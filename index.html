@@ -3164,8 +3164,8 @@
         <td>${l.totalSlots}</td>
         <td><span class="badge badge-${l.status}">${l.status}</span></td>
         <td>
-          <button class="action-btn" onclick="openEditListing(${l.id})">Edit</button>
-          <button class="action-btn danger" onclick="confirmDeleteListing(${l.id})">Delete</button>
+          <button class="action-btn" onclick="openEditListing('${l.id}')">Edit</button>
+          <button class="action-btn danger" onclick="confirmDeleteListing('${l.id}')">Delete</button>
         </td>
       </tr>`).join('');
     }
@@ -3200,6 +3200,7 @@
       if (!value || isNaN(value) || value <= 0) { missing.push('Card Value'); document.getElementById('cardValue').style.border = '2px solid #ef4444'; }
       if (!totalSlots || isNaN(totalSlots) || totalSlots <= 0) { missing.push('Number of Slots'); document.getElementById('cardSlots').style.border = '2px solid #ef4444'; }
       if (pendingPhotoUrls.length === 0) { missing.push('At least one photo'); document.getElementById('photoUploadArea').style.border = '2px dashed #ef4444'; }
+      else { document.getElementById('photoUploadArea').style.border = '2px dashed var(--border)'; }
 
       if (missing.length > 0) {
         showToast('Please fill in: ' + missing.join(', '));
@@ -3562,6 +3563,8 @@
           const lastImg = imgs[imgs.length - 1];
           if (lastImg) lastImg.dataset.url = data.publicUrl;
 
+          // Clear red border on upload area once at least one photo is ready
+          document.getElementById('photoUploadArea').style.border = '2px dashed var(--border)';
           status.textContent = `${pendingPhotoUrls.length} photo(s) ready`;
         } catch (err) {
           status.textContent = 'Upload failed: ' + err.message;
