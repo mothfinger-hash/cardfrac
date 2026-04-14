@@ -758,17 +758,17 @@
       <div class="form-row">
         <div class="form-group">
           <label>Card Name</label>
-          <input type="text" id="cardName" placeholder="e.g., Charizard Base Set" />
+          <input type="text" id="cardName" placeholder="e.g., Charizard Base Set" oninput="this.style.border=''" />
         </div>
         <div class="form-group">
           <label>Grade</label>
-          <input type="text" id="cardGrade" placeholder="e.g., PSA 10" />
+          <input type="text" id="cardGrade" placeholder="e.g., PSA 10" oninput="this.style.border=''" />
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Card Type</label>
-          <input type="text" id="cardType" placeholder="e.g., Pokémon" />
+          <input type="text" id="cardType" placeholder="e.g., Pokémon" oninput="this.style.border=''" />
         </div>
         <div class="form-group">
           <label>Game Type</label>
@@ -783,11 +783,11 @@
       <div class="form-row">
         <div class="form-group">
           <label>Total Value ($)</label>
-          <input type="number" id="cardValue" placeholder="10000" step="0.01" />
+          <input type="number" id="cardValue" placeholder="10000" step="0.01" oninput="this.style.border=''" />
         </div>
         <div class="form-group">
           <label>Number of Slots</label>
-          <input type="number" id="cardSlots" placeholder="100" />
+          <input type="number" id="cardSlots" placeholder="100" oninput="this.style.border=''" />
         </div>
       </div>
       <div class="form-row">
@@ -899,6 +899,13 @@
       <button class="mini-btn" onclick="openBatchCashoutModal()">💰 Cash Out</button>
       <button class="mini-btn" onclick="openBatchListModal()">🏷️ List for Sale</button>
       <button class="mini-btn" onclick="openBatchTradeModal()">🔁 Propose Trade</button>
+    </div>
+  </div>
+
+  <div id="editListingPage" class="page" style="display:none">
+    <div style="padding:24px;max-width:700px;margin:0 auto">
+      <button onclick="showPage('admin')" style="background:none;border:none;color:var(--muted);cursor:pointer;margin-bottom:16px;font-size:.9rem">← Back to Admin</button>
+      <div id="editListingContent"></div>
     </div>
   </div>
 
@@ -1214,7 +1221,7 @@
     // ===== PAGES & NAV =====
     function showPage(pageId) {
       // Guard admin page access
-      if (pageId === 'admin') {
+      if (pageId === 'admin' || pageId === 'editListing') {
         if (!currentUser || !currentUser.is_admin) {
           showToast('Access denied');
           showPage('browse');
@@ -3157,8 +3164,8 @@
         <td>${l.totalSlots}</td>
         <td><span class="badge badge-${l.status}">${l.status}</span></td>
         <td>
-          <button class="action-btn" onclick="editListing(${l.id})">Edit</button>
-          <button class="action-btn danger" onclick="deleteListing(${l.id})">Delete</button>
+          <button class="action-btn" onclick="openEditListing(${l.id})">Edit</button>
+          <button class="action-btn danger" onclick="confirmDeleteListing(${l.id})">Delete</button>
         </td>
       </tr>`).join('');
     }
@@ -3168,9 +3175,15 @@
     }
 
     async function addListing() {
-      const name = document.getElementById('cardName').value;
+      // Clear previous validation errors
+      ['cardName','cardGrade','cardType','cardValue','cardSlots'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.border = '';
+      });
+
+      const name = document.getElementById('cardName').value.trim();
       const grade = document.getElementById('cardGrade').value;
-      const type = document.getElementById('cardType').value;
+      const type = document.getElementById('cardType').value.trim();
       const gameType = document.getElementById('cardGameType')?.value || type;
       const value = parseInt(document.getElementById('cardValue').value);
       const totalSlots = parseInt(document.getElementById('cardSlots').value);
@@ -3179,8 +3192,17 @@
       const vaultLocation = document.getElementById('cardVaultLocation')?.value || 'Standard Vault';
       const insured = document.getElementById('cardInsured')?.checked || true;
 
-      if (!name || !grade || !type || !value || !totalSlots || !pendingPhotoUrls.length) {
-        alert('Please fill all fields and upload at least one photo');
+      // Validate each field and collect errors
+      const missing = [];
+      if (!name) { missing.push('Card Name'); document.getElementById('cardName').style.border = '2px solid #ef4444'; }
+      if (!grade) { missing.push('Grade'); document.getElementById('cardGrade').style.border = '2px solid #ef4444'; }
+      if (!type) { missing.push('Card Type'); document.getElementById('cardType').style.border = '2px solid #ef4444'; }
+      if (!value || isNaN(value) || value <= 0) { missing.push('Card Value'); document.getElementById('cardValue').style.border = '2px solid #ef4444'; }
+      if (!totalSlots || isNaN(totalSlots) || totalSlots <= 0) { missing.push('Number of Slots'); document.getElementById('cardSlots').style.border = '2px solid #ef4444'; }
+      if (pendingPhotoUrls.length === 0) { missing.push('At least one photo'); document.getElementById('photoUploadArea').style.border = '2px dashed #ef4444'; }
+
+      if (missing.length > 0) {
+        showToast('Please fill in: ' + missing.join(', '));
         return;
       }
 
@@ -3265,93 +3287,204 @@
     }
 
     let editingListingId = null;
+    let editPendingPhotoUrls = [];
 
-    function editListing(listingId) {
-      const l = listings.find(x => x.id === listingId);
-      if (!l) return;
+    function openEditListing(listingId) {
       editingListingId = listingId;
+      editPendingPhotoUrls = [];
+      const listing = listings.find(l => l.id === listingId);
+      if (!listing) return;
 
-      document.getElementById('editCardName').value   = l.name;
-      document.getElementById('editCardGrade').value  = l.grade;
-      document.getElementById('editCardType').value   = l.type;
-      document.getElementById('editCardValue').value  = l.value;
-      document.getElementById('editCardSlots').value  = l.totalSlots;
-      document.getElementById('editCardStatus').value = l.status;
-      document.getElementById('editEarlyAccess').value = l.earlyAccessOnly ? 'true' : 'false';
+      // Show the edit modal/page
+      const content = document.getElementById('editListingContent');
+      if (!content) return;
 
-      updateSlotHint();
-      document.getElementById('editListingModal').classList.add('open');
+      content.innerHTML = `
+        <div style="max-width:600px;margin:0 auto">
+          <h3 style="margin-bottom:20px">Edit Listing</h3>
+          <div class="form-group">
+            <label>Card Name</label>
+            <input id="editCardName" class="form-input" value="${listing.name || ''}" oninput="this.style.border=''"/>
+          </div>
+          <div class="form-group">
+            <label>Grade</label>
+            <select id="editCardGrade" class="form-input">
+              <option value="PSA 10" ${listing.grade==='PSA 10'?'selected':''}>PSA 10</option>
+              <option value="BGS Pristine 10" ${listing.grade==='BGS Pristine 10'?'selected':''}>BGS Pristine 10</option>
+              <option value="CGC 10" ${listing.grade==='CGC 10'?'selected':''}>CGC 10</option>
+              <option value="${listing.grade}" ${!['PSA 10','BGS Pristine 10','CGC 10'].includes(listing.grade)?'selected':''}>${listing.grade}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Game Type</label>
+            <select id="editCardGameType" class="form-input">
+              <option value="Pokémon" ${listing.gameType==='Pokémon'?'selected':''}>Pokémon</option>
+              <option value="Magic: The Gathering" ${listing.gameType==='Magic: The Gathering'?'selected':''}>Magic: The Gathering</option>
+              <option value="Yu-Gi-Oh!" ${listing.gameType==='Yu-Gi-Oh!'?'selected':''}>Yu-Gi-Oh!</option>
+              <option value="Sports" ${listing.gameType==='Sports'?'selected':''}>Sports</option>
+              <option value="Other" ${listing.gameType==='Other'?'selected':''}>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Card Type</label>
+            <input id="editCardType" class="form-input" value="${listing.type || ''}" oninput="this.style.border=''"/>
+          </div>
+          <div class="form-group">
+            <label>Card Value ($)</label>
+            <input id="editCardValue" class="form-input" type="number" value="${listing.value || ''}" oninput="this.style.border=''"/>
+          </div>
+          <div class="form-group">
+            <label>Total Slots</label>
+            <input id="editCardSlots" class="form-input" type="number" value="${listing.totalSlots || ''}" min="1"/>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="editCardStatus" class="form-input">
+              <option value="available" ${listing.status==='available'?'selected':''}>Available</option>
+              <option value="sold" ${listing.status==='sold'?'selected':''}>Sold Out</option>
+              <option value="early" ${listing.status==='early'?'selected':''}>Early Access</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Cert Number</label>
+            <input id="editCertNumber" class="form-input" value="${listing.certNumber || ''}"/>
+          </div>
+          <div class="form-group">
+            <label>Vault Location</label>
+            <input id="editVaultLocation" class="form-input" value="${listing.vaultLocation || ''}"/>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="editInsured" ${listing.insured?'checked':''}/> Insured
+            </label>
+          </div>
+          <div class="form-group">
+            <label>Current Photos</label>
+            <div id="editCurrentPhotos" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-bottom:12px">
+              ${(listing.photos || []).map((url, i) => `
+                <div style="position:relative;aspect-ratio:1">
+                  <img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border)" data-url="${url}"/>
+                  <button onclick="removeEditPhoto('${url}', this.closest('div'))" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.7);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:14px;cursor:pointer;line-height:1">×</button>
+                </div>
+              `).join('')}
+            </div>
+            <div id="editPhotoUploadArea" style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer" onclick="document.getElementById('editPhotoFileInput').click()">
+              <div style="color:var(--muted);font-size:.85rem">📷 Upload additional photos</div>
+            </div>
+            <input type="file" id="editPhotoFileInput" accept="image/*" multiple style="display:none" onchange="handleEditPhotoUpload(event)"/>
+            <div id="editPhotoStatus" style="font-size:.8rem;color:var(--muted);margin-top:6px"></div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:24px">
+            <button class="btn btn-teal" onclick="saveEditListing()" style="flex:1">Save Changes</button>
+            <button class="btn btn-secondary" onclick="showPage('admin')" style="flex:1">Cancel</button>
+          </div>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+            <button class="btn" onclick="confirmDeleteListing('${listingId}')" style="width:100%;background:#ef4444;color:white;border:none">🗑️ Delete Listing</button>
+          </div>
+        </div>
+      `;
+
+      // Store current photos for editing
+      editPendingPhotoUrls = [...(listing.photos || [])];
+      showPage('editListing');
     }
 
-    function updateSlotHint() {
-      if (!editingListingId) return;
-      const l = listings.find(x => x.id === editingListingId);
-      if (!l) return;
-      const soldCount = slots.filter(s => s.listingId === editingListingId && s.userId !== null).length;
-      const newCount  = parseInt(document.getElementById('editCardSlots').value) || 0;
-      const hint      = document.getElementById('editSlotHint');
-      if (newCount < soldCount) {
-        hint.innerHTML = `<span style="color:var(--red)">⚠ ${soldCount} slots already sold — minimum is ${soldCount}</span>`;
-      } else if (newCount > l.totalSlots) {
-        hint.innerHTML = `<span style="color:var(--green)">+${newCount - l.totalSlots} new slots will be added</span>`;
-      } else if (newCount < l.totalSlots) {
-        const removable = l.totalSlots - newCount;
-        hint.innerHTML = `<span style="color:var(--yellow)">−${removable} unsold slots will be removed</span>`;
-      } else {
-        hint.innerHTML = `${soldCount} of ${l.totalSlots} slots sold`;
+    function removeEditPhoto(url, wrapper) {
+      editPendingPhotoUrls = editPendingPhotoUrls.filter(u => u !== url);
+      wrapper.remove();
+    }
+
+    async function handleEditPhotoUpload(event) {
+      const files = Array.from(event.target.files);
+      const status = document.getElementById('editPhotoStatus');
+      status.textContent = `Uploading ${files.length} photo(s)...`;
+
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const grid = document.getElementById('editCurrentPhotos');
+          const wrapper = document.createElement('div');
+          wrapper.style.cssText = 'position:relative;aspect-ratio:1';
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border)';
+          const btn = document.createElement('button');
+          btn.textContent = '×';
+          btn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.7);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:14px;cursor:pointer;line-height:1';
+          btn.onclick = () => { editPendingPhotoUrls = editPendingPhotoUrls.filter(u => u !== img.dataset.url); wrapper.remove(); };
+          wrapper.appendChild(img);
+          wrapper.appendChild(btn);
+          grid.appendChild(wrapper);
+        };
+        reader.readAsDataURL(file);
+
+        const ext = file.name.split('.').pop();
+        const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${ext}`;
+        const { error } = await sb.storage.from('card-photos').upload(path, file, { upsert: true });
+        if (!error) {
+          const { data } = sb.storage.from('card-photos').getPublicUrl(path);
+          editPendingPhotoUrls.push(data.publicUrl);
+          // Update the last added img with the URL
+          const imgs = document.getElementById('editCurrentPhotos').querySelectorAll('img');
+          const lastImg = imgs[imgs.length - 1];
+          if (lastImg) lastImg.dataset.url = data.publicUrl;
+        }
       }
-    }
-
-    function closeEditModal() {
-      document.getElementById('editListingModal').classList.remove('open');
-      editingListingId = null;
+      status.textContent = `${editPendingPhotoUrls.length} photo(s) total`;
     }
 
     function saveEditListing() {
-      const l = listings.find(x => x.id === editingListingId);
-      if (!l) return;
+      const listing = listings.find(l => l.id === editingListingId);
+      if (!listing) return;
 
-      const newSlotCount = parseInt(document.getElementById('editCardSlots').value);
-      const soldCount    = slots.filter(s => s.listingId === editingListingId && s.userId !== null).length;
+      const name = document.getElementById('editCardName').value.trim();
+      const grade = document.getElementById('editCardGrade').value;
+      const gameType = document.getElementById('editCardGameType').value;
+      const type = document.getElementById('editCardType').value.trim();
+      const value = parseInt(document.getElementById('editCardValue').value);
+      const status = document.getElementById('editCardStatus').value;
+      const certNumber = document.getElementById('editCertNumber').value.trim();
+      const vaultLocation = document.getElementById('editVaultLocation').value.trim();
+      const insured = document.getElementById('editInsured').checked;
 
-      if (isNaN(newSlotCount) || newSlotCount < 1) { alert('Slot count must be at least 1.'); return; }
-      if (newSlotCount < soldCount) { alert(`Can't reduce below ${soldCount} — that many slots are already sold.`); return; }
-
-      // Apply field changes
-      l.name            = document.getElementById('editCardName').value.trim()   || l.name;
-      l.grade           = document.getElementById('editCardGrade').value.trim()  || l.grade;
-      l.type            = document.getElementById('editCardType').value.trim()   || l.type;
-      l.value           = parseInt(document.getElementById('editCardValue').value) || l.value;
-      l.status          = document.getElementById('editCardStatus').value;
-      l.earlyAccessOnly = document.getElementById('editEarlyAccess').value === 'true';
-
-      // Adjust slot count
-      const currentTotal = l.totalSlots;
-      if (newSlotCount > currentTotal) {
-        // Add new empty slots
-        for (let i = currentTotal; i < newSlotCount; i++) {
-          slots.push({ listingId: l.id, idx: i, userId: null, name: null, email: null, askPrice: null, tradeOpen: false });
-        }
-      } else if (newSlotCount < currentTotal) {
-        // Remove unsold slots from the end
-        let removed = 0;
-        for (let i = currentTotal - 1; i >= 0 && removed < (currentTotal - newSlotCount); i--) {
-          const slotIdx = slots.findIndex(s => s.listingId === l.id && s.idx === i && s.userId === null);
-          if (slotIdx !== -1) { slots.splice(slotIdx, 1); removed++; }
-        }
+      if (!name || !value) {
+        showToast('Please fill in required fields');
+        return;
       }
-      l.totalSlots = newSlotCount;
 
-      closeEditModal();
+      // Update local array
+      listing.name = name;
+      listing.grade = grade;
+      listing.gameType = gameType;
+      listing.type = type;
+      listing.value = value;
+      listing.status = status;
+      listing.certNumber = certNumber;
+      listing.vaultLocation = vaultLocation;
+      listing.insured = insured;
+      listing.photos = editPendingPhotoUrls;
+
+      showToast('Listing updated!');
+      showPage('admin');
       renderAdmin();
     }
 
-    function deleteListing(listingId) {
-      if (confirm('Are you sure?')) {
-        listings = listings.filter(l => l.id !== listingId);
-        slots = slots.filter(s => s.listingId !== listingId);
-        renderAdmin();
+    function confirmDeleteListing(listingId) {
+      const listing = listings.find(l => l.id === listingId);
+      const name = listing?.name || 'this listing';
+
+      if (confirm(`Delete "${name}"? This action cannot be undone.`)) {
+        deleteListing(listingId);
       }
+    }
+
+    function deleteListing(listingId) {
+      listings = listings.filter(l => l.id !== listingId);
+      slots = slots.filter(s => s.listingId !== listingId);
+
+      showToast('Listing deleted');
+      showPage('admin');
+      renderAdmin();
     }
 
     function updateRevenuePanel() {
@@ -3386,10 +3519,27 @@
           // Show local preview immediately
           const reader = new FileReader();
           reader.onload = (e) => {
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'position:relative;aspect-ratio:1';
+
             const img = document.createElement('img');
             img.src = e.target.result;
-            img.style.cssText = 'width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border)';
-            previewGrid.appendChild(img);
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border)';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '×';
+            deleteBtn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.7);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1';
+            deleteBtn.onclick = (e) => {
+              e.preventDefault();
+              const url = img.dataset.url;
+              if (url) pendingPhotoUrls = pendingPhotoUrls.filter(u => u !== url);
+              wrapper.remove();
+              document.getElementById('photoUploadStatus').textContent = `${pendingPhotoUrls.length} photo(s) ready`;
+            };
+
+            wrapper.appendChild(img);
+            wrapper.appendChild(deleteBtn);
+            previewGrid.appendChild(wrapper);
           };
           reader.readAsDataURL(file);
 
@@ -3406,6 +3556,12 @@
 
           const { data } = sb.storage.from('card-photos').getPublicUrl(path);
           pendingPhotoUrls.push(data.publicUrl);
+
+          // Update img.dataset.url for all preview images with this data URL
+          const imgs = previewGrid.querySelectorAll('img');
+          const lastImg = imgs[imgs.length - 1];
+          if (lastImg) lastImg.dataset.url = data.publicUrl;
+
           status.textContent = `${pendingPhotoUrls.length} photo(s) ready`;
         } catch (err) {
           status.textContent = 'Upload failed: ' + err.message;
