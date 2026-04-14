@@ -428,6 +428,11 @@
     }
     .pwa-prompt-close:hover{color:var(--text)}
 
+    /* GAME TYPE PILLS */
+    .game-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; font-size: .8rem; cursor: pointer; transition: all .15s; color: var(--text); }
+    .game-pill:hover { border-color: var(--accent); color: var(--accent); }
+    .game-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
+
     /* TOAST */
     .toast{
       position:fixed;bottom:20px;left:20px;
@@ -677,8 +682,10 @@
       <select id="gameTypeFilter" onchange="applyBrowseFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem">
         <option value="all">All Types</option>
         <option value="Pokémon">Pokémon</option>
-        <option value="Magic">Magic</option>
-        <option value="Yu-Gi-Oh">Yu-Gi-Oh</option>
+        <option value="Magic: The Gathering">Magic</option>
+        <option value="Yu-Gi-Oh!">Yu-Gi-Oh</option>
+        <option value="Sports">Sports</option>
+        <option value="Other">Other</option>
       </select>
       <select id="sortByFilter" onchange="applyBrowseFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem">
         <option value="newest">Newest</option>
@@ -687,6 +694,14 @@
         <option value="hottest">Hottest (% Filled)</option>
       </select>
       <button id="clearFiltersBtn" onclick="clearBrowseFilters()" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--accent);font-size:.9rem;cursor:pointer;display:none">Clear All</button>
+    </div>
+    <div id="gameTypePills" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+      <button class="game-pill active" onclick="setGameTypeFilter('all')">🃏 All</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Pokémon')">⚡ Pokémon</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Magic: The Gathering')">🧙 Magic</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Yu-Gi-Oh!')">🐉 Yu-Gi-Oh!</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Sports')">🏆 Sports</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Other')">🎴 Other</button>
     </div>
     <div class="card-grid" id="browseGrid"></div>
   </div>
@@ -851,6 +866,26 @@
           <div class="rev-val">$<span id="revCashouts">0</span></div>
         </div>
       </div>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">🎯 Assign Slot to User</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
+        <div>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Listing</label>
+          <select id="assignListingId" class="form-input" style="width:100%"></select>
+        </div>
+        <div>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Slot # (or "next available")</label>
+          <input id="assignSlotIdx" class="form-input" placeholder="e.g. 5 or leave blank" style="width:100%"/>
+        </div>
+        <div>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">User Email or Username</label>
+          <input id="assignUserSearch" class="form-input" placeholder="email or username" style="width:100%"/>
+        </div>
+        <button class="btn btn-teal" onclick="adminAssignSlot()" style="white-space:nowrap">Assign</button>
+      </div>
+      <div id="assignStatus" style="margin-top:10px;font-size:.85rem"></div>
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;overflow-x:auto">
@@ -1041,6 +1076,8 @@
 
     // ===== FEE TIER SYSTEM =====
     function getFeeRate() {
+      if (!currentUser) return 0.02;
+      if (currentUser.is_admin) return 0; // admins pay no fees
       return (currentUser && currentUser.membershipActive) ? 0.01 : 0.02;
     }
     function calcFee(amount) {
@@ -1109,6 +1146,9 @@
         const { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).single().catch(() => ({ data: null }));
         currentUser = { ...authData.user, ...profile };
         closeModal('loginModal');
+        // Force close the modal overlay
+        const modal = document.getElementById('loginModal');
+        if (modal) modal.classList.remove('open');
 
         // Wrap UI updates separately so they don't trigger the error message
         try {
@@ -1301,12 +1341,12 @@
           ${listing.earlyAccessOnly ? '<div class="ea-ribbon">Premium Only</div>' : ''}
           ${votePassed ? '<div class="vote-banner">🔨 Vote Passed</div>' : ''}
           ${listing.status === 'sold' && !votePassed ? '<div class="lock-overlay"><div class="lock-icon">🔒</div><p>Sold Out</p></div>' : ''}
-          <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event, ${listing.id})">🔔</button>
-          <div class="thumb-wrap" onclick="viewDetail(${listing.id})" style="cursor:pointer">
+          <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event, '${listing.id}')">🔔</button>
+          <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <img src="${listing.photos[0]}" alt="${listing.name}" class="card-thumb" />
             <div class="photo-count">${listing.photos.length} photos</div>
           </div>
-          <div class="card-info" onclick="viewDetail(${listing.id})" style="cursor:pointer">
+          <div class="card-info" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <div class="card-name">${listing.name}</div>
             <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
             <div class="card-stats">
@@ -1346,6 +1386,19 @@
       document.getElementById('browseSearchInput').value = '';
       document.getElementById('gameTypeFilter').value = 'all';
       document.getElementById('sortByFilter').value = 'newest';
+      document.querySelectorAll('.game-pill').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.game-pill')[0]?.classList.add('active');
+      renderBrowse();
+    }
+
+    function setGameTypeFilter(type) {
+      browseGameTypeFilter = type;
+      // Update pill active states
+      document.querySelectorAll('.game-pill').forEach(p => p.classList.remove('active'));
+      event.target.classList.add('active');
+      // Also sync the dropdown if it exists
+      const dropdown = document.getElementById('gameTypeFilter');
+      if (dropdown) dropdown.value = type;
       renderBrowse();
     }
 
@@ -1378,7 +1431,7 @@
     // ===== DETAIL VIEW =====
     function viewDetail(listingId) {
       showPage('explore');
-      const listing = listings.find(l => l.id === listingId);
+      const listing = listings.find(l => l.id == listingId);
       const detail = document.getElementById('detailView');
 
       // Refresh slots for this listing from Supabase
@@ -2450,6 +2503,14 @@
     }
 
     function renderDashboard() {
+      // If no local slots for current user, try to refresh from Supabase first
+      const myLocalSlots = slots.filter(s => s.userId === currentUser?.id);
+      if (myLocalSlots.length === 0 && currentUser) {
+        // Data not loaded yet — trigger a refresh and re-render
+        refreshMySlots().then(() => renderDashboard());
+        return;
+      }
+
       const mySlots = slots.filter(s => s.userId === currentUser.id);
       const totalHoldingsValue = mySlots.reduce((sum, slot) => {
         const listing = listings.find(l => l.id === slot.listingId);
@@ -2599,6 +2660,10 @@
             <div style="background:var(--surface2);padding:14px;border-radius:8px">
               <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Avg Rating</div>
               <div style="font-size:1.4rem;font-weight:700;color:var(--gold)">⭐ ${avgRating}</div>
+            </div>
+            <div style="background:var(--surface2);padding:14px;border-radius:8px">
+              <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Total Slots Available</div>
+              <div style="font-size:1.4rem;font-weight:700;color:var(--blue)">${slots.filter(s => !s.userId).length}</div>
             </div>
           </div>
         </div>
@@ -3168,6 +3233,85 @@
           <button class="action-btn danger" onclick="confirmDeleteListing('${l.id}')">Delete</button>
         </td>
       </tr>`).join('');
+      populateAssignListingDropdown();
+    }
+
+    function populateAssignListingDropdown() {
+      const sel = document.getElementById('assignListingId');
+      if (!sel) return;
+      sel.innerHTML = listings.map(l => `<option value="${l.id}">${l.name} (${l.grade})</option>`).join('');
+    }
+
+    async function adminAssignSlot() {
+      const listingId = document.getElementById('assignListingId').value;
+      const slotIdxInput = document.getElementById('assignSlotIdx').value.trim();
+      const userSearch = document.getElementById('assignUserSearch').value.trim();
+      const statusEl = document.getElementById('assignStatus');
+
+      if (!listingId || !userSearch) {
+        statusEl.textContent = '⚠️ Please select a listing and enter a user.';
+        statusEl.style.color = '#ef4444';
+        return;
+      }
+
+      // Find the user by email or username
+      const { data: profile } = await sb.from('profiles')
+        .select('id, name, username')
+        .or(`username.eq.${userSearch},id.eq.${userSearch}`)
+        .maybeSingle();
+
+      let userId = profile?.id;
+      let userName = profile?.name || profile?.username;
+
+      if (!userId) {
+        statusEl.textContent = '⚠️ User not found. Make sure they have registered and confirmed their email.';
+        statusEl.style.color = '#ef4444';
+        return;
+      }
+
+      // Find the slot to assign
+      let slot;
+      if (slotIdxInput) {
+        const slotIdx = parseInt(slotIdxInput);
+        const { data: foundSlot } = await sb.from('slots')
+          .select('*')
+          .eq('listing_id', listingId)
+          .eq('idx', slotIdx)
+          .maybeSingle();
+        if (!foundSlot) { statusEl.textContent = '⚠️ Slot not found.'; statusEl.style.color = '#ef4444'; return; }
+        if (foundSlot.user_id) { statusEl.textContent = `⚠️ Slot #${slotIdx} is already owned.`; statusEl.style.color = '#ef4444'; return; }
+        slot = foundSlot;
+      } else {
+        const { data: availableSlot } = await sb.from('slots')
+          .select('*')
+          .eq('listing_id', listingId)
+          .is('user_id', null)
+          .order('idx')
+          .limit(1)
+          .maybeSingle();
+        if (!availableSlot) { statusEl.textContent = '⚠️ No available slots on this listing.'; statusEl.style.color = '#ef4444'; return; }
+        slot = availableSlot;
+      }
+
+      // Assign the slot
+      const { error } = await sb.from('slots').update({ user_id: userId, ask_price: 0, trade_open: false }).eq('id', slot.id);
+      if (error) { statusEl.textContent = '⚠️ Error: ' + error.message; statusEl.style.color = '#ef4444'; return; }
+
+      // Log transaction with $0 (admin assignment, no fee)
+      await sb.from('transactions').insert({
+        type: 'buy', listing_id: listingId, slot_idx: slot.idx,
+        user_id: userId, amount: 0, fee: 0, note: 'Admin assignment'
+      });
+
+      // Update local slots array
+      const localSlot = slots.find(s => s.listingId === listingId && s.idx === slot.idx);
+      if (localSlot) { localSlot.userId = userId; localSlot.name = userName; }
+
+      const listing = listings.find(l => l.id == listingId);
+      statusEl.textContent = `✅ Slot #${slot.idx} of "${listing?.name}" assigned to ${userName}!`;
+      statusEl.style.color = 'var(--green, #10b981)';
+      document.getElementById('assignSlotIdx').value = '';
+      document.getElementById('assignUserSearch').value = '';
     }
 
     function toggleAddForm() {
