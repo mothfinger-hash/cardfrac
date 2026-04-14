@@ -1142,12 +1142,9 @@
           return;
         }
 
-        const { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).single().catch(() => ({ data: null }));
-        currentUser = { ...authData.user, ...profile };
-        closeModal('loginModal');
-        // Force close the modal overlay
-        const modal = document.getElementById('loginModal');
-        if (modal) modal.classList.remove('open');
+        const { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
+        currentUser = { ...authData.user, ...(profile || {}) };
+        document.getElementById('loginModal').classList.remove('open');
 
         // Wrap UI updates separately so they don't trigger the error message
         try {
@@ -1466,7 +1463,7 @@
       for (let i = 0; i < listing.totalSlots; i += 10) {
         slotGridHTML += '<div class="slot-grid">';
         for (let j = 0; j < 10 && i + j < listing.totalSlots; j++) {
-          const slot = listingSlots[i + j];
+          const slot = listingSlots[i + j] || { userId: null, askPrice: null, tradeOpen: false, idx: i + j + 1 };
           const isYours = currentUser && slot.userId === currentUser.id;
           const isTaken = slot.userId && !isYours;
           let classes = 'slot-cell';
@@ -3959,12 +3956,13 @@
     sb.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         try {
-          const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single().catch(() => ({ data: null }));
-          currentUser = { ...session.user, ...profile };
+          const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+          currentUser = { ...session.user, ...(profile || {}) };
         } catch (err) {
           console.error('Auth state change error:', err);
         }
-      } else {
+      } else if (event === 'SIGNED_OUT') {
+        // Only clear the user on explicit sign out — not on page load before session is restored
         currentUser = null;
       }
       updateAuthUI();
