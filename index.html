@@ -445,6 +445,22 @@
     const SUPABASE_URL = 'https://xjamytrhxeaynywcwfun.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_HeBrC8k5nKaBmqA9qMn6-Q_YqL8OEBV';
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function callEdgeFunction(name, body) {
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Edge Function error');
+      return data;
+    }
   </script>
 </head>
 <body>
@@ -1786,26 +1802,13 @@
       slot.email = currentUser.email;
       slot.askPrice = null;
 
-      // Sync to Supabase (fire-and-forget)
-      sb.from('slots')
-        .update({ user_id: currentUser.id, ask_price: 0, trade_open: false })
-        .eq('listing_id', listingId)
-        .eq('idx', slotIdx)
-        .catch(err => console.error('Slot update error:', err));
-
-      sb.from('transactions')
-        .insert({
-          type: 'resale',
-          listing_id: listingId,
-          slot_idx: slotIdx,
-          user_id: currentUser.id,
-          amount: slot.askPrice,
-          fee: fee
-        })
-        .catch(err => console.error('Transaction log error:', err));
+      // Sync to Supabase via Edge Function (server-side validation + fee calculation)
+      callEdgeFunction('process-buy', { listingId, slotIdx })
+        .then(result => showToast(`Slot purchased! Fee: $${result.fee}`))
+        .catch(err => console.error('Buy sync error:', err.message));
 
       closeModal('purchaseModal');
-      alert(`Slot purchased for $${slot.askPrice - fee}! Seller received $${sellerProceeds} (fee: $${fee})`);
+      showToast(`Slot purchased! Seller received $${sellerProceeds} (fee: $${fee})`);
       viewDetail(listingId);
     }
 
@@ -1948,7 +1951,12 @@
       }
 
       offer.status = 'accepted';
-      alert('Trade accepted!');
+
+      // Sync to Supabase via Edge Function (validates ownership server-side)
+      callEdgeFunction('process-trade', { offerId })
+        .then(() => showToast('Trade completed!'))
+        .catch(err => console.error('Trade sync error:', err.message));
+
       openRatingModal(fromUser.id, fromUser.name);
       renderAllContent();
     }
@@ -2039,26 +2047,13 @@
       slot.email = null;
       slot.askPrice = null;
 
-      // Sync to Supabase (fire-and-forget)
-      sb.from('slots')
-        .update({ user_id: null, ask_price: 0, trade_open: false })
-        .eq('listing_id', listingId)
-        .eq('idx', slotIdx)
-        .catch(err => console.error('Slot update error:', err));
-
-      sb.from('transactions')
-        .insert({
-          type: 'cashout',
-          listing_id: listingId,
-          slot_idx: slotIdx,
-          user_id: currentUser.id,
-          amount: amount,
-          fee: fee
-        })
-        .catch(err => console.error('Transaction log error:', err));
+      // Sync to Supabase via Edge Function (validates ownership + calculates fee server-side)
+      callEdgeFunction('process-cashout', { listingId, slotIdx })
+        .then(result => showToast(`Cashed out! You received $${result.cashoutAmount} (fee: $${result.fee})`))
+        .catch(err => console.error('Cashout sync error:', err.message));
 
       closeModal('purchaseModal');
-      alert(`Cashed out for $${amount}`);
+      showToast(`Cashed out for $${amount}`);
       viewDetail(listingId);
     }
 
