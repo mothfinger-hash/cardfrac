@@ -476,7 +476,6 @@
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Browse</button>
-        <button class="nav-tab" data-page="explore">Explore</button>
         <button class="nav-tab" data-page="admin">Admin</button>
         <button class="nav-tab" data-page="account">My Account<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
       </div>
@@ -937,7 +936,7 @@
     </div>
   </div>
 
-  <div id="editListingPage" class="page" style="display:none">
+  <div id="editListingPage" class="page">
     <div style="padding:24px;max-width:700px;margin:0 auto">
       <button onclick="showPage('admin')" style="background:none;border:none;color:var(--muted);cursor:pointer;margin-bottom:16px;font-size:.9rem">← Back to Admin</button>
       <div id="editListingContent"></div>
@@ -2776,7 +2775,7 @@
       const watchedListings = listings.filter(l => currentUser.watchlist.includes(l.id));
       watchlistEl.innerHTML = `<div class="card-grid">${watchedListings.map(listing => {
         const slotsStatus = getSlotStats(listing.id);
-        return `<div class="listing-card" onclick="viewDetail(${listing.id})">
+        return `<div class="listing-card" onclick="viewDetail('${listing.id}')">
           <div class="thumb-wrap">
             <img src="${listing.photos[0]}" alt="${listing.name}" class="card-thumb" />
             <div class="photo-count">${listing.photos.length} photos</div>
