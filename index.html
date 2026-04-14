@@ -1149,7 +1149,21 @@
           return;
         }
 
-        const { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
+        let { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
+        // If profile doesn't exist yet, create it now
+        if (!profile) {
+          const meta = authData.user.user_metadata || {};
+          const username = meta.username || 'user_' + authData.user.id.slice(0, 8);
+          await sb.from('profiles').insert({
+            id: authData.user.id,
+            name: meta.name || authData.user.email.split('@')[0],
+            username,
+            email: authData.user.email,
+            referral_code: username + '_' + Math.random().toString(36).slice(2, 6)
+          });
+          const { data: newProfile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
+          profile = newProfile;
+        }
         currentUser = { ...authData.user, ...(profile || {}) };
         document.getElementById('loginModal').classList.remove('open');
 
@@ -1221,9 +1235,10 @@
       if (currentUser) {
         authSection.style.display = 'none';
         userSection.style.display = 'block';
-        const initials = currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase();
+        const displayName = currentUser.name || currentUser.user_metadata?.name || currentUser.email || 'User';
+        const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
         document.getElementById('avatarInitials').textContent = initials;
-        document.getElementById('userName').textContent = currentUser.username;
+        document.getElementById('userName').textContent = currentUser.username || currentUser.email?.split('@')[0] || 'User';
         // Show admin tab only if user is admin
         if (currentUser.is_admin) {
           adminTab.classList.add('admin-visible');
