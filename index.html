@@ -868,19 +868,26 @@
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
-      <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">🎯 Assign Slot to User</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">🎯 Assign Slots to User</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
           <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Listing</label>
           <select id="assignListingId" class="form-input" style="width:100%"></select>
         </div>
         <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Slot # (or "next available")</label>
-          <input id="assignSlotIdx" class="form-input" placeholder="e.g. 5 or leave blank" style="width:100%"/>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">User Email or Username</label>
+          <input id="assignUserSearch" class="form-input" placeholder="email or username" style="width:100%" oninput="adminLookupUser(this.value)"/>
+          <div id="assignUserResult" style="font-size:.8rem;margin-top:4px;color:var(--muted)"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
+        <div>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Specific slots (e.g. 1,2,3 or 5-10)</label>
+          <input id="assignSlotIdx" class="form-input" placeholder="Leave blank for next available" style="width:100%"/>
         </div>
         <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">User Email or Username</label>
-          <input id="assignUserSearch" class="form-input" placeholder="email or username" style="width:100%"/>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Or assign next X available</label>
+          <input id="assignSlotCount" class="form-input" type="number" min="1" placeholder="e.g. 5" style="width:100%"/>
         </div>
         <button class="btn btn-teal" onclick="adminAssignSlot()" style="white-space:nowrap">Assign</button>
       </div>
@@ -3238,9 +3245,36 @@
       sel.innerHTML = listings.map(l => `<option value="${l.id}">${l.name} (${l.grade})</option>`).join('');
     }
 
+    let assignLookupTimer = null;
+    let resolvedAssignUser = null;
+
+    function adminLookupUser(val) {
+      clearTimeout(assignLookupTimer);
+      const resultEl = document.getElementById('assignUserResult');
+      resolvedAssignUser = null;
+      if (!val || val.length < 2) { resultEl.textContent = ''; return; }
+      resultEl.textContent = 'Searching...';
+      resultEl.style.color = 'var(--muted)';
+      assignLookupTimer = setTimeout(async () => {
+        const { data: profiles } = await sb.from('profiles')
+          .select('id, name, username, email')
+          .or(`username.ilike.%${val}%,email.ilike.%${val}%`)
+          .limit(5);
+        if (profiles && profiles.length > 0) {
+          resolvedAssignUser = profiles[0];
+          resultEl.style.color = 'var(--green, #10b981)';
+          resultEl.textContent = `✅ Found: ${resolvedAssignUser.name} (@${resolvedAssignUser.username})${resolvedAssignUser.email ? ' — ' + resolvedAssignUser.email : ''}`;
+        } else {
+          resultEl.style.color = '#ef4444';
+          resultEl.textContent = '⚠️ No user found. Make sure they have registered.';
+        }
+      }, 400);
+    }
+
     async function adminAssignSlot() {
       const listingId = document.getElementById('assignListingId').value;
       const slotIdxInput = document.getElementById('assignSlotIdx').value.trim();
+      const slotCountInput = parseInt(document.getElementById('assignSlotCount')?.value) || 0;
       const userSearch = document.getElementById('assignUserSearch').value.trim();
       const statusEl = document.getElementById('assignStatus');
 
@@ -3250,64 +3284,91 @@
         return;
       }
 
-      // Find the user by email or username
-      const { data: profile } = await sb.from('profiles')
-        .select('id, name, username')
-        .or(`username.eq.${userSearch},id.eq.${userSearch}`)
-        .maybeSingle();
+      // Use already-resolved user or look up now
+      let profile = resolvedAssignUser;
+      if (!profile) {
+        const { data: found } = await sb.from('profiles')
+          .select('id, name, username, email')
+          .or(`username.ilike.%${userSearch}%,email.ilike.%${userSearch}%`)
+          .limit(1)
+          .maybeSingle();
+        profile = found;
+      }
 
-      let userId = profile?.id;
-      let userName = profile?.name || profile?.username;
-
-      if (!userId) {
+      if (!profile) {
         statusEl.textContent = '⚠️ User not found. Make sure they have registered and confirmed their email.';
         statusEl.style.color = '#ef4444';
         return;
       }
 
-      // Find the slot to assign
-      let slot;
+      const userId = profile.id;
+      const userName = profile.name || profile.username;
+      statusEl.textContent = 'Assigning slots...';
+      statusEl.style.color = 'var(--muted)';
+
+      // Build list of slot indices from input (supports "1,2,3" or "5-10" or "1,3,7-9")
+      let targetIndices = [];
       if (slotIdxInput) {
-        const slotIdx = parseInt(slotIdxInput);
-        const { data: foundSlot } = await sb.from('slots')
-          .select('*')
-          .eq('listing_id', listingId)
-          .eq('idx', slotIdx)
-          .maybeSingle();
-        if (!foundSlot) { statusEl.textContent = '⚠️ Slot not found.'; statusEl.style.color = '#ef4444'; return; }
-        if (foundSlot.user_id) { statusEl.textContent = `⚠️ Slot #${slotIdx} is already owned.`; statusEl.style.color = '#ef4444'; return; }
-        slot = foundSlot;
-      } else {
-        const { data: availableSlot } = await sb.from('slots')
-          .select('*')
-          .eq('listing_id', listingId)
-          .is('user_id', null)
-          .order('idx')
-          .limit(1)
-          .maybeSingle();
-        if (!availableSlot) { statusEl.textContent = '⚠️ No available slots on this listing.'; statusEl.style.color = '#ef4444'; return; }
-        slot = availableSlot;
+        for (const part of slotIdxInput.split(',')) {
+          const range = part.trim().split('-');
+          if (range.length === 2) {
+            const from = parseInt(range[0]), to = parseInt(range[1]);
+            for (let i = from; i <= to; i++) targetIndices.push(i);
+          } else {
+            const n = parseInt(part.trim());
+            if (!isNaN(n)) targetIndices.push(n);
+          }
+        }
       }
 
-      // Assign the slot
-      const { error } = await sb.from('slots').update({ user_id: userId, ask_price: 0, trade_open: false }).eq('id', slot.id);
-      if (error) { statusEl.textContent = '⚠️ Error: ' + error.message; statusEl.style.color = '#ef4444'; return; }
+      let slotsToAssign = [];
+      if (targetIndices.length > 0) {
+        const { data: found } = await sb.from('slots')
+          .select('*').eq('listing_id', listingId).in('idx', targetIndices);
+        const already = found?.filter(s => s.user_id) || [];
+        if (already.length > 0) {
+          statusEl.textContent = `⚠️ Already owned: slot(s) #${already.map(s => s.idx).join(', ')}`;
+          statusEl.style.color = '#ef4444';
+          return;
+        }
+        slotsToAssign = found || [];
+      } else {
+        // Next X available slots
+        const count = slotCountInput || 1;
+        const { data: available } = await sb.from('slots')
+          .select('*').eq('listing_id', listingId).is('user_id', null)
+          .order('idx').limit(count);
+        if (!available || available.length === 0) {
+          statusEl.textContent = '⚠️ No available slots on this listing.';
+          statusEl.style.color = '#ef4444';
+          return;
+        }
+        slotsToAssign = available;
+      }
 
-      // Log transaction with $0 (admin assignment, no fee)
-      await sb.from('transactions').insert({
-        type: 'buy', listing_id: listingId, slot_idx: slot.idx,
-        user_id: userId, amount: 0, fee: 0, note: 'Admin assignment'
-      });
-
-      // Update local slots array
-      const localSlot = slots.find(s => s.listingId === listingId && s.idx === slot.idx);
-      if (localSlot) { localSlot.userId = userId; localSlot.name = userName; }
+      // Assign all slots
+      const assigned = [];
+      for (const slot of slotsToAssign) {
+        const { error } = await sb.from('slots')
+          .update({ user_id: userId, ask_price: 0, trade_open: false }).eq('id', slot.id);
+        if (error) { statusEl.textContent = `⚠️ Error on slot #${slot.idx}: ${error.message}`; statusEl.style.color = '#ef4444'; return; }
+        await sb.from('transactions').insert({
+          type: 'buy', listing_id: listingId, slot_idx: slot.idx,
+          user_id: userId, amount: 0, fee: 0, note: 'Admin assignment'
+        });
+        const localSlot = slots.find(s => s.listingId === listingId && s.idx === slot.idx);
+        if (localSlot) { localSlot.userId = userId; localSlot.name = userName; }
+        assigned.push(slot.idx);
+      }
 
       const listing = listings.find(l => l.id == listingId);
-      statusEl.textContent = `✅ Slot #${slot.idx} of "${listing?.name}" assigned to ${userName}!`;
+      statusEl.textContent = `✅ Assigned ${assigned.length} slot(s) [#${assigned.join(', ')}] of "${listing?.name}" to ${userName}!`;
       statusEl.style.color = 'var(--green, #10b981)';
       document.getElementById('assignSlotIdx').value = '';
+      if (document.getElementById('assignSlotCount')) document.getElementById('assignSlotCount').value = '';
+      resolvedAssignUser = null;
       document.getElementById('assignUserSearch').value = '';
+      document.getElementById('assignUserResult').textContent = '';
     }
 
     function toggleAddForm() {
