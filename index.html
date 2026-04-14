@@ -1347,8 +1347,35 @@
     function viewDetail(listingId) {
       showPage('explore');
       const listing = listings.find(l => l.id === listingId);
-      const stats = getSlotStats(listingId);
       const detail = document.getElementById('detailView');
+
+      // Refresh slots for this listing from Supabase
+      sb.from('slots')
+        .select('*, profiles(id, name, username, rating_count, rating_total)')
+        .eq('listing_id', listingId)
+        .order('idx')
+        .then(({ data: dbSlots }) => {
+          if (dbSlots) {
+            // Replace local slots for this listing
+            slots = slots.filter(s => s.listingId !== listingId);
+            dbSlots.forEach(s => {
+              slots.push({
+                id: s.id,
+                listingId: s.listing_id,
+                idx: s.idx,
+                userId: s.user_id,
+                name: s.profiles?.name || null,
+                username: s.profiles?.username || null,
+                askPrice: s.ask_price || null,
+                tradeOpen: s.trade_open || false,
+                rating: s.profiles ? { count: s.profiles.rating_count, total: s.profiles.rating_total } : null
+              });
+            });
+            viewDetail(listingId); // re-render with fresh data
+          }
+        }).catch(err => console.error('Slot refresh error:', err));
+
+      const stats = getSlotStats(listingId);
       const listingSlots = slots.filter(s => s.listingId === listingId);
 
       let slotGridHTML = '';
@@ -3001,11 +3028,80 @@
       }).join('');
     }
 
+    async function refreshMySlots() {
+      if (!currentUser) return;
+      const { data: dbSlots } = await sb
+        .from('slots')
+        .select('*, listings(id, name, grade, game_type, value, total_slots, status, photos), profiles(id, name, username, rating_count, rating_total)')
+        .eq('user_id', currentUser.id);
+
+      if (dbSlots) {
+        // Update the local slots array - replace entries owned by currentUser
+        slots = slots.filter(s => s.userId !== currentUser.id);
+        dbSlots.forEach(s => {
+          slots.push({
+            id: s.id,
+            listingId: s.listing_id,
+            idx: s.idx,
+            userId: s.user_id,
+            name: s.profiles?.name || null,
+            username: s.profiles?.username || null,
+            askPrice: s.ask_price || null,
+            tradeOpen: s.trade_open || false,
+          });
+          // Also make sure the listing is in our local array
+          if (s.listings && !listings.find(l => l.id === s.listing_id)) {
+            listings.push({
+              id: s.listings.id,
+              name: s.listings.name,
+              grade: s.listings.grade,
+              gameType: s.listings.game_type,
+              value: s.listings.value,
+              totalSlots: s.listings.total_slots,
+              status: s.listings.status,
+              photos: s.listings.photos || [],
+              priceHistory: [],
+              sellVotes: []
+            });
+          }
+        });
+      }
+      renderMySlots();
+    }
+
     function switchAccountTab(tab) {
       document.querySelectorAll('.account-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.account-content').forEach(c => c.classList.remove('active'));
       event.target.classList.add('active');
       document.getElementById(tab).classList.add('active');
+
+      // Refresh data when switching to mySlots or tradeOffers tabs
+      if (tab === 'mySlots' && currentUser) {
+        refreshMySlots();
+      } else if (tab === 'tradeOffers' && currentUser) {
+        sb.from('trade_offers')
+          .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+          .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
+          .order('created_at', { ascending: false })
+          .then(({ data: dbOffers }) => {
+            if (dbOffers) {
+              tradeOffers = dbOffers.map(o => ({
+                id: o.id,
+                fromUserId: o.from_user_id,
+                fromUserName: o.from_profile?.name || 'Unknown',
+                toUserId: o.to_user_id,
+                toUserName: o.to_profile?.name || 'Unknown',
+                fromSlots: o.from_slots || [],
+                toSlots: o.to_slots || [],
+                cashTopup: o.cash_topup || 0,
+                fee: o.fee || 0,
+                status: o.status,
+                ts: new Date(o.created_at)
+              }));
+              renderTradeOffers();
+            }
+          });
+      }
     }
 
     function updateTradeNotification() {
@@ -3046,7 +3142,7 @@
       document.getElementById('addFormWrap').classList.toggle('open');
     }
 
-    function addListing() {
+    async function addListing() {
       const name = document.getElementById('cardName').value;
       const grade = document.getElementById('cardGrade').value;
       const type = document.getElementById('cardType').value;
@@ -3064,49 +3160,69 @@
         return;
       }
 
-      const listing = {
-        id: Math.max(...listings.map(l => l.id)) + 1,
+      const newListing = {
         name, grade, type, gameType, value, totalSlots, status,
         earlyAccessOnly: status === 'early',
         photos: [photoUrl],
         countdown: null,
         certNumber, vaultLocation, insured,
         priceHistory: [{date: new Date().toISOString().split('T')[0], price: value}],
-        sellVotes: [],
-        buyoutOffers: []
+        sellVotes: []
       };
 
-      listings.push(listing);
-      for (let i = 0; i < totalSlots; i++) {
-        slots.push({ listingId: listing.id, idx: i, userId: null, name: null, email: null, askPrice: null, tradeOpen: false });
+      // Write to Supabase first to get a real UUID
+      const { data: dbListing, error } = await sb.from('listings').insert({
+        name: newListing.name,
+        grade: newListing.grade,
+        game_type: newListing.gameType || 'Other',
+        card_type: newListing.type || '',
+        value: newListing.value,
+        total_slots: newListing.totalSlots,
+        status: newListing.status,
+        early_access_only: newListing.earlyAccessOnly || false,
+        cert_number: newListing.certNumber || '',
+        vault_location: newListing.vaultLocation || '',
+        insured: newListing.insured !== false,
+        photos: newListing.photos || [],
+        price_history: [],
+        sell_votes: []
+      }).select().single();
+
+      if (error) {
+        showToast('Error saving listing: ' + error.message);
+        return;
       }
 
-      // Sync to Supabase (fire-and-forget)
-      sb.from('listings').insert({
-        name,
-        grade,
-        game_type: gameType,
-        value,
-        total_slots: totalSlots,
-        status,
-        early_access_only: status === 'early',
-        cert_number: certNumber,
-        vault_location: vaultLocation,
-        insured,
-        photos: [photoUrl]
-      }).select().single().then(({ data: dbListing }) => {
-        if (dbListing) {
-          listing.dbId = dbListing.id;
-          const slotRows = Array.from({ length: totalSlots }, (_, i) => ({
-            listing_id: dbListing.id,
-            idx: i + 1,
-            user_id: null,
-            ask_price: 0,
-            trade_open: false
-          }));
-          sb.from('slots').insert(slotRows).catch(err => console.error('Slots insert error:', err));
-        }
-      }).catch(err => console.error('Listing insert error:', err));
+      // Use the real DB id
+      newListing.id = dbListing.id;
+      listings.unshift(newListing);
+
+      // Create slots in Supabase
+      const slotRows = Array.from({ length: newListing.totalSlots }, (_, i) => ({
+        listing_id: dbListing.id,
+        idx: i + 1,
+        user_id: null,
+        ask_price: 0,
+        trade_open: false
+      }));
+
+      // Insert slots in batches of 100 to avoid request size limits
+      for (let i = 0; i < slotRows.length; i += 100) {
+        await sb.from('slots').insert(slotRows.slice(i, i + 100)).catch(err => console.error('Slots insert error:', err));
+      }
+
+      // Add slots to local array
+      slotRows.forEach((s, i) => {
+        slots.push({
+          id: null, // will be assigned by DB
+          listingId: dbListing.id,
+          idx: i + 1,
+          userId: null,
+          name: null,
+          askPrice: null,
+          tradeOpen: false
+        });
+      });
 
       document.getElementById('cardName').value = '';
       document.getElementById('cardGrade').value = '';
@@ -3118,7 +3234,8 @@
 
       toggleAddForm();
       renderAdmin();
-      alert('Listing added successfully!');
+      renderBrowse();
+      showToast('Listing added successfully!');
     }
 
     let editingListingId = null;
@@ -3350,37 +3467,122 @@
     }
 
     async function initApp() {
+      // Show loading state
+      const browseGrid = document.getElementById('browseGrid');
+      if (browseGrid) browseGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading listings...</div>';
+
       try {
-        // Restore auth session
+        // 1. Restore auth session
         const { data: { session } } = await sb.auth.getSession();
         if (session?.user) {
-          const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single().catch(() => ({ data: null }));
-          currentUser = { ...session.user, ...profile };
-          updateAuthUI();
+          const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+          currentUser = { ...session.user, ...(profile || {}) };
         }
 
-        // Load listings from Supabase
-        const { data: dbListings } = await sb.from('listings').select('*').order('created_at', { ascending: false }).catch(() => ({ data: null }));
-        if (dbListings && dbListings.length > 0) {
+        // 2. Fetch listings from Supabase
+        const { data: dbListings, error: listingsError } = await sb
+          .from('listings')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!listingsError && dbListings && dbListings.length > 0) {
           listings = dbListings.map(l => ({
-            ...l,
+            id: l.id,
+            name: l.name,
+            grade: l.grade,
+            type: l.card_type || '',
+            gameType: l.game_type || 'Other',
+            value: l.value,
             totalSlots: l.total_slots,
+            status: l.status,
             earlyAccessOnly: l.early_access_only,
-            certNumber: l.cert_number,
-            vaultLocation: l.vault_location,
-            gameType: l.game_type,
+            certNumber: l.cert_number || '',
+            vaultLocation: l.vault_location || '',
+            insured: l.insured,
+            photos: l.photos || [],
             priceHistory: l.price_history || [],
             sellVotes: l.sell_votes || [],
-            photos: l.photos || [],
-            buyoutOffers: []
+            countdown: null
+          }));
+        }
+        // else: keep existing demo listings array as fallback
+
+        // 3. Fetch ALL slots from Supabase
+        const { data: dbSlots, error: slotsError } = await sb
+          .from('slots')
+          .select('*, profiles(id, name, username, rating_count, rating_total)')
+          .order('idx');
+
+        if (!slotsError && dbSlots && dbSlots.length > 0) {
+          slots = dbSlots.map(s => ({
+            id: s.id,
+            listingId: s.listing_id,
+            idx: s.idx,
+            userId: s.user_id,
+            name: s.profiles?.name || null,
+            username: s.profiles?.username || null,
+            email: null,
+            askPrice: s.ask_price || null,
+            tradeOpen: s.trade_open || false,
+            rating: s.profiles ? {
+              count: s.profiles.rating_count || 0,
+              total: s.profiles.rating_total || 0
+            } : null
           }));
         }
 
-        renderAllContent();
+        // 4. If user is logged in, fetch their transactions
+        if (currentUser) {
+          const { data: dbTxns } = await sb
+            .from('transactions')
+            .select('*, listings(name)')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false });
+
+          if (dbTxns) {
+            transactions = dbTxns.map(t => ({
+              id: t.id,
+              type: t.type,
+              listingId: t.listing_id,
+              listingName: t.listings?.name || '',
+              slotIdx: t.slot_idx,
+              userId: t.user_id,
+              amount: t.amount,
+              fee: t.fee,
+              ts: new Date(t.created_at)
+            }));
+          }
+
+          // Fetch trade offers
+          const { data: dbOffers } = await sb
+            .from('trade_offers')
+            .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+            .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
+            .order('created_at', { ascending: false });
+
+          if (dbOffers) {
+            tradeOffers = dbOffers.map(o => ({
+              id: o.id,
+              fromUserId: o.from_user_id,
+              fromUserName: o.from_profile?.name || 'Unknown',
+              toUserId: o.to_user_id,
+              toUserName: o.to_profile?.name || 'Unknown',
+              fromSlots: o.from_slots || [],
+              toSlots: o.to_slots || [],
+              cashTopup: o.cash_topup || 0,
+              fee: o.fee || 0,
+              status: o.status,
+              ts: new Date(o.created_at)
+            }));
+          }
+        }
+
       } catch (err) {
-        console.error('Init error:', err);
-        renderAllContent();
+        console.error('initApp error:', err);
+        // Fall back to demo data silently
       }
+
+      renderAllContent();
     }
 
     // Set up auth state listener
