@@ -23,6 +23,8 @@
     .nav-tab:hover{background:var(--surface2);color:var(--text)}
     .nav-tab.active{background:var(--accent);color:#fff}
     .nav-tab .badge-count{position:absolute;top:-8px;right:-8px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700}
+    .nav-tab[data-page="admin"]{display:none}
+    .nav-tab[data-page="admin"].admin-visible{display:flex;align-items:center}
     .auth-buttons{display:flex;gap:8px}
     .auth-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:8px;font-size:.82rem;cursor:pointer;transition:all .15s}
     .auth-btn:hover{border-color:var(--accent);color:var(--accent2)}
@@ -813,19 +815,15 @@
         </div>
       </div>
       <div class="form-group">
-        <label>Primary Photo URL</label>
-        <input type="url" id="cardPhotoMain" placeholder="https://..." />
-      </div>
-      <div class="photo-manager">
-        <div class="photo-preview-grid" id="photoPreview"></div>
-        <div class="photo-actions-row">
-          <button type="button" class="photo-url-btn" onclick="togglePhotoUrl()">+ Add Photo</button>
+        <label>Card Photos</label>
+        <div id="photoUploadArea" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('photoFileInput').click()">
+          <div style="font-size:2rem">📷</div>
+          <div style="color:var(--muted);font-size:.85rem;margin-top:6px">Click to upload photos</div>
+          <div style="color:var(--muted);font-size:.75rem">JPG, PNG, WEBP supported</div>
         </div>
-        <div class="photo-url-row" id="photoUrlRow" style="display:none">
-          <input type="url" id="photoUrl" placeholder="Photo URL" />
-          <button type="button" class="photo-url-add" onclick="addPhoto()">Add</button>
-        </div>
-        <div class="photo-hint">Tip: Add high-resolution photos for better visual appeal</div>
+        <input type="file" id="photoFileInput" accept="image/*" multiple style="display:none" onchange="handlePhotoUpload(event)" />
+        <div id="photoPreviewGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:12px"></div>
+        <div id="photoUploadStatus" style="font-size:.8rem;color:var(--muted);margin-top:6px"></div>
       </div>
       <div style="display:flex;gap:10px;margin-top:16px">
         <button type="button" class="btn btn-primary" onclick="addListing()" style="flex:1">Add Listing</button>
@@ -1104,12 +1102,22 @@
         const { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).single().catch(() => ({ data: null }));
         currentUser = { ...authData.user, ...profile };
         closeModal('loginModal');
-        updateAuthUI();
-        showToast('Welcome back, ' + currentUser.email + '!');
-        showPage('browse');
+
+        // Wrap UI updates separately so they don't trigger the error message
+        try {
+          updateAuthUI();
+          showToast('Welcome back, ' + (currentUser.name || currentUser.email) + '!');
+          showPage('browse');
+        } catch (uiErr) {
+          console.error('UI update error after login:', uiErr);
+        }
+
       } catch (err) {
         console.error('Login error:', err);
-        errorEl.textContent = 'An error occurred. Please try again.';
+        // Only show error if we're not already logged in
+        if (!currentUser) {
+          errorEl.textContent = 'An error occurred. Please try again.';
+        }
       }
     }
 
@@ -1159,15 +1167,23 @@
     function updateAuthUI() {
       const authSection = document.getElementById('authSection');
       const userSection = document.getElementById('userSection');
+      const adminTab = document.querySelector('[data-page="admin"]');
       if (currentUser) {
         authSection.style.display = 'none';
         userSection.style.display = 'block';
         const initials = currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase();
         document.getElementById('avatarInitials').textContent = initials;
         document.getElementById('userName').textContent = currentUser.username;
+        // Show admin tab only if user is admin
+        if (currentUser.is_admin) {
+          adminTab.classList.add('admin-visible');
+        } else {
+          adminTab.classList.remove('admin-visible');
+        }
       } else {
         authSection.style.display = 'flex';
         userSection.style.display = 'none';
+        adminTab.classList.remove('admin-visible');
       }
       renderAllContent();
     }
@@ -1197,6 +1213,15 @@
 
     // ===== PAGES & NAV =====
     function showPage(pageId) {
+      // Guard admin page access
+      if (pageId === 'admin') {
+        if (!currentUser || !currentUser.is_admin) {
+          showToast('Access denied');
+          showPage('browse');
+          return;
+        }
+      }
+
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(pageId + 'Page').classList.add('active');
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -3150,20 +3175,19 @@
       const value = parseInt(document.getElementById('cardValue').value);
       const totalSlots = parseInt(document.getElementById('cardSlots').value);
       const status = document.getElementById('cardStatus').value;
-      const photoUrl = document.getElementById('cardPhotoMain').value;
       const certNumber = document.getElementById('cardCertNumber')?.value || 'N/A';
       const vaultLocation = document.getElementById('cardVaultLocation')?.value || 'Standard Vault';
       const insured = document.getElementById('cardInsured')?.checked || true;
 
-      if (!name || !grade || !type || !value || !totalSlots || !photoUrl) {
-        alert('Please fill all fields');
+      if (!name || !grade || !type || !value || !totalSlots || !pendingPhotoUrls.length) {
+        alert('Please fill all fields and upload at least one photo');
         return;
       }
 
       const newListing = {
         name, grade, type, gameType, value, totalSlots, status,
         earlyAccessOnly: status === 'early',
-        photos: [photoUrl],
+        photos: [...pendingPhotoUrls],
         countdown: null,
         certNumber, vaultLocation, insured,
         priceHistory: [{date: new Date().toISOString().split('T')[0], price: value}],
@@ -3229,8 +3253,10 @@
       document.getElementById('cardType').value = '';
       document.getElementById('cardValue').value = '';
       document.getElementById('cardSlots').value = '';
-      document.getElementById('cardPhotoMain').value = '';
-      document.getElementById('photoPreview').innerHTML = '';
+      document.getElementById('photoPreviewGrid').innerHTML = '';
+      document.getElementById('photoUploadStatus').textContent = '';
+      document.getElementById('photoFileInput').value = '';
+      pendingPhotoUrls = [];
 
       toggleAddForm();
       renderAdmin();
@@ -3343,6 +3369,48 @@
       document.getElementById('revSales').textContent = revSales.toLocaleString();
       document.getElementById('revResales').textContent = revResales.toLocaleString();
       document.getElementById('revCashouts').textContent = revCashouts.toLocaleString();
+    }
+
+    let pendingPhotoUrls = [];
+
+    async function handlePhotoUpload(event) {
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
+
+      const status = document.getElementById('photoUploadStatus');
+      const previewGrid = document.getElementById('photoPreviewGrid');
+      status.textContent = `Uploading ${files.length} photo(s)...`;
+
+      for (const file of files) {
+        try {
+          // Show local preview immediately
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.style.cssText = 'width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border)';
+            previewGrid.appendChild(img);
+          };
+          reader.readAsDataURL(file);
+
+          // Upload to Supabase Storage
+          const ext = file.name.split('.').pop();
+          const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${ext}`;
+          const { error } = await sb.storage.from('card-photos').upload(path, file, { upsert: true });
+
+          if (error) {
+            console.error('Upload error:', error);
+            status.textContent = `Error uploading ${file.name}: ${error.message}`;
+            continue;
+          }
+
+          const { data } = sb.storage.from('card-photos').getPublicUrl(path);
+          pendingPhotoUrls.push(data.publicUrl);
+          status.textContent = `${pendingPhotoUrls.length} photo(s) ready`;
+        } catch (err) {
+          status.textContent = 'Upload failed: ' + err.message;
+        }
+      }
     }
 
     function togglePhotoUrl() {
