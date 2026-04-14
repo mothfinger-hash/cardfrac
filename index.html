@@ -3256,17 +3256,34 @@
       resultEl.textContent = 'Searching...';
       resultEl.style.color = 'var(--muted)';
       assignLookupTimer = setTimeout(async () => {
-        const { data: profiles } = await sb.from('profiles')
-          .select('id, name, username, email')
-          .or(`username.ilike.%${val}%,email.ilike.%${val}%`)
-          .limit(5);
-        if (profiles && profiles.length > 0) {
-          resolvedAssignUser = profiles[0];
-          resultEl.style.color = 'var(--green, #10b981)';
-          resultEl.textContent = `✅ Found: ${resolvedAssignUser.name} (@${resolvedAssignUser.username})${resolvedAssignUser.email ? ' — ' + resolvedAssignUser.email : ''}`;
-        } else {
+        try {
+          // Search by username first
+          let found = null;
+          const { data: byUsername } = await sb.from('profiles')
+            .select('id, name, username, email')
+            .ilike('username', `%${val}%`)
+            .limit(5);
+          if (byUsername?.length > 0) {
+            found = byUsername[0];
+          } else {
+            // Try email if username didn't match
+            const { data: byEmail } = await sb.from('profiles')
+              .select('id, name, username, email')
+              .ilike('email', `%${val}%`)
+              .limit(5);
+            if (byEmail?.length > 0) found = byEmail[0];
+          }
+          if (found) {
+            resolvedAssignUser = found;
+            resultEl.style.color = 'var(--green, #10b981)';
+            resultEl.textContent = `✅ Found: ${found.name} (@${found.username})${found.email ? ' — ' + found.email : ''}`;
+          } else {
+            resultEl.style.color = '#ef4444';
+            resultEl.textContent = '⚠️ No user found. Make sure they have registered.';
+          }
+        } catch (err) {
           resultEl.style.color = '#ef4444';
-          resultEl.textContent = '⚠️ No user found. Make sure they have registered.';
+          resultEl.textContent = '⚠️ Search error: ' + err.message;
         }
       }, 400);
     }
@@ -3287,12 +3304,19 @@
       // Use already-resolved user or look up now
       let profile = resolvedAssignUser;
       if (!profile) {
-        const { data: found } = await sb.from('profiles')
+        const { data: byUsername } = await sb.from('profiles')
           .select('id, name, username, email')
-          .or(`username.ilike.%${userSearch}%,email.ilike.%${userSearch}%`)
-          .limit(1)
-          .maybeSingle();
-        profile = found;
+          .ilike('username', `%${userSearch}%`)
+          .limit(1);
+        if (byUsername?.length > 0) {
+          profile = byUsername[0];
+        } else {
+          const { data: byEmail } = await sb.from('profiles')
+            .select('id, name, username, email')
+            .ilike('email', `%${userSearch}%`)
+            .limit(1);
+          if (byEmail?.length > 0) profile = byEmail[0];
+        }
       }
 
       if (!profile) {
