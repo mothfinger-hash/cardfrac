@@ -1373,7 +1373,7 @@
             <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
             <div class="card-stats">
               <span class="price-tag">$${listing.value.toLocaleString()}</span>
-              ${slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>'}
+              ${listing.status === 'sold' ? '<span class="badge badge-full">Sold Out</span>' : (slotsStatus.taken > 0 && slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>')}
             </div>
             <div class="slots-bar-wrap">
               <div class="slots-bar-label">
@@ -2524,18 +2524,37 @@
       updateTradeNotification();
     }
 
+    let dashboardRefreshing = false;
     function renderDashboard() {
-      // If no local slots for current user, try to refresh from Supabase first
-      const myLocalSlots = slots.filter(s => s.userId === currentUser?.id);
-      if (myLocalSlots.length === 0 && currentUser) {
-        // Data not loaded yet — trigger a refresh and re-render
-        refreshMySlots().then(() => renderDashboard());
+      if (!currentUser) return;
+      const myLocalSlots = slots.filter(s => s.userId === currentUser.id);
+
+      // If no slots loaded yet, do one refresh then render regardless
+      if (myLocalSlots.length === 0 && !dashboardRefreshing) {
+        dashboardRefreshing = true;
+        refreshMySlots().then(() => {
+          dashboardRefreshing = false;
+          renderDashboard();
+        });
+        document.getElementById('dashboardContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Loading portfolio...</div>';
         return;
       }
 
       const mySlots = slots.filter(s => s.userId === currentUser.id);
+
+      if (mySlots.length === 0) {
+        document.getElementById('dashboardContent').innerHTML = `
+          <div style="text-align:center;padding:60px 20px;color:var(--muted)">
+            <div style="font-size:3rem;margin-bottom:16px">📊</div>
+            <div style="font-size:1.1rem;font-weight:600;margin-bottom:8px">No holdings yet</div>
+            <div style="font-size:.9rem">Once you own slots, your portfolio will appear here.</div>
+          </div>`;
+        return;
+      }
+
       const totalHoldingsValue = mySlots.reduce((sum, slot) => {
-        const listing = listings.find(l => l.id === slot.listingId);
+        const listing = listings.find(l => String(l.id) === String(slot.listingId));
+        if (!listing) return sum;
         return sum + Math.ceil(listing.value / listing.totalSlots);
       }, 0);
       const portfolioValue = listings.map(l => {
@@ -2810,7 +2829,7 @@
             <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
             <div class="card-stats">
               <span class="price-tag">$${listing.value.toLocaleString()}</span>
-              ${slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>'}
+              ${listing.status === 'sold' ? '<span class="badge badge-full">Sold Out</span>' : (slotsStatus.taken > 0 && slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>')}
             </div>
           </div>
         </div>`;
