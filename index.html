@@ -1137,52 +1137,38 @@
 
     async function handleLogin(e) {
       e.preventDefault();
-      const email = document.getElementById('loginEmail').value;
+      const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
       const errorEl = document.getElementById('loginError');
       errorEl.textContent = '';
 
-      const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) {
-        errorEl.textContent = error.message || 'Invalid email or password';
-        return;
-      }
-
-      // Close modal IMMEDIATELY after successful auth — before any other async work
-      document.getElementById('loginModal').classList.remove('open');
-
-      // Set a basic currentUser right away so the UI updates instantly
-      currentUser = { ...authData.user };
-      try { updateAuthUI(); } catch(e) { console.warn('updateAuthUI:', e); }
-
-      // Then load profile in background
       try {
-        let { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
-        if (!profile) {
-          const meta = authData.user.user_metadata || {};
-          const username = meta.username || 'user_' + authData.user.id.slice(0, 8);
-          const { error: insertErr } = await sb.from('profiles').insert({
-            id: authData.user.id,
-            name: meta.name || authData.user.email.split('@')[0],
-            username,
-            email: authData.user.email,
-            referral_code: username + '_' + Math.random().toString(36).slice(2, 6)
-          });
-          if (!insertErr) {
-            const { data: fresh } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
-            profile = fresh;
-          }
+        const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          errorEl.textContent = error.message || 'Invalid email or password';
+          return;
         }
-        if (profile) {
-          currentUser = { ...authData.user, ...profile };
-          try { updateAuthUI(); } catch(e) { console.warn('updateAuthUI after profile:', e); }
-        }
-      } catch (profileErr) {
-        console.warn('Profile load error (non-fatal):', profileErr.message);
-      }
 
-      showToast('Welcome back, ' + (currentUser.name || currentUser.email) + '!');
-      showPage('browse');
+        // Close modal immediately after auth succeeds
+        document.getElementById('loginModal').classList.remove('open');
+        currentUser = { ...authData.user };
+        try { updateAuthUI(); } catch(uiErr) { console.warn('updateAuthUI:', uiErr); }
+        showToast('Welcome back!');
+        showPage('browse');
+
+        // Load full profile in background (non-blocking)
+        sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle().then(({ data: profile }) => {
+          if (profile) {
+            currentUser = { ...authData.user, ...profile };
+            try { updateAuthUI(); } catch(uiErr) {}
+            showToast('Welcome back, ' + (profile.name || authData.user.email) + '!');
+          }
+        }).catch(err => console.warn('Profile fetch:', err.message));
+
+      } catch (err) {
+        console.error('Login error:', err);
+        errorEl.textContent = err.message || 'An error occurred. Please try again.';
+      }
     }
 
     async function handleRegister(e) {
