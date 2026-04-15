@@ -1150,19 +1150,23 @@
         }
 
         let { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
-        // If profile doesn't exist yet, create it now
+        // If profile doesn't exist yet, try to create it (non-blocking)
         if (!profile) {
-          const meta = authData.user.user_metadata || {};
-          const username = meta.username || 'user_' + authData.user.id.slice(0, 8);
-          await sb.from('profiles').insert({
-            id: authData.user.id,
-            name: meta.name || authData.user.email.split('@')[0],
-            username,
-            email: authData.user.email,
-            referral_code: username + '_' + Math.random().toString(36).slice(2, 6)
-          });
-          const { data: newProfile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
-          profile = newProfile;
+          try {
+            const meta = authData.user.user_metadata || {};
+            const username = meta.username || 'user_' + authData.user.id.slice(0, 8);
+            await sb.from('profiles').insert({
+              id: authData.user.id,
+              name: meta.name || authData.user.email.split('@')[0],
+              username,
+              email: authData.user.email,
+              referral_code: username + '_' + Math.random().toString(36).slice(2, 6)
+            });
+            const { data: newProfile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
+            profile = newProfile;
+          } catch (profileErr) {
+            console.warn('Could not create profile:', profileErr.message);
+          }
         }
         currentUser = { ...authData.user, ...(profile || {}) };
         document.getElementById('loginModal').classList.remove('open');
@@ -2539,7 +2543,9 @@
         const slotValue = Math.ceil(l.value / l.totalSlots);
         return owned * slotValue;
       }).reduce((a, b) => a + b, 0);
-      const avgRating = currentUser.rating.count > 0 ? (currentUser.rating.total / currentUser.rating.count).toFixed(1) : 'N/A';
+      const ratingCount = currentUser.rating_count || currentUser.rating?.count || 0;
+      const ratingTotal = currentUser.rating_total || currentUser.rating?.total || 0;
+      const avgRating = ratingCount > 0 ? (ratingTotal / ratingCount).toFixed(1) : 'N/A';
 
       // Build holdings data with enhanced metrics
       const holdingsByCard = {};
@@ -2560,7 +2566,7 @@
       // Calculate avg buy-in price for each holding
       Object.keys(holdingsByCard).forEach(listingId => {
         const holding = holdingsByCard[listingId];
-        const buyTransactions = transactions.filter(t => t.userId === currentUser.id && t.listingId === parseInt(listingId) && (t.type === 'buy' || t.type === 'resale'));
+        const buyTransactions = transactions.filter(t => t.userId === currentUser.id && String(t.listingId) === String(listingId) && (t.type === 'buy' || t.type === 'resale'));
         if (buyTransactions.length > 0) {
           const avgBuyIn = Math.round(buyTransactions.reduce((sum, t) => sum + t.amount, 0) / buyTransactions.length);
           holding.avgBuyIn = avgBuyIn;
@@ -2928,22 +2934,22 @@
       `;
 
       html += Object.keys(slotsByListing).map(listingId => {
-        const listingIdNum = parseInt(listingId);
-        const listing = listings.find(l => l.id === listingIdNum);
+        const listing = listings.find(l => String(l.id) === String(listingId));
+        if (!listing) return '';
         const cardsSlots = slotsByListing[listingId].sort((a, b) => a.idx - b.idx);
-        const isExpanded = expandedCards[listingIdNum];
+        const isExpanded = expandedCards[listingId];
         const slotPrice = Math.ceil(listing.value / listing.totalSlots);
         const totalValue = cardsSlots.length * slotPrice;
         const chevron = isExpanded ? '▼' : '▶';
+        const safeId = String(listingId).replace(/[^a-zA-Z0-9_-]/g, '_');
 
         let cardHtml = `<div style="grid-column:1/-1;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;overflow:hidden;background:var(--surface)">`;
 
-        // Main card header (collapsible)
-        cardHtml += `<div style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:${isExpanded ? '1px solid var(--border)' : 'none'};hover:background:var(--surface2)" onclick="toggleCardExpand(${listingIdNum})" style="transition:background .2s">
+        cardHtml += `<div style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:${isExpanded ? '1px solid var(--border)' : 'none'};transition:background .2s" onclick="toggleCardExpand('${listingId}')">
           <div style="width:20px;text-align:center;color:var(--accent);font-weight:bold">${chevron}</div>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:.95rem;margin-bottom:2px">${listing.name}</div>
-            <div style="font-size:.8rem;color:var(--muted)">${listing.grade} • ${listing.gameType}</div>
+            <div style="font-size:.8rem;color:var(--muted)">${listing.grade} • ${listing.gameType || listing.type || ''}</div>
           </div>
           <div style="display:flex;gap:16px;align-items:center;text-align:right">
             <div>
@@ -2963,7 +2969,7 @@
             <table style="width:100%;border-collapse:collapse;font-size:.85rem">
               <thead>
                 <tr style="border-bottom:1px solid var(--border);text-align:left">
-                  <th style="padding:8px 0;color:var(--muted);font-weight:600;width:60px"><input type="checkbox" onchange="toggleAllListingSlots(${listingIdNum}, this.checked)"></th>
+                  <th style="padding:8px 0;color:var(--muted);font-weight:600;width:60px"><input type="checkbox" onchange="toggleAllListingSlots('${listingId}', this.checked)"></th>
                   <th style="padding:8px 0;color:var(--muted);font-weight:600">Slot #</th>
                   <th style="padding:8px 0;color:var(--muted);font-weight:600">Ask Price</th>
                   <th style="padding:8px 0;color:var(--muted);font-weight:600">Status</th>
@@ -2976,15 +2982,15 @@
                   const isSelected = mySlotSelection.has(`${slot.listingId}:${slot.idx}`);
                   const status = slot.askPrice ? 'Listed' : 'Unlisted';
                   return `<tr style="border-bottom:1px solid var(--border);background:${isSelected ? 'rgba(124,92,252,.1)' : 'transparent'}">
-                    <td style="padding:8px 0"><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleSlotSelection(${slot.listingId}, ${slot.idx})"></td>
-                    <td style="padding:8px 0">#${slot.idx + 1}</td>
+                    <td style="padding:8px 0"><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleSlotSelection('${slot.listingId}', ${slot.idx})"></td>
+                    <td style="padding:8px 0">#${slot.idx}</td>
                     <td style="padding:8px 0">${slot.askPrice ? '$' + slot.askPrice : '—'}</td>
                     <td style="padding:8px 0"><span style="color:${slot.askPrice ? 'var(--orange)' : 'var(--muted)'};">${status}</span></td>
                     <td style="padding:8px 0"><span style="color:var(--muted)">–</span></td>
                     <td style="padding:8px 0;display:flex;gap:6px">
-                      ${!slot.askPrice ? `<button class="mini-btn" onclick="openListForSaleModal(${slot.listingId}, ${slot.idx})" style="font-size:.75rem">List</button>` : `<button class="mini-btn" onclick="delistSlot(${slot.listingId}, ${slot.idx})" style="font-size:.75rem">Delist</button>`}
-                      <button class="mini-btn" onclick="openCashoutModal(${slot.listingId}, ${slot.idx}, ${Math.floor(slotPrice * 0.9)})" style="font-size:.75rem">Cash</button>
-                      <button class="mini-btn" onclick="voteToSellSlot(event, ${slot.listingId})" style="font-size:.75rem">Vote</button>
+                      ${!slot.askPrice ? `<button class="mini-btn" onclick="openListForSaleModal('${slot.listingId}', ${slot.idx})" style="font-size:.75rem">List</button>` : `<button class="mini-btn" onclick="delistSlot('${slot.listingId}', ${slot.idx})" style="font-size:.75rem">Delist</button>`}
+                      <button class="mini-btn" onclick="openCashoutModal('${slot.listingId}', ${slot.idx}, ${Math.floor(slotPrice * 0.9)})" style="font-size:.75rem">Cash</button>
+                      <button class="mini-btn" onclick="voteToSellSlot(event, '${slot.listingId}')" style="font-size:.75rem">Vote</button>
                     </td>
                   </tr>`;
                 }).join('')}
@@ -3495,7 +3501,11 @@
 
       // Insert slots in batches of 100 to avoid request size limits
       for (let i = 0; i < slotRows.length; i += 100) {
-        await sb.from('slots').insert(slotRows.slice(i, i + 100)).catch(err => console.error('Slots insert error:', err));
+        const { error: slotErr } = await sb.from('slots').insert(slotRows.slice(i, i + 100));
+        if (slotErr) {
+          showToast('Warning: slots may not have saved — ' + slotErr.message);
+          console.error('Slots insert error:', slotErr);
+        }
       }
 
       // Add slots to local array
