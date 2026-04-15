@@ -1141,33 +1141,39 @@
       const errorEl = document.getElementById('loginError');
       errorEl.textContent = '';
 
-      try {
-        const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) {
-          errorEl.textContent = error.message || 'Invalid email or password';
-          return;
-        }
+      if (!email || !password) {
+        errorEl.textContent = 'Please enter your email and password.';
+        return;
+      }
 
-        // Close modal immediately after auth succeeds
-        document.getElementById('loginModal').classList.remove('open');
-        currentUser = { ...authData.user };
-        try { updateAuthUI(); } catch(uiErr) { console.warn('updateAuthUI:', uiErr); }
-        showToast('Welcome back!');
-        showPage('browse');
+      // Close modal before the async call so timing can never leave it open
+      closeModal('loginModal');
+      showToast('Signing in...');
 
-        // Load full profile in background (non-blocking)
-        sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle().then(({ data: profile }) => {
+      const { data: authData, error } = await sb.auth.signInWithPassword({ email, password }).catch(e => ({ data: null, error: e }));
+
+      if (error || !authData?.user) {
+        // Re-open modal and show error if auth failed
+        openModal('loginModal');
+        errorEl.textContent = error?.message || 'Sign in failed. Please try again.';
+        return;
+      }
+
+      currentUser = { ...authData.user };
+      updateAuthUI();
+      showPage('browse');
+
+      // Load profile in background
+      sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle()
+        .then(({ data: profile }) => {
           if (profile) {
             currentUser = { ...authData.user, ...profile };
-            try { updateAuthUI(); } catch(uiErr) {}
-            showToast('Welcome back, ' + (profile.name || authData.user.email) + '!');
+            updateAuthUI();
           }
-        }).catch(err => console.warn('Profile fetch:', err.message));
-
-      } catch (err) {
-        console.error('Login error:', err);
-        errorEl.textContent = err.message || 'An error occurred. Please try again.';
-      }
+          showToast('Welcome back, ' + (currentUser.name || currentUser.email || 'there') + '!');
+        }).catch(() => {
+          showToast('Welcome back!');
+        });
     }
 
     async function handleRegister(e) {
@@ -1434,8 +1440,13 @@
 
     // ===== DETAIL VIEW =====
     function viewDetail(listingId) {
+      const listing = listings.find(l => String(l.id) === String(listingId));
+      if (!listing) {
+        showToast('Listing not found — refreshing...');
+        initApp().then(() => viewDetail(listingId));
+        return;
+      }
       showPage('explore');
-      const listing = listings.find(l => l.id == listingId);
       const detail = document.getElementById('detailView');
 
       // Refresh slots for this listing from Supabase
@@ -3527,15 +3538,21 @@
         });
       });
 
+      // Reset form state FIRST before any re-renders
+      pendingPhotoUrls = [];
       document.getElementById('cardName').value = '';
       document.getElementById('cardGrade').value = '';
       document.getElementById('cardType').value = '';
       document.getElementById('cardValue').value = '';
       document.getElementById('cardSlots').value = '';
-      document.getElementById('photoPreviewGrid').innerHTML = '';
-      document.getElementById('photoUploadStatus').textContent = '';
-      document.getElementById('photoFileInput').value = '';
-      pendingPhotoUrls = [];
+      const previewGrid = document.getElementById('photoPreviewGrid');
+      if (previewGrid) previewGrid.innerHTML = '';
+      const uploadStatus = document.getElementById('photoUploadStatus');
+      if (uploadStatus) uploadStatus.textContent = '';
+      const fileInput = document.getElementById('photoFileInput');
+      if (fileInput) fileInput.value = '';
+      const uploadArea = document.getElementById('photoUploadArea');
+      if (uploadArea) uploadArea.style.border = '2px dashed var(--border)';
 
       toggleAddForm();
       renderAdmin();
