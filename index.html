@@ -507,11 +507,11 @@
       <div>
         <div class="form-group">
           <label>Email</label>
-          <input type="text" id="loginEmail" placeholder="Enter your email" autocomplete="email" />
+          <input type="text" id="loginEmail" placeholder="Enter your email" autocomplete="email" onkeydown="if(event.key==='Enter')handleLogin()" />
         </div>
         <div class="form-group">
           <label>Password</label>
-          <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" />
+          <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()" />
         </div>
         <div id="loginError" style="color:#ef4444;font-size:.82rem;margin-bottom:8px;min-height:18px"></div>
         <button type="button" class="btn btn-primary" onclick="handleLogin()" style="width:100%">Sign In</button>
@@ -1235,7 +1235,6 @@
         userSection.style.display = 'none';
         adminTab.classList.remove('admin-visible');
       }
-      renderAllContent();
     }
 
     document.getElementById('loginBtn').addEventListener('click', () => openModal('loginModal'));
@@ -4041,8 +4040,8 @@
         // Fall back to demo data silently
       }
 
-      updateAuthUI();
       renderAllContent();
+      updateAuthUI();
     }
 
     // Set up auth state listener
