@@ -1142,51 +1142,47 @@
       const errorEl = document.getElementById('loginError');
       errorEl.textContent = '';
 
-      try {
-        const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) {
-          errorEl.textContent = error.message || 'Invalid email or password';
-          return;
-        }
+      const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) {
+        errorEl.textContent = error.message || 'Invalid email or password';
+        return;
+      }
 
+      // Close modal IMMEDIATELY after successful auth — before any other async work
+      document.getElementById('loginModal').classList.remove('open');
+
+      // Set a basic currentUser right away so the UI updates instantly
+      currentUser = { ...authData.user };
+      try { updateAuthUI(); } catch(e) { console.warn('updateAuthUI:', e); }
+
+      // Then load profile in background
+      try {
         let { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
-        // If profile doesn't exist yet, try to create it (non-blocking)
         if (!profile) {
-          try {
-            const meta = authData.user.user_metadata || {};
-            const username = meta.username || 'user_' + authData.user.id.slice(0, 8);
-            await sb.from('profiles').insert({
-              id: authData.user.id,
-              name: meta.name || authData.user.email.split('@')[0],
-              username,
-              email: authData.user.email,
-              referral_code: username + '_' + Math.random().toString(36).slice(2, 6)
-            });
-            const { data: newProfile } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
-            profile = newProfile;
-          } catch (profileErr) {
-            console.warn('Could not create profile:', profileErr.message);
+          const meta = authData.user.user_metadata || {};
+          const username = meta.username || 'user_' + authData.user.id.slice(0, 8);
+          const { error: insertErr } = await sb.from('profiles').insert({
+            id: authData.user.id,
+            name: meta.name || authData.user.email.split('@')[0],
+            username,
+            email: authData.user.email,
+            referral_code: username + '_' + Math.random().toString(36).slice(2, 6)
+          });
+          if (!insertErr) {
+            const { data: fresh } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
+            profile = fresh;
           }
         }
-        currentUser = { ...authData.user, ...(profile || {}) };
-        document.getElementById('loginModal').classList.remove('open');
-
-        // Wrap UI updates separately so they don't trigger the error message
-        try {
-          updateAuthUI();
-          showToast('Welcome back, ' + (currentUser.name || currentUser.email) + '!');
-          showPage('browse');
-        } catch (uiErr) {
-          console.error('UI update error after login:', uiErr);
+        if (profile) {
+          currentUser = { ...authData.user, ...profile };
+          try { updateAuthUI(); } catch(e) { console.warn('updateAuthUI after profile:', e); }
         }
-
-      } catch (err) {
-        console.error('Login error:', err);
-        // Only show error if we're not already logged in
-        if (!currentUser) {
-          errorEl.textContent = 'An error occurred. Please try again.';
-        }
+      } catch (profileErr) {
+        console.warn('Profile load error (non-fatal):', profileErr.message);
       }
+
+      showToast('Welcome back, ' + (currentUser.name || currentUser.email) + '!');
+      showPage('browse');
     }
 
     async function handleRegister(e) {
@@ -3968,24 +3964,26 @@
     }
 
     async function initApp() {
-      // Show loading state
       const browseGrid = document.getElementById('browseGrid');
-      if (browseGrid) browseGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading listings...</div>';
+      if (browseGrid) browseGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
 
       try {
-        // 1. Restore auth session
-        const { data: { session } } = await sb.auth.getSession();
+        // 1. Restore auth session + fetch listings + fetch slots — all in parallel
+        const [sessionResult, listingsResult, slotsResult] = await Promise.all([
+          sb.auth.getSession(),
+          sb.from('listings').select('*').order('created_at', { ascending: false }),
+          sb.from('slots').select('*').order('idx')
+        ]);
+
+        // Restore session
+        const session = sessionResult.data?.session;
         if (session?.user) {
           const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
           currentUser = { ...session.user, ...(profile || {}) };
         }
 
-        // 2. Fetch listings from Supabase
-        const { data: dbListings, error: listingsError } = await sb
-          .from('listings')
-          .select('*')
-          .order('created_at', { ascending: false });
-
+        // Load listings
+        const { data: dbListings, error: listingsError } = listingsResult;
         if (!listingsError && dbListings && dbListings.length > 0) {
           listings = dbListings.map(l => ({
             id: l.id,
@@ -4006,74 +4004,49 @@
             countdown: null
           }));
         }
-        // else: keep existing demo listings array as fallback
 
-        // 3. Fetch ALL slots from Supabase
-        const { data: dbSlots, error: slotsError } = await sb
-          .from('slots')
-          .select('*')
-          .order('idx');
-
+        // Load slots
+        const { data: dbSlots, error: slotsError } = slotsResult;
         if (!slotsError && dbSlots && dbSlots.length > 0) {
           slots = dbSlots.map(s => ({
             id: s.id,
             listingId: s.listing_id,
             idx: s.idx,
             userId: s.user_id,
-            name: s.profiles?.name || null,
-            username: s.profiles?.username || null,
+            name: null,
             email: null,
-            askPrice: s.ask_price || null,
-            tradeOpen: s.trade_open || false,
-            rating: s.profiles ? {
-              count: s.profiles.rating_count || 0,
-              total: s.profiles.rating_total || 0
-            } : null
+            askPrice: s.ask_price > 0 ? s.ask_price : null,
+            tradeOpen: s.trade_open || false
           }));
         }
 
-        // 4. If user is logged in, fetch their transactions
+        // 2. If logged in, fetch user-specific data in parallel
         if (currentUser) {
-          const { data: dbTxns } = await sb
-            .from('transactions')
-            .select('*, listings(name)')
-            .eq('user_id', currentUser.id)
-            .order('created_at', { ascending: false });
+          const [txnResult, offerResult] = await Promise.all([
+            sb.from('transactions').select('*, listings(name)').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
+            sb.from('trade_offers')
+              .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+              .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
+              .order('created_at', { ascending: false })
+          ]);
 
-          if (dbTxns) {
-            transactions = dbTxns.map(t => ({
-              id: t.id,
-              type: t.type,
-              listingId: t.listing_id,
-              listingName: t.listings?.name || '',
-              slotIdx: t.slot_idx,
-              userId: t.user_id,
-              amount: t.amount,
-              fee: t.fee,
+          if (txnResult.data) {
+            transactions = txnResult.data.map(t => ({
+              id: t.id, type: t.type, listingId: t.listing_id,
+              listingName: t.listings?.name || '', slotIdx: t.slot_idx,
+              userId: t.user_id, amount: t.amount, fee: t.fee,
               ts: new Date(t.created_at)
             }));
           }
 
-          // Fetch trade offers
-          const { data: dbOffers } = await sb
-            .from('trade_offers')
-            .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
-            .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
-            .order('created_at', { ascending: false });
-
-          if (dbOffers) {
-            tradeOffers = dbOffers.map(o => ({
-              id: o.id,
-              fromUserId: o.from_user_id,
+          if (offerResult.data) {
+            tradeOffers = offerResult.data.map(o => ({
+              id: o.id, fromUserId: o.from_user_id,
               fromUserName: o.from_profile?.name || 'Unknown',
-              toUserId: o.to_user_id,
-              toUserName: o.to_profile?.name || 'Unknown',
-              fromSlots: o.from_slots || [],
-              toSlots: o.to_slots || [],
-              cashTopup: o.cash_topup || 0,
-              fee: o.fee || 0,
-              status: o.status,
-              ts: new Date(o.created_at)
+              toUserId: o.to_user_id, toUserName: o.to_profile?.name || 'Unknown',
+              fromSlots: o.from_slots || [], toSlots: o.to_slots || [],
+              cashTopup: o.cash_topup || 0, fee: o.fee || 0,
+              status: o.status, ts: new Date(o.created_at)
             }));
           }
         }
