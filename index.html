@@ -518,7 +518,7 @@
         <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
           Don't have an account? <a href="#" onclick="switchModal('loginModal','registerModal');return false" style="color:var(--accent2);text-decoration:none">Register</a>
         </p>
-      </form>
+      </div>
     </div>
   </div>
 
@@ -1297,7 +1297,9 @@
     // ===== BROWSE =====
     function renderBrowse() {
       const grid = document.getElementById('browseGrid');
-      const tabFilter = document.querySelector('.section-tab.active').textContent.toLowerCase();
+      if (!grid) return;
+      const activeTab = document.querySelector('.section-tab.active');
+      const tabFilter = activeTab ? activeTab.textContent.toLowerCase() : 'all';
 
       let filtered = listings.filter(listing => {
         const shouldShowByTab = tabFilter === 'all' || (tabFilter === 'available' && listing.status === 'available') ||
