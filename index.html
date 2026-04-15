@@ -1458,7 +1458,7 @@
 
       // Refresh slots for this listing from Supabase
       sb.from('slots')
-        .select('*, profiles(id, name, username, rating_count, rating_total)')
+        .select('*')
         .eq('listing_id', listingId)
         .order('idx')
         .then(({ data: dbSlots }) => {
@@ -3173,7 +3173,7 @@
       if (!currentUser) return;
       const { data: dbSlots, error } = await sb
         .from('slots')
-        .select('*, listings(id, name, grade, game_type, value, total_slots, status, photos), profiles(id, name, username, rating_count, rating_total)')
+        .select('*, listings(id, name, grade, game_type, value, total_slots, status, photos)')
         .eq('user_id', currentUser.id);
 
       if (error) { console.error('refreshMySlots error:', error); return; }
@@ -4011,7 +4011,7 @@
         // 3. Fetch ALL slots from Supabase
         const { data: dbSlots, error: slotsError } = await sb
           .from('slots')
-          .select('*, profiles(id, name, username, rating_count, rating_total)')
+          .select('*')
           .order('idx');
 
         if (!slotsError && dbSlots && dbSlots.length > 0) {
