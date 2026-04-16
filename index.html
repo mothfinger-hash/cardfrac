@@ -1308,14 +1308,22 @@
       const tabFilter = activeTab ? activeTab.textContent.toLowerCase() : 'all';
 
       let filtered = listings.filter(listing => {
-        const shouldShowByTab = tabFilter === 'all' || (tabFilter === 'available' && listing.status === 'available') ||
-                          (tabFilter === 'sold out' && listing.status === 'sold') ||
-                          (tabFilter.includes('early') && listing.earlyAccessOnly);
+        const slotStats = getSlotStats(listing.id);
+        const isEarlyAccess = listing.earlyAccessOnly || listing.status === 'early';
+        // A listing is "sold out" if DB status is 'sold', or all its slots are taken
+        const isSoldOut = listing.status === 'sold' ||
+          (listing.totalSlots > 0 && slotStats.available === 0 && slotStats.taken > 0);
+        const isAvailable = !isSoldOut && !isEarlyAccess;
+
+        const shouldShowByTab = tabFilter === 'all' ||
+          (tabFilter === 'available' && isAvailable) ||
+          (tabFilter === 'sold out' && isSoldOut) ||
+          (tabFilter.includes('early') && isEarlyAccess);
         if (!shouldShowByTab) return false;
 
         const search = browseSearchQuery.toLowerCase();
         const matchesSearch = search === '' || listing.name.toLowerCase().includes(search) ||
-                            listing.type.toLowerCase().includes(search) ||
+                            (listing.type || '').toLowerCase().includes(search) ||
                             listing.grade.toLowerCase().includes(search);
         if (!matchesSearch) return false;
 
@@ -1324,19 +1332,17 @@
       });
 
       filtered.sort((a, b) => {
-        if (browseSortFilter === 'price-high') return b.value - a.value;
-        if (browseSortFilter === 'price-low') return a.value - b.value;
+        if (browseSortFilter === 'price-high') return (b.value || 0) - (a.value || 0);
+        if (browseSortFilter === 'price-low') return (a.value || 0) - (b.value || 0);
         if (browseSortFilter === 'slots') {
-          const aAvail = getSlotStats(a.id).available;
-          const bAvail = getSlotStats(b.id).available;
-          return bAvail - aAvail;
+          return getSlotStats(b.id).available - getSlotStats(a.id).available;
         }
         if (browseSortFilter === 'hottest') {
-          const aFilled = (getSlotStats(a.id).taken / a.totalSlots) * 100;
-          const bFilled = (getSlotStats(b.id).taken / b.totalSlots) * 100;
+          const aFilled = a.totalSlots > 0 ? (getSlotStats(a.id).taken / a.totalSlots) * 100 : 0;
+          const bFilled = b.totalSlots > 0 ? (getSlotStats(b.id).taken / b.totalSlots) * 100 : 0;
           return bFilled - aFilled;
         }
-        return b.id - a.id;
+        return 0; // 'newest' — keep DB fetch order (already sorted by created_at desc)
       });
 
       const showClearBtn = browseSearchQuery !== '' || browseGameTypeFilter !== 'all' || browseSortFilter !== 'newest';
@@ -1357,11 +1363,12 @@
         const displayValue = listing.value ? Number(listing.value).toLocaleString() : '—';
         const totalSlots = listing.totalSlots || 100;
 
+        const cardIsSoldOut = listing.status === 'sold' || (totalSlots > 0 && slotsStatus.available === 0 && slotsStatus.taken > 0);
         const isWatched = currentUser && currentUser.watchlist && currentUser.watchlist.includes(listing.id);
-        return `<div class="listing-card ${listing.earlyAccessOnly ? 'early-access-card' : ''} ${listing.status === 'sold' ? 'locked-card' : ''}" style="position:relative">
+        return `<div class="listing-card ${listing.earlyAccessOnly ? 'early-access-card' : ''} ${cardIsSoldOut ? 'locked-card' : ''}" style="position:relative">
           ${listing.earlyAccessOnly ? '<div class="ea-ribbon">Premium Only</div>' : ''}
           ${votePassed ? '<div class="vote-banner">🔨 Vote Passed</div>' : ''}
-          ${listing.status === 'sold' && !votePassed ? '<div class="lock-overlay"><div class="lock-icon">🔒</div><p>Sold Out</p></div>' : ''}
+          ${cardIsSoldOut && !votePassed ? '<div class="lock-overlay"><div class="lock-icon">🔒</div><p>Sold Out</p></div>' : ''}
           <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event, '${listing.id}')">🔔</button>
           <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" onerror="this.src='${PLACEHOLDER_IMG}'" />
@@ -1372,7 +1379,7 @@
             <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
             <div class="card-stats">
               <span class="price-tag">$${displayValue}</span>
-              ${listing.status === 'sold' ? '<span class="badge badge-full">Sold Out</span>' : (slotsStatus.taken > 0 && slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>')}
+              ${cardIsSoldOut ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>'}
             </div>
             <div class="slots-bar-wrap">
               <div class="slots-bar-label">
