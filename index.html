@@ -1460,30 +1460,84 @@
       showPage('explore');
       const detail = document.getElementById('detailView');
 
-      // Refresh slots for this listing from Supabase
+      // Refresh slots for this listing from Supabase — update in-place so navigation is not disrupted
       sb.from('slots')
         .select('*')
         .eq('listing_id', listingId)
         .order('idx')
         .then(({ data: dbSlots }) => {
-          if (dbSlots) {
-            // Replace local slots for this listing
-            slots = slots.filter(s => s.listingId !== listingId);
-            dbSlots.forEach(s => {
-              slots.push({
-                id: s.id,
-                listingId: s.listing_id,
-                idx: s.idx,
-                userId: s.user_id,
-                name: s.profiles?.name || null,
-                username: s.profiles?.username || null,
-                askPrice: s.ask_price || null,
-                tradeOpen: s.trade_open || false,
-                rating: s.profiles ? { count: s.profiles.rating_count, total: s.profiles.rating_total } : null
-              });
+          if (!dbSlots) return;
+          // Update local slots array
+          slots = slots.filter(s => String(s.listingId) !== String(listingId));
+          dbSlots.forEach(s => {
+            slots.push({
+              id: s.id,
+              listingId: s.listing_id,
+              idx: s.idx,
+              userId: s.user_id,
+              name: null,
+              username: null,
+              askPrice: s.ask_price || null,
+              tradeOpen: s.trade_open || false,
             });
-            viewDetail(listingId); // re-render with fresh data
+          });
+
+          // Only update DOM if still on this listing's explore page
+          const explorePage = document.getElementById('explorePage');
+          if (!explorePage || !explorePage.classList.contains('active')) return;
+
+          const freshListing = listings.find(l => String(l.id) === String(listingId));
+          if (!freshListing) return;
+          const freshListingSlots = slots.filter(s => String(s.listingId) === String(listingId));
+          const freshSlotPrice = freshListing.value && freshListing.totalSlots ? Math.ceil(freshListing.value / freshListing.totalSlots) : 0;
+
+          // Rebuild slot grid HTML in-place
+          let newSlotGridHTML = '';
+          for (let i = 0; i < freshListing.totalSlots; i += 10) {
+            newSlotGridHTML += '<div class="slot-grid">';
+            for (let j = 0; j < 10 && i + j < freshListing.totalSlots; j++) {
+              const slot = freshListingSlots.find(s => s.idx === i + j + 1) || { userId: null, askPrice: null, idx: i + j + 1 };
+              const isYours = currentUser && slot.userId === currentUser.id;
+              const isTaken = slot.userId && !isYours;
+              let classes = 'slot-cell';
+              if (isYours) classes += ' yours';
+              else if (slot.askPrice) classes += ' forsale';
+              else if (isTaken) classes += ' taken';
+              newSlotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j}, ${isYours})">
+                ${i + j + 1}
+                <div class="tooltip">${slot.userId ? (isYours ? 'Your slot' : 'Owned') : ('$' + freshSlotPrice)}</div>
+              </div>`;
+            }
+            newSlotGridHTML += '</div>';
           }
+          const slotGridSection = document.querySelector('#detailView .slot-grid-section');
+          if (slotGridSection) {
+            slotGridSection.innerHTML = `<h3>Ownership Grid</h3>
+              <div class="slot-legend">
+                <div><span class="legend-dot ld-available"></span> Available</div>
+                <div><span class="legend-dot ld-taken"></span> Owned</div>
+                <div><span class="legend-dot ld-yours"></span> Your Slot</div>
+                <div><span class="legend-dot ld-forsale"></span> Listed for Sale</div>
+              </div>${newSlotGridHTML}`;
+          }
+
+          // Rebuild owners section in-place
+          const uniqueOwners = {};
+          freshListingSlots.forEach(s => {
+            if (s.userId) {
+              if (!uniqueOwners[s.userId]) {
+                uniqueOwners[s.userId] = { userId: s.userId, name: s.name, username: s.username, count: 0, isYou: !!(currentUser && s.userId === currentUser.id) };
+              }
+              uniqueOwners[s.userId].count++;
+            }
+          });
+          const newOwnerHTML = Object.values(uniqueOwners).map(od => {
+            const dn = od.isYou ? 'You' : (od.name || 'Slot Owner');
+            const un = od.username ? ` (@${od.username})` : '';
+            return `<div class="owner-row"><span class="owner-name">${dn}${un}</span><span>${od.count} slot${od.count > 1 ? 's' : ''}</span>${od.isYou ? '<span class="owner-badge">You</span>' : ''}</div>`;
+          }).join('');
+          const ownerListEl = document.querySelector('#detailView .owners-panel .owner-list');
+          if (ownerListEl) ownerListEl.innerHTML = newOwnerHTML || '<div class="empty-state">No owners yet</div>';
         }).catch(err => console.error('Slot refresh error:', err));
 
       const stats = getSlotStats(listingId);
@@ -3235,8 +3289,10 @@
       event.target.classList.add('active');
       document.getElementById(tab).classList.add('active');
 
-      // Refresh data when switching to mySlots or tradeOffers tabs
-      if (tab === 'mySlots' && currentUser) {
+      // Refresh data when switching tabs
+      if (tab === 'dashboard' && currentUser) {
+        renderDashboard();
+      } else if (tab === 'mySlots' && currentUser) {
         refreshMySlots();
       } else if (tab === 'tradeOffers' && currentUser) {
         sb.from('trade_offers')
