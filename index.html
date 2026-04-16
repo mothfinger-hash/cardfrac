@@ -1022,50 +1022,9 @@
 
   <script>
     // ===== DATA & STATE =====
-    let listings = [
-      {
-        id: 1, name: 'Charizard Base Set', grade: 'PSA 10', type: 'Pokémon', gameType: 'Pokémon', value: 15000,
-        totalSlots: 100, status: 'available', earlyAccessOnly: false,
-        photos: ['https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?w=500&h=600&fit=crop'],
-        countdown: null,
-        certNumber: 'PSA-84229571', vaultLocation: 'PWCC Vault, Portland OR', insured: true,
-        priceHistory: [{date: '2026-04-01', price: 14500}, {date: '2026-04-02', price: 14750}, {date: '2026-04-03', price: 15000}, {date: '2026-04-04', price: 14900}, {date: '2026-04-05', price: 15100}, {date: '2026-04-06', price: 15300}, {date: '2026-04-07', price: 15000}],
-        sellVotes: [], buyoutOffers: []
-      },
-      {
-        id: 2, name: 'Black Lotus', grade: 'BGS Pristine', type: 'Magic', gameType: 'Magic: The Gathering', value: 25000,
-        totalSlots: 100, status: 'available', earlyAccessOnly: true,
-        photos: ['https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=500&h=600&fit=crop'],
-        countdown: null,
-        certNumber: 'BGS-92847102', vaultLocation: 'Heritage Auction Vault, Dallas TX', insured: true,
-        priceHistory: [{date: '2026-04-01', price: 24000}, {date: '2026-04-02', price: 24200}, {date: '2026-04-03', price: 24500}, {date: '2026-04-04', price: 24800}, {date: '2026-04-05', price: 25000}, {date: '2026-04-06', price: 25200}, {date: '2026-04-07', price: 25000}],
-        sellVotes: [], buyoutOffers: []
-      },
-      {
-        id: 3, name: 'Blue-Eyes White Dragon', grade: 'PSA 10', type: 'Yu-Gi-Oh', gameType: 'Yu-Gi-Oh!', value: 8000,
-        totalSlots: 100, status: 'available', earlyAccessOnly: false,
-        photos: ['https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?w=500&h=600&fit=crop'],
-        countdown: null,
-        certNumber: 'PSA-19283746', vaultLocation: 'CGC Vault, Sarasota FL', insured: true,
-        priceHistory: [{date: '2026-04-01', price: 7500}, {date: '2026-04-02', price: 7650}, {date: '2026-04-03', price: 7800}, {date: '2026-04-04', price: 7900}, {date: '2026-04-05', price: 8000}, {date: '2026-04-06', price: 8100}, {date: '2026-04-07', price: 8000}],
-        sellVotes: [], buyoutOffers: []
-      },
-      {
-        id: 4, name: 'Pikachu Illustrator', grade: 'PSA 9', type: 'Pokémon', gameType: 'Pokémon', value: 12000,
-        totalSlots: 100, status: 'sold', earlyAccessOnly: false,
-        photos: ['https://images.unsplash.com/photo-1535404911c519be0aae5726c47ceead6e494b29?w=500&h=600&fit=crop'],
-        countdown: null,
-        certNumber: 'PSA-75829102', vaultLocation: 'PWCC Vault, Portland OR', insured: true,
-        priceHistory: [{date: '2026-03-28', price: 11000}, {date: '2026-03-29', price: 11300}, {date: '2026-03-30', price: 11600}, {date: '2026-03-31', price: 11800}, {date: '2026-04-01', price: 12000}, {date: '2026-04-02', price: 12000}, {date: '2026-04-03', price: 12000}],
-        sellVotes: [], buyoutOffers: []
-      }
-    ];
+    let listings = []; // populated from Supabase in initApp()
 
-    let users = [
-      { id: 1, name: 'Alex Morgan', username: 'alexm', email: 'alex@example.com', password: 'demo123', membershipActive: false, membershipCycle: null, rating: {count: 8, total: 38}, watchlist: [1,2], priceAlerts: [{listingId: 1, targetPrice: 14000}, {listingId: 3, targetPrice: 7500}], referralCode: 'alexm-K7X2', referredBy: null, referralCount: 0, feeDiscountAvailable: false, alerts: [] },
-      { id: 2, name: 'Jordan Lee', username: 'jordanl', email: 'jordan@example.com', password: 'demo123', membershipActive: true, membershipCycle: 'monthly', rating: {count: 12, total: 58}, watchlist: [3], priceAlerts: [], referralCode: 'jordanl-M9P1', referredBy: null, referralCount: 2, feeDiscountAvailable: true, alerts: [] },
-      { id: 3, name: 'Sam Rivera', username: 'samr', email: 'sam@example.com', password: 'demo123', membershipActive: false, membershipCycle: null, rating: {count: 5, total: 22}, watchlist: [], priceAlerts: [], referralCode: 'samr-Q3L5', referredBy: 'jordanl-M9P1', referralCount: 0, feeDiscountAvailable: false, alerts: [] }
-    ];
+    let users = []; // demo users removed — real users come from Supabase profiles
 
     let slots = [];
     let currentUser = null;
@@ -1090,25 +1049,7 @@
       return Math.round(amount * getFeeRate());
     }
 
-    function initSlots() {
-      listings.forEach(listing => {
-        const demoOwners = [1, 2, 3];
-        for (let i = 0; i < listing.totalSlots; i++) {
-          const isOwned = Math.random() < 0.3;
-          const userId = isOwned ? demoOwners[Math.floor(Math.random() * demoOwners.length)] : null;
-          slots.push({
-            listingId: listing.id,
-            idx: i,
-            userId: userId,
-            name: isOwned ? users.find(u => u.id === userId)?.name || null : null,
-            email: isOwned ? users.find(u => u.id === userId)?.email || null : null,
-            askPrice: null,
-            tradeOpen: false
-          });
-        }
-      });
-    }
-    initSlots();
+    // Slots are populated from Supabase in initApp() — no demo data needed
 
     // ===== AUTH =====
     function openModal(modalId) {
