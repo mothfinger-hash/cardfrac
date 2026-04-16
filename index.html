@@ -1451,7 +1451,7 @@
               if (isYours) classes += ' yours';
               else if (slot.askPrice) classes += ' forsale';
               else if (isTaken) classes += ' taken';
-              newSlotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j}, ${isYours})">
+              newSlotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
                 ${i + j + 1}
                 <div class="tooltip">${slot.userId ? (isYours ? 'Your slot' : 'Owned') : ('$' + freshSlotPrice)}</div>
               </div>`;
@@ -1505,7 +1505,7 @@
           else if (slot.askPrice) classes += ' forsale';
           else if (isTaken) classes += ' taken';
 
-          slotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j}, ${isYours})">
+          slotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
             ${content}
             <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : (slot.name || 'Owned')) : ('$' + slotPrice)}</div>
           </div>`;
@@ -1708,12 +1708,17 @@
         alert('Please log in to buy slots');
         return;
       }
-      const slot = slots.find(s => s.listingId === listingId && s.idx === slotIdx);
+      // slotIdx is 1-based (matches DB idx field)
+      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
       if (isYours) {
         openSlotActionsModal(listingId, slotIdx);
-      } else if (slot.askPrice) {
+      } else if (slot && slot.askPrice) {
         openPurchaseForSaleModal(listingId, slotIdx);
-      } else if (!slot.userId) {
+      } else if (slot && slot.userId) {
+        // Owned by another user, not listed for sale — offer a trade
+        openRequestTradeModal(listingId, slotIdx);
+      } else {
+        // Available slot — add to cart
         toggleSlotSelection(listingId, slotIdx);
       }
     }
@@ -1760,7 +1765,7 @@
       const preview = document.getElementById('cartSlots');
       preview.innerHTML = cart.map(c => {
         const listing = listings.find(l => l.id === c.listingId);
-        return `<span class="cart-slot-tag">${listing.name.split(' ')[0]} #${c.slotIdx + 1}</span>`;
+        return `<span class="cart-slot-tag">${listing.name.split(' ')[0]} #${c.slotIdx}</span>`;
       }).join('');
     }
 
@@ -1772,7 +1777,7 @@
       if (!cart.length) return;
 
       cart.forEach(c => {
-        const slot = slots.find(s => s.listingId === c.listingId && s.idx === c.slotIdx);
+        const slot = slots.find(s => String(s.listingId) === String(c.listingId) && s.idx === c.slotIdx);
         const listing = listings.find(l => l.id === c.listingId);
         const slotPrice = Math.ceil(listing.value / listing.totalSlots);
         slot.userId = currentUser.id;
@@ -1804,29 +1809,30 @@
 
     // ===== SLOT ACTIONS =====
     function openSlotActionsModal(listingId, slotIdx) {
-      const slot = slots.find(s => s.listingId === listingId && s.idx === slotIdx);
-      const listing = listings.find(l => l.id === listingId);
+      // slotIdx is 1-based (matches DB idx field)
+      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
+      const listing = listings.find(l => String(l.id) === String(listingId));
       const slotPrice = Math.ceil(listing.value / listing.totalSlots);
 
       const modal = document.getElementById('slotActionsModal');
-      document.getElementById('slotActionTitle').textContent = `Slot #${slotIdx + 1} - ${listing.name}`;
+      document.getElementById('slotActionTitle').textContent = `Slot #${slotIdx} - ${listing.name}`;
       document.getElementById('slotActionSub').textContent = `Current value: $${slotPrice}`;
 
       let html = '<div style="display:flex;flex-direction:column;gap:10px">';
 
       // List for sale
-      if (!slot.askPrice) {
-        html += `<button class="btn btn-primary" onclick="openListForSaleModal(${listingId}, ${slotIdx})">List for Sale</button>`;
+      if (!slot || !slot.askPrice) {
+        html += `<button class="btn btn-primary" onclick="openListForSaleModal('${listingId}', ${slotIdx})">List for Sale</button>`;
       } else {
-        html += `<button class="btn btn-orange" onclick="delistSlot(${listingId}, ${slotIdx})">Delist from Sale</button>`;
+        html += `<button class="btn btn-orange" onclick="delistSlot('${listingId}', ${slotIdx})">Delist from Sale</button>`;
       }
 
       // Propose trade
-      html += `<button class="btn btn-teal" onclick="openTradeProposalModal(${listingId}, ${slotIdx})">Propose Trade</button>`;
+      html += `<button class="btn btn-teal" onclick="openTradeProposalModal('${listingId}', ${slotIdx})">Propose Trade</button>`;
 
       // Cash out
       const cashoutAmount = Math.floor(slotPrice * 0.9);
-      html += `<button class="btn btn-red" onclick="openCashoutModal(${listingId}, ${slotIdx}, ${cashoutAmount})">Cash Out ($${cashoutAmount})</button>`;
+      html += `<button class="btn btn-red" onclick="openCashoutModal('${listingId}', ${slotIdx}, ${cashoutAmount})">Cash Out ($${cashoutAmount})</button>`;
 
       html += '</div>';
       document.getElementById('slotActionsContent').innerHTML = html;
@@ -1835,12 +1841,12 @@
 
     function openListForSaleModal(listingId, slotIdx) {
       closeModal('slotActionsModal');
-      const listing = listings.find(l => l.id === listingId);
+      const listing = listings.find(l => String(l.id) === String(listingId));
       const slotPrice = Math.ceil(listing.value / listing.totalSlots);
 
       const modal = document.getElementById('purchaseModal');
       document.getElementById('purchaseTitle').textContent = 'List Slot for Sale';
-      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx + 1} of ${listing.name}`;
+      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx} of ${listing.name}`;
 
       const html = `
         <div class="purchase-summary">
@@ -1861,7 +1867,7 @@
             <span>$<span id="askNet">0</span></span>
           </div>
         </div>
-        <button type="button" class="btn btn-primary" onclick="listSlotForSale(${listingId}, ${slotIdx})">List Slot</button>
+        <button type="button" class="btn btn-primary" onclick="listSlotForSale('${listingId}', ${slotIdx})">List Slot</button>
         <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
       `;
 
@@ -1882,27 +1888,28 @@
 
     function listSlotForSale(listingId, slotIdx) {
       const askPrice = parseInt(document.getElementById('askPrice').value);
-      const slot = slots.find(s => s.listingId === listingId && s.idx === slotIdx);
-      slot.askPrice = askPrice;
+      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
+      if (slot) slot.askPrice = askPrice;
       closeModal('purchaseModal');
-      alert(`Slot listed for $${askPrice}`);
+      alert(`Slot #${slotIdx} listed for $${askPrice}`);
       viewDetail(listingId);
     }
 
     function delistSlot(listingId, slotIdx) {
-      const slot = slots.find(s => s.listingId === listingId && s.idx === slotIdx);
-      slot.askPrice = null;
+      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
+      if (slot) slot.askPrice = null;
       closeModal('slotActionsModal');
       alert('Slot delisted');
       viewDetail(listingId);
     }
 
     function openPurchaseForSaleModal(listingId, slotIdx) {
-      const slot = slots.find(s => s.listingId === listingId && s.idx === slotIdx);
-      const owner = users.find(u => u.id === slot.userId);
+      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
+      if (!slot) { showToast('Slot not found'); return; }
+      const ownerName = slot.name || slot.username || 'Slot Owner';
       const modal = document.getElementById('purchaseModal');
       document.getElementById('purchaseTitle').textContent = 'Buy Slot';
-      document.getElementById('purchaseSub').textContent = `From ${owner.name} (@${owner.username})`;
+      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx} — From ${ownerName}`;
 
       const fee = calcFee(slot.askPrice);
       const total = slot.askPrice + fee;
@@ -1936,8 +1943,8 @@
         alert('Please log in');
         return;
       }
-      const slot = slots.find(s => s.listingId === listingId && s.idx === slotIdx);
-      const oldOwner = users.find(u => u.id === slot.userId);
+      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
+      if (!slot) { showToast('Slot not found'); return; }
       const fee = calcFee(slot.askPrice);
       const sellerProceeds = slot.askPrice - fee;
 
@@ -1968,7 +1975,7 @@
       const modal = document.getElementById('tradeProposeModal');
       const listing = listings.find(l => l.id === listingId);
 
-      let html = `<p style="color:var(--muted);font-size:.82rem;margin-bottom:16px">You're offering: <strong>Slot #${slotIdx + 1} of ${listing.name}</strong></p>
+      let html = `<p style="color:var(--muted);font-size:.82rem;margin-bottom:16px">You're offering: <strong>Slot #${slotIdx} of ${listing.name}</strong></p>
         <p style="color:var(--muted);font-size:.82rem;margin-bottom:12px">Select a slot to request in return:</p>
         <div class="trade-grid">`;
 
@@ -1984,7 +1991,7 @@
             <div class="trade-listing-name">${l.name}</div>`;
           userSlots.forEach(slot => {
             html += `<div class="trade-slot-item" onclick="selectTradeSlot(${l.id}, ${slot.idx}, this)">
-              <span>Slot <span class="trade-slot-num">#${slot.idx + 1}</span></span>
+              <span>Slot <span class="trade-slot-num">#${slot.idx}</span></span>
               ${slot.askPrice ? `<span style="font-size:.7rem;color:var(--orange)">Listed</span>` : ''}
             </div>`;
           });
@@ -2019,7 +2026,9 @@
         return;
       }
 
-      const toUserId = slots.find(s => s.listingId === selectedTradeSlot.listingId && s.idx === selectedTradeSlot.slotIdx).userId;
+      const toSlotForTrade = slots.find(s => String(s.listingId) === String(selectedTradeSlot.listingId) && s.idx === selectedTradeSlot.slotIdx);
+      if (!toSlotForTrade || !toSlotForTrade.userId) { showToast('Target slot no longer available'); return; }
+      const toUserId = toSlotForTrade.userId;
       const cashTopup = parseInt(document.getElementById('cashTopup').value) || 0;
 
       const offer = {
@@ -2052,6 +2061,111 @@
       selectedTradeSlot = null;
       alert('Trade offer sent!');
       viewDetail(fromListingId);
+    }
+
+    // ===== REQUEST TRADE (clicking someone else's slot) =====
+    // Opens a modal where the current user picks one of THEIR slots to offer
+    // in exchange for the target slot owned by another user.
+    // slotIdx is 1-based (matches DB idx field)
+    function openRequestTradeModal(listingId, slotIdx) {
+      const targetSlot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
+      const targetListing = listings.find(l => String(l.id) === String(listingId));
+      if (!targetSlot || !targetSlot.userId) {
+        showToast('Slot is no longer owned');
+        return;
+      }
+      const ownerName = targetSlot.name || targetSlot.username || 'this user';
+
+      // Reuse tradeProposeModal — update header text and build new content
+      document.querySelector('#tradeProposeModal h3').textContent = 'Request Trade';
+      document.querySelector('#tradeProposeModal .modal-sub').textContent = `Offer one of your slots for Slot #${slotIdx} of ${targetListing.name}`;
+
+      let html = `<p style="color:var(--muted);font-size:.82rem;margin-bottom:16px">You want: <strong>Slot #${slotIdx} of ${targetListing.name}</strong> (owned by ${ownerName})</p>
+        <p style="color:var(--muted);font-size:.82rem;margin-bottom:12px">Select one of your slots to offer in return:</p>
+        <div class="trade-grid">`;
+
+      const mySlots = slots.filter(s => s.userId === currentUser.id);
+      if (mySlots.length === 0) {
+        html += `<div style="color:var(--muted);font-size:.85rem;padding:12px 0">You don't own any slots to trade.</div>`;
+      } else {
+        const grouped = {};
+        mySlots.forEach(s => {
+          const lid = String(s.listingId);
+          if (!grouped[lid]) grouped[lid] = [];
+          grouped[lid].push(s);
+        });
+        Object.keys(grouped).forEach(lid => {
+          const l = listings.find(x => String(x.id) === lid);
+          if (!l) return;
+          html += `<div class="trade-listing-group"><div class="trade-listing-name">${l.name}</div>`;
+          grouped[lid].forEach(s => {
+            html += `<div class="trade-slot-item" onclick="selectTradeSlot('${lid}', ${s.idx}, this)">
+              <span>Slot <span class="trade-slot-num">#${s.idx}</span></span>
+              ${s.askPrice ? `<span style="font-size:.7rem;color:var(--orange)">Listed</span>` : ''}
+            </div>`;
+          });
+          html += '</div>';
+        });
+      }
+
+      html += `</div>
+        <div class="form-group" style="margin-top:16px">
+          <label>Cash Top-up (optional)</label>
+          <input type="number" id="cashTopup" placeholder="0" />
+          <div style="font-size:.75rem;color:var(--muted);margin-top:4px">Positive = you pay extra, Negative = you want them to pay extra</div>
+        </div>
+        <button type="button" class="btn btn-primary" id="sendTradeBtn" disabled onclick="sendRequestTradeOffer('${listingId}', ${slotIdx})">Send Trade Request</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('tradeProposeModal'); document.querySelector('#tradeProposeModal h3').textContent='Propose Trade'; document.querySelector('#tradeProposeModal .modal-sub').textContent='Select a slot you want in return'">Cancel</button>`;
+
+      document.getElementById('tradeProposalContent').innerHTML = html;
+      openModal('tradeProposeModal');
+    }
+
+    function sendRequestTradeOffer(targetListingId, targetSlotIdx) {
+      if (!selectedTradeSlot) {
+        alert('Please select one of your slots to offer');
+        return;
+      }
+      const targetSlot = slots.find(s => String(s.listingId) === String(targetListingId) && s.idx === targetSlotIdx);
+      if (!targetSlot || !targetSlot.userId) {
+        showToast('Target slot is no longer available');
+        return;
+      }
+      const cashTopup = parseInt(document.getElementById('cashTopup')?.value) || 0;
+
+      const offer = {
+        id: tradeOffers.length + 1,
+        fromUserId: currentUser.id,
+        fromListingId: selectedTradeSlot.listingId,
+        fromSlotIdx: selectedTradeSlot.slotIdx,
+        toUserId: targetSlot.userId,
+        toListingId: targetListingId,
+        toSlotIdx: targetSlotIdx,
+        cashTopup,
+        status: 'pending',
+        ts: new Date()
+      };
+      tradeOffers.push(offer);
+
+      sb.from('trade_offers').insert({
+        from_user_id: currentUser.id,
+        to_user_id: targetSlot.userId,
+        from_slots: [{ listingId: selectedTradeSlot.listingId, idx: selectedTradeSlot.slotIdx }],
+        to_slots: [{ listingId: targetListingId, idx: targetSlotIdx }],
+        cash_topup: cashTopup || 0,
+        fee: 0,
+        status: 'pending'
+      }).then(({ error }) => {
+        if (error) console.error('Trade request insert error:', error);
+      });
+
+      closeModal('tradeProposeModal');
+      // Restore modal header text for next use
+      document.querySelector('#tradeProposeModal h3').textContent = 'Propose Trade';
+      document.querySelector('#tradeProposeModal .modal-sub').textContent = 'Select a slot you want in return';
+      selectedTradeSlot = null;
+      showToast(`Trade request sent to ${targetSlot.name || 'slot owner'}!`);
+      viewDetail(targetListingId);
     }
 
     function acceptTrade(offerId) {
@@ -2157,7 +2271,7 @@
 
       const modal = document.getElementById('purchaseModal');
       document.getElementById('purchaseTitle').textContent = 'Cash Out Slot';
-      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx + 1} of ${listing.name}`;
+      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx} of ${listing.name}`;
 
       const html = `
         <div class="purchase-summary">
@@ -2175,7 +2289,7 @@
           </div>
           <div class="ps-note">You lose $${platformKeeps} to the 10% buyback fee.</div>
         </div>
-        <button type="button" class="btn btn-orange" onclick="confirmCashout(${listingId}, ${slotIdx}, ${cashoutAmount})">Confirm Cashout</button>
+        <button type="button" class="btn btn-orange" onclick="confirmCashout('${listingId}', ${slotIdx}, ${cashoutAmount})">Confirm Cashout</button>
         <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
       `;
 
@@ -2184,7 +2298,7 @@
     }
 
     function confirmCashout(listingId, slotIdx, amount) {
-      const slot = slots.find(s => s.listingId === listingId && s.idx === slotIdx);
+      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
       const fee = Math.floor(Math.ceil(listings.find(l => l.id === listingId).value / listings.find(l => l.id === listingId).totalSlots) - amount);
 
       transactions.push({
@@ -2262,17 +2376,17 @@
       let totalAmount = 0;
 
       Object.keys(grouped).forEach(listingId => {
-        const listing = listings.find(l => l.id === parseInt(listingId));
+        const listing = listings.find(l => String(l.id) === String(listingId));
         const slotIndices = grouped[listingId];
         const slotValue = Math.ceil(listing.value / listing.totalSlots);
 
         slotIndices.forEach(idx => {
-          const slot = slots.find(s => s.listingId === parseInt(listingId) && s.idx === idx);
+          const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === idx);
           const cashoutAmount = Math.ceil(slotValue * 0.9);
           totalAmount += cashoutAmount;
 
           transactions.push({
-            listingId: parseInt(listingId), slotIdx: idx, type: 'cashout',
+            listingId, slotIdx: idx, type: 'cashout',
             userId: currentUser.id, userName: currentUser.name, amount: cashoutAmount, ts: new Date()
           });
 
@@ -2323,12 +2437,12 @@
       const grouped = groupSelectedSlots();
 
       inputs.forEach(input => {
-        const listingId = parseInt(input.dataset.listing);
+        const listingId = input.dataset.listing;
         const askPrice = parseInt(input.value);
         const slotIndices = grouped[listingId];
 
         slotIndices.forEach(idx => {
-          const slot = slots.find(s => s.listingId === listingId && s.idx === idx);
+          const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === idx);
           slot.askPrice = askPrice;
         });
       });
@@ -3769,7 +3883,7 @@
       }
 
       // Persist to Supabase first
-      const { error } = await sb.from('listings').update({
+      const { data: updated, error } = await sb.from('listings').update({
         name,
         grade,
         game_type: gameType,
@@ -3781,11 +3895,16 @@
         vault_location: vaultLocation,
         insured,
         photos: editPendingPhotoUrls
-      }).eq('id', editingListingId);
+      }).eq('id', editingListingId).select();
 
       if (error) {
         showToast('Error saving changes: ' + error.message);
         console.error('saveEditListing error:', error);
+        return;
+      }
+      if (!updated || updated.length === 0) {
+        showToast('Save failed — admin UPDATE permission missing in Supabase. Run: CREATE POLICY "Admin update" ON listings FOR UPDATE USING (auth.jwt()->>\'role\' = \'admin\')');
+        console.error('saveEditListing: 0 rows updated — RLS blocked the update for listing', editingListingId);
         return;
       }
 
