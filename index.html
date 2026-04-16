@@ -1223,7 +1223,16 @@
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const navTab = document.querySelector(`[data-page="${pageId}"]`);
       if (navTab) navTab.classList.add('active');
-      if (pageId === 'account') renderAccount();
+      if (pageId === 'account') {
+        renderAccount();
+        // If there are pending trade offers, land directly on the Trade Offers tab
+        const pendingOffers = currentUser
+          ? tradeOffers.filter(o => o.toUserId === currentUser.id && o.status === 'pending').length
+          : 0;
+        if (pendingOffers > 0) {
+          switchAccountTab('tradeOffers');
+        }
+      }
       if (pageId === 'browse') {
         renderBrowse();
         setTimeout(() => {
@@ -3348,8 +3357,16 @@
     function switchAccountTab(tab) {
       document.querySelectorAll('.account-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.account-content').forEach(c => c.classList.remove('active'));
-      event.target.classList.add('active');
+      // Support programmatic calls (no event.target) by finding the button via its onclick
+      const tabBtn = [...document.querySelectorAll('.account-tab')].find(b => b.getAttribute('onclick') === `switchAccountTab('${tab}')`);
+      if (tabBtn) tabBtn.classList.add('active');
       document.getElementById(tab).classList.add('active');
+
+      // Clear trade notification badge when the user opens Trade Offers
+      if (tab === 'tradeOffers') {
+        const badge = document.getElementById('tradeNotification');
+        if (badge) badge.style.display = 'none';
+      }
 
       // Refresh data when switching tabs
       if (tab === 'dashboard' && currentUser) {
