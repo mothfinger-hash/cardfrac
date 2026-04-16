@@ -1342,9 +1342,20 @@
       const showClearBtn = browseSearchQuery !== '' || browseGameTypeFilter !== 'all' || browseSortFilter !== 'newest';
       document.getElementById('clearFiltersBtn').style.display = showClearBtn ? 'block' : 'none';
 
+      const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a1a24'/%3E%3Crect x='110' y='60' width='80' height='100' rx='8' fill='%232e2e3e'/%3E%3Ctext x='150' y='185' font-family='sans-serif' font-size='12' fill='%238888a8' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:2rem;margin-bottom:12px">🃏</div><div style="font-size:1.1rem;font-weight:600;margin-bottom:6px">No listings found</div><div style="font-size:.9rem">Try adjusting your filters or check back soon.</div></div>';
+        return;
+      }
+
       grid.innerHTML = filtered.map(listing => {
         const slotsStatus = getSlotStats(listing.id);
         const votePassed = listing.status === 'vote_passed';
+        const photoSrc = (listing.photos && listing.photos[0]) ? listing.photos[0] : PLACEHOLDER_IMG;
+        const photoCount = listing.photos ? listing.photos.length : 0;
+        const displayValue = listing.value ? Number(listing.value).toLocaleString() : '—';
+        const totalSlots = listing.totalSlots || 100;
 
         const isWatched = currentUser && currentUser.watchlist && currentUser.watchlist.includes(listing.id);
         return `<div class="listing-card ${listing.earlyAccessOnly ? 'early-access-card' : ''} ${listing.status === 'sold' ? 'locked-card' : ''}" style="position:relative">
@@ -1353,22 +1364,22 @@
           ${listing.status === 'sold' && !votePassed ? '<div class="lock-overlay"><div class="lock-icon">🔒</div><p>Sold Out</p></div>' : ''}
           <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event, '${listing.id}')">🔔</button>
           <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
-            <img src="${listing.photos[0]}" alt="${listing.name}" class="card-thumb" />
-            <div class="photo-count">${listing.photos.length} photos</div>
+            <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" onerror="this.src='${PLACEHOLDER_IMG}'" />
+            <div class="photo-count">${photoCount} photos</div>
           </div>
           <div class="card-info" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <div class="card-name">${listing.name}</div>
             <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
             <div class="card-stats">
-              <span class="price-tag">$${listing.value.toLocaleString()}</span>
+              <span class="price-tag">$${displayValue}</span>
               ${listing.status === 'sold' ? '<span class="badge badge-full">Sold Out</span>' : (slotsStatus.taken > 0 && slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>')}
             </div>
             <div class="slots-bar-wrap">
               <div class="slots-bar-label">
-                <span>${slotsStatus.available}/${listing.totalSlots} available</span>
+                <span>${slotsStatus.available}/${totalSlots} available</span>
               </div>
               <div class="slots-bar">
-                <div class="slots-bar-fill" style="width:${(slotsStatus.available/listing.totalSlots)*100}%"></div>
+                <div class="slots-bar-fill" style="width:${totalSlots > 0 ? (slotsStatus.available/totalSlots)*100 : 0}%"></div>
               </div>
             </div>
           </div>
@@ -1523,11 +1534,11 @@
         <div class="detail-layout">
           <div class="gallery-wrap">
             <div class="gallery-main" onclick="openLightbox(0, ${listingId})">
-              <img src="${listing.photos[0]}" alt="${listing.name}" />
+              <img src="${(listing.photos && listing.photos[0]) ? listing.photos[0] : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%231a1a24'/%3E%3Ctext x='200' y='160' font-family='sans-serif' font-size='14' fill='%238888a8' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E"}" alt="${listing.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%231a1a24%22/%3E%3C/svg%3E'" />
               <div class="gallery-zoom-hint">Click to zoom</div>
             </div>
             <div class="gallery-thumbs">
-              ${listing.photos.map((p, i) => `<img src="${p}" alt="" class="gallery-thumb ${i === 0 ? 'active' : ''}" onclick="changeGallery(${i}, ${listingId})" />`).join('')}
+              ${(listing.photos || []).map((p, i) => `<img src="${p}" alt="" class="gallery-thumb ${i === 0 ? 'active' : ''}" onclick="changeGallery(${i}, ${listingId})" onerror="this.style.display='none'" />`).join('')}
             </div>
           </div>
           <div>
@@ -2814,14 +2825,14 @@
         const slotsStatus = getSlotStats(listing.id);
         return `<div class="listing-card" onclick="viewDetail('${listing.id}')">
           <div class="thumb-wrap">
-            <img src="${listing.photos[0]}" alt="${listing.name}" class="card-thumb" />
-            <div class="photo-count">${listing.photos.length} photos</div>
+            <img src="${(listing.photos && listing.photos[0]) ? listing.photos[0] : ''}" alt="${listing.name}" class="card-thumb" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22220%22%3E%3Crect width=%22300%22 height=%22220%22 fill=%22%231a1a24%22/%3E%3C/svg%3E'" />
+            <div class="photo-count">${listing.photos ? listing.photos.length : 0} photos</div>
           </div>
           <div class="card-info">
             <div class="card-name">${listing.name}</div>
             <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
             <div class="card-stats">
-              <span class="price-tag">$${listing.value.toLocaleString()}</span>
+              <span class="price-tag">$${listing.value ? Number(listing.value).toLocaleString() : '—'}</span>
               ${listing.status === 'sold' ? '<span class="badge badge-full">Sold Out</span>' : (slotsStatus.taken > 0 && slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>')}
             </div>
           </div>
@@ -3262,11 +3273,11 @@
     function renderAdminTable() {
       const tbody = document.getElementById('listingsTable');
       tbody.innerHTML = listings.map((l, i) => `<tr>
-        <td><img src="${l.photos[0]}" alt="" class="admin-card-img" /></td>
+        <td><img src="${(l.photos && l.photos[0]) ? l.photos[0] : ''}" alt="" class="admin-card-img" onerror="this.style.display='none'" /></td>
         <td>${l.name}</td>
         <td>${l.grade}</td>
         <td>${l.type}</td>
-        <td>$${l.value.toLocaleString()}</td>
+        <td>$${l.value ? Number(l.value).toLocaleString() : '—'}</td>
         <td>${l.totalSlots}</td>
         <td><span class="badge badge-${l.status}">${l.status}</span></td>
         <td>
@@ -3525,18 +3536,34 @@
         }
       }
 
-      // Add slots to local array
-      slotRows.forEach((s, i) => {
-        slots.push({
-          id: null, // will be assigned by DB
-          listingId: dbListing.id,
-          idx: i + 1,
-          userId: null,
-          name: null,
-          askPrice: null,
-          tradeOpen: false
+      // Re-fetch the newly inserted slots from DB to get real UUIDs
+      const { data: freshSlots } = await sb.from('slots').select('*').eq('listing_id', dbListing.id).order('idx');
+      if (freshSlots && freshSlots.length > 0) {
+        freshSlots.forEach(s => {
+          slots.push({
+            id: s.id,
+            listingId: s.listing_id,
+            idx: s.idx,
+            userId: s.user_id,
+            name: null,
+            askPrice: s.ask_price > 0 ? s.ask_price : null,
+            tradeOpen: s.trade_open || false
+          });
         });
-      });
+      } else {
+        // Fallback: add to local array without real IDs (better than nothing)
+        slotRows.forEach((s, i) => {
+          slots.push({
+            id: null,
+            listingId: dbListing.id,
+            idx: i + 1,
+            userId: null,
+            name: null,
+            askPrice: null,
+            tradeOpen: false
+          });
+        });
+      }
 
       // Reset form state FIRST before any re-renders
       pendingPhotoUrls = [];
@@ -4077,6 +4104,11 @@
         currentUser = null;
       }
       updateAuthUI();
+      // Re-render page content on actual auth changes (initApp handles INITIAL_SESSION)
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        renderAllContent();
+        showPage('browse');
+      }
     });
 
     initApp();
