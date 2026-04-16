@@ -2864,14 +2864,14 @@
             <div>
               <div style="font-size:.9rem;color:var(--muted);margin-bottom:8px">Rating Score</div>
               <div style="font-size:2rem;font-weight:700;color:var(--gold)">⭐ ${avgRating}</div>
-              <div style="font-size:.8rem;color:var(--muted);margin-top:4px">${currentUser.rating.count} ratings</div>
+              <div style="font-size:.8rem;color:var(--muted);margin-top:4px">${ratingCount} ratings</div>
             </div>
             <div>
               <div style="font-size:.9rem;color:var(--muted);margin-bottom:8px">Referral Info</div>
               <div style="background:var(--surface2);padding:12px;border-radius:8px">
-                <div style="font-size:.85rem;color:var(--text);margin-bottom:4px">Your Code: <strong>${currentUser.referralCode}</strong></div>
-                <button onclick="copyReferralCode('${currentUser.referralCode}')" style="background:var(--accent);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:.8rem;cursor:pointer;width:100%;margin-top:6px">Copy Code</button>
-                <div style="font-size:.75rem;color:var(--muted);margin-top:6px">Referred ${currentUser.referralCount} users</div>
+                <div style="font-size:.85rem;color:var(--text);margin-bottom:4px">Your Code: <strong>${currentUser.referral_code || currentUser.referralCode || 'N/A'}</strong></div>
+                <button onclick="copyReferralCode('${currentUser.referral_code || currentUser.referralCode || ''}')" style="background:var(--accent);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:.8rem;cursor:pointer;width:100%;margin-top:6px">Copy Code</button>
+                <div style="font-size:.75rem;color:var(--muted);margin-top:6px">Referred ${currentUser.referral_count || currentUser.referralCount || 0} users</div>
               </div>
             </div>
           </div>
