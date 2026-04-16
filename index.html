@@ -1489,6 +1489,7 @@
       const stats = getSlotStats(listingId);
       const listingSlots = slots.filter(s => s.listingId === listingId);
 
+      const slotPrice = listing.value && listing.totalSlots ? Math.ceil(listing.value / listing.totalSlots) : 0;
       let slotGridHTML = '';
       for (let i = 0; i < listing.totalSlots; i += 10) {
         slotGridHTML += '<div class="slot-grid">';
@@ -1502,9 +1503,9 @@
           else if (slot.askPrice) classes += ' forsale';
           else if (isTaken) classes += ' taken';
 
-          slotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, ${listingId}, ${i + j}, ${isYours})">
+          slotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j}, ${isYours})">
             ${content}
-            <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : slot.name) : `$${Math.ceil(listing.value / listing.totalSlots)}`}</div>
+            <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : (slot.name || 'Owned')) : ('$' + slotPrice)}</div>
           </div>`;
         }
         slotGridHTML += '</div>';
@@ -1514,17 +1515,25 @@
       const uniqueOwners = {};
       listingSlots.forEach(s => {
         if (s.userId) {
-          const owner = users.find(u => u.id === s.userId);
-          if (!uniqueOwners[owner.id]) uniqueOwners[owner.id] = { user: owner, count: 0 };
-          uniqueOwners[owner.id].count++;
+          if (!uniqueOwners[s.userId]) {
+            uniqueOwners[s.userId] = {
+              userId: s.userId,
+              name: s.name || null,
+              username: s.username || null,
+              count: 0,
+              isYou: !!(currentUser && s.userId === currentUser.id)
+            };
+          }
+          uniqueOwners[s.userId].count++;
         }
       });
       Object.values(uniqueOwners).forEach(ownerData => {
-        const avgRating = ownerData.user.rating.count > 0 ? (ownerData.user.rating.total / ownerData.user.rating.count).toFixed(1) : 'N/A';
+        const displayName = ownerData.isYou ? 'You' : (ownerData.name || 'Slot Owner');
+        const usernameStr = ownerData.username ? ` (@${ownerData.username})` : '';
         ownerHTML += `<div class="owner-row">
-          <span class="owner-name">${ownerData.user.name} (@${ownerData.user.username}) ${ownerData.user.rating.count > 0 ? '⭐ ' + avgRating : ''}</span>
+          <span class="owner-name">${displayName}${usernameStr}</span>
           <span>${ownerData.count} slot${ownerData.count > 1 ? 's' : ''}</span>
-          ${ownerData.user.id === currentUser?.id ? '<span class="owner-badge">You</span>' : ''}
+          ${ownerData.isYou ? '<span class="owner-badge">You</span>' : ''}
         </div>`;
       });
 
@@ -2558,11 +2567,12 @@
 
       const totalHoldingsValue = mySlots.reduce((sum, slot) => {
         const listing = listings.find(l => String(l.id) === String(slot.listingId));
-        if (!listing) return sum;
+        if (!listing || !listing.value || !listing.totalSlots) return sum;
         return sum + Math.ceil(listing.value / listing.totalSlots);
       }, 0);
       const portfolioValue = listings.map(l => {
-        const owned = mySlots.filter(s => s.listingId === l.id).length;
+        const owned = mySlots.filter(s => String(s.listingId) === String(l.id)).length;
+        if (!l.value || !l.totalSlots) return 0;
         const slotValue = Math.ceil(l.value / l.totalSlots);
         return owned * slotValue;
       }).reduce((a, b) => a + b, 0);
@@ -2576,7 +2586,8 @@
       let colorIdx = 0;
 
       mySlots.forEach(slot => {
-        const listing = listings.find(l => l.id === slot.listingId);
+        const listing = listings.find(l => String(l.id) === String(slot.listingId));
+        if (!listing || !listing.value || !listing.totalSlots) return; // skip if listing data missing
         const slotValue = Math.ceil(listing.value / listing.totalSlots);
         if (!holdingsByCard[slot.listingId]) {
           holdingsByCard[slot.listingId] = {listing, count: 0, totalValue: 0, color: colors[colorIdx % colors.length]};
@@ -3734,7 +3745,7 @@
       status.textContent = `${editPendingPhotoUrls.length} photo(s) total`;
     }
 
-    function saveEditListing() {
+    async function saveEditListing() {
       const listing = listings.find(l => l.id === editingListingId);
       if (!listing) return;
 
@@ -3753,7 +3764,28 @@
         return;
       }
 
-      // Update local array
+      // Persist to Supabase first
+      const { error } = await sb.from('listings').update({
+        name,
+        grade,
+        game_type: gameType,
+        card_type: type,
+        value,
+        status,
+        early_access_only: status === 'early',
+        cert_number: certNumber,
+        vault_location: vaultLocation,
+        insured,
+        photos: editPendingPhotoUrls
+      }).eq('id', editingListingId);
+
+      if (error) {
+        showToast('Error saving changes: ' + error.message);
+        console.error('saveEditListing error:', error);
+        return;
+      }
+
+      // Update local array to match
       listing.name = name;
       listing.grade = grade;
       listing.gameType = gameType;
@@ -3763,11 +3795,12 @@
       listing.certNumber = certNumber;
       listing.vaultLocation = vaultLocation;
       listing.insured = insured;
-      listing.photos = editPendingPhotoUrls;
+      listing.photos = [...editPendingPhotoUrls];
 
       showToast('Listing updated!');
       showPage('admin');
       renderAdmin();
+      renderBrowse();
     }
 
     function confirmDeleteListing(listingId) {
