@@ -2072,7 +2072,7 @@
 
       tradeOffers.push(offer);
 
-      // Sync to Supabase (fire-and-forget)
+      // Insert to Supabase — show result to user
       sb.from('trade_offers').insert({
         from_user_id: currentUser.id,
         to_user_id: toUserId,
@@ -2081,11 +2081,17 @@
         cash_topup: cashTopup || 0,
         fee: 0,
         status: 'pending'
-      }).catch(err => console.error('Trade offer insert error:', err));
+      }).then(({ error }) => {
+        if (error) {
+          showToast('Trade offer failed: ' + error.message);
+          console.error('Trade offer insert error:', error);
+        } else {
+          showToast('Trade offer sent!');
+        }
+      });
 
       closeModal('tradeProposeModal');
       selectedTradeSlot = null;
-      alert('Trade offer sent!');
       viewDetail(fromListingId);
     }
 
@@ -2182,7 +2188,12 @@
         fee: 0,
         status: 'pending'
       }).then(({ error }) => {
-        if (error) console.error('Trade request insert error:', error);
+        if (error) {
+          showToast('Trade request failed: ' + error.message);
+          console.error('Trade request insert error:', error);
+        } else {
+          showToast(`Trade request sent to ${targetSlot.name || 'slot owner'}!`);
+        }
       });
 
       closeModal('tradeProposeModal');
@@ -2190,64 +2201,54 @@
       document.querySelector('#tradeProposeModal h3').textContent = 'Propose Trade';
       document.querySelector('#tradeProposeModal .modal-sub').textContent = 'Select a slot you want in return';
       selectedTradeSlot = null;
-      showToast(`Trade request sent to ${targetSlot.name || 'slot owner'}!`);
       viewDetail(targetListingId);
     }
 
-    function acceptTrade(offerId) {
+    async function acceptTrade(offerId) {
       const offer = tradeOffers.find(o => o.id === offerId);
-      if (!offer) return;
+      if (!offer) { showToast('Offer not found'); return; }
 
-      const fromUser = users.find(u => u.id === offer.fromUserId);
-      const toUser = users.find(u => u.id === offer.toUserId);
+      showToast('Processing trade...');
 
-      // Handle both old and new format
-      if (offer.fromSlots && offer.toSlots) {
-        // New multi-slot format
-        offer.fromSlots.forEach(fslot => {
-          const slot = slots.find(s => s.listingId === fslot.listingId && s.idx === fslot.idx);
-          slot.userId = toUser.id;
-          slot.name = toUser.name;
-          slot.email = toUser.email;
-          slot.askPrice = null;
-          transactions.push({
-            listingId: fslot.listingId, slotIdx: fslot.idx, type: 'trade',
-            userId: toUser.id, userName: toUser.name, amount: 0, ts: new Date()
-          });
-        });
-        offer.toSlots.forEach(tslot => {
-          const slot = slots.find(s => s.listingId === tslot.listingId && s.idx === tslot.idx);
-          slot.userId = fromUser.id;
-          slot.name = fromUser.name;
-          slot.email = fromUser.email;
-          slot.askPrice = null;
-        });
+      // 1. Mark offer as accepted in Supabase
+      const { error: offerErr } = await sb.from('trade_offers')
+        .update({ status: 'accepted' })
+        .eq('id', offerId);
+      if (offerErr) { showToast('Error accepting trade: ' + offerErr.message); return; }
+
+      // 2. Swap slot ownership in Supabase
+      // from_slots transfer to the accepting user (to_user = currentUser)
+      // to_slots transfer to the offer sender (from_user)
+      const swapOps = [
+        ...(offer.fromSlots || []).map(s =>
+          sb.from('slots').update({ user_id: offer.toUserId, ask_price: null })
+            .eq('listing_id', s.listingId).eq('idx', s.idx)
+        ),
+        ...(offer.toSlots || []).map(s =>
+          sb.from('slots').update({ user_id: offer.fromUserId, ask_price: null })
+            .eq('listing_id', s.listingId).eq('idx', s.idx)
+        )
+      ];
+      const results = await Promise.all(swapOps);
+      const errs = results.filter(r => r.error).map(r => r.error);
+      if (errs.length > 0) {
+        console.error('Slot swap errors:', errs);
+        showToast('Trade recorded but slot transfer had issues — please refresh');
       } else {
-        // Old single-slot format
-        const fromSlot = slots.find(s => s.listingId === offer.fromListingId && s.idx === offer.fromSlotIdx);
-        const toSlot = slots.find(s => s.listingId === offer.toListingId && s.idx === offer.toSlotIdx);
-
-        [fromSlot.userId, toSlot.userId] = [toSlot.userId, fromSlot.userId];
-        [fromSlot.name, toSlot.name] = [toSlot.name, fromSlot.name];
-        [fromSlot.email, toSlot.email] = [toSlot.email, fromSlot.email];
-        fromSlot.askPrice = null;
-        toSlot.askPrice = null;
-
-        transactions.push({
-          listingId: offer.fromListingId, slotIdx: offer.fromSlotIdx, type: 'trade',
-          userId: offer.toUserId, userName: toUser.name, amount: 0, ts: new Date()
-        });
+        showToast('Trade completed!');
       }
 
+      // 3. Update local state & re-fetch slots from DB so everyone is in sync
       offer.status = 'accepted';
-
-      // Sync to Supabase via Edge Function (validates ownership server-side)
-      callEdgeFunction('process-trade', { offerId })
-        .then(() => showToast('Trade completed!'))
-        .catch(err => console.error('Trade sync error:', err.message));
-
-      openRatingModal(fromUser.id, fromUser.name);
-      renderAllContent();
+      sb.from('slots').select('*').order('idx').then(({ data }) => {
+        if (data) slots = data.map(s => ({
+          id: s.id, listingId: s.listing_id, idx: s.idx,
+          userId: s.user_id, name: null, email: null,
+          askPrice: s.ask_price > 0 ? s.ask_price : null,
+          tradeOpen: s.trade_open || false
+        }));
+        renderAllContent();
+      });
     }
 
     function openRatingModal(userId, userName) {
@@ -2278,14 +2279,26 @@
 
     function declineTrade(offerId) {
       const offer = tradeOffers.find(o => o.id === offerId);
-      if (offer) offer.status = 'declined';
-      renderAllContent();
+      if (!offer) return;
+      sb.from('trade_offers').update({ status: 'declined' }).eq('id', offerId)
+        .then(({ error }) => {
+          if (error) { showToast('Error declining offer: ' + error.message); return; }
+          offer.status = 'declined';
+          renderTradeOffers();
+          showToast('Trade offer declined');
+        });
     }
 
     function cancelTrade(offerId) {
       const offer = tradeOffers.find(o => o.id === offerId);
-      if (offer) offer.status = 'cancelled';
-      renderAllContent();
+      if (!offer) return;
+      sb.from('trade_offers').update({ status: 'cancelled' }).eq('id', offerId)
+        .then(({ error }) => {
+          if (error) { showToast('Error cancelling offer: ' + error.message); return; }
+          offer.status = 'cancelled';
+          renderTradeOffers();
+          showToast('Trade offer cancelled');
+        });
     }
 
     // ===== CASHOUT =====
@@ -3239,8 +3252,8 @@
               ${o.cashTopup !== 0 ? `<div style="margin-top:4px;color:${o.cashTopup > 0 ? 'var(--green)' : 'var(--orange)'}">Cash adjustment: ${o.cashTopup > 0 ? '+' : ''}$${o.cashTopup}</div>` : ''}
             </div>
             <div class="offer-actions">
-              <button class="mini-btn" onclick="acceptTrade(${o.id})">Accept</button>
-              <button class="mini-btn danger" onclick="declineTrade(${o.id})">Decline</button>
+              <button class="mini-btn" onclick="acceptTrade('${o.id}')">Accept</button>
+              <button class="mini-btn danger" onclick="declineTrade('${o.id}')">Decline</button>
             </div>
           </div>`;
         }).join('');
@@ -3300,7 +3313,7 @@
               ${o.cashTopup !== 0 ? `<div style="margin-top:4px;color:${o.cashTopup > 0 ? 'var(--red)' : 'var(--green)'}">You ${o.cashTopup > 0 ? 'pay' : 'receive'}: ${Math.abs(o.cashTopup)}</div>` : ''}
             </div>
             <div class="offer-actions">
-              ${o.status === 'pending' ? `<button class="mini-btn danger" onclick="cancelTrade(${o.id})">Cancel</button>` : ''}
+              ${o.status === 'pending' ? `<button class="mini-btn danger" onclick="cancelTrade('${o.id}')">Cancel</button>` : ''}
             </div>
           </div>`;
         }).join('');
