@@ -396,6 +396,27 @@
       /* Push page content up so it's not hidden behind bottom nav */
       .page{padding-bottom:80px}
       .cart-bar{bottom:64px}
+
+      /* Account page — tabs scroll horizontally so all 5 fit */
+      .account-tabs{
+        overflow-x:auto;
+        flex-wrap:nowrap;
+        -webkit-overflow-scrolling:touch;
+        padding-bottom:6px;
+        gap:6px;
+        /* hide scrollbar on mobile */
+        scrollbar-width:none;
+      }
+      .account-tabs::-webkit-scrollbar{display:none}
+      .account-tab{white-space:nowrap;flex-shrink:0;padding:7px 12px;font-size:.8rem}
+
+      /* Offer cards — stack actions vertically */
+      .offer-actions{flex-direction:column}
+      .offer-actions .mini-btn{width:100%}
+
+      /* History table — horizontal scroll */
+      .tx-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+      .tx-table{min-width:420px}
     }
 
     /* MOBILE BOTTOM NAV */
@@ -773,17 +794,19 @@
 
     <div id="history" class="account-content">
       <h3 style="font-size:1rem;margin-bottom:14px">Transaction History</h3>
-      <table class="tx-table">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Details</th>
-            <th>Date</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody"></tbody>
-      </table>
+      <div class="tx-table-wrap">
+        <table class="tx-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Details</th>
+              <th>Date</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -3196,6 +3219,53 @@
       grid.innerHTML = html;
     }
 
+    // Fetches trade offers from Supabase without relying on FK joins,
+    // then resolves profile names via a separate bulk profiles query.
+    function fetchAndRenderTradeOffers() {
+      if (!currentUser) return;
+      sb.from('trade_offers')
+        .select('*')
+        .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
+        .order('created_at', { ascending: false })
+        .then(({ data: dbOffers, error }) => {
+          if (error) {
+            console.error('Trade offers fetch error:', error);
+            showToast('Error loading trade offers: ' + error.message);
+            return;
+          }
+          if (!dbOffers || dbOffers.length === 0) {
+            tradeOffers = [];
+            renderTradeOffers();
+            return;
+          }
+          // Bulk-fetch profiles for all user IDs in these offers
+          const userIds = [...new Set([
+            ...dbOffers.map(o => o.from_user_id),
+            ...dbOffers.map(o => o.to_user_id)
+          ]).values()];
+          sb.from('profiles').select('id, name, username').in('id', userIds)
+            .then(({ data: profileRows }) => {
+              const pm = {};
+              (profileRows || []).forEach(p => { pm[p.id] = p; });
+              tradeOffers = dbOffers.map(o => ({
+                id: o.id,
+                fromUserId: o.from_user_id,
+                fromUserName: pm[o.from_user_id]?.name || pm[o.from_user_id]?.username || 'Someone',
+                toUserId: o.to_user_id,
+                toUserName: pm[o.to_user_id]?.name || pm[o.to_user_id]?.username || 'User',
+                fromSlots: o.from_slots || [],
+                toSlots: o.to_slots || [],
+                cashTopup: o.cash_topup || 0,
+                fee: o.fee || 0,
+                status: o.status,
+                ts: new Date(o.created_at)
+              }));
+              renderTradeOffers();
+              updateTradeNotification();
+            });
+        });
+    }
+
     function renderTradeOffers() {
       const incoming = tradeOffers.filter(o => o.toUserId === currentUser.id && o.status === 'pending');
       const outgoing = tradeOffers.filter(o => o.fromUserId === currentUser.id && (o.status === 'pending' || o.status === 'accepted'));
@@ -3406,28 +3476,7 @@
       } else if (tab === 'mySlots' && currentUser) {
         refreshMySlots();
       } else if (tab === 'tradeOffers' && currentUser) {
-        sb.from('trade_offers')
-          .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
-          .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
-          .order('created_at', { ascending: false })
-          .then(({ data: dbOffers }) => {
-            if (dbOffers) {
-              tradeOffers = dbOffers.map(o => ({
-                id: o.id,
-                fromUserId: o.from_user_id,
-                fromUserName: o.from_profile?.name || 'Unknown',
-                toUserId: o.to_user_id,
-                toUserName: o.to_profile?.name || 'Unknown',
-                fromSlots: o.from_slots || [],
-                toSlots: o.to_slots || [],
-                cashTopup: o.cash_topup || 0,
-                fee: o.fee || 0,
-                status: o.status,
-                ts: new Date(o.created_at)
-              }));
-              renderTradeOffers();
-            }
-          });
+        fetchAndRenderTradeOffers();
       }
     }
 
@@ -4282,7 +4331,7 @@
           const [txnResult, offerResult] = await Promise.all([
             sb.from('transactions').select('*, listings(name)').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
             sb.from('trade_offers')
-              .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+              .select('*')
               .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
               .order('created_at', { ascending: false })
           ]);
@@ -4296,11 +4345,20 @@
             }));
           }
 
-          if (offerResult.data) {
+          if (offerResult.data && offerResult.data.length > 0) {
+            // Resolve profile names via a separate bulk query to avoid FK join issues
+            const uids = [...new Set([
+              ...offerResult.data.map(o => o.from_user_id),
+              ...offerResult.data.map(o => o.to_user_id)
+            ]).values()];
+            const { data: pRows } = await sb.from('profiles').select('id, name, username').in('id', uids);
+            const pm = {};
+            (pRows || []).forEach(p => { pm[p.id] = p; });
             tradeOffers = offerResult.data.map(o => ({
               id: o.id, fromUserId: o.from_user_id,
-              fromUserName: o.from_profile?.name || 'Unknown',
-              toUserId: o.to_user_id, toUserName: o.to_profile?.name || 'Unknown',
+              fromUserName: pm[o.from_user_id]?.name || pm[o.from_user_id]?.username || 'Someone',
+              toUserId: o.to_user_id,
+              toUserName: pm[o.to_user_id]?.name || pm[o.to_user_id]?.username || 'User',
               fromSlots: o.from_slots || [], toSlots: o.to_slots || [],
               cashTopup: o.cash_topup || 0, fee: o.fee || 0,
               status: o.status, ts: new Date(o.created_at)
@@ -4334,7 +4392,7 @@
           sb.from('listings').select('*').order('created_at', { ascending: false }),
           sb.from('slots').select('*').order('idx'),
           sb.from('trade_offers')
-            .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+            .select('*')
             .or(`from_user_id.eq.${uid},to_user_id.eq.${uid}`)
             .order('created_at', { ascending: false })
         ]).then(([profileRes, listingsRes, slotsRes, offersRes]) => {
@@ -4358,19 +4416,30 @@
               tradeOpen: s.trade_open || false
             }));
           }
-          if (offersRes.data) {
-            tradeOffers = offersRes.data.map(o => ({
-              id: o.id, fromUserId: o.from_user_id,
-              fromUserName: o.from_profile?.name || 'Unknown',
-              toUserId: o.to_user_id, toUserName: o.to_profile?.name || 'Unknown',
-              fromSlots: o.from_slots || [], toSlots: o.to_slots || [],
-              cashTopup: o.cash_topup || 0, fee: o.fee || 0,
-              status: o.status, ts: new Date(o.created_at)
-            }));
+          if (offersRes.data && offersRes.data.length > 0) {
+            // Resolve profile names without FK join
+            const uids = [...new Set([
+              ...offersRes.data.map(o => o.from_user_id),
+              ...offersRes.data.map(o => o.to_user_id)
+            ]).values()];
+            sb.from('profiles').select('id, name, username').in('id', uids)
+              .then(({ data: pRows }) => {
+                const pm = {};
+                (pRows || []).forEach(p => { pm[p.id] = p; });
+                tradeOffers = offersRes.data.map(o => ({
+                  id: o.id, fromUserId: o.from_user_id,
+                  fromUserName: pm[o.from_user_id]?.name || pm[o.from_user_id]?.username || 'Someone',
+                  toUserId: o.to_user_id,
+                  toUserName: pm[o.to_user_id]?.name || pm[o.to_user_id]?.username || 'User',
+                  fromSlots: o.from_slots || [], toSlots: o.to_slots || [],
+                  cashTopup: o.cash_topup || 0, fee: o.fee || 0,
+                  status: o.status, ts: new Date(o.created_at)
+                }));
+                updateTradeNotification();
+              });
           }
           updateAuthUI();
           renderAllContent();
-          updateTradeNotification();
         }).catch(err => console.error('Background data fetch error:', err));
 
       } else if (event === 'SIGNED_OUT') {
