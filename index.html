@@ -1079,6 +1079,7 @@
     let currentUser = null;
     let cart = [];
     let lightboxIndex = 0;
+    let lightboxListingId = null;
     let tradeOffers = [];
     let transactions = [];
     let mySlotSelection = new Set(); // "listingId:slotIdx" format
@@ -1593,12 +1594,12 @@
         ${listing.status === 'sold' ? '<div style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:12px;margin-bottom:16px;color:var(--accent);display:flex;align-items:center;gap:8px"><span>🔒</span><span>This card is fully sold out — all slots are owned</span></div>' : ''}
         <div class="detail-layout">
           <div class="gallery-wrap">
-            <div class="gallery-main" onclick="openLightbox(0, ${listingId})">
-              <img src="${(listing.photos && listing.photos[0]) ? listing.photos[0] : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%231a1a24'/%3E%3Ctext x='200' y='160' font-family='sans-serif' font-size='14' fill='%238888a8' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E"}" alt="${listing.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%231a1a24%22/%3E%3C/svg%3E'" />
+            <div class="gallery-main" id="galleryMain_${listingId}" onclick="openLightboxFromGallery('${listingId}')">
+              <img id="galleryMainImg_${listingId}" src="${(listing.photos && listing.photos[0]) ? listing.photos[0] : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%231a1a24'/%3E%3Ctext x='200' y='160' font-family='sans-serif' font-size='14' fill='%238888a8' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E"}" alt="${listing.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%231a1a24%22/%3E%3C/svg%3E'" />
               <div class="gallery-zoom-hint">Click to zoom</div>
             </div>
             <div class="gallery-thumbs">
-              ${(listing.photos || []).map((p, i) => `<img src="${p}" alt="" class="gallery-thumb ${i === 0 ? 'active' : ''}" onclick="changeGallery(${i}, ${listingId})" onerror="this.style.display='none'" />`).join('')}
+              ${(listing.photos || []).map((p, i) => `<img src="${p}" alt="" class="gallery-thumb ${i === 0 ? 'active' : ''}" onclick="changeGallery(${i}, '${listingId}')" onerror="this.style.display='none'" />`).join('')}
             </div>
           </div>
           <div>
@@ -1784,12 +1785,25 @@
     }
 
     function changeGallery(idx, listingId) {
-      const listing = listings.find(l => l.id === listingId);
-      const main = document.querySelector('.gallery-main img');
-      main.src = listing.photos[idx];
+      const listing = listings.find(l => String(l.id) === String(listingId));
+      if (!listing || !listing.photos[idx]) return;
+      // Update the main image using stable ID
+      const mainImg = document.getElementById('galleryMainImg_' + listingId);
+      if (mainImg) mainImg.src = listing.photos[idx];
+      // Mark active thumbnail
       document.querySelectorAll('.gallery-thumb').forEach((t, i) => {
         t.classList.toggle('active', i === idx);
       });
+      // Store active index on the container so zoom click opens the right photo
+      const galleryMain = document.getElementById('galleryMain_' + listingId);
+      if (galleryMain) galleryMain.dataset.activeIdx = String(idx);
+    }
+
+    // Called when user clicks the main gallery image — opens lightbox at currently-shown photo
+    function openLightboxFromGallery(listingId) {
+      const galleryMain = document.getElementById('galleryMain_' + listingId);
+      const idx = galleryMain ? parseInt(galleryMain.dataset.activeIdx || '0') : 0;
+      openLightbox(idx, listingId);
     }
 
     function updateCartBar() {
@@ -4165,8 +4179,10 @@
 
     // ===== LIGHTBOX =====
     function openLightbox(idx, listingId) {
-      const listing = listings.find(l => l.id === listingId);
+      const listing = listings.find(l => String(l.id) === String(listingId));
+      if (!listing || !listing.photos || listing.photos.length === 0) return;
       lightboxIndex = idx;
+      lightboxListingId = String(listingId);
       const lightbox = document.getElementById('lightbox');
       const img = document.getElementById('lightboxImg');
       img.src = listing.photos[idx];
@@ -4174,7 +4190,10 @@
       document.getElementById('lightboxTotal').textContent = listing.photos.length;
 
       const thumbs = document.getElementById('lightboxThumbs');
-      thumbs.innerHTML = listing.photos.map((p, i) => `<img src="${p}" alt="" class="lightbox-thumb ${i === idx ? 'active' : ''}" onclick="changeLightbox(${i}, ${listingId})" />`).join('');
+      // UUID quoted properly in onclick
+      thumbs.innerHTML = listing.photos.map((p, i) =>
+        `<img src="${p}" alt="" class="lightbox-thumb ${i === idx ? 'active' : ''}" onclick="openLightbox(${i}, '${listingId}')" />`
+      ).join('');
 
       lightbox.classList.add('open');
     }
@@ -4183,26 +4202,20 @@
       document.getElementById('lightbox').classList.remove('open');
     }
 
-    function changeLightbox(idx, listingId) {
-      openLightbox(idx, listingId);
-    }
-
     function prevLightbox() {
-      const total = parseInt(document.getElementById('lightboxTotal').textContent);
-      lightboxIndex = (lightboxIndex - 1 + total) % total;
-      const img = document.getElementById('lightboxImg').src.match(/[^/]+$/)[0];
-      // Re-open with current listing
-      const listings_copy = listings;
-      const currentListing = listings_copy.find(l => l.photos.some(p => p.includes(img)));
-      if (currentListing) openLightbox(lightboxIndex, currentListing.id);
+      if (!lightboxListingId) return;
+      const listing = listings.find(l => String(l.id) === lightboxListingId);
+      if (!listing) return;
+      lightboxIndex = (lightboxIndex - 1 + listing.photos.length) % listing.photos.length;
+      openLightbox(lightboxIndex, lightboxListingId);
     }
 
     function nextLightbox() {
-      const total = parseInt(document.getElementById('lightboxTotal').textContent);
-      lightboxIndex = (lightboxIndex + 1) % total;
-      const img = document.getElementById('lightboxImg').src.match(/[^/]+$/)[0];
-      const currentListing = listings.find(l => l.photos.some(p => p.includes(img)));
-      if (currentListing) openLightbox(lightboxIndex, currentListing.id);
+      if (!lightboxListingId) return;
+      const listing = listings.find(l => String(l.id) === lightboxListingId);
+      if (!listing) return;
+      lightboxIndex = (lightboxIndex + 1) % listing.photos.length;
+      openLightbox(lightboxIndex, lightboxListingId);
     }
 
     // ===== MEMBERSHIP =====
