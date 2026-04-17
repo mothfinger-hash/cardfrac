@@ -1832,36 +1832,65 @@
       }).join('');
     }
 
-    function purchaseCart() {
-      if (!currentUser) {
-        alert('Please log in');
-        return;
+    // ===== STRIPE CHECKOUT =====
+    async function initiateCheckout(type, items) {
+      if (!currentUser) { alert('Please log in to purchase'); return; }
+      showToast('Redirecting to checkout...');
+      try {
+        const result = await callEdgeFunction('create-checkout-session', {
+          type,
+          items,
+          successUrl: window.location.origin + window.location.pathname,
+          cancelUrl: window.location.origin + window.location.pathname,
+        });
+        if (result.url) {
+          window.location.href = result.url;
+        } else {
+          showToast('Checkout error: ' + (result.error || 'no URL returned'));
+        }
+      } catch (err) {
+        showToast('Checkout failed: ' + err.message);
+        console.error('Checkout error:', err);
       }
+    }
+
+    async function initiateMembershipCheckout(plan) {
+      if (!currentUser) { openModal('loginModal'); return; }
+      showToast('Redirecting to checkout...');
+      try {
+        const result = await callEdgeFunction('create-checkout-session', {
+          type: 'membership',
+          plan,
+          successUrl: window.location.origin + window.location.pathname,
+          cancelUrl: window.location.origin + window.location.pathname,
+        });
+        if (result.url) {
+          window.location.href = result.url;
+        } else {
+          showToast('Checkout error: ' + (result.error || 'no URL returned'));
+        }
+      } catch (err) {
+        showToast('Checkout failed: ' + err.message);
+        console.error('Membership checkout error:', err);
+      }
+    }
+
+        function purchaseCart() {
+      if (!currentUser) { alert('Please log in to purchase'); return; }
       if (!cart.length) return;
 
-      cart.forEach(c => {
-        const slot = slots.find(s => String(s.listingId) === String(c.listingId) && s.idx === c.slotIdx);
-        const listing = listings.find(l => l.id === c.listingId);
+      const items = cart.map(c => {
+        const listing = listings.find(l => String(l.id) === String(c.listingId));
         const slotPrice = Math.ceil(listing.value / listing.totalSlots);
-        slot.userId = currentUser.id;
-        slot.name = currentUser.name;
-        slot.email = currentUser.email;
-        transactions.push({
-          listingId: c.listingId, slotIdx: c.slotIdx, type: 'buy',
-          userId: currentUser.id, userName: currentUser.name, amount: slotPrice, ts: new Date()
-        });
+        return {
+          listingId: String(c.listingId),
+          listingName: listing.name,
+          slotIdx: c.slotIdx,
+          priceCents: slotPrice * 100,
+        };
       });
 
-      const basePrice = cart.reduce((sum, c) => {
-        const listing = listings.find(l => l.id === c.listingId);
-        return sum + Math.ceil(listing.value / listing.totalSlots);
-      }, 0);
-      const fee = calcFee(basePrice);
-
-      alert(`Purchase successful! +${cart.length} slots\n(Fee: $${fee})`);
-      cart = [];
-      updateCartBar();
-      renderBrowse();
+      initiateCheckout('slot_purchase', items);
     }
 
     function clearCart() {
@@ -1993,7 +2022,7 @@
           </div>
           <div class="ps-note">Seller receives: $${slot.askPrice - fee}</div>
         </div>
-        <button type="button" class="btn btn-teal" onclick="buySlotForSale(${listingId}, ${slotIdx})">Buy Now</button>
+        <button type="button" class="btn btn-teal" onclick="buySlotForSale('${listingId}', ${slotIdx})">Buy Now</button>
         <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
       `;
 
@@ -2002,33 +2031,19 @@
     }
 
     function buySlotForSale(listingId, slotIdx) {
-      if (!currentUser) {
-        alert('Please log in');
-        return;
-      }
+      if (!currentUser) { alert('Please log in to purchase'); return; }
       const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
       if (!slot) { showToast('Slot not found'); return; }
-      const fee = calcFee(slot.askPrice);
-      const sellerProceeds = slot.askPrice - fee;
-
-      transactions.push({
-        listingId, slotIdx, type: 'resale',
-        userId: currentUser.id, userName: currentUser.name, amount: slot.askPrice, ts: new Date()
-      });
-
-      slot.userId = currentUser.id;
-      slot.name = currentUser.name;
-      slot.email = currentUser.email;
-      slot.askPrice = null;
-
-      // Sync to Supabase via Edge Function (server-side validation + fee calculation)
-      callEdgeFunction('process-buy', { listingId, slotIdx })
-        .then(result => showToast(`Slot purchased! Fee: $${result.fee}`))
-        .catch(err => console.error('Buy sync error:', err.message));
+      const listing = listings.find(l => String(l.id) === String(listingId));
+      if (!listing) { showToast('Listing not found'); return; }
 
       closeModal('purchaseModal');
-      showToast(`Slot purchased! Seller received $${sellerProceeds} (fee: $${fee})`);
-      viewDetail(listingId);
+      initiateCheckout('secondary_purchase', [{
+        listingId: String(listingId),
+        listingName: listing.name,
+        slotIdx: slot.idx,
+        priceCents: slot.askPrice * 100,
+      }]);
     }
 
     // ===== TRADES =====
@@ -4231,16 +4246,11 @@
     document.getElementById('membershipBtn').addEventListener('click', () => openModal('membershipModal'));
 
     function upgradeMembership() {
-      if (!currentUser) {
-        alert('Please log in first');
-        return;
-      }
-      const cycle = document.querySelector('.billing-opt.active').textContent.toLowerCase();
-      currentUser.membershipActive = true;
-      currentUser.membershipCycle = cycle;
+      if (!currentUser) { openModal('loginModal'); closeModal('membershipModal'); return; }
+      const cycle = document.getElementById('membershipBillFreq').textContent;
+      const plan = cycle === 'yearly' ? 'yearly' : 'monthly';
       closeModal('membershipModal');
-      alert(`Upgraded to Premium (${cycle})!`);
-      updateAuthUI();
+      initiateMembershipCheckout(plan);
     }
 
     // ===== TOAST & NOTIFICATIONS =====
@@ -4386,6 +4396,60 @@
 
       renderAllContent();
       updateAuthUI();
+
+      // ── Post-payment redirect handling ──────────────────────────────────
+      // Stripe sends the user back to ?payment=success or ?payment=cancelled
+      const urlParams = new URLSearchParams(window.location.search);
+      const paymentStatus = urlParams.get('payment');
+      if (paymentStatus) {
+        // Clean up URL so refreshing doesn't re-trigger
+        window.history.replaceState({}, '', window.location.pathname);
+
+        if (paymentStatus === 'success') {
+          if (urlParams.get('type') === 'membership') {
+            showToast('🎉 Premium membership activated! Welcome to CardFrac Premium.');
+            // Refresh profile to pick up is_premium flag
+            if (currentUser) {
+              sb.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
+                .then(({ data }) => {
+                  if (data) { currentUser = { ...currentUser, ...data }; updateAuthUI(); }
+                });
+            }
+          } else {
+            showToast('🎉 Payment successful! Refreshing your slots...');
+            // Give the webhook ~3s to process, then re-fetch slots
+            setTimeout(() => {
+              Promise.all([
+                sb.from('slots').select('*').order('idx'),
+                currentUser
+                  ? sb.from('transactions').select('*, listings(name)').eq('user_id', currentUser.id).order('created_at', { ascending: false })
+                  : Promise.resolve({ data: null })
+              ]).then(([slotsRes, txnRes]) => {
+                if (slotsRes.data) {
+                  slots = slotsRes.data.map(s => ({
+                    id: s.id, listingId: s.listing_id, idx: s.idx,
+                    userId: s.user_id, name: null, email: null,
+                    askPrice: s.ask_price > 0 ? s.ask_price : null,
+                    tradeOpen: s.trade_open || false
+                  }));
+                }
+                if (txnRes.data) {
+                  transactions = txnRes.data.map(t => ({
+                    id: t.id, type: t.type, listingId: t.listing_id,
+                    listingName: t.listings?.name || '', slotIdx: t.slot_idx,
+                    userId: t.user_id, amount: t.amount, fee: t.fee,
+                    ts: new Date(t.created_at)
+                  }));
+                }
+                renderAllContent();
+                showToast('✅ Slots updated!');
+              });
+            }, 3000);
+          }
+        } else if (paymentStatus === 'cancelled') {
+          showToast('Payment cancelled — your cart is still saved.');
+        }
+      }
     }
 
     // Set up auth state listener
