@@ -4306,29 +4306,22 @@
 
     // Set up auth state listener
     sb.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Fetch profile + all user data in one go using session.user.id (always safe)
+        const uid = session.user.id;
         try {
-          const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-          currentUser = { ...session.user, ...(profile || {}) };
-        } catch (err) {
-          console.error('Auth state change error:', err);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        // Only clear the user on explicit sign out — not on page load before session is restored
-        currentUser = null;
-      }
-      updateAuthUI();
-      // Re-render page content on actual auth changes (initApp handles INITIAL_SESSION)
-      if (event === 'SIGNED_IN') {
-        // Re-fetch listings + slots in case they were empty for unauthenticated load (RLS)
-        Promise.all([
-          sb.from('listings').select('*').order('created_at', { ascending: false }),
-          sb.from('slots').select('*').order('idx'),
-          sb.from('trade_offers')
-            .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
-            .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
-            .order('created_at', { ascending: false })
-        ]).then(([listingsRes, slotsRes, offersRes]) => {
+          const [profileRes, listingsRes, slotsRes, offersRes] = await Promise.all([
+            sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
+            sb.from('listings').select('*').order('created_at', { ascending: false }),
+            sb.from('slots').select('*').order('idx'),
+            sb.from('trade_offers')
+              .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+              .or(`from_user_id.eq.${uid},to_user_id.eq.${uid}`)
+              .order('created_at', { ascending: false })
+          ]);
+
+          currentUser = { ...session.user, ...(profileRes.data || {}) };
+
           if (listingsRes.data && listingsRes.data.length > 0) {
             listings = listingsRes.data.map(l => ({
               id: l.id, name: l.name, grade: l.grade,
@@ -4358,18 +4351,20 @@
               status: o.status, ts: new Date(o.created_at)
             }));
           }
-          renderAllContent();
-          updateAuthUI();
-          updateTradeNotification();
-        });
-        // Show updated nav immediately without waiting for the re-fetch
+        } catch (err) {
+          console.error('SIGNED_IN data fetch error:', err);
+          currentUser = { ...session.user };
+        }
+        updateAuthUI();
         renderAllContent();
         showPage('browse');
+        updateTradeNotification();
+
       } else if (event === 'SIGNED_OUT') {
-        listings = [];
-        slots = [];
+        currentUser = null;
         tradeOffers = [];
-        // Re-fetch public data for logged-out browsing
+        updateAuthUI();
+        // Re-fetch public listings after sign-out
         Promise.all([
           sb.from('listings').select('*').order('created_at', { ascending: false }),
           sb.from('slots').select('*').order('idx')
@@ -4398,6 +4393,7 @@
         renderAllContent();
         showPage('browse');
       }
+      // INITIAL_SESSION: initApp() handles the first render, nothing to do here
     });
 
     initApp();
