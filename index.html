@@ -1126,21 +1126,12 @@
         return;
       }
 
+      // Update UI immediately — onAuthStateChange (SIGNED_IN) will re-fetch
+      // listings, profile data, and re-render once the full data is ready
       currentUser = { ...authData.user };
       updateAuthUI();
       showPage('browse');
-
-      // Load profile in background
-      sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle()
-        .then(({ data: profile }) => {
-          if (profile) {
-            currentUser = { ...authData.user, ...profile };
-            updateAuthUI();
-          }
-          showToast('Welcome back, ' + (currentUser.name || currentUser.email || 'there') + '!');
-        }).catch(() => {
-          showToast('Welcome back!');
-        });
+      showToast('Welcome back!');
     }
 
     async function handleRegister(e) {
@@ -4329,28 +4320,81 @@
       updateAuthUI();
       // Re-render page content on actual auth changes (initApp handles INITIAL_SESSION)
       if (event === 'SIGNED_IN') {
-        // Re-fetch trade offers so badge is accurate immediately after login
-        sb.from('trade_offers')
-          .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
-          .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
-          .order('created_at', { ascending: false })
-          .then(({ data }) => {
-            if (data) {
-              tradeOffers = data.map(o => ({
-                id: o.id, fromUserId: o.from_user_id,
-                fromUserName: o.from_profile?.name || 'Unknown',
-                toUserId: o.to_user_id, toUserName: o.to_profile?.name || 'Unknown',
-                fromSlots: o.from_slots || [], toSlots: o.to_slots || [],
-                cashTopup: o.cash_topup || 0, fee: o.fee || 0,
-                status: o.status, ts: new Date(o.created_at)
-              }));
-              updateTradeNotification();
-            }
-          });
+        // Re-fetch listings + slots in case they were empty for unauthenticated load (RLS)
+        Promise.all([
+          sb.from('listings').select('*').order('created_at', { ascending: false }),
+          sb.from('slots').select('*').order('idx'),
+          sb.from('trade_offers')
+            .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+            .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
+            .order('created_at', { ascending: false })
+        ]).then(([listingsRes, slotsRes, offersRes]) => {
+          if (listingsRes.data && listingsRes.data.length > 0) {
+            listings = listingsRes.data.map(l => ({
+              id: l.id, name: l.name, grade: l.grade,
+              type: l.card_type || '', gameType: l.game_type || 'Other',
+              value: l.value, totalSlots: l.total_slots, status: l.status,
+              earlyAccessOnly: l.early_access_only, certNumber: l.cert_number || '',
+              vaultLocation: l.vault_location || '', insured: l.insured,
+              photos: l.photos || [], priceHistory: l.price_history || [],
+              sellVotes: l.sell_votes || [], countdown: null
+            }));
+          }
+          if (slotsRes.data && slotsRes.data.length > 0) {
+            slots = slotsRes.data.map(s => ({
+              id: s.id, listingId: s.listing_id, idx: s.idx,
+              userId: s.user_id, name: null, email: null,
+              askPrice: s.ask_price > 0 ? s.ask_price : null,
+              tradeOpen: s.trade_open || false
+            }));
+          }
+          if (offersRes.data) {
+            tradeOffers = offersRes.data.map(o => ({
+              id: o.id, fromUserId: o.from_user_id,
+              fromUserName: o.from_profile?.name || 'Unknown',
+              toUserId: o.to_user_id, toUserName: o.to_profile?.name || 'Unknown',
+              fromSlots: o.from_slots || [], toSlots: o.to_slots || [],
+              cashTopup: o.cash_topup || 0, fee: o.fee || 0,
+              status: o.status, ts: new Date(o.created_at)
+            }));
+          }
+          renderAllContent();
+          updateAuthUI();
+          updateTradeNotification();
+        });
+        // Show updated nav immediately without waiting for the re-fetch
         renderAllContent();
         showPage('browse');
       } else if (event === 'SIGNED_OUT') {
+        listings = [];
+        slots = [];
         tradeOffers = [];
+        // Re-fetch public data for logged-out browsing
+        Promise.all([
+          sb.from('listings').select('*').order('created_at', { ascending: false }),
+          sb.from('slots').select('*').order('idx')
+        ]).then(([listingsRes, slotsRes]) => {
+          if (listingsRes.data) {
+            listings = listingsRes.data.map(l => ({
+              id: l.id, name: l.name, grade: l.grade,
+              type: l.card_type || '', gameType: l.game_type || 'Other',
+              value: l.value, totalSlots: l.total_slots, status: l.status,
+              earlyAccessOnly: l.early_access_only, certNumber: l.cert_number || '',
+              vaultLocation: l.vault_location || '', insured: l.insured,
+              photos: l.photos || [], priceHistory: l.price_history || [],
+              sellVotes: l.sell_votes || [], countdown: null
+            }));
+          }
+          if (slotsRes.data) {
+            slots = slotsRes.data.map(s => ({
+              id: s.id, listingId: s.listing_id, idx: s.idx,
+              userId: s.user_id, name: null, email: null,
+              askPrice: s.ask_price > 0 ? s.ask_price : null,
+              tradeOpen: s.trade_open || false
+            }));
+          }
+          renderAllContent();
+        });
         renderAllContent();
         showPage('browse');
       }
