@@ -1210,18 +1210,18 @@
       document.getElementById('avatarDropdown').classList.remove('open');
       showPage('account');
     });
-    document.getElementById('signOutBtn').addEventListener('click', async () => {
-      try {
-        await sb.auth.signOut();
-      } catch (err) {
-        console.error('Logout error:', err);
-      }
+    document.getElementById('signOutBtn').addEventListener('click', () => {
+      // Update UI instantly — don't wait for the network call
       currentUser = null;
       cart = [];
+      tradeOffers = [];
       updateCartBar();
       updateAuthUI();
       document.getElementById('avatarDropdown').classList.remove('open');
       showPage('browse');
+      showToast('Signed out');
+      // Sign out in background (onAuthStateChange SIGNED_OUT will re-render with fresh public listings)
+      sb.auth.signOut().catch(err => console.error('Logout error:', err));
     });
 
     // ===== PAGES & NAV =====
@@ -4305,23 +4305,27 @@
     }
 
     // Set up auth state listener
-    sb.auth.onAuthStateChange(async (event, session) => {
+    // Rule: update UI immediately, fetch data in the background
+    sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        // Fetch profile + all user data in one go using session.user.id (always safe)
+        // Update nav instantly using whatever we have
+        if (!currentUser) currentUser = { ...session.user };
+        updateAuthUI();
+        renderAllContent();
+        showPage('browse');
+
+        // Then enrich with profile + fresh data in background
         const uid = session.user.id;
-        try {
-          const [profileRes, listingsRes, slotsRes, offersRes] = await Promise.all([
-            sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
-            sb.from('listings').select('*').order('created_at', { ascending: false }),
-            sb.from('slots').select('*').order('idx'),
-            sb.from('trade_offers')
-              .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
-              .or(`from_user_id.eq.${uid},to_user_id.eq.${uid}`)
-              .order('created_at', { ascending: false })
-          ]);
-
+        Promise.all([
+          sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
+          sb.from('listings').select('*').order('created_at', { ascending: false }),
+          sb.from('slots').select('*').order('idx'),
+          sb.from('trade_offers')
+            .select('*, from_profile:profiles!from_user_id(id, name, username), to_profile:profiles!to_user_id(id, name, username)')
+            .or(`from_user_id.eq.${uid},to_user_id.eq.${uid}`)
+            .order('created_at', { ascending: false })
+        ]).then(([profileRes, listingsRes, slotsRes, offersRes]) => {
           currentUser = { ...session.user, ...(profileRes.data || {}) };
-
           if (listingsRes.data && listingsRes.data.length > 0) {
             listings = listingsRes.data.map(l => ({
               id: l.id, name: l.name, grade: l.grade,
@@ -4351,20 +4355,20 @@
               status: o.status, ts: new Date(o.created_at)
             }));
           }
-        } catch (err) {
-          console.error('SIGNED_IN data fetch error:', err);
-          currentUser = { ...session.user };
-        }
-        updateAuthUI();
-        renderAllContent();
-        showPage('browse');
-        updateTradeNotification();
+          updateAuthUI();
+          renderAllContent();
+          updateTradeNotification();
+        }).catch(err => console.error('Background data fetch error:', err));
 
       } else if (event === 'SIGNED_OUT') {
+        // Update UI instantly
         currentUser = null;
         tradeOffers = [];
         updateAuthUI();
-        // Re-fetch public listings after sign-out
+        renderAllContent();
+        showPage('browse');
+
+        // Re-fetch public listings in background
         Promise.all([
           sb.from('listings').select('*').order('created_at', { ascending: false }),
           sb.from('slots').select('*').order('idx')
@@ -4389,11 +4393,9 @@
             }));
           }
           renderAllContent();
-        });
-        renderAllContent();
-        showPage('browse');
+        }).catch(err => console.error('Post-signout fetch error:', err));
       }
-      // INITIAL_SESSION: initApp() handles the first render, nothing to do here
+      // INITIAL_SESSION: initApp() handles the first render
     });
 
     initApp();
