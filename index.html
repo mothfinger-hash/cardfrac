@@ -480,7 +480,90 @@
       from{transform:translateX(-100%);opacity:0}
       to{transform:translateX(0);opacity:1}
     }
-  </style>
+  
+    /* ── HERO LANDING ─────────────────────────────── */
+    #heroSection {
+      padding: 3.5rem 2rem 2rem;
+      text-align: center;
+      border-bottom: 2px solid var(--border);
+      background: linear-gradient(180deg, rgba(57,255,20,.04) 0%, transparent 100%);
+      position: relative;
+      z-index: 2;
+    }
+    .hero-title {
+      font-size: clamp(1.4rem, 4vw, 2.4rem);
+      color: var(--accent);
+      margin-bottom: .75rem;
+      text-shadow: 0 0 15px var(--accent), 0 0 25px rgba(57,255,20,.4);
+      letter-spacing: 3px;
+      line-height: 1.4;
+    }
+    .hero-title::before { content: '> '; color: var(--muted); }
+    .hero-title::after  { content: ' <'; color: var(--muted); }
+    .hero-tagline {
+      font-size: .85rem;
+      color: var(--muted);
+      margin: .75rem 0 1.75rem;
+      letter-spacing: 2px;
+    }
+    .hero-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--accent);
+      margin-left: 4px;
+      animation: cur-blink 1s steps(2) infinite;
+      vertical-align: middle;
+    }
+    @keyframes cur-blink {
+      0%,49%  { background: var(--accent); }
+      50%,100%{ background: transparent; }
+    }
+    .hero-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      max-width: 560px;
+      margin: 0 auto 1.75rem;
+    }
+    .hero-stat-box {
+      padding: 1.25rem;
+      border: 2px solid var(--border);
+      background: rgba(5,20,10,.5);
+      box-shadow: 0 0 12px rgba(57,255,20,.12), inset 0 0 12px rgba(57,255,20,.03);
+      text-align: center;
+    }
+    .hero-stat-label {
+      font-size: .78rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      margin-bottom: .4rem;
+    }
+    .hero-stat-value {
+      font-size: 2rem;
+      color: var(--accent);
+      text-shadow: 0 0 8px var(--accent);
+      font-weight: bold;
+    }
+    .hero-cta {
+      display: inline-block;
+      padding: .7rem 2.2rem;
+      background: var(--accent);
+      color: var(--bg);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1rem;
+      letter-spacing: 2px;
+      border: none;
+      cursor: pointer;
+      text-shadow: none;
+      box-shadow: 0 0 14px var(--accent), 0 0 28px rgba(57,255,20,.35);
+      transition: box-shadow .2s, transform .1s;
+    }
+    .hero-cta:hover {
+      box-shadow: 0 0 22px var(--accent), 0 0 44px rgba(57,255,20,.5);
+      transform: translateY(-1px);
+    }
+</style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const SUPABASE_URL = 'https://xjamytrhxeaynywcwfun.supabase.co';
@@ -506,7 +589,7 @@
 </head>
 <body>
   <nav>
-    <button class="logo" onclick="showPage('browse');setMobileNav('browse')">CardFrac</button>
+    <button class="logo" onclick="showPage('browse');setMobileNav('browse')">[ CARDFRAC_SYS ]</button>
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Browse</button>
@@ -516,7 +599,7 @@
       </div>
       <div id="authSection" class="auth-buttons">
         <button class="auth-btn" id="loginBtn">Login</button>
-        <button class="auth-btn" id="registerBtn">Register</button>
+        <button class="auth-btn" id="registerBtn">join_network</button>
       </div>
       <div id="userSection" style="display:none;position:relative">
         <div class="user-avatar" id="userChip">
@@ -551,7 +634,7 @@
         <div id="loginError" style="color:#ef4444;font-size:.82rem;margin-bottom:8px;min-height:18px"></div>
         <button type="button" class="btn btn-primary" onclick="handleLogin()" style="width:100%">Sign In</button>
         <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
-          Don't have an account? <a href="#" onclick="switchModal('loginModal','registerModal');return false" style="color:var(--accent2);text-decoration:none">Register</a>
+          Don't have an account? <a href="#" onclick="switchModal('loginModal','registerModal');return false" style="color:var(--accent2);text-decoration:none">join_network</a>
         </p>
       </div>
     </div>
@@ -703,6 +786,21 @@
 
   <!-- PAGES -->
   <div id="browsePage" class="page active">
+    <div id="heroSection">
+      <h1 class="hero-title">FRACTIONAL CARD OWNERSHIP<br>PROTOCOL v2.0<span class="hero-cursor"></span></h1>
+      <p class="hero-tagline">DECENTRALIZED OWNERSHIP // SECURE STORAGE // INSTANT LIQUIDITY</p>
+      <div class="hero-stats">
+        <div class="hero-stat-box">
+          <div class="hero-stat-label">[ TOTAL_CARDS ]</div>
+          <div class="hero-stat-value" id="heroTotalCards">—</div>
+        </div>
+        <div class="hero-stat-box">
+          <div class="hero-stat-label">[ MARKET_CAP ]</div>
+          <div class="hero-stat-value" id="heroMarketCap">—</div>
+        </div>
+      </div>
+      <button class="hero-cta" onclick="document.getElementById('browseGrid').scrollIntoView({behavior:'smooth'})">[ BROWSE_NETWORK ]</button>
+    </div>
     <h2>Browse Listings</h2>
     <p class="subtitle">Fractional ownership starts here. Own a piece of legendary cards.</p>
     <div class="section-tabs">
@@ -1293,6 +1391,19 @@
       }
       if (pageId === 'browse') {
         renderBrowse();
+
+      // update hero stats
+      (function(){
+        const totalEl = document.getElementById('heroTotalCards');
+        const capEl   = document.getElementById('heroMarketCap');
+        if (totalEl) totalEl.textContent = slots.length;
+        if (capEl) {
+          const cap = slots.reduce((s,l) => s + (l.value||0), 0);
+          capEl.textContent = cap >= 1000000 ? '$' + (cap/1000000).toFixed(1) + 'M'
+            : cap >= 1000 ? '$' + (cap/1000).toFixed(1) + 'K'
+            : '$' + cap;
+        }
+      })();
         setTimeout(() => {
           const searchInput = document.getElementById('browseSearchInput');
           if (searchInput && !searchInput.hasListeners) {
