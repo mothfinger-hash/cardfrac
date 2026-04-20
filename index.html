@@ -435,6 +435,20 @@
       /* History table — horizontal scroll */
       .tx-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
       .tx-table{min-width:420px}
+      /* Retro mobile nav — tighten logo */
+      .logo { font-size: .85rem !important; letter-spacing: 1px; }
+      /* Search bar — full width on mobile */
+      .search-and-filters { grid-template-columns: 1fr !important; }
+      /* Game pills — wrap nicely */
+      #gameTypePills { gap: 6px; }
+      .game-pill { font-size: .72rem; padding: 5px 10px; }
+      /* Section tabs — scroll on mobile */
+      .section-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; }
+      .section-tabs::-webkit-scrollbar { display: none; }
+      .section-tab { white-space: nowrap; flex-shrink: 0; font-size: .78rem; padding: 6px 12px; }
+      /* Browse page h2 spacing */
+      #browsePage > h2 { margin-bottom: 12px; font-size: 1rem; }
+
     }
 
     /* MOBILE BOTTOM NAV */
@@ -593,6 +607,43 @@
     }
 
     input,textarea,select{text-transform:none}
+
+    /* ── MOBILE HERO / LANDING ──────────────────────── */
+    @media(max-width:768px) {
+      #heroSection { padding: 2.5rem 1.5rem 1.75rem; }
+      .hero-stats { gap: 1rem; }
+      .hero-stat-value { font-size: 1.75rem; }
+    }
+    @media(max-width:600px) {
+      #heroSection { padding: 2rem 1.2rem 1.5rem; }
+      #landingPage { padding-bottom: 80px !important; }
+      .hero-title {
+        font-size: clamp(1rem, 5.5vw, 1.5rem);
+        letter-spacing: 1.5px;
+        line-height: 1.5;
+      }
+      .hero-title::before, .hero-title::after { display: none; }
+      .hero-tagline { font-size: .72rem; letter-spacing: 1px; word-spacing: 2px; }
+      .hero-stats { grid-template-columns: 1fr 1fr; gap: .75rem; }
+      .hero-stat-box { padding: .9rem .6rem; }
+      .hero-stat-label { font-size: .68rem; }
+      .hero-stat-value { font-size: 1.4rem; }
+      .hero-cta {
+        display: block;
+        width: 100%;
+        max-width: 300px;
+        margin: 0 auto;
+        font-size: .82rem;
+        letter-spacing: 1.5px;
+        padding: .75rem 1rem;
+      }
+      .hero-footer-line {
+        font-size: .62rem;
+        letter-spacing: 1px;
+        word-spacing: 2px;
+        line-height: 1.6;
+      }
+    }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -1207,7 +1258,8 @@
     let users = []; // demo users removed — real users come from Supabase profiles
 
     let slots = [];
-    let profilesMap = {}; // userId -> { id, name, username } — populated after slots load
+    let profilesMap = {};
+    let freshSignIn = false; // true only when user just clicked Sign In / Create Account // userId -> { id, name, username } — populated after slots load
     let currentUser = null;
     let cart = [];
     let lightboxIndex = 0;
@@ -1283,6 +1335,7 @@
       }
 
       // Close modal before the async call so timing can never leave it open
+      freshSignIn = true;
       closeModal('loginModal');
       showToast('Signing in...');
 
@@ -1292,6 +1345,7 @@
         // Re-open modal and show error if auth failed
         openModal('loginModal');
         errorEl.textContent = error?.message || 'Sign in failed. Please try again.';
+        freshSignIn = false;
         return;
       }
 
@@ -1338,6 +1392,7 @@
         }
 
         showToast('Account created! Check your email to confirm.');
+        freshSignIn = true;
         closeModal('registerModal');
         showPage('browse');
       } catch (err) {
@@ -4808,7 +4863,7 @@
         if (!currentUser) currentUser = { ...session.user };
         updateAuthUI();
         renderAllContent();
-        showPage('browse');
+        if (freshSignIn) { freshSignIn = false; showPage('browse'); }
 
         // Then enrich with profile + fresh data in background
         const uid = session.user.id;
