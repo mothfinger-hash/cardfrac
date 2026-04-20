@@ -785,7 +785,11 @@
 
   <div id="leaderboardPage" class="page">
     <h2>Leaderboard</h2>
-    <p style="color:var(--muted);margin-bottom:24px;font-size:.9rem">Top collectors ranked by portfolio value.</p>
+    <div class="section-tabs" style="margin-bottom:24px">
+      <button class="section-tab active" onclick="renderLeaderboard('value')">💰 Portfolio Value</button>
+      <button class="section-tab" onclick="renderLeaderboard('slots')">📦 Most Slots</button>
+      <button class="section-tab" onclick="renderLeaderboard('diverse')">🎴 Most Diverse</button>
+    </div>
     <div id="leaderboardContent"><div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div></div>
   </div>
 
@@ -1056,6 +1060,7 @@
     let users = []; // demo users removed — real users come from Supabase profiles
 
     let slots = [];
+    let profilesMap = {}; // userId -> { id, name, username } — populated after slots load
     let currentUser = null;
     let cart = [];
     let lightboxIndex = 0;
@@ -4329,7 +4334,16 @@
     }
 
     // ===== LEADERBOARD =====
-    function renderLeaderboard() {
+    function renderLeaderboard(mode) {
+      // Update active tab
+      if (mode) {
+        document.querySelectorAll('#leaderboardPage .section-tab').forEach(t => t.classList.remove('active'));
+        const idx = ['value','slots','diverse'].indexOf(mode);
+        const tabs = document.querySelectorAll('#leaderboardPage .section-tab');
+        if (tabs[idx]) tabs[idx].classList.add('active');
+      }
+      const activeMode = mode || 'value';
+
       const el = document.getElementById('leaderboardContent');
       if (!el) return;
       if (!listings.length || !slots.length) {
@@ -4337,72 +4351,85 @@
         return;
       }
 
-      // Build portfolio value per user from slots + listings
-      const portfolioByUser = {};
+      // Build stats per user from slots + listings
+      const byUser = {};
       slots.forEach(s => {
         if (!s.userId) return;
         const listing = listings.find(l => String(l.id) === String(s.listingId));
         if (!listing || !listing.value || !listing.totalSlots) return;
         const slotValue = Math.ceil(listing.value / listing.totalSlots);
-        if (!portfolioByUser[s.userId]) portfolioByUser[s.userId] = { userId: s.userId, slotCount: 0, totalValue: 0, cards: new Set() };
-        portfolioByUser[s.userId].slotCount++;
-        portfolioByUser[s.userId].totalValue += slotValue;
-        portfolioByUser[s.userId].cards.add(String(s.listingId));
+        if (!byUser[s.userId]) byUser[s.userId] = { userId: s.userId, slotCount: 0, totalValue: 0, cards: new Set() };
+        byUser[s.userId].slotCount++;
+        byUser[s.userId].totalValue += slotValue;
+        byUser[s.userId].cards.add(String(s.listingId));
       });
 
-      const ranked = Object.values(portfolioByUser)
-        .sort((a, b) => b.totalValue - a.totalValue)
-        .slice(0, 50);
-
-      if (ranked.length === 0) {
-        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No portfolio data yet — be the first to buy a slot!</div>';
+      if (Object.keys(byUser).length === 0) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No data yet — be the first to buy a slot!</div>';
         return;
       }
 
-      // Fetch names for ranked users
-      const userIds = ranked.map(r => r.userId);
-      sb.from('profiles').select('id, name, username, is_premium, is_admin').in('id', userIds)
-        .then(({ data: pRows }) => {
-          const pm = {};
-          (pRows || []).forEach(p => { pm[p.id] = p; });
+      // Sort by active mode
+      const ranked = Object.values(byUser).sort((a, b) => {
+        if (activeMode === 'slots')   return b.slotCount - a.slotCount;
+        if (activeMode === 'diverse') return b.cards.size - a.cards.size;
+        return b.totalValue - a.totalValue; // 'value' default
+      }).slice(0, 50);
 
-          const medals = ['🥇', '🥈', '🥉'];
-          const rows = ranked.map((r, i) => {
-            const profile = pm[r.userId] || {};
-            const displayName = profile.username || profile.name || 'Anonymous';
-            const isPrem = profile.is_premium || profile.is_admin;
-            const medal = medals[i] || `#${i + 1}`;
-            const isMe = currentUser && r.userId === currentUser.id;
-            return `<tr style="${isMe ? 'background:rgba(124,92,252,.08);' : ''}">
-              <td style="font-size:1.1rem;text-align:center;width:48px">${medal}</td>
-              <td>
-                <div style="font-weight:600;color:${isMe ? 'var(--accent)' : 'var(--text)'}">${displayName}${isMe ? ' <span style="font-size:.7rem;color:var(--accent)">(you)</span>' : ''}</div>
-                ${isPrem ? '<div style="font-size:.7rem;color:var(--gold);margin-top:2px">★ Premium</div>' : ''}
-              </td>
-              <td style="text-align:center;color:var(--muted)">${r.slotCount}</td>
-              <td style="text-align:center;color:var(--muted)">${r.cards.size}</td>
-              <td style="text-align:right;font-weight:700;color:var(--green)">$${r.totalValue.toLocaleString()}</td>
-            </tr>`;
-          }).join('');
+      // Column config per mode
+      const colHeader = activeMode === 'slots' ? 'Slots Owned'
+                      : activeMode === 'diverse' ? 'Unique Cards'
+                      : 'Portfolio Value';
 
-          el.innerHTML = `
-            <div style="overflow-x:auto">
-              <table class="tx-table" style="width:100%;min-width:400px">
-                <thead>
-                  <tr>
-                    <th style="text-align:center">Rank</th>
-                    <th>Collector</th>
-                    <th style="text-align:center">Slots</th>
-                    <th style="text-align:center">Cards</th>
-                    <th style="text-align:right">Portfolio Value</th>
-                  </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-              </table>
-            </div>
-            ${currentUser && !portfolioByUser[currentUser.id] ? '<div style="margin-top:20px;padding:14px;background:var(--surface2);border-radius:8px;text-align:center;font-size:.9rem;color:var(--muted)">You\'re not on the board yet \u2014 buy your first slot to join the rankings!</div>' : ''}
-          `;
-        });
+      // Use profilesMap for names (already loaded) + fetch any missing
+      const missingIds = ranked.map(r => r.userId).filter(id => !profilesMap[id]);
+      const fetchProfiles = missingIds.length > 0
+        ? sb.from('profiles').select('id, name, username, is_premium, is_admin').in('id', missingIds)
+            .then(({ data }) => { (data || []).forEach(p => { profilesMap[p.id] = p; }); })
+        : Promise.resolve();
+
+      fetchProfiles.then(() => {
+        const medals = ['🥇', '🥈', '🥉'];
+        const rows = ranked.map((r, i) => {
+          const profile = profilesMap[r.userId] || {};
+          const displayName = profile.username || profile.name || 'Anonymous';
+          const isPrem = profile.is_premium || profile.is_admin;
+          const medal = medals[i] || `#${i + 1}`;
+          const isMe = currentUser && r.userId === currentUser.id;
+          const statVal = activeMode === 'slots'   ? r.slotCount
+                        : activeMode === 'diverse' ? r.cards.size
+                        : '$' + r.totalValue.toLocaleString();
+          const statColor = activeMode === 'value' ? 'var(--green)' : 'var(--teal)';
+          return `<tr style="${isMe ? 'background:rgba(124,92,252,.08);' : ''}">
+            <td style="font-size:1.1rem;text-align:center;width:48px">${medal}</td>
+            <td>
+              <div style="font-weight:600;color:${isMe ? 'var(--accent)' : 'var(--text)'}">${displayName}${isMe ? ' <span style="font-size:.7rem;color:var(--accent)">(you)</span>' : ''}</div>
+              ${isPrem ? '<div style="font-size:.7rem;color:var(--gold);margin-top:2px">★ Premium</div>' : ''}
+            </td>
+            <td style="text-align:center;color:var(--muted)">${r.slotCount}</td>
+            <td style="text-align:center;color:var(--muted)">${r.cards.size}</td>
+            <td style="text-align:right;font-weight:700;color:${statColor}">${statVal}</td>
+          </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+          <div style="overflow-x:auto">
+            <table class="tx-table" style="width:100%;min-width:400px">
+              <thead>
+                <tr>
+                  <th style="text-align:center">Rank</th>
+                  <th>Collector</th>
+                  <th style="text-align:center">Slots</th>
+                  <th style="text-align:center">Cards</th>
+                  <th style="text-align:right">${colHeader}</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          ${currentUser && !byUser[currentUser.id] ? '<div style="margin-top:20px;padding:14px;background:var(--surface2);border-radius:8px;text-align:center;font-size:.9rem;color:var(--muted)">You\'re not ranked yet \u2014 buy your first slot to join the leaderboard!</div>' : ''}
+        `;
+      });
     }
 
     // ===== INIT =====
@@ -4466,6 +4493,14 @@
             askPrice: s.ask_price > 0 ? s.ask_price : null,
             tradeOpen: s.trade_open || false
           }));
+        }
+
+        // Populate profilesMap for slot owner name lookups
+        const ownerIds = [...new Set(slots.filter(s => s.userId).map(s => s.userId))];
+        if (ownerIds.length > 0) {
+          const { data: pOwners } = await sb.from('profiles').select('id, name, username').in('id', ownerIds);
+          profilesMap = {};
+          (pOwners || []).forEach(p => { profilesMap[p.id] = p; });
         }
 
         // 2. If logged in, fetch user-specific data in parallel
