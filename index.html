@@ -13,7 +13,7 @@
       --yellow:#ccff44;--gold:#7fff00;--orange:#88ff66;--teal:#00ff88;
       --text:#c8ffc8;--muted:#4a8a4a;
     }
-    body{font-family:'Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh}
+    body{font-family:'Share Tech Mono',monospace;text-transform:uppercase;background:var(--bg);color:var(--text);min-height:100vh}
 
     /* ── CRT GRID BACKGROUND ── */
     body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
@@ -591,6 +591,8 @@
       70%  { opacity: 0; }
       100% { left: 130%; opacity: 0; }
     }
+
+    input,textarea,select{text-transform:none}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -620,10 +622,10 @@
     <button class="logo" onclick="showPage('landing')">[ CARDFRAC_SYS ]</button>
     <div class="nav-right">
       <div class="nav-tabs">
-        <button class="nav-tab active" data-page="browse">Browse</button>
+        <button class="nav-tab active" data-page="browse">Browse_Listings</button>
         <button class="nav-tab" data-page="leaderboard">Leaderboard</button>
-        <button class="nav-tab" data-page="admin">Admin</button>
-        <button class="nav-tab" data-page="account">My Account<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
+        <button class="nav-tab" data-page="admin">Admin_Panel</button>
+        <button class="nav-tab" data-page="account">My_Account<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
       </div>
       <div id="authSection" class="auth-buttons">
         <button class="auth-btn" id="loginBtn">Login</button>
@@ -635,9 +637,9 @@
           <span id="userName">User</span>
         </div>
         <div class="avatar-dropdown" id="avatarDropdown">
-          <div class="dropdown-item" id="myAccountBtn">My Account</div>
+          <div class="dropdown-item" id="myAccountBtn">My_Account</div>
           <div class="dropdown-divider"></div>
-          <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">Sign Out</div>
+          <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">Sign_Out</div>
         </div>
       </div>
       <button class="member-chip" id="membershipBtn">Premium</button>
@@ -660,7 +662,7 @@
           <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()" />
         </div>
         <div id="loginError" style="color:#ef4444;font-size:.82rem;margin-bottom:8px;min-height:18px"></div>
-        <button type="button" class="btn btn-primary" onclick="handleLogin()" style="width:100%">Sign In</button>
+        <button type="button" class="btn btn-primary" onclick="handleLogin()" style="width:100%">Sign_In</button>
         <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
           Don't have an account? <a href="#" onclick="switchModal('loginModal','registerModal');return false" style="color:var(--accent2);text-decoration:none">join_network</a>
         </p>
@@ -700,7 +702,7 @@
           <input type="text" id="regReferralCode" placeholder="Enter referral code if you have one" />
         </div>
         <div id="registerError" class="form-error"></div>
-        <button type="submit" class="btn btn-primary">Create Account</button>
+        <button type="submit" class="btn btn-primary">Create_Account</button>
         <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
           Already have an account? <a href="#" onclick="switchModal('registerModal','loginModal');return false" style="color:var(--accent2);text-decoration:none">Sign In</a>
         </p>
@@ -770,7 +772,7 @@
         <div class="pp-price" id="membershipPrice">$9/mo</div>
         <div class="pp-label">Billed <span id="membershipBillFreq">monthly</span></div>
       </div>
-      <button type="button" class="btn btn-gold" onclick="upgradeMembership()">Upgrade to Premium</button>
+      <button type="button" class="btn btn-gold" onclick="upgradeMembership()">Upgrade_to_Premium</button>
     </div>
   </div>
 
@@ -781,7 +783,7 @@
       <h3>Cash Out Selected Slots</h3>
       <p class="modal-sub">Sell slots back to the platform at 90% value</p>
       <div id="batchCashoutContent" style="max-height:400px;overflow-y:auto;margin:20px 0"></div>
-      <button type="button" class="btn btn-gold" onclick="confirmBatchCashout()">Confirm Cashout</button>
+      <button type="button" class="btn btn-gold" onclick="confirmBatchCashout()">Confirm_Cashout</button>
       <button type="button" class="btn btn-secondary" onclick="closeModal('batchCashoutModal')">Cancel</button>
     </div>
   </div>
@@ -793,7 +795,7 @@
       <h3>List Selected Slots for Sale</h3>
       <p class="modal-sub">Set asking price for each card group</p>
       <div id="batchListContent" style="max-height:400px;overflow-y:auto;margin:20px 0"></div>
-      <button type="button" class="btn btn-primary" onclick="confirmBatchList()">List Slots</button>
+      <button type="button" class="btn btn-primary" onclick="confirmBatchList()">List_Slots</button>
       <button type="button" class="btn btn-secondary" onclick="closeModal('batchListModal')">Cancel</button>
     </div>
   </div>
@@ -838,8 +840,8 @@
     <div class="section-tabs">
       <button class="section-tab active" onclick="filterListings('all')">All</button>
       <button class="section-tab" onclick="filterListings('available')">Available</button>
-      <button class="section-tab" onclick="filterListings('sold')">Sold Out</button>
-      <button class="section-tab" onclick="filterListings('early')">Early Access <span class="tab-gold">Premium</span></button>
+      <button class="section-tab" onclick="filterListings('sold')">Sold_Out</button>
+      <button class="section-tab" onclick="filterListings('early')">Early_Access <span class="tab-gold">Premium</span></button>
     </div>
     <div class="search-and-filters" style="margin:20px 0;display:grid;grid-template-columns:1fr auto auto auto auto;gap:12px;align-items:center">
       <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem;width:100%" />
@@ -879,7 +881,7 @@
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
       <button class="account-tab" onclick="switchAccountTab('mySlots')">Portfolio</button>
-      <button class="account-tab" onclick="switchAccountTab('tradeOffers')">Trade Offers</button>
+      <button class="account-tab" onclick="switchAccountTab('tradeOffers')">Trade_Offers</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
     </div>
@@ -1410,6 +1412,21 @@
       }
     }
 
+
+    // ── RETRO LABELS: replace spaces with _ in all button text nodes ──────────
+    function retroLabels() {
+      document.querySelectorAll('button, .dropdown-item').forEach(el => {
+        el.childNodes.forEach(node => {
+          if (node.nodeType === 3 /* TEXT_NODE */) {
+            const trimmed = node.textContent.trim();
+            if (trimmed && trimmed.includes(' ')) {
+              node.textContent = node.textContent.replace(/ /g, '_');
+            }
+          }
+        });
+      });
+    }
+
     function showPage(pageId) {
       // Guard admin page access
       if (pageId === 'admin' || pageId === 'editListing') {
@@ -1454,6 +1471,7 @@
         }, 10);
       }
       if (pageId === 'admin') renderAdmin();
+      setTimeout(retroLabels, 50);
     }
 
     document.querySelectorAll('[data-page]').forEach(tab => {
@@ -2581,7 +2599,7 @@
           </div>
           <div class="ps-note">You lose $${platformKeeps} to the 10% buyback fee.</div>
         </div>
-        <button type="button" class="btn btn-orange" onclick="confirmCashout('${listingId}', ${slotIdx}, ${cashoutAmount})">Confirm Cashout</button>
+        <button type="button" class="btn btn-orange" onclick="confirmCashout('${listingId}', ${slotIdx}, ${cashoutAmount})">Confirm_Cashout</button>
         <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
       `;
 
@@ -4887,7 +4905,7 @@
       // INITIAL_SESSION: initApp() handles the first render
     });
 
-    initApp();
+    initApp().then(() => retroLabels());
   </script>
 
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
