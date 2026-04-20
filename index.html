@@ -1193,6 +1193,9 @@
         } else {
           adminTab.classList.remove('admin-visible');
         }
+        // Hide the Premium button for members (they're already in)
+        const membershipBtn = document.getElementById('membershipBtn');
+        if (membershipBtn) membershipBtn.style.display = userIsPremium() ? 'none' : '';
       } else {
         authSection.style.display = 'flex';
         userSection.style.display = 'none';
@@ -2875,7 +2878,29 @@
       let diversBgColor = diversificationScore >= 70 ? '#dcfce7' : diversificationScore >= 40 ? '#fef3c7' : '#fee2e2';
       let diversTextColor = diversificationScore >= 70 ? '#22c55e' : diversificationScore >= 40 ? '#f59e0b' : '#ef4444';
 
+      // Build member since badge
+      let memberSinceHtml = '';
+      if (userIsPremium()) {
+        let sinceLabel = '';
+        if (currentUser.is_admin) {
+          sinceLabel = 'Admin &mdash; always active';
+        } else {
+          const startedAt = currentUser.membership_started_at || currentUser.membershipStartedAt;
+          sinceLabel = startedAt
+            ? 'Member since ' + new Date(startedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            : 'Active member';
+        }
+        memberSinceHtml = `<div style="background:linear-gradient(135deg,rgba(240,192,64,.12),rgba(124,92,252,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+          <div style="font-size:1.6rem;line-height:1">★</div>
+          <div>
+            <div style="font-size:.85rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em">Premium Member</div>
+            <div style="font-size:.8rem;color:var(--muted);margin-top:3px">${sinceLabel}</div>
+          </div>
+        </div>`;
+      }
+
       dashEl.innerHTML = `
+        ${memberSinceHtml}
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
           <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">Portfolio Summary</h3>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
