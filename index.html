@@ -563,6 +563,27 @@
       box-shadow: 0 0 22px var(--accent), 0 0 44px rgba(57,255,20,.5);
       transform: translateY(-1px);
     }
+
+    /* ── CARD PULSE SHINE ─────────────────────────────── */
+    .listing-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(57,255,20,.07), transparent);
+      animation: card-pulse 4s ease-in-out infinite var(--pulse-delay, 0s);
+      pointer-events: none;
+      z-index: 1;
+    }
+    @keyframes card-pulse {
+      0%   { left: -60%; opacity: 0; }
+      10%  { opacity: 1; }
+      60%  { left: 130%; opacity: 1; }
+      70%  { opacity: 0; }
+      100% { left: 130%; opacity: 0; }
+    }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -589,7 +610,7 @@
 </head>
 <body>
   <nav>
-    <button class="logo" onclick="showPage('browse');setMobileNav('browse')">[ CARDFRAC_SYS ]</button>
+    <button class="logo" onclick="showPage('landing')">[ CARDFRAC_SYS ]</button>
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Browse</button>
@@ -785,7 +806,7 @@
   </div>
 
   <!-- PAGES -->
-  <div id="browsePage" class="page active">
+  <div id="landingPage" class="page active" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
     <div id="heroSection">
       <h1 class="hero-title">FRACTIONAL CARD OWNERSHIP<br>PROTOCOL v2.0<span class="hero-cursor"></span></h1>
       <p class="hero-tagline">DECENTRALIZED OWNERSHIP // SECURE STORAGE // INSTANT LIQUIDITY</p>
@@ -799,8 +820,11 @@
           <div class="hero-stat-value" id="heroMarketCap">—</div>
         </div>
       </div>
-      <button class="hero-cta" onclick="document.getElementById('browseGrid').scrollIntoView({behavior:'smooth'})">[ BROWSE_NETWORK ]</button>
+      <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[ BROWSE_NETWORK ]</button>
     </div>
+  </div>
+
+  <div id="browsePage" class="page">
     <h2>Browse Listings</h2>
     <p class="subtitle">Fractional ownership starts here. Own a piece of legendary cards.</p>
     <div class="section-tabs">
@@ -1363,6 +1387,22 @@
     });
 
     // ===== PAGES & NAV =====
+    function updateHeroStats() {
+      const totalEl = document.getElementById('heroTotalCards');
+      const capEl   = document.getElementById('heroMarketCap');
+      // slots[] is the listings array; each entry is one unique card
+      const listings = slots; // alias for clarity
+      if (totalEl) totalEl.textContent = listings.length;
+      if (capEl) {
+        const cap = listings.reduce((s, l) => s + (l.value || 0), 0);
+        capEl.textContent = cap >= 1000000
+          ? '$' + (cap / 1000000).toFixed(1) + 'M'
+          : cap >= 1000
+            ? '$' + (cap / 1000).toFixed(1) + 'K'
+            : '$' + cap;
+      }
+    }
+
     function showPage(pageId) {
       // Guard admin page access
       if (pageId === 'admin' || pageId === 'editListing') {
@@ -1389,21 +1429,15 @@
           switchAccountTab('tradeOffers');
         }
       }
+      if (pageId === 'landing') {
+        updateHeroStats();
+      }
       if (pageId === 'browse') {
         renderBrowse();
+      updateHeroStats();
 
       // update hero stats
-      (function(){
-        const totalEl = document.getElementById('heroTotalCards');
-        const capEl   = document.getElementById('heroMarketCap');
-        if (totalEl) totalEl.textContent = slots.length;
-        if (capEl) {
-          const cap = slots.reduce((s,l) => s + (l.value||0), 0);
-          capEl.textContent = cap >= 1000000 ? '$' + (cap/1000000).toFixed(1) + 'M'
-            : cap >= 1000 ? '$' + (cap/1000).toFixed(1) + 'K'
-            : '$' + cap;
-        }
-      })();
+      updateHeroStats();
         setTimeout(() => {
           const searchInput = document.getElementById('browseSearchInput');
           if (searchInput && !searchInput.hasListeners) {
@@ -1513,6 +1547,12 @@
           </div>
         </div>`;
       }).join('');
+      // Stagger the pulse animation delay on each card
+      setTimeout(() => {
+        document.querySelectorAll('#browseGrid .listing-card').forEach((card, i) => {
+          card.style.setProperty('--pulse-delay', (i % 6) * 0.65 + 's');
+        });
+      }, 30);
     }
 
     function filterListings(filter) {
