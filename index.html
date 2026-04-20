@@ -116,7 +116,11 @@
     .listing-card.early-access-card:hover{border-color:var(--gold)}
     .listing-card.locked-card{position:relative}
     .listing-card.locked-card:hover{transform:translateY(-3px);border-color:var(--accent)}
-    .ea-ribbon{position:absolute;top:0;left:0;right:0;background:linear-gradient(90deg,rgba(240,192,64,.9),rgba(251,146,60,.9));color:#000;font-size:.68rem;font-weight:800;text-align:center;padding:4px 0;text-transform:uppercase;letter-spacing:.08em;z-index:2}
+    .ea-ribbon{position:absolute;top:0;left:0;right:0;background:linear-gradient(90deg,rgba(240,192,64,.95),rgba(251,146,60,.95));color:#000;font-size:.7rem;font-weight:800;text-align:center;padding:5px 0;text-transform:uppercase;letter-spacing:.06em;z-index:2}
+    .ea-lock-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3;border-radius:11px;gap:6px}
+    .ea-lock-overlay .ea-lock-icon{font-size:2rem}
+    .ea-lock-overlay p{color:#fff;font-size:.8rem;font-weight:600;margin:0;text-align:center;padding:0 12px}
+    .ea-lock-overlay button{background:linear-gradient(135deg,var(--gold),#e8a020);color:#000;border:none;padding:6px 14px;border-radius:6px;font-size:.78rem;font-weight:700;cursor:pointer;margin-top:4px}
     .lock-overlay{position:absolute;top:8px;right:8px;background:rgba(15,15,19,.9);display:flex;align-items:center;justify-content:center;flex-direction:row;gap:6px;z-index:4;border-radius:6px;padding:6px 10px;border:1px solid rgba(255,255,255,.2)}
     .lock-overlay .lock-icon{font-size:1rem}
     .lock-overlay p{font-size:.75rem;color:var(--muted);text-align:center;padding:0;margin:0}
@@ -487,10 +491,11 @@
 </head>
 <body>
   <nav>
-    <div class="logo">CardFrac</div>
+    <button class="logo" onclick="showPage('browse');setMobileNav('browse')">CardFrac</button>
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Browse</button>
+        <button class="nav-tab" data-page="leaderboard">Leaderboard</button>
         <button class="nav-tab" data-page="admin">Admin</button>
         <button class="nav-tab" data-page="account">My Account<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
       </div>
@@ -620,7 +625,7 @@
       <div class="perks-list">
         <div class="perk-item">
           <div class="perk-icon">★</div>
-          <div class="perk-text"><strong>Lower fees:</strong> 1% transaction fee vs 2% for non-members</div>
+          <div class="perk-text"><strong>Lower fees:</strong> 3.9% vs 5% for non-members — pays for itself fast</div>
         </div>
         <div class="perk-item">
           <div class="perk-icon">★</div>
@@ -776,6 +781,12 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <div id="leaderboardPage" class="page">
+    <h2>Leaderboard</h2>
+    <p style="color:var(--muted);margin-bottom:24px;font-size:.9rem">Top collectors ranked by portfolio value.</p>
+    <div id="leaderboardContent"><div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div></div>
   </div>
 
   <div id="adminPage" class="page">
@@ -937,6 +948,7 @@
       <div class="cart-breakdown">
         <span id="cartPrice">$0</span> + <span id="cartFee">$0</span> fee = <span id="cartTotal">$0</span>
       </div>
+      <div id="cartSavingsCallout" style="display:none;font-size:.72rem;color:var(--gold);margin-top:3px">★ Members pay 3.9% — you'd save <span id="cartSavingsAmt">$0</span> on this order</div>
       <div class="cart-slots-preview" id="cartSlots"></div>
     </div>
     <div class="cart-actions">
@@ -1058,13 +1070,19 @@
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
 
     // ===== FEE TIER SYSTEM =====
-    // Standard fee: 5% (covers Stripe 2.9% + platform 2.1%)
-    // Premium/admin fee: 2.5% (discounted for members)
-    // Admin fee: 0% (free)
+    // ── Fee tiers ──────────────────────────────────────────────────────
+    // Standard : 5%   (covers Stripe 2.9% + platform cut)
+    // Member   : 3.9% (Stripe covered, platform take is smaller)
+    // Admin    : 0%   (always free)
     function getFeeRate() {
       if (!currentUser) return 0.05;
-      if (currentUser.is_admin) return 0; // admins pay no fees
-      return userIsPremium() ? 0.025 : 0.05;
+      if (currentUser.is_admin) return 0;
+      if (currentUser.referred_by && currentUser.referral_discount_used === false) return 0; // first-trade referral reward
+      return userIsPremium() ? 0.039 : 0.05;
+    }
+    // Savings a non-member would get by upgrading (used for callouts)
+    function memberSavings(amount) {
+      return Math.round(amount * (0.05 - 0.039));
     }
     function calcFee(amount) {
       return Math.round(amount * getFeeRate());
@@ -1239,6 +1257,7 @@
 
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(pageId + 'Page').classList.add('active');
+      if (pageId === 'leaderboard') renderLeaderboard();
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const navTab = document.querySelector(`[data-page="${pageId}"]`);
       if (navTab) navTab.classList.add('active');
@@ -1334,8 +1353,10 @@
 
         const cardIsSoldOut = listing.status === 'sold' || (totalSlots > 0 && slotsStatus.available === 0 && slotsStatus.taken > 0);
         const isWatched = currentUser && currentUser.watchlist && currentUser.watchlist.includes(listing.id);
+        const showEaLock = listing.earlyAccessOnly && !userIsPremium();
         return `<div class="listing-card ${listing.earlyAccessOnly ? 'early-access-card' : ''} ${cardIsSoldOut ? 'locked-card' : ''}" style="position:relative">
-          ${listing.earlyAccessOnly ? '<div class="ea-ribbon">Premium Only</div>' : ''}
+          ${listing.earlyAccessOnly ? '<div class="ea-ribbon">★ Members Early Access</div>' : ''}
+          ${showEaLock ? `<div class="ea-lock-overlay"><div class="ea-lock-icon">★</div><p>Members get first access</p><button onclick="event.stopPropagation();openModal('membershipModal')">Unlock with Premium</button></div>` : ''}
           ${votePassed ? '<div class="vote-banner">🔨 Vote Passed</div>' : ''}
           ${cardIsSoldOut && !votePassed ? '<div class="lock-overlay"><div class="lock-icon">🔒</div><p>Sold Out</p></div>' : ''}
           <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event, '${listing.id}')">🔔</button>
@@ -1581,7 +1602,10 @@
             </div>
           </div>
           <div>
-            <div class="grade-badge-detail">🏆 ${listing.grade}</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+              <div class="grade-badge-detail">🏆 ${listing.grade}</div>
+              ${currentUser ? `<button onclick="togglePriceAlert('${listingId}')" style="display:flex;align-items:center;gap:6px;background:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'rgba(124,92,252,.2)' : 'var(--surface2)'};border:1px solid ${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--border)'};color:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--muted)'};border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;transition:all .15s">${(currentUser.watchlist||[]).includes(String(listingId)) ? '🔔 Watching' : '🔔 Notify me'}</button>` : ''}
+            </div>
             <h1>${listing.name}</h1>
             <p class="detail-meta">${listing.gameType}</p>
             ${listing.sellVotes && listing.sellVotes.length > 0 ? `<div style="background:rgba(251,146,60,.15);border:1px solid rgba(251,146,60,.3);border-radius:8px;padding:12px;margin-bottom:16px;color:var(--orange)">🗳️ ${listing.sellVotes.length} owner(s) have voted to sell</div>` : ''}
@@ -1802,6 +1826,22 @@
       document.getElementById('cartPrice').textContent = '$' + basePrice.toLocaleString();
       document.getElementById('cartFee').textContent = '$' + fee.toLocaleString();
       document.getElementById('cartTotal').textContent = '$' + total.toLocaleString();
+      const callout = document.getElementById('cartSavingsCallout');
+      if (callout) {
+        if (currentUser && currentUser.referred_by && currentUser.referral_discount_used === false) {
+          document.getElementById('cartSavingsAmt').textContent = 'full fee';
+          callout.style.display = 'block';
+          callout.textContent = '🎁 Referral reward: your first purchase is fee-free!';
+          callout.style.color = 'var(--green)';
+        } else if (!userIsPremium() && currentUser) {
+          const savings = memberSavings(basePrice);
+          if (savings > 0) {
+            callout.innerHTML = '★ Members pay 3.9% — you\'d save <span id="cartSavingsAmt">$' + savings.toLocaleString() + '</span> on this order';
+            callout.style.color = 'var(--gold)';
+            callout.style.display = 'block';
+          } else { callout.style.display = 'none'; }
+        } else { callout.style.display = 'none'; }
+      }
 
       const preview = document.getElementById('cartSlots');
       preview.innerHTML = cart.map(c => {
@@ -1999,6 +2039,7 @@
             <span>$${total}</span>
           </div>
           <div class="ps-note">Seller receives: $${slot.askPrice - fee}</div>
+          ${!userIsPremium() && currentUser ? `<div style="margin-top:8px;padding:8px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.2);border-radius:6px;font-size:.75rem;color:var(--gold)">★ Members pay 3.9% — you'd save $${memberSavings(slot.askPrice)} on this trade. <button onclick="closeModal('purchaseModal');openModal('membershipModal')" style="background:none;border:none;color:var(--gold);font-weight:700;cursor:pointer;text-decoration:underline">Upgrade →</button></div>` : ''}
         </div>
         <button type="button" class="btn btn-teal" onclick="buySlotForSale('${listingId}', ${slotIdx})">Buy Now</button>
         <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
@@ -4266,6 +4307,103 @@
     }
 
 
+
+
+    // ===== PRICE ALERTS =====
+    async function togglePriceAlert(listingId) {
+      if (!currentUser) { openModal('loginModal'); return; }
+      const existing = currentUser.watchlist || [];
+      const isWatching = existing.includes(listingId);
+      // Reuse watchlist as the alert list (already stored in profiles)
+      // Toggle
+      let newList = isWatching ? existing.filter(id => id !== listingId) : [...existing, listingId];
+      await sb.from('profiles').update({ watchlist: newList }).eq('id', currentUser.id);
+      currentUser.watchlist = newList;
+      showToast(isWatching ? 'Alert removed' : '🔔 You'll be notified when this listing changes');
+      // Re-render current detail if open
+      const detailEl = document.getElementById('detailView');
+      if (detailEl && detailEl.dataset.listingId === String(listingId)) {
+        viewDetail(listingId);
+      }
+    }
+
+    // ===== LEADERBOARD =====
+    function renderLeaderboard() {
+      const el = document.getElementById('leaderboardContent');
+      if (!el) return;
+      if (!listings.length || !slots.length) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Loading data...</div>';
+        return;
+      }
+
+      // Build portfolio value per user from slots + listings
+      const portfolioByUser = {};
+      slots.forEach(s => {
+        if (!s.userId) return;
+        const listing = listings.find(l => String(l.id) === String(s.listingId));
+        if (!listing || !listing.value || !listing.totalSlots) return;
+        const slotValue = Math.ceil(listing.value / listing.totalSlots);
+        if (!portfolioByUser[s.userId]) portfolioByUser[s.userId] = { userId: s.userId, slotCount: 0, totalValue: 0, cards: new Set() };
+        portfolioByUser[s.userId].slotCount++;
+        portfolioByUser[s.userId].totalValue += slotValue;
+        portfolioByUser[s.userId].cards.add(String(s.listingId));
+      });
+
+      const ranked = Object.values(portfolioByUser)
+        .sort((a, b) => b.totalValue - a.totalValue)
+        .slice(0, 50);
+
+      if (ranked.length === 0) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No portfolio data yet — be the first to buy a slot!</div>';
+        return;
+      }
+
+      // Fetch names for ranked users
+      const userIds = ranked.map(r => r.userId);
+      sb.from('profiles').select('id, name, username, is_premium, is_admin').in('id', userIds)
+        .then(({ data: pRows }) => {
+          const pm = {};
+          (pRows || []).forEach(p => { pm[p.id] = p; });
+
+          const medals = ['🥇', '🥈', '🥉'];
+          const rows = ranked.map((r, i) => {
+            const profile = pm[r.userId] || {};
+            const displayName = profile.name || profile.username || 'Anonymous';
+            const isPrem = profile.is_premium || profile.is_admin;
+            const medal = medals[i] || `#${i + 1}`;
+            const isMe = currentUser && r.userId === currentUser.id;
+            return `<tr style="${isMe ? 'background:rgba(124,92,252,.08);' : ''}">
+              <td style="font-size:1.1rem;text-align:center;width:48px">${medal}</td>
+              <td>
+                <div style="font-weight:600;color:${isMe ? 'var(--accent)' : 'var(--text)'}">${displayName}${isMe ? ' <span style="font-size:.7rem;color:var(--accent)">(you)</span>' : ''}</div>
+                ${isPrem ? '<div style="font-size:.7rem;color:var(--gold);margin-top:2px">★ Premium</div>' : ''}
+              </td>
+              <td style="text-align:center;color:var(--muted)">${r.slotCount}</td>
+              <td style="text-align:center;color:var(--muted)">${r.cards.size}</td>
+              <td style="text-align:right;font-weight:700;color:var(--green)">$${r.totalValue.toLocaleString()}</td>
+            </tr>`;
+          }).join('');
+
+          el.innerHTML = `
+            <div style="overflow-x:auto">
+              <table class="tx-table" style="width:100%;min-width:400px">
+                <thead>
+                  <tr>
+                    <th style="text-align:center">Rank</th>
+                    <th>Collector</th>
+                    <th style="text-align:center">Slots</th>
+                    <th style="text-align:center">Cards</th>
+                    <th style="text-align:right">Portfolio Value</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+            ${currentUser && !portfolioByUser[currentUser.id] ? '<div style="margin-top:20px;padding:14px;background:var(--surface2);border-radius:8px;text-align:center;font-size:.9rem;color:var(--muted)">You're not on the board yet — buy your first slot to join the rankings!</div>' : ''}
+          `;
+        });
+    }
+
     // ===== INIT =====
     function renderAllContent() {
       renderBrowse();
@@ -4545,6 +4683,10 @@
     <button class="mobile-nav-btn active" id="mobileNavBrowse" onclick="showPage('browse'); setMobileNav('browse')">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Browse
+    </button>
+    <button class="mobile-nav-btn" id="mobileNavLeaderboard" onclick="showPage('leaderboard'); setMobileNav('leaderboard')">
+      <svg viewBox="0 0 24 24"><rect x="2" y="14" width="4" height="8" rx="1"/><rect x="10" y="9" width="4" height="13" rx="1"/><rect x="18" y="4" width="4" height="18" rx="1"/></svg>
+      Leaders
     </button>
     <button class="mobile-nav-btn" id="mobileNavAccount" onclick="showPage('account'); setMobileNav('account')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
