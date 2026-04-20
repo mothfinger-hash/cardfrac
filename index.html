@@ -563,6 +563,13 @@
       box-shadow: 0 0 22px var(--accent), 0 0 44px rgba(57,255,20,.5);
       transform: translateY(-1px);
     }
+    .hero-footer-line {
+      margin-top: 1.6rem;
+      font-size: .72rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      opacity: .7;
+    }
 
     /* ── CARD PULSE SHINE ─────────────────────────────── */
     .listing-card::before {
@@ -573,7 +580,7 @@
       width: 60%;
       height: 100%;
       background: linear-gradient(90deg, transparent, rgba(57,255,20,.07), transparent);
-      animation: card-pulse 4s ease-in-out infinite var(--pulse-delay, 0s);
+      animation: card-pulse 8s ease-in-out infinite;
       pointer-events: none;
       z-index: 1;
     }
@@ -821,6 +828,7 @@
         </div>
       </div>
       <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[ BROWSE_NETWORK ]</button>
+      <p class="hero-footer-line">CARDFRAC NETWORK // SECURE VAULT STORAGE // ALL RIGHTS RESERVED</p>
     </div>
   </div>
 
@@ -1390,16 +1398,15 @@
     function updateHeroStats() {
       const totalEl = document.getElementById('heroTotalCards');
       const capEl   = document.getElementById('heroMarketCap');
-      // slots[] is the listings array; each entry is one unique card
-      const listings = slots; // alias for clarity
+      // `listings` = unique cards array (global), `slots` = individual ownership records
       if (totalEl) totalEl.textContent = listings.length;
       if (capEl) {
-        const cap = listings.reduce((s, l) => s + (l.value || 0), 0);
+        const cap = listings.reduce((s, l) => s + (Number(l.value) || 0), 0);
         capEl.textContent = cap >= 1000000
           ? '$' + (cap / 1000000).toFixed(1) + 'M'
           : cap >= 1000
             ? '$' + (cap / 1000).toFixed(1) + 'K'
-            : '$' + cap;
+            : cap > 0 ? '$' + cap : '—';
       }
     }
 
@@ -1547,10 +1554,13 @@
           </div>
         </div>`;
       }).join('');
-      // Stagger the pulse animation delay on each card
+      // Sync all card pulses to the same phase
       setTimeout(() => {
-        document.querySelectorAll('#browseGrid .listing-card').forEach((card, i) => {
-          card.style.setProperty('--pulse-delay', (i % 6) * 0.65 + 's');
+        const now = performance.now();
+        const cycleDuration = 8000; // ms, matches CSS animation duration
+        const phase = now % cycleDuration;
+        document.querySelectorAll('#browseGrid .listing-card').forEach(card => {
+          card.style.animationDelay = '-' + (phase / 1000).toFixed(3) + 's';
         });
       }, 30);
     }
