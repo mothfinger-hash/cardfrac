@@ -33,6 +33,7 @@
     .logo{font-size:1.25rem;font-weight:800;color:var(--accent);text-shadow:0 0 8px var(--accent),0 0 18px rgba(57,255,20,.4);letter-spacing:2px;border:none;padding:0;cursor:pointer;outline:none;background:transparent}
     .nav-right{display:flex;align-items:center;gap:10px}
     .nav-tabs{display:flex;gap:4px}
+    button{text-transform:uppercase}
     .nav-tab{padding:6px 14px;border-radius:0;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:.85rem;font-weight:400;transition:all .15s;position:relative;letter-spacing:.05em}
     .nav-tab:hover{background:rgba(57,255,20,.06);color:var(--text);border-color:var(--border)}
     .nav-tab.active{background:rgba(57,255,20,.12);color:var(--accent);border-color:var(--accent);text-shadow:0 0 8px rgba(57,255,20,.5);box-shadow:0 0 10px rgba(57,255,20,.15)}
@@ -670,7 +671,7 @@
 </head>
 <body>
   <nav>
-    <button class="logo" onclick="showPage('landing')">[ CARDFRAC_SYS ]</button>
+    <button class="logo" onclick="showPage('landing')">[CARDFRAC_SYS]</button>
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Browse_Listings</button>
@@ -880,7 +881,7 @@
           <div class="hero-stat-value" id="heroMarketCap">—</div>
         </div>
       </div>
-      <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[ BROWSE_NETWORK ]</button>
+      <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[BROWSE_NETWORK]</button>
       <p class="hero-footer-line">CARDFRAC NETWORK // SECURE VAULT STORAGE // ALL RIGHTS RESERVED</p>
     </div>
   </div>
@@ -913,12 +914,12 @@
       <button id="clearFiltersBtn" onclick="clearBrowseFilters()" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--accent);font-size:.9rem;cursor:pointer;display:none">Clear All</button>
     </div>
     <div id="gameTypePills" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-      <button class="game-pill active" onclick="setGameTypeFilter('all')">🃏 All</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Pokémon')">⚡ Pokémon</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Magic: The Gathering')">🧙 Magic</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Yu-Gi-Oh!')">🐉 Yu-Gi-Oh!</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Sports')">🏆 Sports</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Other')">🎴 Other</button>
+      <button class="game-pill active" onclick="setGameTypeFilter('all')">All</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Pokémon')">Pokémon</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Magic: The Gathering')">Magic</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Yu-Gi-Oh!')">Yu-Gi-Oh!</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Sports')">Sports</button>
+      <button class="game-pill" onclick="setGameTypeFilter('Other')">Other</button>
     </div>
     <div class="card-grid" id="browseGrid"></div>
   </div>
@@ -984,9 +985,9 @@
   <div id="leaderboardPage" class="page">
     <h2>Leaderboard</h2>
     <div class="section-tabs" style="margin-bottom:24px">
-      <button class="section-tab active" onclick="renderLeaderboard('value')">💰 Portfolio Value</button>
-      <button class="section-tab" onclick="renderLeaderboard('slots')">📦 Most Slots</button>
-      <button class="section-tab" onclick="renderLeaderboard('diverse')">🎴 Most Diverse</button>
+      <button class="section-tab active" onclick="renderLeaderboard('value')">Portfolio_Value</button>
+      <button class="section-tab" onclick="renderLeaderboard('slots')">Most_Slots</button>
+      <button class="section-tab" onclick="renderLeaderboard('diverse')">Most_Diverse</button>
     </div>
     <div id="leaderboardContent"><div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div></div>
   </div>
@@ -1474,7 +1475,7 @@
         el.childNodes.forEach(node => {
           if (node.nodeType === 3 /* TEXT_NODE */) {
             const trimmed = node.textContent.trim();
-            if (trimmed && trimmed.includes(' ')) {
+            if (trimmed && trimmed.includes(' ') && !trimmed.startsWith('[')) {
               node.textContent = node.textContent.replace(/ /g, '_');
             }
           }
