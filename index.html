@@ -1502,7 +1502,7 @@
               else if (isTaken) classes += ' taken';
               newSlotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
                 ${i + j + 1}
-                <div class="tooltip">${slot.userId ? (isYours ? 'Your slot' : 'Owned') : ('$' + freshSlotPrice)}</div>
+                <div class="tooltip">${slot.userId ? (isYours ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'Owned')) : ('$' + freshSlotPrice)}</div>
               </div>`;
             }
             newSlotGridHTML += '</div>';
@@ -1556,7 +1556,7 @@
 
           slotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
             ${content}
-            <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : (slot.name || 'Owned')) : ('$' + slotPrice)}</div>
+            <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'Owned')) : ('$' + slotPrice)}</div>
           </div>`;
         }
         slotGridHTML += '</div>';
@@ -1579,8 +1579,9 @@
         }
       });
       Object.values(uniqueOwners).forEach(ownerData => {
-        const displayName = ownerData.isYou ? 'You' : (ownerData.name || 'Slot Owner');
-        const usernameStr = ownerData.username ? ` (@${ownerData.username})` : '';
+        const ownerProfile = profilesMap[ownerData.userId] || {};
+        const displayName = ownerData.isYou ? 'You' : (ownerProfile.username || ownerProfile.name || ownerData.name || 'Slot Owner');
+        const usernameStr = '';
         ownerHTML += `<div class="owner-row">
           <span class="owner-name">${displayName}${usernameStr}</span>
           <span>${ownerData.count} slot${ownerData.count > 1 ? 's' : ''}</span>
@@ -4368,7 +4369,7 @@
           const medals = ['🥇', '🥈', '🥉'];
           const rows = ranked.map((r, i) => {
             const profile = pm[r.userId] || {};
-            const displayName = profile.name || profile.username || 'Anonymous';
+            const displayName = profile.username || profile.name || 'Anonymous';
             const isPrem = profile.is_premium || profile.is_admin;
             const medal = medals[i] || `#${i + 1}`;
             const isMe = currentUser && r.userId === currentUser.id;
