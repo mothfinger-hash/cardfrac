@@ -442,38 +442,6 @@
       .mobile-nav{display:flex}
     }
 
-    /* PWA PROMPT */
-    .pwa-prompt{
-      position:fixed;bottom:0;left:0;right:0;
-      background:var(--surface);
-      border-top:2px solid var(--accent);
-      padding:16px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      z-index:100;
-      box-shadow:0 -4px 20px rgba(0,0,0,.3);
-      animation:slideUp .3s ease
-    }
-    @keyframes slideUp{
-      from{transform:translateY(100%);opacity:0}
-      to{transform:translateY(0);opacity:1}
-    }
-    .pwa-prompt-text{flex:1;font-size:.9rem;color:var(--text)}
-    .pwa-prompt-btn{
-      background:var(--accent);color:#fff;border:none;
-      padding:8px 16px;border-radius:6px;font-weight:600;
-      cursor:pointer;white-space:nowrap;
-      transition:all .2s
-    }
-    .pwa-prompt-btn:hover{background:#6b4fdb}
-    .pwa-prompt-close{
-      background:none;border:none;color:var(--muted);
-      cursor:pointer;font-size:1.2rem;
-      transition:color .2s
-    }
-    .pwa-prompt-close:hover{color:var(--text)}
 
     /* GAME TYPE PILLS */
     .game-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; font-size: .8rem; cursor: pointer; transition: all .15s; color: var(--text); }
@@ -1090,13 +1058,20 @@
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
 
     // ===== FEE TIER SYSTEM =====
+    // Standard fee: 5% (covers Stripe 2.9% + platform 2.1%)
+    // Premium/admin fee: 2.5% (discounted for members)
+    // Admin fee: 0% (free)
     function getFeeRate() {
-      if (!currentUser) return 0.02;
+      if (!currentUser) return 0.05;
       if (currentUser.is_admin) return 0; // admins pay no fees
-      return (currentUser && currentUser.membershipActive) ? 0.01 : 0.02;
+      return userIsPremium() ? 0.025 : 0.05;
     }
     function calcFee(amount) {
       return Math.round(amount * getFeeRate());
+    }
+    // Admins are automatically treated as premium (no subscription needed)
+    function userIsPremium() {
+      return !!(currentUser && (currentUser.is_admin || currentUser.is_premium || currentUser.membershipActive));
     }
 
     // Slots are populated from Supabase in initApp() — no demo data needed
@@ -3208,7 +3183,7 @@
         // Expandable submenu with individual slots
         if (isExpanded) {
           cardHtml += `<div style="padding:12px 16px;background:var(--surface2)">
-            <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+            <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:.85rem;min-width:500px">
               <thead>
                 <tr style="border-bottom:1px solid var(--border);text-align:left">
                   <th style="padding:8px 0;color:var(--muted);font-weight:600;width:60px"><input type="checkbox" onchange="toggleAllListingSlots('${listingId}', this.checked)"></th>
@@ -3237,7 +3212,7 @@
                   </tr>`;
                 }).join('')}
               </tbody>
-            </table>
+            </table></div>
           </div>`;
         }
 
@@ -4097,7 +4072,7 @@
       let revTotal = 0, revSales = 0, revResales = 0, revCashouts = 0;
       transactions.forEach(t => {
         // For historical transactions, estimate fee based on 0.02 (non-member rate) since we don't track user membership per transaction
-        const fee = t.type === 'buy' ? Math.ceil(t.amount * 0.02) : t.type === 'resale' ? Math.ceil(t.amount * 0.02) : t.type === 'cashout' ? Math.ceil((Math.ceil(listings.find(l => l.id === t.listingId).value / listings.find(l => l.id === t.listingId).totalSlots) - t.amount)) : 0;
+        const fee = t.type === 'buy' ? Math.ceil(t.amount * 0.05) : t.type === 'resale' ? Math.ceil(t.amount * 0.05) : t.type === 'cashout' ? Math.ceil((Math.ceil(listings.find(l => l.id === t.listingId).value / listings.find(l => l.id === t.listingId).totalSlots) - t.amount)) : 0;
         revTotal += fee;
         if (t.type === 'buy') revSales += fee;
         else if (t.type === 'resale') revResales += fee;
@@ -4265,26 +4240,6 @@
       }, 2000);
     }
 
-    // ===== PWA PROMPT =====
-    let pwaSeen = false;
-    setTimeout(() => {
-      if (!pwaSeen && window.innerWidth < 768) {
-        pwaSeen = true;
-        const prompt = document.createElement('div');
-        prompt.className = 'pwa-prompt';
-        prompt.innerHTML = `
-          <span class="pwa-prompt-text">Add CardFrac to your home screen for easy access</span>
-          <button class="pwa-prompt-btn" onclick="installPWA()">Install</button>
-          <button class="pwa-prompt-close" onclick="this.parentElement.remove()">×</button>
-        `;
-        document.body.appendChild(prompt);
-      }
-    }, 30000);
-
-    function installPWA() {
-      document.querySelector('.pwa-prompt')?.remove();
-      showToast('Thanks! Check your browser\'s share menu to add to home screen.');
-    }
 
     // ===== INIT =====
     function renderAllContent() {
