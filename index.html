@@ -1759,7 +1759,7 @@
             `<div class="tx-row">
               <span class="tx-type">${t.type === 'buy' ? 'Buy' : t.type === 'resale' ? 'Sale' : 'Trade'}</span>
               <span class="tx-detail">@${t.userName} • Slot #${t.slotIdx + 1}</span>
-              <span class="tx-price">$${t.amount}</span>
+              <span class="tx-price">${t.amount > 0 ? '$' + t.amount : 'Assigned'}</span>
             </div>`
           ).join('');
         });
@@ -4051,6 +4051,9 @@
       }
 
       // Assign all slots
+      const assignListing = listings.find(l => String(l.id) === String(listingId));
+      const assignSlotPrice = assignListing && assignListing.totalSlots > 0
+        ? Math.ceil(assignListing.value / assignListing.totalSlots) : 0;
       const assigned = [];
       for (const slot of slotsToAssign) {
         const { error } = await sb.from('slots')
@@ -4058,7 +4061,7 @@
         if (error) { statusEl.textContent = `⚠️ Error on slot #${slot.idx}: ${error.message}`; statusEl.style.color = '#ef4444'; return; }
         await sb.from('transactions').insert({
           type: 'buy', listing_id: listingId, slot_idx: slot.idx,
-          user_id: userId, amount: 0, fee: 0, note: 'Admin assignment'
+          user_id: userId, amount: assignSlotPrice, fee: 0, note: 'Admin assignment'
         });
         const localSlot = slots.find(s => s.listingId === listingId && s.idx === slot.idx);
         if (localSlot) { localSlot.userId = userId; localSlot.name = userName; }
