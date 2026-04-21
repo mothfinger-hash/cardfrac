@@ -1286,6 +1286,7 @@
     let browseSearchQuery = '';
     let browseGameTypeFilter = 'all';
     let browseSortFilter = 'newest';
+    let browseTabFilter = 'all';
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
 
     // ===== FEE TIER SYSTEM =====
@@ -1555,9 +1556,6 @@
     function renderBrowse() {
       const grid = document.getElementById('browseGrid');
       if (!grid) return;
-      const activeTab = document.querySelector('.section-tab.active');
-      const tabFilter = activeTab ? activeTab.textContent.toLowerCase() : 'all';
-
       let filtered = listings.filter(listing => {
         const slotStats = getSlotStats(listing.id);
         const isEarlyAccess = listing.earlyAccessOnly || listing.status === 'early';
@@ -1566,10 +1564,10 @@
           (listing.totalSlots > 0 && slotStats.available === 0 && slotStats.taken > 0);
         const isAvailable = !isSoldOut && !isEarlyAccess;
 
-        const shouldShowByTab = tabFilter === 'all' ||
-          (tabFilter === 'available' && isAvailable) ||
-          (tabFilter === 'sold out' && isSoldOut) ||
-          (tabFilter.includes('early') && isEarlyAccess);
+        const shouldShowByTab = browseTabFilter === 'all' ||
+          (browseTabFilter === 'available' && isAvailable) ||
+          (browseTabFilter === 'sold' && isSoldOut) ||
+          (browseTabFilter === 'early' && isEarlyAccess);
         if (!shouldShowByTab) return false;
 
         const search = browseSearchQuery.toLowerCase();
@@ -1657,6 +1655,7 @@
     }
 
     function filterListings(filter) {
+      browseTabFilter = filter;
       document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
       event.target.classList.add('active');
       renderBrowse();
@@ -1731,30 +1730,38 @@
 
       // Fetch recent transactions for this listing with buyer usernames
       sb.from('transactions')
-        .select('type, slot_idx, amount, user_id, profiles(username, name)')
+        .select('type, slot_idx, amount, user_id')
         .eq('listing_id', listingId)
         .order('created_at', { ascending: false })
         .limit(5)
-        .then(({ data: txData }) => {
-          if (!txData) return;
+        .then(async ({ data: txData }) => {
+          if (!txData || txData.length === 0) {
+            const txEl = document.getElementById(`recentTxList_${listingId}`);
+            if (txEl) txEl.innerHTML = '<div class="empty-state">No transactions yet</div>';
+            return;
+          }
+          // Fetch profiles for transaction users
+          const uids = [...new Set(txData.map(t => t.user_id).filter(Boolean))];
+          const { data: profiles } = uids.length > 0
+            ? await sb.from('profiles').select('id, username, name').in('id', uids)
+            : { data: [] };
+          const pm = {};
+          (profiles || []).forEach(p => { pm[p.id] = p; });
           listingTxCache[listingId] = txData.map(t => ({
             type: t.type,
-            userName: t.profiles?.username || t.profiles?.name || 'User',
+            userName: pm[t.user_id]?.username || pm[t.user_id]?.name || 'User',
             slotIdx: t.slot_idx,
             amount: t.amount,
           }));
           const txEl = document.getElementById(`recentTxList_${listingId}`);
           if (!txEl) return;
-          const txItems = listingTxCache[listingId];
-          txEl.innerHTML = txItems.length === 0
-            ? '<div class="empty-state">No transactions yet</div>'
-            : txItems.map(t =>
-                `<div class="tx-row">
-                  <span class="tx-type">${t.type === 'buy' ? 'Buy' : t.type === 'resale' ? 'Sale' : 'Trade'}</span>
-                  <span class="tx-detail">@${t.userName} • Slot #${t.slotIdx + 1}</span>
-                  <span class="tx-price">$${t.amount}</span>
-                </div>`
-              ).join('');
+          txEl.innerHTML = listingTxCache[listingId].map(t =>
+            `<div class="tx-row">
+              <span class="tx-type">${t.type === 'buy' ? 'Buy' : t.type === 'resale' ? 'Sale' : 'Trade'}</span>
+              <span class="tx-detail">@${t.userName} • Slot #${t.slotIdx + 1}</span>
+              <span class="tx-price">$${t.amount}</span>
+            </div>`
+          ).join('');
         });
 
       // Refresh slots for this listing from Supabase — update in-place so navigation is not disrupted
@@ -1915,7 +1922,7 @@
           <div>
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
               <div class="grade-badge-detail">🏆 ${listing.grade}</div>
-              ${currentUser ? `<button onclick="togglePriceAlert('${listingId}')" style="display:flex;align-items:center;gap:6px;background:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'rgba(124,92,252,.2)' : 'var(--surface2)'};border:1px solid ${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--border)'};color:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--muted)'};border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;transition:all .15s">${(currentUser.watchlist||[]).includes(String(listingId)) ? '🔔 Watching' : '🔔 Notify me'}</button>` : ''}
+              ${currentUser ? `<button onclick="togglePriceAlert('${listingId}')" style="display:flex;align-items:center;gap:6px;background:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'rgba(124,92,252,.2)' : 'var(--surface2)'};border:1px solid ${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--border)'};color:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--muted)'};border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;transition:all .15s">${(currentUser.watchlist||[]).includes(String(listingId)) ? 'Watching' : 'Notify me'}</button>` : ''}
             </div>
             <h1>${listing.name}</h1>
             <p class="detail-meta">${listing.gameType}</p>

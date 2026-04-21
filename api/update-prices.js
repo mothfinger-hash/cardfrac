@@ -135,6 +135,9 @@ async function fetchPriceFromUrl(url) {
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 module.exports = async function handler(req, res) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    return res.status(500).json({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables in Vercel dashboard.' });
+  }
   // ── Auth: accept Vercel cron secret OR a valid Supabase admin JWT ──────────
   const cronSecret = process.env.CRON_SECRET;
   const vercelCronHeader = req.headers['x-vercel-cron-secret'];   // set by Vercel
