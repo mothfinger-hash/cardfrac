@@ -26,7 +26,21 @@ function extractNumber(str) {
   return isNaN(n) ? null : Math.round(n);
 }
 
-async function fetchPriceFromUrl(url) {
+// Maps listing grade strings → PriceCharting element ID suffixes and keywords
+function gradeToKey(grade) {
+  if (!grade) return null;
+  const g = grade.toLowerCase().trim();
+  if (g.includes('10'))       return { id: 'grade_10', label: 'psa 10' };
+  if (g.includes('9.5'))      return { id: 'grade_9_5', label: 'bgs 9.5' };
+  if (g.includes('9'))        return { id: 'grade_9',  label: 'psa 9' };
+  if (g.includes('8'))        return { id: 'grade_8',  label: 'psa 8' };
+  if (g.includes('7'))        return { id: 'grade_7',  label: 'psa 7' };
+  if (g.includes('6'))        return { id: 'grade_6',  label: 'psa 6' };
+  if (g.includes('ungraded') || g.includes('raw')) return { id: 'used', label: 'ungraded' };
+  return null;
+}
+
+async function fetchPriceFromUrl(url, grade) {
   if (!url) return null;
 
   let html;
@@ -44,6 +58,52 @@ async function fetchPriceFromUrl(url) {
     html = await res.text();
   } catch (err) {
     console.error(`[update-prices] fetch error for ${url}:`, err.message);
+    return null;
+  }
+
+  // ── PriceCharting ─────────────────────────────────────────────────────────
+  if (url.includes('pricecharting.com')) {
+    const gradeKey = gradeToKey(grade);
+
+    // 1. Try embedded JSON (pricecharting sometimes embeds price data as JS vars)
+    const jsonMatch = html.match(/var\s+prices\s*=\s*(\{[\s\S]*?\});/) ||
+                      html.match(/\"prices\"\s*:\s*(\{[\s\S]*?\})/);
+    if (jsonMatch) {
+      try {
+        const prices = JSON.parse(jsonMatch[1]);
+        if (gradeKey) {
+          const val = prices[gradeKey.id] ?? prices[gradeKey.id + '_price'];
+          if (val != null) return Math.round(Number(val) / 100); // pricecharting stores cents
+        }
+        // Fallback to grade 10 then ungraded
+        const fallback = prices['grade_10'] ?? prices['used'];
+        if (fallback != null) return Math.round(Number(fallback) / 100);
+      } catch (_) {}
+    }
+
+    // 2. Try element IDs — pricecharting uses id="grade_10_price" etc.
+    const idToTry = gradeKey ? [gradeKey.id, 'grade_10', 'used'] : ['grade_10', 'used'];
+    for (const id of idToTry) {
+      const patterns = [
+        new RegExp(`id="${id}_price"[^>]*>[^<]*\\$([\\d,]+(?:\\.\\d{1,2})?)`, 'i'),
+        new RegExp(`id="${id}"[^>]*>[^<]*\\$([\\d,]+(?:\\.\\d{1,2})?)`, 'i'),
+        new RegExp(`"${id}":\\s*"?([\\d]+)"?`, 'i'),
+      ];
+      for (const p of patterns) {
+        const m = html.match(p);
+        if (m) { const price = extractNumber(m[1]); if (price && price > 0) return price; }
+      }
+    }
+
+    // 3. Fallback: find any price near the grade label in the HTML
+    if (gradeKey) {
+      const labelPattern = new RegExp(
+        gradeKey.label.replace('.', '\\.') + '[\\s\\S]{0,200}?\\$([\\d,]+(?:\\.\\d{1,2})?)', 'i'
+      );
+      const m = html.match(labelPattern);
+      if (m) { const price = extractNumber(m[1]); if (price && price > 0) return price; }
+    }
+
     return null;
   }
 
@@ -160,7 +220,7 @@ module.exports = async function handler(req, res) {
   // ── Fetch all listings that have a price_source_url set ───────────────────
   const { data: listings, error: fetchErr } = await sb
     .from('listings')
-    .select('id, name, value, price_source_url')
+    .select('id, name, value, grade, price_source_url')
     .not('price_source_url', 'is', null)
     .neq('price_source_url', '');
 
@@ -178,7 +238,7 @@ module.exports = async function handler(req, res) {
   const errors = [];
 
   for (const listing of listings) {
-    const newPrice = await fetchPriceFromUrl(listing.price_source_url);
+    const newPrice = await fetchPriceFromUrl(listing.price_source_url, listing.grade);
 
     if (newPrice == null) {
       errors.push({ name: listing.name, url: listing.price_source_url, reason: 'Could not parse price' });

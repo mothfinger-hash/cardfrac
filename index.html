@@ -4757,28 +4757,32 @@
                         : activeMode === 'diverse' ? r.cards.size
                         : '$' + r.totalValue.toLocaleString();
           const statColor = activeMode === 'value' ? 'var(--green)' : 'var(--teal)';
+          // On mobile, hide the two columns that aren't the primary stat for this mode
+          const hideSlots   = activeMode !== 'slots'   ? 'class="hm"' : '';
+          const hideCards   = activeMode !== 'diverse' ? 'class="hm"' : '';
+          const hideValue   = activeMode !== 'value'   ? 'class="hm"' : '';
           return `<tr style="${isMe ? 'background:rgba(124,92,252,.08);' : ''}">
             <td style="font-size:1.1rem;text-align:center;width:48px">${medal}</td>
             <td>
               <div style="font-weight:600;color:${isMe ? 'var(--accent)' : 'var(--text)'}">${displayName}${isMe ? ' <span style="font-size:.7rem;color:var(--accent)">(you)</span>' : ''}</div>
               ${isPrem ? '<div style="font-size:.7rem;color:var(--gold);margin-top:2px">★ Premium</div>' : ''}
             </td>
-            <td style="text-align:center;color:var(--muted)">${r.slotCount}</td>
-            <td style="text-align:center;color:var(--muted)">${r.cards.size}</td>
-            <td style="text-align:right;font-weight:700;color:${statColor}">${statVal}</td>
+            <td ${hideSlots} style="text-align:center;color:var(--muted)">${r.slotCount}</td>
+            <td ${hideCards} style="text-align:center;color:var(--muted)">${r.cards.size}</td>
+            <td ${hideValue} style="text-align:right;font-weight:700;color:${statColor}">${statVal}</td>
           </tr>`;
         }).join('');
 
         el.innerHTML = `
           <div style="overflow-x:auto">
-            <table class="tx-table" style="width:100%;min-width:400px">
+            <table class="tx-table" style="width:100%">
               <thead>
                 <tr>
                   <th style="text-align:center">Rank</th>
                   <th>Collector</th>
-                  <th style="text-align:center">Slots</th>
-                  <th style="text-align:center">Cards</th>
-                  <th style="text-align:right">${colHeader}</th>
+                  <th ${activeMode !== 'slots'   ? 'class="hm"' : ''} style="text-align:center">Slots</th>
+                  <th ${activeMode !== 'diverse' ? 'class="hm"' : ''} style="text-align:center">Cards</th>
+                  <th ${activeMode !== 'value'   ? 'class="hm"' : ''} style="text-align:right">${colHeader}</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
