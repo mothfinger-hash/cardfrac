@@ -4103,7 +4103,10 @@
           const lines = updated.length > 0
             ? updated.map(r => `${r.name}: $${r.old} → $${r.new}`).join(' | ')
             : 'All prices already up to date.';
-          statusEl.textContent = `[ DONE ] ${data.updated} updated, ${data.unchanged} unchanged, ${data.errors} errors. ${lines}`;
+          const errorDetails = data.errors?.length > 0
+            ? ' | Errors: ' + data.errors.map(e => `${e.name}: ${e.reason}`).join(', ')
+            : '';
+          statusEl.textContent = `[ DONE ] ${data.updated} updated, ${data.unchanged} unchanged, ${data.errorCount} errors. ${lines}${errorDetails}`;
           if (data.updated > 0) { await initApp(); showToast(`${data.updated} price(s) updated`); }
         } else {
           statusEl.textContent = `[ ERROR ] ${data.error || res.statusText}`;

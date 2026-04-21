@@ -206,7 +206,7 @@ module.exports = async function handler(req, res) {
   return res.status(200).json({
     updated: results.filter(r => r.status === 'updated').length,
     unchanged: results.filter(r => r.status === 'unchanged').length,
-    errors: errors.length,
+    errorCount: errors.length,
     results,
     errors,
   });
