@@ -435,10 +435,10 @@
 
       /* History table — horizontal scroll */
       .tx-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-      .tx-table{min-width:420px}
-      /* Holdings overview — stack on mobile */
+      .tx-table{font-size:.8rem}
+      /* Holdings table — hide secondary cols on mobile */
+      .hm { display: none; }
       .holdings-grid { grid-template-columns: 1fr !important; }
-      .holdings-grid table { font-size: .78rem; }
 
       /* Retro mobile nav — tighten logo */
       .logo { font-size: .85rem !important; letter-spacing: 1px; }
@@ -3138,10 +3138,10 @@
         return `<tr>
           <td><div style="display:flex;align-items:center;gap:8px"><div style="width:12px;height:12px;background:${h.color};border-radius:2px"></div><div>${h.listing.name}<div style="font-size:.75rem;color:var(--muted);margin-top:2px">${h.listing.gameType}</div></div></div></td>
           <td style="text-align:center">${h.count}</td>
-          <td style="text-align:right">$${h.avgBuyIn.toLocaleString()}</td>
-          <td style="text-align:right">$${currentPerSlot.toLocaleString()}</td>
-          <td style="text-align:right;color:${changeColor}"><strong>${changeSymbol}$${Math.abs(h.change).toLocaleString()}</strong></td>
-          <td style="text-align:right;color:${changeColor}"><strong>${changeSymbol}${h.changePercent}%</strong></td>
+          <td class="hm" style="text-align:right">$${h.avgBuyIn.toLocaleString()}</td>
+          <td class="hm" style="text-align:right">$${currentPerSlot.toLocaleString()}</td>
+          <td class="hm" style="text-align:right;color:${changeColor}"><strong>${changeSymbol}$${Math.abs(h.change).toLocaleString()}</strong></td>
+          <td class="hm" style="text-align:right;color:${changeColor}"><strong>${changeSymbol}${h.changePercent}%</strong></td>
           <td style="text-align:right;font-weight:600">$${h.totalValue.toLocaleString()}</td>
         </tr>`
       }).join('');
@@ -3260,8 +3260,8 @@
           <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">Holdings Overview</h3>
           <div class="holdings-grid" style="display:grid;grid-template-columns:${holdings.length > 0 ? '1fr 1.5fr' : '1fr'};gap:20px">
             ${holdings.length > 0 ? `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-              ${pieChartSvg}
+            <div style="display:flex;flex-direction:column;align-items:stretch;justify-content:center">
+              <div style="display:flex;justify-content:center">${pieChartSvg}</div>
               <div style="margin-top:16px;width:100%">
                 <div style="font-size:.85rem;font-weight:600;margin-bottom:8px">Portfolio Mix</div>
                 ${pieSlices.map(s => `
@@ -3275,15 +3275,15 @@
             </div>
             ` : ''}
             <div>
-              <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tx-table" style="width:100%;min-width:480px">
+              <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tx-table" style="width:100%">
                 <thead>
                   <tr>
-                    <th>Card / Game Type</th>
+                    <th>Card</th>
                     <th style="text-align:center">Slots</th>
-                    <th style="text-align:right">Avg Buy-in</th>
-                    <th style="text-align:right">Current</th>
-                    <th style="text-align:right">$ Change</th>
-                    <th style="text-align:right">% Change</th>
+                    <th class="hm" style="text-align:right">Avg Buy-in</th>
+                    <th class="hm" style="text-align:right">Current</th>
+                    <th class="hm" style="text-align:right">$ Change</th>
+                    <th class="hm" style="text-align:right">% Change</th>
                     <th style="text-align:right">Total Value</th>
                   </tr>
                 </thead>
