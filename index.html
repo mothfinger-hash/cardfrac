@@ -33,7 +33,7 @@
     .logo{font-size:1.25rem;font-weight:800;color:var(--accent);text-shadow:0 0 8px var(--accent),0 0 18px rgba(57,255,20,.4);letter-spacing:2px;border:none;padding:0;cursor:pointer;outline:none;background:transparent}
     .nav-right{display:flex;align-items:center;gap:10px}
     .nav-tabs{display:flex;gap:4px}
-    button{text-transform:uppercase}
+    button{text-transform:uppercase;font-family:'Share Tech Mono',monospace}
     .nav-tab{padding:6px 14px;border-radius:0;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:.85rem;font-weight:400;transition:all .15s;position:relative;letter-spacing:.05em}
     .nav-tab:hover{background:rgba(57,255,20,.06);color:var(--text);border-color:var(--border)}
     .nav-tab.active{background:rgba(57,255,20,.12);color:var(--accent);border-color:var(--accent);text-shadow:0 0 8px rgba(57,255,20,.5);box-shadow:0 0 10px rgba(57,255,20,.15)}
@@ -436,6 +436,10 @@
       /* History table — horizontal scroll */
       .tx-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
       .tx-table{min-width:420px}
+      /* Holdings overview — stack on mobile */
+      .holdings-grid { grid-template-columns: 1fr !important; }
+      .holdings-grid table { font-size: .78rem; }
+
       /* Retro mobile nav — tighten logo */
       .logo { font-size: .85rem !important; letter-spacing: 1px; }
       /* Search bar — full width on mobile */
@@ -995,7 +999,7 @@
   <div id="adminPage" class="page">
     <div class="admin-header">
       <h2>Admin_Panel</h2>
-      <button class="btn-outline" onclick="toggleAddForm()">Add Listing</button>
+      <button class="btn-outline" onclick="toggleAddForm()">Add_Listing</button>
     </div>
 
     <div class="add-form-wrap" id="addFormWrap">
@@ -1071,7 +1075,7 @@
         <div id="photoUploadStatus" style="font-size:.8rem;color:var(--muted);margin-top:6px"></div>
       </div>
       <div style="display:flex;gap:10px;margin-top:16px">
-        <button type="button" class="btn btn-primary" onclick="addListing()" style="flex:1">Add Listing</button>
+        <button type="button" class="btn btn-primary" onclick="addListing()" style="flex:1">Add_Listing</button>
         <button type="button" class="btn btn-secondary" onclick="toggleAddForm()">Cancel</button>
       </div>
     </div>
@@ -1421,7 +1425,10 @@
         }
         // Hide the Premium button for members (they're already in)
         const membershipBtn = document.getElementById('membershipBtn');
-        if (membershipBtn) membershipBtn.style.display = userIsPremium() ? 'none' : '';
+        if (membershipBtn) {
+          const onMobile = window.innerWidth <= 600;
+          membershipBtn.style.display = (userIsPremium() || (onMobile && !currentUser)) ? 'none' : '';
+        }
       } else {
         authSection.style.display = 'flex';
         userSection.style.display = 'none';
@@ -3251,7 +3258,7 @@
 
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
           <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">Holdings Overview</h3>
-          <div style="display:grid;grid-template-columns:${holdings.length > 0 ? '1fr 1.5fr' : '1fr'};gap:20px">
+          <div class="holdings-grid" style="display:grid;grid-template-columns:${holdings.length > 0 ? '1fr 1.5fr' : '1fr'};gap:20px">
             ${holdings.length > 0 ? `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
               ${pieChartSvg}
@@ -3268,7 +3275,7 @@
             </div>
             ` : ''}
             <div>
-              <table class="tx-table" style="width:100%">
+              <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tx-table" style="width:100%;min-width:480px">
                 <thead>
                   <tr>
                     <th>Card / Game Type</th>
@@ -3283,7 +3290,7 @@
                 <tbody>
                   ${holdingsHtml || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No slots owned</td></tr>'}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
         </div>
@@ -4961,7 +4968,7 @@
       // INITIAL_SESSION: initApp() handles the first render
     });
 
-    initApp().then(() => retroLabels());
+    initApp().then(() => { retroLabels(); updateHeroStats(); });
   </script>
 
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
