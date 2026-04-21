@@ -1750,6 +1750,14 @@
           const freshListingSlots = slots.filter(s => String(s.listingId) === String(listingId));
           const freshSlotPrice = freshListing.value && freshListing.totalSlots ? Math.ceil(freshListing.value / freshListing.totalSlots) : 0;
 
+          // Fetch any owner profiles not yet in profilesMap
+          const missingOwnerIds = [...new Set(freshListingSlots.filter(s => s.userId && !profilesMap[s.userId]).map(s => s.userId))];
+          const profileFetch = missingOwnerIds.length > 0
+            ? sb.from('profiles').select('id, name, username').in('id', missingOwnerIds)
+                .then(({ data }) => { (data || []).forEach(p => { profilesMap[p.id] = p; }); })
+            : Promise.resolve();
+          profileFetch.then(() => {
+
           // Rebuild slot grid HTML in-place
           let newSlotGridHTML = '';
           for (let i = 0; i < freshListing.totalSlots; i += 10) {
@@ -1764,7 +1772,7 @@
               else if (isTaken) classes += ' taken';
               newSlotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
                 ${i + j + 1}
-                <div class="tooltip">${slot.userId ? (isYours ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'Owned')) : ('$' + freshSlotPrice)}</div>
+                <div class="tooltip">${slot.userId ? (isYours ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'USER')) : ('$' + freshSlotPrice)}</div>
               </div>`;
             }
             newSlotGridHTML += '</div>';
@@ -1791,12 +1799,14 @@
             }
           });
           const newOwnerHTML = Object.values(uniqueOwners).map(od => {
-            const dn = od.isYou ? 'You' : (od.name || 'Slot Owner');
-            const un = od.username ? ` (@${od.username})` : '';
+            const _op = profilesMap[od.userId] || {};
+            const dn = od.isYou ? 'You' : (_op.username || _op.name || 'USER');
+            const un = (!od.isYou && _op.username) ? `` : '';
             return `<div class="owner-row"><span class="owner-name">${dn}${un}</span><span>${od.count} slot${od.count > 1 ? 's' : ''}</span>${od.isYou ? '<span class="owner-badge">You</span>' : ''}</div>`;
           }).join('');
           const ownerListEl = document.querySelector('#detailView .owners-panel .owner-list');
           if (ownerListEl) ownerListEl.innerHTML = newOwnerHTML || '<div class="empty-state">No owners yet</div>';
+        }); // end profileFetch.then
         }).catch(err => console.error('Slot refresh error:', err));
 
       const stats = getSlotStats(listingId);
@@ -1818,7 +1828,7 @@
 
           slotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
             ${content}
-            <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'Owned')) : ('$' + slotPrice)}</div>
+            <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'USER')) : ('$' + slotPrice)}</div>
           </div>`;
         }
         slotGridHTML += '</div>';
@@ -1843,7 +1853,7 @@
       Object.values(uniqueOwners).forEach(ownerData => {
         const ownerProfile = profilesMap[ownerData.userId] || {};
         const displayName = ownerData.isYou ? 'You' : (ownerProfile.username || ownerProfile.name || ownerData.name || 'Slot Owner');
-        const usernameStr = '';
+        const usernameStr = (!ownerData.isYou && ownerProfile.username) ? ` <span style="color:var(--muted);font-size:.8rem">@${ownerProfile.username}</span>` : '';
         ownerHTML += `<div class="owner-row">
           <span class="owner-name">${displayName}${usernameStr}</span>
           <span>${ownerData.count} slot${ownerData.count > 1 ? 's' : ''}</span>
