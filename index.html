@@ -748,6 +748,7 @@
         <div class="form-group">
           <label>Password</label>
           <input type="password" id="regPassword" placeholder="Create password" required />
+          <div style="font-size:.72rem;color:var(--muted);margin-top:5px;text-transform:none;line-height:1.6">Min 8 chars · One Uppercase · One lowercase · One number</div>
         </div>
         <div class="form-group">
           <label>Confirm Password</label>
@@ -1279,6 +1280,7 @@
     let lightboxListingId = null;
     let tradeOffers = [];
     let transactions = [];
+    let listingTxCache = {}; // listingId -> [{type, userName, slotIdx, amount}]
     let mySlotSelection = new Set(); // "listingId:slotIdx" format
     let buyoutOffers = [];
     let browseSearchQuery = '';
@@ -1727,6 +1729,34 @@
       showPage('explore');
       const detail = document.getElementById('detailView');
 
+      // Fetch recent transactions for this listing with buyer usernames
+      sb.from('transactions')
+        .select('type, slot_idx, amount, user_id, profiles(username, name)')
+        .eq('listing_id', listingId)
+        .order('created_at', { ascending: false })
+        .limit(5)
+        .then(({ data: txData }) => {
+          if (!txData) return;
+          listingTxCache[listingId] = txData.map(t => ({
+            type: t.type,
+            userName: t.profiles?.username || t.profiles?.name || 'User',
+            slotIdx: t.slot_idx,
+            amount: t.amount,
+          }));
+          const txEl = document.getElementById(`recentTxList_${listingId}`);
+          if (!txEl) return;
+          const txItems = listingTxCache[listingId];
+          txEl.innerHTML = txItems.length === 0
+            ? '<div class="empty-state">No transactions yet</div>'
+            : txItems.map(t =>
+                `<div class="tx-row">
+                  <span class="tx-type">${t.type === 'buy' ? 'Buy' : t.type === 'resale' ? 'Sale' : 'Trade'}</span>
+                  <span class="tx-detail">@${t.userName} • Slot #${t.slotIdx + 1}</span>
+                  <span class="tx-price">$${t.amount}</span>
+                </div>`
+              ).join('');
+        });
+
       // Refresh slots for this listing from Supabase — update in-place so navigation is not disrupted
       sb.from('slots')
         .select('*')
@@ -1945,14 +1975,8 @@
             </div>
             <div class="tx-history">
               <h3>Recent Transactions</h3>
-              <div class="owner-list">
-                ${transactions.filter(t => t.listingId === listingId).slice(0, 5).map(t =>
-                  `<div class="tx-row">
-                    <span class="tx-type">${t.type === 'buy' ? 'Buy' : t.type === 'resale' ? 'Sale' : 'Trade'}</span>
-                    <span class="tx-detail">${t.userName || 'User'} • Slot #${t.slotIdx + 1}</span>
-                    <span class="tx-price">$${t.amount}</span>
-                  </div>`
-                ).join('') || '<div class="empty-state">No transactions yet</div>'}
+              <div class="owner-list" id="recentTxList_${listingId}">
+                <div class="empty-state">Loading...</div>
               </div>
             </div>
           </div>

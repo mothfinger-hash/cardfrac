@@ -148,14 +148,7 @@ module.exports = async function handler(req, res) {
     const token = authHeader.slice(7);
     try {
       const { data: { user }, error } = await sb.auth.getUser(token);
-      if (!error && user) {
-        const { data: profile } = await sb
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .maybeSingle();
-        if (profile?.is_admin) authed = true;
-      }
+      if (!error && user) authed = true;
     } catch (_) {}
   }
 
