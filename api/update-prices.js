@@ -11,7 +11,7 @@
 //   SUPABASE_SERVICE_KEY  — service role key (Settings → API → service_role)
 //   CRON_SECRET           — any random string, set in Vercel + paste in your env
 
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 const sb = createClient(
   process.env.SUPABASE_URL,
@@ -134,7 +134,7 @@ async function fetchPriceFromUrl(url) {
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // ── Auth: accept Vercel cron secret OR a valid Supabase admin JWT ──────────
   const cronSecret = process.env.CRON_SECRET;
   const vercelCronHeader = req.headers['x-vercel-cron-secret'];   // set by Vercel
