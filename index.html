@@ -999,8 +999,12 @@
   <div id="adminPage" class="page">
     <div class="admin-header">
       <h2>Admin_Panel</h2>
-      <button class="btn-outline" onclick="toggleAddForm()">Add_Listing</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-outline" id="refreshPricesBtn" onclick="triggerPriceRefresh()" style="font-size:.8rem;padding:6px 12px">Refresh_Prices</button>
+        <button class="btn-outline" onclick="toggleAddForm()">Add_Listing</button>
+      </div>
     </div>
+    <div id="priceRefreshStatus" style="display:none;font-size:.82rem;padding:10px 14px;border:1px solid var(--border);background:var(--surface2);margin-bottom:16px"></div>
 
     <div class="add-form-wrap" id="addFormWrap">
       <h3>Add New Listing</h3>
@@ -1062,6 +1066,10 @@
           <label style="margin:0">Insured</label>
           <input type="checkbox" id="cardInsured" checked />
         </div>
+      </div>
+      <div class="form-group">
+        <label>Price Source URL <span style="color:var(--muted);font-size:.75rem">(TCGPlayer / eBay / PSA — admin only, used for auto price updates)</span></label>
+        <input type="url" id="cardPriceSourceUrl" placeholder="https://www.tcgplayer.com/product/..." />
       </div>
       <div class="form-group">
         <label>Card Photos</label>
@@ -4036,6 +4044,37 @@
       document.getElementById('assignUserResult').textContent = '';
     }
 
+    async function triggerPriceRefresh() {
+      const btn = document.getElementById('refreshPricesBtn');
+      const statusEl = document.getElementById('priceRefreshStatus');
+      btn.disabled = true;
+      btn.textContent = 'Refreshing...';
+      statusEl.style.display = 'block';
+      statusEl.textContent = '[ FETCHING_PRICES... ]';
+      try {
+        const session = await sb.auth.getSession();
+        const token = session.data.session?.access_token;
+        const res = await fetch('/api/update-prices', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const updated = data.results?.filter(r => r.status === 'updated') || [];
+          const lines = updated.length > 0
+            ? updated.map(r => `${r.name}: $${r.old} → $${r.new}`).join(' | ')
+            : 'All prices already up to date.';
+          statusEl.textContent = `[ DONE ] ${data.updated} updated, ${data.unchanged} unchanged, ${data.errors} errors. ${lines}`;
+          if (data.updated > 0) { await initApp(); showToast(`${data.updated} price(s) updated`); }
+        } else {
+          statusEl.textContent = `[ ERROR ] ${data.error || res.statusText}`;
+        }
+      } catch (err) {
+        statusEl.textContent = `[ ERROR ] ${err.message}`;
+      }
+      btn.disabled = false;
+      btn.textContent = 'Refresh_Prices';
+    }
+
     function toggleAddForm() {
       document.getElementById('addFormWrap').classList.toggle('open');
     }
@@ -4057,6 +4096,7 @@
       const certNumber = document.getElementById('cardCertNumber')?.value || 'N/A';
       const vaultLocation = document.getElementById('cardVaultLocation')?.value || 'Standard Vault';
       const insured = document.getElementById('cardInsured')?.checked || true;
+      const priceSourceUrl = document.getElementById('cardPriceSourceUrl')?.value?.trim() || null;
 
       // Validate each field and collect errors
       const missing = [];
@@ -4096,6 +4136,7 @@
         cert_number: newListing.certNumber || '',
         vault_location: newListing.vaultLocation || '',
         insured: newListing.insured !== false,
+        price_source_url: priceSourceUrl,
         photos: newListing.photos || [],
         price_history: [],
         sell_votes: []
@@ -4252,6 +4293,10 @@
             </label>
           </div>
           <div class="form-group">
+            <label>Price Source URL <span style="color:var(--muted);font-size:.75rem">(TCGPlayer / eBay / PSA)</span></label>
+            <input type="url" id="editPriceSourceUrl" class="form-input" value="${listing.priceSourceUrl || ''}" placeholder="https://www.tcgplayer.com/product/..."/>
+          </div>
+          <div class="form-group">
             <label>Current Photos</label>
             <div id="editCurrentPhotos" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-bottom:12px">
               ${(listing.photos || []).map((url, i) => `
@@ -4339,6 +4384,7 @@
       const certNumber = document.getElementById('editCertNumber').value.trim();
       const vaultLocation = document.getElementById('editVaultLocation').value.trim();
       const insured = document.getElementById('editInsured').checked;
+      const priceSourceUrl = document.getElementById('editPriceSourceUrl')?.value?.trim() || null;
 
       if (!name || !value) {
         showToast('Please fill in required fields');
@@ -4357,7 +4403,8 @@
         cert_number: certNumber,
         vault_location: vaultLocation,
         insured,
-        photos: editPendingPhotoUrls
+        photos: editPendingPhotoUrls,
+        price_source_url: priceSourceUrl
       }).eq('id', editingListingId).select();
 
       if (error) {
@@ -4740,6 +4787,7 @@
             certNumber: l.cert_number || '',
             vaultLocation: l.vault_location || '',
             insured: l.insured,
+            priceSourceUrl: l.price_source_url || null,
             photos: l.photos || [],
             priceHistory: l.price_history || [],
             sellVotes: l.sell_votes || [],
@@ -4901,7 +4949,7 @@
               type: l.card_type || '', gameType: l.game_type || 'Other',
               value: l.value, totalSlots: l.total_slots, status: l.status,
               earlyAccessOnly: l.early_access_only, certNumber: l.cert_number || '',
-              vaultLocation: l.vault_location || '', insured: l.insured,
+              vaultLocation: l.vault_location || '', insured: l.insured, priceSourceUrl: l.price_source_url || null,
               photos: l.photos || [], priceHistory: l.price_history || [],
               sellVotes: l.sell_votes || [], countdown: null
             }));
@@ -4959,7 +5007,7 @@
               type: l.card_type || '', gameType: l.game_type || 'Other',
               value: l.value, totalSlots: l.total_slots, status: l.status,
               earlyAccessOnly: l.early_access_only, certNumber: l.cert_number || '',
-              vaultLocation: l.vault_location || '', insured: l.insured,
+              vaultLocation: l.vault_location || '', insured: l.insured, priceSourceUrl: l.price_source_url || null,
               photos: l.photos || [], priceHistory: l.price_history || [],
               sellVotes: l.sell_votes || [], countdown: null
             }));
