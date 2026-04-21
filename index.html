@@ -4057,7 +4057,10 @@
         const res = await fetch('/api/update-prices', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try { data = JSON.parse(rawText); }
+        catch { statusEl.textContent = `[ SERVER_ERROR ] ${rawText.slice(0, 200)}`; btn.disabled = false; btn.textContent = 'Refresh_Prices'; return; }
         if (res.ok) {
           const updated = data.results?.filter(r => r.status === 'updated') || [];
           const lines = updated.length > 0
