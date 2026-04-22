@@ -561,10 +561,11 @@
       text-align: center;
     }
     .hero-stat-label {
-      font-size: .78rem;
+      font-size: .72rem;
       color: var(--muted);
-      letter-spacing: 1px;
+      letter-spacing: .5px;
       margin-bottom: .4rem;
+      white-space: nowrap;
     }
     .hero-stat-value {
       font-size: 2rem;
@@ -1127,11 +1128,11 @@
       <p class="hero-tagline">TRACK · BUY · SELL // PORTFOLIO ANALYTICS // SECURE ESCROW</p>
       <div class="hero-stats">
         <div class="hero-stat-box">
-          <div class="hero-stat-label">[ LISTED_FOR_SALE ]</div>
+          <div class="hero-stat-label">[ FOR_SALE ]</div>
           <div class="hero-stat-value" id="heroTotalCards">—</div>
         </div>
         <div class="hero-stat-box">
-          <div class="hero-stat-label">[ MARKETPLACE_VALUE ]</div>
+          <div class="hero-stat-label">[ MKT_VALUE ]</div>
           <div class="hero-stat-value" id="heroMarketCap">—</div>
         </div>
       </div>
@@ -2252,6 +2253,15 @@
           cancelUrl: window.location.origin + window.location.pathname,
         });
         if (result.url) {
+          window.location.href = result.url;
+        } else {
+          showToast('Checkout unavailable — see console for details');
+        }
+      } catch(e) {
+        showToast('Checkout error: ' + e.message);
+      }
+    }
+
     // ===== ACCOUNT PAGE =====
     let activeOrdersTab = 'buying';
 
