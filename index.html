@@ -726,6 +726,39 @@
 
     /* ── COLLECTION PANEL TRANSITION ───────────────────── */
     #collectionPanel.open{max-height:600px!important}
+
+    /* ── BINDER VIEW TOGGLE ── */
+    .binder-view-toggle{display:flex;gap:6px}
+    .binder-view-btn{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
+    .binder-view-btn.active,.binder-view-btn:hover{border-color:var(--accent);color:var(--accent)}
+    /* ── BINDER GRIDS ── */
+    .binder-grid-3x3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .binder-grid-2x2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+    .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
+    @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
+    /* ── BINDER CARD ── */
+    .binder-card{background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:border-color .15s,transform .1s;overflow:hidden}
+    .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+    .binder-card-img-wrap{position:relative;aspect-ratio:3/4;background:var(--surface2);overflow:hidden}
+    .binder-card-img{width:100%;height:100%;object-fit:contain;display:block}
+    .binder-card-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem}
+    .binder-card-badge{position:absolute;bottom:4px;right:4px;font-size:.55rem;padding:2px 5px}
+    .binder-card-info{padding:6px 8px}
+    .binder-card-name{font-size:.72rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+    .binder-card-set{font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+    .binder-card-value{font-size:.78rem;color:var(--accent);font-weight:700}
+    /* ── BINDER PAGINATION ── */
+    .binder-pagination{display:flex;justify-content:center;gap:10px;margin-top:18px;align-items:center}
+    .binder-page-btn{padding:7px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer;transition:all .15s}
+    .binder-page-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+    .binder-page-btn:disabled{opacity:.35;cursor:not-allowed}
+    /* ── DASHBOARD CHART ── */
+    .dash-chart-section{background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
+    .dash-chart-row{display:grid;grid-template-columns:110px 1fr 72px;gap:8px;align-items:center;margin-bottom:8px}
+    .dash-chart-label{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dash-chart-bar-wrap{background:var(--surface2);height:10px;border-radius:2px;overflow:hidden}
+    .dash-chart-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease;min-width:2px}
+    .dash-chart-val{font-size:.72rem;color:var(--accent);text-align:right;white-space:nowrap}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -755,8 +788,9 @@
     <button class="logo" onclick="showPage('landing')">[CARDFRAC_SYS]</button>
     <div class="nav-right">
       <div class="nav-tabs">
-        <button class="nav-tab active" data-page="browse">Browse</button>
+        <button class="nav-tab active" data-page="browse">Marketplace</button>
         <button class="nav-tab" data-page="collection">My_Binder</button>
+        <button class="nav-tab" data-page="addCard">Add_Card</button>
         <button class="nav-tab" data-page="account">Dashboard<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
         <button class="nav-tab" data-page="admin">Admin_Panel</button>
       </div>
@@ -1155,7 +1189,7 @@
         onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
         onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 My_Binder</button>
       <button onclick="openListCardModal()"
-        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ List_A_Card</button>
+        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">List_A_Card</button>
     </div>
 
     <div class="section-tabs">
@@ -1212,7 +1246,7 @@
     <div id="myListings" class="account-content">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <h3 style="font-size:1rem">Your_Listings</h3>
-        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">+ List_A_Card</button>
+        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">List_A_Card</button>
       </div>
       <div id="myListingsContent"></div>
     </div>
@@ -1250,9 +1284,34 @@
 
   <div id="collectionPage" class="page">
     <h2>My_Binder</h2>
-    <p class="subtitle">Track your raw and graded cards — every card, every grade, every dollar.</p>
+    <p class="subtitle">Your complete card holdings at a glance.</p>
 
-    <!-- Add Card Section -->
+    <!-- Binder View Controls -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div class="binder-view-toggle">
+        <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
+        <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
+        <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
+      </div>
+      <button onclick="showPage('addCard');setMobileNav('addCard')"
+        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
+    </div>
+
+    <!-- Portfolio Summary -->
+    <div id="collectionSummary" class="coll-summary"></div>
+
+    <!-- Binder Grid -->
+    <div id="collectionContent">
+      <div class="coll-empty">Sign in to view your binder.</div>
+    </div>
+
+    <!-- Pagination -->
+    <div id="binderPagination" class="binder-pagination" style="display:none"></div>
+  </div>
+
+  <div id="addCardPage" class="page">
+    <h2>Add_Card</h2>
+    <p class="subtitle">Search the Pokémon TCG database or add any card manually.</p>
     <div class="coll-add-section">
       <div class="coll-add-title">// ADD_CARD_TO_COLLECTION</div>
       <input type="text" class="coll-search-bar" id="cardSearchInput"
@@ -1264,14 +1323,6 @@
       </div>
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
-    </div>
-
-    <!-- Portfolio Summary -->
-    <div id="collectionSummary" class="coll-summary"></div>
-
-    <!-- Collection Table -->
-    <div id="collectionContent">
-      <div class="coll-empty">Sign in to view and manage your collection.</div>
     </div>
   </div>
 
@@ -1574,6 +1625,8 @@
     let browseSearchQuery = '';
     let browseGameTypeFilter = 'all';
     let browseSortFilter = 'newest';
+    let binderView = '3x3';
+    let binderPage = 0;
     let browseTabFilter = 'all';
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
     let collectionItems = []; // Phase 2: user's personal card collection
@@ -1838,7 +1891,8 @@
         }, 10);
       }
       if (pageId === 'admin') renderAdmin();
-      if (pageId === 'collection') renderCollection();
+      if (pageId === 'collection') renderBinder();
+      if (pageId === 'addCard') { /* addCardPage ready */ }
       // collection page is accessible directly via nav
       setTimeout(retroLabels, 50);
     }
@@ -2316,17 +2370,73 @@
         .reduce((s, o) => s + (o.seller_payout || 0), 0);
       const buyingActive = orders.filter(o => o.buyer_id === currentUser.id && !['completed','cancelled'].includes(o.status)).length;
 
+      // Binder portfolio stats
+      const totalValue = collectionItems.reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
+      const totalCost  = collectionItems.reduce((s, c) => s + ((c.purchase_price || 0) * (c.quantity || 1)), 0);
+      const totalGain  = totalValue - totalCost;
+      const gainSign   = totalGain >= 0 ? '+' : '';
+      const gainPct    = totalCost > 0 ? ((totalGain / totalCost) * 100).toFixed(1) : null;
+
+      // Top 3 by value
+      const top3 = [...collectionItems]
+        .sort((a, b) => ((b.current_value || b.purchase_price || 0) * (b.quantity || 1)) - ((a.current_value || a.purchase_price || 0) * (a.quantity || 1)))
+        .slice(0, 3);
+
+      // Chart: top 8 by per-card value
+      const chartItems = [...collectionItems]
+        .sort((a, b) => (b.current_value || b.purchase_price || 0) - (a.current_value || a.purchase_price || 0))
+        .slice(0, 8);
+      const maxVal = chartItems.length > 0 ? Math.max(...chartItems.map(c => c.current_value || c.purchase_price || 0)) : 1;
+      const chartBars = chartItems.map(c => {
+        const v = c.current_value || c.purchase_price || 0;
+        const pct = maxVal > 0 ? (v / maxVal * 100).toFixed(1) : 0;
+        const name = c.card_name.length > 15 ? c.card_name.slice(0, 14) + '…' : c.card_name;
+        return `<div class="dash-chart-row">
+          <div class="dash-chart-label">${name}</div>
+          <div class="dash-chart-bar-wrap"><div class="dash-chart-bar" style="width:${pct}%"></div></div>
+          <div class="dash-chart-val">$${Number(v).toLocaleString()}</div>
+        </div>`;
+      }).join('');
+
       const content = document.getElementById('dashboardContent');
       if (!content) return;
       content.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;margin-bottom:24px">
+          <div class="coll-stat-box" style="border-color:var(--accent)"><div class="coll-stat-label" style="color:var(--accent)">Binder_Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Net_Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) : '—'}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Active_Listings</div><div class="coll-stat-value">${activeSales}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Completed_Sales</div><div class="coll-stat-value">${completedSales}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Total_Earned</div><div class="coll-stat-value">${totalEarned > 0 ? '$'+totalEarned.toFixed(2) : '—'}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Active_Purchases</div><div class="coll-stat-value">${buyingActive}</div></div>
-          ${pendingPayouts > 0 ? `<div class="coll-stat-box" style="border-color:var(--accent)"><div class="coll-stat-label" style="color:var(--accent)">Pending_Payouts</div><div class="coll-stat-value">${pendingPayouts}</div></div>` : ''}
+          ${pendingPayouts > 0 ? `<div class="coll-stat-box" style="border-color:var(--red)"><div class="coll-stat-label" style="color:var(--red)">Pending_Payouts</div><div class="coll-stat-value">${pendingPayouts}</div></div>` : ''}
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
+
+        ${chartItems.length > 0 ? `
+        <div class="dash-chart-section">
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// PORTFOLIO_VALUE_BREAKDOWN</div>
+          ${chartBars}
+        </div>` : ''}
+
+        ${top3.length > 0 ? `
+        <div style="margin:24px 0 16px">
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// TOP_3_MOST_VALUABLE</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px">
+            ${top3.map((item, i) => {
+              const v = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+              const medals = ['#1','#2','#3'];
+              return `<div class="binder-card" onclick="showPage('collection');setMobileNav('collection');setTimeout(()=>openBinderCardDetail('${item.id}'),80)" style="cursor:pointer">
+                <div class="binder-card-img-wrap" style="aspect-ratio:3/4">
+                  ${item.card_image_url ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy">` : `<div class="binder-card-placeholder">${medals[i]}</div>`}
+                  <span style="position:absolute;top:4px;left:4px;background:var(--accent);color:#080500;font-size:.6rem;font-weight:700;padding:2px 5px;border-radius:2px">${medals[i]}</span>
+                </div>
+                <div class="binder-card-info">
+                  <div class="binder-card-name">${item.card_name.length > 16 ? item.card_name.slice(0,15)+'…' : item.card_name}</div>
+                  <div class="binder-card-value">${v > 0 ? '$' + v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>` : ''}
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
           <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
           <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My_Binder</button>
         </div>
@@ -2338,7 +2448,7 @@
       if (!content || !currentUser) return;
       const mine = listings.filter(l => l.seller_id === currentUser.id || l.sellerId === currentUser.id);
       if (mine.length === 0) {
-        content.innerHTML = '<div class="coll-empty">You have no active listings.<br>Click "+ List A Card" to get started.</div>';
+        content.innerHTML = '<div class="coll-empty">You have no active listings.<br>Click "List A Card" to get started.</div>';
         return;
       }
       content.innerHTML = `<div class="coll-table-wrap"><table class="coll-table">
@@ -3786,20 +3896,33 @@
       if (!error && data) collectionItems = data;
     }
 
-    function renderCollection() {
+    function setBinderView(view) {
+      binderView = view;
+      binderPage = 0;
+      ['3x3','2x2','1x1'].forEach(v => {
+        const btn = document.getElementById('binderBtn' + v);
+        if (btn) btn.classList.toggle('active', v === view);
+      });
+      renderBinder();
+    }
+
+    function renderBinder() {
       const content = document.getElementById('collectionContent');
       const summary = document.getElementById('collectionSummary');
+      const pagination = document.getElementById('binderPagination');
       if (!content) return;
 
       if (!currentUser) {
-        summary.innerHTML = '';
-        content.innerHTML = '<div class="coll-empty">Sign in to view and manage your collection.</div>';
+        if (summary) summary.innerHTML = '';
+        if (pagination) pagination.style.display = 'none';
+        content.innerHTML = '<div class="coll-empty">Sign in to view your binder.</div>';
         return;
       }
 
       if (collectionItems.length === 0) {
-        summary.innerHTML = '';
-        content.innerHTML = '<div class="coll-empty">No cards yet.<br>Search above to add your first card to the collection.</div>';
+        if (summary) summary.innerHTML = '';
+        if (pagination) pagination.style.display = 'none';
+        content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add_Your_First_Card</button></div>`;
         return;
       }
 
@@ -3811,86 +3934,104 @@
       const gainPct    = totalCost > 0 ? ((totalGain / totalCost) * 100).toFixed(1) : null;
       const gainSign   = totalGain >= 0 ? '+' : '';
 
-      summary.innerHTML = `
-        <div class="coll-stat-box">
-          <div class="coll-stat-label">Total_Cards</div>
-          <div class="coll-stat-value">${totalCards}</div>
-        </div>
-        <div class="coll-stat-box">
-          <div class="coll-stat-label">Cost_Basis</div>
-          <div class="coll-stat-value">${totalCost > 0 ? '$' + totalCost.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
-        </div>
-        <div class="coll-stat-box">
-          <div class="coll-stat-label">Est_Value</div>
-          <div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
-        </div>
-        <div class="coll-stat-box">
-          <div class="coll-stat-label">Total_Gain/Loss</div>
-          <div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">
-            ${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}
-          </div>
-        </div>
+      if (summary) summary.innerHTML = `
+        <div class="coll-stat-box"><div class="coll-stat-label">Total_Cards</div><div class="coll-stat-value">${totalCards}</div></div>
+        <div class="coll-stat-box"><div class="coll-stat-label">Cost_Basis</div><div class="coll-stat-value">${totalCost > 0 ? '$' + totalCost.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div></div>
+        <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div></div>
+        <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
       `;
 
-      // Table
-      content.innerHTML = `
-        <div class="coll-section-header">
-          <span style="font-size:.85rem;color:var(--accent)">// COLLECTION_ITEMS (${collectionItems.length})</span>
+      // Pagination
+      const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : 1;
+      const totalPages = Math.ceil(collectionItems.length / perPage);
+      binderPage = Math.min(binderPage, Math.max(0, totalPages - 1));
+      const pageItems = collectionItems.slice(binderPage * perPage, (binderPage + 1) * perPage);
+      const gridClass = binderView === '3x3' ? 'binder-grid-3x3' : binderView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
+
+      content.innerHTML = `<div class="${gridClass}">${pageItems.map(item => {
+        const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+        const isGraded = item.condition && item.condition !== 'raw';
+        const condLabel = isGraded
+          ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+          : 'Raw';
+        return `<div class="binder-card" onclick="openBinderCardDetail('${item.id}')">
+          <div class="binder-card-img-wrap">
+            ${item.card_image_url
+              ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" alt="${item.card_name}">`
+              : `<div class="binder-card-placeholder">?</div>`}
+            <span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>
+          </div>
+          <div class="binder-card-info">
+            <div class="binder-card-name">${item.card_name}</div>
+            ${binderView !== '3x3' ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
+            <div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
+          </div>
+        </div>`;
+      }).join('')}</div>`;
+
+      if (pagination) {
+        if (totalPages > 1) {
+          pagination.style.display = 'flex';
+          pagination.innerHTML = `
+            <button class="binder-page-btn" onclick="binderChangePage(-1)" ${binderPage === 0 ? 'disabled' : ''}>← Prev</button>
+            <span style="color:var(--muted);font-size:.78rem;align-self:center">${binderPage + 1} / ${totalPages}</span>
+            <button class="binder-page-btn" onclick="binderChangePage(1)" ${binderPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+          `;
+        } else {
+          pagination.style.display = 'none';
+        }
+      }
+    }
+
+    function binderChangePage(dir) {
+      binderPage += dir;
+      renderBinder();
+    }
+
+    function openBinderCardDetail(itemId) {
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      if (!item) return;
+      const qty  = item.quantity || 1;
+      const val  = (item.current_value || item.purchase_price || 0) * qty;
+      const cost = (item.purchase_price || 0) * qty;
+      const gain = val - cost;
+      const gainSign = gain >= 0 ? '+' : '';
+      const gainPct  = cost > 0 ? ((gain / cost) * 100).toFixed(1) : null;
+      const isGraded = item.condition && item.condition !== 'raw';
+      const condLabel = isGraded
+        ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+        : 'Raw';
+
+      document.getElementById('binderDetailContent').innerHTML = `
+        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+          <div style="flex-shrink:0;text-align:center">
+            ${item.card_image_url
+              ? `<img src="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px solid var(--border);display:block;margin:0 auto">`
+              : `<div style="width:120px;height:168px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem">?</div>`}
+            <div style="margin-top:8px"><span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span></div>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:1.05rem;color:var(--text);margin-bottom:4px">${item.card_name}</div>
+            ${item.set_name ? `<div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">${item.set_name}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+              <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" style="font-size:1rem">${val > 0 ? '$' + val.toFixed(2) : '—'}</div></div>
+              <div class="coll-stat-box"><div class="coll-stat-label">Cost_Basis</div><div class="coll-stat-value" style="font-size:1rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
+              <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}" style="font-size:1rem">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
+              <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:1rem">${qty}</div></div>
+            </div>
+            ${item.cert_number ? `<div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Cert #: ${item.cert_number}</div>` : ''}
+            ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.75rem;color:var(--accent);text-decoration:none">→ View_Price_Source</a>` : ''}
+          </div>
         </div>
-        <div class="coll-table-wrap">
-          <table class="coll-table">
-            <thead>
-              <tr>
-                <th>Card</th>
-                <th>Set</th>
-                <th>Condition</th>
-                <th>Qty</th>
-                <th>Cost</th>
-                <th>Est Value</th>
-                <th>Gain/Loss</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${collectionItems.map(item => {
-                const qty   = item.quantity || 1;
-                const cost  = (item.purchase_price || 0) * qty;
-                const val   = (item.current_value || item.purchase_price || 0) * qty;
-                const gain  = val - cost;
-                const gPct  = cost > 0 ? ((gain / cost) * 100).toFixed(1) : null;
-                const gSign = gain >= 0 ? '+' : '';
-                const condLabel = item.condition === 'raw'
-                  ? '<span class="raw-badge">Raw</span>'
-                  : `<span class="grade-badge">${item.condition.toUpperCase()} ${item.grade_value != null ? item.grade_value : ''}</span>`;
-                return `<tr>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:8px">
-                      ${item.card_image_url ? `<img src="${item.card_image_url}" style="height:44px;width:auto;border:1px solid var(--border);flex-shrink:0" loading="lazy">` : ''}
-                      <div>
-                        <div style="color:var(--text);font-size:.82rem">${item.card_name}</div>
-                        ${item.card_number ? `<div style="font-size:.65rem;color:var(--muted)">#${item.card_number}</div>` : ''}
-                        ${item.cert_number ? `<div style="font-size:.65rem;color:var(--muted)">Cert: ${item.cert_number}</div>` : ''}
-                      </div>
-                    </div>
-                  </td>
-                  <td style="color:var(--muted);font-size:.78rem;white-space:nowrap">${item.set_name || '—'}</td>
-                  <td>${condLabel}</td>
-                  <td style="color:var(--text)">${qty}</td>
-                  <td style="color:var(--muted)">${item.purchase_price ? '$' + cost.toFixed(2) : '—'}</td>
-                  <td style="color:var(--text)">${item.current_value ? '$' + val.toFixed(2) : '—'}</td>
-                  <td class="${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gPct !== null ? gSign + '$' + Math.abs(gain).toFixed(2) : '—'}</td>
-                  <td>
-                    <button onclick="deleteCollectionItem('${item.id}')"
-                      style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer;transition:all .15s"
-                      onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">Del</button>
-                  </td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
+        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+          <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
+            style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove_Card</button>
         </div>
       `;
+      openModal('binderDetailModal');
     }
+
+    function renderCollection() { renderBinder(); }
 
     async function searchPokemonCards() {
       const input = document.getElementById('cardSearchInput');
@@ -4271,15 +4412,28 @@
     initApp().then(() => { retroLabels(); updateHeroStats(); });
   </script>
 
+  <!-- BINDER CARD DETAIL MODAL -->
+  <div class="modal-overlay" id="binderDetailModal">
+    <div class="modal" style="max-width:560px">
+      <button class="modal-close" onclick="closeModal('binderDetailModal')">×</button>
+      <h3>Card_Detail</h3>
+      <div id="binderDetailContent"></div>
+    </div>
+  </div>
+
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
   <div class="mobile-nav" id="mobileNav">
     <button class="mobile-nav-btn active" id="mobileNavBrowse" onclick="showPage('browse'); setMobileNav('browse')">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      Browse
+      Marketplace
     </button>
     <button class="mobile-nav-btn" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
       <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>
       My_Binder
+    </button>
+    <button class="mobile-nav-btn" id="mobileNavAddCard" onclick="showPage('addCard'); setMobileNav('addCard')">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add_Card
     </button>
     <button class="mobile-nav-btn" id="mobileNavAccount" onclick="showPage('account'); setMobileNav('account')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
