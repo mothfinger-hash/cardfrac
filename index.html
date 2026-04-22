@@ -701,6 +701,30 @@
       .coll-table th:nth-child(2),.coll-table td:nth-child(2),
       .coll-table th:nth-child(6),.coll-table td:nth-child(6){display:none}
     }
+
+    /* ── CONDITION BADGES ──────────────────────────────── */
+    .cond-nm{background:rgba(57,255,20,.1);border:1px solid rgba(57,255,20,.3);color:var(--green)}
+    .cond-lp{background:rgba(255,221,68,.1);border:1px solid rgba(255,221,68,.3);color:var(--yellow)}
+    .cond-hp{background:rgba(255,68,85,.1);border:1px solid rgba(255,68,85,.3);color:var(--red)}
+    .cond-graded{background:rgba(255,140,20,.12);border:1px solid rgba(255,140,20,.3);color:var(--accent)}
+    .cond-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;font-weight:700;letter-spacing:.06em}
+
+    /* ── MARKET PRICE DIFF ─────────────────────────────── */
+    .price-diff-pos{color:var(--green);font-size:.72rem}
+    .price-diff-neg{color:var(--red);font-size:.72rem}
+    .market-price-line{font-size:.72rem;color:var(--muted);margin-top:3px}
+
+    /* ── STAR RATING ────────────────────────────────────── */
+    .star-btn{background:transparent;border:none;font-size:1.8rem;color:var(--border);cursor:pointer;transition:color .1s;padding:0 2px}
+    .star-btn.active,.star-btn:hover{color:var(--gold)}
+
+    /* ── PHOTO PREVIEW ──────────────────────────────────── */
+    .lc-photo-thumb{position:relative;width:72px;height:72px;border:1px solid var(--border);overflow:hidden}
+    .lc-photo-thumb img{width:100%;height:100%;object-fit:cover}
+    .lc-photo-thumb .rm-btn{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.7);border:none;color:#fff;font-size:.7rem;width:18px;height:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%}
+
+    /* ── COLLECTION PANEL TRANSITION ───────────────────── */
+    #collectionPanel.open{max-height:600px!important}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -731,7 +755,6 @@
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Browse_Listings</button>
-        <button class="nav-tab" data-page="collection">Collection</button>
         <button class="nav-tab" data-page="leaderboard">Leaderboard</button>
         <button class="nav-tab" data-page="admin">Admin_Panel</button>
         <button class="nav-tab" data-page="account">My_Account<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
@@ -820,35 +843,6 @@
     </div>
   </div>
 
-  <!-- SLOT ACTIONS MODAL -->
-  <div class="modal-overlay" id="slotActionsModal">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal('slotActionsModal')">×</button>
-      <h3 id="slotActionTitle">Slot Actions</h3>
-      <p class="modal-sub" id="slotActionSub"></p>
-      <div id="slotActionsContent"></div>
-    </div>
-  </div>
-
-  <!-- TRADE PROPOSE MODAL -->
-  <div class="modal-overlay" id="tradeProposeModal">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal('tradeProposeModal')">×</button>
-      <h3>Propose Trade</h3>
-      <p class="modal-sub">Select a slot you want in return</p>
-      <div id="tradeProposalContent"></div>
-    </div>
-  </div>
-
-  <!-- PURCHASE MODAL -->
-  <div class="modal-overlay" id="purchaseModal">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal('purchaseModal')">×</button>
-      <h3 id="purchaseTitle">Purchase Slot</h3>
-      <p class="modal-sub" id="purchaseSub"></p>
-      <div id="purchaseContent"></div>
-    </div>
-  </div>
 
   <!-- MEMBERSHIP MODAL -->
   <div class="modal-overlay" id="membershipModal">
@@ -886,43 +880,6 @@
     </div>
   </div>
 
-  <!-- BATCH CASHOUT MODAL -->
-  <div class="modal-overlay" id="batchCashoutModal">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal('batchCashoutModal')">×</button>
-      <h3>Cash Out Selected Slots</h3>
-      <p class="modal-sub">Sell slots back to the platform at 90% value</p>
-      <div id="batchCashoutContent" style="max-height:400px;overflow-y:auto;margin:20px 0"></div>
-      <button type="button" class="btn btn-gold" onclick="confirmBatchCashout()">Confirm_Cashout</button>
-      <button type="button" class="btn btn-secondary" onclick="closeModal('batchCashoutModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- BATCH LIST FOR SALE MODAL -->
-  <div class="modal-overlay" id="batchListModal">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal('batchListModal')">×</button>
-      <h3>List Selected Slots for Sale</h3>
-      <p class="modal-sub">Set asking price for each card group</p>
-      <div id="batchListContent" style="max-height:400px;overflow-y:auto;margin:20px 0"></div>
-      <button type="button" class="btn btn-primary" onclick="confirmBatchList()">List_Slots</button>
-      <button type="button" class="btn btn-secondary" onclick="closeModal('batchListModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- BATCH TRADE MODAL (3-step wizard) -->
-  <div class="modal-overlay" id="batchTradeModal">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal('batchTradeModal')">×</button>
-      <h3 id="tradeWizardTitle">Trade Offer - Step 1</h3>
-      <p class="modal-sub" id="tradeWizardSub">Your offer</p>
-      <div id="tradeWizardContent" style="max-height:400px;overflow-y:auto;margin:20px 0"></div>
-      <div style="display:flex;gap:8px">
-        <button type="button" class="btn btn-secondary" onclick="closeBatchTradeModal()">Cancel</button>
-        <button type="button" class="btn btn-primary" id="tradeWizardNext" onclick="nextTradeStep()">Next</button>
-      </div>
-    </div>
-  </div>
 
   <!-- ADD TO COLLECTION MODAL -->
   <div class="modal-overlay" id="addToCollectionModal">
@@ -995,11 +952,179 @@
     </div>
   </div>
 
+  <!-- LIST CARD MODAL -->
+  <div class="modal-overlay" id="listCardModal">
+    <div class="modal" style="max-width:600px">
+      <button class="modal-close" onclick="closeModal('listCardModal')">×</button>
+      <h3>List_Card_For_Sale</h3>
+      <p class="modal-sub">Required: front &amp; back photo. Buyers see market price vs. your ask.</p>
+
+      <div class="atc-grid" style="margin-bottom:14px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Card Name *</label>
+          <input class="atc-input" id="lcName" type="text" placeholder="e.g. Charizard Base Set Holo" style="width:100%" />
+          <div id="lcMarketPriceResult" style="font-size:.75rem;margin-top:5px;display:none"></div>
+        </div>
+        <div class="form-group">
+          <label>Game / Category *</label>
+          <select class="atc-input" id="lcGame" style="width:100%">
+            <option value="Pokémon">Pokémon</option>
+            <option value="Magic: The Gathering">Magic: The Gathering</option>
+            <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+            <option value="Sports">Sports</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Condition *</label>
+          <select class="atc-input" id="lcCondition" onchange="toggleLcGrade()" style="width:100%">
+            <option value="NM">NM — Near Mint</option>
+            <option value="LP">LP — Lightly Played</option>
+            <option value="HP">HP — Heavily Played</option>
+            <option value="Graded">Graded / Slabbed</option>
+          </select>
+        </div>
+        <div class="form-group" id="lcGradeWrap" style="display:none">
+          <label>Grading Company</label>
+          <select class="atc-input" id="lcGradingCo" style="width:100%">
+            <option value="PSA">PSA</option>
+            <option value="BGS">BGS / Beckett</option>
+            <option value="CGC">CGC</option>
+            <option value="ACE">ACE</option>
+          </select>
+        </div>
+        <div class="form-group" id="lcGradeNumWrap" style="display:none">
+          <label>Grade</label>
+          <select class="atc-input" id="lcGradeNum" style="width:100%">
+            <option value="10">10</option><option value="9.5">9.5</option>
+            <option value="9">9</option><option value="8.5">8.5</option>
+            <option value="8">8</option><option value="7">7</option>
+            <option value="6">6</option><option value="5">5</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Your Ask Price ($) *</label>
+          <input class="atc-input" id="lcPrice" type="number" min="0.01" step="0.01" placeholder="e.g. 120.00" style="width:100%" onblur="lookupMarketPrice()" />
+        </div>
+        <div class="form-group">
+          <label>Shipping ($)</label>
+          <input class="atc-input" id="lcShipping" type="number" min="0" step="0.01" value="5.00" style="width:100%" />
+        </div>
+      </div>
+
+      <!-- Photo Upload -->
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Photos * <span style="color:var(--muted);font-size:.72rem">(Front &amp; back required · up to 8)</span></label>
+        <div id="lcPhotoArea" style="border:2px dashed var(--border);padding:20px;text-align:center;cursor:pointer;transition:border-color .15s" onclick="document.getElementById('lcPhotoInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleLcPhotoDrop(event)">
+          <div style="color:var(--muted);font-size:.82rem;margin-bottom:6px">Click or drag photos here</div>
+          <div style="font-size:.72rem;color:var(--muted)">JPEG / PNG · max 5MB each</div>
+          <input type="file" id="lcPhotoInput" accept="image/*" multiple style="display:none" onchange="handleLcPhotoSelect(event)" />
+        </div>
+        <div id="lcPhotoPreview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div>
+        <div id="lcPhotoError" style="color:var(--red);font-size:.75rem;margin-top:4px;display:none"></div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Description (optional)</label>
+        <textarea class="atc-input" id="lcDescription" rows="2" placeholder="Any extra details about the card's condition, history, etc." style="width:100%;resize:vertical"></textarea>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:10px 14px;font-size:.75rem;color:var(--muted);margin-bottom:16px;line-height:1.7">
+        Platform fee: <strong style="color:var(--accent)">5%</strong> deducted from your payout on sale ·
+        Funds held in escrow until buyer confirms delivery ·
+        7-day buyer protection window after delivery
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button class="lc-save-btn" onclick="saveMarketplaceListing()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">List_Card</button>
+        <button onclick="closeModal('listCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUY CARD MODAL -->
+  <div class="modal-overlay" id="buyCardModal">
+    <div class="modal" style="max-width:420px">
+      <button class="modal-close" onclick="closeModal('buyCardModal')">×</button>
+      <h3>Confirm_Purchase</h3>
+      <p class="modal-sub" id="buyCardName" style="color:var(--accent);text-transform:none;font-size:.95rem"></p>
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;margin:16px 0;font-size:.82rem">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--muted)">Card grade</span><span id="buyCardGrade" style="color:var(--text)"></span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--muted)">Card price</span><span id="buyCardPrice" style="color:var(--text)"></span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--muted)">Shipping</span><span id="buyCardShipping" style="color:var(--text)"></span></div>
+        <div style="border-top:1px solid var(--border);margin:8px 0"></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--accent)">Total</span><span id="buyCardTotal" style="color:var(--accent);font-weight:700"></span></div>
+      </div>
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:16px;line-height:1.7">
+        ✓ Funds held in escrow until delivery confirmed<br>
+        ✓ 7-day buyer protection after delivery<br>
+        ✓ File a claim if card doesn't match description
+      </div>
+      <input type="hidden" id="buyCardListingId" />
+      <div style="display:flex;gap:10px">
+        <button class="buy-confirm-btn" onclick="confirmBuyCard()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Proceed_to_Payment</button>
+        <button onclick="closeModal('buyCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD TRACKING MODAL -->
+  <div class="modal-overlay" id="addTrackingModal">
+    <div class="modal" style="max-width:400px">
+      <button class="modal-close" onclick="closeModal('addTrackingModal')">×</button>
+      <h3>Add_Tracking</h3>
+      <p class="modal-sub">Ship the card and enter the tracking details below. Buyer will be notified.</p>
+      <input type="hidden" id="trackingOrderId" />
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Carrier</label>
+        <select class="atc-input" id="trackingCarrier" style="width:100%">
+          <option value="USPS">USPS</option>
+          <option value="UPS">UPS</option>
+          <option value="FedEx">FedEx</option>
+          <option value="DHL">DHL</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Tracking Number *</label>
+        <input class="atc-input" id="trackingNumber" type="text" placeholder="e.g. 9400111899223821234567" style="width:100%" />
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="saveTracking()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save_&amp;_Notify_Buyer</button>
+        <button onclick="closeModal('addTrackingModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RATE SELLER MODAL -->
+  <div class="modal-overlay" id="rateSellerModal">
+    <div class="modal" style="max-width:400px">
+      <button class="modal-close" onclick="closeModal('rateSellerModal')">×</button>
+      <h3>Rate_Seller</h3>
+      <p class="modal-sub" id="rateSellerName"></p>
+      <input type="hidden" id="rateOrderId" />
+      <input type="hidden" id="rateSellerId" />
+      <div style="display:flex;justify-content:center;gap:12px;margin:20px 0" id="ratingStars">
+        <button onclick="selectRating(1)" class="star-btn" data-v="1">★</button>
+        <button onclick="selectRating(2)" class="star-btn" data-v="2">★</button>
+        <button onclick="selectRating(3)" class="star-btn" data-v="3">★</button>
+        <button onclick="selectRating(4)" class="star-btn" data-v="4">★</button>
+        <button onclick="selectRating(5)" class="star-btn" data-v="5">★</button>
+      </div>
+      <div id="ratingLabel" style="text-align:center;color:var(--muted);font-size:.82rem;margin-bottom:14px">Select a rating</div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Comment (optional)</label>
+        <textarea class="atc-input" id="ratingComment" rows="2" placeholder="Describe your experience..." style="width:100%;resize:vertical"></textarea>
+      </div>
+      <button onclick="submitRating()" style="width:100%;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Submit_Rating</button>
+    </div>
+  </div>
+
   <!-- PAGES -->
   <div id="landingPage" class="page active" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
     <div id="heroSection">
-      <h1 class="hero-title">FRACTIONAL CARD OWNERSHIP<br>PROTOCOL v2.0<span class="hero-cursor"></span></h1>
-      <p class="hero-tagline">DECENTRALIZED OWNERSHIP // SECURE STORAGE // INSTANT LIQUIDITY</p>
+      <h1 class="hero-title">P2P CARD MARKETPLACE<br>PROTOCOL v3.0<span class="hero-cursor"></span></h1>
+      <p class="hero-tagline">BUY · SELL · TRACK // SECURE ESCROW // BUYER PROTECTION</p>
       <div class="hero-stats">
         <div class="hero-stat-box">
           <div class="hero-stat-label">[ TOTAL_CARDS ]</div>
@@ -1011,18 +1136,44 @@
         </div>
       </div>
       <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[BROWSE_NETWORK]</button>
-      <p class="hero-footer-line">CARDFRAC NETWORK // SECURE VAULT STORAGE // ALL RIGHTS RESERVED</p>
+      <p class="hero-footer-line">CARDFRAC MARKETPLACE // BUYER PROTECTED // 5% SELLER FEE</p>
     </div>
   </div>
 
   <div id="browsePage" class="page">
-    <h2>Browse_Listings</h2>
-    <p class="subtitle">Fractional ownership starts here. Own a piece of legendary cards.</p>
+    <h2>Marketplace</h2>
+    <p class="subtitle">Buy and sell trading cards — secured escrow, buyer protection, seller ratings.</p>
+
+    <!-- Collapsible Add to Collection Panel -->
+    <div id="collectionPanel" style="background:var(--surface);border:1px solid var(--border);margin-bottom:20px;overflow:hidden;max-height:0;transition:max-height .35s ease">
+      <div style="padding:16px 20px">
+        <div class="coll-add-title" style="margin-bottom:12px">// ADD_CARD_TO_COLLECTION</div>
+        <input type="text" class="coll-search-bar" id="cardSearchInput"
+          placeholder="Search Pokémon cards by name (e.g. Charizard, Pikachu)..."
+          onkeydown="if(event.key==='Enter')searchPokemonCards()" />
+        <div class="coll-add-btns" style="margin-top:10px">
+          <button class="coll-btn-primary" onclick="searchPokemonCards()">Search_Pokémon_TCG</button>
+          <button class="coll-btn-secondary" onclick="openManualAddModal()">Add_Manually</button>
+        </div>
+        <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
+        <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Browse controls -->
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <button onclick="toggleCollectionPanel()" id="collPanelBtn"
+        style="padding:7px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s;letter-spacing:.04em"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Add_To_Collection</button>
+      <button onclick="openListCardModal()"
+        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ List_A_Card</button>
+    </div>
+
     <div class="section-tabs">
       <button class="section-tab active" onclick="filterListings('all')">All</button>
       <button class="section-tab" onclick="filterListings('available')">Available</button>
-      <button class="section-tab" onclick="filterListings('sold')">Sold_Out</button>
-      <button class="section-tab" onclick="filterListings('early')">Early_Access <span class="tab-gold">Premium</span></button>
+      <button class="section-tab" onclick="filterListings('sold')">Sold</button>
     </div>
     <div class="search-and-filters" style="margin:20px 0;display:grid;grid-template-columns:1fr auto auto auto auto;gap:12px;align-items:center">
       <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem;width:100%" />
@@ -1036,9 +1187,8 @@
       </select>
       <select id="sortByFilter" onchange="applyBrowseFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem">
         <option value="newest">Newest</option>
-        <option value="price-high">Most Valuable</option>
-        <option value="slots">Most Slots Available</option>
-        <option value="hottest">Hottest (% Filled)</option>
+        <option value="price-high">Price: High to Low</option>
+        <option value="price-low">Price: Low to High</option>
       </select>
       <button id="clearFiltersBtn" onclick="clearBrowseFilters()" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--accent);font-size:.9rem;cursor:pointer;display:none">Clear All</button>
     </div>
@@ -1061,8 +1211,8 @@
     <h2>My_Account</h2>
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
-      <button class="account-tab" onclick="switchAccountTab('mySlots')">Portfolio</button>
-      <button class="account-tab" onclick="switchAccountTab('tradeOffers')">Trade_Offers</button>
+      <button class="account-tab" onclick="switchAccountTab('myListings')">My_Listings</button>
+      <button class="account-tab" onclick="switchAccountTab('myOrders')">Orders<span class="badge-count" id="orderNotification" style="display:none">0</span></button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
     </div>
@@ -1071,21 +1221,20 @@
       <div id="dashboardContent"></div>
     </div>
 
-    <div id="mySlots" class="account-content">
-      <h3 style="font-size:1rem;margin-bottom:14px">Your Slots</h3>
-      <div id="mySlotsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px"></div>
+    <div id="myListings" class="account-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <h3 style="font-size:1rem">Your_Listings</h3>
+        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">+ List_A_Card</button>
+      </div>
+      <div id="myListingsContent"></div>
     </div>
 
-    <div id="tradeOffers" class="account-content">
-      <h3 style="font-size:1rem;margin-bottom:14px">Trade Offers</h3>
-      <div style="margin-bottom:24px">
-        <h4 style="font-size:.9rem;color:var(--muted);margin-bottom:10px">Incoming Offers</h4>
-        <div id="incomingOffers"></div>
+    <div id="myOrders" class="account-content">
+      <div class="account-tabs" style="margin-bottom:16px;border-bottom:none">
+        <button class="account-tab active" id="ordersTabBuying" onclick="switchOrdersTab('buying')">Buying</button>
+        <button class="account-tab" id="ordersTabSelling" onclick="switchOrdersTab('selling')">Selling</button>
       </div>
-      <div>
-        <h4 style="font-size:.9rem;color:var(--muted);margin-bottom:10px">Outgoing Offers</h4>
-        <div id="outgoingOffers"></div>
-      </div>
+      <div id="ordersContent"></div>
     </div>
 
     <div id="watchlist" class="account-content">
@@ -1111,8 +1260,8 @@
     </div>
   </div>
 
-  <!-- COLLECTION PAGE -->
-  <div id="collectionPage" class="page">
+  <!-- COLLECTION PAGE (data still accessible, UI moved to Browse panel) -->
+  <div id="collectionPage" class="page" style="display:none!important">
     <h2>My_Collection</h2>
     <p class="subtitle">Track your raw and graded cards — every card, every grade, every dollar.</p>
 
@@ -1442,6 +1591,9 @@
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
     let collectionItems = []; // Phase 2: user's personal card collection
     let pendingCollectionCard = null; // card data staged for Add-to-Collection modal
+    let orders = []; // marketplace orders
+    let lcPhotos = []; // photo blobs staged for listing upload
+    let selectedRating = 0; // current star rating selection
 
     // ===== FEE TIER SYSTEM =====
     // ── Fee tiers ──────────────────────────────────────────────────────
@@ -1699,7 +1851,7 @@
         }, 10);
       }
       if (pageId === 'admin') renderAdmin();
-      if (pageId === 'collection') renderCollection();
+      // collection is now a panel inside browse, not a page
       setTimeout(retroLabels, 50);
     }
 
@@ -1707,28 +1859,25 @@
       tab.addEventListener('click', () => showPage(tab.dataset.page));
     });
 
-    // ===== BROWSE =====
+    // ===== BROWSE / MARKETPLACE =====
     function renderBrowse() {
       const grid = document.getElementById('browseGrid');
       if (!grid) return;
+
       let filtered = listings.filter(listing => {
-        const slotStats = getSlotStats(listing.id);
-        const isEarlyAccess = listing.earlyAccessOnly || listing.status === 'early';
-        // A listing is "sold out" if DB status is 'sold', or all its slots are taken
-        const isSoldOut = listing.status === 'sold' ||
-          (listing.totalSlots > 0 && slotStats.available === 0 && slotStats.taken > 0);
-        const isAvailable = !isSoldOut && !isEarlyAccess;
+        const isSold = listing.status === 'sold';
+        const isActive = listing.status === 'active' || listing.status === 'available';
 
         const shouldShowByTab = browseTabFilter === 'all' ||
-          (browseTabFilter === 'available' && isAvailable) ||
-          (browseTabFilter === 'sold' && isSoldOut) ||
-          (browseTabFilter === 'early' && isEarlyAccess);
+          (browseTabFilter === 'available' && isActive) ||
+          (browseTabFilter === 'sold' && isSold);
         if (!shouldShowByTab) return false;
 
         const search = browseSearchQuery.toLowerCase();
-        const matchesSearch = search === '' || listing.name.toLowerCase().includes(search) ||
-                            (listing.type || '').toLowerCase().includes(search) ||
-                            listing.grade.toLowerCase().includes(search);
+        const matchesSearch = search === '' ||
+          listing.name.toLowerCase().includes(search) ||
+          (listing.type || '').toLowerCase().includes(search) ||
+          (listing.grade || '').toLowerCase().includes(search);
         if (!matchesSearch) return false;
 
         const gameTypeMatch = browseGameTypeFilter === 'all' || listing.gameType === browseGameTypeFilter;
@@ -1736,77 +1885,89 @@
       });
 
       filtered.sort((a, b) => {
-        if (browseSortFilter === 'price-high') return (b.value || 0) - (a.value || 0);
-        if (browseSortFilter === 'price-low') return (a.value || 0) - (b.value || 0);
-        if (browseSortFilter === 'slots') {
-          return getSlotStats(b.id).available - getSlotStats(a.id).available;
-        }
-        if (browseSortFilter === 'hottest') {
-          const aFilled = a.totalSlots > 0 ? (getSlotStats(a.id).taken / a.totalSlots) * 100 : 0;
-          const bFilled = b.totalSlots > 0 ? (getSlotStats(b.id).taken / b.totalSlots) * 100 : 0;
-          return bFilled - aFilled;
-        }
-        return 0; // 'newest' — keep DB fetch order (already sorted by created_at desc)
+        const aPrice = a.list_price || a.value || 0;
+        const bPrice = b.list_price || b.value || 0;
+        if (browseSortFilter === 'price-high') return bPrice - aPrice;
+        if (browseSortFilter === 'price-low') return aPrice - bPrice;
+        return 0; // newest — keep DB order
       });
 
       const showClearBtn = browseSearchQuery !== '' || browseGameTypeFilter !== 'all' || browseSortFilter !== 'newest';
-      document.getElementById('clearFiltersBtn').style.display = showClearBtn ? 'block' : 'none';
+      const clearBtn = document.getElementById('clearFiltersBtn');
+      if (clearBtn) clearBtn.style.display = showClearBtn ? 'block' : 'none';
 
-      const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a1a24'/%3E%3Crect x='110' y='60' width='80' height='100' rx='8' fill='%232e2e3e'/%3E%3Ctext x='150' y='185' font-family='sans-serif' font-size='12' fill='%238888a8' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
+      const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a0a00'/%3E%3Crect x='110' y='60' width='80' height='100' rx='4' fill='%232e1500'/%3E%3Ctext x='150' y='185' font-family='monospace' font-size='11' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
 
       if (filtered.length === 0) {
-        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:2rem;margin-bottom:12px">🃏</div><div style="font-size:1.1rem;font-weight:600;margin-bottom:6px">No listings found</div><div style="font-size:.9rem">Try adjusting your filters or check back soon.</div></div>';
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted)">
+          <div style="font-size:2rem;margin-bottom:12px">🃏</div>
+          <div style="font-size:.95rem;margin-bottom:8px">No listings found</div>
+          <div style="font-size:.82rem">Try adjusting filters, or <button onclick="openListCardModal()" style="background:transparent;border:none;color:var(--accent);font-family:inherit;cursor:pointer;font-size:.82rem;text-decoration:underline">list your own card</button></div>
+        </div>`;
         return;
       }
 
       grid.innerHTML = filtered.map(listing => {
-        const slotsStatus = getSlotStats(listing.id);
-        const votePassed = listing.status === 'vote_passed';
+        const price = listing.list_price || listing.value || 0;
+        const displayPrice = price ? '$' + Number(price).toLocaleString() : 'Make Offer';
         const photoSrc = (listing.photos && listing.photos[0]) ? listing.photos[0] : PLACEHOLDER_IMG;
         const photoCount = listing.photos ? listing.photos.length : 0;
-        const displayValue = listing.value ? Number(listing.value).toLocaleString() : '—';
-        const totalSlots = listing.totalSlots || 100;
+        const isSold = listing.status === 'sold';
+        const isOwn = currentUser && (listing.seller_id === currentUser.id || listing.sellerId === currentUser.id);
+        const isWatched = currentUser && currentUser.watchlist && currentUser.watchlist.includes(String(listing.id));
+        const cond = listing.condition || 'NM';
+        const gradeVal = listing.grade_value || listing.gradeValue;
+        const condLabel = cond === 'Graded'
+          ? `${listing.grade || 'PSA'} ${gradeVal || ''}`
+          : cond;
+        const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
+        const sellerName = listing.sellerName || 'Seller';
+        const sellerRating = listing.sellerRating ? `★ ${listing.sellerRating.toFixed(1)}` : '';
 
-        const cardIsSoldOut = listing.status === 'sold' || (totalSlots > 0 && slotsStatus.available === 0 && slotsStatus.taken > 0);
-        const isWatched = currentUser && currentUser.watchlist && currentUser.watchlist.includes(listing.id);
-        const showEaLock = listing.earlyAccessOnly && !userIsPremium();
-        return `<div class="listing-card ${listing.earlyAccessOnly ? 'early-access-card' : ''} ${cardIsSoldOut ? 'locked-card' : ''}" style="position:relative">
-          ${listing.earlyAccessOnly ? '<div class="ea-ribbon">★ Members Early Access</div>' : ''}
-          ${showEaLock ? `<div class="ea-lock-overlay"><div class="ea-lock-icon">★</div><p>Members get first access</p><button onclick="event.stopPropagation();openModal('membershipModal')">Unlock with Premium</button></div>` : ''}
-          ${votePassed ? '<div class="vote-banner">🔨 Vote Passed</div>' : ''}
-          ${cardIsSoldOut && !votePassed ? '<div class="lock-overlay"><div class="lock-icon">🔒</div><p>Sold Out</p></div>' : ''}
-          <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event, '${listing.id}')">🔔</button>
+        // Market price comparison
+        const marketPrice = listing.market_price || listing.marketPrice;
+        let marketPriceHtml = '';
+        if (marketPrice && price && !isSold) {
+          const diff = price - marketPrice;
+          const diffPct = ((diff / marketPrice) * 100).toFixed(0);
+          const isAbove = diff > 0;
+          marketPriceHtml = `<div class="market-price-line">
+            Market: $${Number(marketPrice).toLocaleString()}
+            <span class="${isAbove ? 'price-diff-neg' : 'price-diff-pos'}">
+              (${isAbove ? '+' : ''}${diffPct}%)
+            </span>
+          </div>`;
+        }
+
+        return `<div class="listing-card ${isSold ? 'locked-card' : ''}" style="position:relative">
+          ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
+          <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event,'${listing.id}')">🔔</button>
           <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" onerror="this.src='${PLACEHOLDER_IMG}'" />
-            <div class="photo-count">${photoCount} photos</div>
+            ${photoCount > 1 ? `<div class="photo-count">${photoCount} photos</div>` : ''}
           </div>
           <div class="card-info" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <div class="card-name">${listing.name}</div>
-            <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
-            <div class="card-stats">
-              <span class="price-tag">$${displayValue}</span>
-              ${cardIsSoldOut ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>'}
+            <div style="margin-bottom:4px">
+              <span class="cond-badge ${condClass}">${condLabel}</span>
+              ${listing.gameType ? `<span style="font-size:.72rem;color:var(--muted);margin-left:6px">${listing.gameType}</span>` : ''}
             </div>
-            <div class="slots-bar-wrap">
-              <div class="slots-bar-label">
-                <span>${slotsStatus.available}/${totalSlots} available</span>
-              </div>
-              <div class="slots-bar">
-                <div class="slots-bar-fill" style="width:${totalSlots > 0 ? (slotsStatus.available/totalSlots)*100 : 0}%"></div>
-              </div>
+            <div class="card-stats">
+              <span class="price-tag">${displayPrice}</span>
+              ${isSold
+                ? '<span class="badge badge-full">Sold</span>'
+                : isOwn
+                  ? '<span class="badge" style="background:rgba(255,140,20,.15);border:1px solid rgba(255,140,20,.3);color:var(--accent)">Your Listing</span>'
+                  : '<span class="badge badge-open">For Sale</span>'}
+            </div>
+            ${marketPriceHtml}
+            <div style="font-size:.72rem;color:var(--muted);margin-top:5px">
+              ${sellerName}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
             </div>
           </div>
+          ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy_Now_→</button>` : ''}
         </div>`;
       }).join('');
-      // Sync all card pulses to the same phase
-      setTimeout(() => {
-        const now = performance.now();
-        const cycleDuration = 8000; // ms, matches CSS animation duration
-        const phase = now % cycleDuration;
-        document.querySelectorAll('#browseGrid .listing-card').forEach(card => {
-          card.style.animationDelay = '-' + (phase / 1000).toFixed(3) + 's';
-        });
-      }, 30);
     }
 
     function filterListings(filter) {
@@ -1817,9 +1978,9 @@
     }
 
     function applyBrowseFilters() {
-      browseSearchQuery = document.getElementById('browseSearchInput').value;
-      browseGameTypeFilter = document.getElementById('gameTypeFilter').value;
-      browseSortFilter = document.getElementById('sortByFilter').value;
+      browseSearchQuery = (document.getElementById('browseSearchInput') || {}).value || '';
+      browseGameTypeFilter = (document.getElementById('gameTypeFilter') || {}).value || 'all';
+      browseSortFilter = (document.getElementById('sortByFilter') || {}).value || 'newest';
       renderBrowse();
     }
 
@@ -1827,9 +1988,9 @@
       browseSearchQuery = '';
       browseGameTypeFilter = 'all';
       browseSortFilter = 'newest';
-      document.getElementById('browseSearchInput').value = '';
-      document.getElementById('gameTypeFilter').value = 'all';
-      document.getElementById('sortByFilter').value = 'newest';
+      const si = document.getElementById('browseSearchInput'); if(si) si.value='';
+      const gt = document.getElementById('gameTypeFilter'); if(gt) gt.value='all';
+      const sf = document.getElementById('sortByFilter'); if(sf) sf.value='newest';
       document.querySelectorAll('.game-pill').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.game-pill')[0]?.classList.add('active');
       renderBrowse();
@@ -1837,10 +1998,8 @@
 
     function setGameTypeFilter(type) {
       browseGameTypeFilter = type;
-      // Update pill active states
       document.querySelectorAll('.game-pill').forEach(p => p.classList.remove('active'));
       event.target.classList.add('active');
-      // Also sync the dropdown if it exists
       const dropdown = document.getElementById('gameTypeFilter');
       if (dropdown) dropdown.value = type;
       renderBrowse();
@@ -1848,435 +2007,188 @@
 
     function toggleWatchlist(event, listingId) {
       event.stopPropagation();
-      if (!currentUser) {
-        alert('Please log in to add to watchlist');
-        return;
-      }
+      if (!currentUser) { showToast('Sign in to add to watchlist'); return; }
       if (!currentUser.watchlist) currentUser.watchlist = [];
-      const idx = currentUser.watchlist.indexOf(listingId);
-      if (idx > -1) {
-        currentUser.watchlist.splice(idx, 1);
-        showToast('Removed from watchlist');
-      } else {
-        currentUser.watchlist.push(listingId);
-        showToast('Added to watchlist');
-      }
+      const idx = currentUser.watchlist.indexOf(String(listingId));
+      if (idx > -1) { currentUser.watchlist.splice(idx, 1); showToast('Removed from watchlist'); }
+      else { currentUser.watchlist.push(String(listingId)); showToast('Added to watchlist'); }
       renderBrowse();
     }
 
-    function getSlotStats(listingId) {
-      const listingSlots = slots.filter(s => s.listingId === listingId);
-      const available = listingSlots.filter(s => !s.userId).length;
-      const taken = listingSlots.filter(s => s.userId).length;
-      const forSale = listingSlots.filter(s => s.askPrice).length;
-      return { available, taken, forSale };
-    }
+    // Stub — no more slot stats
+    function getSlotStats(listingId) { return { available: 0, taken: 0, forSale: 0 }; }
 
     // ===== DETAIL VIEW =====
+    // ===== DETAIL VIEW (Marketplace) =====
     function viewDetail(listingId) {
       const listing = listings.find(l => String(l.id) === String(listingId));
-      if (!listing) {
-        showToast('Listing not found — refreshing...');
-        initApp().then(() => viewDetail(listingId));
-        return;
-      }
+      if (!listing) { showToast('Listing not found'); return; }
       showPage('explore');
       const detail = document.getElementById('detailView');
+      if (!detail) return;
 
-      // Fetch recent transactions for this listing with buyer usernames
-      sb.from('transactions')
-        .select('type, slot_idx, amount, user_id')
-        .eq('listing_id', listingId)
-        .order('created_at', { ascending: false })
-        .limit(5)
-        .then(async ({ data: txData }) => {
-          if (!txData || txData.length === 0) {
-            const txEl = document.getElementById(`recentTxList_${listingId}`);
-            if (txEl) txEl.innerHTML = '<div class="empty-state">No transactions yet</div>';
-            return;
-          }
-          // Fetch profiles for transaction users
-          const uids = [...new Set(txData.map(t => t.user_id).filter(Boolean))];
-          const { data: profiles } = uids.length > 0
-            ? await sb.from('profiles').select('id, username, name').in('id', uids)
-            : { data: [] };
-          const pm = {};
-          (profiles || []).forEach(p => { pm[p.id] = p; });
-          const txListing = listings.find(l => String(l.id) === String(listingId));
-          const currentSlotPrice = txListing && txListing.totalSlots > 0
-            ? Math.ceil(txListing.value / txListing.totalSlots) : 0;
-          listingTxCache[listingId] = txData.map(t => ({
-            type: t.type,
-            userName: pm[t.user_id]?.username || pm[t.user_id]?.name || 'User',
-            slotIdx: t.slot_idx,
-            amount: t.amount > 0 ? t.amount : currentSlotPrice,
-          }));
-          const txEl = document.getElementById(`recentTxList_${listingId}`);
-          if (!txEl) return;
-          txEl.innerHTML = listingTxCache[listingId].map(t =>
-            `<div class="tx-row">
-              <span class="tx-type">${t.type === 'buy' ? 'Buy' : t.type === 'resale' ? 'Sale' : 'Trade'}</span>
-              <span class="tx-detail">@${t.userName} • Slot #${t.slotIdx + 1}</span>
-              <span class="tx-price">$${t.amount}</span>
-            </div>`
-          ).join('');
-        });
+      const price = listing.list_price || listing.value || 0;
+      const shipping = listing.shipping_price || 0;
+      const total = price + shipping;
+      const marketPrice = listing.market_price || listing.marketPrice;
+      const isSold = listing.status === 'sold';
+      const isOwn = currentUser && (listing.seller_id === currentUser.id || listing.sellerId === currentUser.id);
+      const cond = listing.condition || 'NM';
+      const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
+      const condLabel = cond === 'Graded'
+        ? `${listing.grade || 'PSA'} ${listing.grade_value || listing.gradeValue || ''}`
+        : cond;
+      const PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%231a0a00'/%3E%3Ctext x='200' y='160' font-family='monospace' font-size='14' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
 
-      // Refresh slots for this listing from Supabase — update in-place so navigation is not disrupted
-      sb.from('slots')
-        .select('*')
-        .eq('listing_id', listingId)
-        .order('idx')
-        .then(({ data: dbSlots }) => {
-          if (!dbSlots) return;
-          // Update local slots array
-          slots = slots.filter(s => String(s.listingId) !== String(listingId));
-          dbSlots.forEach(s => {
-            slots.push({
-              id: s.id,
-              listingId: s.listing_id,
-              idx: s.idx,
-              userId: s.user_id,
-              name: null,
-              username: null,
-              askPrice: s.ask_price || null,
-              tradeOpen: s.trade_open || false,
-            });
-          });
-
-          // Only update DOM if still on this listing's explore page
-          const explorePage = document.getElementById('explorePage');
-          if (!explorePage || !explorePage.classList.contains('active')) return;
-
-          const freshListing = listings.find(l => String(l.id) === String(listingId));
-          if (!freshListing) return;
-          const freshListingSlots = slots.filter(s => String(s.listingId) === String(listingId));
-          const freshSlotPrice = freshListing.value && freshListing.totalSlots ? Math.ceil(freshListing.value / freshListing.totalSlots) : 0;
-
-          // Fetch any owner profiles not yet in profilesMap
-          const missingOwnerIds = [...new Set(freshListingSlots.filter(s => s.userId && !profilesMap[s.userId]).map(s => s.userId))];
-          const profileFetch = missingOwnerIds.length > 0
-            ? sb.from('profiles').select('id, name, username').in('id', missingOwnerIds)
-                .then(({ data }) => { (data || []).forEach(p => { profilesMap[p.id] = p; }); })
-            : Promise.resolve();
-          profileFetch.then(() => {
-
-          // Rebuild slot grid HTML in-place
-          let newSlotGridHTML = '';
-          for (let i = 0; i < freshListing.totalSlots; i += 10) {
-            newSlotGridHTML += '<div class="slot-grid">';
-            for (let j = 0; j < 10 && i + j < freshListing.totalSlots; j++) {
-              const slot = freshListingSlots.find(s => s.idx === i + j + 1) || { userId: null, askPrice: null, idx: i + j + 1 };
-              const isYours = currentUser && slot.userId === currentUser.id;
-              const isTaken = slot.userId && !isYours;
-              let classes = 'slot-cell';
-              if (isYours) classes += ' yours';
-              else if (slot.askPrice) classes += ' forsale';
-              else if (isTaken) classes += ' taken';
-              newSlotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
-                ${i + j + 1}
-                <div class="tooltip">${slot.userId ? (isYours ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'USER')) : ('$' + freshSlotPrice)}</div>
-              </div>`;
-            }
-            newSlotGridHTML += '</div>';
-          }
-          const slotGridSection = document.querySelector('#detailView .slot-grid-section');
-          if (slotGridSection) {
-            slotGridSection.innerHTML = `<h3>Ownership Grid</h3>
-              <div class="slot-legend">
-                <div><span class="legend-dot ld-available"></span> Available</div>
-                <div><span class="legend-dot ld-taken"></span> Owned</div>
-                <div><span class="legend-dot ld-yours"></span> Your Slot</div>
-                <div><span class="legend-dot ld-forsale"></span> Listed for Sale</div>
-              </div>${newSlotGridHTML}`;
-          }
-
-          // Rebuild owners section in-place
-          const uniqueOwners = {};
-          freshListingSlots.forEach(s => {
-            if (s.userId) {
-              if (!uniqueOwners[s.userId]) {
-                uniqueOwners[s.userId] = { userId: s.userId, name: s.name, username: s.username, count: 0, isYou: !!(currentUser && s.userId === currentUser.id) };
-              }
-              uniqueOwners[s.userId].count++;
-            }
-          });
-          const newOwnerHTML = Object.values(uniqueOwners).map(od => {
-            const _op = profilesMap[od.userId] || {};
-            const dn = od.isYou ? 'You' : (_op.username || _op.name || 'USER');
-            const un = (!od.isYou && _op.username) ? `` : '';
-            return `<div class="owner-row"><span class="owner-name">${dn}${un}</span><span>${od.count} slot${od.count > 1 ? 's' : ''}</span>${od.isYou ? '<span class="owner-badge">You</span>' : ''}</div>`;
-          }).join('');
-          const ownerListEl = document.querySelector('#detailView .owners-panel .owner-list');
-          if (ownerListEl) ownerListEl.innerHTML = newOwnerHTML || '<div class="empty-state">No owners yet</div>';
-        }); // end profileFetch.then
-        }).catch(err => console.error('Slot refresh error:', err));
-
-      const stats = getSlotStats(listingId);
-      const listingSlots = slots.filter(s => s.listingId === listingId);
-
-      const slotPrice = listing.value && listing.totalSlots ? Math.ceil(listing.value / listing.totalSlots) : 0;
-      let slotGridHTML = '';
-      for (let i = 0; i < listing.totalSlots; i += 10) {
-        slotGridHTML += '<div class="slot-grid">';
-        for (let j = 0; j < 10 && i + j < listing.totalSlots; j++) {
-          const slot = listingSlots[i + j] || { userId: null, askPrice: null, tradeOpen: false, idx: i + j + 1 };
-          const isYours = currentUser && slot.userId === currentUser.id;
-          const isTaken = slot.userId && !isYours;
-          let classes = 'slot-cell';
-          let content = `${i + j + 1}`;
-          if (isYours) classes += ' yours';
-          else if (slot.askPrice) classes += ' forsale';
-          else if (isTaken) classes += ' taken';
-
-          slotGridHTML += `<div class="${classes}" onclick="handleSlotClick(event, '${listingId}', ${i + j + 1}, ${isYours})">
-            ${content}
-            <div class="tooltip">${slot.userId ? (currentUser && slot.userId === currentUser.id ? 'Your slot' : (profilesMap[slot.userId]?.username || profilesMap[slot.userId]?.name || 'USER')) : ('$' + slotPrice)}</div>
-          </div>`;
-        }
-        slotGridHTML += '</div>';
+      // Market price comparison
+      let marketHtml = '';
+      if (marketPrice && price) {
+        const diff = price - marketPrice;
+        const diffPct = ((diff / marketPrice) * 100).toFixed(1);
+        const cls = diff > 0 ? 'price-diff-neg' : 'price-diff-pos';
+        marketHtml = `<div style="font-size:.82rem;margin-top:4px;color:var(--muted)">
+          Market: <strong>$${Number(marketPrice).toLocaleString()}</strong>
+          <span class="${cls}" style="margin-left:6px">${diff > 0 ? '+' : ''}${diffPct}% vs market</span>
+        </div>`;
       }
 
-      let ownerHTML = '';
-      const uniqueOwners = {};
-      listingSlots.forEach(s => {
-        if (s.userId) {
-          if (!uniqueOwners[s.userId]) {
-            uniqueOwners[s.userId] = {
-              userId: s.userId,
-              name: s.name || null,
-              username: s.username || null,
-              count: 0,
-              isYou: !!(currentUser && s.userId === currentUser.id)
-            };
-          }
-          uniqueOwners[s.userId].count++;
-        }
-      });
-      Object.values(uniqueOwners).forEach(ownerData => {
-        const ownerProfile = profilesMap[ownerData.userId] || {};
-        const displayName = ownerData.isYou ? 'You' : (ownerProfile.username || ownerProfile.name || ownerData.name || 'Slot Owner');
-        const usernameStr = (!ownerData.isYou && ownerProfile.username) ? ` <span style="color:var(--muted);font-size:.8rem">@${ownerProfile.username}</span>` : '';
-        ownerHTML += `<div class="owner-row">
-          <span class="owner-name">${displayName}${usernameStr}</span>
-          <span>${ownerData.count} slot${ownerData.count > 1 ? 's' : ''}</span>
-          ${ownerData.isYou ? '<span class="owner-badge">You</span>' : ''}
-        </div>`;
-      });
+      // Seller info
+      const sellerName = listing.sellerName || 'Seller';
+      const sellerRating = listing.sellerRating;
 
       detail.innerHTML = `
-        <a class="detail-back" onclick="showPage('browse')">← Back to Listings</a>
-        ${listing.status === 'sold' ? '<div style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:12px;margin-bottom:16px;color:var(--accent);display:flex;align-items:center;gap:8px"><span>🔒</span><span>This card is fully sold out — all slots are owned</span></div>' : ''}
+        <a class="detail-back" onclick="showPage('browse')" style="cursor:pointer">← Back to Marketplace</a>
+        ${isSold ? '<div style="background:rgba(57,255,20,.08);border:1px solid rgba(57,255,20,.25);padding:12px 16px;margin-bottom:16px;color:var(--green);font-size:.85rem">✓ This card has been sold</div>' : ''}
         <div class="detail-layout">
           <div class="gallery-wrap">
-            <div class="gallery-main" id="galleryMain_${listingId}" onclick="openLightboxFromGallery('${listingId}')">
-              <img id="galleryMainImg_${listingId}" src="${(listing.photos && listing.photos[0]) ? listing.photos[0] : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%231a1a24'/%3E%3Ctext x='200' y='160' font-family='sans-serif' font-size='14' fill='%238888a8' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E"}" alt="${listing.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%231a1a24%22/%3E%3C/svg%3E'" />
+            <div class="gallery-main" id="galleryMain_${listingId}" onclick="openLightboxFromGallery('${listingId}')" style="cursor:zoom-in">
+              <img id="galleryMainImg_${listingId}" src="${listing.photos?.[0] || PLACEHOLDER}" alt="${listing.name}" onerror="this.src='${PLACEHOLDER}'" />
               <div class="gallery-zoom-hint">Click to zoom</div>
             </div>
             <div class="gallery-thumbs">
-              ${(listing.photos || []).map((p, i) => `<img src="${p}" alt="" class="gallery-thumb ${i === 0 ? 'active' : ''}" onclick="changeGallery(${i}, '${listingId}')" onerror="this.style.display='none'" />`).join('')}
+              ${(listing.photos || []).map((p, i) =>
+                `<img src="${p}" alt="" class="gallery-thumb ${i===0?'active':''}" onclick="changeGallery(${i},'${listingId}')" onerror="this.style.display='none'" />`
+              ).join('')}
             </div>
           </div>
           <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-              <div class="grade-badge-detail">🏆 ${listing.grade}</div>
-              ${currentUser ? `<button onclick="togglePriceAlert('${listingId}')" style="display:flex;align-items:center;gap:6px;background:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'rgba(124,92,252,.2)' : 'var(--surface2)'};border:1px solid ${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--border)'};color:${(currentUser.watchlist||[]).includes(String(listingId)) ? 'var(--accent)' : 'var(--muted)'};border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;transition:all .15s">${(currentUser.watchlist||[]).includes(String(listingId)) ? 'Watching' : 'Notify me'}</button>` : ''}
+            <div style="margin-bottom:10px">
+              <span class="cond-badge ${condClass}">${condLabel}</span>
+              ${listing.gameType ? `<span style="font-size:.78rem;color:var(--muted);margin-left:8px">${listing.gameType}</span>` : ''}
             </div>
-            <h1>${listing.name}</h1>
-            <p class="detail-meta">${listing.gameType}</p>
-            ${listing.sellVotes && listing.sellVotes.length > 0 ? `<div style="background:rgba(251,146,60,.15);border:1px solid rgba(251,146,60,.3);border-radius:8px;padding:12px;margin-bottom:16px;color:var(--orange)">🗳️ ${listing.sellVotes.length} owner(s) have voted to sell</div>` : ''}
-            <div class="detail-stats">
+            <h1 style="margin-bottom:6px">${listing.name}</h1>
+            <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px">
+              Listed by <strong style="color:var(--text)">${sellerName}</strong>
+              ${sellerRating ? `<span style="color:var(--gold);margin-left:6px">★ ${sellerRating.toFixed(1)}</span>` : ''}
+            </div>
+
+            <div class="detail-stats" style="margin-bottom:16px">
               <div class="stat-box">
-                <div class="stat-label">Price per Slot</div>
-                <div class="stat-val">$${Math.ceil(listing.value / listing.totalSlots).toLocaleString()}</div>
+                <div class="stat-label">Ask Price</div>
+                <div class="stat-val">$${Number(price).toLocaleString()}</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Total Value</div>
-                <div class="stat-val">$${listing.value.toLocaleString()}</div>
+                <div class="stat-label">Shipping</div>
+                <div class="stat-val">${shipping > 0 ? '$'+shipping.toFixed(2) : 'Free'}</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Available</div>
-                <div class="stat-val">${stats.available}/${listing.totalSlots}</div>
+                <div class="stat-label">Total</div>
+                <div class="stat-val" style="color:var(--accent)">$${total.toFixed(2)}</div>
               </div>
             </div>
-            <div class="slot-grid-section">
-              <h3>Ownership Grid</h3>
-              <div class="slot-legend">
-                <div><span class="legend-dot ld-available"></span> Available</div>
-                <div><span class="legend-dot ld-taken"></span> Owned</div>
-                <div><span class="legend-dot ld-yours"></span> Your Slot</div>
-                <div><span class="legend-dot ld-forsale"></span> Listed for Sale</div>
+            ${marketHtml}
+
+            ${!isSold && !isOwn ? `
+            <div style="margin:20px 0">
+              <button onclick="buyCard('${listingId}')"
+                style="width:100%;padding:14px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.95rem;font-weight:700;cursor:pointer;letter-spacing:.06em;margin-bottom:8px">
+                Buy_Now_→ $${total.toFixed(2)}
+              </button>
+              <div style="font-size:.72rem;color:var(--muted);line-height:1.8;text-align:center">
+                ✓ Funds held in escrow · ✓ 7-day buyer protection · ✓ 5% platform fee paid by seller
               </div>
-              ${slotGridHTML}
-            </div>
-            <div class="vault-cert-panel" style="background:var(--surface2);padding:16px;border-radius:8px;margin:20px 0">
-              <h3 style="margin-bottom:16px">Vault & Certification</h3>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                <div>
-                  <div style="color:var(--muted);font-size:.85rem;margin-bottom:4px">🔐 PSA/BGS Cert #</div>
-                  <div style="font-weight:600;font-family:monospace;margin-bottom:8px">${listing.certNumber}</div>
-                  <a href="#" style="color:var(--accent);font-size:.85rem;text-decoration:none">Verify →</a>
-                </div>
-                <div>
-                  <div style="color:var(--muted);font-size:.85rem;margin-bottom:4px">📦 Storage Location</div>
-                  <div style="font-weight:600;font-size:.9rem">${listing.vaultLocation}</div>
-                </div>
-              </div>
-              <div style="margin-top:12px;padding:12px;background:var(--surface);border-radius:6px;display:flex;align-items:center;gap:8px">
-                <span style="font-size:1.2rem">${listing.insured ? '🛡️' : '⚠️'}</span>
-                <span>${listing.insured ? 'Insured' : 'Not Insured'}</span>
-              </div>
-            </div>
-            <div class="price-history-panel" style="background:var(--surface2);padding:16px;border-radius:8px;margin:20px 0">
-              <h3 style="margin-bottom:16px">Price History</h3>
-              <svg id="priceChart_${listingId}" width="100%" height="200" style="border-radius:6px;margin-bottom:12px"></svg>
-              <div id="priceChangeIndicator_${listingId}" style="font-size:.9rem"></div>
-            </div>
-            <div class="owners-panel">
-              <h3>Current Owners</h3>
-              <div class="owner-list">
-                ${ownerHTML || '<div class="empty-state">No owners yet</div>'}
-              </div>
-            </div>
-            <div class="tx-history">
-              <h3>Recent Transactions</h3>
-              <div class="owner-list" id="recentTxList_${listingId}">
-                <div class="empty-state">Loading...</div>
-              </div>
+            </div>` : ''}
+            ${isOwn && !isSold ? `
+            <div style="margin:20px 0;padding:14px;border:1px solid var(--border);background:var(--surface2)">
+              <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">// Your Listing</div>
+              <button onclick="deactivateListing('${listingId}')"
+                style="padding:8px 20px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">
+                Remove Listing
+              </button>
+            </div>` : ''}
+
+            ${listing.notes ? `<div style="margin:16px 0;padding:14px;background:var(--surface2);border-left:2px solid var(--border);font-size:.85rem;color:var(--muted);line-height:1.6">${listing.notes}</div>` : ''}
+
+            <div class="price-history-panel" style="background:var(--surface2);padding:16px;margin:20px 0">
+              <h3 style="margin-bottom:16px;font-size:.9rem">Price History</h3>
+              <svg id="priceChart_${listingId}" width="100%" height="200"></svg>
+              <div id="priceChangeIndicator_${listingId}" style="font-size:.85rem;margin-top:8px"></div>
             </div>
           </div>
         </div>
       `;
-      setTimeout(() => drawPriceChart(listingId, listing.priceHistory), 100);
+      setTimeout(() => drawPriceChart(listingId, listing.priceHistory), 80);
     }
 
     function drawPriceChart(listingId, priceHistory) {
       if (!priceHistory || priceHistory.length < 2) return;
-
       const svg = document.getElementById(`priceChart_${listingId}`);
       if (!svg) return;
-
-      const padding = {top: 20, right: 20, bottom: 30, left: 60};
-      const width = svg.offsetWidth - padding.left - padding.right;
-      const height = 200 - padding.top - padding.bottom;
-
+      const pad = {top:20,right:20,bottom:30,left:60};
+      const w = svg.offsetWidth - pad.left - pad.right;
+      const h = 200 - pad.top - pad.bottom;
       const prices = priceHistory.map(p => p.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const priceRange = maxPrice - minPrice || 1;
-
-      const xStep = width / (priceHistory.length - 1);
-      const points = priceHistory.map((p, i) => ({
-        x: padding.left + i * xStep,
-        y: padding.top + height - ((p.price - minPrice) / priceRange) * height
+      const minP = Math.min(...prices), maxP = Math.max(...prices);
+      const range = maxP - minP || 1;
+      const xStep = w / (priceHistory.length - 1);
+      const pts = priceHistory.map((p, i) => ({
+        x: pad.left + i * xStep,
+        y: pad.top + h - ((p.price - minP) / range) * h
       }));
-
-      let pathD = `M ${points[0].x} ${points[0].y}`;
-      points.slice(1).forEach(p => pathD += ` L ${p.x} ${p.y}`);
-
-      const fillD = pathD + ` L ${points[points.length-1].x} ${padding.top + height} L ${points[0].x} ${padding.top + height} Z`;
-
-      let svgHTML = `
-        <defs>
-          <linearGradient id="grad_${listingId}" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:var(--accent);stop-opacity:0.3" />
-            <stop offset="100%" style="stop-color:var(--accent);stop-opacity:0" />
-          </linearGradient>
-        </defs>
-        <path d="${fillD}" fill="url(#grad_${listingId})" />
-        <path d="${pathD}" stroke="var(--accent)" stroke-width="2" fill="none" />
-      `;
-
-      points.forEach((p, i) => {
-        svgHTML += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent)" style="cursor:pointer"
-          onmouseover="this.r.baseVal.value=6;document.getElementById('priceTooltip_${listingId}_${i}').style.opacity=1"
-          onmouseout="this.r.baseVal.value=4;document.getElementById('priceTooltip_${listingId}_${i}').style.opacity=0" />
-          <text x="${p.x}" y="${padding.top + height + 20}" text-anchor="middle" font-size="11" fill="var(--muted)" style="pointer-events:none">${priceHistory[i].date.split('-')[2]}</text>
-          <g id="priceTooltip_${listingId}_${i}" style="opacity:0;pointer-events:none;transition:opacity .2s">
-            <rect x="${p.x-35}" y="${p.y-30}" width="70" height="25" fill="var(--surface)" stroke="var(--border)" rx="4" />
-            <text x="${p.x}" y="${p.y-12}" text-anchor="middle" font-size="12" fill="var(--text)" font-weight="600">$${priceHistory[i].price}</text>
-          </g>
-        `;
+      let pathD = `M ${pts[0].x} ${pts[0].y}`;
+      pts.slice(1).forEach(p => pathD += ` L ${p.x} ${p.y}`);
+      const fillD = pathD + ` L ${pts[pts.length-1].x} ${pad.top+h} L ${pts[0].x} ${pad.top+h} Z`;
+      let html = `<defs><linearGradient id="grad_${listingId}" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" style="stop-color:var(--accent);stop-opacity:0.3"/>
+        <stop offset="100%" style="stop-color:var(--accent);stop-opacity:0"/>
+      </linearGradient></defs>
+      <path d="${fillD}" fill="url(#grad_${listingId})"/>
+      <path d="${pathD}" stroke="var(--accent)" stroke-width="2" fill="none"/>`;
+      pts.forEach((p, i) => {
+        html += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent)"/>
+        <text x="${p.x}" y="${pad.top+h+20}" text-anchor="middle" font-size="11" fill="var(--muted)">${(priceHistory[i].date||'').split('-')[2]||''}</text>`;
       });
-
-      const ySteps = 4;
-      for (let i = 0; i <= ySteps; i++) {
-        const yPos = padding.top + (height / ySteps) * i;
-        const yVal = maxPrice - (priceRange / ySteps) * i;
-        svgHTML += `<text x="${padding.left-10}" y="${yPos+4}" text-anchor="end" font-size="11" fill="var(--muted)">$${Math.round(yVal)}</text>`;
-        svgHTML += `<line x1="${padding.left}" y1="${yPos}" x2="${padding.left + width}" y2="${yPos}" stroke="var(--border)" stroke-width="1" opacity="0.3" />`;
+      for (let i = 0; i <= 4; i++) {
+        const yp = pad.top + (h/4)*i;
+        const yv = maxP - (range/4)*i;
+        html += `<text x="${pad.left-8}" y="${yp+4}" text-anchor="end" font-size="11" fill="var(--muted)">$${Math.round(yv)}</text>
+        <line x1="${pad.left}" y1="${yp}" x2="${pad.left+w}" y2="${yp}" stroke="var(--border)" stroke-width="1" opacity="0.3"/>`;
       }
-
-      svg.innerHTML = svgHTML;
-
-      const firstPrice = priceHistory[0].price;
-      const lastPrice = priceHistory[priceHistory.length - 1].price;
-      const change = lastPrice - firstPrice;
-      const changePercent = ((change / firstPrice) * 100).toFixed(1);
-      const isUp = change >= 0;
-      const indicator = document.getElementById(`priceChangeIndicator_${listingId}`);
-      if (indicator) {
-        indicator.innerHTML = `
-          <span style="color:${isUp ? 'var(--green)' : 'var(--red)'};font-weight:600">
-            ${isUp ? '↑' : '↓'} ${Math.abs(changePercent)}% (${isUp ? '+' : ''}$${Math.round(change)})
-          </span>
-          <span style="color:var(--muted);margin-left:8px">from $${firstPrice} to $${lastPrice}</span>
-        `;
-      }
-    }
-
-    function handleSlotClick(e, listingId, slotIdx, isYours) {
-      if (!currentUser) {
-        alert('Please log in to buy slots');
-        return;
-      }
-      // slotIdx is 1-based (matches DB idx field)
-      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      if (isYours) {
-        openSlotActionsModal(listingId, slotIdx);
-      } else if (slot && slot.askPrice) {
-        openPurchaseForSaleModal(listingId, slotIdx);
-      } else if (slot && slot.userId) {
-        // Owned by another user, not listed for sale — offer a trade
-        openRequestTradeModal(listingId, slotIdx);
-      } else {
-        // Available slot — add to cart
-        toggleSlotSelection(listingId, slotIdx);
-      }
-    }
-
-    function toggleSlotSelection(listingId, slotIdx) {
-      const key = `${listingId}-${slotIdx}`;
-      if (cart.some(c => c.key === key)) {
-        cart = cart.filter(c => c.key !== key);
-      } else {
-        cart.push({ listingId, slotIdx, key });
-      }
-      updateCartBar();
-      viewDetail(listings.find(l => l.id === listingId).id);
+      svg.innerHTML = html;
+      const change = prices[prices.length-1] - prices[0];
+      const pct = ((change/prices[0])*100).toFixed(1);
+      const ind = document.getElementById(`priceChangeIndicator_${listingId}`);
+      if (ind) ind.innerHTML = `<span style="color:${change>=0?'var(--green)':'var(--red)'}">${change>=0?'↑':'↓'} ${Math.abs(pct)}%</span> <span style="color:var(--muted)">from $${prices[0]} to $${prices[prices.length-1]}</span>`;
     }
 
     function changeGallery(idx, listingId) {
       const listing = listings.find(l => String(l.id) === String(listingId));
-      if (!listing || !listing.photos[idx]) return;
-      // Update the main image using stable ID
+      if (!listing || !listing.photos?.[idx]) return;
       const mainImg = document.getElementById('galleryMainImg_' + listingId);
       if (mainImg) mainImg.src = listing.photos[idx];
-      // Mark active thumbnail
-      document.querySelectorAll('.gallery-thumb').forEach((t, i) => {
-        t.classList.toggle('active', i === idx);
-      });
-      // Store active index on the container so zoom click opens the right photo
-      const galleryMain = document.getElementById('galleryMain_' + listingId);
-      if (galleryMain) galleryMain.dataset.activeIdx = String(idx);
+      document.querySelectorAll('.gallery-thumb').forEach((t, i) => t.classList.toggle('active', i === idx));
+      const gm = document.getElementById('galleryMain_' + listingId);
+      if (gm) gm.dataset.activeIdx = String(idx);
     }
 
-    // Called when user clicks the main gallery image — opens lightbox at currently-shown photo
     function openLightboxFromGallery(listingId) {
-      const galleryMain = document.getElementById('galleryMain_' + listingId);
-      const idx = galleryMain ? parseInt(galleryMain.dataset.activeIdx || '0') : 0;
+      const gm = document.getElementById('galleryMain_' + listingId);
+      const idx = gm ? parseInt(gm.dataset.activeIdx || '0') : 0;
       openLightbox(idx, listingId);
     }
+
+    // handleSlotClick stub (no-op, slots no longer used)
+    function handleSlotClick() {}
 
     function updateCartBar() {
       const bar = document.getElementById('cartBar');
@@ -2353,1672 +2265,583 @@
           cancelUrl: window.location.origin + window.location.pathname,
         });
         if (result.url) {
-          window.location.href = result.url;
-        } else {
-          showToast('Checkout error: ' + (result.error || 'no URL returned'));
-        }
-      } catch (err) {
-        showToast('Checkout failed: ' + err.message);
-        console.error('Membership checkout error:', err);
-      }
-    }
-
-        function purchaseCart() {
-      if (!currentUser) { alert('Please log in to purchase'); return; }
-      if (!cart.length) return;
-
-      const items = cart.map(c => {
-        const listing = listings.find(l => String(l.id) === String(c.listingId));
-        const slotPrice = Math.ceil(listing.value / listing.totalSlots);
-        return {
-          listingId: String(c.listingId),
-          listingName: listing.name,
-          slotIdx: c.slotIdx,
-          priceCents: slotPrice * 100,
-        };
-      });
-
-      initiateCheckout('slot_purchase', items);
-    }
-
-    function clearCart() {
-      cart = [];
-      updateCartBar();
-      renderBrowse();
-    }
-
-    // ===== SLOT ACTIONS =====
-    function openSlotActionsModal(listingId, slotIdx) {
-      // slotIdx is 1-based (matches DB idx field)
-      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      const listing = listings.find(l => String(l.id) === String(listingId));
-      const slotPrice = Math.ceil(listing.value / listing.totalSlots);
-
-      const modal = document.getElementById('slotActionsModal');
-      document.getElementById('slotActionTitle').textContent = `Slot #${slotIdx} - ${listing.name}`;
-      document.getElementById('slotActionSub').textContent = `Current value: $${slotPrice}`;
-
-      let html = '<div style="display:flex;flex-direction:column;gap:10px">';
-
-      // List for sale
-      if (!slot || !slot.askPrice) {
-        html += `<button class="btn btn-primary" onclick="openListForSaleModal('${listingId}', ${slotIdx})">List for Sale</button>`;
-      } else {
-        html += `<button class="btn btn-orange" onclick="delistSlot('${listingId}', ${slotIdx})">Delist from Sale</button>`;
-      }
-
-      // Propose trade
-      html += `<button class="btn btn-teal" onclick="openTradeProposalModal('${listingId}', ${slotIdx})">Propose Trade</button>`;
-
-      // Cash out
-      const cashoutAmount = Math.floor(slotPrice * 0.9);
-      html += `<button class="btn btn-red" onclick="openCashoutModal('${listingId}', ${slotIdx}, ${cashoutAmount})">Cash Out ($${cashoutAmount})</button>`;
-
-      html += '</div>';
-      document.getElementById('slotActionsContent').innerHTML = html;
-      openModal('slotActionsModal');
-    }
-
-    function openListForSaleModal(listingId, slotIdx) {
-      closeModal('slotActionsModal');
-      const listing = listings.find(l => String(l.id) === String(listingId));
-      const slotPrice = Math.ceil(listing.value / listing.totalSlots);
-
-      const modal = document.getElementById('purchaseModal');
-      document.getElementById('purchaseTitle').textContent = 'List Slot for Sale';
-      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx} of ${listing.name}`;
-
-      const html = `
-        <div class="purchase-summary">
-          <div class="ps-row">
-            <span>Current Slot Value</span>
-            <span>$${slotPrice}</span>
-          </div>
-          <div class="ps-row">
-            <label>Asking Price</label>
-            <input type="number" id="askPrice" value="${slotPrice}" min="0" style="width:100px;text-align:right" />
-          </div>
-          <div class="ps-row fee">
-            <span>Platform Fee (${currentUser?.membershipActive ? '1% — Member rate' : '2%'})</span>
-            <span>$<span id="askFee">0</span></span>
-          </div>
-          <div class="ps-row total">
-            <span>Your Net</span>
-            <span>$<span id="askNet">0</span></span>
-          </div>
-        </div>
-        <button type="button" class="btn btn-primary" onclick="listSlotForSale('${listingId}', ${slotIdx})">List Slot</button>
-        <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
-      `;
-
-      document.getElementById('purchaseContent').innerHTML = html;
-
-      const askPriceInput = document.getElementById('askPrice');
-      askPriceInput.addEventListener('input', () => {
-        const price = parseInt(askPriceInput.value) || 0;
-        const fee = calcFee(price);
-        const net = price - fee;
-        document.getElementById('askFee').textContent = fee;
-        document.getElementById('askNet').textContent = net;
-      });
-      askPriceInput.dispatchEvent(new Event('input'));
-
-      openModal('purchaseModal');
-    }
-
-    function listSlotForSale(listingId, slotIdx) {
-      const askPrice = parseInt(document.getElementById('askPrice').value);
-      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      if (slot) slot.askPrice = askPrice;
-      closeModal('purchaseModal');
-      alert(`Slot #${slotIdx} listed for $${askPrice}`);
-      viewDetail(listingId);
-    }
-
-    function delistSlot(listingId, slotIdx) {
-      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      if (slot) slot.askPrice = null;
-      closeModal('slotActionsModal');
-      alert('Slot delisted');
-      viewDetail(listingId);
-    }
-
-    function openPurchaseForSaleModal(listingId, slotIdx) {
-      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      if (!slot) { showToast('Slot not found'); return; }
-      const ownerName = slot.name || slot.username || 'Slot Owner';
-      const modal = document.getElementById('purchaseModal');
-      document.getElementById('purchaseTitle').textContent = 'Buy Slot';
-      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx} — From ${ownerName}`;
-
-      const fee = calcFee(slot.askPrice);
-      const total = slot.askPrice + fee;
-
-      const html = `
-        <div class="purchase-summary">
-          <div class="ps-row">
-            <span>Asking Price</span>
-            <span>$${slot.askPrice}</span>
-          </div>
-          <div class="ps-row fee">
-            <span>Platform Fee (${currentUser?.membershipActive ? '1% — Member rate' : '2%'})</span>
-            <span>$${fee}</span>
-          </div>
-          <div class="ps-row total">
-            <span>Total</span>
-            <span>$${total}</span>
-          </div>
-          <div class="ps-note">Seller receives: $${slot.askPrice - fee}</div>
-          ${!userIsPremium() && currentUser ? `<div style="margin-top:8px;padding:8px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.2);border-radius:6px;font-size:.75rem;color:var(--gold)">★ Members pay 3.9% — you'd save $${memberSavings(slot.askPrice)} on this trade. <button onclick="closeModal('purchaseModal');openModal('membershipModal')" style="background:none;border:none;color:var(--gold);font-weight:700;cursor:pointer;text-decoration:underline">Upgrade →</button></div>` : ''}
-        </div>
-        <button type="button" class="btn btn-teal" onclick="buySlotForSale('${listingId}', ${slotIdx})">Buy Now</button>
-        <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
-      `;
-
-      document.getElementById('purchaseContent').innerHTML = html;
-      openModal('purchaseModal');
-    }
-
-    function buySlotForSale(listingId, slotIdx) {
-      if (!currentUser) { alert('Please log in to purchase'); return; }
-      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      if (!slot) { showToast('Slot not found'); return; }
-      const listing = listings.find(l => String(l.id) === String(listingId));
-      if (!listing) { showToast('Listing not found'); return; }
-
-      closeModal('purchaseModal');
-      initiateCheckout('secondary_purchase', [{
-        listingId: String(listingId),
-        listingName: listing.name,
-        slotIdx: slot.idx,
-        priceCents: slot.askPrice * 100,
-      }]);
-    }
-
-    // ===== TRADES =====
-    function openTradeProposalModal(listingId, slotIdx) {
-      closeModal('slotActionsModal');
-
-      const modal = document.getElementById('tradeProposeModal');
-      const listing = listings.find(l => l.id === listingId);
-
-      let html = `<p style="color:var(--muted);font-size:.82rem;margin-bottom:16px">You're offering: <strong>Slot #${slotIdx} of ${listing.name}</strong></p>
-        <p style="color:var(--muted);font-size:.82rem;margin-bottom:12px">Select a slot to request in return:</p>
-        <div class="trade-grid">`;
-
-      listings.forEach(l => {
-        const userSlots = slots.filter(s => s.listingId === l.id && s.userId === currentUser.id && !(s.listingId === listingId && s.idx === slotIdx));
-        if (userSlots.length === 0) {
-          html += `<div class="trade-listing-group">
-            <div class="trade-listing-name">${l.name}</div>
-            <div style="font-size:.75rem;color:var(--muted)">You don't own slots in this listing</div>
-          </div>`;
-        } else {
-          html += `<div class="trade-listing-group">
-            <div class="trade-listing-name">${l.name}</div>`;
-          userSlots.forEach(slot => {
-            html += `<div class="trade-slot-item" onclick="selectTradeSlot(${l.id}, ${slot.idx}, this)">
-              <span>Slot <span class="trade-slot-num">#${slot.idx}</span></span>
-              ${slot.askPrice ? `<span style="font-size:.7rem;color:var(--orange)">Listed</span>` : ''}
-            </div>`;
-          });
-          html += '</div>';
-        }
-      });
-
-      html += `</div>
-        <div class="form-group" style="margin-top:16px">
-          <label>Cash Top-up (optional)</label>
-          <input type="number" id="cashTopup" placeholder="0" />
-          <div style="font-size:.75rem;color:var(--muted);margin-top:4px">Positive = you pay extra, Negative = they pay you extra</div>
-        </div>
-        <button type="button" class="btn btn-primary" id="sendTradeBtn" disabled onclick="sendTradeOffer(${listingId}, ${slotIdx})">Send Offer</button>
-        <button type="button" class="btn btn-secondary" onclick="closeModal('tradeProposeModal')">Cancel</button>`;
-
-      document.getElementById('tradeProposalContent').innerHTML = html;
-      openModal('tradeProposeModal');
-    }
-
-    let selectedTradeSlot = null;
-    function selectTradeSlot(listingId, slotIdx, el) {
-      document.querySelectorAll('.trade-slot-item.selected').forEach(e => e.classList.remove('selected'));
-      el.classList.add('selected');
-      selectedTradeSlot = { listingId, slotIdx };
-      document.getElementById('sendTradeBtn').disabled = false;
-    }
-
-    function sendTradeOffer(fromListingId, fromSlotIdx) {
-      if (!selectedTradeSlot) {
-        alert('Please select a slot');
-        return;
-      }
-
-      const toSlotForTrade = slots.find(s => String(s.listingId) === String(selectedTradeSlot.listingId) && s.idx === selectedTradeSlot.slotIdx);
-      if (!toSlotForTrade || !toSlotForTrade.userId) { showToast('Target slot no longer available'); return; }
-      const toUserId = toSlotForTrade.userId;
-      const cashTopup = parseInt(document.getElementById('cashTopup').value) || 0;
-
-      const offer = {
-        id: tradeOffers.length + 1,
-        fromUserId: currentUser.id,
-        fromListingId,
-        fromSlotIdx,
-        toUserId,
-        toListingId: selectedTradeSlot.listingId,
-        toSlotIdx: selectedTradeSlot.slotIdx,
-        cashTopup,
-        status: 'pending',
-        ts: new Date()
-      };
-
-      tradeOffers.push(offer);
-
-      // Insert to Supabase — show result to user
-      sb.from('trade_offers').insert({
-        from_user_id: currentUser.id,
-        to_user_id: toUserId,
-        from_slots: [{ listingId: fromListingId, idx: fromSlotIdx }],
-        to_slots: [{ listingId: selectedTradeSlot.listingId, idx: selectedTradeSlot.slotIdx }],
-        cash_topup: cashTopup || 0,
-        fee: 0,
-        status: 'pending'
-      }).then(({ error }) => {
-        if (error) {
-          showToast('Trade offer failed: ' + error.message);
-          console.error('Trade offer insert error:', error);
-        } else {
-          showToast('Trade offer sent!');
-        }
-      });
-
-      closeModal('tradeProposeModal');
-      selectedTradeSlot = null;
-      viewDetail(fromListingId);
-    }
-
-    // ===== REQUEST TRADE (clicking someone else's slot) =====
-    // Opens a modal where the current user picks one of THEIR slots to offer
-    // in exchange for the target slot owned by another user.
-    // slotIdx is 1-based (matches DB idx field)
-    function openRequestTradeModal(listingId, slotIdx) {
-      const targetSlot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      const targetListing = listings.find(l => String(l.id) === String(listingId));
-      if (!targetSlot || !targetSlot.userId) {
-        showToast('Slot is no longer owned');
-        return;
-      }
-      const ownerName = targetSlot.name || targetSlot.username || 'this user';
-
-      // Reuse tradeProposeModal — update header text and build new content
-      document.querySelector('#tradeProposeModal h3').textContent = 'Request Trade';
-      document.querySelector('#tradeProposeModal .modal-sub').textContent = `Offer one of your slots for Slot #${slotIdx} of ${targetListing.name}`;
-
-      let html = `<p style="color:var(--muted);font-size:.82rem;margin-bottom:16px">You want: <strong>Slot #${slotIdx} of ${targetListing.name}</strong> (owned by ${ownerName})</p>
-        <p style="color:var(--muted);font-size:.82rem;margin-bottom:12px">Select one of your slots to offer in return:</p>
-        <div class="trade-grid">`;
-
-      const mySlots = slots.filter(s => s.userId === currentUser.id);
-      if (mySlots.length === 0) {
-        html += `<div style="color:var(--muted);font-size:.85rem;padding:12px 0">You don't own any slots to trade.</div>`;
-      } else {
-        const grouped = {};
-        mySlots.forEach(s => {
-          const lid = String(s.listingId);
-          if (!grouped[lid]) grouped[lid] = [];
-          grouped[lid].push(s);
-        });
-        Object.keys(grouped).forEach(lid => {
-          const l = listings.find(x => String(x.id) === lid);
-          if (!l) return;
-          html += `<div class="trade-listing-group"><div class="trade-listing-name">${l.name}</div>`;
-          grouped[lid].forEach(s => {
-            html += `<div class="trade-slot-item" onclick="selectTradeSlot('${lid}', ${s.idx}, this)">
-              <span>Slot <span class="trade-slot-num">#${s.idx}</span></span>
-              ${s.askPrice ? `<span style="font-size:.7rem;color:var(--orange)">Listed</span>` : ''}
-            </div>`;
-          });
-          html += '</div>';
-        });
-      }
-
-      html += `</div>
-        <div class="form-group" style="margin-top:16px">
-          <label>Cash Top-up (optional)</label>
-          <input type="number" id="cashTopup" placeholder="0" />
-          <div style="font-size:.75rem;color:var(--muted);margin-top:4px">Positive = you pay extra, Negative = you want them to pay extra</div>
-        </div>
-        <button type="button" class="btn btn-primary" id="sendTradeBtn" disabled onclick="sendRequestTradeOffer('${listingId}', ${slotIdx})">Send Trade Request</button>
-        <button type="button" class="btn btn-secondary" onclick="closeModal('tradeProposeModal'); document.querySelector('#tradeProposeModal h3').textContent='Propose Trade'; document.querySelector('#tradeProposeModal .modal-sub').textContent='Select a slot you want in return'">Cancel</button>`;
-
-      document.getElementById('tradeProposalContent').innerHTML = html;
-      openModal('tradeProposeModal');
-    }
-
-    function sendRequestTradeOffer(targetListingId, targetSlotIdx) {
-      if (!selectedTradeSlot) {
-        alert('Please select one of your slots to offer');
-        return;
-      }
-      const targetSlot = slots.find(s => String(s.listingId) === String(targetListingId) && s.idx === targetSlotIdx);
-      if (!targetSlot || !targetSlot.userId) {
-        showToast('Target slot is no longer available');
-        return;
-      }
-      const cashTopup = parseInt(document.getElementById('cashTopup')?.value) || 0;
-
-      const offer = {
-        id: tradeOffers.length + 1,
-        fromUserId: currentUser.id,
-        fromListingId: selectedTradeSlot.listingId,
-        fromSlotIdx: selectedTradeSlot.slotIdx,
-        toUserId: targetSlot.userId,
-        toListingId: targetListingId,
-        toSlotIdx: targetSlotIdx,
-        cashTopup,
-        status: 'pending',
-        ts: new Date()
-      };
-      tradeOffers.push(offer);
-
-      sb.from('trade_offers').insert({
-        from_user_id: currentUser.id,
-        to_user_id: targetSlot.userId,
-        from_slots: [{ listingId: selectedTradeSlot.listingId, idx: selectedTradeSlot.slotIdx }],
-        to_slots: [{ listingId: targetListingId, idx: targetSlotIdx }],
-        cash_topup: cashTopup || 0,
-        fee: 0,
-        status: 'pending'
-      }).then(({ error }) => {
-        if (error) {
-          showToast('Trade request failed: ' + error.message);
-          console.error('Trade request insert error:', error);
-        } else {
-          showToast(`Trade request sent to ${targetSlot.name || 'slot owner'}!`);
-        }
-      });
-
-      closeModal('tradeProposeModal');
-      // Restore modal header text for next use
-      document.querySelector('#tradeProposeModal h3').textContent = 'Propose Trade';
-      document.querySelector('#tradeProposeModal .modal-sub').textContent = 'Select a slot you want in return';
-      selectedTradeSlot = null;
-      viewDetail(targetListingId);
-    }
-
-    async function acceptTrade(offerId) {
-      const offer = tradeOffers.find(o => o.id === offerId);
-      if (!offer) { showToast('Offer not found'); return; }
-
-      showToast('Processing trade...');
-
-      // 1. Mark offer as accepted in Supabase
-      const { error: offerErr } = await sb.from('trade_offers')
-        .update({ status: 'accepted' })
-        .eq('id', offerId);
-      if (offerErr) { showToast('Error accepting trade: ' + offerErr.message); return; }
-
-      // 2. Swap slot ownership in Supabase
-      // from_slots transfer to the accepting user (to_user = currentUser)
-      // to_slots transfer to the offer sender (from_user)
-      const swapOps = [
-        ...(offer.fromSlots || []).map(s =>
-          sb.from('slots').update({ user_id: offer.toUserId, ask_price: null })
-            .eq('listing_id', s.listingId).eq('idx', s.idx)
-        ),
-        ...(offer.toSlots || []).map(s =>
-          sb.from('slots').update({ user_id: offer.fromUserId, ask_price: null })
-            .eq('listing_id', s.listingId).eq('idx', s.idx)
-        )
-      ];
-      const results = await Promise.all(swapOps);
-      const errs = results.filter(r => r.error).map(r => r.error);
-      if (errs.length > 0) {
-        console.error('Slot swap errors:', errs);
-        showToast('Trade recorded but slot transfer had issues — please refresh');
-      } else {
-        showToast('Trade completed!');
-      }
-
-      // 3. Update local state & re-fetch slots from DB so everyone is in sync
-      offer.status = 'accepted';
-      sb.from('slots').select('*').order('idx').then(({ data }) => {
-        if (data) slots = data.map(s => ({
-          id: s.id, listingId: s.listing_id, idx: s.idx,
-          userId: s.user_id, name: null, email: null,
-          askPrice: s.ask_price > 0 ? s.ask_price : null,
-          tradeOpen: s.trade_open || false
-        }));
-        renderAllContent();
-      });
-    }
-
-    function openRatingModal(userId, userName) {
-      const modalContent = document.getElementById('slotActionsContent');
-      const modal = document.getElementById('slotActionsModal');
-      document.getElementById('slotActionTitle').textContent = 'Rate Your Trade';
-      document.getElementById('slotActionSub').textContent = `How was your experience trading with ${userName}?`;
-
-      let ratingHtml = '<div style="text-align:center;padding:20px 0">';
-      for (let i = 1; i <= 5; i++) {
-        ratingHtml += `<button onclick="submitRating(${userId}, ${i})" style="background:none;border:none;font-size:2.5rem;cursor:pointer;margin:0 6px;opacity:0.5;transition:opacity .2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">⭐</button>`;
-      }
-      ratingHtml += '</div>';
-
-      modalContent.innerHTML = ratingHtml;
-      openModal('slotActionsModal');
-    }
-
-    function submitRating(userId, rating) {
-      const targetUser = users.find(u => u.id === userId);
-      if (targetUser) {
-        targetUser.rating.total += rating;
-        targetUser.rating.count++;
-      }
-      closeModal('slotActionsModal');
-      showToast(`Thanks! You rated ${rating} star${rating > 1 ? 's' : ''}`);
-    }
-
-    function declineTrade(offerId) {
-      const offer = tradeOffers.find(o => o.id === offerId);
-      if (!offer) return;
-      sb.from('trade_offers').update({ status: 'declined' }).eq('id', offerId)
-        .then(({ error }) => {
-          if (error) { showToast('Error declining offer: ' + error.message); return; }
-          offer.status = 'declined';
-          renderTradeOffers();
-          showToast('Trade offer declined');
-        });
-    }
-
-    function cancelTrade(offerId) {
-      const offer = tradeOffers.find(o => o.id === offerId);
-      if (!offer) return;
-      sb.from('trade_offers').update({ status: 'cancelled' }).eq('id', offerId)
-        .then(({ error }) => {
-          if (error) { showToast('Error cancelling offer: ' + error.message); return; }
-          offer.status = 'cancelled';
-          renderTradeOffers();
-          showToast('Trade offer cancelled');
-        });
-    }
-
-    // ===== CASHOUT =====
-    function openCashoutModal(listingId, slotIdx, cashoutAmount) {
-      closeModal('slotActionsModal');
-      const listing = listings.find(l => l.id === listingId);
-      const slotPrice = Math.ceil(listing.value / listing.totalSlots);
-      const platformKeeps = slotPrice - cashoutAmount;
-
-      const modal = document.getElementById('purchaseModal');
-      document.getElementById('purchaseTitle').textContent = 'Cash Out Slot';
-      document.getElementById('purchaseSub').textContent = `Slot #${slotIdx} of ${listing.name}`;
-
-      const html = `
-        <div class="purchase-summary">
-          <div class="ps-row">
-            <span>Current Value</span>
-            <span>$${slotPrice}</span>
-          </div>
-          <div class="ps-row fee">
-            <span>Platform Buyback (10% fee)</span>
-            <span>-$${platformKeeps}</span>
-          </div>
-          <div class="ps-row total">
-            <span>You Receive</span>
-            <span>$${cashoutAmount}</span>
-          </div>
-          <div class="ps-note">You lose $${platformKeeps} to the 10% buyback fee.</div>
-        </div>
-        <button type="button" class="btn btn-orange" onclick="confirmCashout('${listingId}', ${slotIdx}, ${cashoutAmount})">Confirm_Cashout</button>
-        <button type="button" class="btn btn-secondary" onclick="closeModal('purchaseModal')">Cancel</button>
-      `;
-
-      document.getElementById('purchaseContent').innerHTML = html;
-      openModal('purchaseModal');
-    }
-
-    function confirmCashout(listingId, slotIdx, amount) {
-      const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === slotIdx);
-      const fee = Math.floor(Math.ceil(listings.find(l => l.id === listingId).value / listings.find(l => l.id === listingId).totalSlots) - amount);
-
-      transactions.push({
-        listingId, slotIdx, type: 'cashout',
-        userId: currentUser.id, userName: currentUser.name, amount, ts: new Date()
-      });
-      slot.userId = null;
-      slot.name = null;
-      slot.email = null;
-      slot.askPrice = null;
-
-      // Sync to Supabase via Edge Function (validates ownership + calculates fee server-side)
-      callEdgeFunction('process-cashout', { listingId, slotIdx })
-        .then(result => showToast(`Cashed out! You received $${result.cashoutAmount} (fee: $${result.fee})`))
-        .catch(err => console.error('Cashout sync error:', err.message));
-
-      closeModal('purchaseModal');
-      showToast(`Cashed out for $${amount}`);
-      viewDetail(listingId);
-    }
-
-    // ===== BATCH OPERATIONS =====
-    function openBatchCashoutModal() {
-      if (mySlotSelection.size === 0) return;
-      const grouped = groupSelectedSlots();
-      const content = document.getElementById('batchCashoutContent');
-      let totalValue = 0;
-      let html = '';
-
-      Object.keys(grouped).forEach(listingId => {
-        const listing = listings.find(l => l.id === parseInt(listingId));
-        const slotIndices = grouped[listingId];
-        const slotValue = Math.ceil(listing.value / listing.totalSlots);
-        const slotsCashout = slotIndices.length * slotValue * 0.9;
-        const platformKeeps = slotIndices.length * slotValue - slotsCashout;
-
-        html += `
-          <div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px">
-            <div style="font-weight:600;margin-bottom:8px">${listing.name}</div>
-            <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Slots: ${slotIndices.map(i => i + 1).join(', ')}</div>
-            <div style="display:flex;justify-content:space-between;font-size:.85rem">
-              <span>Value per slot:</span>
-              <span>$${slotValue}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:.85rem">
-              <span>Total value (${slotIndices.length} slots):</span>
-              <span>$${slotIndices.length * slotValue}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:.85rem;color:var(--orange);margin-top:4px">
-              <span>After 10% fee:</span>
-              <span>$${slotsCashout.toFixed(0)}</span>
-            </div>
-          </div>
-        `;
-        totalValue += slotsCashout;
-      });
-
-      html += `<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;font-weight:600">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span>Total you receive:</span>
-          <span style="color:var(--gold)">$${totalValue.toFixed(0)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:.85rem;color:var(--muted)">
-          <span>Platform keeps:</span>
-          <span>10%</span>
-        </div>
-      </div>`;
-
-      content.innerHTML = html;
-      openModal('batchCashoutModal');
-    }
-
-    function confirmBatchCashout() {
-      const grouped = groupSelectedSlots();
-      let totalAmount = 0;
-
-      Object.keys(grouped).forEach(listingId => {
-        const listing = listings.find(l => String(l.id) === String(listingId));
-        const slotIndices = grouped[listingId];
-        const slotValue = Math.ceil(listing.value / listing.totalSlots);
-
-        slotIndices.forEach(idx => {
-          const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === idx);
-          const cashoutAmount = Math.ceil(slotValue * 0.9);
-          totalAmount += cashoutAmount;
-
-          transactions.push({
-            listingId, slotIdx: idx, type: 'cashout',
-            userId: currentUser.id, userName: currentUser.name, amount: cashoutAmount, ts: new Date()
-          });
-
-          slot.userId = null;
-          slot.name = null;
-          slot.email = null;
-          slot.askPrice = null;
-        });
-      });
-
-      mySlotSelection.clear();
-      closeModal('batchCashoutModal');
-      alert(`Batch cashout successful! You received $${totalAmount}`);
-      renderAllContent();
-    }
-
-    function openBatchListModal() {
-      if (mySlotSelection.size === 0) return;
-      const grouped = groupSelectedSlots();
-      const content = document.getElementById('batchListContent');
-      let html = '';
-
-      Object.keys(grouped).forEach(listingId => {
-        const listing = listings.find(l => l.id === parseInt(listingId));
-        const slotIndices = grouped[listingId];
-        const slotValue = Math.ceil(listing.value / listing.totalSlots);
-
-        html += `
-          <div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px">
-            <div style="font-weight:600;margin-bottom:8px">${listing.name}</div>
-            <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Slots: ${slotIndices.map(i => i + 1).join(', ')}</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <label style="min-width:80px">Asking price:</label>
-              <input type="number" class="batch-list-price" data-listing="${listingId}" value="${slotValue}" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);width:100px" />
-              <span style="font-size:.8rem;color:var(--muted)">per slot</span>
-            </div>
-            <div style="font-size:.75rem;color:var(--muted);margin-top:6px">Buyer pays ${currentUser?.membershipActive ? '1%' : '2%'} fee on top</div>
-          </div>
-        `;
-      });
-
-      content.innerHTML = html;
-      openModal('batchListModal');
-    }
-
-    function confirmBatchList() {
-      const inputs = document.querySelectorAll('.batch-list-price');
-      const grouped = groupSelectedSlots();
-
-      inputs.forEach(input => {
-        const listingId = input.dataset.listing;
-        const askPrice = parseInt(input.value);
-        const slotIndices = grouped[listingId];
-
-        slotIndices.forEach(idx => {
-          const slot = slots.find(s => String(s.listingId) === String(listingId) && s.idx === idx);
-          slot.askPrice = askPrice;
-        });
-      });
-
-      mySlotSelection.clear();
-      closeModal('batchListModal');
-      alert('Slots listed for sale!');
-      renderAllContent();
-    }
-
-    let batchTradeStep = 1;
-    let batchTradeSelectedWant = new Set();
-
-    function openBatchTradeModal() {
-      if (mySlotSelection.size === 0) return;
-      batchTradeStep = 1;
-      batchTradeSelectedWant.clear();
-      showBatchTradeStep();
-    }
-
-    function showBatchTradeStep() {
-      const content = document.getElementById('tradeWizardContent');
-      const nextBtn = document.getElementById('tradeWizardNext');
-
-      if (batchTradeStep === 1) {
-        document.getElementById('tradeWizardTitle').textContent = 'Propose Trade - Step 1';
-        document.getElementById('tradeWizardSub').textContent = 'Your offer';
-        const grouped = groupSelectedSlots();
-        let html = '';
-
-        Object.keys(grouped).forEach(listingId => {
-          const listing = listings.find(l => l.id === parseInt(listingId));
-          const slotIndices = grouped[listingId];
-          const slotValue = Math.ceil(listing.value / listing.totalSlots);
-
-          html += `
-            <div style="padding:12px;background:var(--surface2);border-radius:8px;margin-bottom:10px">
-              <div style="font-weight:600">${listing.name}</div>
-              <div style="font-size:.82rem;color:var(--muted);margin-top:4px">Slots: ${slotIndices.map(i => i + 1).join(', ')}</div>
-              <div style="font-size:.82rem;margin-top:4px">Value: $${slotIndices.length * slotValue}</div>
-            </div>
-          `;
-        });
-
-        content.innerHTML = html;
-        nextBtn.textContent = 'Next';
-      } else if (batchTradeStep === 2) {
-        document.getElementById('tradeWizardTitle').textContent = 'Propose Trade - Step 2';
-        document.getElementById('tradeWizardSub').textContent = 'Select slots you want';
-        const otherSlots = slots.filter(s => s.userId !== currentUser.id && s.userId !== null);
-        let html = '';
-
-        if (otherSlots.length === 0) {
-          html = '<div class="empty-state">No slots available from other users</div>';
-        } else {
-          html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">';
-          otherSlots.forEach(slot => {
-            const listing = listings.find(l => l.id === slot.listingId);
-            const slotValue = Math.ceil(listing.value / listing.totalSlots);
-            const owner = users.find(u => u.id === slot.userId);
-            const isSelected = batchTradeSelectedWant.has(`${slot.listingId}:${slot.idx}`);
-
-            html += `<div style="padding:8px;border:${isSelected ? '2px solid var(--accent)' : '1px solid var(--border)'};border-radius:6px;background:${isSelected ? 'rgba(124,92,252,.1)' : 'var(--surface2)'};cursor:pointer" onclick="toggleBatchTradeWant('${slot.listingId}:${slot.idx}')">
-              <div style="font-size:.75rem;font-weight:600">${listing.name.substring(0, 10)}</div>
-              <div style="font-size:.7rem;color:var(--muted)">Slot #${slot.idx + 1}</div>
-              <div style="font-size:.7rem;margin-top:4px">$${slotValue}</div>
-              <div style="font-size:.65rem;color:var(--muted)">by ${owner.name}</div>
-            </div>`;
-          });
-          html += '</div>';
-        }
-
-        content.innerHTML = html;
-        nextBtn.textContent = 'Next';
-      } else if (batchTradeStep === 3) {
-        document.getElementById('tradeWizardTitle').textContent = 'Propose Trade - Step 3';
-        document.getElementById('tradeWizardSub').textContent = 'Review & finalize';
-
-        const myGrouped = groupSelectedSlots();
-        let myValue = 0;
-        Object.keys(myGrouped).forEach(listingId => {
-          const listing = listings.find(l => l.id === parseInt(listingId));
-          const slotIndices = myGrouped[listingId];
-          const slotValue = Math.ceil(listing.value / listing.totalSlots);
-          myValue += slotIndices.length * slotValue;
-        });
-
-        let theirValue = 0;
-        batchTradeSelectedWant.forEach(key => {
-          const [listingId, slotIdx] = key.split(':');
-          const listing = listings.find(l => l.id === parseInt(listingId));
-          const slotValue = Math.ceil(listing.value / listing.totalSlots);
-          theirValue += slotValue;
-        });
-
-        const difference = myValue - theirValue;
-        const fee = calcFee(myValue + theirValue);
-
-        let html = `
-          <div style="margin-bottom:16px">
-            <div style="font-weight:600;margin-bottom:8px">Your slots value: $${myValue}</div>
-            <div style="font-weight:600;margin-bottom:12px">Their slots value: $${theirValue}</div>
-          </div>
-          <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-              <span>Value difference:</span>
-              <span style="color:${difference > 0 ? 'var(--orange)' : 'var(--green)'}">$${Math.abs(difference)}</span>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-              <label>Cash adjustment:</label>
-              <input type="number" id="tradeWizardCash" value="${Math.max(0, difference)}" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);width:100px" />
-            </div>
-            <div style="font-size:.85rem;color:var(--muted)">Platform fee (${currentUser?.membershipActive ? '1%' : '2%'}): $${fee}</div>
-          </div>
-        `;
-
-        content.innerHTML = html;
-        nextBtn.textContent = 'Send Offer';
-      }
-    }
-
-    function toggleBatchTradeWant(key) {
-      if (batchTradeSelectedWant.has(key)) {
-        batchTradeSelectedWant.delete(key);
-      } else {
-        batchTradeSelectedWant.add(key);
-      }
-      showBatchTradeStep();
-    }
-
-    function nextTradeStep() {
-      if (batchTradeStep === 1) {
-        batchTradeStep = 2;
-      } else if (batchTradeStep === 2) {
-        if (batchTradeSelectedWant.size === 0) {
-          alert('Select at least one slot you want');
-          return;
-        }
-        batchTradeStep = 3;
-      } else if (batchTradeStep === 3) {
-        confirmBatchTrade();
-        return;
-      }
-      showBatchTradeStep();
-    }
-
-    function confirmBatchTrade() {
-      if (batchTradeSelectedWant.size === 0) {
-        alert('No slots selected');
-        return;
-      }
-
-      const myGrouped = groupSelectedSlots();
-      const cashTopup = parseInt(document.getElementById('tradeWizardCash').value) || 0;
-
-      const offer = {
-        id: tradeOffers.length + 1,
-        fromUserId: currentUser.id,
-        fromSlots: Array.from(mySlotSelection).map(key => {
-          const [listingId, idx] = key.split(':');
-          return { listingId: parseInt(listingId), idx: parseInt(idx) };
-        }),
-        toSlots: Array.from(batchTradeSelectedWant).map(key => {
-          const [listingId, idx] = key.split(':');
-          return { listingId: parseInt(listingId), idx: parseInt(idx) };
-        }),
-        cashTopup,
-        status: 'pending',
-        ts: new Date()
-      };
-
-      tradeOffers.push(offer);
-      mySlotSelection.clear();
-      batchTradeSelectedWant.clear();
-      closeModal('batchTradeModal');
-      alert('Trade offer sent!');
-      renderAllContent();
-    }
-
-    function closeBatchTradeModal() {
-      closeModal('batchTradeModal');
-      mySlotSelection.clear();
-      batchTradeSelectedWant.clear();
-    }
-
-    function groupSelectedSlots() {
-      const grouped = {};
-      mySlotSelection.forEach(key => {
-        const [listingId, slotIdx] = key.split(':');
-        if (!grouped[listingId]) grouped[listingId] = [];
-        grouped[listingId].push(parseInt(slotIdx));
-      });
-      return grouped;
-    }
-
     // ===== ACCOUNT PAGE =====
-    function renderAccount() {
-      if (!currentUser) {
-        showPage('browse');
-        return;
-      }
+    let activeOrdersTab = 'buying';
 
+    function renderAccount() {
+      if (!currentUser) { showPage('browse'); return; }
       renderDashboard();
-      renderMySlots();
-      renderTradeOffers();
+      renderMyListings();
+      renderOrders();
       renderHistory();
       renderWatchlist();
-      updateTradeNotification();
+      updateOrderNotification();
+    }
+
+    function switchAccountTab(tab) {
+      document.querySelectorAll('.account-tab').forEach(t => t.classList.remove('active'));
+      const tabEl = document.querySelector(`[onclick="switchAccountTab('${tab}')"]`);
+      if (tabEl) tabEl.classList.add('active');
+      document.querySelectorAll('.account-content').forEach(c => c.classList.remove('active'));
+      const contentEl = document.getElementById(tab);
+      if (contentEl) contentEl.classList.add('active');
+      if (tab === 'myOrders') renderOrders();
+      if (tab === 'myListings') renderMyListings();
+    }
+
+    function switchOrdersTab(tab) {
+      activeOrdersTab = tab;
+      document.getElementById('ordersTabBuying').classList.toggle('active', tab === 'buying');
+      document.getElementById('ordersTabSelling').classList.toggle('active', tab === 'selling');
+      renderOrders();
+    }
+
+    function updateOrderNotification() {
+      const pending = orders.filter(o =>
+        (o.status === 'shipped' && o.buyer_id === currentUser?.id) ||
+        (o.status === 'paid' && o.seller_id === currentUser?.id)
+      ).length;
+      const badge = document.getElementById('orderNotification');
+      if (badge) {
+        badge.textContent = pending;
+        badge.style.display = pending > 0 ? 'flex' : 'none';
+      }
     }
 
     let dashboardRefreshing = false;
     function renderDashboard() {
       if (!currentUser) return;
-      const myLocalSlots = slots.filter(s => s.userId === currentUser.id);
+      const myListingItems = listings.filter(l => l.seller_id === currentUser.id || l.sellerId === currentUser.id);
+      const activeSales = myListingItems.filter(l => l.status === 'active' || l.status === 'available').length;
+      const completedSales = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed').length;
+      const pendingPayouts = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed' && !o.payout_sent_at).length;
+      const totalEarned = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed')
+        .reduce((s, o) => s + (o.seller_payout || 0), 0);
+      const buyingActive = orders.filter(o => o.buyer_id === currentUser.id && !['completed','cancelled'].includes(o.status)).length;
 
-      // If no slots loaded yet, do one refresh then render regardless
-      if (myLocalSlots.length === 0 && !dashboardRefreshing) {
-        dashboardRefreshing = true;
-        refreshMySlots().then(() => {
-          dashboardRefreshing = false;
-          renderDashboard();
-        });
-        document.getElementById('dashboardContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Loading portfolio...</div>';
-        return;
-      }
-
-      const mySlots = slots.filter(s => s.userId === currentUser.id);
-
-      if (mySlots.length === 0) {
-        document.getElementById('dashboardContent').innerHTML = `
-          <div style="text-align:center;padding:60px 20px;color:var(--muted)">
-            <div style="font-size:3rem;margin-bottom:16px">📊</div>
-            <div style="font-size:1.1rem;font-weight:600;margin-bottom:8px">No holdings yet</div>
-            <div style="font-size:.9rem">Once you own slots, your portfolio will appear here.</div>
-          </div>`;
-        return;
-      }
-
-      const totalHoldingsValue = mySlots.reduce((sum, slot) => {
-        const listing = listings.find(l => String(l.id) === String(slot.listingId));
-        if (!listing || !listing.value || !listing.totalSlots) return sum;
-        return sum + Math.ceil(listing.value / listing.totalSlots);
-      }, 0);
-      const portfolioValue = listings.map(l => {
-        const owned = mySlots.filter(s => String(s.listingId) === String(l.id)).length;
-        if (!l.value || !l.totalSlots) return 0;
-        const slotValue = Math.ceil(l.value / l.totalSlots);
-        return owned * slotValue;
-      }).reduce((a, b) => a + b, 0);
-      const ratingCount = currentUser.rating_count || currentUser.rating?.count || 0;
-      const ratingTotal = currentUser.rating_total || currentUser.rating?.total || 0;
-      const avgRating = ratingCount > 0 ? (ratingTotal / ratingCount).toFixed(1) : 'N/A';
-
-      // Build holdings data with enhanced metrics
-      const holdingsByCard = {};
-      const colors = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#14b8a6'];
-      let colorIdx = 0;
-
-      mySlots.forEach(slot => {
-        const listing = listings.find(l => String(l.id) === String(slot.listingId));
-        if (!listing || !listing.value || !listing.totalSlots) return; // skip if listing data missing
-        const slotValue = Math.ceil(listing.value / listing.totalSlots);
-        if (!holdingsByCard[slot.listingId]) {
-          holdingsByCard[slot.listingId] = {listing, count: 0, totalValue: 0, color: colors[colorIdx % colors.length]};
-          colorIdx++;
-        }
-        holdingsByCard[slot.listingId].count++;
-        holdingsByCard[slot.listingId].totalValue += slotValue;
-      });
-
-      // Calculate avg buy-in price for each holding
-      Object.keys(holdingsByCard).forEach(listingId => {
-        const holding = holdingsByCard[listingId];
-        const buyTransactions = transactions.filter(t => t.userId === currentUser.id && String(t.listingId) === String(listingId) && (t.type === 'buy' || t.type === 'resale'));
-        if (buyTransactions.length > 0) {
-          const avgBuyIn = Math.round(buyTransactions.reduce((sum, t) => sum + t.amount, 0) / buyTransactions.length);
-          holding.avgBuyIn = avgBuyIn;
-        } else {
-          holding.avgBuyIn = Math.ceil(holding.listing.value / holding.listing.totalSlots);
-        }
-        const currentPerSlot = Math.ceil(holding.listing.value / holding.listing.totalSlots);
-        holding.change = currentPerSlot - holding.avgBuyIn;
-        holding.changePercent = holding.avgBuyIn > 0 ? ((holding.change / holding.avgBuyIn) * 100).toFixed(1) : 0;
-      });
-
-      const holdings = Object.values(holdingsByCard).sort((a, b) => b.totalValue - a.totalValue);
-
-      // Calculate portfolio metrics
-      const totalChange = holdings.reduce((sum, h) => sum + (h.change * h.count), 0);
-      const largestPosition = holdings.length > 0 ? (holdings[0].totalValue / portfolioValue * 100) : 0;
-      const diversificationScore = Math.max(0, 100 - largestPosition);
-
-      // Find top gainer and loser
-      let topGainer = null, topLoser = null;
-      holdings.forEach(h => {
-        if (!topGainer || h.changePercent > topGainer.changePercent) topGainer = h;
-        if (!topLoser || h.changePercent < topLoser.changePercent) topLoser = h;
-      });
-
-      // Build pie chart data
-      const pieSlices = holdings.map((h, i) => ({
-        label: h.listing.name,
-        value: h.totalValue,
-        color: h.color,
-        percent: portfolioValue > 0 ? (h.totalValue / portfolioValue * 100).toFixed(1) : 0
-      }));
-
-      // Game type breakdown
-      const gameTypeMap = {};
-      holdings.forEach(h => {
-        if (!gameTypeMap[h.listing.gameType]) gameTypeMap[h.listing.gameType] = 0;
-        gameTypeMap[h.listing.gameType] += h.totalValue;
-      });
-
-      // Build enhanced holdings table
-      let holdingsHtml = holdings.map(h => {
-        const currentPerSlot = Math.ceil(h.listing.value / h.listing.totalSlots);
-        const changeColor = h.change >= 0 ? '#22c55e' : '#ef4444';
-        const changeSymbol = h.change >= 0 ? '+' : '';
-        return `<tr>
-          <td><div style="display:flex;align-items:center;gap:8px"><div style="width:12px;height:12px;background:${h.color};border-radius:2px"></div><div>${h.listing.name}<div style="font-size:.75rem;color:var(--muted);margin-top:2px">${h.listing.gameType}</div></div></div></td>
-          <td style="text-align:center">${h.count}</td>
-          <td class="hm" style="text-align:right">$${h.avgBuyIn.toLocaleString()}</td>
-          <td class="hm" style="text-align:right">$${currentPerSlot.toLocaleString()}</td>
-          <td class="hm" style="text-align:right;color:${changeColor}"><strong>${changeSymbol}$${Math.abs(h.change).toLocaleString()}</strong></td>
-          <td class="hm" style="text-align:right;color:${changeColor}"><strong>${changeSymbol}${h.changePercent}%</strong></td>
-          <td style="text-align:right;font-weight:600">$${h.totalValue.toLocaleString()}</td>
-        </tr>`
-      }).join('');
-
-      const dashEl = document.getElementById('dashboardContent');
-
-      // Generate SVG pie chart
-      let pieChartSvg = '';
-      if (holdings.length > 0) {
-        let currentAngle = -Math.PI / 2;
-        const radius = 80, innerRadius = 50;
-        const cx = 110, cy = 110;
-
-        pieChartSvg = `<svg width="220" height="220" viewBox="0 0 220 220" style="max-width:100%">`;
-        pieSlices.forEach((slice, idx) => {
-          const sliceAngle = (slice.value / portfolioValue) * 2 * Math.PI;
-          const endAngle = currentAngle + sliceAngle;
-          const startX = cx + radius * Math.cos(currentAngle);
-          const startY = cy + radius * Math.sin(currentAngle);
-          const endX = cx + radius * Math.cos(endAngle);
-          const endY = cy + radius * Math.sin(endAngle);
-          const largeArc = sliceAngle > Math.PI ? 1 : 0;
-          const innerStartX = cx + innerRadius * Math.cos(currentAngle);
-          const innerStartY = cy + innerRadius * Math.sin(currentAngle);
-          const innerEndX = cx + innerRadius * Math.cos(endAngle);
-          const innerEndY = cy + innerRadius * Math.sin(endAngle);
-          const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY} L ${innerEndX} ${innerEndY} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerStartX} ${innerStartY} Z`;
-          pieChartSvg += `<path d="${pathData}" fill="${slice.color}" stroke="var(--surface2)" stroke-width="2"/>`;
-          currentAngle = endAngle;
-        });
-        pieChartSvg += `<circle cx="${cx}" cy="${cy}" r="${innerRadius - 2}" fill="var(--surface)" stroke="var(--surface2)" stroke-width="2"/>`;
-        pieChartSvg += `<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)">$${(portfolioValue / 1000).toFixed(1)}k</text>`;
-        pieChartSvg += `<text x="${cx}" y="${cy + 12}" text-anchor="middle" font-size="12" fill="var(--muted)">Total</text>`;
-        pieChartSvg += `</svg>`;
-      }
-
-      // Build diversification badge
-      let diversBgColor = diversificationScore >= 70 ? '#dcfce7' : diversificationScore >= 40 ? '#fef3c7' : '#fee2e2';
-      let diversTextColor = diversificationScore >= 70 ? '#22c55e' : diversificationScore >= 40 ? '#f59e0b' : '#ef4444';
-
-      // Build member since badge
-      let memberSinceHtml = '';
-      if (userIsPremium()) {
-        let sinceLabel = '';
-        if (currentUser.is_admin) {
-          sinceLabel = 'Admin &mdash; always active';
-        } else {
-          const startedAt = currentUser.membership_started_at || currentUser.membershipStartedAt;
-          sinceLabel = startedAt
-            ? 'Member since ' + new Date(startedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-            : 'Active member';
-        }
-        memberSinceHtml = `<div style="background:linear-gradient(135deg,rgba(240,192,64,.12),rgba(124,92,252,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
-          <div style="font-size:1.6rem;line-height:1">★</div>
-          <div>
-            <div style="font-size:.85rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em">Premium_Member</div>
-            <div style="font-size:.8rem;color:var(--muted);margin-top:3px">${sinceLabel}</div>
-          </div>
-        </div>`;
-      }
-
-      dashEl.innerHTML = `
-        ${memberSinceHtml}
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
-          <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">Portfolio Summary</h3>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-            <div style="background:var(--surface2);padding:14px;border-radius:8px">
-              <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Total Holdings Value</div>
-              <div style="font-size:1.4rem;font-weight:700;color:var(--green)">$${portfolioValue.toLocaleString()}</div>
-            </div>
-            <div style="background:var(--surface2);padding:14px;border-radius:8px">
-              <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Slots Owned</div>
-              <div style="font-size:1.4rem;font-weight:700;color:var(--teal)">${mySlots.length}</div>
-            </div>
-            <div style="background:var(--surface2);padding:14px;border-radius:8px">
-              <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Total Return</div>
-              <div style="font-size:1.4rem;font-weight:700;color:${totalChange >= 0 ? 'var(--green)' : 'var(--red)'}">${totalChange >= 0 ? '+' : ''}$${Math.abs(totalChange).toLocaleString()}</div>
-            </div>
-            <div style="background:var(--surface2);padding:14px;border-radius:8px">
-              <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Diversification</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-                <div style="background:${diversBgColor};color:${diversTextColor};padding:4px 10px;border-radius:6px;font-weight:600;font-size:.85rem">${Math.round(diversificationScore)}/100</div>
-              </div>
-            </div>
-            <div style="background:var(--surface2);padding:14px;border-radius:8px">
-              <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Avg Rating</div>
-              <div style="font-size:1.4rem;font-weight:700;color:var(--gold)">⭐ ${avgRating}</div>
-            </div>
-            <div style="background:var(--surface2);padding:14px;border-radius:8px">
-              <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Total Slots Available</div>
-              <div style="font-size:1.4rem;font-weight:700;color:var(--blue)">${slots.filter(s => !s.userId).length}</div>
-            </div>
-          </div>
+      const content = document.getElementById('dashboardContent');
+      if (!content) return;
+      content.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">
+          <div class="coll-stat-box"><div class="coll-stat-label">Active_Listings</div><div class="coll-stat-value">${activeSales}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Completed_Sales</div><div class="coll-stat-value">${completedSales}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Total_Earned</div><div class="coll-stat-value">${totalEarned > 0 ? '$'+totalEarned.toFixed(2) : '—'}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Active_Purchases</div><div class="coll-stat-value">${buyingActive}</div></div>
+          ${pendingPayouts > 0 ? `<div class="coll-stat-box" style="border-color:var(--accent)"><div class="coll-stat-label" style="color:var(--accent)">Pending_Payouts</div><div class="coll-stat-value">${pendingPayouts}</div></div>` : ''}
         </div>
-
-        ${topGainer && topLoser ? `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:24px">
-          ${topGainer && topGainer.changePercent >= 0 ? `
-          <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:12px;padding:16px">
-            <div style="font-size:.85rem;color:var(--muted);margin-bottom:6px">📈 Top Gainer</div>
-            <div style="font-size:1.1rem;font-weight:700;color:var(--green)">${topGainer.listing.name}</div>
-            <div style="font-size:.9rem;color:var(--green);margin-top:4px">+${topGainer.changePercent}% (${topGainer.changePercent}% gain)</div>
-          </div>
-          ` : ''}
-          ${topLoser && topLoser.changePercent < 0 ? `
-          <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:16px">
-            <div style="font-size:.85rem;color:var(--muted);margin-bottom:6px">📉 Biggest Loss</div>
-            <div style="font-size:1.1rem;font-weight:700;color:var(--red)">${topLoser.listing.name}</div>
-            <div style="font-size:.9rem;color:var(--red);margin-top:4px">${topLoser.changePercent}% (${Math.abs(topLoser.changePercent)}% loss)</div>
-          </div>
-          ` : ''}
-        </div>
-        ` : ''}
-
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
-          <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">Holdings Overview</h3>
-          <div class="holdings-grid" style="display:grid;grid-template-columns:${holdings.length > 0 ? '1fr 1.5fr' : '1fr'};gap:20px">
-            ${holdings.length > 0 ? `
-            <div style="display:flex;flex-direction:column;align-items:stretch;justify-content:center">
-              <div style="display:flex;justify-content:center">${pieChartSvg}</div>
-              <div style="margin-top:16px;width:100%">
-                <div style="font-size:.85rem;font-weight:600;margin-bottom:8px">Portfolio Mix</div>
-                ${pieSlices.map(s => `
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.8rem">
-                    <div style="width:10px;height:10px;background:${s.color};border-radius:2px;flex-shrink:0"></div>
-                    <div style="flex:1">${s.label}</div>
-                    <div style="font-weight:600">${s.percent}%</div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-            ` : ''}
-            <div>
-              <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tx-table" style="width:100%">
-                <thead>
-                  <tr>
-                    <th>Card</th>
-                    <th style="text-align:center">Slots</th>
-                    <th class="hm" style="text-align:right">Avg Buy-in</th>
-                    <th class="hm" style="text-align:right">Current</th>
-                    <th class="hm" style="text-align:right">$ Change</th>
-                    <th class="hm" style="text-align:right">% Change</th>
-                    <th style="text-align:right">Total Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${holdingsHtml || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No slots owned</td></tr>'}
-                </tbody>
-              </table></div>
-            </div>
-          </div>
-        </div>
-
-        ${Object.keys(gameTypeMap).length > 1 ? `
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
-          <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">Allocation by Game Type</h3>
-          <div style="display:flex;flex-direction:column;gap:12px">
-            ${Object.entries(gameTypeMap).map(([gameType, value]) => {
-              const percent = portfolioValue > 0 ? (value / portfolioValue * 100).toFixed(1) : 0;
-              return `<div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:.9rem">
-                  <strong>${gameType}</strong>
-                  <span style="color:var(--muted)">${percent}% ($${value.toLocaleString()})</span>
-                </div>
-                <div style="background:var(--surface2);height:12px;border-radius:6px;overflow:hidden">
-                  <div style="background:linear-gradient(90deg,var(--accent),var(--accent2));height:100%;width:${percent}%;border-radius:6px"></div>
-                </div>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>
-        ` : ''}
-
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
-          <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">Your Reputation</h3>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-            <div>
-              <div style="font-size:.9rem;color:var(--muted);margin-bottom:8px">Rating Score</div>
-              <div style="font-size:2rem;font-weight:700;color:var(--gold)">⭐ ${avgRating}</div>
-              <div style="font-size:.8rem;color:var(--muted);margin-top:4px">${ratingCount} ratings</div>
-            </div>
-            <div>
-              <div style="font-size:.9rem;color:var(--muted);margin-bottom:8px">Referral Info</div>
-              <div style="background:var(--surface2);padding:12px;border-radius:8px">
-                <div style="font-size:.85rem;color:var(--text);margin-bottom:4px">Your Code: <strong>${currentUser.referral_code || currentUser.referralCode || 'N/A'}</strong></div>
-                <button onclick="copyReferralCode('${currentUser.referral_code || currentUser.referralCode || ''}')" style="background:var(--accent);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:.8rem;cursor:pointer;width:100%;margin-top:6px">Copy Code</button>
-                <div style="font-size:.75rem;color:var(--muted);margin-top:6px">Referred ${currentUser.referral_count || currentUser.referralCount || 0} users</div>
-              </div>
-            </div>
-          </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
+          <button onclick="showPage('browse');setMobileNav('browse');setTimeout(toggleCollectionPanel,100)" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">View_My_Collection</button>
         </div>
       `;
+    }
+
+    function renderMyListings() {
+      const content = document.getElementById('myListingsContent');
+      if (!content || !currentUser) return;
+      const mine = listings.filter(l => l.seller_id === currentUser.id || l.sellerId === currentUser.id);
+      if (mine.length === 0) {
+        content.innerHTML = '<div class="coll-empty">You have no active listings.<br>Click "+ List A Card" to get started.</div>';
+        return;
+      }
+      content.innerHTML = `<div class="coll-table-wrap"><table class="coll-table">
+        <thead><tr><th>Card</th><th>Grade</th><th>Price</th><th>Status</th><th></th></tr></thead>
+        <tbody>${mine.map(l => {
+          const price = l.list_price || l.value || 0;
+          return `<tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                ${l.photos && l.photos[0] ? `<img src="${l.photos[0]}" style="height:40px;width:auto;border:1px solid var(--border)">` : ''}
+                <span style="color:var(--text)">${l.name}</span>
+              </div>
+            </td>
+            <td><span class="${l.grade && l.grade !== 'Raw' ? 'grade-badge' : 'raw-badge'}">${l.grade || 'Raw'}</span></td>
+            <td style="color:var(--accent)">$${Number(price).toLocaleString()}</td>
+            <td><span class="badge ${l.status === 'sold' ? 'badge-full' : 'badge-open'}">${l.status || 'Active'}</span></td>
+            <td>
+              ${l.status !== 'sold' ? `<button onclick="deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+    }
+
+    function renderOrders() {
+      const content = document.getElementById('ordersContent');
+      if (!content || !currentUser) return;
+
+      const mine = orders.filter(o =>
+        activeOrdersTab === 'buying' ? o.buyer_id === currentUser.id : o.seller_id === currentUser.id
+      );
+
+      if (mine.length === 0) {
+        content.innerHTML = `<div class="coll-empty">${activeOrdersTab === 'buying' ? 'No purchases yet.' : 'No sales yet.'}</div>`;
+        return;
+      }
+
+      const statusLabel = { pending_payment:'Pending Payment', paid:'Paid — Awaiting Shipment', shipped:'Shipped — Confirm Delivery', delivered:'Delivered', completed:'Completed', cancelled:'Cancelled', disputed:'Disputed' };
+      const statusColor = { pending_payment:'var(--muted)', paid:'var(--yellow)', shipped:'var(--teal)', delivered:'var(--green)', completed:'var(--green)', cancelled:'var(--red)', disputed:'var(--red)' };
+
+      content.innerHTML = mine.map(order => {
+        const listing = listings.find(l => String(l.id) === String(order.listing_id));
+        const cardName = listing ? listing.name : (order.card_name || 'Unknown Card');
+        const photoSrc = listing && listing.photos && listing.photos[0] ? listing.photos[0] : '';
+        const status = order.status || 'pending_payment';
+        const isBuying = activeOrdersTab === 'buying';
+
+        let actionHtml = '';
+        if (isBuying && status === 'shipped') {
+          actionHtml = `<button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm_Delivery</button>`;
+        } else if (!isBuying && status === 'paid') {
+          actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add_Tracking_#</button>`;
+        }
+
+        return `<div style="background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:12px">
+          <div style="display:flex;gap:12px;align-items:start;flex-wrap:wrap">
+            ${photoSrc ? `<img src="${photoSrc}" style="height:60px;width:auto;border:1px solid var(--border);flex-shrink:0">` : ''}
+            <div style="flex:1;min-width:200px">
+              <div style="color:var(--text);font-size:.9rem;margin-bottom:4px">${cardName}</div>
+              <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">Order #${order.id.slice(0,8).toUpperCase()} · ${new Date(order.created_at).toLocaleDateString()}</div>
+              <div style="font-size:.78rem;margin-bottom:6px">
+                <span style="color:${statusColor[status] || 'var(--muted)'}">● ${statusLabel[status] || status}</span>
+              </div>
+              ${order.tracking_number ? `<div style="font-size:.72rem;color:var(--muted)">Tracking: ${order.tracking_carrier || ''} ${order.tracking_number}</div>` : ''}
+              <div style="font-size:.78rem;color:var(--muted);margin-top:4px">
+                ${isBuying ? `Paid: $${(order.amount||0).toFixed(2)}` : `Your payout: $${(order.seller_payout||0).toFixed(2)} ${order.payout_sent_at ? '✓ Sent' : '(pending)'}`}
+              </div>
+            </div>
+            ${actionHtml ? `<div>${actionHtml}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
     }
 
     function renderWatchlist() {
-      const watchlistEl = document.getElementById('watchlistContent');
-      if (!currentUser.watchlist || currentUser.watchlist.length === 0) {
-        watchlistEl.innerHTML = '<div class="empty-state">Your watchlist is empty. Browse listings to add cards!</div>';
+      const content = document.getElementById('watchlistContent');
+      if (!content) return;
+      if (!currentUser || !currentUser.watchlist || currentUser.watchlist.length === 0) {
+        content.innerHTML = '<div class="coll-empty">No items in your watchlist yet.<br>Click the 🔔 on any listing to watch it.</div>';
         return;
       }
-      const watchedListings = listings.filter(l => currentUser.watchlist.includes(l.id));
-      watchlistEl.innerHTML = `<div class="card-grid">${watchedListings.map(listing => {
-        const slotsStatus = getSlotStats(listing.id);
-        return `<div class="listing-card" onclick="viewDetail('${listing.id}')">
-          <div class="thumb-wrap">
-            <img src="${(listing.photos && listing.photos[0]) ? listing.photos[0] : ''}" alt="${listing.name}" class="card-thumb" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22220%22%3E%3Crect width=%22300%22 height=%22220%22 fill=%22%231a1a24%22/%3E%3C/svg%3E'" />
-            <div class="photo-count">${listing.photos ? listing.photos.length : 0} photos</div>
-          </div>
-          <div class="card-info">
-            <div class="card-name">${listing.name}</div>
-            <div class="card-meta">${listing.grade} • ${listing.gameType}</div>
-            <div class="card-stats">
-              <span class="price-tag">$${listing.value ? Number(listing.value).toLocaleString() : '—'}</span>
-              ${listing.status === 'sold' ? '<span class="badge badge-full">Sold Out</span>' : (slotsStatus.taken > 0 && slotsStatus.available === 0 ? '<span class="badge badge-full">Sold Out</span>' : '<span class="badge badge-open">Available</span>')}
-            </div>
-          </div>
-        </div>`;
-      }).join('')}</div>`;
-    }
-
-    function copyReferralCode(code) {
-      navigator.clipboard.writeText(code);
-      showToast('Referral code copied!');
-    }
-
-    function voteToSellSlot(event, listingId) {
-      event.stopPropagation();
-      const listing = listings.find(l => l.id === listingId);
-      if (!listing.sellVotes) listing.sellVotes = [];
-      if (!listing.sellVotes.includes(currentUser.id)) {
-        listing.sellVotes.push(currentUser.id);
-        showToast('Vote to sell recorded');
-      }
-      renderMySlots();
-    }
-
-    function toggleSlotSelection(listingId, slotIdx) {
-      const key = `${listingId}:${slotIdx}`;
-      if (mySlotSelection.has(key)) {
-        mySlotSelection.delete(key);
-      } else {
-        mySlotSelection.add(key);
-      }
-      renderMySlots();
-      updateBatchActionBar();
-    }
-
-    function toggleCardExpand(listingId) {
-      expandedCards[listingId] = !expandedCards[listingId];
-      renderMySlots();
-    }
-
-    function expandAllCards() {
-      const mySlots = slots.filter(s => s.userId === currentUser.id);
-      const uniqueListings = new Set(mySlots.map(s => s.listingId));
-      uniqueListings.forEach(listingId => expandedCards[listingId] = true);
-      renderMySlots();
-    }
-
-    function collapseAllCards() {
-      expandedCards = {};
-      renderMySlots();
-    }
-
-    function toggleAllListingSlots(listingId, checked) {
-      const mySlots = slots.filter(s => s.userId === currentUser.id && s.listingId === listingId);
-      if (checked) {
-        mySlots.forEach(slot => mySlotSelection.add(`${slot.listingId}:${slot.idx}`));
-      } else {
-        mySlots.forEach(slot => mySlotSelection.delete(`${slot.listingId}:${slot.idx}`));
-      }
-      renderMySlots();
-      updateBatchActionBar();
-    }
-
-    function selectAllSlots() {
-      const mySlots = slots.filter(s => s.userId === currentUser.id);
-      mySlots.forEach(slot => {
-        mySlotSelection.add(`${slot.listingId}:${slot.idx}`);
-      });
-      renderMySlots();
-      updateBatchActionBar();
-    }
-
-    function clearAllSlots() {
-      mySlotSelection.clear();
-      renderMySlots();
-      updateBatchActionBar();
-    }
-
-    function updateBatchActionBar() {
-      const bar = document.getElementById('batchActionBar');
-      if (!bar) return;
-      if (mySlotSelection.size === 0) {
-        bar.style.display = 'none';
+      const watched = listings.filter(l => currentUser.watchlist.includes(String(l.id)));
+      if (watched.length === 0) {
+        content.innerHTML = '<div class="coll-empty">Your watched listings are no longer available.</div>';
         return;
       }
-      const totalValue = Array.from(mySlotSelection).reduce((sum, key) => {
-        const [listingId, slotIdx] = key.split(':');
-        const listing = listings.find(l => l.id === parseInt(listingId));
-        return sum + Math.ceil(listing.value / listing.totalSlots);
-      }, 0);
-      document.getElementById('batchCount').textContent = mySlotSelection.size;
-      document.getElementById('batchTotal').textContent = '$' + totalValue.toLocaleString();
-      bar.style.display = 'block';
-    }
-
-    function renderMySlots() {
-      const mySlots = slots.filter(s => s.userId === currentUser.id);
-      const grid = document.getElementById('mySlotsGrid');
-
-      if (mySlots.length === 0) {
-        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">You don\'t own any slots yet. Browse listings to get started!</div>';
-        return;
-      }
-
-      // Group slots by listing
-      const slotsByListing = {};
-      mySlots.forEach(slot => {
-        if (!slotsByListing[slot.listingId]) {
-          slotsByListing[slot.listingId] = [];
-        }
-        slotsByListing[slot.listingId].push(slot);
-      });
-
-      // Build card-level view with expandable submenus
-      let html = `
-        <div style="grid-column:1/-1;display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-          <button class="mini-btn" onclick="selectAllSlots()">Select All</button>
-          <button class="mini-btn" onclick="clearAllSlots()">Clear</button>
-          <div style="flex:1"></div>
-          <button class="mini-btn" onclick="expandAllCards()" style="background:var(--accent)">Expand All</button>
-          <button class="mini-btn" onclick="collapseAllCards()">Collapse All</button>
-        </div>
-      `;
-
-      html += Object.keys(slotsByListing).map(listingId => {
-        const listing = listings.find(l => String(l.id) === String(listingId));
-        if (!listing) return '';
-        const cardsSlots = slotsByListing[listingId].sort((a, b) => a.idx - b.idx);
-        const isExpanded = expandedCards[listingId];
-        const slotPrice = Math.ceil(listing.value / listing.totalSlots);
-        const totalValue = cardsSlots.length * slotPrice;
-        const chevron = isExpanded ? '▼' : '▶';
-        const safeId = String(listingId).replace(/[^a-zA-Z0-9_-]/g, '_');
-
-        let cardHtml = `<div style="grid-column:1/-1;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;overflow:hidden;background:var(--surface)">`;
-
-        cardHtml += `<div style="padding:12px 16px;display:flex;align-items:center;gap:12px;border-bottom:${isExpanded ? '1px solid var(--border)' : 'none'};transition:background .2s">
-          <div style="width:20px;text-align:center;color:var(--accent);font-weight:bold;cursor:pointer" onclick="toggleCardExpand('${listingId}')">${chevron}</div>
-          <div style="flex:1;min-width:0;cursor:pointer" onclick="toggleCardExpand('${listingId}')">
-            <div style="font-weight:600;font-size:.95rem;margin-bottom:2px">${listing.name}</div>
-            <div style="font-size:.8rem;color:var(--muted)">${listing.grade} • ${listing.gameType || listing.type || ''}</div>
-          </div>
-          <div style="display:flex;gap:16px;align-items:center;text-align:right">
-            <div>
-              <div style="font-size:.85rem;color:var(--muted);margin-bottom:2px">Slots Owned</div>
-              <div style="font-weight:600">${cardsSlots.length}</div>
-            </div>
-            <div>
-              <div style="font-size:.85rem;color:var(--muted);margin-bottom:2px">Total Value</div>
-              <div style="font-weight:600">$${totalValue.toLocaleString()}</div>
-            </div>
-            <button class="mini-btn" onclick="event.stopPropagation();viewDetail('${listingId}')" style="background:var(--accent);border:none;color:white;padding:6px 12px">View Card →</button>
-          </div>
-        </div>`;
-
-        // Expandable submenu with individual slots
-        if (isExpanded) {
-          cardHtml += `<div style="padding:12px 16px;background:var(--surface2)">
-            <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:.85rem;min-width:500px">
-              <thead>
-                <tr style="border-bottom:1px solid var(--border);text-align:left">
-                  <th style="padding:8px 0;color:var(--muted);font-weight:600;width:60px"><input type="checkbox" onchange="toggleAllListingSlots('${listingId}', this.checked)"></th>
-                  <th style="padding:8px 0;color:var(--muted);font-weight:600">Slot #</th>
-                  <th style="padding:8px 0;color:var(--muted);font-weight:600">Ask Price</th>
-                  <th style="padding:8px 0;color:var(--muted);font-weight:600">Status</th>
-                  <th style="padding:8px 0;color:var(--muted);font-weight:600">Trade Open</th>
-                  <th style="padding:8px 0;color:var(--muted);font-weight:600">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${cardsSlots.map((slot, idx) => {
-                  const isSelected = mySlotSelection.has(`${slot.listingId}:${slot.idx}`);
-                  const status = slot.askPrice ? 'Listed' : 'Unlisted';
-                  return `<tr style="border-bottom:1px solid var(--border);background:${isSelected ? 'rgba(124,92,252,.1)' : 'transparent'}">
-                    <td style="padding:8px 0"><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleSlotSelection('${slot.listingId}', ${slot.idx})"></td>
-                    <td style="padding:8px 0">#${slot.idx}</td>
-                    <td style="padding:8px 0">${slot.askPrice ? '$' + slot.askPrice : '—'}</td>
-                    <td style="padding:8px 0"><span style="color:${slot.askPrice ? 'var(--orange)' : 'var(--muted)'};">${status}</span></td>
-                    <td style="padding:8px 0"><span style="color:var(--muted)">–</span></td>
-                    <td style="padding:8px 0;display:flex;gap:6px">
-                      ${!slot.askPrice ? `<button class="mini-btn" onclick="openListForSaleModal('${slot.listingId}', ${slot.idx})" style="font-size:.75rem">List</button>` : `<button class="mini-btn" onclick="delistSlot('${slot.listingId}', ${slot.idx})" style="font-size:.75rem">Delist</button>`}
-                      <button class="mini-btn" onclick="openCashoutModal('${slot.listingId}', ${slot.idx}, ${Math.floor(slotPrice * 0.9)})" style="font-size:.75rem">Cash</button>
-                      <button class="mini-btn" onclick="voteToSellSlot(event, '${slot.listingId}')" style="font-size:.75rem">Vote</button>
-                    </td>
-                  </tr>`;
-                }).join('')}
-              </tbody>
-            </table></div>
-          </div>`;
-        }
-
-        cardHtml += `</div>`;
-        return cardHtml;
-      }).join('');
-
-      grid.innerHTML = html;
-    }
-
-    // Fetches trade offers from Supabase without relying on FK joins,
-    // then resolves profile names via a separate bulk profiles query.
-    function fetchAndRenderTradeOffers() {
-      if (!currentUser) return;
-      sb.from('trade_offers')
-        .select('*')
-        .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
-        .order('created_at', { ascending: false })
-        .then(({ data: dbOffers, error }) => {
-          if (error) {
-            console.error('Trade offers fetch error:', error);
-            showToast('Error loading trade offers: ' + error.message);
-            return;
-          }
-          if (!dbOffers || dbOffers.length === 0) {
-            tradeOffers = [];
-            renderTradeOffers();
-            return;
-          }
-          // Bulk-fetch profiles for all user IDs in these offers
-          const userIds = [...new Set([
-            ...dbOffers.map(o => o.from_user_id),
-            ...dbOffers.map(o => o.to_user_id)
-          ]).values()];
-          sb.from('profiles').select('id, name, username').in('id', userIds)
-            .then(({ data: profileRows }) => {
-              const pm = {};
-              (profileRows || []).forEach(p => { pm[p.id] = p; });
-              tradeOffers = dbOffers.map(o => ({
-                id: o.id,
-                fromUserId: o.from_user_id,
-                fromUserName: pm[o.from_user_id]?.name || pm[o.from_user_id]?.username || 'Someone',
-                toUserId: o.to_user_id,
-                toUserName: pm[o.to_user_id]?.name || pm[o.to_user_id]?.username || 'User',
-                fromSlots: o.from_slots || [],
-                toSlots: o.to_slots || [],
-                cashTopup: o.cash_topup || 0,
-                fee: o.fee || 0,
-                status: o.status,
-                ts: new Date(o.created_at)
-              }));
-              renderTradeOffers();
-              updateTradeNotification();
-            });
-        });
-    }
-
-    function renderTradeOffers() {
-      const incoming = tradeOffers.filter(o => o.toUserId === currentUser.id && o.status === 'pending');
-      const outgoing = tradeOffers.filter(o => o.fromUserId === currentUser.id && (o.status === 'pending' || o.status === 'accepted'));
-
-      const incomingEl = document.getElementById('incomingOffers');
-      if (incoming.length === 0) {
-        incomingEl.innerHTML = '<div class="empty-state">No incoming offers</div>';
-      } else {
-        incomingEl.innerHTML = incoming.map(o => {
-          // Use fromUserName already joined from profiles during fetch — avoids users[] lookup crash
-          const fromName = o.fromUserName || 'Someone';
-          let offersHtml = '';
-          let wantsHtml = '';
-
-          if (o.fromSlots && o.toSlots) {
-            const groupedFrom = {};
-            o.fromSlots.forEach(s => {
-              const lid = String(s.listingId);
-              if (!groupedFrom[lid]) groupedFrom[lid] = [];
-              groupedFrom[lid].push(s.idx);
-            });
-            offersHtml = Object.keys(groupedFrom).map(lid => {
-              const l = listings.find(x => String(x.id) === lid);
-              return `Slot${groupedFrom[lid].length > 1 ? 's' : ''} ${groupedFrom[lid].join(', ')} of ${l ? l.name : 'Unknown Card'}`;
-            }).join(', ');
-
-            const groupedTo = {};
-            o.toSlots.forEach(s => {
-              const lid = String(s.listingId);
-              if (!groupedTo[lid]) groupedTo[lid] = [];
-              groupedTo[lid].push(s.idx);
-            });
-            wantsHtml = Object.keys(groupedTo).map(lid => {
-              const l = listings.find(x => String(x.id) === lid);
-              return `Slot${groupedTo[lid].length > 1 ? 's' : ''} ${groupedTo[lid].join(', ')} of ${l ? l.name : 'Unknown Card'}`;
-            }).join(', ');
-          } else {
-            const fromListing = listings.find(l => String(l.id) === String(o.fromListingId));
-            const toListing = listings.find(l => String(l.id) === String(o.toListingId));
-            offersHtml = `Slot #${o.fromSlotIdx} of ${fromListing ? fromListing.name : 'Unknown'}`;
-            wantsHtml = `Slot #${o.toSlotIdx} of ${toListing ? toListing.name : 'Unknown'}`;
-          }
-
-          return `<div class="offer-card">
-            <div class="offer-header">
-              <span class="offer-from">
-                <span>${fromName}</span>
-              </span>
-              <span class="offer-badge">Pending</span>
-            </div>
-            <div class="offer-details">
-              <div>Offers: <strong>${offersHtml}</strong></div>
-              <div style="margin-top:4px">Wants: <strong>${wantsHtml}</strong></div>
-              ${o.cashTopup !== 0 ? `<div style="margin-top:4px;color:${o.cashTopup > 0 ? 'var(--green)' : 'var(--orange)'}">Cash adjustment: ${o.cashTopup > 0 ? '+' : ''}$${o.cashTopup}</div>` : ''}
-            </div>
-            <div class="offer-actions">
-              <button class="mini-btn" onclick="acceptTrade('${o.id}')">Accept</button>
-              <button class="mini-btn danger" onclick="declineTrade('${o.id}')">Decline</button>
+      content.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+        ${watched.map(l => {
+          const price = l.list_price || l.value || 0;
+          const photo = l.photos && l.photos[0];
+          return `<div class="listing-card" style="cursor:pointer" onclick="viewDetail('${l.id}')">
+            ${photo ? `<img src="${photo}" style="width:100%;height:140px;object-fit:contain;border-bottom:1px solid var(--border)">` : ''}
+            <div style="padding:10px">
+              <div style="color:var(--text);font-size:.85rem;margin-bottom:4px">${l.name}</div>
+              <div style="color:var(--accent);font-size:.9rem">$${Number(price).toLocaleString()}</div>
             </div>
           </div>`;
-        }).join('');
-      }
-
-      const outgoingEl = document.getElementById('outgoingOffers');
-      if (outgoing.length === 0) {
-        outgoingEl.innerHTML = '<div class="empty-state">No outgoing offers</div>';
-      } else {
-        outgoingEl.innerHTML = outgoing.map(o => {
-          const toName = o.toUserName || 'User';
-          let offersHtml = '';
-          let wantsHtml = '';
-
-          if (o.fromSlots && o.toSlots) {
-            const groupedFrom = {};
-            o.fromSlots.forEach(s => {
-              const lid = String(s.listingId);
-              if (!groupedFrom[lid]) groupedFrom[lid] = [];
-              groupedFrom[lid].push(s.idx);
-            });
-            offersHtml = Object.keys(groupedFrom).map(lid => {
-              const l = listings.find(x => String(x.id) === lid);
-              return `Slot${groupedFrom[lid].length > 1 ? 's' : ''} ${groupedFrom[lid].join(', ')} of ${l ? l.name : 'Unknown Card'}`;
-            }).join(', ');
-
-            const groupedTo = {};
-            o.toSlots.forEach(s => {
-              const lid = String(s.listingId);
-              if (!groupedTo[lid]) groupedTo[lid] = [];
-              groupedTo[lid].push(s.idx);
-            });
-            wantsHtml = Object.keys(groupedTo).map(lid => {
-              const l = listings.find(x => String(x.id) === lid);
-              return `Slot${groupedTo[lid].length > 1 ? 's' : ''} ${groupedTo[lid].join(', ')} of ${l ? l.name : 'Unknown Card'}`;
-            }).join(', ');
-          } else {
-            // Old single-slot format
-            const fromListing = listings.find(l => String(l.id) === String(o.fromListingId));
-            const toListing = listings.find(l => String(l.id) === String(o.toListingId));
-            offersHtml = `Slot #${o.fromSlotIdx} of ${fromListing ? fromListing.name : 'Unknown'}`;
-            wantsHtml = `Slot #${o.toSlotIdx} of ${toListing ? toListing.name : 'Unknown'}`;
-          }
-
-          return `<div class="offer-card">
-            <div class="offer-header">
-              <span class="offer-from">
-                <span>To: ${toName}</span>
-              </span>
-              <span class="offer-badge" style="background:${o.status === 'accepted' ? 'rgba(34,197,94,.15);color:var(--green)' : 'rgba(245,158,11,.15);color:var(--yellow)'}">
-                ${o.status === 'accepted' ? 'Accepted' : 'Pending'}
-              </span>
-            </div>
-            <div class="offer-details">
-              <div>You offer: <strong>${offersHtml}</strong></div>
-              <div style="margin-top:4px">You want: <strong>${wantsHtml}</strong></div>
-              ${o.cashTopup !== 0 ? `<div style="margin-top:4px;color:${o.cashTopup > 0 ? 'var(--red)' : 'var(--green)'}">You ${o.cashTopup > 0 ? 'pay' : 'receive'}: ${Math.abs(o.cashTopup)}</div>` : ''}
-            </div>
-            <div class="offer-actions">
-              ${o.status === 'pending' ? `<button class="mini-btn danger" onclick="cancelTrade('${o.id}')">Cancel</button>` : ''}
-            </div>
-          </div>`;
-        }).join('');
-      }
+        }).join('')}
+      </div>`;
     }
 
     function renderHistory() {
-      const userTx = transactions.filter(t => t.userId === currentUser.id);
       const tbody = document.getElementById('historyBody');
-
-      if (userTx.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No transactions yet</td></tr>';
+      if (!tbody || !currentUser) return;
+      const myOrders = orders.filter(o => o.buyer_id === currentUser.id || o.seller_id === currentUser.id);
+      if (myOrders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted)">No transactions yet</td></tr>';
         return;
       }
-
-      tbody.innerHTML = userTx.map(t => {
-        const listing = listings.find(l => l.id === t.listingId);
-        const typeMap = { buy: 'Purchase', resale: 'Purchase', trade: 'Trade', cashout: 'Cashout' };
+      tbody.innerHTML = myOrders.map(o => {
+        const isBuy = o.buyer_id === currentUser.id;
+        const listing = listings.find(l => String(l.id) === String(o.listing_id));
         return `<tr>
-          <td><span class="tx-type-badge tx-type-${t.type}">${typeMap[t.type]}</span></td>
-          <td>${listing.name} - Slot #${t.slotIdx + 1}</td>
-          <td>${t.ts.toLocaleDateString()}</td>
-          <td>$${t.amount}</td>
+          <td><span class="tx-type-badge" style="background:${isBuy ? 'rgba(0,204,255,.15)' : 'rgba(57,255,20,.1)'};color:${isBuy ? 'var(--teal)' : 'var(--green)'}">${isBuy ? 'Buy' : 'Sale'}</span></td>
+          <td style="color:var(--text)">${listing ? listing.name : 'Unknown Card'}</td>
+          <td style="color:var(--muted);font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
+          <td style="color:var(--accent)">$${isBuy ? (o.amount||0).toFixed(2) : (o.seller_payout||0).toFixed(2)}</td>
         </tr>`;
       }).join('');
     }
 
-    async function refreshMySlots() {
-      if (!currentUser) return;
-      const { data: dbSlots, error } = await sb
-        .from('slots')
-        .select('*, listings(id, name, grade, game_type, value, total_slots, status, photos)')
-        .eq('user_id', currentUser.id);
+    // ─── Marketplace actions ───────────────────────────────────────────
+    async function deactivateListing(listingId) {
+      if (!confirm('Remove this listing from the marketplace?')) return;
+      const { error } = await sb.from('listings').update({ status: 'inactive' }).eq('id', listingId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      const l = listings.find(l => String(l.id) === String(listingId));
+      if (l) l.status = 'inactive';
+      renderMyListings();
+      renderBrowse();
+      showToast('Listing removed');
+    }
 
-      if (error) { console.error('refreshMySlots error:', error); return; }
-      console.log('refreshMySlots: found', dbSlots?.length, 'slots for user', currentUser.id);
+    async function confirmDelivery(orderId) {
+      if (!confirm('Confirm you received the card? This releases payment to the seller.')) return;
+      const now = new Date().toISOString();
+      const { error } = await sb.from('orders').update({
+        status: 'completed',
+        delivered_at: now,
+        completed_at: now
+      }).eq('id', orderId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      const o = orders.find(o => o.id === orderId);
+      if (o) { o.status = 'completed'; o.delivered_at = now; o.completed_at = now; }
+      showToast('Delivery confirmed! Payment will be released to the seller.');
+      renderOrders();
+      updateOrderNotification();
+      // Prompt for seller rating
+      if (o) setTimeout(() => openRateSellerModal(orderId, o.seller_id, o.seller_name || 'the seller'), 800);
+    }
 
-      if (dbSlots) {
-        // Replace all slots owned by currentUser with fresh DB data
-        slots = slots.filter(s => String(s.userId) !== String(currentUser.id));
-        dbSlots.forEach(s => {
-          slots.push({
-            id: s.id,
-            listingId: s.listing_id,
-            idx: s.idx,
-            userId: s.user_id,
-            name: s.profiles?.name || null,
-            username: s.profiles?.username || null,
-            askPrice: s.ask_price > 0 ? s.ask_price : null,
-            tradeOpen: s.trade_open || false,
-          });
-          // Also ensure the listing is in our local array
-          if (s.listings && !listings.find(l => String(l.id) === String(s.listing_id))) {
-            listings.push({
-              id: s.listings.id,
-              name: s.listings.name,
-              grade: s.listings.grade,
-              gameType: s.listings.game_type,
-              type: s.listings.game_type,
-              value: s.listings.value,
-              totalSlots: s.listings.total_slots,
-              status: s.listings.status,
-              photos: s.listings.photos || [],
-              priceHistory: [],
-              sellVotes: []
-            });
+    // ─── Seller Ratings ────────────────────────────────────────────────
+    function openRateSellerModal(orderId, sellerId, sellerName) {
+      const o = orders.find(x => x.id === orderId);
+      if (o && o.rating_submitted) return; // already rated
+      document.getElementById('rateOrderId').value = orderId;
+      document.getElementById('rateSellerId').value = sellerId || '';
+      document.getElementById('rateSellerName').textContent = `Rate your experience with ${sellerName}`;
+      document.getElementById('ratingComment').value = '';
+      selectedRating = 0;
+      document.querySelectorAll('.star-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('ratingLabel').textContent = 'Select a rating';
+      openModal('rateSellerModal');
+    }
+
+    function selectRating(val) {
+      selectedRating = val;
+      const labels = ['','Terrible','Poor','OK','Good','Excellent'];
+      document.getElementById('ratingLabel').textContent = labels[val] || '';
+      document.querySelectorAll('.star-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.v) <= val);
+      });
+    }
+
+    async function submitRating() {
+      if (!selectedRating) { showToast('Select a rating first'); return; }
+      const orderId = document.getElementById('rateOrderId').value;
+      const sellerId = document.getElementById('rateSellerId').value;
+      const comment = document.getElementById('ratingComment').value.trim();
+
+      const { error } = await sb.from('seller_ratings').insert({
+        order_id: orderId,
+        seller_id: sellerId || null,
+        buyer_id: currentUser.id,
+        rating: selectedRating,
+        comment: comment || null
+      });
+      if (error) { showToast('Error submitting rating: ' + error.message); return; }
+
+      // Mark order as rated
+      await sb.from('orders').update({ rating_submitted: true }).eq('id', orderId);
+      const o = orders.find(x => x.id === orderId);
+      if (o) o.rating_submitted = true;
+
+      closeModal('rateSellerModal');
+      showToast('Rating submitted — thanks!');
+    }
+
+    function openAddTrackingModal(orderId) {
+      document.getElementById('trackingOrderId').value = orderId;
+      document.getElementById('trackingNumber').value = '';
+      document.getElementById('trackingCarrier').value = '';
+      openModal('addTrackingModal');
+    }
+
+    async function saveTracking() {
+      const orderId = document.getElementById('trackingOrderId').value;
+      const trackingNumber = document.getElementById('trackingNumber').value.trim();
+      const carrier = document.getElementById('trackingCarrier').value;
+      if (!trackingNumber) { showToast('Enter a tracking number'); return; }
+      const { error } = await sb.from('orders').update({
+        tracking_number: trackingNumber,
+        tracking_carrier: carrier,
+        status: 'shipped',
+        shipped_at: new Date().toISOString()
+      }).eq('id', orderId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      const o = orders.find(o => o.id === orderId);
+      if (o) { o.tracking_number = trackingNumber; o.tracking_carrier = carrier; o.status = 'shipped'; }
+      closeModal('addTrackingModal');
+      showToast('Tracking added! Buyer has been notified.');
+      renderOrders();
+      updateOrderNotification();
+    }
+
+    // ─── Collection Panel Toggle ───────────────────────────────────────
+    function toggleCollectionPanel() {
+      const panel = document.getElementById('collectionPanel');
+      const btn = document.getElementById('collPanelBtn');
+      if (!panel) return;
+      const isOpen = panel.classList.contains('open');
+      panel.classList.toggle('open', !isOpen);
+      if (btn) btn.textContent = isOpen ? '+ Add_To_Collection' : '− Add_To_Collection';
+    }
+
+    // ─── Market Price Lookup ───────────────────────────────────────────
+    async function lookupMarketPrice() {
+      const name = (document.getElementById('lcName') || {}).value?.trim();
+      const condition = (document.getElementById('lcCondition') || {}).value || 'NM';
+      const resultEl = document.getElementById('lcMarketPriceResult');
+      if (!name || !resultEl) return;
+
+      resultEl.style.display = 'block';
+      resultEl.style.color = 'var(--muted)';
+      resultEl.textContent = '// Looking up market price...';
+
+      try {
+        // Use our existing price scraper endpoint
+        const res = await fetch('/api/lookup-price', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, condition })
+        });
+        if (res.ok) {
+          const { price } = await res.json();
+          if (price) {
+            document.getElementById('lcMarketPriceResult').innerHTML =
+              `Market price: <strong style="color:var(--accent)">$${price.toFixed(2)}</strong> <span style="color:var(--muted)">(PriceCharting)</span>`;
+            // Store for comparison
+            document.getElementById('lcMarketPriceResult').dataset.marketPrice = price;
+          } else {
+            resultEl.textContent = '// No market price found — you can still list manually';
           }
+        } else {
+          resultEl.textContent = '// Price lookup unavailable';
+        }
+      } catch(e) {
+        resultEl.textContent = '// Price lookup unavailable';
+      }
+    }
+
+    // ─── Photo Handling ────────────────────────────────────────────────
+    function handleLcPhotoSelect(event) {
+      const files = Array.from(event.target.files);
+      addLcPhotos(files);
+    }
+
+    function handleLcPhotoDrop(event) {
+      event.preventDefault();
+      document.getElementById('lcPhotoArea').style.borderColor = 'var(--border)';
+      const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      addLcPhotos(files);
+    }
+
+    function addLcPhotos(files) {
+      const errEl = document.getElementById('lcPhotoError');
+      errEl.style.display = 'none';
+      const remaining = 8 - lcPhotos.length;
+      if (remaining <= 0) { errEl.textContent = 'Maximum 8 photos allowed'; errEl.style.display = 'block'; return; }
+      const toAdd = files.slice(0, remaining);
+      toAdd.forEach(file => {
+        if (file.size > 5 * 1024 * 1024) {
+          errEl.textContent = `${file.name} is over 5MB`; errEl.style.display = 'block'; return;
+        }
+        lcPhotos.push(file);
+      });
+      renderLcPhotoPreview();
+    }
+
+    function renderLcPhotoPreview() {
+      const preview = document.getElementById('lcPhotoPreview');
+      if (!preview) return;
+      preview.innerHTML = lcPhotos.map((file, i) => {
+        const url = URL.createObjectURL(file);
+        const label = i === 0 ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:.55rem;text-align:center;color:#fff;padding:2px">FRONT</div>'
+          : i === 1 ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:.55rem;text-align:center;color:#fff;padding:2px">BACK</div>' : '';
+        return `<div class="lc-photo-thumb">
+          <img src="${url}" alt="Photo ${i+1}">
+          ${label}
+          <button class="rm-btn" onclick="removeLcPhoto(${i})">×</button>
+        </div>`;
+      }).join('');
+      document.getElementById('lcPhotoArea').style.display = lcPhotos.length >= 8 ? 'none' : '';
+    }
+
+    function removeLcPhoto(idx) {
+      lcPhotos.splice(idx, 1);
+      renderLcPhotoPreview();
+      document.getElementById('lcPhotoArea').style.display = '';
+    }
+
+    function toggleLcGrade() {
+      const cond = document.getElementById('lcCondition').value;
+      const show = cond === 'Graded';
+      document.getElementById('lcGradeWrap').style.display = show ? '' : 'none';
+      document.getElementById('lcGradeNumWrap').style.display = show ? '' : 'none';
+    }
+
+    // ─── List Card Modal ───────────────────────────────────────────────
+    function openListCardModal(prefill) {
+      if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
+      lcPhotos = [];
+      document.getElementById('lcName').value = prefill?.cardName || '';
+      document.getElementById('lcGame').value = prefill?.gameType || 'Pokémon';
+      document.getElementById('lcCondition').value = prefill?.condition || 'NM';
+      document.getElementById('lcPrice').value = '';
+      document.getElementById('lcShipping').value = '5.00';
+      document.getElementById('lcDescription').value = '';
+      document.getElementById('lcMarketPriceResult').style.display = 'none';
+      document.getElementById('lcPhotoError').style.display = 'none';
+      renderLcPhotoPreview();
+      toggleLcGrade();
+      openModal('listCardModal');
+    }
+
+    async function saveMarketplaceListing() {
+      if (!currentUser) return;
+      const name = document.getElementById('lcName').value.trim();
+      const game = document.getElementById('lcGame').value;
+      const condition = document.getElementById('lcCondition').value;
+      const gradingCo = condition === 'Graded' ? document.getElementById('lcGradingCo').value : null;
+      const gradeNum = condition === 'Graded' ? parseFloat(document.getElementById('lcGradeNum').value) : null;
+      const price = parseFloat(document.getElementById('lcPrice').value);
+      const shipping = parseFloat(document.getElementById('lcShipping').value) || 0;
+      const description = document.getElementById('lcDescription').value.trim();
+      const marketPriceEl = document.getElementById('lcMarketPriceResult');
+      const marketPrice = marketPriceEl?.dataset?.marketPrice ? parseFloat(marketPriceEl.dataset.marketPrice) : null;
+
+      // Validation
+      if (!name) { showToast('Enter a card name'); return; }
+      if (!price || price <= 0) { showToast('Enter a valid price'); return; }
+      const errEl = document.getElementById('lcPhotoError');
+      if (lcPhotos.length < 2) {
+        errEl.textContent = 'At least 2 photos required (front + back)';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      const saveBtn = document.querySelector('#listCardModal .lc-save-btn');
+      if (saveBtn) { saveBtn.textContent = 'Uploading...'; saveBtn.disabled = true; }
+
+      // Upload photos to Supabase Storage
+      const photoUrls = [];
+      for (const file of lcPhotos) {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `listings/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { data: upData, error: upErr } = await sb.storage.from('card-photos').upload(path, file, { upsert: false });
+        if (upErr) {
+          // If storage bucket doesn't exist, continue without photos
+          console.warn('Photo upload failed:', upErr.message);
+          break;
+        }
+        const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
+        if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
+      }
+
+      if (saveBtn) { saveBtn.textContent = 'Saving...'; }
+
+      const gradeDisplay = condition === 'Graded' ? `${gradingCo} ${gradeNum}` : condition;
+
+      const { data, error } = await sb.from('listings').insert({
+        name,
+        game_type: game,
+        grade: gradeDisplay,
+        condition,
+        grade_value: gradeNum,
+        value: price,
+        list_price: price,
+        market_price: marketPrice,
+        shipping_price: shipping,
+        status: 'active',
+        seller_id: currentUser.id,
+        total_slots: 1,
+        photos: photoUrls,
+        notes: description || null
+      }).select().single();
+
+      if (saveBtn) { saveBtn.textContent = 'List_Card'; saveBtn.disabled = false; }
+      if (error) { showToast('Error saving listing: ' + error.message); return; }
+
+      if (data) {
+        listings.unshift({
+          id: data.id, name: data.name, grade: data.grade || '',
+          condition: data.condition || 'NM', gradeValue: data.grade_value,
+          type: '', gameType: data.game_type || 'Other',
+          value: data.value, list_price: data.list_price,
+          market_price: data.market_price,
+          status: data.status, totalSlots: 1,
+          earlyAccessOnly: false, certNumber: '',
+          photos: photoUrls, priceHistory: [], sellVotes: [],
+          seller_id: data.seller_id, sellerName: currentUser.username || currentUser.name || 'You',
+          shipping_price: data.shipping_price || 0
         });
       }
-      renderMySlots();
+      lcPhotos = [];
+      closeModal('listCardModal');
+      showToast(name + ' listed for sale!');
+      renderBrowse();
+      renderMyListings();
     }
 
-    function switchAccountTab(tab) {
-      document.querySelectorAll('.account-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.account-content').forEach(c => c.classList.remove('active'));
-      // Support programmatic calls (no event.target) by finding the button via its onclick
-      const tabBtn = [...document.querySelectorAll('.account-tab')].find(b => b.getAttribute('onclick') === `switchAccountTab('${tab}')`);
-      if (tabBtn) tabBtn.classList.add('active');
-      document.getElementById(tab).classList.add('active');
-
-      // Clear trade notification badge when the user opens Trade Offers
-      if (tab === 'tradeOffers') {
-        const badge = document.getElementById('tradeNotification');
-        if (badge) badge.style.display = 'none';
+    // ─── Marketplace Checkout ──────────────────────────────────────────
+    async function buyCard(listingId) {
+      if (!currentUser) { showToast('Sign in to purchase'); openModal('loginModal'); return; }
+      const listing = listings.find(l => String(l.id) === String(listingId));
+      if (!listing) { showToast('Listing not found'); return; }
+      if (listing.seller_id === currentUser.id || listing.sellerId === currentUser.id) {
+        showToast("You can't buy your own listing"); return;
       }
 
-      // Refresh data when switching tabs
-      if (tab === 'dashboard' && currentUser) {
-        renderDashboard();
-      } else if (tab === 'mySlots' && currentUser) {
-        refreshMySlots();
-      } else if (tab === 'tradeOffers' && currentUser) {
-        fetchAndRenderTradeOffers();
+      document.getElementById('buyCardName').textContent = listing.name;
+      document.getElementById('buyCardGrade').textContent = listing.grade || 'Raw';
+      const price = listing.list_price || listing.value || 0;
+      const shipping = listing.shipping_price || 0;
+      document.getElementById('buyCardPrice').textContent = '$' + price.toFixed(2);
+      document.getElementById('buyCardShipping').textContent = shipping > 0 ? '$' + shipping.toFixed(2) : 'Free';
+      document.getElementById('buyCardTotal').textContent = '$' + (price + shipping).toFixed(2);
+      document.getElementById('buyCardListingId').value = listingId;
+      openModal('buyCardModal');
+    }
+
+    async function confirmBuyCard() {
+      const listingId = document.getElementById('buyCardListingId').value;
+      const listing = listings.find(l => String(l.id) === String(listingId));
+      if (!listing) return;
+      const price = listing.list_price || listing.value || 0;
+      const shipping = listing.shipping_price || 0;
+      const total = price + shipping;
+
+      const btn = document.querySelector('#buyCardModal .buy-confirm-btn');
+      if (btn) { btn.textContent = 'Redirecting...'; btn.disabled = true; }
+
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        const token = session?.access_token;
+        const res = await fetch('/api/marketplace-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            listingId,
+            sellerId: listing.seller_id || listing.sellerId,
+            amount: Math.round(total * 100), // cents
+            cardName: listing.name,
+            successUrl: window.location.origin + window.location.pathname + '?payment=success&type=purchase',
+            cancelUrl: window.location.origin + window.location.pathname + '?payment=cancelled',
+          })
+        });
+        const result = await res.json();
+        if (result.url) {
+          window.location.href = result.url;
+        } else {
+          showToast('Checkout error: ' + (result.error || 'No URL returned'));
+          if (btn) { btn.textContent = 'Proceed_to_Payment'; btn.disabled = false; }
+        }
+      } catch(err) {
+        showToast('Checkout unavailable — Stripe not yet configured');
+        if (btn) { btn.textContent = 'Proceed_to_Payment'; btn.disabled = false; }
+        closeModal('buyCardModal');
       }
     }
+
+    async function loadOrders() {
+      if (!currentUser) { orders = []; return; }
+      const { data, error } = await sb.from('orders')
+        .select('*')
+        .or(`buyer_id.eq.${currentUser.id},seller_id.eq.${currentUser.id}`)
+        .order('created_at', { ascending: false });
+      if (!error && data) orders = data;
+    }
+
 
     function updateTradeNotification() {
       const pending = tradeOffers.filter(o => o.toUserId === currentUser?.id && o.status === 'pending').length;
@@ -5311,8 +4134,9 @@
               .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
               .order('created_at', { ascending: false })
           ]);
-          // Load collection silently (table may not exist yet)
+          // Load collection and orders silently (tables may not exist yet)
           loadCollection().catch(() => {});
+          loadOrders().catch(() => {});
 
           if (txnResult.data) {
             transactions = txnResult.data.map(t => ({
@@ -5472,8 +4296,9 @@
           }
           updateAuthUI();
           renderAllContent();
-          // Load collection in background after sign-in
+          // Load collection + orders in background after sign-in
           loadCollection().catch(() => {});
+          loadOrders().catch(() => {});
         }).catch(err => console.error('Background data fetch error:', err));
 
       } else if (event === 'SIGNED_OUT') {
@@ -5481,6 +4306,7 @@
         currentUser = null;
         tradeOffers = [];
         collectionItems = [];
+        orders = [];
         updateAuthUI();
         renderAllContent();
         showPage('browse');
@@ -5524,10 +4350,7 @@
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Browse
     </button>
-    <button class="mobile-nav-btn" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
-      <svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/><polyline points="9 11 12 14 22 4"/></svg>
-      Collection
-    </button>
+
     <button class="mobile-nav-btn" id="mobileNavLeaderboard" onclick="showPage('leaderboard'); setMobileNav('leaderboard')">
       <svg viewBox="0 0 24 24"><rect x="2" y="14" width="4" height="8" rx="1"/><rect x="10" y="9" width="4" height="13" rx="1"/><rect x="18" y="4" width="4" height="18" rx="1"/></svg>
       Leaders
