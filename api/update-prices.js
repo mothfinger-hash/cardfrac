@@ -138,24 +138,51 @@ async function fetchPriceFromUrl(url, grade) {
 
   // ── eBay ───────────────────────────────────────────────────────────────────
   if (url.includes('ebay.com')) {
-    // Sold/completed listing search page — grab first result price
+    // 1. eBay embeds app state as a giant JSON blob — most reliable source
+    const stateMatch = html.match(/window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]*?\});\s*<\/script>/) ||
+                       html.match(/"binPrice"\s*:\s*"([^"]+)"/) ;
+    if (stateMatch) {
+      try {
+        const state = JSON.parse(stateMatch[1]);
+        const price = state?.rightRail?.buyBox?.price?.value ||
+                      state?.pageModel?.modelList?.[0]?.price?.value;
+        if (price) return Math.round(Number(price));
+      } catch (_) {}
+    }
+
+    // 2. itemprop — reliable on single listing pages
+    const itempropMatch = html.match(/itemprop="price"\s+content="([\d.]+)"/);
+    if (itempropMatch) { const p = extractNumber(itempropMatch[1]); if (p && p > 0) return p; }
+
+    // 3. JSON-LD structured data
+    const jsonLdBlocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi)];
+    for (const block of jsonLdBlocks) {
+      try {
+        const data = JSON.parse(block[1]);
+        const price = data?.offers?.price ?? data?.offers?.[0]?.price;
+        if (price != null) return Math.round(Number(price));
+      } catch (_) {}
+    }
+
+    // 4. Sold listings search page — s-item__price spans (skip "X to Y" ranges)
     const soldPrices = [...html.matchAll(/class="s-item__price"[^>]*>([\s\S]*?)<\/span>/g)];
     for (const m of soldPrices) {
       const raw = m[1].replace(/<[^>]+>/g, '').trim();
-      // Skip ranges like "$10.00 to $20.00"
       if (raw.includes(' to ')) continue;
       const price = extractNumber(raw);
       if (price && price > 0) return price;
     }
-    // Single completed listing page
+
+    // 5. Regex fallbacks for single listing pages
     const patterns = [
-      /"price"\s*:\s*\{"value"\s*:\s*"([\d.]+)"/,
-      /class="x-price-primary"[^>]*>[\s\S]*?\$([\d,]+\.?\d{0,2})/,
-      /"amount"\s*:\s*"([\d.]+)"/,
+      /"price"\s*:\s*\{\s*"value"\s*:\s*"([\d.]+)"/,
+      /class="x-price-primary"[^>]*>[\s\S]{0,60}?\$([\d,]+\.?\d{0,2})/,
+      /"finalPrice"\s*:\s*\{\s*"value"\s*:\s*"([\d.]+)"/,
+      /"binPrice"\s*:\s*"US \$([\d,]+\.?\d{0,2})"/,
     ];
     for (const p of patterns) {
       const m = html.match(p);
-      if (m) return extractNumber(m[1]);
+      if (m) { const price = extractNumber(m[1]); if (price && price > 0) return price; }
     }
   }
 
