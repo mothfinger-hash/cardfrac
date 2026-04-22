@@ -4023,12 +4023,55 @@
             ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.75rem;color:var(--accent);text-decoration:none">→ View_Price_Source</a>` : ''}
           </div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
+          <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
+            style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
+            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
           <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
             style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove_Card</button>
+          <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
         </div>
       `;
       openModal('binderDetailModal');
+    }
+
+    async function refreshBinderCardPrice(itemId) {
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      if (!item) return;
+      const btn    = document.getElementById(`binderRefreshBtn_${itemId}`);
+      const status = document.getElementById(`binderRefreshStatus_${itemId}`);
+      if (btn) { btn.disabled = true; btn.textContent = '↻ Looking up...'; }
+      if (status) { status.style.display = 'inline'; status.textContent = ''; }
+
+      try {
+        const condition = item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+        const res = await fetch('/api/lookup-price', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: item.card_name, condition })
+        });
+        const data = await res.json();
+        if (data.price) {
+          // Write updated current_value to Supabase
+          const { error } = await sb
+            .from('collection_items')
+            .update({ current_value: data.price })
+            .eq('id', itemId);
+          if (error) throw new Error(error.message);
+          // Update local state
+          const local = collectionItems.find(c => String(c.id) === String(itemId));
+          if (local) local.current_value = data.price;
+          if (status) { status.style.color = 'var(--accent)'; status.textContent = `Updated → $${data.price.toFixed(2)} (PriceCharting)`; }
+          // Re-open the modal with fresh data so values update
+          setTimeout(() => openBinderCardDetail(itemId), 400);
+        } else {
+          if (status) { status.style.color = 'var(--muted)'; status.textContent = 'No price found — try adding a price source URL in Admin.'; }
+        }
+      } catch(e) {
+        if (status) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + e.message; }
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh_Price'; }
     }
 
     function renderCollection() { renderBinder(); }
