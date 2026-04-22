@@ -657,6 +657,50 @@
         line-height: 1.6;
       }
     }
+
+    /* ── COLLECTION PAGE ─────────────────────────────── */
+    .coll-search-bar{width:100%;padding:10px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.9rem;letter-spacing:.03em;outline:none;transition:border-color .15s}
+    .coll-search-bar:focus{border-color:var(--accent);box-shadow:0 0 8px rgba(255,140,20,0.16)}
+    .coll-search-bar::placeholder{color:var(--muted)}
+    .card-result-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:16px}
+    .card-result{background:var(--surface);border:1px solid var(--border);cursor:pointer;padding:8px;transition:all .15s;text-align:center}
+    .card-result:hover{border-color:var(--accent);box-shadow:0 0 12px rgba(255,140,20,0.2);transform:translateY(-2px)}
+    .card-result img{width:100%;height:auto;display:block;margin-bottom:6px;border:1px solid var(--border)}
+    .card-result-name{font-size:.72rem;color:var(--text);margin-bottom:2px;line-height:1.3}
+    .card-result-set{font-size:.64rem;color:var(--muted)}
+    .coll-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+    .coll-stat-box{background:var(--surface);border:1px solid var(--border);padding:16px;text-align:center}
+    .coll-stat-label{font-size:.7rem;color:var(--muted);margin-bottom:6px;letter-spacing:.08em}
+    .coll-stat-value{font-size:1.15rem;color:var(--accent);text-shadow:0 0 8px rgba(255,140,20,0.24);font-weight:700}
+    .coll-table-wrap{overflow-x:auto}
+    .coll-table{width:100%;border-collapse:collapse;font-size:.82rem}
+    .coll-table th{text-align:left;padding:10px 12px;color:var(--accent);font-size:.72rem;letter-spacing:.1em;border-bottom:1px solid var(--border);text-shadow:0 0 6px rgba(255,140,20,0.24);white-space:nowrap}
+    .coll-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .coll-table tr:hover td{background:var(--surface2)}
+    .grade-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;font-weight:700;background:rgba(255,140,20,0.12);border:1px solid rgba(255,140,20,0.3);color:var(--accent);letter-spacing:.04em}
+    .raw-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;color:var(--muted);border:1px solid var(--border);letter-spacing:.04em}
+    .coll-gain-pos{color:var(--green)}
+    .coll-gain-neg{color:var(--red)}
+    .coll-add-section{background:var(--surface);border:1px solid var(--border);padding:20px;margin-bottom:24px}
+    .coll-add-title{font-size:.85rem;color:var(--accent);margin-bottom:14px;letter-spacing:.06em;text-shadow:0 0 6px rgba(255,140,20,0.24)}
+    .coll-add-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .coll-btn-primary{padding:9px 22px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
+    .coll-btn-primary:hover{background:rgba(255,140,20,0.12)}
+    .coll-btn-secondary{padding:9px 22px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
+    .coll-btn-secondary:hover{border-color:var(--accent);color:var(--text)}
+    .coll-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+    .coll-empty{text-align:center;padding:48px;color:var(--muted);font-size:.88rem;line-height:1.8}
+    /* ATC Modal inputs */
+    .atc-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .atc-input{width:100%;padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;outline:none;transition:border-color .15s}
+    .atc-input:focus{border-color:var(--accent)}
+    .atc-input::placeholder{color:var(--muted)}
+    @media(max-width:600px){
+      .atc-grid{grid-template-columns:1fr}
+      .card-result-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}
+      .coll-table th:nth-child(2),.coll-table td:nth-child(2),
+      .coll-table th:nth-child(6),.coll-table td:nth-child(6){display:none}
+    }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -687,6 +731,7 @@
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Browse_Listings</button>
+        <button class="nav-tab" data-page="collection">Collection</button>
         <button class="nav-tab" data-page="leaderboard">Leaderboard</button>
         <button class="nav-tab" data-page="admin">Admin_Panel</button>
         <button class="nav-tab" data-page="account">My_Account<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
@@ -879,6 +924,77 @@
     </div>
   </div>
 
+  <!-- ADD TO COLLECTION MODAL -->
+  <div class="modal-overlay" id="addToCollectionModal">
+    <div class="modal" style="max-width:540px">
+      <button class="modal-close" onclick="closeModal('addToCollectionModal')">×</button>
+      <h3>Add_To_Collection</h3>
+      <p class="modal-sub" id="atcCardName" style="color:var(--accent);text-transform:none"></p>
+      <!-- Manual name input (shown only for manual entry) -->
+      <div class="form-group" id="atcManualNameRow" style="display:none;margin-bottom:14px">
+        <label>Card Name</label>
+        <input type="text" class="atc-input" id="atcManualNameInput" placeholder="e.g. 1986 Michael Jordan Fleer Rookie" style="width:100%" />
+      </div>
+      <div class="atc-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Condition</label>
+          <select class="atc-input" id="atcCondition" onchange="toggleGradeField()" style="width:100%">
+            <option value="raw">Raw / Ungraded</option>
+            <option value="psa">PSA</option>
+            <option value="bgs">BGS / Beckett</option>
+            <option value="cgc">CGC</option>
+            <option value="ace">ACE</option>
+          </select>
+        </div>
+        <div class="form-group" id="gradeFieldWrap">
+          <label>Grade</label>
+          <select class="atc-input" id="atcGrade" style="width:100%">
+            <option value="10">10</option>
+            <option value="9.5">9.5</option>
+            <option value="9">9</option>
+            <option value="8.5">8.5</option>
+            <option value="8">8</option>
+            <option value="7">7</option>
+            <option value="6">6</option>
+            <option value="5">5</option>
+            <option value="4">4</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantity</label>
+          <input type="number" class="atc-input" id="atcQuantity" value="1" min="1" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Purchase Price ($)</label>
+          <input type="number" class="atc-input" id="atcPurchasePrice" placeholder="Optional" step="0.01" min="0" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Purchase Date</label>
+          <input type="date" class="atc-input" id="atcPurchaseDate" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Cert # (optional)</label>
+          <input type="text" class="atc-input" id="atcCertNumber" placeholder="PSA/BGS cert number" style="width:100%" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Price Source URL (optional)</label>
+        <input type="text" class="atc-input" id="atcPriceUrl" placeholder="PriceCharting or eBay URL for auto-price tracking" style="width:100%" />
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Notes</label>
+        <input type="text" class="atc-input" id="atcNotes" placeholder="Optional notes" style="width:100%" />
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="saveToCollection()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add_To_Collection</button>
+        <button onclick="closeModal('addToCollectionModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PAGES -->
   <div id="landingPage" class="page active" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
     <div id="heroSection">
@@ -992,6 +1108,34 @@
           <tbody id="historyBody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- COLLECTION PAGE -->
+  <div id="collectionPage" class="page">
+    <h2>My_Collection</h2>
+    <p class="subtitle">Track your raw and graded cards — every card, every grade, every dollar.</p>
+
+    <!-- Add Card Section -->
+    <div class="coll-add-section">
+      <div class="coll-add-title">// ADD_CARD_TO_COLLECTION</div>
+      <input type="text" class="coll-search-bar" id="cardSearchInput"
+        placeholder="Search Pokémon cards by name (e.g. Charizard, Pikachu)..."
+        onkeydown="if(event.key==='Enter')searchPokemonCards()" />
+      <div class="coll-add-btns">
+        <button class="coll-btn-primary" onclick="searchPokemonCards()">Search_Pokémon_TCG</button>
+        <button class="coll-btn-secondary" onclick="openManualAddModal()">Add_Manually_(Sports_/_Other)</button>
+      </div>
+      <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
+      <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
+    </div>
+
+    <!-- Portfolio Summary -->
+    <div id="collectionSummary" class="coll-summary"></div>
+
+    <!-- Collection Table -->
+    <div id="collectionContent">
+      <div class="coll-empty">Sign in to view and manage your collection.</div>
     </div>
   </div>
 
@@ -1296,6 +1440,8 @@
     let browseSortFilter = 'newest';
     let browseTabFilter = 'all';
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
+    let collectionItems = []; // Phase 2: user's personal card collection
+    let pendingCollectionCard = null; // card data staged for Add-to-Collection modal
 
     // ===== FEE TIER SYSTEM =====
     // ── Fee tiers ──────────────────────────────────────────────────────
@@ -1553,6 +1699,7 @@
         }, 10);
       }
       if (pageId === 'admin') renderAdmin();
+      if (pageId === 'collection') renderCollection();
       setTimeout(retroLabels, 50);
     }
 
@@ -4807,6 +4954,288 @@
       if (currentUser) updateTradeNotification();
     }
 
+    // ===== COLLECTION PAGE (Phase 2) =====
+
+    async function loadCollection() {
+      if (!currentUser) { collectionItems = []; return; }
+      const { data, error } = await sb
+        .from('collection_items')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+      if (!error && data) collectionItems = data;
+    }
+
+    function renderCollection() {
+      const content = document.getElementById('collectionContent');
+      const summary = document.getElementById('collectionSummary');
+      if (!content) return;
+
+      if (!currentUser) {
+        summary.innerHTML = '';
+        content.innerHTML = '<div class="coll-empty">Sign in to view and manage your collection.</div>';
+        return;
+      }
+
+      if (collectionItems.length === 0) {
+        summary.innerHTML = '';
+        content.innerHTML = '<div class="coll-empty">No cards yet.<br>Search above to add your first card to the collection.</div>';
+        return;
+      }
+
+      // Summary stats
+      const totalCards = collectionItems.reduce((s, c) => s + (c.quantity || 1), 0);
+      const totalCost  = collectionItems.reduce((s, c) => s + ((c.purchase_price || 0) * (c.quantity || 1)), 0);
+      const totalValue = collectionItems.reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
+      const totalGain  = totalValue - totalCost;
+      const gainPct    = totalCost > 0 ? ((totalGain / totalCost) * 100).toFixed(1) : null;
+      const gainSign   = totalGain >= 0 ? '+' : '';
+
+      summary.innerHTML = `
+        <div class="coll-stat-box">
+          <div class="coll-stat-label">Total_Cards</div>
+          <div class="coll-stat-value">${totalCards}</div>
+        </div>
+        <div class="coll-stat-box">
+          <div class="coll-stat-label">Cost_Basis</div>
+          <div class="coll-stat-value">${totalCost > 0 ? '$' + totalCost.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
+        </div>
+        <div class="coll-stat-box">
+          <div class="coll-stat-label">Est_Value</div>
+          <div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
+        </div>
+        <div class="coll-stat-box">
+          <div class="coll-stat-label">Total_Gain/Loss</div>
+          <div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">
+            ${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}
+          </div>
+        </div>
+      `;
+
+      // Table
+      content.innerHTML = `
+        <div class="coll-section-header">
+          <span style="font-size:.85rem;color:var(--accent)">// COLLECTION_ITEMS (${collectionItems.length})</span>
+        </div>
+        <div class="coll-table-wrap">
+          <table class="coll-table">
+            <thead>
+              <tr>
+                <th>Card</th>
+                <th>Set</th>
+                <th>Condition</th>
+                <th>Qty</th>
+                <th>Cost</th>
+                <th>Est Value</th>
+                <th>Gain/Loss</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${collectionItems.map(item => {
+                const qty   = item.quantity || 1;
+                const cost  = (item.purchase_price || 0) * qty;
+                const val   = (item.current_value || item.purchase_price || 0) * qty;
+                const gain  = val - cost;
+                const gPct  = cost > 0 ? ((gain / cost) * 100).toFixed(1) : null;
+                const gSign = gain >= 0 ? '+' : '';
+                const condLabel = item.condition === 'raw'
+                  ? '<span class="raw-badge">Raw</span>'
+                  : `<span class="grade-badge">${item.condition.toUpperCase()} ${item.grade_value != null ? item.grade_value : ''}</span>`;
+                return `<tr>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      ${item.card_image_url ? `<img src="${item.card_image_url}" style="height:44px;width:auto;border:1px solid var(--border);flex-shrink:0" loading="lazy">` : ''}
+                      <div>
+                        <div style="color:var(--text);font-size:.82rem">${item.card_name}</div>
+                        ${item.card_number ? `<div style="font-size:.65rem;color:var(--muted)">#${item.card_number}</div>` : ''}
+                        ${item.cert_number ? `<div style="font-size:.65rem;color:var(--muted)">Cert: ${item.cert_number}</div>` : ''}
+                      </div>
+                    </div>
+                  </td>
+                  <td style="color:var(--muted);font-size:.78rem;white-space:nowrap">${item.set_name || '—'}</td>
+                  <td>${condLabel}</td>
+                  <td style="color:var(--text)">${qty}</td>
+                  <td style="color:var(--muted)">${item.purchase_price ? '$' + cost.toFixed(2) : '—'}</td>
+                  <td style="color:var(--text)">${item.current_value ? '$' + val.toFixed(2) : '—'}</td>
+                  <td class="${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gPct !== null ? gSign + '$' + Math.abs(gain).toFixed(2) : '—'}</td>
+                  <td>
+                    <button onclick="deleteCollectionItem('${item.id}')"
+                      style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer;transition:all .15s"
+                      onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">Del</button>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    async function searchPokemonCards() {
+      const input = document.getElementById('cardSearchInput');
+      const query = input ? input.value.trim() : '';
+      if (!query) { showToast('Enter a card name to search'); return; }
+
+      const status = document.getElementById('cardSearchStatus');
+      const grid   = document.getElementById('cardResultGrid');
+      status.style.display = 'block';
+      status.textContent   = '// Searching Pokémon TCG database...';
+      grid.style.display   = 'none';
+      grid.innerHTML       = '';
+
+      try {
+        const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(query)}"&pageSize=24&orderBy=name`);
+        if (!res.ok) throw new Error('API error ' + res.status);
+        const json  = await res.json();
+        const cards = json.data || [];
+
+        if (cards.length === 0) {
+          status.textContent = `// No results for "${query}" — try a different spelling`;
+          return;
+        }
+        status.textContent = `// Found ${cards.length} result${cards.length !== 1 ? 's' : ''} — click a card to add it`;
+        grid.style.display = 'grid';
+        grid.innerHTML = cards.map(card => {
+          const cardData = JSON.stringify({
+            apiCardId:    card.id,
+            cardName:     card.name,
+            setName:      (card.set && card.set.name)  || '',
+            setCode:      (card.set && card.set.id)    || '',
+            cardNumber:   card.number || '',
+            cardImageUrl: (card.images && card.images.small) || '',
+            gameType:     'pokemon'
+          }).replace(/"/g, '&quot;');
+          return `<div class="card-result" onclick='openAddToCollectionModal(JSON.parse(this.dataset.card))' data-card="${cardData}">
+            ${card.images && card.images.small
+              ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">`
+              : '<div style="height:90px;background:var(--surface2);margin-bottom:6px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">No Image</div>'}
+            <div class="card-result-name">${card.name}</div>
+            <div class="card-result-set">${(card.set && card.set.name) || ''} #${card.number || '?'}</div>
+          </div>`;
+        }).join('');
+      } catch(e) {
+        status.textContent = '// Search failed — check your connection';
+        console.error('Pokémon TCG search error:', e);
+      }
+    }
+
+    function openAddToCollectionModal(cardData) {
+      if (!currentUser) { showToast('Sign in to add cards to your collection'); return; }
+      pendingCollectionCard = cardData;
+      const nameEl = document.getElementById('atcCardName');
+      if (nameEl) nameEl.textContent = cardData.cardName + (cardData.setName ? ' — ' + cardData.setName : '');
+      const manualRow = document.getElementById('atcManualNameRow');
+      if (manualRow) manualRow.style.display = 'none';
+      const manualInput = document.getElementById('atcManualNameInput');
+      if (manualInput) manualInput.value = '';
+      // Reset form
+      document.getElementById('atcCondition').value = 'raw';
+      document.getElementById('atcGrade').value = '10';
+      document.getElementById('atcQuantity').value = '1';
+      document.getElementById('atcPurchasePrice').value = '';
+      document.getElementById('atcPurchaseDate').value = '';
+      document.getElementById('atcCertNumber').value = '';
+      document.getElementById('atcPriceUrl').value = '';
+      document.getElementById('atcNotes').value = '';
+      toggleGradeField();
+      openModal('addToCollectionModal');
+    }
+
+    function openManualAddModal() {
+      if (!currentUser) { showToast('Sign in to add cards to your collection'); return; }
+      pendingCollectionCard = { apiCardId: null, cardName: '', setName: '', setCode: '', cardNumber: '', cardImageUrl: '', gameType: 'pokemon' };
+      document.getElementById('atcCardName').textContent = 'Manual Entry';
+      const manualRow = document.getElementById('atcManualNameRow');
+      if (manualRow) manualRow.style.display = '';
+      document.getElementById('atcManualNameInput').value = '';
+      document.getElementById('atcCondition').value = 'raw';
+      document.getElementById('atcGrade').value = '10';
+      document.getElementById('atcQuantity').value = '1';
+      document.getElementById('atcPurchasePrice').value = '';
+      document.getElementById('atcPurchaseDate').value = '';
+      document.getElementById('atcCertNumber').value = '';
+      document.getElementById('atcPriceUrl').value = '';
+      document.getElementById('atcNotes').value = '';
+      toggleGradeField();
+      openModal('addToCollectionModal');
+    }
+
+    function toggleGradeField() {
+      const condition = document.getElementById('atcCondition').value;
+      const wrap = document.getElementById('gradeFieldWrap');
+      if (wrap) wrap.style.visibility = condition === 'raw' ? 'hidden' : 'visible';
+    }
+
+    async function saveToCollection() {
+      if (!currentUser || !pendingCollectionCard) return;
+
+      const condition     = document.getElementById('atcCondition').value;
+      const gradeValue    = condition !== 'raw' ? parseFloat(document.getElementById('atcGrade').value) : null;
+      const quantity      = parseInt(document.getElementById('atcQuantity').value)  || 1;
+      const purchasePrice = parseFloat(document.getElementById('atcPurchasePrice').value) || null;
+      const purchaseDate  = document.getElementById('atcPurchaseDate').value || null;
+      const certNumber    = document.getElementById('atcCertNumber').value.trim() || null;
+      const priceSourceUrl= document.getElementById('atcPriceUrl').value.trim() || null;
+      const notes         = document.getElementById('atcNotes').value.trim() || null;
+
+      let cardName = pendingCollectionCard.cardName;
+      const manualInput = document.getElementById('atcManualNameInput');
+      if (manualInput && document.getElementById('atcManualNameRow').style.display !== 'none') {
+        cardName = manualInput.value.trim();
+      }
+      if (!cardName) { showToast('Please enter a card name'); return; }
+
+      const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
+      if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
+
+      const { error } = await sb.from('collection_items').insert({
+        user_id:         currentUser.id,
+        api_card_id:     pendingCollectionCard.apiCardId  || null,
+        card_name:       cardName,
+        set_name:        pendingCollectionCard.setName    || null,
+        set_code:        pendingCollectionCard.setCode    || null,
+        card_number:     pendingCollectionCard.cardNumber || null,
+        card_image_url:  pendingCollectionCard.cardImageUrl || null,
+        game_type:       pendingCollectionCard.gameType   || 'pokemon',
+        condition,
+        grade_value:     gradeValue,
+        cert_number:     certNumber,
+        quantity,
+        purchase_price:  purchasePrice,
+        purchase_date:   purchaseDate,
+        price_source_url: priceSourceUrl,
+        notes
+      });
+
+      if (saveBtn) { saveBtn.textContent = 'Add_To_Collection'; saveBtn.disabled = false; }
+
+      if (error) {
+        // Friendly message for missing table
+        if (error.message && error.message.includes('does not exist')) {
+          showToast('Run the SQL migration in Supabase first — see PORTFOLIO_TRACKER_PLAN.md');
+        } else {
+          showToast('Error saving card: ' + error.message);
+        }
+        return;
+      }
+
+      showToast(cardName + ' added to collection!');
+      closeModal('addToCollectionModal');
+      pendingCollectionCard = null;
+      await loadCollection();
+      renderCollection();
+    }
+
+    async function deleteCollectionItem(id) {
+      if (!confirm('Remove this card from your collection?')) return;
+      const { error } = await sb.from('collection_items').delete().eq('id', id);
+      if (error) { showToast('Error: ' + error.message); return; }
+      collectionItems = collectionItems.filter(c => c.id !== id);
+      renderCollection();
+      showToast('Card removed from collection');
+    }
+
     async function initApp() {
       const browseGrid = document.getElementById('browseGrid');
       if (browseGrid) browseGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
@@ -4882,6 +5311,8 @@
               .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
               .order('created_at', { ascending: false })
           ]);
+          // Load collection silently (table may not exist yet)
+          loadCollection().catch(() => {});
 
           if (txnResult.data) {
             transactions = txnResult.data.map(t => ({
@@ -5041,12 +5472,15 @@
           }
           updateAuthUI();
           renderAllContent();
+          // Load collection in background after sign-in
+          loadCollection().catch(() => {});
         }).catch(err => console.error('Background data fetch error:', err));
 
       } else if (event === 'SIGNED_OUT') {
         // Update UI instantly
         currentUser = null;
         tradeOffers = [];
+        collectionItems = [];
         updateAuthUI();
         renderAllContent();
         showPage('browse');
@@ -5089,6 +5523,10 @@
     <button class="mobile-nav-btn active" id="mobileNavBrowse" onclick="showPage('browse'); setMobileNav('browse')">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Browse
+    </button>
+    <button class="mobile-nav-btn" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/><polyline points="9 11 12 14 22 4"/></svg>
+      Collection
     </button>
     <button class="mobile-nav-btn" id="mobileNavLeaderboard" onclick="showPage('leaderboard'); setMobileNav('leaderboard')">
       <svg viewBox="0 0 24 24"><rect x="2" y="14" width="4" height="8" rx="1"/><rect x="10" y="9" width="4" height="13" rx="1"/><rect x="18" y="4" width="4" height="18" rx="1"/></svg>
