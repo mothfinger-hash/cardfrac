@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CardFrac — Fractional Card Ownership</title>
+  <title>CardFrac — Card Collection &amp; Marketplace</title>
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#ff8c14" />
@@ -754,10 +754,10 @@
     <button class="logo" onclick="showPage('landing')">[CARDFRAC_SYS]</button>
     <div class="nav-right">
       <div class="nav-tabs">
-        <button class="nav-tab active" data-page="browse">Browse_Listings</button>
-        <button class="nav-tab" data-page="leaderboard">Leaderboard</button>
+        <button class="nav-tab active" data-page="browse">Browse</button>
+        <button class="nav-tab" data-page="collection">My_Binder</button>
+        <button class="nav-tab" data-page="account">Dashboard<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
         <button class="nav-tab" data-page="admin">Admin_Panel</button>
-        <button class="nav-tab" data-page="account">My_Account<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
       </div>
       <div id="authSection" class="auth-buttons">
         <button class="auth-btn" id="loginBtn">Login</button>
@@ -1123,49 +1123,36 @@
   <!-- PAGES -->
   <div id="landingPage" class="page active" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
     <div id="heroSection">
-      <h1 class="hero-title">P2P CARD MARKETPLACE<br>PROTOCOL v3.0<span class="hero-cursor"></span></h1>
-      <p class="hero-tagline">BUY · SELL · TRACK // SECURE ESCROW // BUYER PROTECTION</p>
+      <h1 class="hero-title">YOUR CARD COLLECTION<br>COMMAND CENTER<span class="hero-cursor"></span></h1>
+      <p class="hero-tagline">TRACK · BUY · SELL // PORTFOLIO ANALYTICS // SECURE ESCROW</p>
       <div class="hero-stats">
         <div class="hero-stat-box">
-          <div class="hero-stat-label">[ TOTAL_CARDS ]</div>
+          <div class="hero-stat-label">[ LISTED_FOR_SALE ]</div>
           <div class="hero-stat-value" id="heroTotalCards">—</div>
         </div>
         <div class="hero-stat-box">
-          <div class="hero-stat-label">[ MARKET_CAP ]</div>
+          <div class="hero-stat-label">[ MARKETPLACE_VALUE ]</div>
           <div class="hero-stat-value" id="heroMarketCap">—</div>
         </div>
       </div>
-      <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[BROWSE_NETWORK]</button>
-      <p class="hero-footer-line">CARDFRAC MARKETPLACE // BUYER PROTECTED // 5% SELLER FEE</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <button class="hero-cta" onclick="showPage('collection');setMobileNav('collection')" style="background:transparent;border:2px solid var(--accent);color:var(--accent)">[MY_BINDER]</button>
+        <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[MARKETPLACE]</button>
+      </div>
+      <p class="hero-footer-line">CARDFRAC // ALL-IN-ONE COLLECTION TRACKER + P2P MARKETPLACE // 5% SELLER FEE</p>
     </div>
   </div>
 
   <div id="browsePage" class="page">
     <h2>Marketplace</h2>
-    <p class="subtitle">Buy and sell trading cards — secured escrow, buyer protection, seller ratings.</p>
-
-    <!-- Collapsible Add to Collection Panel -->
-    <div id="collectionPanel" style="background:var(--surface);border:1px solid var(--border);margin-bottom:20px;overflow:hidden;max-height:0;transition:max-height .35s ease">
-      <div style="padding:16px 20px">
-        <div class="coll-add-title" style="margin-bottom:12px">// ADD_CARD_TO_COLLECTION</div>
-        <input type="text" class="coll-search-bar" id="cardSearchInput"
-          placeholder="Search Pokémon cards by name (e.g. Charizard, Pikachu)..."
-          onkeydown="if(event.key==='Enter')searchPokemonCards()" />
-        <div class="coll-add-btns" style="margin-top:10px">
-          <button class="coll-btn-primary" onclick="searchPokemonCards()">Search_Pokémon_TCG</button>
-          <button class="coll-btn-secondary" onclick="openManualAddModal()">Add_Manually</button>
-        </div>
-        <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
-        <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
-      </div>
-    </div>
+    <p class="subtitle">Buy and sell trading cards — secured escrow, buyer protection, seller ratings. Check back often — new listings added by the community daily.</p>
 
     <!-- Browse controls -->
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-      <button onclick="toggleCollectionPanel()" id="collPanelBtn"
+      <button onclick="showPage('collection');setMobileNav('collection')"
         style="padding:7px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s;letter-spacing:.04em"
         onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Add_To_Collection</button>
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 My_Binder</button>
       <button onclick="openListCardModal()"
         style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ List_A_Card</button>
     </div>
@@ -1208,7 +1195,7 @@
   </div>
 
   <div id="accountPage" class="page">
-    <h2>My_Account</h2>
+    <h2>Dashboard</h2>
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
       <button class="account-tab" onclick="switchAccountTab('myListings')">My_Listings</button>
@@ -1260,9 +1247,8 @@
     </div>
   </div>
 
-  <!-- COLLECTION PAGE (data still accessible, UI moved to Browse panel) -->
-  <div id="collectionPage" class="page" style="display:none!important">
-    <h2>My_Collection</h2>
+  <div id="collectionPage" class="page">
+    <h2>My_Binder</h2>
     <p class="subtitle">Track your raw and graded cards — every card, every grade, every dollar.</p>
 
     <!-- Add Card Section -->
@@ -1851,7 +1837,8 @@
         }, 10);
       }
       if (pageId === 'admin') renderAdmin();
-      // collection is now a panel inside browse, not a page
+      if (pageId === 'collection') renderCollection();
+      // collection page is accessible directly via nav
       setTimeout(retroLabels, 50);
     }
 
@@ -2331,7 +2318,7 @@
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
-          <button onclick="showPage('browse');setMobileNav('browse');setTimeout(toggleCollectionPanel,100)" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">View_My_Collection</button>
+          <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My_Binder</button>
         </div>
       `;
     }
@@ -4059,16 +4046,47 @@
       showToast('Card removed from collection');
     }
 
+    // ── Listing mapper — maps Supabase row → JS object ──────────────────────
+    function mapListing(l) {
+      return {
+        id: l.id,
+        name: l.name,
+        grade: l.grade,
+        type: l.card_type || '',
+        gameType: l.game_type || 'Other',
+        value: l.value,
+        list_price: l.list_price || l.value || 0,
+        condition: l.condition || 'NM',
+        grade_value: l.grade_value || null,
+        market_price: l.market_price || null,
+        shipping_price: l.shipping_price || 0,
+        seller_id: l.seller_id || null,
+        sellerName: l.seller_name || null,
+        sellerRating: l.seller_rating || null,
+        totalSlots: l.total_slots,
+        status: l.status,
+        earlyAccessOnly: l.early_access_only,
+        certNumber: l.cert_number || '',
+        vaultLocation: l.vault_location || '',
+        insured: l.insured,
+        priceSourceUrl: l.price_source_url || null,
+        photos: l.photos || [],
+        priceHistory: l.price_history || [],
+        sellVotes: l.sell_votes || [],
+        description: l.description || '',
+        countdown: null
+      };
+    }
+
     async function initApp() {
       const browseGrid = document.getElementById('browseGrid');
       if (browseGrid) browseGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
 
       try {
-        // 1. Restore auth session + fetch listings + fetch slots — all in parallel
-        const [sessionResult, listingsResult, slotsResult] = await Promise.all([
+        // 1. Restore auth session + fetch listings — in parallel
+        const [sessionResult, listingsResult] = await Promise.all([
           sb.auth.getSession(),
-          sb.from('listings').select('*').order('created_at', { ascending: false }),
-          sb.from('slots').select('*').order('idx')
+          sb.from('listings').select('*').order('created_at', { ascending: false })
         ]);
 
         // Restore session
@@ -4078,62 +4096,20 @@
           currentUser = { ...session.user, ...(profile || {}) };
         }
 
-        // Load listings
+        // Load listings (marketplace fields included)
         const { data: dbListings, error: listingsError } = listingsResult;
-        if (!listingsError && dbListings && dbListings.length > 0) {
-          listings = dbListings.map(l => ({
-            id: l.id,
-            name: l.name,
-            grade: l.grade,
-            type: l.card_type || '',
-            gameType: l.game_type || 'Other',
-            value: l.value,
-            totalSlots: l.total_slots,
-            status: l.status,
-            earlyAccessOnly: l.early_access_only,
-            certNumber: l.cert_number || '',
-            vaultLocation: l.vault_location || '',
-            insured: l.insured,
-            priceSourceUrl: l.price_source_url || null,
-            photos: l.photos || [],
-            priceHistory: l.price_history || [],
-            sellVotes: l.sell_votes || [],
-            countdown: null
-          }));
-        }
-
-        // Load slots
-        const { data: dbSlots, error: slotsError } = slotsResult;
-        if (!slotsError && dbSlots && dbSlots.length > 0) {
-          slots = dbSlots.map(s => ({
-            id: s.id,
-            listingId: s.listing_id,
-            idx: s.idx,
-            userId: s.user_id,
-            name: null,
-            email: null,
-            askPrice: s.ask_price > 0 ? s.ask_price : null,
-            tradeOpen: s.trade_open || false
-          }));
-        }
-
-        // Populate profilesMap for slot owner name lookups
-        const ownerIds = [...new Set(slots.filter(s => s.userId).map(s => s.userId))];
-        if (ownerIds.length > 0) {
-          const { data: pOwners } = await sb.from('profiles').select('id, name, username').in('id', ownerIds);
-          profilesMap = {};
-          (pOwners || []).forEach(p => { profilesMap[p.id] = p; });
+        if (!listingsError && dbListings) {
+          listings = dbListings.map(mapListing);
         }
 
         // 2. If logged in, fetch user-specific data in parallel
         if (currentUser) {
-          const [txnResult, offerResult] = await Promise.all([
-            sb.from('transactions').select('*, listings(name)').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
-            sb.from('trade_offers')
-              .select('*')
-              .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
-              .order('created_at', { ascending: false })
-          ]);
+          const txnResult = await sb.from('transactions')
+            .select('*, listings(name)')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false })
+            .catch(() => ({ data: null }));
+          const offerResult = { data: [] }; // trade_offers deprecated
           // Load collection and orders silently (tables may not exist yet)
           loadCollection().catch(() => {});
           loadOrders().catch(() => {});
@@ -4195,34 +4171,15 @@
                 });
             }
           } else {
-            showToast('🎉 Payment successful! Refreshing your slots...');
-            // Give the webhook ~3s to process, then re-fetch slots
+            showToast('🎉 Payment successful! Your order is being processed...');
+            // Give the webhook ~3s to process, then re-fetch orders
             setTimeout(() => {
-              Promise.all([
-                sb.from('slots').select('*').order('idx'),
-                currentUser
-                  ? sb.from('transactions').select('*, listings(name)').eq('user_id', currentUser.id).order('created_at', { ascending: false })
-                  : Promise.resolve({ data: null })
-              ]).then(([slotsRes, txnRes]) => {
-                if (slotsRes.data) {
-                  slots = slotsRes.data.map(s => ({
-                    id: s.id, listingId: s.listing_id, idx: s.idx,
-                    userId: s.user_id, name: null, email: null,
-                    askPrice: s.ask_price > 0 ? s.ask_price : null,
-                    tradeOpen: s.trade_open || false
-                  }));
-                }
-                if (txnRes.data) {
-                  transactions = txnRes.data.map(t => ({
-                    id: t.id, type: t.type, listingId: t.listing_id,
-                    listingName: t.listings?.name || '', slotIdx: t.slot_idx,
-                    userId: t.user_id, amount: t.amount, fee: t.fee,
-                    ts: new Date(t.created_at)
-                  }));
-                }
+              loadOrders().then(() => {
                 renderAllContent();
-                showToast('✅ Slots updated!');
-              });
+                showToast('✅ Order confirmed! Check Dashboard → Orders.');
+                showPage('account');
+                switchAccountTab('myOrders');
+              }).catch(() => {});
             }, 3000);
           }
         } else if (paymentStatus === 'cancelled') {
@@ -4245,33 +4202,13 @@
         const uid = session.user.id;
         Promise.all([
           sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
-          sb.from('listings').select('*').order('created_at', { ascending: false }),
-          sb.from('slots').select('*').order('idx'),
-          sb.from('trade_offers')
-            .select('*')
-            .or(`from_user_id.eq.${uid},to_user_id.eq.${uid}`)
-            .order('created_at', { ascending: false })
-        ]).then(([profileRes, listingsRes, slotsRes, offersRes]) => {
+          sb.from('listings').select('*').order('created_at', { ascending: false })
+        ]).then(([profileRes, listingsRes]) => {
           currentUser = { ...session.user, ...(profileRes.data || {}) };
-          if (listingsRes.data && listingsRes.data.length > 0) {
-            listings = listingsRes.data.map(l => ({
-              id: l.id, name: l.name, grade: l.grade,
-              type: l.card_type || '', gameType: l.game_type || 'Other',
-              value: l.value, totalSlots: l.total_slots, status: l.status,
-              earlyAccessOnly: l.early_access_only, certNumber: l.cert_number || '',
-              vaultLocation: l.vault_location || '', insured: l.insured, priceSourceUrl: l.price_source_url || null,
-              photos: l.photos || [], priceHistory: l.price_history || [],
-              sellVotes: l.sell_votes || [], countdown: null
-            }));
+          if (listingsRes.data) {
+            listings = listingsRes.data.map(mapListing);
           }
-          if (slotsRes.data && slotsRes.data.length > 0) {
-            slots = slotsRes.data.map(s => ({
-              id: s.id, listingId: s.listing_id, idx: s.idx,
-              userId: s.user_id, name: null, email: null,
-              askPrice: s.ask_price > 0 ? s.ask_price : null,
-              tradeOpen: s.trade_open || false
-            }));
-          }
+          const offersRes = { data: [] }; // trade_offers no longer used
           if (offersRes.data && offersRes.data.length > 0) {
             // Resolve profile names without FK join
             const uids = [...new Set([
@@ -4312,31 +4249,11 @@
         showPage('browse');
 
         // Re-fetch public listings in background
-        Promise.all([
-          sb.from('listings').select('*').order('created_at', { ascending: false }),
-          sb.from('slots').select('*').order('idx')
-        ]).then(([listingsRes, slotsRes]) => {
-          if (listingsRes.data) {
-            listings = listingsRes.data.map(l => ({
-              id: l.id, name: l.name, grade: l.grade,
-              type: l.card_type || '', gameType: l.game_type || 'Other',
-              value: l.value, totalSlots: l.total_slots, status: l.status,
-              earlyAccessOnly: l.early_access_only, certNumber: l.cert_number || '',
-              vaultLocation: l.vault_location || '', insured: l.insured, priceSourceUrl: l.price_source_url || null,
-              photos: l.photos || [], priceHistory: l.price_history || [],
-              sellVotes: l.sell_votes || [], countdown: null
-            }));
-          }
-          if (slotsRes.data) {
-            slots = slotsRes.data.map(s => ({
-              id: s.id, listingId: s.listing_id, idx: s.idx,
-              userId: s.user_id, name: null, email: null,
-              askPrice: s.ask_price > 0 ? s.ask_price : null,
-              tradeOpen: s.trade_open || false
-            }));
-          }
-          renderAllContent();
-        }).catch(err => console.error('Post-signout fetch error:', err));
+        sb.from('listings').select('*').order('created_at', { ascending: false })
+          .then(({ data }) => {
+            if (data) listings = data.map(mapListing);
+            renderAllContent();
+          }).catch(err => console.error('Post-signout fetch error:', err));
       }
       // INITIAL_SESSION: initApp() handles the first render
     });
@@ -4350,14 +4267,13 @@
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Browse
     </button>
-
-    <button class="mobile-nav-btn" id="mobileNavLeaderboard" onclick="showPage('leaderboard'); setMobileNav('leaderboard')">
-      <svg viewBox="0 0 24 24"><rect x="2" y="14" width="4" height="8" rx="1"/><rect x="10" y="9" width="4" height="13" rx="1"/><rect x="18" y="4" width="4" height="18" rx="1"/></svg>
-      Leaders
+    <button class="mobile-nav-btn" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>
+      My_Binder
     </button>
     <button class="mobile-nav-btn" id="mobileNavAccount" onclick="showPage('account'); setMobileNav('account')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      Account
+      Dashboard
       <span class="mobile-nav-badge" id="mobileTradeNotification" style="display:none">0</span>
     </button>
   </div>
