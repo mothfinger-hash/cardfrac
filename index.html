@@ -1002,7 +1002,7 @@
         </div>
         <div class="form-group">
           <label>Game / Category *</label>
-          <select class="atc-input" id="lcGame" style="width:100%">
+          <select class="atc-input" id="lcGame" style="width:100%" disabled>
             <option value="Pokémon">Pokémon</option>
             <option value="Magic: The Gathering">Magic: The Gathering</option>
             <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
@@ -1200,13 +1200,8 @@
     </div>
     <div class="search-and-filters" style="margin:20px 0;display:grid;grid-template-columns:1fr auto auto auto auto;gap:12px;align-items:center">
       <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem;width:100%" />
-      <select id="gameTypeFilter" onchange="applyBrowseFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem">
+      <select id="gameTypeFilter" onchange="applyBrowseFilters()" style="display:none">
         <option value="all">All Types</option>
-        <option value="Pokémon">Pokémon</option>
-        <option value="Magic: The Gathering">Magic</option>
-        <option value="Yu-Gi-Oh!">Yu-Gi-Oh</option>
-        <option value="Sports">Sports</option>
-        <option value="Other">Other</option>
       </select>
       <select id="sortByFilter" onchange="applyBrowseFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem">
         <option value="newest">Newest</option>
@@ -1215,14 +1210,7 @@
       </select>
       <button id="clearFiltersBtn" onclick="clearBrowseFilters()" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--accent);font-size:.9rem;cursor:pointer;display:none">Clear All</button>
     </div>
-    <div id="gameTypePills" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-      <button class="game-pill active" onclick="setGameTypeFilter('all')">All</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Pokémon')">Pokémon</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Magic: The Gathering')">Magic</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Yu-Gi-Oh!')">Yu-Gi-Oh!</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Sports')">Sports</button>
-      <button class="game-pill" onclick="setGameTypeFilter('Other')">Other</button>
-    </div>
+    <div id="gameTypePills" style="display:none"></div>
     <div class="card-grid" id="browseGrid"></div>
   </div>
 
@@ -1451,32 +1439,7 @@
       </div>
     </div>
 
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
-      <h3 style="font-size:1rem;font-weight:600;margin-bottom:16px">🎯 Assign Slots to User</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-        <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Listing</label>
-          <select id="assignListingId" class="form-input" style="width:100%"></select>
-        </div>
-        <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">User Email or Username</label>
-          <input id="assignUserSearch" class="form-input" placeholder="email or username" style="width:100%" oninput="adminLookupUser(this.value)"/>
-          <div id="assignUserResult" style="font-size:.8rem;margin-top:4px;color:var(--muted)"></div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
-        <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Specific slots (e.g. 1,2,3 or 5-10)</label>
-          <input id="assignSlotIdx" class="form-input" placeholder="Leave blank for next available" style="width:100%"/>
-        </div>
-        <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px">Or assign next X available</label>
-          <input id="assignSlotCount" class="form-input" type="number" min="1" placeholder="e.g. 5" style="width:100%"/>
-        </div>
-        <button class="btn btn-teal" onclick="adminAssignSlot()" style="white-space:nowrap">Assign</button>
-      </div>
-      <div id="assignStatus" style="margin-top:10px;font-size:.85rem"></div>
-    </div>
+
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;overflow-x:auto">
       <table class="admin-table">
@@ -1626,6 +1589,7 @@
     let browseSearchQuery = '';
     let browseGameTypeFilter = 'all';
     let browseSortFilter = 'newest';
+    const POKEMON_ONLY = true; // flip to false when ready for other TCGs
     let binderView = '3x3';
     let binderPage = 0;
     let browseTabFilter = 'all';
@@ -1892,7 +1856,10 @@
         }, 10);
       }
       if (pageId === 'admin') renderAdmin();
-      if (pageId === 'collection') renderBinder();
+      if (pageId === 'collection') {
+        renderBinder();
+        if (currentUser) loadCollection().then(() => renderBinder()).catch(() => {});
+      }
       if (pageId === 'addCard') { /* addCardPage ready */ }
       // collection page is accessible directly via nav
       setTimeout(retroLabels, 50);
@@ -1908,6 +1875,7 @@
       if (!grid) return;
 
       let filtered = listings.filter(listing => {
+        if (POKEMON_ONLY && listing.gameType !== 'Pokémon') return false;
         const isSold = listing.status === 'sold';
         const isActive = listing.status === 'active' || listing.status === 'available';
 
@@ -2904,6 +2872,7 @@
 
       const { data, error } = await sb.from('listings').insert({
         name,
+        card_type: game,
         game_type: game,
         grade: gradeDisplay,
         condition,
@@ -2923,7 +2892,7 @@
       const lcErr = document.getElementById('lcSaveError');
       if (error) {
         if (lcErr) { lcErr.textContent = '// Error: ' + error.message; lcErr.style.display = 'block'; }
-        else showToast('Error saving listing: ' + error.message);
+        showToast('Listing error: ' + error.message.slice(0, 80));
         return;
       }
       if (lcErr) lcErr.style.display = 'none';
@@ -3073,19 +3042,10 @@
           <button class="action-btn danger" onclick="confirmDeleteListing('${l.id}')">Delete</button>
         </td>
       </tr>`).join('');
-      populateAssignListingDropdown();
     }
-
-    function populateAssignListingDropdown() {
-      const sel = document.getElementById('assignListingId');
-      if (!sel) return;
-      sel.innerHTML = listings.map(l => `<option value="${l.id}">${l.name} (${l.grade})</option>`).join('');
-    }
-
-    let assignLookupTimer = null;
-    let resolvedAssignUser = null;
 
     function adminLookupUser(val) {
+      return; // slot assignment removed
       clearTimeout(assignLookupTimer);
       const resultEl = document.getElementById('assignUserResult');
       resolvedAssignUser = null;
@@ -3253,6 +3213,7 @@
         try { data = JSON.parse(rawText); }
         catch { statusEl.textContent = `[ SERVER_ERROR ] ${rawText.slice(0, 200)}`; btn.disabled = false; btn.textContent = 'Refresh_Prices'; return; }
         if (res.ok) {
+          if (data.message && !data.results) { statusEl.textContent = `[ INFO ] ${data.message}`; btn.disabled = false; btn.textContent = 'Refresh_Prices'; return; }
           const updated = data.results?.filter(r => r.status === 'updated') || [];
           const lines = updated.length > 0
             ? updated.map(r => `${r.name}: $${r.old} → $${r.new}`).join(' | ')
@@ -3260,7 +3221,7 @@
           const errorDetails = data.errors?.length > 0
             ? ' | Errors: ' + data.errors.map(e => `${e.name}: ${e.reason}`).join(', ')
             : '';
-          statusEl.textContent = `[ DONE ] ${data.updated} updated, ${data.unchanged} unchanged, ${data.errorCount} errors. ${lines}${errorDetails}`;
+          statusEl.textContent = `[ DONE ] ${data.updated} updated, ${data.unchanged ?? 0} unchanged, ${data.errorCount ?? 0} errors. ${lines}${errorDetails}`;
           if (data.updated > 0) { await initApp(); showToast(`${data.updated} price(s) updated`); }
         } else {
           statusEl.textContent = `[ ERROR ] ${data.error || res.statusText}`;
