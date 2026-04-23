@@ -737,8 +737,9 @@
     .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
     @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
     /* ── BINDER CARD ── */
-    .binder-card{background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:border-color .15s,transform .1s;overflow:hidden}
+    .binder-card{background:var(--surface);border:1px solid var(--border);cursor:grab;transition:border-color .15s,transform .1s,opacity .15s;overflow:hidden}
     .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+    .binder-card.drag-over{border-color:var(--accent);box-shadow:0 0 14px rgba(255,140,20,.35);transform:scale(1.03)}
     .binder-card.ghost-card{opacity:.52;border:1px dashed var(--muted);position:relative}
     .binder-card.ghost-card:hover{opacity:.75;border-color:var(--teal);transform:translateY(-2px)}
     .want-badge{background:rgba(0,204,255,.15);border:1px solid rgba(0,204,255,.5);color:var(--teal);font-size:.55rem;padding:2px 5px;position:absolute;bottom:4px;right:4px}
@@ -992,6 +993,11 @@
       <div style="display:flex;gap:10px">
         <button onclick="saveToCollection()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add_To_Collection</button>
         <button onclick="closeModal('addToCollectionModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+      <div style="margin-top:14px;text-align:center;border-top:1px solid var(--border);padding-top:12px">
+        <span style="font-size:.75rem;color:var(--muted)">Don't own it yet?</span>
+        <button onclick="closeModal('addToCollectionModal');openAddToWishlistModal(pendingCollectionCard||{})"
+          style="margin-left:10px;background:transparent;border:none;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline;padding:0">♡ Add_to_Wishlist_Instead</button>
       </div>
     </div>
   </div>
@@ -1321,12 +1327,8 @@
         <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
         <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
       </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="showPage('addCard');setMobileNav('addCard')"
-          style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
-        <button onclick="openManualWishlistModal()"
-          style="padding:7px 16px;border:1px solid rgba(0,204,255,.5);background:rgba(0,204,255,.06);color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">♡ Wishlist</button>
-      </div>
+      <button onclick="showPage('addCard');setMobileNav('addCard')"
+        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
     </div>
 
     <!-- Portfolio Summary -->
@@ -1352,10 +1354,7 @@
       <div class="coll-add-btns">
         <button class="coll-btn-primary" onclick="searchPokemonCards()">Search_Pokémon_TCG</button>
         <button class="coll-btn-secondary" onclick="openManualAddModal()">Add_Manually_(Sports_/_Other)</button>
-        <button onclick="openManualWishlistModal()"
-          style="padding:10px 18px;border:1px solid rgba(0,204,255,.5);background:rgba(0,204,255,.06);color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer;letter-spacing:.04em">♡ Add_To_Wishlist</button>
       </div>
-      <p style="font-size:.7rem;color:var(--muted);margin-top:8px">// Search results also show a ♡ WISHLIST button under each card</p>
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
     </div>
@@ -2619,8 +2618,8 @@
       if (!confirm('Remove this listing from the marketplace?')) return;
       const { error } = await sb.from('listings').update({ status: 'inactive' }).eq('id', listingId);
       if (error) { showToast('Error: ' + error.message); return; }
-      const l = listings.find(l => String(l.id) === String(listingId));
-      if (l) l.status = 'inactive';
+      // Remove from local state entirely so it disappears from both views
+      listings = listings.filter(l => String(l.id) !== String(listingId));
       renderMyListings();
       renderBrowse();
       showToast('Listing removed');
@@ -3991,7 +3990,8 @@
         .from('collection_items')
         .select('*')
         .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: false });
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('created_at',  { ascending: true });
       if (!error && data) collectionItems = data;
     }
 
@@ -4004,6 +4004,10 @@
       });
       renderBinder();
     }
+
+    // ── Binder drag-and-drop state ─────────────────────────────────────────
+    let dragSrcIndex = null;   // global index in collectionItems of the card being dragged
+    let binderSaveTimer = null;
 
     function renderBinder() {
       const content = document.getElementById('collectionContent');
@@ -4018,18 +4022,16 @@
         return;
       }
 
-      // Separate owned and ghost (wishlist) cards
-      const ownedItems = collectionItems.filter(c => !c.is_ghost);
-      const ghostItems = collectionItems.filter(c => c.is_ghost);
-
-      if (ownedItems.length === 0 && ghostItems.length === 0) {
+      if (collectionItems.length === 0) {
         if (summary) summary.innerHTML = '';
         if (pagination) pagination.style.display = 'none';
         content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add_Your_First_Card</button></div>`;
         return;
       }
 
-      // Summary stats — owned cards only
+      // Summary stats — owned cards only, wishlist chip separate
+      const ownedItems = collectionItems.filter(c => !c.is_ghost);
+      const ghostCount = collectionItems.filter(c => c.is_ghost).length;
       const totalCards = ownedItems.reduce((s, c) => s + (c.quantity || 1), 0);
       const totalCost  = ownedItems.reduce((s, c) => s + ((c.purchase_price || 0) * (c.quantity || 1)), 0);
       const totalValue = ownedItems.reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
@@ -4042,85 +4044,116 @@
         <div class="coll-stat-box"><div class="coll-stat-label">Cost_Basis</div><div class="coll-stat-value">${totalCost > 0 ? '$' + totalCost.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div></div>
         <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div></div>
         <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
-        ${ghostItems.length > 0 ? `<div class="coll-stat-box" style="border-color:var(--teal)"><div class="coll-stat-label" style="color:var(--teal)">Wishlist</div><div class="coll-stat-value" style="color:var(--teal)">${ghostItems.length}</div></div>` : ''}
+        ${ghostCount > 0 ? `<div class="coll-stat-box" style="border-color:var(--teal)"><div class="coll-stat-label" style="color:var(--teal)">Wishlist</div><div class="coll-stat-value" style="color:var(--teal)">${ghostCount}</div></div>` : ''}
       `;
 
+      // Paginate the unified collectionItems array (owned + ghost intermixed)
+      const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : 1;
+      const totalPages = Math.ceil(collectionItems.length / perPage);
+      binderPage = Math.min(binderPage, Math.max(0, totalPages - 1));
+      const pageStart = binderPage * perPage;
+      const pageItems = collectionItems.slice(pageStart, pageStart + perPage);
       const gridClass = binderView === '3x3' ? 'binder-grid-3x3' : binderView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
 
-      // Render owned cards with pagination
-      let ownedHtml = '';
-      if (ownedItems.length > 0) {
-        const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : 1;
-        const totalPages = Math.ceil(ownedItems.length / perPage);
-        binderPage = Math.min(binderPage, Math.max(0, totalPages - 1));
-        const pageItems = ownedItems.slice(binderPage * perPage, (binderPage + 1) * perPage);
+      content.innerHTML = `<div class="${gridClass}" id="binderGrid">${pageItems.map((item, pageIdx) => {
+        const globalIdx = pageStart + pageIdx;
+        const isGhost  = item.is_ghost;
+        const isGraded = !isGhost && item.condition && item.condition !== 'raw';
+        const condLabel = isGraded
+          ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+          : 'Raw';
+        const val  = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+        const goal = item.savings_goal || 0;
+        const saved= item.amount_saved || 0;
+        const pct  = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
 
-        ownedHtml = `<div class="${gridClass}">${pageItems.map(item => {
-          const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
-          const isGraded = item.condition && item.condition !== 'raw';
-          const condLabel = isGraded
-            ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
-            : 'Raw';
-          return `<div class="binder-card" onclick="openBinderCardDetail('${item.id}')">
-            <div class="binder-card-img-wrap">
-              ${item.card_image_url
-                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" alt="${item.card_name}">`
-                : `<div class="binder-card-placeholder">?</div>`}
-              <span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>
-            </div>
-            <div class="binder-card-info">
-              <div class="binder-card-name">${item.card_name}</div>
-              ${binderView !== '3x3' ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
-              <div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
-            </div>
-          </div>`;
-        }).join('')}</div>`;
+        return `<div class="binder-card${isGhost ? ' ghost-card' : ''}"
+          draggable="true"
+          data-idx="${globalIdx}"
+          data-id="${item.id}"
+          onclick="openBinderCardDetail('${item.id}')"
+          ondragstart="binderDragStart(event,${globalIdx})"
+          ondragover="binderDragOver(event)"
+          ondrop="binderDrop(event,${globalIdx})"
+          ondragend="binderDragEnd(event)"
+          style="cursor:grab">
+          <div class="binder-card-img-wrap">
+            ${item.card_image_url
+              ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
+              : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
+            ${isGhost
+              ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
+              : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`}
+          </div>
+          <div class="binder-card-info">
+            <div class="binder-card-name">${item.card_name}</div>
+            ${binderView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
+            ${isGhost
+              ? (goal > 0
+                  ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
+                     <div style="font-size:.6rem;color:var(--teal)">${pct}% — $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>`
+                  : `<div class="binder-card-value" style="color:var(--teal)">Wishlist</div>`)
+              : `<div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>`}
+          </div>
+        </div>`;
+      }).join('')}</div>`;
 
-        if (pagination) {
-          if (totalPages > 1) {
-            pagination.style.display = 'flex';
-            pagination.innerHTML = `
-              <button class="binder-page-btn" onclick="binderChangePage(-1)" ${binderPage === 0 ? 'disabled' : ''}>← Prev</button>
-              <span style="color:var(--muted);font-size:.78rem;align-self:center">${binderPage + 1} / ${totalPages}</span>
-              <button class="binder-page-btn" onclick="binderChangePage(1)" ${binderPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
-            `;
-          } else {
-            pagination.style.display = 'none';
-          }
+      if (pagination) {
+        if (totalPages > 1) {
+          pagination.style.display = 'flex';
+          pagination.innerHTML = `
+            <button class="binder-page-btn" onclick="binderChangePage(-1)" ${binderPage === 0 ? 'disabled' : ''}>← Prev</button>
+            <span style="color:var(--muted);font-size:.78rem;align-self:center">${binderPage + 1} / ${totalPages}</span>
+            <button class="binder-page-btn" onclick="binderChangePage(1)" ${binderPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+          `;
+        } else {
+          pagination.style.display = 'none';
         }
-      } else {
-        if (pagination) pagination.style.display = 'none';
-        ownedHtml = `<div class="coll-empty" style="margin-bottom:8px">No owned cards yet — add your first card above.</div>`;
       }
+    }
 
-      // Render ghost/wishlist section
-      let ghostHtml = '';
-      if (ghostItems.length > 0) {
-        ghostHtml = `<div class="ghost-section-title">// WISHLIST — GHOST_CARDS (${ghostItems.length})</div>
-          <div class="${gridClass}">${ghostItems.map(item => {
-          const goal   = item.savings_goal  || 0;
-          const saved  = item.amount_saved  || 0;
-          const pct    = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
-          return `<div class="binder-card ghost-card" onclick="openBinderCardDetail('${item.id}')">
-            <div class="binder-card-img-wrap">
-              ${item.card_image_url
-                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" alt="${item.card_name}" style="filter:grayscale(30%)">`
-                : `<div class="binder-card-placeholder" style="color:var(--teal)">♡</div>`}
-              <span class="want-badge">WANT</span>
-              <div class="ghost-shimmer"></div>
-            </div>
-            <div class="binder-card-info">
-              <div class="binder-card-name">${item.card_name}</div>
-              ${goal > 0 ? `
-                <div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
-                <div style="font-size:.6rem;color:var(--teal)">${pct}% — $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>
-              ` : `<div class="binder-card-value" style="color:var(--teal)">Wishlist</div>`}
-            </div>
-          </div>`;
-        }).join('')}</div>`;
-      }
+    // ── Drag-and-drop handlers ────────────────────────────────────────────
+    function binderDragStart(e, idx) {
+      dragSrcIndex = idx;
+      e.dataTransfer.effectAllowed = 'move';
+      e.currentTarget.style.opacity = '0.4';
+    }
 
-      content.innerHTML = ownedHtml + ghostHtml;
+    function binderDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      // Highlight drop target
+      document.querySelectorAll('#binderGrid .binder-card').forEach(el => el.classList.remove('drag-over'));
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function binderDrop(e, targetIdx) {
+      e.preventDefault();
+      if (dragSrcIndex === null || dragSrcIndex === targetIdx) return;
+      // Reorder local array
+      const [moved] = collectionItems.splice(dragSrcIndex, 1);
+      collectionItems.splice(targetIdx, 0, moved);
+      dragSrcIndex = null;
+      renderBinder();
+      // Debounce save so rapid drags don't spam Supabase
+      clearTimeout(binderSaveTimer);
+      binderSaveTimer = setTimeout(saveBinderOrder, 600);
+    }
+
+    function binderDragEnd(e) {
+      dragSrcIndex = null;
+      document.querySelectorAll('#binderGrid .binder-card').forEach(el => {
+        el.style.opacity = '';
+        el.classList.remove('drag-over');
+      });
+    }
+
+    async function saveBinderOrder() {
+      if (!currentUser) return;
+      // Write sort_order for every item in one batched series of updates
+      await Promise.all(collectionItems.map((item, idx) =>
+        sb.from('collection_items').update({ sort_order: idx }).eq('id', item.id)
+      ));
     }
 
     function binderChangePage(dir) {
