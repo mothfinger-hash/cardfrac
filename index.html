@@ -2875,6 +2875,7 @@
         game_type: game,
         grade: gradeDisplay,
         value: price,
+        shipping_price: shipping,
         status: 'active',
         seller_id: currentUser.id,
         total_slots: 1,
@@ -4075,10 +4076,12 @@
 
       try {
         const condition = item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+        const payload = { name: item.card_name, condition };
+        if (item.price_source_url) payload.url = item.price_source_url;
         const res = await fetch('/api/lookup-price', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: item.card_name, condition })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.price) {
@@ -4091,7 +4094,8 @@
           // Update local state
           const local = collectionItems.find(c => String(c.id) === String(itemId));
           if (local) local.current_value = data.price;
-          if (status) { status.style.color = 'var(--accent)'; status.textContent = `Updated → $${data.price.toFixed(2)} (PriceCharting)`; }
+          const src = data.source === 'url' ? 'price source URL' : 'PriceCharting';
+          if (status) { status.style.color = 'var(--accent)'; status.textContent = `Updated → $${data.price.toFixed(2)} (${src})`; }
           // Re-open the modal with fresh data so values update
           setTimeout(() => openBinderCardDetail(itemId), 400);
         } else {
