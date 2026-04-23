@@ -1070,6 +1070,7 @@
         7-day buyer protection window after delivery
       </div>
 
+      <div id="lcSaveError" style="display:none;color:var(--red);font-size:.78rem;padding:8px 12px;border:1px solid var(--red);margin-bottom:10px;background:rgba(239,68,68,.06)"></div>
       <div style="display:flex;gap:10px">
         <button class="lc-save-btn" onclick="saveMarketplaceListing()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">List_Card</button>
         <button onclick="closeModal('listCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
@@ -2486,8 +2487,8 @@
         return;
       }
 
-      const statusLabel = { pending_payment:'Pending Payment', paid:'Paid — Awaiting Shipment', shipped:'Shipped — Confirm Delivery', delivered:'Delivered', completed:'Completed', cancelled:'Cancelled', disputed:'Disputed' };
-      const statusColor = { pending_payment:'var(--muted)', paid:'var(--yellow)', shipped:'var(--teal)', delivered:'var(--green)', completed:'var(--green)', cancelled:'var(--red)', disputed:'var(--red)' };
+      const statusLabel = { pending_payment:'Pending Payment', paid:'Paid — Awaiting Shipment', shipped:'Shipped — Confirm Delivery', delivered:'Delivered', completed:'Completed', cancelled:'Cancelled', disputed:'Disputed', return_requested:'Return Requested — Ship Card Back' };
+      const statusColor = { pending_payment:'var(--muted)', paid:'var(--yellow)', shipped:'var(--teal)', delivered:'var(--green)', completed:'var(--green)', cancelled:'var(--red)', disputed:'var(--red)', return_requested:'var(--yellow)' };
 
       content.innerHTML = mine.map(order => {
         const listing = listings.find(l => String(l.id) === String(order.listing_id));
@@ -2498,7 +2499,11 @@
 
         let actionHtml = '';
         if (isBuying && status === 'shipped') {
-          actionHtml = `<button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm_Delivery</button>`;
+          actionHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm_Delivery</button>
+          </div>`;
+        } else if (isBuying && status === 'completed') {
+          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return_Card</button>`;
         } else if (!isBuying && status === 'paid') {
           actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add_Tracking_#</button>`;
         }
@@ -2591,13 +2596,69 @@
         completed_at: now
       }).eq('id', orderId);
       if (error) { showToast('Error: ' + error.message); return; }
-      const o = orders.find(o => o.id === orderId);
+      const o = orders.find(x => x.id === orderId);
       if (o) { o.status = 'completed'; o.delivered_at = now; o.completed_at = now; }
+
+      // Auto-add purchased card to buyer's binder
+      if (o && currentUser) {
+        const listing = listings.find(l => String(l.id) === String(o.listing_id));
+        if (listing) {
+          const isGraded = listing.condition && listing.condition !== 'Raw' && listing.condition !== 'raw';
+          const insertData = {
+            user_id:        currentUser.id,
+            card_name:      listing.name,
+            game_type:      listing.gameType || listing.game_type || 'Other',
+            condition:      isGraded ? 'graded' : 'raw',
+            grade_value:    listing.grade_value || listing.gradeValue || null,
+            card_image_url: listing.photos?.[0] || null,
+            purchase_price: o.amount || listing.list_price || listing.value || 0,
+            current_value:  listing.market_price || listing.value || 0,
+            quantity:       1,
+            purchase_date:  now.slice(0, 10),
+            notes:          'auto_purchase:' + orderId
+          };
+          const { data: newItem, error: collErr } = await sb.from('collection_items').insert(insertData).select().single();
+          if (collErr) {
+            console.warn('[binder auto-add] failed:', collErr.message);
+          } else if (newItem) {
+            collectionItems.unshift(newItem);
+            showToast('Card added to your binder!');
+          }
+        }
+      }
+
       showToast('Delivery confirmed! Payment will be released to the seller.');
       renderOrders();
       updateOrderNotification();
       // Prompt for seller rating
       if (o) setTimeout(() => openRateSellerModal(orderId, o.seller_id, o.seller_name || 'the seller'), 800);
+    }
+
+    async function requestReturn(orderId) {
+      if (!confirm('Request a return? This will open a dispute and remove the card from your binder. You will need to ship the card back to the seller.')) return;
+      const o = orders.find(x => x.id === orderId);
+
+      // Remove auto-added binder card
+      const autoItem = collectionItems.find(c => c.notes === 'auto_purchase:' + orderId);
+      if (autoItem) {
+        await sb.from('collection_items').delete().eq('id', autoItem.id);
+        collectionItems = collectionItems.filter(c => c.id !== autoItem.id);
+      }
+
+      // Mark listing back to available if we can find it
+      if (o) {
+        await sb.from('listings').update({ status: 'available' }).eq('id', o.listing_id);
+        const listing = listings.find(l => String(l.id) === String(o.listing_id));
+        if (listing) listing.status = 'available';
+      }
+
+      // Mark order as return_requested
+      const { error } = await sb.from('orders').update({ status: 'return_requested' }).eq('id', orderId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      if (o) o.status = 'return_requested';
+
+      showToast('Return requested. Ship the card back to the seller using the original tracking address.');
+      renderOrders();
     }
 
     // ─── Seller Ratings ────────────────────────────────────────────────
@@ -2789,6 +2850,8 @@
       document.getElementById('lcDescription').value = '';
       document.getElementById('lcMarketPriceResult').style.display = 'none';
       document.getElementById('lcPhotoError').style.display = 'none';
+      const _lcErr = document.getElementById('lcSaveError');
+      if (_lcErr) _lcErr.style.display = 'none';
       renderLcPhotoPreview();
       toggleLcGrade();
       openModal('listCardModal');
@@ -2853,11 +2916,17 @@
         seller_id: currentUser.id,
         total_slots: 1,
         photos: photoUrls,
-        notes: description || null
+        description: description || null
       }).select().single();
 
       if (saveBtn) { saveBtn.textContent = 'List_Card'; saveBtn.disabled = false; }
-      if (error) { showToast('Error saving listing: ' + error.message); return; }
+      const lcErr = document.getElementById('lcSaveError');
+      if (error) {
+        if (lcErr) { lcErr.textContent = '// Error: ' + error.message; lcErr.style.display = 'block'; }
+        else showToast('Error saving listing: ' + error.message);
+        return;
+      }
+      if (lcErr) lcErr.style.display = 'none';
 
       if (data) {
         listings.unshift({
