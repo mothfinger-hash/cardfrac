@@ -2872,15 +2872,9 @@
 
       const { data, error } = await sb.from('listings').insert({
         name,
-        card_type: game,
         game_type: game,
         grade: gradeDisplay,
-        condition,
-        grade_value: gradeNum,
         value: price,
-        list_price: price,
-        market_price: marketPrice,
-        shipping_price: shipping,
         status: 'active',
         seller_id: currentUser.id,
         total_slots: 1,
@@ -4057,6 +4051,8 @@
           </div>
         </div>
         <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
+          <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
+            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List_For_Sale</button>
           <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
             style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
