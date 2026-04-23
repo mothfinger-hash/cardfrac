@@ -3950,7 +3950,11 @@
     // ===== INIT =====
     function renderAllContent() {
       renderBrowse();
-      if (currentUser) updateTradeNotification();
+      renderBinder();
+      if (currentUser) {
+        renderDashboard();
+        updateTradeNotification();
+      }
     }
 
     // ===== COLLECTION PAGE (Phase 2) =====
@@ -4373,9 +4377,11 @@
             .order('created_at', { ascending: false })
             .catch(() => ({ data: null }));
           const offerResult = { data: [] }; // trade_offers deprecated
-          // Load collection and orders silently (tables may not exist yet)
-          loadCollection().catch(() => {});
-          loadOrders().catch(() => {});
+          // Load collection and orders, then re-render binder + dashboard
+          await Promise.all([
+            loadCollection().catch(() => {}),
+            loadOrders().catch(() => {})
+          ]);
 
           if (txnResult.data) {
             transactions = txnResult.data.map(t => ({
@@ -4496,9 +4502,14 @@
           }
           updateAuthUI();
           renderAllContent();
-          // Load collection + orders in background after sign-in
-          loadCollection().catch(() => {});
-          loadOrders().catch(() => {});
+          // Load collection + orders in background after sign-in, then re-render
+          Promise.all([
+            loadCollection().catch(() => {}),
+            loadOrders().catch(() => {})
+          ]).then(() => {
+            renderBinder();
+            renderDashboard();
+          });
         }).catch(err => console.error('Background data fetch error:', err));
 
       } else if (event === 'SIGNED_OUT') {
