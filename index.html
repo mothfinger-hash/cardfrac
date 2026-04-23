@@ -2377,14 +2377,12 @@
     function renderDashboard() {
       if (!currentUser) return;
       const myListingItems = listings.filter(l => l.seller_id === currentUser.id || l.sellerId === currentUser.id);
-      const activeSales = myListingItems.filter(l => l.status === 'active' || l.status === 'available').length;
-      const completedSales = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed').length;
+      const activeSales    = myListingItems.filter(l => l.status === 'active' || l.status === 'available').length;
       const pendingPayouts = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed' && !o.payout_sent_at).length;
-      const totalEarned = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed')
+      const totalEarned    = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed')
         .reduce((s, o) => s + (o.seller_payout || 0), 0);
-      const buyingActive = orders.filter(o => o.buyer_id === currentUser.id && !['completed','cancelled'].includes(o.status)).length;
 
-      // Binder portfolio stats — owned cards only
+      // Owned vs ghost split
       const ownedCards = collectionItems.filter(c => !c.is_ghost);
       const ghostCards = collectionItems.filter(c => c.is_ghost);
       const totalValue = ownedCards.reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
@@ -2393,12 +2391,12 @@
       const gainSign   = totalGain >= 0 ? '+' : '';
       const gainPct    = totalCost > 0 ? ((totalGain / totalCost) * 100).toFixed(1) : null;
 
-      // Top 3 by value (owned only)
-      const top3 = [...ownedCards]
+      // Top 5 by value (owned only), with condition label
+      const top5 = [...ownedCards]
         .sort((a, b) => ((b.current_value || b.purchase_price || 0) * (b.quantity || 1)) - ((a.current_value || a.purchase_price || 0) * (a.quantity || 1)))
-        .slice(0, 3);
+        .slice(0, 5);
 
-      // Chart: top 8 by per-card value (owned only)
+      // Bar chart: top 8 per-card value
       const chartItems = [...ownedCards]
         .sort((a, b) => (b.current_value || b.purchase_price || 0) - (a.current_value || a.purchase_price || 0))
         .slice(0, 8);
@@ -2406,17 +2404,33 @@
       const chartBars = chartItems.map(c => {
         const v = c.current_value || c.purchase_price || 0;
         const pct = maxVal > 0 ? (v / maxVal * 100).toFixed(1) : 0;
-        const name = c.card_name.length > 15 ? c.card_name.slice(0, 14) + '…' : c.card_name;
-        return `<div class="dash-chart-row">
-          <div class="dash-chart-label">${name}</div>
+        const isGraded = c.condition && c.condition !== 'raw';
+        const condChip = isGraded
+          ? `<span class="grade-badge" style="font-size:.52rem;padding:1px 4px;margin-left:4px">${c.condition.toUpperCase()}${c.grade_value != null ? ' ' + c.grade_value : ''}</span>`
+          : `<span class="raw-badge"  style="font-size:.52rem;padding:1px 4px;margin-left:4px">Raw</span>`;
+        const name = c.card_name.length > 14 ? c.card_name.slice(0, 13) + '…' : c.card_name;
+        return `<div class="dash-chart-row" style="grid-template-columns:130px 1fr 72px">
+          <div class="dash-chart-label">${name}${condChip}</div>
           <div class="dash-chart-bar-wrap"><div class="dash-chart-bar" style="width:${pct}%"></div></div>
           <div class="dash-chart-val">$${Number(v).toLocaleString()}</div>
         </div>`;
       }).join('');
 
+      // YTD chart from portfolio_snapshots
+      const snapshots = (window._portfolioSnapshots || []);
+      const ytdHtml = buildYtdChart(snapshots, totalValue);
+
+      // Biggest movers (7-day) — all cards with price history
+      const moversHtml = buildMovers(collectionItems);
+
+      // Price alerts for ghost cards
+      const alertsHtml = buildPriceAlerts(ghostCards);
+
       const content = document.getElementById('dashboardContent');
       if (!content) return;
       content.innerHTML = `
+        ${alertsHtml}
+
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;margin-bottom:24px">
           <div class="coll-stat-box" style="border-color:var(--accent)"><div class="coll-stat-label" style="color:var(--accent)">Binder_Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Net_Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) : '—'}</div></div>
@@ -2425,23 +2439,31 @@
           ${pendingPayouts > 0 ? `<div class="coll-stat-box" style="border-color:var(--red)"><div class="coll-stat-label" style="color:var(--red)">Pending_Payouts</div><div class="coll-stat-value">${pendingPayouts}</div></div>` : ''}
         </div>
 
+        ${ytdHtml}
+
         ${chartItems.length > 0 ? `
         <div class="dash-chart-section">
           <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// PORTFOLIO_VALUE_BREAKDOWN</div>
           ${chartBars}
         </div>` : ''}
 
-        ${top3.length > 0 ? `
+        ${top5.length > 0 ? `
         <div style="margin:24px 0 16px">
-          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// TOP_3_MOST_VALUABLE</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px">
-            ${top3.map((item, i) => {
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// TOP_5_MOST_VALUABLE</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">
+            ${top5.map((item, i) => {
               const v = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
-              const medals = ['#1','#2','#3'];
+              const isGraded = item.condition && item.condition !== 'raw';
+              const condLabel = isGraded
+                ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+                : 'Raw';
+              const rankColors = ['var(--gold)','#c0c0c0','#cd7f32','var(--muted)','var(--muted)'];
+              const medals = ['#1','#2','#3','#4','#5'];
               return `<div class="binder-card" onclick="showPage('collection');setMobileNav('collection');setTimeout(()=>openBinderCardDetail('${item.id}'),80)" style="cursor:pointer">
                 <div class="binder-card-img-wrap" style="aspect-ratio:3/4">
                   ${item.card_image_url ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy">` : `<div class="binder-card-placeholder">${medals[i]}</div>`}
-                  <span style="position:absolute;top:4px;left:4px;background:var(--accent);color:#080500;font-size:.6rem;font-weight:700;padding:2px 5px;border-radius:2px">${medals[i]}</span>
+                  <span style="position:absolute;top:4px;left:4px;background:${rankColors[i]};color:#080500;font-size:.6rem;font-weight:700;padding:2px 5px">${medals[i]}</span>
+                  <span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="position:absolute;bottom:4px;right:4px;font-size:.5rem;padding:1px 4px">${condLabel}</span>
                 </div>
                 <div class="binder-card-info">
                   <div class="binder-card-name">${item.card_name.length > 16 ? item.card_name.slice(0,15)+'…' : item.card_name}</div>
@@ -2452,27 +2474,25 @@
           </div>
         </div>` : ''}
 
+        ${moversHtml}
+
         ${ghostCards.length > 0 ? `
         <div class="dash-chart-section" style="border-color:rgba(0,204,255,.25);margin-top:8px">
           <div style="font-size:.75rem;color:var(--teal);margin-bottom:14px;letter-spacing:.08em">// WISHLIST_GOALS (${ghostCards.length})</div>
           ${ghostCards.map(c => {
-            const goal    = c.savings_goal  || 0;
-            const saved   = c.amount_saved  || 0;
-            const pct     = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
-            const name    = c.card_name.length > 18 ? c.card_name.slice(0, 17) + '…' : c.card_name;
-            const barPct  = goal > 0 ? pct : 0;
+            const goal   = c.savings_goal || 0;
+            const saved  = c.amount_saved || 0;
+            const pct    = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
+            const name   = c.card_name.length > 22 ? c.card_name.slice(0, 21) + '…' : c.card_name;
             return `<div style="margin-bottom:14px;cursor:pointer" onclick="showPage('collection');setMobileNav('collection');setTimeout(()=>openBinderCardDetail('${c.id}'),80)">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
                 <span style="font-size:.72rem;color:var(--text)">${name}</span>
                 <span style="font-size:.68rem;color:var(--teal)">${goal > 0 ? '$' + saved.toFixed(0) + ' / $' + goal.toFixed(0) : 'No goal set'}</span>
               </div>
-              <div class="savings-bar-wrap">
-                <div class="savings-bar-fill" style="width:${barPct}%"></div>
-              </div>
+              <div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${goal > 0 ? pct : 0}%"></div></div>
               ${goal > 0 ? `<div style="font-size:.62rem;color:var(--muted);margin-top:2px">${pct}% saved${Number(pct) >= 100 ? ' — Ready to buy! ✓' : ''}</div>` : ''}
             </div>`;
           }).join('')}
-          <button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:4px;padding:6px 14px;border:1px solid rgba(0,204,255,.35);background:rgba(0,204,255,.06);color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">+ Add_To_Wishlist</button>
         </div>` : ''}
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
@@ -2480,6 +2500,176 @@
           <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My_Binder</button>
         </div>
       `;
+
+      // Draw YTD SVG line chart after innerHTML is set
+      drawYtdChart(snapshots, totalValue);
+    }
+
+    // ── YTD Portfolio Chart ──────────────────────────────────────────────────
+    function buildYtdChart(snapshots, currentValue) {
+      const pts = [...snapshots];
+      // Append today's live value as the rightmost point
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (!pts.length || pts[pts.length-1].snapshot_date !== todayStr) {
+        pts.push({ snapshot_date: todayStr, total_value: currentValue });
+      }
+      if (pts.length < 2) {
+        return `<div class="dash-chart-section" style="margin-bottom:16px">
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:8px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
+          <div style="font-size:.75rem;color:var(--muted)">Building history — check back tomorrow for your first data point.</div>
+        </div>`;
+      }
+      return `<div class="dash-chart-section" style="margin-bottom:16px">
+        <div style="font-size:.75rem;color:var(--accent);margin-bottom:10px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
+        <svg id="ytdChartSvg" width="100%" height="120" style="display:block;overflow:visible"></svg>
+      </div>`;
+    }
+
+    function drawYtdChart(snapshots, currentValue) {
+      const svg = document.getElementById('ytdChartSvg');
+      if (!svg) return;
+      const pts = [...snapshots];
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (!pts.length || pts[pts.length-1].snapshot_date !== todayStr) {
+        pts.push({ snapshot_date: todayStr, total_value: currentValue });
+      }
+      if (pts.length < 2) return;
+
+      const W = svg.getBoundingClientRect().width || 500;
+      const H = 110;
+      const PAD_L = 52, PAD_R = 12, PAD_T = 10, PAD_B = 24;
+      const vals = pts.map(p => Number(p.total_value) || 0);
+      const minV = Math.min(...vals);
+      const maxV = Math.max(...vals);
+      const range = maxV - minV || 1;
+
+      const xScale = i => PAD_L + (i / (pts.length - 1)) * (W - PAD_L - PAD_R);
+      const yScale = v => PAD_T + (1 - (v - minV) / range) * (H - PAD_T - PAD_B);
+
+      const polyPoints = pts.map((p, i) => `${xScale(i).toFixed(1)},${yScale(Number(p.total_value)).toFixed(1)}`).join(' ');
+      const areaPoints = `${xScale(0).toFixed(1)},${H - PAD_B} ` + polyPoints + ` ${xScale(pts.length-1).toFixed(1)},${H - PAD_B}`;
+
+      const isUp = vals[vals.length-1] >= vals[0];
+      const lineColor = isUp ? 'var(--green)' : 'var(--red)';
+      const fillColor = isUp ? 'rgba(57,255,20,.08)' : 'rgba(255,68,85,.08)';
+
+      // Y axis labels
+      const yLabels = [minV, (minV + maxV) / 2, maxV].map((v, i) => {
+        const y = yScale(v);
+        return `<text x="${PAD_L - 4}" y="${y.toFixed(1)}" text-anchor="end" font-size="9" fill="var(--muted)" font-family="Share Tech Mono,monospace" dominant-baseline="middle">$${Math.round(v).toLocaleString()}</text>`;
+      }).join('');
+
+      // X axis: show first, middle, last date labels
+      const xIdxs = [0, Math.floor((pts.length-1)/2), pts.length-1];
+      const xLabels = xIdxs.map(i => {
+        const d = pts[i].snapshot_date.slice(5); // MM-DD
+        return `<text x="${xScale(i).toFixed(1)}" y="${H - PAD_B + 14}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="Share Tech Mono,monospace">${d}</text>`;
+      }).join('');
+
+      svg.innerHTML = `
+        <polygon points="${areaPoints}" fill="${fillColor}" />
+        <polyline points="${polyPoints}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-linejoin="round" />
+        <circle cx="${xScale(pts.length-1).toFixed(1)}" cy="${yScale(vals[vals.length-1]).toFixed(1)}" r="3" fill="${lineColor}" />
+        ${yLabels}
+        ${xLabels}
+        <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" stroke="var(--border)" stroke-width="1"/>
+        <line x1="${PAD_L}" y1="${H - PAD_B}" x2="${W - PAD_R}" y2="${H - PAD_B}" stroke="var(--border)" stroke-width="1"/>
+      `;
+    }
+
+    // ── Biggest Movers (7-day) ───────────────────────────────────────────────
+    function buildMovers(cards) {
+      // Uses price_history stored on each card (array of {date, value})
+      const now = Date.now();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      const movers = [];
+
+      for (const c of cards) {
+        const history = c.price_history_log || [];  // [{date:'YYYY-MM-DD', value:N}]
+        if (!history.length) continue;
+        // Find oldest entry within 7 days
+        const cutoff = new Date(now - sevenDaysMs).toISOString().slice(0, 10);
+        const old = [...history].filter(h => h.date >= cutoff).shift();
+        if (!old) continue;
+        const currentVal = c.current_value || c.purchase_price || 0;
+        const oldVal = old.value || 0;
+        if (!oldVal) continue;
+        const delta = currentVal - oldVal;
+        const deltaPct = ((delta / oldVal) * 100);
+        movers.push({ ...c, delta, deltaPct, oldVal, currentVal });
+      }
+
+      if (!movers.length) return '';
+
+      movers.sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct));
+      const top = movers.slice(0, 5);
+
+      return `<div class="dash-chart-section" style="margin-bottom:16px">
+        <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// BIGGEST_MOVERS — 7_DAYS</div>
+        ${top.map(c => {
+          const sign = c.delta >= 0 ? '+' : '';
+          const color = c.delta >= 0 ? 'var(--green)' : 'var(--red)';
+          const name = c.card_name.length > 22 ? c.card_name.slice(0, 21) + '…' : c.card_name;
+          const ghostMark = c.is_ghost ? ' <span style="color:var(--teal);font-size:.6rem">♡</span>' : '';
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer"
+            onclick="showPage('collection');setMobileNav('collection');setTimeout(()=>openBinderCardDetail('${c.id}'),80)">
+            <span style="font-size:.75rem;color:var(--text)">${name}${ghostMark}</span>
+            <span style="font-size:.78rem;color:${color};font-weight:700">${sign}${c.deltaPct.toFixed(1)}% (${sign}$${Math.abs(c.delta).toFixed(0)})</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    // ── Price Alerts for Ghost Cards ─────────────────────────────────────────
+    function buildPriceAlerts(ghostCards) {
+      const alerts = [];
+
+      for (const c of ghostCards) {
+        const goal = c.savings_goal || 0;
+        if (!goal) continue;
+        const marketVal = c.current_value || 0;
+
+        // Alert: current tracked price is at or below target
+        if (marketVal > 0 && marketVal <= goal) {
+          alerts.push({ type: 'price_hit', card: c, marketVal, goal });
+        }
+
+        // Alert: a marketplace listing exists at or below target
+        const matchingListing = listings.find(l =>
+          l.name.toLowerCase().includes(c.card_name.toLowerCase().slice(0, 8)) &&
+          (l.status === 'active' || l.status === 'available') &&
+          (l.value || 0) <= goal
+        );
+        if (matchingListing) {
+          alerts.push({ type: 'listing_hit', card: c, listing: matchingListing, goal });
+        }
+      }
+
+      if (!alerts.length) return '';
+
+      return `<div style="margin-bottom:20px">
+        ${alerts.map(a => {
+          if (a.type === 'price_hit') {
+            return `<div style="background:rgba(57,255,20,.07);border:1px solid rgba(57,255,20,.35);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
+              onclick="showPage('collection');setMobileNav('collection');setTimeout(()=>openBinderCardDetail('${a.card.id}'),80)">
+              <div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">🎯 PRICE TARGET HIT — ${a.card.card_name}</div>
+                <div style="font-size:.68rem;color:var(--muted);margin-top:2px">Market price $${a.marketVal.toFixed(0)} is at or below your $${a.goal.toFixed(0)} target</div>
+              </div>
+              <span style="font-size:.7rem;color:var(--green)">→</span>
+            </div>`;
+          } else {
+            return `<div style="background:rgba(57,255,20,.07);border:1px solid rgba(57,255,20,.35);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
+              onclick="showPage('browse');setMobileNav('browse')">
+              <div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">🛒 LISTED AT TARGET — ${a.card.card_name}</div>
+                <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${a.listing.name} is on the marketplace for $${(a.listing.value||0).toFixed(0)} (target: $${a.goal.toFixed(0)})</div>
+              </div>
+              <span style="font-size:.7rem;color:var(--green)">→ Marketplace</span>
+            </div>`;
+          }
+        }).join('')}
+      </div>`;
     }
 
     function renderMyListings() {
@@ -3986,13 +4176,61 @@
 
     async function loadCollection() {
       if (!currentUser) { collectionItems = []; return; }
+      const sevenAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const [collResult, histResult] = await Promise.all([
+        sb.from('collection_items')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('sort_order', { ascending: true, nullsFirst: false })
+          .order('created_at',  { ascending: true }),
+        sb.from('price_history')
+          .select('collection_item_id, recorded_at, recorded_value')
+          .eq('user_id', currentUser.id)
+          .gte('recorded_at', sevenAgo)
+          .order('recorded_at', { ascending: true })
+      ]);
+      if (!collResult.error && collResult.data) {
+        // Attach price history log to each item
+        const histMap = {};
+        if (!histResult.error && histResult.data) {
+          for (const h of histResult.data) {
+            const cid = String(h.collection_item_id);
+            if (!histMap[cid]) histMap[cid] = [];
+            histMap[cid].push({ date: h.recorded_at, value: h.recorded_value });
+          }
+        }
+        collectionItems = collResult.data.map(c => ({
+          ...c,
+          price_history_log: histMap[String(c.id)] || []
+        }));
+      }
+    }
+
+    async function loadPortfolioSnapshots() {
+      if (!currentUser) return;
+      const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
       const { data, error } = await sb
-        .from('collection_items')
-        .select('*')
+        .from('portfolio_snapshots')
+        .select('snapshot_date, total_value')
         .eq('user_id', currentUser.id)
-        .order('sort_order', { ascending: true, nullsFirst: false })
-        .order('created_at',  { ascending: true });
-      if (!error && data) collectionItems = data;
+        .gte('snapshot_date', yearStart)
+        .order('snapshot_date', { ascending: true });
+      if (!error && data) {
+        window._portfolioSnapshots = data;
+      }
+      // Write today's snapshot (upsert so it's idempotent)
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const ownedVal = collectionItems
+        .filter(c => !c.is_ghost)
+        .reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
+      if (ownedVal > 0) {
+        sb.from('portfolio_snapshots').upsert({
+          user_id: currentUser.id,
+          snapshot_date: todayStr,
+          total_value: ownedVal,
+          card_count: collectionItems.filter(c => !c.is_ghost).length
+        }, { onConflict: 'user_id,snapshot_date' }).catch(() => {});
+      }
     }
 
     function setBinderView(view) {
@@ -4300,6 +4538,7 @@
         });
         const data = await res.json();
         if (data.price) {
+          const oldPrice = item.current_value || item.purchase_price || null;
           // Write updated current_value to Supabase
           const { error } = await sb
             .from('collection_items')
@@ -4311,6 +4550,23 @@
           if (local) local.current_value = data.price;
           const src = data.source === 'url' ? 'price source URL' : 'PriceCharting';
           if (status) { status.style.color = 'var(--accent)'; status.textContent = `Updated → $${data.price.toFixed(2)} (${src})`; }
+          // Log price history if value changed
+          if (oldPrice !== data.price && currentUser) {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            sb.from('price_history').upsert({
+              collection_item_id: itemId,
+              user_id: currentUser.id,
+              recorded_value: data.price,
+              recorded_at: todayStr
+            }, { onConflict: 'collection_item_id,recorded_at' }).catch(() => {});
+            // Also update local price_history_log array for movers chart
+            if (local) {
+              local.price_history_log = local.price_history_log || [];
+              const existing = local.price_history_log.findIndex(h => h.date === todayStr);
+              if (existing >= 0) local.price_history_log[existing].value = data.price;
+              else local.price_history_log.push({ date: todayStr, value: data.price });
+            }
+          }
           // Re-open the modal with fresh data so values update
           setTimeout(() => openBinderCardDetail(itemId), 400);
         } else {
@@ -4654,7 +4910,7 @@
         // 1. Restore auth session + fetch listings — in parallel
         const [sessionResult, listingsResult] = await Promise.all([
           sb.auth.getSession(),
-          sb.from('listings').select('*').order('created_at', { ascending: false })
+          sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false })
         ]);
 
         // Restore session
@@ -4678,10 +4934,11 @@
             .order('created_at', { ascending: false })
             .catch(() => ({ data: null }));
           const offerResult = { data: [] }; // trade_offers deprecated
-          // Load collection and orders, then re-render binder + dashboard
+          // Load collection, orders, and portfolio snapshots in parallel
           await Promise.all([
             loadCollection().catch(() => {}),
-            loadOrders().catch(() => {})
+            loadOrders().catch(() => {}),
+            loadPortfolioSnapshots().catch(() => {})
           ]);
 
           if (txnResult.data) {
@@ -4772,7 +5029,7 @@
         const uid = session.user.id;
         Promise.all([
           sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
-          sb.from('listings').select('*').order('created_at', { ascending: false })
+          sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false })
         ]).then(([profileRes, listingsRes]) => {
           currentUser = { ...session.user, ...(profileRes.data || {}) };
           if (listingsRes.data) {
@@ -4803,10 +5060,11 @@
           }
           updateAuthUI();
           renderAllContent();
-          // Load collection + orders in background after sign-in, then re-render
+          // Load collection + orders + snapshots in background after sign-in, then re-render
           Promise.all([
             loadCollection().catch(() => {}),
-            loadOrders().catch(() => {})
+            loadOrders().catch(() => {}),
+            loadPortfolioSnapshots().catch(() => {})
           ]).then(() => {
             renderBinder();
             renderDashboard();
