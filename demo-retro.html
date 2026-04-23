@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CardFrac - Fractional Trading Card Ownership</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            font-family: 'Share Tech Mono', monospace;
+            background: #050a05;
+            color: #39ff14;
+            overflow-x: hidden;
+        }
+
+        /* Grid background pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(0deg, transparent 24%, rgba(26, 122, 26, 0.04) 25%, rgba(26, 122, 26, 0.04) 26%, transparent 27%, transparent 74%, rgba(26, 122, 26, 0.04) 75%, rgba(26, 122, 26, 0.04) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(26, 122, 26, 0.04) 25%, rgba(26, 122, 26, 0.04) 26%, transparent 27%, transparent 74%, rgba(26, 122, 26, 0.04) 75%, rgba(26, 122, 26, 0.04) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Scanline overlay */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 2;
+            animation: scanlines 8s linear infinite;
+        }
+
+        @keyframes scanlines {
+            0% {
+                transform: translateY(0);
+            }
+            100% {
+                transform: translateY(10px);
+            }
+        }
+
+        /* Main content wrapper */
+        .container {
+            position: relative;
+            z-index: 3;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Navigation Bar */
+        nav {
+            background: rgba(5, 10, 5, 0.95);
+            border-bottom: 2px solid #1a7a1a;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.15);
+        }
+
+        .nav-logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #39ff14;
+            text-shadow: 0 0 8px #39ff14, 0 0 15px #1a7a1a;
+            letter-spacing: 2px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: #39ff14;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border: 1px solid #1a7a1a;
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+        }
+
+        .nav-link:hover {
+            background: rgba(57, 255, 20, 0.08);
+            box-shadow: 0 0 12px rgba(57, 255, 20, 0.3);
+            color: #7fff00;
+            border-color: #2a5a2a;
+        }
+
+        .nav-btn {
+            background: linear-gradient(135deg, #39ff14 0%, #2a5a2a 100%);
+            color: #050a05;
+            border: 2px solid #1a7a1a;
+            padding: 0.75rem 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 12px rgba(57, 255, 20, 0.25);
+        }
+
+        .nav-btn:hover {
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.4), 0 0 30px rgba(127, 255, 0, 0.2);
+            transform: scale(1.05);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 4rem 2rem;
+            text-align: center;
+            border-bottom: 2px solid #1a7a1a;
+            background: linear-gradient(180deg, rgba(57, 255, 20, 0.03) 0%, transparent 100%);
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+            color: #39ff14;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 15px #39ff14, 0 0 25px #1a7a1a;
+            letter-spacing: 3px;
+            line-height: 1.4;
+        }
+
+        .hero-title::before {
+            content: '> ';
+            color: #2a5a2a;
+        }
+
+        .hero-title::after {
+            content: ' <';
+            color: #2a5a2a;
+        }
+
+        .hero-tagline {
+            font-size: 1rem;
+            color: #2a5a2a;
+            margin: 1rem 0 2rem;
+            letter-spacing: 2px;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background: #39ff14;
+            margin-left: 5px;
+            animation: blink 1s steps(2) infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes blink {
+            0%, 49% { background: #39ff14; }
+            50%, 100% { background: transparent; }
+        }
+
+        /* Stats Section */
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .stat-box {
+            padding: 2rem;
+            border: 2px solid #1a7a1a;
+            background: rgba(5, 20, 10, 0.5);
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.15), inset 0 0 15px rgba(57, 255, 20, 0.03);
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #2a5a2a;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            color: #39ff14;
+            text-shadow: 0 0 8px #39ff14;
+            font-weight: bold;
+        }
+
+        /* Main Content Area */
+        .content {
+            flex: 1;
+            padding: 3rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            color: #39ff14;
+            margin-bottom: 2rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #39ff14;
+        }
+
+        .section-title::before {
+            content: '>> ';
+            color: #2a5a2a;
+        }
+
+        /* Card Grid */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .card-listing {
+            border: 2px solid #1a7a1a;
+            background: linear-gradient(135deg, rgba(5, 20, 10, 0.6) 0%, rgba(10, 20, 10, 0.6) 100%);
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.1), inset 0 0 15px rgba(57, 255, 20, 0.02);
+            transition: all 0.3s ease;
+        }
+
+        .card-listing::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(57, 255, 20, 0.1), transparent);
+            animation: cardShine 3s infinite;
+        }
+
+        @keyframes cardShine {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .card-listing:hover {
+            box-shadow: 0 0 25px rgba(57, 255, 20, 0.3), 0 0 15px rgba(127, 255, 0, 0.2), inset 0 0 15px rgba(57, 255, 20, 0.05);
+            transform: translateY(-5px);
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            color: #39ff14;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 8px #39ff14;
+            letter-spacing: 1px;
+        }
+
+        .card-game-type {
+            display: inline-block;
+            background: #1a7a1a;
+            color: #39ff14;
+            padding: 0.3rem 0.7rem;
+            font-size: 0.75rem;
+            margin-bottom: 1rem;
+            letter-spacing: 1px;
+            font-weight: bold;
+            border: 1px solid #39ff14;
+        }
+
+        .card-value {
+            font-size: 1.5rem;
+            color: #39ff14;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 8px #39ff14;
+        }
+
+        .card-value::before {
+            content: '$ ';
+            color: #2a5a2a;
+        }
+
+        .card-stats {
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+            color: #39ff14;
+        }
+
+        .card-stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(57, 255, 20, 0.15);
+        }
+
+        .stat-label-card {
+            color: #2a5a2a;
+        }
+
+        .stat-value-card {
+            color: #39ff14;
+        }
+
+        /* Availability Bar */
+        .availability {
+            margin-top: 1.5rem;
+        }
+
+        .availability-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            color: #39ff14;
+        }
+
+        .availability-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(57, 255, 20, 0.08);
+            border: 1px solid #1a7a1a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .availability-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2a5a2a, #39ff14);
+            box-shadow: 0 0 8px #39ff14, inset 0 0 4px rgba(57, 255, 20, 0.2);
+        }
+
+        .card-listing.sold-out {
+            opacity: 0.7;
+            border-color: #1a7a1a;
+        }
+
+        .sold-out-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #1a7a1a;
+            color: #39ff14;
+            padding: 0.5rem 1rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+            font-size: 0.75rem;
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.2);
+            border: 1px solid #39ff14;
+        }
+
+        /* Footer */
+        footer {
+            background: rgba(5, 10, 5, 0.95);
+            border-top: 2px solid #1a7a1a;
+            padding: 2rem;
+            text-align: center;
+            color: #39ff14;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.15);
+            margin-top: auto;
+        }
+
+        footer::before {
+            content: '[ ';
+            color: #2a5a2a;
+        }
+
+        footer::after {
+            content: ' ]';
+            color: #2a5a2a;
+        }
+
+        .footer-text {
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            text-shadow: 0 0 8px #39ff14;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 1.8rem;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                gap: 1rem;
+            }
+
+            nav {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav>
+            <div class="nav-logo">[ CARDFRAC_SYS ]</div>
+            <div class="nav-links">
+                <a href="#" class="nav-link">[BROWSE]</a>
+                <a href="#" class="nav-link">[LEADERBOARD]</a>
+                <a href="#" class="nav-link">[ACCOUNT]</a>
+                <button class="nav-link nav-btn">[JOIN_NETWORK]</button>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <h1 class="hero-title">
+                FRACTIONAL CARD OWNERSHIP
+                <br>
+                PROTOCOL v2.0<span class="cursor"></span>
+            </h1>
+            <p class="hero-tagline">DECENTRALIZED OWNERSHIP // SECURE STORAGE // INSTANT LIQUIDITY</p>
+
+            <!-- Stats -->
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-label">[ TOTAL_CARDS ]</div>
+                    <div class="stat-value">847</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">[ MARKET_CAP ]</div>
+                    <div class="stat-value">$2.4M</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content -->
+        <section class="content">
+            <h2 class="section-title">AVAILABLE LISTINGS</h2>
+
+            <div class="card-grid">
+                <!-- Card 1 -->
+                <div class="card-listing">
+                    <div class="card-game-type">TCG: POKEMON</div>
+                    <h3 class="card-title">Charizard Base Set</h3>
+                    <div class="card-value">4200</div>
+
+                    <div class="card-stats">
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Grade:</span>
+                            <span class="stat-value-card">PSA 10</span>
+                        </div>
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Price per Slot:</span>
+                            <span class="stat-value-card">$182.61</span>
+                        </div>
+                    </div>
+
+                    <div class="availability">
+                        <div class="availability-label">
+                            <span>Slots Available</span>
+                            <span>23 / 100</span>
+                        </div>
+                        <div class="availability-bar">
+                            <div class="availability-fill" style="width: 23%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="card-listing">
+                    <div class="card-game-type">TCG: YUGIOH</div>
+                    <h3 class="card-title">Blue-Eyes White Dragon</h3>
+                    <div class="card-value">1800</div>
+
+                    <div class="card-stats">
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Grade:</span>
+                            <span class="stat-value-card">BGS 9.5</span>
+                        </div>
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Price per Slot:</span>
+                            <span class="stat-value-card">$26.87</span>
+                        </div>
+                    </div>
+
+                    <div class="availability">
+                        <div class="availability-label">
+                            <span>Slots Available</span>
+                            <span>67 / 100</span>
+                        </div>
+                        <div class="availability-bar">
+                            <div class="availability-fill" style="width: 67%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="card-listing">
+                    <div class="card-game-type">TCG: MAGIC</div>
+                    <h3 class="card-title">Black Lotus Alpha</h3>
+                    <div class="card-value">12000</div>
+
+                    <div class="card-stats">
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Grade:</span>
+                            <span class="stat-value-card">PSA 8</span>
+                        </div>
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Price per Slot:</span>
+                            <span class="stat-value-card">$2400.00</span>
+                        </div>
+                    </div>
+
+                    <div class="availability">
+                        <div class="availability-label">
+                            <span>Slots Available</span>
+                            <span>5 / 100</span>
+                        </div>
+                        <div class="availability-bar">
+                            <div class="availability-fill" style="width: 5%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="card-listing sold-out">
+                    <div class="sold-out-badge">SOLD OUT</div>
+                    <div class="card-game-type">TCG: POKEMON</div>
+                    <h3 class="card-title">Pikachu Illustrator</h3>
+                    <div class="card-value">89000</div>
+
+                    <div class="card-stats">
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Grade:</span>
+                            <span class="stat-value-card">PSA 7</span>
+                        </div>
+                        <div class="card-stat-row">
+                            <span class="stat-label-card">Price per Slot:</span>
+                            <span class="stat-value-card">$890.00</span>
+                        </div>
+                    </div>
+
+                    <div class="availability">
+                        <div class="availability-label">
+                            <span>Slots Available</span>
+                            <span>0 / 100</span>
+                        </div>
+                        <div class="availability-bar">
+                            <div class="availability-fill" style="width: 100%; background: #1a7a1a;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <div class="footer-text">CARDFRAC NETWORK // SECURE VAULT STORAGE // ALL RIGHTS RESERVED</div>
+        </footer>
+    </div>
+</body>
+</html>
