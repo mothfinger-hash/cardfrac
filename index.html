@@ -2884,8 +2884,7 @@
         status: 'active',
         seller_id: currentUser.id,
         total_slots: 1,
-        photos: photoUrls,
-        description: description || null
+        photos: photoUrls
       }).select().single();
 
       if (saveBtn) { saveBtn.textContent = 'List_Card'; saveBtn.disabled = false; }
@@ -4123,16 +4122,18 @@
       grid.innerHTML       = '';
 
       try {
-        const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(query)}"&pageSize=24&orderBy=name`);
+        const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=250&orderBy=name`);
         if (!res.ok) throw new Error('API error ' + res.status);
         const json  = await res.json();
         const cards = json.data || [];
+        const total = json.totalCount || cards.length;
 
         if (cards.length === 0) {
           status.textContent = `// No results for "${query}" — try a different spelling`;
           return;
         }
-        status.textContent = `// Found ${cards.length} result${cards.length !== 1 ? 's' : ''} — click a card to add it`;
+        const moreNote = total > cards.length ? ` (showing ${cards.length} of ${total} — refine your search for more)` : '';
+        status.textContent = `// Found ${total} result${total !== 1 ? 's' : ''}${moreNote} — click a card to add it`;
         grid.style.display = 'grid';
         grid.innerHTML = cards.map(card => {
           const cardData = JSON.stringify({
