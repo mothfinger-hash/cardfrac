@@ -1064,6 +1064,44 @@
     </div>
   </div>
 
+  <!-- VENDOR APPLICATION MODAL -->
+  <div class="modal-overlay" id="vendorApplicationModal">
+    <div class="modal" style="max-width:520px">
+      <button class="modal-close" onclick="closeModal('vendorApplicationModal')">×</button>
+      <h3 style="color:var(--accent)">Apply_To_Sell</h3>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:20px">CardFrac is a verified vendor marketplace. Fill out the form below and we'll review your application within 2–3 business days.</p>
+      <div id="vendorAppStatus" style="display:none;padding:10px 14px;border-radius:6px;font-size:.8rem;margin-bottom:16px"></div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px">Shop / Business Name *</div>
+          <input id="vaShopName" type="text" placeholder="e.g. Rocket Cards & Collectibles" class="atc-input" style="width:100%" />
+        </div>
+        <div>
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px">Tell us about your shop *</div>
+          <textarea id="vaDescription" rows="3" placeholder="What you sell, how long you've been in the hobby, physical store or online-only, etc." style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;resize:vertical"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px">Location</div>
+            <input id="vaLocation" type="text" placeholder="City, State" class="atc-input" style="width:100%" />
+          </div>
+          <div>
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px">Instagram Handle</div>
+            <input id="vaInstagram" type="text" placeholder="@yourshop" class="atc-input" style="width:100%" />
+          </div>
+        </div>
+        <div>
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px">Website (optional)</div>
+          <input id="vaWebsite" type="text" placeholder="https://yourshop.com" class="atc-input" style="width:100%" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button onclick="saveVendorApplication()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Submit_Application</button>
+        <button onclick="closeModal('vendorApplicationModal')" style="padding:12px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- LIST CARD MODAL -->
   <div class="modal-overlay" id="listCardModal">
     <div class="modal" style="max-width:600px">
@@ -1518,6 +1556,12 @@
 
 
 
+    <!-- Vendor Applications Panel (admin only) -->
+    <div style="background:var(--surface);border:1px solid rgba(255,140,20,.3);border-radius:14px;padding:18px;margin-bottom:24px">
+      <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em;margin-bottom:14px">// VENDOR_APPLICATIONS</div>
+      <div id="vendorApplicationsPanel"><div style="color:var(--muted);font-size:.8rem">Loading...</div></div>
+    </div>
+
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;overflow-x:auto">
       <table class="admin-table">
         <thead>
@@ -1698,6 +1742,10 @@
     // Admins are automatically treated as premium (no subscription needed)
     function userIsPremium() {
       return !!(currentUser && (currentUser.is_admin || currentUser.is_premium || currentUser.membershipActive));
+    }
+
+    function userIsVendor() {
+      return !!(currentUser && (currentUser.is_admin || currentUser.is_vendor));
     }
 
     // Slots are populated from Supabase in initApp() — no demo data needed
@@ -2011,6 +2059,7 @@
         const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
         const sellerName = listing.sellerName || 'Seller';
         const sellerRating = listing.sellerRating ? `★ ${listing.sellerRating.toFixed(1)}` : '';
+        const vendorBadge = listing.isVendorListing ? `<span style="background:rgba(255,140,20,.18);border:1px solid rgba(255,140,20,.5);color:var(--accent);font-size:.55rem;padding:1px 5px;letter-spacing:.06em;vertical-align:middle;margin-left:4px">VENDOR</span>` : '';
 
         // Market price comparison
         const marketPrice = listing.market_price || listing.marketPrice;
@@ -2050,7 +2099,7 @@
             </div>
             ${marketPriceHtml}
             <div style="font-size:.72rem;color:var(--muted);margin-top:5px">
-              ${sellerName}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
+              ${sellerName}${vendorBadge}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
             </div>
           </div>
           ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy_Now_→</button>` : ''}
@@ -3154,6 +3203,7 @@
     // ─── List Card Modal ───────────────────────────────────────────────
     function openListCardModal(prefill) {
       if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
+      if (!userIsVendor()) { openVendorApplicationModal(); return; }
       lcPhotos = [];
       document.getElementById('lcName').value = prefill?.cardName || '';
       document.getElementById('lcGame').value = prefill?.gameType || 'Pokémon';
@@ -3223,6 +3273,8 @@
         shipping_price: shipping,
         status: 'active',
         seller_id: currentUser.id,
+        seller_name: currentUser.shop_name || currentUser.username || currentUser.name || null,
+        is_vendor_listing: true,
         total_slots: 1,
         photos: photoUrls
       }).select().single();
@@ -3361,9 +3413,108 @@
     }
 
     // ===== ADMIN PAGE =====
+    // ── Vendor Application Functions ─────────────────────────────────────────
+
+    async function openVendorApplicationModal() {
+      if (!currentUser) { showToast('Sign in first'); return; }
+      // Check if already applied
+      const { data } = await sb.from('vendor_applications').select('status').eq('user_id', currentUser.id).maybeSingle();
+      const statusEl = document.getElementById('vendorAppStatus');
+      if (data) {
+        statusEl.style.display = 'block';
+        if (data.status === 'pending') {
+          statusEl.style.background = 'rgba(255,140,20,.1)'; statusEl.style.color = 'var(--accent)';
+          statusEl.textContent = '⏳ Your application is pending review. We\'ll be in touch soon.';
+        } else if (data.status === 'approved') {
+          statusEl.style.background = 'rgba(57,255,20,.1)'; statusEl.style.color = 'var(--green)';
+          statusEl.textContent = '✓ Your application was approved! Refresh the page to start listing.';
+        } else if (data.status === 'rejected') {
+          statusEl.style.background = 'rgba(255,60,60,.1)'; statusEl.style.color = 'var(--red)';
+          statusEl.textContent = 'Your previous application was not approved. You may reapply below.';
+        }
+      } else {
+        statusEl.style.display = 'none';
+      }
+      openModal('vendorApplicationModal');
+    }
+
+    async function saveVendorApplication() {
+      const shopName    = document.getElementById('vaShopName').value.trim();
+      const description = document.getElementById('vaDescription').value.trim();
+      const location    = document.getElementById('vaLocation').value.trim();
+      const instagram   = document.getElementById('vaInstagram').value.trim();
+      const website     = document.getElementById('vaWebsite').value.trim();
+      if (!shopName)    { showToast('Please enter your shop name'); return; }
+      if (!description) { showToast('Please describe your shop'); return; }
+      const btn = document.querySelector('#vendorApplicationModal button[onclick="saveVendorApplication()"]');
+      if (btn) { btn.textContent = 'Submitting...'; btn.disabled = true; }
+      const { error } = await sb.from('vendor_applications').upsert({
+        user_id: currentUser.id, shop_name: shopName, shop_description: description,
+        shop_location: location, instagram, shop_website: website, status: 'pending',
+        submitted_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (btn) { btn.textContent = 'Submit_Application'; btn.disabled = false; }
+      if (error) { showToast('Error: ' + error.message); return; }
+      showToast('Application submitted! We\'ll review it within 2–3 business days.');
+      closeModal('vendorApplicationModal');
+    }
+
+    // Admin: load and render vendor applications
+    let vendorApplications = [];
+    async function loadVendorApplications() {
+      if (!currentUser?.is_admin) return;
+      const { data } = await sb.from('vendor_applications').select('*, profiles(email, username)').order('submitted_at', { ascending: false });
+      vendorApplications = data || [];
+    }
+
+    async function approveVendorApplication(userId, appId) {
+      await sb.from('profiles').update({ is_vendor: true }).eq('id', userId);
+      await sb.from('vendor_applications').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', appId);
+      vendorApplications = vendorApplications.map(a => a.id === appId ? { ...a, status: 'approved' } : a);
+      renderAdminVendorApplications();
+      showToast('Vendor approved ✓');
+    }
+
+    async function rejectVendorApplication(appId) {
+      const notes = prompt('Optional: reason for rejection (shown to admin only)');
+      await sb.from('vendor_applications').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewer_notes: notes || null }).eq('id', appId);
+      vendorApplications = vendorApplications.map(a => a.id === appId ? { ...a, status: 'rejected' } : a);
+      renderAdminVendorApplications();
+      showToast('Application rejected');
+    }
+
+    function renderAdminVendorApplications() {
+      const el = document.getElementById('vendorApplicationsPanel');
+      if (!el) return;
+      if (!vendorApplications.length) { el.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:12px 0">No applications yet.</div>'; return; }
+      el.innerHTML = vendorApplications.map(a => {
+        const statusColor = { pending: 'var(--accent)', approved: 'var(--green)', rejected: 'var(--red)' }[a.status] || 'var(--muted)';
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:.9rem;color:var(--text);font-weight:700">${a.shop_name}</div>
+              <div style="font-size:.72rem;color:var(--muted);margin-top:2px">${a.profiles?.email || a.user_id} · ${new Date(a.submitted_at).toLocaleDateString()}</div>
+              ${a.shop_location ? `<div style="font-size:.72rem;color:var(--muted)">${a.shop_location}</div>` : ''}
+              ${a.instagram ? `<div style="font-size:.72rem;color:var(--teal)">@${a.instagram.replace('@','')}</div>` : ''}
+              ${a.shop_website ? `<div style="font-size:.72rem"><a href="${a.shop_website}" target="_blank" style="color:var(--accent);text-decoration:none">↗ ${a.shop_website}</a></div>` : ''}
+              <div style="font-size:.78rem;color:var(--muted);margin-top:8px;max-width:400px">${a.shop_description || ''}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+              <span style="font-size:.7rem;color:${statusColor};letter-spacing:.06em;text-transform:uppercase">${a.status}</span>
+              ${a.status === 'pending' ? `
+                <button onclick="approveVendorApplication('${a.user_id}','${a.id}')" style="padding:6px 14px;background:rgba(57,255,20,.12);border:1px solid var(--green);color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✓ Approve</button>
+                <button onclick="rejectVendorApplication('${a.id}')" style="padding:6px 14px;background:transparent;border:1px solid var(--red);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✗ Reject</button>
+              ` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
     function renderAdmin() {
       renderAdminTable();
       updateRevenuePanel();
+      loadVendorApplications().then(renderAdminVendorApplications);
     }
 
     function renderAdminTable() {
@@ -5139,6 +5290,7 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
         seller_id: l.seller_id || null,
         sellerName: l.seller_name || null,
         sellerRating: l.seller_rating || null,
+        isVendorListing: l.is_vendor_listing || false,
         totalSlots: l.total_slots,
         status: l.status,
         earlyAccessOnly: l.early_access_only,
