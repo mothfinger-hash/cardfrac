@@ -3638,6 +3638,8 @@
       errEl.style.display  = 'none';
 
       let success = 0, failed = 0;
+      const insertedIds = [];
+
       for (let i = 0; i < vendorImportRows.length; i++) {
         const r = vendorImportRows[i];
         progEl.textContent = `// Importing ${i + 1} / ${vendorImportRows.length}…`;
@@ -3652,12 +3654,11 @@
         const price      = parseFloat(r['Price'])      || 0;
         const notes      = String(r['Notes']           || '').trim();
 
-        // Normalise condition: "Raw" / "raw" / blank → 'raw', anything else → 'graded'
         const isGraded  = rawCond.toLowerCase() !== 'raw' && rawCond !== '';
         const condition = isGraded ? 'graded' : 'raw';
         const gradeVal  = isGraded && grade ? parseFloat(grade) || null : null;
 
-        const { error } = await sb.from('collection_items').insert({
+        const { data: newRow, error } = await sb.from('collection_items').insert({
           user_id:        currentUser.id,
           card_name:      cardName,
           set_name:       setName    || null,
@@ -3672,23 +3673,91 @@
           notes:          notes      || null,
           is_ghost:       false,
           sold_offline:   false,
-        });
+        }).select('id').single();
 
         if (error) { console.error('Import row error:', error.message); failed++; }
-        else success++;
+        else { success++; if (newRow?.id) insertedIds.push(newRow.id); }
       }
 
-      progEl.textContent = `// Done — ${success} card${success !== 1 ? 's' : ''} added to your binder${failed ? `, ${failed} failed` : ''}.`;
+      progEl.textContent = `// Done — ${success} card${success !== 1 ? 's' : ''} added. Matching images…`;
       btn.textContent = 'Import →';
       btn.disabled = false;
       vendorImportRows = [];
       document.getElementById('importSubmitBtn').style.display = 'none';
-      showToast(`✓ ${success} card${success !== 1 ? 's' : ''} added to your binder`);
+      showToast(`✓ ${success} card${success !== 1 ? 's' : ''} added — matching images in background`);
       closeModal('vendorImportModal');
-      // Reload binder so imported cards appear immediately
+
+      // Show cards immediately (no images yet), then enrich in background
       await loadCollection();
       renderBinder();
       renderDashboard();
+
+      // Background enrichment: match each card against Pokémon TCG API
+      if (insertedIds.length) enrichImportedCards(insertedIds);
+    }
+
+    // ── Match imported cards against Pokémon TCG API to fill in images / IDs ─
+    async function enrichImportedCards(itemIds) {
+      const items = collectionItems.filter(c => itemIds.includes(c.id));
+      if (!items.length) return;
+      console.log(`[PathBinder] Enriching ${items.length} imported card(s)…`);
+
+      for (const item of items) {
+        try {
+          // Build query: name is required; add number and set name when available
+          let q = `name:"${item.card_name}"`;
+          if (item.card_number) q += ` number:${item.card_number}`;
+          if (item.set_name)    q += ` set.name:"${item.set_name}"`;
+
+          const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
+          const data = await res.json();
+          const card = data?.data?.[0];
+          if (!card) continue;
+
+          const imageUrl      = card.images?.small  || null;
+          const apiCardId     = card.id             || null;   // e.g. "base1-4"
+          const setCode       = card.set?.id        || null;
+          const setName       = card.set?.name      || item.set_name || null;
+          const tcgplayerUrl  = card.tcgplayer?.url || null;
+
+          // Look up price source URL from card_price_urls table
+          let priceSourceUrl = item.price_source_url || null;
+          if (!priceSourceUrl && apiCardId) {
+            const { data: urlRow } = await sb
+              .from('card_price_urls')
+              .select('price_source_url')
+              .eq('api_card_id', apiCardId)
+              .maybeSingle();
+            priceSourceUrl = urlRow?.price_source_url || null;
+          }
+
+          // Patch the DB row with everything we found
+          const patch = {
+            card_image_url:   imageUrl,
+            api_card_id:      apiCardId,
+            set_code:         setCode,
+            set_name:         setName,
+            price_source_url: priceSourceUrl,
+          };
+          if (tcgplayerUrl) patch.tcgplayer_url = tcgplayerUrl;
+
+          const { error } = await sb.from('collection_items').update(patch).eq('id', item.id);
+          if (!error) {
+            // Keep local state in sync so the binder re-renders correctly
+            Object.assign(item, patch);
+          }
+        } catch (err) {
+          console.warn(`[enrich] ${item.card_name}:`, err.message);
+        }
+
+        // Polite pause — TCG API is rate-limited
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      // Re-render once all images are in
+      renderBinder();
+      renderDashboard();
+      console.log('[PathBinder] Enrichment complete.');
     }
 
     // ===== ADMIN PAGE =====
