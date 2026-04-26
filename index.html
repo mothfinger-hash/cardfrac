@@ -1372,7 +1372,7 @@
         <button class="hero-cta" onclick="showPage('collection');setMobileNav('collection')" style="background:transparent;border:2px solid var(--accent);color:var(--accent)">[MY_BINDER]</button>
         <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[MARKETPLACE]</button>
       </div>
-      <p class="hero-footer-line">CARDFRAC // ALL-IN-ONE COLLECTION TRACKER + P2P MARKETPLACE // 5% SELLER FEE</p>
+      <p class="hero-footer-line">PATHBINDER // ALL-IN-ONE COLLECTION TRACKER + P2P MARKETPLACE // 5% PLATFORM FEE</p>
     </div>
   </div>
 
@@ -1691,7 +1691,7 @@
       <div class="cart-breakdown">
         <span id="cartPrice">$0</span> + <span id="cartFee">$0</span> fee = <span id="cartTotal">$0</span>
       </div>
-      <div id="cartSavingsCallout" style="display:none;font-size:.72rem;color:var(--gold);margin-top:3px">★ Members pay 3.9% — you'd save <span id="cartSavingsAmt">$0</span> on this order</div>
+      <div id="cartBreakdownFooter" style="display:none;margin-top:3px"></div>
       <div class="cart-slots-preview" id="cartSlots"></div>
     </div>
     <div class="cart-actions">
@@ -1826,18 +1826,13 @@
 
     // ===== FEE TIER SYSTEM =====
     // ── Fee tiers ──────────────────────────────────────────────────────
-    // Standard : 5%   (covers Stripe 2.9% + platform cut)
-    // Member   : 3.9% (Stripe covered, platform take is smaller)
+    // Standard : 5%   (covers Stripe 2.9% + platform cut) — flat for all tiers
     // Admin    : 0%   (always free)
     function getFeeRate() {
       if (!currentUser) return 0.05;
       if (currentUser.is_admin) return 0;
       if (currentUser.referred_by && currentUser.referral_discount_used === false) return 0; // first-trade referral reward
-      return userIsPremium() ? 0.039 : 0.05;
-    }
-    // Savings a non-member would get by upgrading (used for callouts)
-    function memberSavings(amount) {
-      return Math.round(amount * (0.05 - 0.039));
+      return 0.05;
     }
     function calcFee(amount) {
       return Math.round(amount * getFeeRate());
@@ -1846,11 +1841,13 @@
     // Tiers: 'free' | 'collector' | 'vendor' | 'shop'
     // Reads subscription_tier from profile; falls back to legacy flags for existing users.
     const TIER_ORDER = ['free', 'collector', 'vendor', 'shop'];
+    // Monochromatic — all tiers use the app's CRT palette.
+    // Current tier gets orange accent; others stay muted.
     const TIER_COLORS = {
-      free:      { primary: '#888780', fill: '#F1EFE8', text: '#2C2C2A' },
-      collector: { primary: '#1D9E75', fill: '#E1F5EE', text: '#085041' },
-      vendor:    { primary: '#534AB7', fill: '#EEEDFE', text: '#26215C' },
-      shop:      { primary: '#993C1D', fill: '#FAECE7', text: '#4A1B0C' },
+      free:      { label: 'FREE'      },
+      collector: { label: 'COLLECTOR' },
+      vendor:    { label: 'VENDOR'    },
+      shop:      { label: 'SHOP'      },
     };
 
     function userTier() {
@@ -1890,6 +1887,7 @@
     }
     function hasPriceTracking()  { return tierAtLeast('collector'); }
     function hasBulkImport()     { return tierAtLeast('vendor'); }
+    function hasMultiBinder()    { return tierAtLeast('vendor'); }
 
     // Admins are automatically treated as premium (no subscription needed)
     function userIsPremium() {
@@ -2498,21 +2496,13 @@
       document.getElementById('cartPrice').textContent = '$' + basePrice.toLocaleString();
       document.getElementById('cartFee').textContent = '$' + fee.toLocaleString();
       document.getElementById('cartTotal').textContent = '$' + total.toLocaleString();
-      const callout = document.getElementById('cartSavingsCallout');
-      if (callout) {
-        if (currentUser && currentUser.referred_by && currentUser.referral_discount_used === false) {
-          document.getElementById('cartSavingsAmt').textContent = 'full fee';
-          callout.style.display = 'block';
-          callout.textContent = '🎁 Referral reward: your first purchase is fee-free!';
-          callout.style.color = 'var(--green)';
-        } else if (!userIsPremium() && currentUser) {
-          const savings = memberSavings(basePrice);
-          if (savings > 0) {
-            callout.innerHTML = '★ Members pay 3.9% — you\'d save <span id="cartSavingsAmt">$' + savings.toLocaleString() + '</span> on this order';
-            callout.style.color = 'var(--gold)';
-            callout.style.display = 'block';
-          } else { callout.style.display = 'none'; }
-        } else { callout.style.display = 'none'; }
+      // Referral fee-free callout (cart footer)
+      const cartFooter = document.getElementById('cartBreakdownFooter');
+      if (cartFooter && currentUser?.referred_by && currentUser.referral_discount_used === false) {
+        cartFooter.innerHTML = '<span style="font-size:.72rem;color:var(--green)">🎁 Referral reward: your first purchase is fee-free!</span>';
+        cartFooter.style.display = 'block';
+      } else if (cartFooter) {
+        cartFooter.style.display = 'none';
       }
 
       const preview = document.getElementById('cartSlots');
@@ -5248,32 +5238,33 @@
         badge: null,
         features: [
           'Up to 200 cards logged',
-          'Card catalog search',
+          'Card catalog search & auto-fill',
           'Manual value entry',
-          'Condition tracking',
+          'Condition & grade tracking',
           'Collection dashboard',
-          'Basic set completion tracker',
-          '1 Ghost Card goal',
+          '1 Wishlist goal',
           '1 Card Fund goal',
+          'Shareable binder link',
+          'Marketplace access (5% seller fee)',
         ],
-        locked: ['Live market prices','Price trend alerts','Collection PDF export','Bulk import','Multi-binder org'],
+        locked: ['Live market prices','Price trend charts','Bulk CSV import','Multi-binder org'],
       },
       {
-        id: 'collector', label: 'Collector', monthly: 5, annual: null, // no annual option per spec
+        id: 'collector', label: 'Collector', monthly: 5, annual: null,
         ctaLabel: 'Start Collector', ctaAction: 'checkout_collector',
         badge: 'Most popular',
         features: [
           'Unlimited cards',
           'Live market price tracking',
-          'Price trend alerts',
-          'Grading cost calculator',
-          'Collection PDF export',
-          'Monthly market memo',
-          'Unlimited Ghost Card goals',
+          'Daily auto price refresh',
+          'Per-card price trend charts',
+          'YTD portfolio chart',
+          'Biggest Movers dashboard',
+          'Unlimited Wishlist goals',
           'Up to 3 Card Fund goals',
-          'Lower 3.9% marketplace fee',
+          'Marketplace access (5% seller fee)',
         ],
-        locked: ['Bulk CSV import','Multi-binder org','Weekly market memo','Shareable collection link'],
+        locked: ['Bulk CSV import','Multi-binder org','Sales archive & trade log'],
       },
       {
         id: 'vendor', label: 'Vendor', monthly: 25, annual: 239.99,
@@ -5282,17 +5273,14 @@
         features: [
           'Everything in Collector',
           'Bulk CSV import',
-          'Multi-binder / set org',
-          'Weekly market memo',
-          'Shareable collection link',
-          'Collection analytics',
-          'Buy / sell / trade log',
+          'Multi-binder organization',
+          'Sales archive & trade log',
+          'Unlimited Card Fund goals',
           'Grading submission tracker',
           'Early feature access',
-          'Unlimited Card Fund goals',
           '48-hour support response',
         ],
-        locked: ['White-label storefront','Multi-user access','Staff pipeline'],
+        locked: ['White-label storefront','Multi-user access','Dedicated account manager'],
       },
       {
         id: 'shop', label: 'Shop', monthly: 200, annual: 1800,
@@ -5310,7 +5298,6 @@
           'Monthly strategy session',
           'Onboarding call',
           '24-hour support response',
-          'First access to all features',
         ],
         locked: [],
       },
@@ -5327,51 +5314,70 @@
       const grid = document.getElementById('pricingGrid');
       if (!grid) return;
       const current = userTier();
-      grid.innerHTML = TIER_DEFS.map(t => {
-        const col = TIER_COLORS[t.id];
-        const isCurrent = t.id === current;
-        const isPopular = t.badge === 'Most popular';
 
-        // Price line
+      grid.innerHTML = TIER_DEFS.map(t => {
+        const isCurrent = t.id === current;
+
+        // ── Price line ──────────────────────────────────────────────────
         let priceLine = '';
         if (t.monthly === 0) {
-          priceLine = '<span style="font-size:1.4rem;font-weight:700">Free</span><span style="font-size:.72rem;color:var(--muted)"> forever</span>';
+          priceLine = `<span style="font-size:1.5rem;font-weight:700;color:var(--text)">Free</span><span style="font-size:.72rem;color:var(--muted)"> forever</span>`;
         } else if (_pricingBilling === 'yearly' && t.annual != null) {
           const perMo = (t.annual / 12).toFixed(2);
-          priceLine = `<span style="font-size:1.4rem;font-weight:700">$${perMo}</span><span style="font-size:.72rem;color:var(--muted)">/mo</span><br><span style="font-size:.65rem;color:${col.primary}">$${t.annual}/yr — save ${t.id === 'vendor' ? '20' : '25'}%</span>`;
+          const savePct = t.id === 'vendor' ? '20' : '25';
+          priceLine = `<span style="font-size:1.5rem;font-weight:700;color:var(--text)">$${perMo}</span><span style="font-size:.72rem;color:var(--muted)">/mo</span>
+            <div style="font-size:.65rem;color:var(--accent);margin-top:2px">$${t.annual}/yr — save ${savePct}%</div>`;
         } else {
-          priceLine = `<span style="font-size:1.4rem;font-weight:700">$${t.monthly}</span><span style="font-size:.72rem;color:var(--muted)">/mo</span>`;
+          priceLine = `<span style="font-size:1.5rem;font-weight:700;color:var(--text)">$${t.monthly}</span><span style="font-size:.72rem;color:var(--muted)">/mo</span>`;
+          if (t.annual != null) {
+            priceLine += `<div style="font-size:.6rem;color:var(--muted);margin-top:2px">Annual billing available</div>`;
+          }
         }
 
-        // CTA button
+        // ── CTA button ──────────────────────────────────────────────────
         let ctaBtn = '';
         if (isCurrent) {
-          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:${col.primary};border:1px solid ${col.primary};margin-top:auto">✓ Current plan</div>`;
+          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:rgba(255,140,20,.06);letter-spacing:.06em">✓ Current plan</div>`;
         } else if (t.ctaAction === 'shop_intake') {
-          ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:${col.primary};color:#fff;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;margin-top:auto">Contact us →</button>`;
+          ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Contact us →</button>`;
         } else if (t.ctaAction) {
-          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${isPopular ? col.primary : 'transparent'};color:${isPopular ? '#fff' : col.primary};border:1px solid ${col.primary};font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;margin-top:auto">${t.ctaLabel} →</button>`;
+          const isAbove = TIER_ORDER.indexOf(t.id) < TIER_ORDER.indexOf(current);
+          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${t.badge ? 'var(--accent)' : 'transparent'};color:${t.badge ? '#080500' : 'var(--accent)'};border:1px solid var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;opacity:${isAbove ? '.5' : '1'}">${t.ctaLabel} →</button>`;
         } else {
-          ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;margin-top:auto">${t.ctaLabel}</button>`;
+          ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">${t.ctaLabel}</button>`;
         }
 
+        // ── Feature list ────────────────────────────────────────────────
         const featureLines = t.features.map(f =>
-          `<div style="font-size:.68rem;color:var(--text);padding:3px 0;display:flex;gap:5px"><span style="color:${col.primary};flex-shrink:0">✓</span>${f}</div>`
+          `<div style="font-size:.68rem;color:${isCurrent ? 'var(--text)' : 'var(--muted)'};padding:3px 0;display:flex;gap:6px;align-items:baseline">
+            <span style="color:${isCurrent ? 'var(--accent)' : 'var(--muted)'};flex-shrink:0;font-size:.7rem">✓</span>${f}
+          </div>`
         ).join('');
-        const lockedLines = t.locked.slice(0,3).map(f =>
-          `<div style="font-size:.65rem;color:var(--muted);padding:2px 0;display:flex;gap:5px"><span style="flex-shrink:0">○</span>${f}</div>`
-        ).join('') + (t.locked.length > 3 ? `<div style="font-size:.62rem;color:var(--muted);padding:2px 0">+${t.locked.length-3} more…</div>` : '');
+        const lockedLines = t.locked.map(f =>
+          `<div style="font-size:.65rem;color:var(--border);padding:2px 0;display:flex;gap:6px;align-items:baseline">
+            <span style="flex-shrink:0">○</span>${f}
+          </div>`
+        ).join('');
 
-        return `<div style="
-          border:${isPopular ? '2px solid '+col.primary : '1px solid var(--border)'};
-          border-radius:0;padding:16px;display:flex;flex-direction:column;gap:0;
-          background:${isCurrent ? col.fill.replace(')',', .08)').replace('rgb','rgba') : 'var(--surface)'};
-          position:relative;
-        ">
-          ${t.badge ? `<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:${col.primary};color:#fff;font-size:.6rem;font-weight:700;padding:2px 10px;letter-spacing:.06em;white-space:nowrap">${t.badge}</div>` : ''}
-          <div style="font-size:.65rem;letter-spacing:.1em;color:${col.primary};margin-bottom:4px">${t.label.toUpperCase()}</div>
-          <div style="margin-bottom:12px;line-height:1.3">${priceLine}</div>
-          <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;flex:1">${featureLines}${lockedLines ? '<div style="margin-top:6px">'+lockedLines+'</div>' : ''}</div>
+        // ── Card chrome ─────────────────────────────────────────────────
+        const borderStyle = isCurrent
+          ? '2px solid var(--accent)'
+          : '1px solid var(--border)';
+        const bgStyle = isCurrent
+          ? 'background:rgba(255,140,20,.04)'
+          : 'background:var(--surface)';
+        const headerColor = isCurrent ? 'color:var(--accent)' : 'color:var(--muted)';
+        const glowStyle   = isCurrent ? 'box-shadow:0 0 18px rgba(255,140,20,.08)' : '';
+
+        return `<div style="border:${borderStyle};${bgStyle};${glowStyle};padding:18px;display:flex;flex-direction:column;gap:0;position:relative">
+          ${t.badge ? `<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:#080500;font-size:.58rem;font-weight:700;padding:2px 10px;letter-spacing:.08em;white-space:nowrap">${t.badge}</div>` : ''}
+          ${isCurrent ? `<div style="position:absolute;top:8px;right:10px;font-size:.58rem;color:var(--accent);letter-spacing:.06em;opacity:.7">● ACTIVE</div>` : ''}
+          <div style="font-size:.62rem;letter-spacing:.12em;${headerColor};margin-bottom:6px">${t.label.toUpperCase()}</div>
+          <div style="margin-bottom:14px;line-height:1.4">${priceLine}</div>
+          <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:12px;flex:1">
+            ${featureLines}
+            ${lockedLines ? `<div style="margin-top:8px;padding-top:6px;border-top:1px dashed rgba(74,40,0,.3)">${lockedLines}</div>` : ''}
+          </div>
           ${ctaBtn}
         </div>`;
       }).join('');
@@ -5718,7 +5724,7 @@
       if (!wrap || !tabs) return;
 
       // Only show tabs for Vendor+
-      if (!tierAtLeast('vendor') || !currentUser) { wrap.style.display = 'none'; return; }
+      if (!hasMultiBinder() || !currentUser) { wrap.style.display = 'none'; return; }
       wrap.style.display = 'block';
 
       const allActive  = currentBinderId === null;
@@ -6011,7 +6017,19 @@
                     ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
                        <div style="font-size:.6rem;color:var(--teal)">${pct}% — $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>`
                     : `<div class="binder-card-value" style="color:var(--teal)">Wishlist</div>`)
-                : `<div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>`}
+                : `<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+                    <div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
+                    ${(()=>{
+                      if (!hasPriceTracking() || !item.price_history_log?.length || !item.current_value) return '';
+                      const hist = item.price_history_log;
+                      const oldest = hist[0]?.value;
+                      if (!oldest || oldest === item.current_value) return '';
+                      const chg = ((item.current_value - oldest) / oldest * 100);
+                      const sign = chg >= 0 ? '+' : '';
+                      const color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+                      return `<span style="font-size:.56rem;color:${color};white-space:nowrap;font-weight:700">${sign}${chg.toFixed(1)}%</span>`;
+                    })()}
+                  </div>`}
             </div>
           </div>`;
         }).join('')}</div>`;
@@ -6288,6 +6306,104 @@
       renderBinder();
     }
 
+    // ── Per-card price trend chart ────────────────────────────────────────────
+    async function loadAndDrawCardChart(itemId) {
+      const svg      = document.getElementById(`cardTrendSvg_${itemId}`);
+      const rangeEl  = document.getElementById(`cardTrendRange_${itemId}`);
+      if (!svg || !currentUser) return;
+
+      try {
+        // Fetch up to 90 days of history for this specific card
+        const ninetyAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const { data, error } = await sb
+          .from('price_history')
+          .select('recorded_at, recorded_value')
+          .eq('collection_item_id', itemId)
+          .eq('user_id', currentUser.id)
+          .gte('recorded_at', ninetyAgo)
+          .order('recorded_at', { ascending: true });
+
+        if (error) throw error;
+
+        // Also include current value as "today" point if not already present
+        const item = collectionItems.find(c => String(c.id) === String(itemId));
+        const todayStr = new Date().toISOString().slice(0, 10);
+        let points = (data || []).map(h => ({ date: h.recorded_at.slice(0, 10), value: Number(h.recorded_value) }));
+        if (item?.current_value) {
+          const lastDate = points[points.length - 1]?.date;
+          if (lastDate !== todayStr) points.push({ date: todayStr, value: item.current_value });
+        }
+
+        if (points.length < 2) {
+          svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="var(--muted)" font-family="Share Tech Mono,monospace">Not enough data yet — refreshes daily</text>`;
+          if (rangeEl) rangeEl.textContent = points.length === 1 ? '1 data point' : '—';
+          return;
+        }
+
+        // Update range label
+        if (rangeEl) {
+          const first = points[0].value, last = points[points.length - 1].value;
+          const chg = ((last - first) / first * 100);
+          const sign = chg >= 0 ? '+' : '';
+          const color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+          const days  = points.length;
+          rangeEl.innerHTML = `<span style="color:${color}">${sign}${chg.toFixed(1)}% (${days}d)</span>`;
+        }
+
+        _drawCardPriceChart(svg, points);
+      } catch (err) {
+        if (svg) svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="var(--muted)" font-family="Share Tech Mono,monospace">Failed to load history</text>`;
+      }
+    }
+
+    function _drawCardPriceChart(svg, points) {
+      const W = svg.getBoundingClientRect().width || 340;
+      const H = 80;
+      const PAD_L = 46, PAD_R = 8, PAD_T = 8, PAD_B = 20;
+
+      const vals   = points.map(p => p.value);
+      const minV   = Math.min(...vals);
+      const maxV   = Math.max(...vals);
+      const range  = maxV - minV || (minV * 0.02) || 1;
+
+      const xScale = i => PAD_L + (i / (points.length - 1)) * (W - PAD_L - PAD_R);
+      const yScale = v => PAD_T + (1 - (v - minV) / range) * (H - PAD_T - PAD_B);
+
+      const polyPts = points.map((p, i) => `${xScale(i).toFixed(1)},${yScale(p.value).toFixed(1)}`).join(' ');
+      const areaPts = `${xScale(0).toFixed(1)},${H - PAD_B} ${polyPts} ${xScale(points.length - 1).toFixed(1)},${H - PAD_B}`;
+
+      const isUp     = vals[vals.length - 1] >= vals[0];
+      const lineClr  = isUp ? 'var(--green)' : 'var(--red)';
+      const fillClr  = isUp ? 'rgba(57,255,20,.06)' : 'rgba(255,68,85,.06)';
+
+      // Y labels: min, max
+      const yLabels = [minV, maxV].map(v => {
+        const y = yScale(v);
+        return `<text x="${PAD_L - 3}" y="${y.toFixed(1)}" text-anchor="end" font-size="8" fill="var(--muted)" font-family="Share Tech Mono,monospace" dominant-baseline="middle">$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(v < 10 ? 2 : 0)}</text>`;
+      }).join('');
+
+      // X labels: first and last date
+      const xLabels = [0, points.length - 1].map(i => {
+        const d = points[i].date.slice(5); // MM-DD
+        return `<text x="${xScale(i).toFixed(1)}" y="${H - PAD_B + 12}" text-anchor="${i === 0 ? 'start' : 'end'}" font-size="8" fill="var(--muted)" font-family="Share Tech Mono,monospace">${d}</text>`;
+      }).join('');
+
+      // Hover dots (last point always shown)
+      const lastX = xScale(points.length - 1).toFixed(1);
+      const lastY = yScale(vals[vals.length - 1]).toFixed(1);
+
+      svg.innerHTML = `
+        <polygon points="${areaPts}" fill="${fillClr}" />
+        <polyline points="${polyPts}" fill="none" stroke="${lineClr}" stroke-width="1.5" stroke-linejoin="round" />
+        <circle cx="${lastX}" cy="${lastY}" r="3" fill="${lineClr}" />
+        <text x="${parseFloat(lastX) + 5}" y="${parseFloat(lastY) + 3}" font-size="8" fill="${lineClr}" font-family="Share Tech Mono,monospace">$${vals[vals.length-1].toFixed(vals[vals.length-1] < 10 ? 2 : 0)}</text>
+        ${yLabels}
+        ${xLabels}
+        <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" stroke="var(--border)" stroke-width="1"/>
+        <line x1="${PAD_L}" y1="${H - PAD_B}" x2="${W - PAD_R}" y2="${H - PAD_B}" stroke="var(--border)" stroke-width="1"/>
+      `;
+    }
+
     function openBinderCardDetail(itemId) {
       const item = collectionItems.find(c => String(c.id) === String(itemId));
       if (!item) return;
@@ -6398,6 +6514,23 @@
               <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:1rem">${qty}</div></div>
             </div>
             ${item.cert_number ? `<div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Cert #: ${item.cert_number}</div>` : ''}
+
+            <!-- ── Price trend chart ── -->
+            ${hasPriceTracking()
+              ? `<div id="cardTrendSection_${item.id}" style="margin-bottom:14px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <div style="font-size:.68rem;color:var(--accent);letter-spacing:.08em">// PRICE_TREND</div>
+                    <span id="cardTrendRange_${item.id}" style="font-size:.6rem;color:var(--muted)">Loading…</span>
+                  </div>
+                  <svg id="cardTrendSvg_${item.id}" width="100%" height="80" style="display:block;overflow:visible;background:var(--surface2);border:1px solid var(--border)">
+                    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="var(--muted)" font-family="Share Tech Mono,monospace">Fetching history…</text>
+                  </svg>
+                </div>`
+              : `<div style="margin-bottom:14px;padding:10px;background:var(--surface2);border:1px dashed var(--border);text-align:center">
+                  <div style="font-size:.65rem;color:var(--muted)">// PRICE_TREND — <span style="color:var(--teal)">Collector+</span> feature</div>
+                  <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:6px;padding:4px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.65rem;cursor:pointer">Upgrade to unlock →</button>
+                </div>`}
+
             <div style="margin-top:10px">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px;letter-spacing:.04em">Price_Source_URL</div>
               <div style="display:flex;gap:8px;align-items:center">
@@ -6434,6 +6567,10 @@
       const titleEl2 = document.getElementById('binderDetailTitle');
       if (titleEl2) { titleEl2.textContent = 'Card_Detail'; titleEl2.style.color = ''; }
       openModal('binderDetailModal');
+      if (hasPriceTracking()) {
+        // Load chart asynchronously after modal is visible
+        setTimeout(() => loadAndDrawCardChart(item.id), 80);
+      }
     }
 
     async function savePriceSourceUrl(itemId) {
