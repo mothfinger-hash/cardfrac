@@ -4512,7 +4512,17 @@
                 </div>
               </div>
 
-              ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.75rem;color:var(--accent);text-decoration:none">→ View_Price_Source</a>` : ''}
+              <div style="margin-top:10px">
+                <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px;letter-spacing:.04em">Price_Source_URL</div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
+                    placeholder="PriceCharting or TCGPlayer URL"
+                    style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
+                  <button onclick="savePriceSourceUrl('${item.id}')"
+                    style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
+                  ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.8rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
+                </div>
+              </div>
             </div>
           </div>
           <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
@@ -4563,7 +4573,17 @@
               <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:1rem">${qty}</div></div>
             </div>
             ${item.cert_number ? `<div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Cert #: ${item.cert_number}</div>` : ''}
-            ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.75rem;color:var(--accent);text-decoration:none">→ View_Price_Source</a>` : ''}
+            <div style="margin-top:10px">
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px;letter-spacing:.04em">Price_Source_URL</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
+                  placeholder="PriceCharting or TCGPlayer URL"
+                  style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
+                <button onclick="savePriceSourceUrl('${item.id}')"
+                  style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
+                ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.8rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
+              </div>
+            </div>
           </div>
         </div>
         <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
@@ -4583,6 +4603,17 @@
       const titleEl2 = document.getElementById('binderDetailTitle');
       if (titleEl2) { titleEl2.textContent = 'Card_Detail'; titleEl2.style.color = ''; }
       openModal('binderDetailModal');
+    }
+
+    async function savePriceSourceUrl(itemId) {
+      const url = document.getElementById('priceUrlEdit_' + itemId)?.value.trim() || null;
+      const { error } = await sb.from('collection_items').update({ price_source_url: url }).eq('id', itemId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      const local = collectionItems.find(c => String(c.id) === String(itemId));
+      if (local) local.price_source_url = url;
+      showToast('Price source URL saved');
+      // Re-open modal to refresh the Open link
+      openBinderCardDetail(itemId);
     }
 
     // ── Sold Offline ─────────────────────────────────────────────────────────

@@ -61,7 +61,9 @@ function parsePriceChartingHtml(html, grade) {
       for (const k of candidates) {
         const val = prices[k] ?? prices[k + '_price'];
         if (val != null) {
-          const n = Math.round(Number(val) / 100); // stored in cents
+          const raw = Number(val);
+          // PriceCharting stores cents; divide to get dollars with decimal precision
+          const n = raw > 100 ? parseFloat((raw / 100).toFixed(2)) : raw;
           if (n > 0) return n;
         }
       }
