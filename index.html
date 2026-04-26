@@ -4954,43 +4954,95 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
       if (nextArrow) nextArrow.disabled = (binderPage >= totalPages - 1 || totalPages <= 1);
     }
 
-    // ── Animated page turn ───────────────────────────────────────────────────
+    // ── Dramatic page-turn: clone current page, render next underneath, pivot clone away ──
     let _flipping = false;
     function flipBinderPage(dir) {
       if (_flipping) return;
       const content = document.getElementById('collectionContent');
-      if (!content || content.children.length === 0) { binderChangePage(dir); return; }
+      if (!content || !content.firstChild) { binderChangePage(dir); return; }
 
       _flipping = true;
-      // Exit: slide + tilt away in the direction of travel
-      content.style.transition = 'transform .18s ease, opacity .18s ease';
-      content.style.transformOrigin = dir > 0 ? 'left center' : 'right center';
-      content.style.transform = dir > 0
-        ? 'perspective(900px) rotateY(-10deg) translateX(-28px)'
-        : 'perspective(900px) rotateY(10deg) translateX(28px)';
-      content.style.opacity = '0';
+      const rect      = content.getBoundingClientRect();
+      const pivot     = dir > 0 ? 'left' : 'right';
+      const DURATION  = 520; // ms
 
-      setTimeout(() => {
-        binderPage = Math.max(0, binderPage + dir);
-        renderBinder();  // renders new content
+      // ── 1. Lift a snapshot of the current page as a fixed overlay ─────────
+      const flipEl = document.createElement('div');
+      Object.assign(flipEl.style, {
+        position:        'fixed',
+        top:             rect.top  + 'px',
+        left:            rect.left + 'px',
+        width:           rect.width  + 'px',
+        minHeight:       rect.height + 'px',
+        zIndex:          '1002',
+        pointerEvents:   'none',
+        overflow:        'hidden',
+        background:      'var(--surface)',
+        transformOrigin: pivot + ' center',
+        willChange:      'transform, opacity',
+        borderRadius:    '6px',
+        boxShadow:       '0 8px 40px rgba(0,0,0,0.55)',
+      });
+      // Copy card grid HTML into the overlay (images already cached → instant)
+      flipEl.innerHTML = content.innerHTML;
 
-        // Entry: start from opposite side, then ease to centre
-        content.style.transition = 'none';
-        content.style.transformOrigin = dir > 0 ? 'right center' : 'left center';
-        content.style.transform = dir > 0
-          ? 'perspective(900px) rotateY(10deg) translateX(28px)'
-          : 'perspective(900px) rotateY(-10deg) translateX(-28px)';
-        content.style.opacity = '0';
-        content.offsetHeight; // force repaint so transition fires
-        content.style.transition = 'transform .22s ease, opacity .22s ease';
-        content.style.transform = '';
-        content.style.opacity = '1';
+      // Fold-shadow gradient on the spine edge — deepens as the page pivots
+      const foldShade = document.createElement('div');
+      Object.assign(foldShade.style, {
+        position:   'absolute', inset: '0', pointerEvents: 'none', zIndex: '3',
+        background: `linear-gradient(to ${pivot === 'left' ? 'right' : 'left'}, transparent 55%, rgba(0,0,0,0.65) 100%)`,
+        opacity:    '0',
+        transition: `opacity ${DURATION}ms ease`,
+      });
+      flipEl.appendChild(foldShade);
+
+      // ── 2. Dark veil over the incoming page — lifts as it's revealed ───────
+      const veil = document.createElement('div');
+      Object.assign(veil.style, {
+        position:   'fixed',
+        top:        rect.top  + 'px',
+        left:       rect.left + 'px',
+        width:      rect.width  + 'px',
+        minHeight:  rect.height + 'px',
+        zIndex:     '1001',
+        pointerEvents: 'none',
+        background: 'rgba(0,0,0,0.38)',
+        transition: `opacity ${DURATION}ms ease`,
+      });
+
+      document.body.appendChild(veil);
+      document.body.appendChild(flipEl);
+
+      // ── 3. Render new page immediately — it appears beneath the overlay ───
+      binderPage = Math.max(0, binderPage + dir);
+      renderBinder();
+
+      // New page fades in gently while the old page rotates away
+      content.style.opacity  = '0';
+      content.style.transition = 'none';
+      requestAnimationFrame(() => {
+        content.style.transition = `opacity ${DURATION * 0.6}ms ease ${DURATION * 0.25}ms`;
+        content.style.opacity    = '1';
+      });
+
+      // ── 4. Pivot the outgoing page away from its spine edge ───────────────
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        flipEl.style.transition = `transform ${DURATION}ms cubic-bezier(0.42,0,0.18,1), opacity ${DURATION}ms ease`;
+        flipEl.style.transform  = dir > 0
+          ? 'perspective(1100px) rotateY(-92deg)'   // slight over-rotate for snap feel
+          : 'perspective(1100px) rotateY(92deg)';
+        flipEl.style.opacity    = '0.04';
+        foldShade.style.opacity = '1';              // fold shadow deepens
+        veil.style.opacity      = '0';              // incoming page brightens
+
         setTimeout(() => {
+          if (document.body.contains(flipEl)) document.body.removeChild(flipEl);
+          if (document.body.contains(veil))   document.body.removeChild(veil);
           content.style.transition = '';
-          content.style.transformOrigin = '';
+          content.style.opacity    = '';
           _flipping = false;
-        }, 240);
-      }, 180);
+        }, DURATION + 30);
+      }));
     }
 
     // ── Mobile swipe to change binder page ───────────────────────────────
