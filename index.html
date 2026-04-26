@@ -737,7 +737,7 @@
     .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
     @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
     /* ── BINDER CARD ── */
-    .binder-card{background:var(--surface);border:1px solid var(--border);cursor:grab;transition:border-color .15s,transform .1s,opacity .15s;overflow:hidden}
+    .binder-card{background:var(--surface);border:1px solid var(--border);cursor:grab;transition:border-color .15s,transform .1s,opacity .15s;overflow:hidden;border-radius:10px}
     .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
     .binder-card.drag-over{border-color:var(--accent);box-shadow:0 0 14px rgba(255,140,20,.35);transform:scale(1.03)}
     .binder-card.ghost-card{opacity:.52;border:1px dashed var(--muted);position:relative}
@@ -749,7 +749,7 @@
     .savings-bar-fill{height:100%;background:var(--teal);border-radius:4px;transition:width .5s ease;min-width:2px}
     /* Ghost section divider */
     .ghost-section-title{font-size:.72rem;color:var(--teal);letter-spacing:.1em;margin:24px 0 10px;border-bottom:1px solid rgba(0,204,255,.2);padding-bottom:4px}
-    .binder-card-img-wrap{position:relative;aspect-ratio:3/4;background:var(--surface2);overflow:hidden;padding:5px}
+    .binder-card-img-wrap{position:relative;aspect-ratio:3/4;background:var(--surface2);overflow:hidden;padding:5px;border-radius:8px}
     .binder-card-img{width:100%;height:100%;object-fit:contain;display:block}
     .binder-card-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem}
     .binder-card-badge{position:absolute;bottom:4px;right:4px;font-size:.55rem;padding:2px 5px}
@@ -2474,12 +2474,6 @@
 
         ${ytdHtml}
 
-        ${chartItems.length > 0 ? `
-        <div class="dash-chart-section">
-          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// PORTFOLIO_VALUE_BREAKDOWN</div>
-          ${chartBars}
-        </div>` : ''}
-
         ${top5.length > 0 ? `
         <div style="margin:24px 0 16px">
           <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// TOP_5_MOST_VALUABLE</div>
@@ -2575,7 +2569,10 @@
       if (pts.length < 2) {
         return `<div class="dash-chart-section" style="margin-bottom:16px">
           <div style="font-size:.75rem;color:var(--accent);margin-bottom:8px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
-          <div style="font-size:.75rem;color:var(--muted)">Building history — check back tomorrow for your first data point.</div>
+          <div style="display:flex;align-items:baseline;gap:12px">
+            <div style="font-size:1.6rem;color:var(--text);font-weight:700">${currentValue > 0 ? '$' + currentValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div>
+            <div style="font-size:.72rem;color:var(--muted)">Tracking started today — chart builds as daily snapshots accumulate</div>
+          </div>
         </div>`;
       }
       return `<div class="dash-chart-section" style="margin-bottom:16px">
@@ -2644,18 +2641,33 @@
       const movers = [];
 
       for (const c of cards) {
-        const history = c.price_history_log || [];  // [{date:'YYYY-MM-DD', value:N}]
-        if (!history.length) continue;
-        // Find oldest entry within 7 days
-        const cutoff = new Date(now - sevenDaysMs).toISOString().slice(0, 10);
-        const old = [...history].filter(h => h.date >= cutoff).shift();
-        if (!old) continue;
-        const currentVal = c.current_value || c.purchase_price || 0;
-        const oldVal = old.value || 0;
+        const currentVal = c.current_value || 0;
+        if (!currentVal) continue;
+
+        let oldVal = null;
+        let periodLabel = '7d';
+
+        // Prefer a real price_history entry from within the last 7 days
+        const history = c.price_history_log || [];
+        if (history.length) {
+          const cutoff = new Date(now - sevenDaysMs).toISOString().slice(0, 10);
+          const oldEntry = [...history].filter(h => h.date >= cutoff).shift();
+          if (oldEntry && oldEntry.value && oldEntry.value !== currentVal) {
+            oldVal = oldEntry.value;
+          }
+        }
+
+        // Fall back to purchase_price so cards show gain/loss vs what was paid
+        if (!oldVal && c.purchase_price && c.purchase_price !== currentVal) {
+          oldVal = c.purchase_price;
+          periodLabel = 'vs cost';
+        }
+
         if (!oldVal) continue;
-        const delta = currentVal - oldVal;
-        const deltaPct = ((delta / oldVal) * 100);
-        movers.push({ ...c, delta, deltaPct, oldVal, currentVal });
+        const delta    = currentVal - oldVal;
+        const deltaPct = (delta / oldVal) * 100;
+        if (Math.abs(deltaPct) < 0.1) continue; // skip <0.1% noise
+        movers.push({ ...c, delta, deltaPct, oldVal, currentVal, periodLabel });
       }
 
       if (!movers.length) return '';
@@ -2672,8 +2684,11 @@
           const ghostMark = c.is_ghost ? ' <span style="color:var(--teal);font-size:.6rem">♡</span>' : '';
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer"
             onclick="showPage('collection');setMobileNav('collection');setTimeout(()=>openBinderCardDetail('${c.id}'),80)">
-            <span style="font-size:.75rem;color:var(--text)">${name}${ghostMark}</span>
-            <span style="font-size:.78rem;color:${color};font-weight:700">${sign}${c.deltaPct.toFixed(1)}% (${sign}$${Math.abs(c.delta).toFixed(0)})</span>
+            <div>
+              <span style="font-size:.75rem;color:var(--text)">${name}${ghostMark}</span>
+              <span style="font-size:.6rem;color:var(--muted);margin-left:5px">${c.periodLabel}</span>
+            </div>
+            <span style="font-size:.78rem;color:${color};font-weight:700">${sign}${c.deltaPct.toFixed(1)}% (${sign}$${Math.abs(c.delta).toFixed(2)})</span>
           </div>`;
         }).join('')}
       </div>`;
@@ -4274,7 +4289,23 @@
         .eq('user_id', currentUser.id)
         .gte('snapshot_date', yearStart)
         .order('snapshot_date', { ascending: true });
-      if (!error && data) {
+      if (error) {
+        console.warn('[portfolio_snapshots] Query error:', error.message);
+        if (error.message?.includes('does not exist')) {
+          console.log('%c[CardFrac] Run this SQL in Supabase to enable YTD chart:', 'color:orange;font-weight:bold');
+          console.log(`create table if not exists portfolio_snapshots (
+  id            bigserial primary key,
+  user_id       uuid references auth.users(id) on delete cascade,
+  snapshot_date date not null,
+  total_value   numeric not null default 0,
+  card_count    int default 0,
+  created_at    timestamptz default now(),
+  unique(user_id, snapshot_date)
+);
+alter table portfolio_snapshots enable row level security;
+create policy "Users manage own snapshots" on portfolio_snapshots for all using (auth.uid() = user_id);`);
+        }
+      } else if (data) {
         window._portfolioSnapshots = data;
       }
       // Write today's snapshot (upsert so it's idempotent)
@@ -4679,6 +4710,22 @@
       showToast(`${cardName} marked as sold for $${salePrice.toFixed(2)}`);
       renderBinder();
       renderDashboard();
+    }
+
+    // Silently refresh prices for cards with a price URL but no current value (first-time price fetch)
+    async function autoRefreshUnpricedCards() {
+      const unpriced = collectionItems.filter(c => !c.sold_offline && c.price_source_url && !c.current_value);
+      if (!unpriced.length) return;
+      console.log(`[CardFrac] Auto-refreshing ${unpriced.length} unpriced card(s)...`);
+      for (const item of unpriced) {
+        await refreshBinderCardPrice(item.id);
+        // Small pause between requests to be polite to the price API
+        await new Promise(r => setTimeout(r, 400));
+      }
+      if (unpriced.length > 0) {
+        renderBinder();
+        renderDashboard();
+      }
     }
 
     async function refreshBinderCardPrice(itemId) {
@@ -5134,6 +5181,8 @@
             loadOrders().catch(() => {}),
             loadPortfolioSnapshots().catch(() => {})
           ]);
+          // Silently refresh any cards that have a price URL but no current_value yet
+          autoRefreshUnpricedCards();
 
           if (txnResult.data) {
             transactions = txnResult.data.map(t => ({
