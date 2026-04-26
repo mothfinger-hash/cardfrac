@@ -2667,9 +2667,9 @@
       if (pts.length < 2) {
         return `<div class="dash-chart-section" style="margin-bottom:16px">
           <div style="font-size:.75rem;color:var(--accent);margin-bottom:8px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
-          <div style="display:flex;align-items:baseline;gap:12px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
             <div style="font-size:1.6rem;color:var(--text);font-weight:700">${currentValue > 0 ? '$' + currentValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div>
-            <div style="font-size:.72rem;color:var(--muted)">Tracking started today — chart builds as daily snapshots accumulate</div>
+            <div style="font-size:.72rem;color:var(--muted)">Chart populates after prices are refreshed on multiple days — use Refresh_Prices in the admin panel to log today's values.</div>
           </div>
         </div>`;
       }
@@ -4747,42 +4747,89 @@
     async function loadPortfolioSnapshots() {
       if (!currentUser) return;
       const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
-      const { data, error } = await sb
+      const todayStr  = new Date().toISOString().slice(0, 10);
+
+      // ── 1. Try the portfolio_snapshots table first ──────────────────────────
+      const { data: snapData, error: snapError } = await sb
         .from('portfolio_snapshots')
         .select('snapshot_date, total_value')
         .eq('user_id', currentUser.id)
         .gte('snapshot_date', yearStart)
         .order('snapshot_date', { ascending: true });
-      if (error) {
-        console.warn('[portfolio_snapshots] Query error:', error.message);
-        if (error.message?.includes('does not exist')) {
-          console.log('%c[PathBinder] Run this SQL in Supabase to enable YTD chart:', 'color:orange;font-weight:bold');
-          console.log(`create table if not exists portfolio_snapshots (
-  id            bigserial primary key,
-  user_id       uuid references auth.users(id) on delete cascade,
-  snapshot_date date not null,
-  total_value   numeric not null default 0,
-  card_count    int default 0,
-  created_at    timestamptz default now(),
-  unique(user_id, snapshot_date)
-);
-alter table portfolio_snapshots enable row level security;
-create policy "Users manage own snapshots" on portfolio_snapshots for all using (auth.uid() = user_id);`);
-        }
-      } else if (data) {
-        window._portfolioSnapshots = data;
+
+      const tableExists = !snapError || !snapError.message?.includes('does not exist');
+
+      if (!snapError && snapData && snapData.length > 0) {
+        // Table has historical data — use it, write today's snapshot, done
+        window._portfolioSnapshots = snapData;
+        _writePortfolioSnapshot(todayStr, tableExists);
+        return;
       }
-      // Write today's snapshot (upsert so it's idempotent)
-      const todayStr = new Date().toISOString().slice(0, 10);
+
+      // ── 2. Fallback: synthesise chart from price_history ───────────────────
+      // Fetch this user's full-year price history + owned card list in parallel
+      const [histResult, collResult] = await Promise.all([
+        sb.from('price_history')
+          .select('collection_item_id, recorded_at, recorded_value')
+          .eq('user_id', currentUser.id)
+          .gte('recorded_at', yearStart)
+          .order('recorded_at', { ascending: true }),
+        sb.from('collection_items')
+          .select('id, current_value, purchase_price, quantity, is_ghost, sold_offline')
+          .eq('user_id', currentUser.id)
+      ]);
+
+      if (!histResult.error && histResult.data?.length && !collResult.error && collResult.data?.length) {
+        window._portfolioSnapshots = _buildSnapshotsFromHistory(histResult.data, collResult.data);
+      }
+
+      // Write today's snapshot so the table starts accumulating going forward
+      _writePortfolioSnapshot(todayStr, tableExists);
+    }
+
+    // Build synthetic portfolio snapshots by aggregating per-card price_history
+    function _buildSnapshotsFromHistory(histEntries, cardItems) {
+      const owned = cardItems.filter(c => !c.is_ghost && !c.sold_offline);
+
+      // Map cardId → sorted price entries
+      const cardHistMap = {};
+      for (const h of histEntries) {
+        const cid = String(h.collection_item_id);
+        if (!cardHistMap[cid]) cardHistMap[cid] = [];
+        cardHistMap[cid].push({ date: h.recorded_at.slice(0, 10), value: Number(h.recorded_value) });
+      }
+
+      // All unique dates where any price was logged
+      const allDates = [...new Set(histEntries.map(h => h.recorded_at.slice(0, 10)))].sort();
+      if (!allDates.length) return [];
+
+      return allDates.map(date => {
+        let total = 0;
+        for (const card of owned) {
+          const qty = card.quantity || 1;
+          const hist = cardHistMap[String(card.id)] || [];
+          // Most recent recorded price on or before this date
+          const relevant = hist.filter(h => h.date <= date);
+          const price = relevant.length
+            ? relevant[relevant.length - 1].value
+            : (card.current_value || card.purchase_price || 0);
+          total += price * qty;
+        }
+        return { snapshot_date: date, total_value: total };
+      });
+    }
+
+    function _writePortfolioSnapshot(todayStr, tableExists) {
+      if (!tableExists || !currentUser) return;
       const ownedVal = collectionItems
-        .filter(c => !c.is_ghost)
+        .filter(c => !c.is_ghost && !c.sold_offline)
         .reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
       if (ownedVal > 0) {
         sb.from('portfolio_snapshots').upsert({
-          user_id: currentUser.id,
+          user_id:       currentUser.id,
           snapshot_date: todayStr,
-          total_value: ownedVal,
-          card_count: collectionItems.filter(c => !c.is_ghost).length
+          total_value:   ownedVal,
+          card_count:    collectionItems.filter(c => !c.is_ghost && !c.sold_offline).length
         }, { onConflict: 'user_id,snapshot_date' }).then(null, () => {});
       }
     }
