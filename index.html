@@ -749,7 +749,7 @@
     .savings-bar-fill{height:100%;background:var(--teal);border-radius:4px;transition:width .5s ease;min-width:2px}
     /* Ghost section divider */
     .ghost-section-title{font-size:.72rem;color:var(--teal);letter-spacing:.1em;margin:24px 0 10px;border-bottom:1px solid rgba(0,204,255,.2);padding-bottom:4px}
-    .binder-card-img-wrap{position:relative;aspect-ratio:3/4;background:var(--surface2);overflow:hidden}
+    .binder-card-img-wrap{position:relative;aspect-ratio:3/4;background:var(--surface2);overflow:hidden;padding:5px}
     .binder-card-img{width:100%;height:100%;object-fit:contain;display:block}
     .binder-card-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem}
     .binder-card-badge{position:absolute;bottom:4px;right:4px;font-size:.55rem;padding:2px 5px}
@@ -1028,6 +1028,38 @@
       <div style="display:flex;gap:10px">
         <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(0,204,255,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add_To_Wishlist</button>
         <button onclick="closeModal('addToWishlistModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOLD OFFLINE MODAL -->
+  <div class="modal-overlay" id="soldOfflineModal">
+    <div class="modal" style="max-width:420px">
+      <button class="modal-close" onclick="closeModal('soldOfflineModal')">×</button>
+      <h3>Sold_Offline</h3>
+      <p class="modal-sub" id="soldOfflineCardName" style="color:var(--accent);text-transform:none;opacity:.85"></p>
+      <p style="font-size:.75rem;color:var(--muted);margin-bottom:16px">Log a sale that happened outside CardFrac. The card will be removed from your active binder and recorded in your sales history.</p>
+      <div class="atc-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Sale Price ($) *</label>
+          <input type="number" class="atc-input" id="soSalePrice" placeholder="0.00" step="0.01" min="0" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Sale Date</label>
+          <input type="date" class="atc-input" id="soSaleDate" style="width:100%" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Buyer / Platform (optional)</label>
+        <input type="text" class="atc-input" id="soBuyer" placeholder="e.g. eBay, local show, friend" style="width:100%" />
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Notes (optional)</label>
+        <input type="text" class="atc-input" id="soNotes" placeholder="Any additional notes" style="width:100%" />
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="confirmSoldOffline()" style="flex:1;padding:12px;background:var(--green);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Mark_As_Sold</button>
+        <button onclick="closeModal('soldOfflineModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -2382,9 +2414,10 @@
       const totalEarned    = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed')
         .reduce((s, o) => s + (o.seller_payout || 0), 0);
 
-      // Owned vs ghost split
-      const ownedCards = collectionItems.filter(c => !c.is_ghost);
-      const ghostCards = collectionItems.filter(c => c.is_ghost);
+      // Owned vs ghost vs sold split
+      const ownedCards  = collectionItems.filter(c => !c.is_ghost && !c.sold_offline);
+      const ghostCards  = collectionItems.filter(c => c.is_ghost  && !c.sold_offline);
+      const soldOffline = collectionItems.filter(c => c.sold_offline);
       const totalValue = ownedCards.reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
       const totalCost  = ownedCards.reduce((s, c) => s + ((c.purchase_price || 0) * (c.quantity || 1)), 0);
       const totalGain  = totalValue - totalCost;
@@ -2494,6 +2527,32 @@
             </div>`;
           }).join('')}
         </div>` : ''}
+
+        ${soldOffline.length > 0 ? (() => {
+          const totalSaleRevenue = soldOffline.reduce((s, c) => s + (c.offline_sale_price || 0), 0);
+          const totalSaleCost    = soldOffline.reduce((s, c) => s + (c.purchase_price || 0), 0);
+          const totalSaleProfit  = totalSaleRevenue - totalSaleCost;
+          return `<div class="dash-chart-section" style="border-color:rgba(57,255,20,.25);margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// OFFLINE_SALES_HISTORY (${soldOffline.length})</div>
+              <div style="font-size:.72rem;color:var(--muted)">Revenue: <span style="color:var(--green)">$${totalSaleRevenue.toFixed(2)}</span> · Profit: <span style="color:${totalSaleProfit >= 0 ? 'var(--green)' : 'var(--red)'}">$${totalSaleProfit.toFixed(2)}</span></div>
+            </div>
+            <div style="max-height:220px;overflow-y:auto">
+              ${[...soldOffline].sort((a,b) => (b.offline_sale_date||'').localeCompare(a.offline_sale_date||'')).map(c => {
+                const profit = (c.offline_sale_price || 0) - (c.purchase_price || 0);
+                const sign = profit >= 0 ? '+' : '';
+                return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+                  <div>
+                    <div style="font-size:.75rem;color:var(--text)">${c.card_name}</div>
+                    <div style="font-size:.65rem;color:var(--muted)">${c.offline_sale_date || '—'}${c.offline_buyer ? ' · ' + c.offline_buyer : ''}</div>
+                  </div>
+                  <div style="font-size:.78rem;color:var(--green);text-align:right">$${(c.offline_sale_price||0).toFixed(2)}</div>
+                  <div style="font-size:.72rem;color:${profit >= 0 ? 'var(--green)' : 'var(--red)'};text-align:right;min-width:56px">${sign}$${Math.abs(profit).toFixed(2)}</div>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+        })() : ''}
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
           <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
@@ -4229,7 +4288,7 @@
           snapshot_date: todayStr,
           total_value: ownedVal,
           card_count: collectionItems.filter(c => !c.is_ghost).length
-        }, { onConflict: 'user_id,snapshot_date' }).catch(() => {});
+        }, { onConflict: 'user_id,snapshot_date' }).then(null, () => {});
       }
     }
 
@@ -4260,7 +4319,10 @@
         return;
       }
 
-      if (collectionItems.length === 0) {
+      // Active items only — exclude sold offline cards from the binder display
+      const activeItems = collectionItems.filter(c => !c.sold_offline);
+
+      if (activeItems.length === 0) {
         if (summary) summary.innerHTML = '';
         if (pagination) pagination.style.display = 'none';
         content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add_Your_First_Card</button></div>`;
@@ -4268,14 +4330,15 @@
       }
 
       // Summary stats — owned cards only, wishlist chip separate
-      const ownedItems = collectionItems.filter(c => !c.is_ghost);
-      const ghostCount = collectionItems.filter(c => c.is_ghost).length;
+      const ownedItems = activeItems.filter(c => !c.is_ghost);
+      const ghostCount = activeItems.filter(c => c.is_ghost).length;
       const totalCards = ownedItems.reduce((s, c) => s + (c.quantity || 1), 0);
       const totalCost  = ownedItems.reduce((s, c) => s + ((c.purchase_price || 0) * (c.quantity || 1)), 0);
       const totalValue = ownedItems.reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
       const totalGain  = totalValue - totalCost;
       const gainPct    = totalCost > 0 ? ((totalGain / totalCost) * 100).toFixed(1) : null;
       const gainSign   = totalGain >= 0 ? '+' : '';
+      const soldCount  = collectionItems.filter(c => c.sold_offline).length;
 
       if (summary) summary.innerHTML = `
         <div class="coll-stat-box"><div class="coll-stat-label">Owned_Cards</div><div class="coll-stat-value">${totalCards}</div></div>
@@ -4283,14 +4346,15 @@
         <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div></div>
         <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
         ${ghostCount > 0 ? `<div class="coll-stat-box" style="border-color:var(--teal)"><div class="coll-stat-label" style="color:var(--teal)">Wishlist</div><div class="coll-stat-value" style="color:var(--teal)">${ghostCount}</div></div>` : ''}
+        ${soldCount > 0 ? `<div class="coll-stat-box" style="border-color:var(--green)"><div class="coll-stat-label" style="color:var(--green)">Sold_Offline</div><div class="coll-stat-value" style="color:var(--green)">${soldCount}</div></div>` : ''}
       `;
 
-      // Paginate the unified collectionItems array (owned + ghost intermixed)
+      // Paginate active items only (owned + ghost, no sold)
       const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : 1;
-      const totalPages = Math.ceil(collectionItems.length / perPage);
+      const totalPages = Math.ceil(activeItems.length / perPage);
       binderPage = Math.min(binderPage, Math.max(0, totalPages - 1));
       const pageStart = binderPage * perPage;
-      const pageItems = collectionItems.slice(pageStart, pageStart + perPage);
+      const pageItems = activeItems.slice(pageStart, pageStart + perPage);
       const gridClass = binderView === '3x3' ? 'binder-grid-3x3' : binderView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
 
       content.innerHTML = `<div class="${gridClass}" id="binderGrid">${pageItems.map((item, pageIdx) => {
@@ -4505,6 +4569,8 @@
         <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
           <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
             style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List_For_Sale</button>
+          <button onclick="openSoldOfflineModal('${item.id}')"
+            style="padding:8px 18px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">$ Sold_Offline</button>
           <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
             style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
@@ -4517,6 +4583,71 @@
       const titleEl2 = document.getElementById('binderDetailTitle');
       if (titleEl2) { titleEl2.textContent = 'Card_Detail'; titleEl2.style.color = ''; }
       openModal('binderDetailModal');
+    }
+
+    // ── Sold Offline ─────────────────────────────────────────────────────────
+    let _soldOfflineItemId = null;
+
+    function openSoldOfflineModal(itemId) {
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      if (!item) return;
+      _soldOfflineItemId = itemId;
+      const nameEl = document.getElementById('soldOfflineCardName');
+      if (nameEl) nameEl.textContent = item.card_name + (item.set_name ? ' — ' + item.set_name : '');
+      document.getElementById('soSalePrice').value = item.current_value || item.purchase_price || '';
+      document.getElementById('soSaleDate').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('soBuyer').value = '';
+      document.getElementById('soNotes').value = '';
+      closeModal('binderDetailModal');
+      openModal('soldOfflineModal');
+    }
+
+    async function confirmSoldOffline() {
+      const itemId = _soldOfflineItemId;
+      if (!itemId) return;
+      const salePrice = parseFloat(document.getElementById('soSalePrice').value) || 0;
+      const saleDate  = document.getElementById('soSaleDate').value || new Date().toISOString().slice(0, 10);
+      const buyer     = document.getElementById('soBuyer').value.trim() || null;
+      const notes     = document.getElementById('soNotes').value.trim() || null;
+
+      const btn = document.querySelector('#soldOfflineModal button[onclick="confirmSoldOffline()"]');
+      if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+
+      const { error } = await sb.from('collection_items').update({
+        sold_offline: true,
+        offline_sale_price: salePrice,
+        offline_sale_date:  saleDate,
+        offline_buyer:      buyer,
+        notes: notes || (document.getElementById('soNotes').value.trim() || null)
+      }).eq('id', itemId);
+
+      if (btn) { btn.textContent = '✓ Mark_As_Sold'; btn.disabled = false; }
+
+      if (error) {
+        // Columns may not exist yet — handle gracefully
+        if (error.message?.includes('column') || error.message?.includes('schema')) {
+          showToast('Run the Sold Offline SQL migration first (see console)');
+          console.log('%cSold Offline SQL Migration:', 'color:orange;font-weight:bold');
+          console.log(`alter table collection_items
+  add column if not exists sold_offline boolean default false,
+  add column if not exists offline_sale_price numeric default null,
+  add column if not exists offline_sale_date date default null,
+  add column if not exists offline_buyer text default null;`);
+        } else {
+          showToast('Error: ' + error.message);
+        }
+        return;
+      }
+
+      // Remove from active binder locally
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      const cardName = item?.card_name || 'Card';
+      collectionItems = collectionItems.filter(c => String(c.id) !== String(itemId));
+      _soldOfflineItemId = null;
+      closeModal('soldOfflineModal');
+      showToast(`${cardName} marked as sold for $${salePrice.toFixed(2)}`);
+      renderBinder();
+      renderDashboard();
     }
 
     async function refreshBinderCardPrice(itemId) {
@@ -4558,7 +4689,7 @@
               user_id: currentUser.id,
               recorded_value: data.price,
               recorded_at: todayStr
-            }, { onConflict: 'collection_item_id,recorded_at' }).catch(() => {});
+            }, { onConflict: 'collection_item_id,recorded_at' }).then(null, () => {});
             // Also update local price_history_log array for movers chart
             if (local) {
               local.price_history_log = local.price_history_log || [];
@@ -4593,6 +4724,17 @@
       document.getElementById('wishlistSaved').value = '';
       document.getElementById('wishlistPriceUrl').value = '';
       openModal('addToWishlistModal');
+      // Auto-populate price URL from pre-mapped lookup table
+      if (cardData.apiCardId) {
+        const urlField = document.getElementById('wishlistPriceUrl');
+        urlField.placeholder = 'Looking up price URL…';
+        sb.from('card_price_urls').select('price_source_url').eq('api_card_id', cardData.apiCardId).maybeSingle()
+          .then(({ data }) => {
+            if (data?.price_source_url && !urlField.value) urlField.value = data.price_source_url;
+            urlField.placeholder = 'PriceCharting URL for tracking';
+          })
+          .catch(() => { urlField.placeholder = 'PriceCharting URL for tracking'; });
+      }
     }
 
     function openManualWishlistModal() {
@@ -4628,7 +4770,7 @@
       const btn = document.querySelector('#addToWishlistModal button[onclick="saveToWishlist()"]');
       if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
 
-      const { error } = await sb.from('collection_items').insert({
+      const { data: newRow, error } = await sb.from('collection_items').insert({
         user_id:          currentUser.id,
         api_card_id:      pendingCollectionCard.apiCardId   || null,
         card_name:        cardName,
@@ -4643,7 +4785,7 @@
         savings_goal:     savingsGoal,
         amount_saved:     amountSaved,
         price_source_url: priceUrl
-      });
+      }).select('id').single();
 
       if (btn) { btn.textContent = '♡ Add_To_Wishlist'; btn.disabled = false; }
 
@@ -4667,6 +4809,11 @@
       await loadCollection();
       renderBinder();
       renderDashboard();
+      // Auto-refresh price so the ghost card shows a current value immediately
+      if (newRow?.id && priceUrl) {
+        const item = collectionItems.find(c => String(c.id) === String(newRow.id));
+        if (item) refreshBinderCardPrice(newRow.id);
+      }
     }
 
     async function updateSavingsAmount(itemId, newAmount) {
@@ -4774,6 +4921,17 @@
       document.getElementById('atcNotes').value = '';
       toggleGradeField();
       openModal('addToCollectionModal');
+      // Auto-populate price URL from pre-mapped lookup table
+      if (cardData.apiCardId) {
+        const urlField = document.getElementById('atcPriceUrl');
+        urlField.placeholder = 'Looking up price URL…';
+        sb.from('card_price_urls').select('price_source_url').eq('api_card_id', cardData.apiCardId).maybeSingle()
+          .then(({ data }) => {
+            if (data?.price_source_url && !urlField.value) urlField.value = data.price_source_url;
+            urlField.placeholder = 'PriceCharting or eBay URL for auto-price tracking';
+          })
+          .catch(() => { urlField.placeholder = 'PriceCharting or eBay URL for auto-price tracking'; });
+      }
     }
 
     function openManualAddModal() {
@@ -4823,7 +4981,7 @@
       const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
       if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
 
-      const { error } = await sb.from('collection_items').insert({
+      const { data: newRow, error } = await sb.from('collection_items').insert({
         user_id:         currentUser.id,
         api_card_id:     pendingCollectionCard.apiCardId  || null,
         card_name:       cardName,
@@ -4840,7 +4998,7 @@
         purchase_date:   purchaseDate,
         price_source_url: priceSourceUrl,
         notes
-      });
+      }).select('id').single();
 
       if (saveBtn) { saveBtn.textContent = 'Add_To_Collection'; saveBtn.disabled = false; }
 
@@ -4859,6 +5017,11 @@
       pendingCollectionCard = null;
       await loadCollection();
       renderCollection();
+      // Auto-refresh price immediately if a price URL was set
+      if (newRow?.id && priceSourceUrl) {
+        const item = collectionItems.find(c => String(c.id) === String(newRow.id));
+        if (item) refreshBinderCardPrice(newRow.id);
+      }
     }
 
     async function deleteCollectionItem(id) {
