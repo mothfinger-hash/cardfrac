@@ -1128,7 +1128,7 @@
     <div class="modal" style="max-width:560px">
       <button class="modal-close" onclick="closeModal('vendorImportModal')">×</button>
       <h3 style="margin-bottom:4px">Bulk_Import_Inventory</h3>
-      <p style="font-size:.78rem;color:var(--muted);margin-bottom:18px">Upload a completed PathBinder vendor template. Each row becomes a live listing on the marketplace.</p>
+      <p style="font-size:.78rem;color:var(--muted);margin-bottom:18px">Upload your inventory spreadsheet — cards are added to your binder. From there you can list any card for sale (with photos), or mark it as sold offline.</p>
 
       <div style="display:flex;gap:10px;margin-bottom:20px">
         <button onclick="downloadVendorTemplate()" style="flex:1;padding:10px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">⬇ Download_Template</button>
@@ -3642,52 +3642,53 @@
         const r = vendorImportRows[i];
         progEl.textContent = `// Importing ${i + 1} / ${vendorImportRows.length}…`;
 
-        const cardName    = String(r['Card Name']       || '').trim();
-        const setName     = String(r['Set Name']        || '').trim();
-        const cardNumber  = String(r['Card Number']     || '').trim();
-        const condition   = String(r['Condition']       || 'Raw').trim();
-        const grade       = String(r['Grade']           || '').trim();
-        const certNum     = String(r['Certification #'] || '').trim();
-        const price       = parseFloat(r['Price'])      || 0;
-        const notes       = String(r['Notes']           || '').trim();
+        const cardName   = String(r['Card Name']       || '').trim();
+        const setName    = String(r['Set Name']        || '').trim();
+        const cardNumber = String(r['Card Number']     || '').trim();
+        const rawCond    = String(r['Condition']       || 'raw').trim();
+        const grade      = String(r['Grade']           || '').trim();
+        const certNum    = String(r['Certification #'] || '').trim();
+        const cost       = parseFloat(r['Cost'])       || 0;
+        const price      = parseFloat(r['Price'])      || 0;
+        const notes      = String(r['Notes']           || '').trim();
 
-        // Grade display: "PSA 10", "BGS 9.5", or just the condition for raw cards
-        const isGraded = condition.toLowerCase() !== 'raw' && grade;
-        const gradeDisplay = isGraded ? `${condition} ${grade}` : condition;
+        // Normalise condition: "Raw" / "raw" / blank → 'raw', anything else → 'graded'
+        const isGraded  = rawCond.toLowerCase() !== 'raw' && rawCond !== '';
+        const condition = isGraded ? 'graded' : 'raw';
+        const gradeVal  = isGraded && grade ? parseFloat(grade) || null : null;
 
-        // Build a descriptive listing name
-        const setTag  = setName ? ` — ${setName}` : '';
-        const numTag  = cardNumber ? ` #${cardNumber}` : '';
-        const listingName = `${cardName}${setTag}${numTag}`;
-
-        const { error } = await sb.from('listings').insert({
-          name:              listingName,
-          game_type:         'Pokémon',
-          grade:             gradeDisplay,
-          cert_number:       certNum || null,
-          value:             price,
-          shipping_price:    0,
-          status:            'active',
-          seller_id:         currentUser.id,
-          seller_name:       currentUser.shop_name || currentUser.username || currentUser.name || null,
-          is_vendor_listing: true,
-          total_slots:       1,
-          description:       notes || null,
-          photos:            []
+        const { error } = await sb.from('collection_items').insert({
+          user_id:        currentUser.id,
+          card_name:      cardName,
+          set_name:       setName    || null,
+          card_number:    cardNumber || null,
+          game_type:      'pokemon',
+          condition,
+          grade_value:    gradeVal,
+          cert_number:    certNum    || null,
+          purchase_price: cost       || null,
+          current_value:  price      || null,
+          quantity:       1,
+          notes:          notes      || null,
+          is_ghost:       false,
+          sold_offline:   false,
         });
 
         if (error) { console.error('Import row error:', error.message); failed++; }
         else success++;
       }
 
-      progEl.textContent = `// Done — ${success} imported, ${failed} failed.`;
-      btn.textContent = 'Import_Listings →';
+      progEl.textContent = `// Done — ${success} card${success !== 1 ? 's' : ''} added to your binder${failed ? `, ${failed} failed` : ''}.`;
+      btn.textContent = 'Import →';
       btn.disabled = false;
       vendorImportRows = [];
       document.getElementById('importSubmitBtn').style.display = 'none';
-      showToast(`✓ ${success} listing${success !== 1 ? 's' : ''} imported to marketplace`);
-      // Reload listings
-      if (typeof loadListings === 'function') loadListings();
+      showToast(`✓ ${success} card${success !== 1 ? 's' : ''} added to your binder`);
+      closeModal('vendorImportModal');
+      // Reload binder so imported cards appear immediately
+      await loadCollection();
+      renderBinder();
+      renderDashboard();
     }
 
     // ===== ADMIN PAGE =====
