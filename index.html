@@ -4801,7 +4801,7 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
       // Paginate active items only (owned + ghost, no sold)
       const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : binderView === '1x1' ? 1 : 40;
       const totalPages = Math.ceil(activeItems.length / perPage);
-      binderPage = Math.min(binderPage, Math.max(0, totalPages - 1));
+      binderPage = Math.max(0, Math.min(binderPage, Math.max(0, totalPages - 1)));
       const pageStart = binderPage * perPage;
       const pageItems = activeItems.slice(pageStart, pageStart + perPage);
 
@@ -4895,19 +4895,26 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
     (function() {
       let swipeStartX = null;
       let swipeStartY = null;
+      let swipeOnCard  = false;   // track if touch started on a draggable card
       document.addEventListener('touchstart', e => {
         const el = e.target.closest('#collectionContent');
         if (!el) return;
+        // Don't hijack touches that start on a binder card — those may be drags
+        swipeOnCard = !!e.target.closest('.binder-card');
         swipeStartX = e.touches[0].clientX;
         swipeStartY = e.touches[0].clientY;
       }, { passive: true });
       document.addEventListener('touchend', e => {
         if (swipeStartX === null) return;
         const el = e.target.closest('#collectionContent');
-        if (!el) { swipeStartX = null; return; }
+        if (!el) { swipeStartX = null; swipeOnCard = false; return; }
         const dx = e.changedTouches[0].clientX - swipeStartX;
         const dy = e.changedTouches[0].clientY - swipeStartY;
+        const wasOnCard = swipeOnCard;
         swipeStartX = null;
+        swipeOnCard = false;
+        // Skip swipe if touch started on a card (let drag-and-drop handle it)
+        if (wasOnCard) return;
         // Only count horizontal swipes (dx > dy in magnitude, dx > 50px threshold)
         if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
         if (dx < 0) binderChangePage(1);   // swipe left  → next page
@@ -4960,7 +4967,7 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
     }
 
     function binderChangePage(dir) {
-      binderPage += dir;
+      binderPage = Math.max(0, binderPage + dir);
       renderBinder();
     }
 
