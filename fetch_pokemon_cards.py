@@ -25,12 +25,13 @@ def make_slug(name):
     return slug.strip('-')
 
 def fetch_pokemon_cards():
-    """Fetch all cards from Pokémon TCG API"""
+    """Fetch all cards from Pokémon TCG API with retry logic"""
     all_cards = []
     page_size = 250
     page = 1          # API is 1-indexed
     total_count = None
     base_url = "https://api.pokemontcg.io/v2/cards"
+    max_retries = 5
 
     print("Fetching Pokémon TCG cards...")
 
@@ -41,29 +42,50 @@ def fetch_pokemon_cards():
             "orderBy": "set.id,number"
         }
 
-        try:
-            response = requests.get(base_url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
+        success = False
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(base_url, params=params, timeout=30)
 
-            if total_count is None:
-                total_count = data.get("totalCount", 0)
-                print(f"Total cards reported by API: {total_count}")
+                # Rate limited — back off and retry
+                if response.status_code == 429 or response.status_code == 400:
+                    wait = 10 * (attempt + 1)
+                    print(f"  Rate limited on page {page} (attempt {attempt+1}/{max_retries}). Waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
 
-            cards = data.get("data", [])
-            if not cards:
-                print(f"Page {page}: No more cards. Total fetched: {len(all_cards)}")
+                response.raise_for_status()
+                data = response.json()
+
+                if total_count is None:
+                    total_count = data.get("totalCount", 0)
+                    print(f"Total cards reported by API: {total_count}")
+
+                cards = data.get("data", [])
+                if not cards:
+                    print(f"Page {page}: No more cards. Total fetched: {len(all_cards)}")
+                    return all_cards
+
+                all_cards.extend(cards)
+                print(f"Page {page}: Fetched {len(cards)} cards. Running total: {len(all_cards)}")
+                success = True
                 break
 
-            all_cards.extend(cards)
-            print(f"Page {page}: Fetched {len(cards)} cards. Running total: {len(all_cards)}")
+            except Exception as e:
+                wait = 10 * (attempt + 1)
+                print(f"  Error on page {page} attempt {attempt+1}: {e}. Waiting {wait}s...")
+                time.sleep(wait)
 
-            # Stop when we have everything
-            if total_count and len(all_cards) >= total_count:
-                break
+        if not success:
+            print(f"Failed to fetch page {page} after {max_retries} attempts. Stopping.")
+            break
 
-            page += 1
-            time.sleep(0.1)
+        # Stop when we have everything
+        if total_count and len(all_cards) >= total_count:
+            break
+
+        page += 1
+        time.sleep(0.8)  # Polite delay between pages to avoid rate limits
 
         except Exception as e:
             print(f"Error on page {page}: {e}")

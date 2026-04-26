@@ -1369,20 +1369,7 @@
     </div>
 
     <div id="history" class="account-content">
-      <h3 style="font-size:1rem;margin-bottom:14px">Transaction History</h3>
-      <div class="tx-table-wrap">
-        <table class="tx-table">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Details</th>
-              <th>Date</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody id="historyBody"></tbody>
-        </table>
-      </div>
+      <div id="historyContent"></div>
     </div>
   </div>
 
@@ -2571,42 +2558,18 @@
           }).join('')}
         </div>` : ''}
 
-        ${soldOffline.length > 0 ? (() => {
-          const totalSaleRevenue = soldOffline.reduce((s, c) => s + (c.offline_sale_price || 0), 0);
-          const totalSaleCost    = soldOffline.reduce((s, c) => s + (c.purchase_price || 0), 0);
-          const totalSaleProfit  = totalSaleRevenue - totalSaleCost;
-          return `<div class="dash-chart-section" style="border-color:rgba(57,255,20,.25);margin-bottom:16px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-              <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// OFFLINE_SALES_HISTORY (${soldOffline.length})</div>
-              <div style="font-size:.72rem;color:var(--muted)">Revenue: <span style="color:var(--green)">$${totalSaleRevenue.toFixed(2)}</span> · Profit: <span style="color:${totalSaleProfit >= 0 ? 'var(--green)' : 'var(--red)'}">$${totalSaleProfit.toFixed(2)}</span></div>
-            </div>
-            <div style="max-height:220px;overflow-y:auto">
-              ${[...soldOffline].sort((a,b) => (b.offline_sale_date||'').localeCompare(a.offline_sale_date||'')).map(c => {
-                const profit = (c.offline_sale_price || 0) - (c.purchase_price || 0);
-                const sign = profit >= 0 ? '+' : '';
-                const cost = c.purchase_price || 0;
-                return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-                  <div>
-                    <div style="font-size:.75rem;color:var(--text)">${c.card_name}</div>
-                    <div style="font-size:.65rem;color:var(--muted)">${c.offline_sale_date || '—'}${c.offline_buyer ? ' · ' + c.offline_buyer : ''}</div>
-                  </div>
-                  <div style="text-align:right">
-                    <div style="font-size:.6rem;color:var(--muted)">cost</div>
-                    <div style="font-size:.72rem;color:var(--muted)">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div>
-                  </div>
-                  <div style="text-align:right">
-                    <div style="font-size:.6rem;color:var(--muted)">sold</div>
-                    <div style="font-size:.78rem;color:var(--green)">$${(c.offline_sale_price||0).toFixed(2)}</div>
-                  </div>
-                  <div style="text-align:right;min-width:56px">
-                    <div style="font-size:.6rem;color:var(--muted)">profit</div>
-                    <div style="font-size:.72rem;color:${profit >= 0 ? 'var(--green)' : 'var(--red)'}">${sign}$${Math.abs(profit).toFixed(2)}</div>
-                  </div>
-                </div>`;
-              }).join('')}
-            </div>
-          </div>`;
-        })() : ''}
+        ${userIsVendor() && soldOffline.length > 0 ? `
+        <div class="dash-chart-section" style="border-color:rgba(57,255,20,.25);margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// SALES_SUMMARY</div>
+            <button onclick="showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('history'),80)" style="background:transparent;border:none;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">→ View Full History</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:10px">
+            <div class="coll-stat-box"><div class="coll-stat-label">Offline_Sales</div><div class="coll-stat-value">${soldOffline.length}</div></div>
+            <div class="coll-stat-box"><div class="coll-stat-label">Revenue</div><div class="coll-stat-value" style="color:var(--green)">$${soldOffline.reduce((s,c)=>s+(c.offline_sale_price||0),0).toFixed(2)}</div></div>
+            <div class="coll-stat-box"><div class="coll-stat-label">Profit</div><div class="coll-stat-value" style="color:var(--green)">$${(soldOffline.reduce((s,c)=>s+(c.offline_sale_price||0),0)-soldOffline.reduce((s,c)=>s+(c.purchase_price||0),0)).toFixed(2)}</div></div>
+          </div>
+        </div>` : ''}
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
           <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
@@ -2918,23 +2881,100 @@
     }
 
     function renderHistory() {
-      const tbody = document.getElementById('historyBody');
-      if (!tbody || !currentUser) return;
-      const myOrders = orders.filter(o => o.buyer_id === currentUser.id || o.seller_id === currentUser.id);
-      if (myOrders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted)">No transactions yet</td></tr>';
-        return;
+      const el = document.getElementById('historyContent');
+      if (!el || !currentUser) return;
+
+      const isVendor = userIsVendor();
+
+      // ── Purchase History (all users) ──────────────────────────────────────
+      const purchases = orders.filter(o => o.buyer_id === currentUser.id);
+      const purchaseRows = purchases.length
+        ? purchases.map(o => {
+            const listing = listings.find(l => String(l.id) === String(o.listing_id));
+            return `<tr>
+              <td style="color:var(--text)">${listing ? listing.name : 'Unknown Card'}</td>
+              <td style="color:var(--muted);font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
+              <td style="color:var(--teal)">$${(o.amount||0).toFixed(2)}</td>
+              <td><span class="badge badge-open" style="font-size:.6rem">${o.status||'—'}</span></td>
+            </tr>`;
+          }).join('')
+        : `<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);font-size:.8rem">No purchases yet</td></tr>`;
+
+      let vendorHtml = '';
+      if (isVendor) {
+        // ── Online Sales (vendor only) ──────────────────────────────────────
+        const onlineSales = orders.filter(o => o.seller_id === currentUser.id);
+        const onlineSaleRows = onlineSales.length
+          ? onlineSales.map(o => {
+              const listing = listings.find(l => String(l.id) === String(o.listing_id));
+              const payout = o.seller_payout || 0;
+              return `<tr>
+                <td style="color:var(--text)">${listing ? listing.name : 'Unknown Card'}</td>
+                <td style="color:var(--muted);font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
+                <td style="color:var(--green)">$${payout.toFixed(2)}</td>
+                <td><span class="badge" style="background:rgba(57,255,20,.1);color:var(--green);font-size:.6rem">${o.status||'—'}</span></td>
+              </tr>`;
+            }).join('')
+          : `<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);font-size:.8rem">No online sales yet</td></tr>`;
+
+        // ── Offline Sales (vendor only) ─────────────────────────────────────
+        const soldOffline = collectionItems.filter(c => c.sold_offline);
+        const totalOfflineRevenue = soldOffline.reduce((s,c) => s + (c.offline_sale_price||0), 0);
+        const totalOfflineProfit  = soldOffline.reduce((s,c) => s + ((c.offline_sale_price||0)-(c.purchase_price||0)), 0);
+
+        const offlineSaleRows = soldOffline.length
+          ? [...soldOffline].sort((a,b)=>(b.offline_sale_date||'').localeCompare(a.offline_sale_date||'')).map(c => {
+              const profit = (c.offline_sale_price||0) - (c.purchase_price||0);
+              const sign = profit >= 0 ? '+' : '';
+              return `<tr>
+                <td style="color:var(--text)">${c.card_name}${c.offline_buyer ? `<div style="font-size:.65rem;color:var(--muted)">${c.offline_buyer}</div>` : ''}</td>
+                <td style="color:var(--muted);font-size:.8rem">${c.offline_sale_date || '—'}</td>
+                <td>
+                  <div style="color:var(--green);font-size:.82rem">$${(c.offline_sale_price||0).toFixed(2)}</div>
+                  <div style="font-size:.68rem;color:var(--muted)">cost $${(c.purchase_price||0).toFixed(2)}</div>
+                </td>
+                <td style="color:${profit>=0?'var(--green)':'var(--red)'};font-size:.8rem">${sign}$${Math.abs(profit).toFixed(2)}</td>
+              </tr>`;
+            }).join('')
+          : `<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);font-size:.8rem">No offline sales recorded yet</td></tr>`;
+
+        const offlineTotals = soldOffline.length ? `
+          <div style="display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:.72rem;color:var(--muted)">Total Revenue: <span style="color:var(--green)">$${totalOfflineRevenue.toFixed(2)}</span></span>
+            <span style="font-size:.72rem;color:var(--muted)">Total Profit: <span style="color:${totalOfflineProfit>=0?'var(--green)':'var(--red)'}">$${totalOfflineProfit>=0?'+':''}${totalOfflineProfit.toFixed(2)}</span></span>
+          </div>` : '';
+
+        vendorHtml = `
+          <div style="margin-top:28px">
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">// ONLINE_SALES</div>
+            <div class="tx-table-wrap">
+              <table class="tx-table">
+                <thead><tr><th>Card</th><th>Date</th><th>Payout</th><th>Status</th></tr></thead>
+                <tbody>${onlineSaleRows}</tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin-top:28px">
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">// OFFLINE_SALES</div>
+            <div class="tx-table-wrap">
+              <table class="tx-table">
+                <thead><tr><th>Card</th><th>Date</th><th>Sale Price</th><th>Profit</th></tr></thead>
+                <tbody>${offlineSaleRows}</tbody>
+              </table>
+            </div>
+            ${offlineTotals}
+          </div>`;
       }
-      tbody.innerHTML = myOrders.map(o => {
-        const isBuy = o.buyer_id === currentUser.id;
-        const listing = listings.find(l => String(l.id) === String(o.listing_id));
-        return `<tr>
-          <td><span class="tx-type-badge" style="background:${isBuy ? 'rgba(0,204,255,.15)' : 'rgba(57,255,20,.1)'};color:${isBuy ? 'var(--teal)' : 'var(--green)'}">${isBuy ? 'Buy' : 'Sale'}</span></td>
-          <td style="color:var(--text)">${listing ? listing.name : 'Unknown Card'}</td>
-          <td style="color:var(--muted);font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
-          <td style="color:var(--accent)">$${isBuy ? (o.amount||0).toFixed(2) : (o.seller_payout||0).toFixed(2)}</td>
-        </tr>`;
-      }).join('');
+
+      el.innerHTML = `
+        <div style="font-size:.75rem;color:var(--teal);letter-spacing:.08em;margin-bottom:12px">// PURCHASE_HISTORY</div>
+        <div class="tx-table-wrap">
+          <table class="tx-table">
+            <thead><tr><th>Card</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+            <tbody>${purchaseRows}</tbody>
+          </table>
+        </div>
+        ${vendorHtml}`;
     }
 
     // ─── Marketplace actions ───────────────────────────────────────────
