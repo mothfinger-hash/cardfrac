@@ -4915,6 +4915,37 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
     }
 
     // Silently refresh prices for cards with a price URL but no current value (first-time price fetch)
+    async function backfillPriceSourceUrls() {
+      // Find cards that have an api_card_id but no price_source_url saved yet
+      const needsUrl = collectionItems.filter(c => c.api_card_id && !c.price_source_url && !c.sold_offline);
+      if (!needsUrl.length) return;
+      console.log(`[CardFrac] Backfilling price URLs for ${needsUrl.length} card(s)...`);
+
+      // Batch the .in() query in groups of 500 to stay within Supabase limits
+      const BATCH = 500;
+      const urlMap = {};
+      for (let i = 0; i < needsUrl.length; i += BATCH) {
+        const ids = needsUrl.slice(i, i + BATCH).map(c => c.api_card_id);
+        const { data } = await sb.from('card_price_urls')
+          .select('api_card_id, price_source_url')
+          .in('api_card_id', ids);
+        if (data) data.forEach(r => { urlMap[r.api_card_id] = r.price_source_url; });
+      }
+
+      // Write the URLs back to collection_items and update local state
+      const toUpdate = needsUrl.filter(c => urlMap[c.api_card_id]);
+      if (!toUpdate.length) { console.log('[CardFrac] No matching URLs found in card_price_urls.'); return; }
+
+      for (const item of toUpdate) {
+        const url = urlMap[item.api_card_id];
+        const { error } = await sb.from('collection_items')
+          .update({ price_source_url: url })
+          .eq('id', item.id);
+        if (!error) item.price_source_url = url;
+      }
+      console.log(`[CardFrac] Backfilled ${toUpdate.length} price URL(s).`);
+    }
+
     async function autoRefreshUnpricedCards() {
       const unpriced = collectionItems.filter(c => !c.sold_offline && c.price_source_url && !c.current_value);
       if (!unpriced.length) return;
@@ -5384,6 +5415,8 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
             loadOrders().catch(() => {}),
             loadPortfolioSnapshots().catch(() => {})
           ]);
+          // Backfill price_source_url for cards that have api_card_id but no URL yet
+          await backfillPriceSourceUrls();
           // Silently refresh any cards that have a price URL but no current_value yet
           autoRefreshUnpricedCards();
 
