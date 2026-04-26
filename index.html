@@ -1548,6 +1548,11 @@
     <div id="publicBinderContent" style="max-width:900px;margin:0 auto"></div>
   </div>
 
+  <!-- ── STOREFRONT PAGE ────────────────────────────────────────────────── -->
+  <div id="storefrontPage" class="page" style="padding:0;max-width:100%">
+    <div id="storefrontContent"></div>
+  </div>
+
   <div id="leaderboardPage" class="page">
     <h2>Leaderboard</h2>
     <div class="section-tabs" style="margin-bottom:24px">
@@ -2150,7 +2155,8 @@
         renderBinder();
         if (currentUser) Promise.all([loadCollection(), loadBinders()]).then(() => renderBinder()).catch(() => {});
       }
-      if (pageId === 'publicBinder') { /* content managed by loadPublicBinder */ }
+      if (pageId === 'publicBinder')  { /* content managed by loadPublicBinder */ }
+      if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
       if (pageId === 'addCard') { /* addCardPage ready */ }
       // collection page is accessible directly via nav
       setTimeout(retroLabels, 50);
@@ -2750,6 +2756,61 @@
           <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
           <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My_Binder</button>
         </div>
+
+        ${tierAtLeast('shop') ? `
+        <div style="margin-top:28px;padding:18px;background:var(--surface);border:1px solid var(--accent);border-left-width:3px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+            <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em">// MY_STOREFRONT</div>
+            <div style="display:flex;gap:8px">
+              <button onclick="copyStoreLink()" style="padding:5px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">⬡ Copy_Store_Link</button>
+              <button onclick="previewStorefront()" style="padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">↗ Preview</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Shop Name</div>
+              <input id="shopSettingName" type="text" value="${(currentUser.shop_name||'').replace(/"/g,'&quot;')}" placeholder="Your shop name"
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            </div>
+            <div>
+              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Tagline</div>
+              <input id="shopSettingTagline" type="text" value="${(currentUser.shop_tagline||'').replace(/"/g,'&quot;')}" placeholder="Short description"
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            </div>
+            <div>
+              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Instagram</div>
+              <input id="shopSettingInstagram" type="text" value="${(currentUser.shop_instagram||'').replace(/"/g,'&quot;')}" placeholder="@handle"
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            </div>
+            <div>
+              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Website</div>
+              <input id="shopSettingWebsite" type="text" value="${(currentUser.shop_website||'').replace(/"/g,'&quot;')}" placeholder="https://..."
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            </div>
+          </div>
+          <div style="margin-bottom:12px">
+            <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">About / Description</div>
+            <textarea id="shopSettingDesc" rows="2" placeholder="Tell customers about your shop…"
+              style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;resize:vertical;outline:none"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">${currentUser.shop_description||''}</textarea>
+          </div>
+          <div style="margin-bottom:12px">
+            <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;letter-spacing:.04em">Banner Color</div>
+            <div id="shopBannerPicker" style="display:flex;gap:8px;flex-wrap:wrap">
+              ${['#080500','#1a0a00','#0a0a14','#0a140a','#14080a','#0a1014','#181218','#0d0d0d'].map(c =>
+                `<div onclick="document.querySelectorAll('#shopBannerPicker [data-bc]').forEach(x=>x.style.outline='none');this.style.outline='2px solid var(--accent)'"
+                  data-bc="${c}" style="width:24px;height:24px;background:${c};cursor:pointer;border:1px solid var(--border);
+                  outline:${(currentUser.shop_banner_color||'#080500')===c?'2px solid var(--accent)':'none'};outline-offset:2px"></div>`
+              ).join('')}
+            </div>
+          </div>
+          <button onclick="saveShopSettings()" style="padding:8px 20px;border:none;background:var(--accent);color:#080500;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Save_Settings</button>
+          <div id="shopSettingSaved" style="display:inline;margin-left:10px;font-size:.72rem;color:var(--green);display:none">✓ Saved</div>
+        </div>` : ''}
       `;
 
       // Draw YTD SVG line chart after innerHTML is set
@@ -3217,6 +3278,246 @@
       } catch (err) {
         console.error('loadPublicBinder error:', err);
         el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--red)">Failed to load binder.</div>`;
+      }
+    }
+
+    // ── Storefront helper functions ──────────────────────────────────────────
+    function copyStoreLink() {
+      const slug = getShareUsername();
+      if (!slug) { showToast('Sign in to access your store link'); return; }
+      const url = `${window.location.origin}${window.location.pathname}?store=${encodeURIComponent(slug)}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('🔗 Store link copied! Share it with customers.');
+      }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('🔗 Store link copied!');
+      });
+    }
+
+    function previewStorefront() {
+      const slug = getShareUsername();
+      if (!slug) { showToast('Sign in to preview your storefront'); return; }
+      loadStorefront(slug);
+    }
+
+    async function saveShopSettings() {
+      if (!currentUser) return;
+      const name    = document.getElementById('shopSettingName')?.value.trim()     || '';
+      const tagline = document.getElementById('shopSettingTagline')?.value.trim()  || '';
+      const insta   = document.getElementById('shopSettingInstagram')?.value.trim()|| '';
+      const website = document.getElementById('shopSettingWebsite')?.value.trim()  || '';
+      const desc    = document.getElementById('shopSettingDesc')?.value.trim()     || '';
+      const active  = document.querySelector('#shopBannerPicker [data-bc]');
+      // find which swatch has the accent outline
+      let banner = currentUser.shop_banner_color || '#080500';
+      document.querySelectorAll('#shopBannerPicker [data-bc]').forEach(el => {
+        if (el.style.outline && el.style.outline.includes('2px')) banner = el.getAttribute('data-bc');
+      });
+
+      const { error } = await sb.from('profiles').update({
+        shop_name:         name     || null,
+        shop_tagline:      tagline  || null,
+        shop_instagram:    insta    || null,
+        shop_website:      website  || null,
+        shop_description:  desc     || null,
+        shop_banner_color: banner,
+      }).eq('id', currentUser.id);
+
+      if (error) { showToast('Error: ' + error.message); return; }
+
+      currentUser.shop_name         = name     || null;
+      currentUser.shop_tagline      = tagline  || null;
+      currentUser.shop_instagram    = insta    || null;
+      currentUser.shop_website      = website  || null;
+      currentUser.shop_description  = desc     || null;
+      currentUser.shop_banner_color = banner;
+
+      const saved = document.getElementById('shopSettingSaved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(() => { saved.style.display = 'none'; }, 2500); }
+      showToast('✓ Shop settings saved');
+    }
+
+    // ── Public storefront page ───────────────────────────────────────────────
+    async function loadStorefront(usernameOrId) {
+      const el = document.getElementById('storefrontContent');
+      if (!el) return;
+      el.innerHTML = `<div style="text-align:center;padding:80px;color:var(--muted)">Loading storefront…</div>`;
+      showPage('storefront');
+
+      try {
+        // Resolve profile
+        let profile = null;
+        const { data: byUsername } = await sb.from('profiles')
+          .select('id, name, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, shop_banner_color, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+          .eq('username', usernameOrId).maybeSingle();
+        if (byUsername) {
+          profile = byUsername;
+        } else {
+          const { data: byId } = await sb.from('profiles')
+            .select('id, name, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, shop_banner_color, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+            .eq('id', usernameOrId).maybeSingle();
+          profile = byId;
+        }
+
+        if (!profile) {
+          el.innerHTML = `<div style="text-align:center;padding:80px;color:var(--muted)">Storefront not found.</div>`;
+          return;
+        }
+
+        // Must be at least vendor to have a public storefront
+        const tier = profile.subscription_tier ||
+          (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'collector' : 'free');
+        const tierOrder = ['free','collector','vendor','shop'];
+        const tierIdx   = tierOrder.indexOf(tier);
+        if (tierIdx < tierOrder.indexOf('vendor')) {
+          el.innerHTML = `<div style="text-align:center;padding:80px;color:var(--muted)">This user doesn't have a public storefront.</div>`;
+          return;
+        }
+
+        // Fetch their active (non-ghost, non-sold) cards
+        const { data: items } = await sb.from('collection_items')
+          .select('id, card_name, set_name, card_number, condition, grade_label, grade_value, quantity, image_url, current_value, purchase_price, is_ghost, sold_offline')
+          .eq('user_id', profile.id)
+          .eq('is_ghost', false)
+          .eq('sold_offline', false)
+          .order('sort_order', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true });
+
+        const cards      = items || [];
+        const cardCount  = cards.length;
+        const totalValue = cards.reduce((s, c) => s + ((c.current_value || c.purchase_price || 0) * (c.quantity || 1)), 0);
+
+        // Display values
+        const shopName   = profile.shop_name    || profile.name || profile.username || 'Shop';
+        const tagline    = profile.shop_tagline  || '';
+        const desc       = profile.shop_description || '';
+        const banner     = profile.shop_banner_color || '#0a0a14';
+        const insta      = profile.shop_instagram ? profile.shop_instagram.replace(/^@/, '') : '';
+        const website    = profile.shop_website || '';
+
+        // Tier badge
+        const tierColors = { free:'var(--muted)', collector:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
+        const tierBadge = tier !== 'free'
+          ? `<span style="font-size:.6rem;padding:2px 8px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.1em;vertical-align:middle">${tier.toUpperCase()}</span>`
+          : '';
+
+        // Social links
+        const socialHtml = [
+          insta   ? `<a href="https://instagram.com/${insta}" target="_blank" rel="noopener"
+                       style="color:var(--teal);font-size:.78rem;text-decoration:none;border:1px solid var(--border);padding:5px 12px;display:inline-block">
+                       ↗ @${insta}
+                     </a>` : '',
+          website ? `<a href="${website.startsWith('http') ? website : 'https://'+website}" target="_blank" rel="noopener"
+                       style="color:var(--muted);font-size:.78rem;text-decoration:none;border:1px solid var(--border);padding:5px 12px;display:inline-block">
+                       ↗ Website
+                     </a>` : '',
+        ].filter(Boolean).join('');
+
+        // Card grid
+        const gridCards = cards.map(c => {
+          const condLabel = c.condition === 'graded' && c.grade_value
+            ? `${c.grade_label || 'PSA'} ${c.grade_value}`
+            : (c.condition || '').toUpperCase();
+          const img = c.image_url
+            ? `<img src="${c.image_url}" alt="${c.card_name}" loading="lazy"
+                 style="width:100%;height:160px;object-fit:contain;background:var(--surface2);border-radius:4px 4px 0 0;display:block">`
+            : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.68rem">NO IMAGE</div>`;
+          const qtyBadge = (c.quantity || 1) > 1
+            ? `<span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.75);color:var(--text);font-size:.6rem;padding:1px 5px;border-radius:2px">×${c.quantity}</span>`
+            : '';
+          const valBadge = c.current_value
+            ? `<span style="font-size:.7rem;color:var(--green);font-weight:700">$${c.current_value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
+            : '';
+          return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative;transition:transform .15s,box-shadow .15s"
+                       onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 28px rgba(0,0,0,.55)'"
+                       onmouseleave="this.style.transform='';this.style.boxShadow=''">
+            ${img}
+            ${qtyBadge}
+            <div style="padding:8px 10px">
+              <div style="font-size:.75rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">${c.card_name}</div>
+              ${c.set_name ? `<div style="font-size:.63rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.set_name}${c.card_number ? ` #${c.card_number}` : ''}</div>` : ''}
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                ${condLabel ? `<span style="font-size:.6rem;color:var(--teal)">${condLabel}</span>` : '<span></span>'}
+                ${valBadge}
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+
+        // Shop stats bar
+        const statsHtml = `
+          <div style="display:flex;gap:24px;flex-wrap:wrap;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--border);font-size:.78rem">
+            <span style="color:var(--muted)">Inventory: <span style="color:var(--text);font-weight:700">${cardCount.toLocaleString()}</span> cards</span>
+            ${totalValue > 0 ? `<span style="color:var(--muted)">Est. Value: <span style="color:var(--green);font-weight:700">$${totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>` : ''}
+            ${profile.username ? `<span style="color:var(--muted)">Handle: <span style="color:var(--text)">@${profile.username}</span></span>` : ''}
+          </div>`;
+
+        // CTA for anonymous visitors
+        const ctaHtml = !currentUser ? `
+          <div style="margin:32px 20px;padding:22px;background:var(--surface);border:1px solid var(--border);text-align:center;max-width:480px;margin-left:auto;margin-right:auto">
+            <div style="color:var(--accent);font-size:.88rem;margin-bottom:8px;letter-spacing:.08em">// BUILD YOUR OWN COLLECTION</div>
+            <div style="color:var(--muted);font-size:.8rem;margin-bottom:16px">Track your cards, monitor prices, and launch your own storefront with PathBinder.</div>
+            <button onclick="openModal('authModal');document.getElementById('authModalTab-register')?.click()"
+              style="padding:10px 28px;border:none;background:linear-gradient(135deg,var(--accent),var(--gold));color:#080500;font-family:'Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+              Start Free →
+            </button>
+          </div>` : '';
+
+        // Back button logic
+        const backBtn = `<button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>`;
+        const myBtn   = currentUser
+          ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>`
+          : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`;
+
+        el.innerHTML = `
+          <!-- Banner -->
+          <div style="background:${banner};border-bottom:1px solid var(--border);padding:32px 24px 24px">
+            <div style="max-width:900px;margin:0 auto;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+                  <h1 style="font-size:1.6rem;margin:0;letter-spacing:.04em">${shopName}</h1>
+                  ${tierBadge}
+                </div>
+                ${tagline ? `<div style="color:var(--muted);font-size:.88rem;margin-bottom:12px">${tagline}</div>` : ''}
+                ${socialHtml ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${socialHtml}</div>` : ''}
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                ${backBtn}
+                ${myBtn}
+              </div>
+            </div>
+          </div>
+
+          ${statsHtml}
+
+          <!-- Body -->
+          <div style="max-width:900px;margin:0 auto;padding:24px 20px">
+
+            ${desc ? `
+            <div style="margin-bottom:28px;padding:16px 20px;background:var(--surface);border:1px solid var(--border)">
+              <div style="font-size:.65rem;color:var(--accent);letter-spacing:.1em;margin-bottom:8px">// ABOUT</div>
+              <p style="margin:0;font-size:.85rem;color:var(--muted);line-height:1.65">${desc.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</p>
+            </div>` : ''}
+
+            <!-- Card Grid -->
+            <div style="margin-bottom:12px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px">
+              <div style="font-size:.65rem;color:var(--accent);letter-spacing:.1em">// COLLECTION · ${cardCount} CARDS</div>
+            </div>
+            ${cardCount === 0
+              ? `<div style="text-align:center;padding:60px;color:var(--muted)">No cards in collection yet.</div>`
+              : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px">${gridCards}</div>`}
+
+            ${ctaHtml}
+          </div>`;
+
+      } catch (err) {
+        console.error('loadStorefront error:', err);
+        el.innerHTML = `<div style="text-align:center;padding:80px;color:var(--red)">Failed to load storefront.</div>`;
       }
     }
 
@@ -5768,7 +6069,7 @@
           '1 Wishlist goal',
           '1 Card Fund goal',
           'Shareable binder link',
-          'Marketplace access (5% seller fee)',
+          'Marketplace access',
         ],
         locked: ['Live market prices','Price trend charts','Bulk CSV import','Multi-binder org'],
       },
@@ -5785,7 +6086,7 @@
           'Biggest Movers dashboard',
           'Unlimited Wishlist goals',
           'Up to 3 Card Fund goals',
-          'Marketplace access (5% seller fee)',
+          'Marketplace access',
         ],
         locked: ['Bulk CSV import','Multi-binder org','Sales archive & trade log'],
       },
@@ -7812,7 +8113,15 @@
       if (binderParam) {
         window.history.replaceState({}, '', window.location.pathname);
         loadPublicBinder(binderParam);
-        return; // skip payment handling on binder deep-links
+        return;
+      }
+
+      // Storefront link: ?store=username
+      const storeParam = urlParams.get('store');
+      if (storeParam) {
+        window.history.replaceState({}, '', window.location.pathname);
+        loadStorefront(storeParam);
+        return;
       }
 
       // ── Post-payment redirect handling ──────────────────────────────────
