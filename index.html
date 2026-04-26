@@ -13,6 +13,21 @@
   <meta name="apple-mobile-web-app-title" content="PathBinder" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
+  <script>
+    function _loadJsPDF(cb) {
+      if (window.jspdf) { cb(); return; }
+      const s1 = document.createElement('script');
+      s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s1.onload = () => {
+        const s2 = document.createElement('script');
+        s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
+        s2.onload = cb;
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s1);
+    }
+  </script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -3205,109 +3220,366 @@
       }
     }
 
+    // ── Sales period filter state ─────────────────────────────────────────────
+    let _salesPeriod = 'all'; // 'today'|'week'|'month'|'year'|'all'
+
+    function setSalesPeriod(p) {
+      _salesPeriod = p;
+      renderSalesArchive();
+    }
+
+    function _salesPeriodRange() {
+      const now = new Date();
+      switch (_salesPeriod) {
+        case 'today': {
+          const d = new Date(now); d.setHours(0,0,0,0);
+          return { from: d, label: 'Today' };
+        }
+        case 'week': {
+          const d = new Date(now); d.setDate(d.getDate() - 6); d.setHours(0,0,0,0);
+          return { from: d, label: 'Last 7 Days' };
+        }
+        case 'month': {
+          const d = new Date(now.getFullYear(), now.getMonth(), 1);
+          return { from: d, label: now.toLocaleString('default',{month:'long',year:'numeric'}) };
+        }
+        case 'year': {
+          const d = new Date(now.getFullYear(), 0, 1);
+          return { from: d, label: String(now.getFullYear()) };
+        }
+        default:
+          return { from: null, label: 'All Time' };
+      }
+    }
+
+    function _inSalesPeriod(dateStr) {
+      const { from } = _salesPeriodRange();
+      if (!from) return true;
+      return new Date(dateStr) >= from;
+    }
+
     function renderSalesArchive() {
       const el = document.getElementById('salesArchiveContent');
       if (!el || !currentUser) return;
 
-      // ── Offline / manually-archived sales (all tiers) ───────────────────
-      const soldOffline = [...collectionItems.filter(c => c.sold_offline)]
+      const isVendorPlus = tierAtLeast('vendor');
+      const isShop       = tierAtLeast('shop');
+      const { label: periodLabel } = _salesPeriodRange();
+
+      // ── Collect all sales data ─────────────────────────────────────────────
+      const allOffline = [...collectionItems.filter(c => c.sold_offline)]
         .sort((a,b) => (b.offline_sale_date||'').localeCompare(a.offline_sale_date||''));
+      const allOnline = isVendorPlus
+        ? [...orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed')]
+            .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
+        : [];
 
-      const totalOfflineRev    = soldOffline.reduce((s,c) => s + (c.offline_sale_price||0), 0);
-      const totalOfflineProfit = soldOffline.reduce((s,c) => s + ((c.offline_sale_price||0)-(c.purchase_price||0)), 0);
+      // Period-filtered views
+      const offline = isVendorPlus
+        ? allOffline.filter(c => _inSalesPeriod(c.offline_sale_date || '1900-01-01'))
+        : allOffline;
+      const online  = allOnline.filter(o => _inSalesPeriod(o.created_at));
 
-      const offlineRows = soldOffline.length
-        ? soldOffline.map(c => {
-            const profit = (c.offline_sale_price||0) - (c.purchase_price||0);
-            const sign   = profit >= 0 ? '+' : '';
-            const img    = c.image_url
-              ? `<img src="${c.image_url}" style="width:28px;height:39px;object-fit:contain;border-radius:2px;margin-right:8px;vertical-align:middle">`
-              : `<span style="display:inline-block;width:28px;height:39px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;margin-right:8px;vertical-align:middle"></span>`;
-            const gradeTag = c.condition === 'graded' && c.grade_value
-              ? `<span style="font-size:.62rem;color:var(--gold);margin-left:4px">${c.grade_label||''} ${c.grade_value}</span>` : '';
-            return `<tr>
-              <td style="vertical-align:middle">
-                <div style="display:flex;align-items:center">
-                  ${img}
-                  <div>
-                    <div style="color:var(--text);font-size:.8rem">${c.card_name}${gradeTag}</div>
-                    ${c.set_name ? `<div style="font-size:.65rem;color:var(--muted)">${c.set_name}</div>` : ''}
-                    ${c.offline_buyer ? `<div style="font-size:.62rem;color:var(--teal)">Buyer: ${c.offline_buyer}</div>` : ''}
-                  </div>
-                </div>
-              </td>
-              <td style="color:var(--muted);font-size:.78rem;white-space:nowrap">${c.offline_sale_date || '—'}</td>
-              <td>
-                <div style="color:var(--green);font-size:.82rem">$${(c.offline_sale_price||0).toFixed(2)}</div>
-                <div style="font-size:.65rem;color:var(--muted)">cost $${(c.purchase_price||0).toFixed(2)}</div>
-              </td>
-              <td style="color:${profit>=0?'var(--green)':'var(--red)'};font-size:.8rem">${sign}$${Math.abs(profit).toFixed(2)}</td>
-              <td>
-                <button onclick="restoreArchivedCard('${c.id}')" style="padding:3px 8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.65rem;cursor:pointer" title="Restore to binder">↩ Restore</button>
-              </td>
-            </tr>`;
-          }).join('')
-        : `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--muted);font-size:.82rem">No archived sales yet.<br><span style="font-size:.72rem">Mark a card as "Sold Offline" in the binder to archive it here.</span></td></tr>`;
+      // ── Summary numbers ────────────────────────────────────────────────────
+      const offRev    = offline.reduce((s,c) => s + (c.offline_sale_price||0), 0);
+      const offCost   = offline.reduce((s,c) => s + (c.purchase_price||0), 0);
+      const offProfit = offRev - offCost;
+      const onRev     = online.reduce((s,o) => s + (o.seller_payout||0), 0);
+      const onFees    = online.reduce((s,o) => s + (o.platform_fee||0), 0);
+      const totalRev  = offRev + onRev;
+      const totalProfit = offProfit + onRev; // online: payout already net of fees
+      const margin    = totalRev > 0 ? (totalProfit / totalRev * 100) : 0;
+      const totalCount = offline.length + online.length;
 
-      const offlineSummary = soldOffline.length ? `
-        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border)">
-          <span style="font-size:.75rem;color:var(--muted)">Cards Sold: <span style="color:var(--text)">${soldOffline.length}</span></span>
-          <span style="font-size:.75rem;color:var(--muted)">Total Revenue: <span style="color:var(--green)">$${totalOfflineRev.toFixed(2)}</span></span>
-          <span style="font-size:.75rem;color:var(--muted)">Total Profit: <span style="color:${totalOfflineProfit>=0?'var(--green)':'var(--red)'}">$${totalOfflineProfit>=0?'+':''}${totalOfflineProfit.toFixed(2)}</span></span>
+      // ── Period tab bar (Vendor+) ───────────────────────────────────────────
+      const periods = [
+        { k:'today', l:'Today' }, { k:'week', l:'This Week' },
+        { k:'month', l:'This Month' }, { k:'year', l:'This Year' },
+        { k:'all', l:'All Time' },
+      ];
+      const periodTabs = isVendorPlus ? `
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:20px">
+          ${periods.map(p => `
+            <button onclick="setSalesPeriod('${p.k}')" style="
+              padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
+              border:1px solid ${_salesPeriod===p.k ? 'var(--accent)' : 'var(--border)'};
+              background:${_salesPeriod===p.k ? 'rgba(255,140,20,.1)' : 'transparent'};
+              color:${_salesPeriod===p.k ? 'var(--accent)' : 'var(--muted)'};
+            ">${p.l}</button>
+          `).join('')}
         </div>` : '';
 
-      // ── Online marketplace sales (Vendor+ only) ──────────────────────────
-      let onlineHtml = '';
-      if (tierAtLeast('vendor')) {
-        const onlineSales = [...orders.filter(o => o.seller_id === currentUser.id)]
-          .sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-        const totalOnlineRev    = onlineSales.reduce((s,o) => s + (o.seller_payout||0), 0);
-        const totalOnlineFees   = onlineSales.reduce((s,o) => s + (o.platform_fee||0), 0);
+      // ── Summary stat tiles (Vendor+) ───────────────────────────────────────
+      const statTiles = isVendorPlus ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px">
+          <div class="coll-stat-box">
+            <div class="coll-stat-label">Total_Sales</div>
+            <div class="coll-stat-value">${totalCount}</div>
+          </div>
+          <div class="coll-stat-box">
+            <div class="coll-stat-label">Revenue</div>
+            <div class="coll-stat-value" style="color:var(--green)">$${totalRev.toFixed(2)}</div>
+          </div>
+          <div class="coll-stat-box">
+            <div class="coll-stat-label">Profit</div>
+            <div class="coll-stat-value" style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${totalProfit>=0?'+':''}$${Math.abs(totalProfit).toFixed(2)}</div>
+          </div>
+          <div class="coll-stat-box">
+            <div class="coll-stat-label">Margin</div>
+            <div class="coll-stat-value" style="color:${margin>=0?'var(--teal)':'var(--red)'}">${margin.toFixed(1)}%</div>
+          </div>
+          ${isVendorPlus && onFees > 0 ? `
+          <div class="coll-stat-box">
+            <div class="coll-stat-label">Fees_Paid</div>
+            <div class="coll-stat-value" style="color:var(--muted)">$${onFees.toFixed(2)}</div>
+          </div>` : ''}
+        </div>` : '';
 
-        const onlineRows = onlineSales.length
-          ? onlineSales.map(o => {
-              const listing = listings.find(l => String(l.id) === String(o.listing_id));
-              return `<tr>
-                <td style="color:var(--text);font-size:.8rem">${listing ? listing.name : 'Marketplace Sale'}</td>
-                <td style="color:var(--muted);font-size:.78rem;white-space:nowrap">${new Date(o.created_at).toLocaleDateString()}</td>
-                <td style="color:var(--green);font-size:.82rem">$${(o.seller_payout||0).toFixed(2)}</td>
-                <td style="color:var(--muted);font-size:.75rem">$${(o.platform_fee||0).toFixed(2)}</td>
-                <td><span style="font-size:.62rem;padding:2px 6px;border:1px solid ${o.status==='completed'?'var(--green)':'var(--border)'};color:${o.status==='completed'?'var(--green)':'var(--muted)'}">${(o.status||'').toUpperCase()}</span></td>
-              </tr>`;
-            }).join('')
-          : `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);font-size:.8rem">No marketplace sales yet</td></tr>`;
+      // ── Export buttons (Vendor+) ───────────────────────────────────────────
+      const exportBtns = isVendorPlus ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+          <button onclick="exportSalesCSV()" style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s"
+            onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">⬇ Export CSV</button>
+          <button onclick="${isShop ? 'exportSalesReportPDF()' : 'exportSalesPDF()'}" style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s"
+            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">⬇ Export PDF${isShop ? ' (Full Report)' : ''}</button>
+        </div>` : '';
 
-        const onlineSummary = onlineSales.length ? `
-          <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border)">
-            <span style="font-size:.75rem;color:var(--muted)">Sales: <span style="color:var(--text)">${onlineSales.length}</span></span>
-            <span style="font-size:.75rem;color:var(--muted)">Payout Total: <span style="color:var(--green)">$${totalOnlineRev.toFixed(2)}</span></span>
-            <span style="font-size:.75rem;color:var(--muted)">Fees Paid: <span style="color:var(--red)">$${totalOnlineFees.toFixed(2)}</span></span>
-          </div>` : '';
+      // ── Combined transaction table ─────────────────────────────────────────
+      // Merge offline + online into one sorted list
+      const combined = [
+        ...offline.map(c => ({
+          date:    c.offline_sale_date || '',
+          name:    c.card_name,
+          set:     c.set_name || '',
+          cond:    c.condition === 'graded' ? `${c.grade_label||'PSA'} ${c.grade_value||''}`.trim() : 'Raw',
+          buyer:   c.offline_buyer || '',
+          revenue: c.offline_sale_price || 0,
+          cost:    c.purchase_price || 0,
+          profit:  (c.offline_sale_price||0) - (c.purchase_price||0),
+          fee:     0,
+          channel: 'Offline',
+          id:      c.id,
+          isOffline: true,
+        })),
+        ...online.map(o => {
+          const listing = listings.find(l => String(l.id) === String(o.listing_id));
+          return {
+            date:    new Date(o.created_at).toISOString().slice(0,10),
+            name:    listing?.name || 'Marketplace Sale',
+            set:     '',
+            cond:    listing?.condition || '',
+            buyer:   '',
+            revenue: (o.seller_payout||0) + (o.platform_fee||0),
+            cost:    0,
+            profit:  o.seller_payout || 0,
+            fee:     o.platform_fee || 0,
+            channel: 'Online',
+            id:      o.id,
+            isOffline: false,
+          };
+        }),
+      ].sort((a,b) => b.date.localeCompare(a.date));
 
-        onlineHtml = `
-          <div style="margin-top:32px">
-            <div style="font-size:.75rem;color:var(--teal);letter-spacing:.08em;margin-bottom:12px">// MARKETPLACE_SALES (Online)</div>
-            <div class="tx-table-wrap">
-              <table class="tx-table">
-                <thead><tr><th>Card</th><th>Date</th><th>Payout</th><th>Fee</th><th>Status</th></tr></thead>
-                <tbody>${onlineRows}</tbody>
-              </table>
+      const tableRows = combined.length
+        ? combined.map(r => {
+            const sign = r.profit >= 0 ? '+' : '';
+            return `<tr>
+              <td style="color:var(--muted);font-size:.72rem;white-space:nowrap">${r.date||'—'}</td>
+              <td style="color:var(--text);font-size:.78rem">
+                <div>${r.name}</div>
+                ${r.set ? `<div style="font-size:.65rem;color:var(--muted)">${r.set}</div>` : ''}
+                ${r.buyer ? `<div style="font-size:.62rem;color:var(--teal)">→ ${r.buyer}</div>` : ''}
+              </td>
+              <td style="font-size:.72rem;color:var(--muted)">${r.cond}</td>
+              <td style="color:var(--green);font-size:.78rem">$${r.revenue.toFixed(2)}</td>
+              <td style="font-size:.72rem;color:var(--muted)">$${r.cost.toFixed(2)}</td>
+              <td style="color:${r.profit>=0?'var(--green)':'var(--red)'};font-size:.78rem">${sign}$${Math.abs(r.profit).toFixed(2)}</td>
+              <td>
+                <span style="font-size:.6rem;padding:1px 5px;border:1px solid ${r.channel==='Online'?'var(--teal)':'var(--border)'};color:${r.channel==='Online'?'var(--teal)':'var(--muted)'}">${r.channel}</span>
+              </td>
+              ${r.isOffline ? `<td><button onclick="restoreArchivedCard('${r.id}')" style="padding:2px 6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.6rem;cursor:pointer">↩</button></td>` : '<td></td>'}
+            </tr>`;
+          }).join('')
+        : `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--muted);font-size:.82rem">
+            No sales in this period.<br>
+            <span style="font-size:.72rem">Mark a card as "Sold Offline" in the binder to record it here.</span>
+          </td></tr>`;
+
+      const tableHeaders = isVendorPlus
+        ? '<tr><th>Date</th><th>Card</th><th>Condition</th><th>Revenue</th><th>Cost</th><th>Profit</th><th>Channel</th><th></th></tr>'
+        : '<tr><th>Date</th><th>Card</th><th>Condition</th><th>Sale Price</th><th>Cost</th><th>Profit</th><th>Type</th><th></th></tr>';
+
+      // ── Shop-only: monthly revenue chart ──────────────────────────────────
+      let shopAnalytics = '';
+      if (isShop) {
+        // Build monthly buckets from ALL sales (not period-filtered) for the chart
+        const monthMap = {};
+        [...allOffline, ...allOnline.map(o => ({
+          offline_sale_date: new Date(o.created_at).toISOString().slice(0,10),
+          offline_sale_price: (o.seller_payout||0) + (o.platform_fee||0),
+          _isOnline: true, _payout: o.seller_payout||0,
+        }))].forEach(s => {
+          const d = s.offline_sale_date || '';
+          if (!d) return;
+          const mo = d.slice(0,7); // YYYY-MM
+          if (!monthMap[mo]) monthMap[mo] = { rev: 0, profit: 0, count: 0 };
+          const rev  = s.offline_sale_price || 0;
+          const prof = s._isOnline ? s._payout : (rev - (s.purchase_price||0));
+          monthMap[mo].rev    += rev;
+          monthMap[mo].profit += prof;
+          monthMap[mo].count  += 1;
+        });
+        const months = Object.keys(monthMap).sort().slice(-12); // last 12 months
+
+        // Top 5 cards by revenue
+        const cardRevMap = {};
+        allOffline.forEach(c => {
+          if (!cardRevMap[c.card_name]) cardRevMap[c.card_name] = { rev:0, count:0 };
+          cardRevMap[c.card_name].rev   += c.offline_sale_price||0;
+          cardRevMap[c.card_name].count += 1;
+        });
+        allOnline.forEach(o => {
+          const l = listings.find(x => String(x.id) === String(o.listing_id));
+          const n = l?.name || 'Marketplace Sale';
+          if (!cardRevMap[n]) cardRevMap[n] = { rev:0, count:0 };
+          cardRevMap[n].rev   += (o.seller_payout||0) + (o.platform_fee||0);
+          cardRevMap[n].count += 1;
+        });
+        const top5 = Object.entries(cardRevMap)
+          .sort((a,b) => b[1].rev - a[1].rev).slice(0,5);
+
+        // Channel breakdown
+        const chanOffRev = allOffline.reduce((s,c) => s+(c.offline_sale_price||0),0);
+        const chanOnRev  = allOnline.reduce((s,o) => s+(o.seller_payout||0)+(o.platform_fee||0),0);
+        const chanTotal  = chanOffRev + chanOnRev || 1;
+
+        // Draw monthly bar chart as SVG
+        let barChartSvg = '';
+        if (months.length > 0) {
+          const maxRev = Math.max(...months.map(m => monthMap[m].rev), 1);
+          const barW   = Math.min(36, Math.floor(420 / months.length) - 4);
+          const chartW = Math.max(300, months.length * (barW + 6));
+          const chartH = 100;
+          const padB   = 22, padT = 8;
+
+          const bars = months.map((m, i) => {
+            const rev  = monthMap[m].rev;
+            const prof = monthMap[m].profit;
+            const bH   = Math.max(2, (rev / maxRev) * (chartH - padT - padB));
+            const x    = i * (barW + 6) + 2;
+            const y    = chartH - padB - bH;
+            const mo   = new Date(m + '-01').toLocaleString('default',{month:'short'});
+            const isProfit = prof >= 0;
+            return `
+              <rect x="${x}" y="${y}" width="${barW}" height="${bH}" fill="rgba(255,140,20,.7)" rx="1"/>
+              <text x="${x + barW/2}" y="${chartH - padB + 12}" text-anchor="middle" font-size="7" fill="var(--muted)" font-family="Share Tech Mono,monospace">${mo}</text>
+              <text x="${x + barW/2}" y="${y - 3}" text-anchor="middle" font-size="7" fill="var(--accent)" font-family="Share Tech Mono,monospace">${rev >= 1000 ? '$'+(rev/1000).toFixed(1)+'k' : '$'+rev.toFixed(0)}</text>
+            `;
+          }).join('');
+
+          barChartSvg = `
+            <div style="font-size:.72rem;color:var(--accent);letter-spacing:.08em;margin-bottom:8px">// MONTHLY_REVENUE (Last 12 Months)</div>
+            <div style="overflow-x:auto;margin-bottom:20px">
+              <svg width="${chartW}" height="${chartH}" style="display:block;min-width:${chartW}px">
+                <line x1="0" y1="${chartH-padB}" x2="${chartW}" y2="${chartH-padB}" stroke="var(--border)" stroke-width="1"/>
+                ${bars}
+              </svg>
+            </div>`;
+        }
+
+        // Monthly breakdown table (last 12 months)
+        const monthTableRows = months.slice().reverse().map(m => {
+          const { rev, profit, count } = monthMap[m];
+          const sign = profit >= 0 ? '+' : '';
+          const label = new Date(m + '-01').toLocaleString('default',{month:'long', year:'numeric'});
+          return `<tr>
+            <td style="color:var(--muted);font-size:.75rem">${label}</td>
+            <td style="color:var(--text);font-size:.75rem;text-align:right">${count}</td>
+            <td style="color:var(--green);font-size:.75rem;text-align:right">$${rev.toFixed(2)}</td>
+            <td style="color:${profit>=0?'var(--green)':'var(--red)'};font-size:.75rem;text-align:right">${sign}$${Math.abs(profit).toFixed(2)}</td>
+            <td style="color:var(--muted);font-size:.75rem;text-align:right">${rev>0?(profit/rev*100).toFixed(1)+'%':'—'}</td>
+          </tr>`;
+        }).join('');
+
+        shopAnalytics = `
+          <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
+            <div style="font-size:.72rem;color:var(--accent);letter-spacing:.1em;margin-bottom:16px">// SHOP_ANALYTICS</div>
+
+            ${barChartSvg}
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+              <!-- Top 5 cards -->
+              <div>
+                <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">TOP_CARDS_BY_REVENUE</div>
+                ${top5.length ? top5.map(([name, data], i) => `
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(74,40,0,.3)">
+                    <div style="font-size:.72rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${i+1}. ${name}</div>
+                    <div style="font-size:.72rem;color:var(--green);flex-shrink:0">$${data.rev.toFixed(2)}</div>
+                  </div>`).join('')
+                : '<div style="font-size:.72rem;color:var(--muted)">No data yet</div>'}
+              </div>
+              <!-- Channel breakdown -->
+              <div>
+                <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">CHANNEL_BREAKDOWN</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:.7rem;margin-bottom:3px">
+                      <span style="color:var(--muted)">Offline</span>
+                      <span style="color:var(--text)">$${chanOffRev.toFixed(2)} (${allOffline.length} sales)</span>
+                    </div>
+                    <div style="height:6px;background:var(--surface2);border:1px solid var(--border)">
+                      <div style="height:100%;width:${(chanOffRev/chanTotal*100).toFixed(1)}%;background:var(--accent)"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:.7rem;margin-bottom:3px">
+                      <span style="color:var(--muted)">Online</span>
+                      <span style="color:var(--text)">$${chanOnRev.toFixed(2)} (${allOnline.length} sales)</span>
+                    </div>
+                    <div style="height:6px;background:var(--surface2);border:1px solid var(--border)">
+                      <div style="height:100%;width:${(chanOnRev/chanTotal*100).toFixed(1)}%;background:var(--teal)"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:14px">
+                  <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">MONTHLY_BREAKDOWN</div>
+                  <div class="tx-table-wrap" style="max-height:200px;overflow-y:auto">
+                    <table class="tx-table">
+                      <thead><tr><th>Month</th><th style="text-align:right">Sales</th><th style="text-align:right">Revenue</th><th style="text-align:right">Profit</th><th style="text-align:right">Margin</th></tr></thead>
+                      <tbody>${monthTableRows || '<tr><td colspan="5" style="text-align:center;padding:10px;color:var(--muted)">No data</td></tr>'}</tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
-            ${onlineSummary}
           </div>`;
       }
 
       el.innerHTML = `
-        <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">// SALES_ARCHIVE</div>
-        <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px">All cards you've sold or archived. Restore any card to move it back into your active binder.</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+          <div>
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// SALES_ARCHIVE${isVendorPlus ? ' — ' + periodLabel : ''}</div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:2px">
+              ${isVendorPlus ? 'All sales channels combined.' : 'Cards you\'ve sold or archived. Restore any card to your active binder.'}
+            </div>
+          </div>
+        </div>
+
+        ${periodTabs}
+        ${statTiles}
+        ${exportBtns}
+
         <div class="tx-table-wrap">
           <table class="tx-table">
-            <thead><tr><th>Card</th><th>Date Sold</th><th>Sale Price</th><th>Profit/Loss</th><th></th></tr></thead>
-            <tbody>${offlineRows}</tbody>
+            <thead>${tableHeaders}</thead>
+            <tbody>${tableRows}</tbody>
           </table>
         </div>
-        ${offlineSummary}
-        ${onlineHtml}`;
+
+        ${shopAnalytics}`;
     }
 
     async function restoreArchivedCard(itemId) {
@@ -3326,6 +3598,257 @@
       renderSalesArchive();
       renderBinder();
       showToast('✓ Card restored to binder');
+    }
+
+    // ── Build the unified sales rows used by both export functions ───────────
+    function _buildSalesRows() {
+      const { from } = _salesPeriodRange();
+      const inPeriod = d => !from || new Date(d) >= from;
+
+      const offline = collectionItems.filter(c => c.sold_offline && inPeriod(c.offline_sale_date||'1900-01-01'));
+      const online  = tierAtLeast('vendor')
+        ? orders.filter(o => o.seller_id === currentUser?.id && o.status === 'completed' && inPeriod(o.created_at))
+        : [];
+
+      return [
+        ...offline.map(c => ({
+          date:    c.offline_sale_date || '',
+          name:    c.card_name,
+          set:     c.set_name || '',
+          cond:    c.condition === 'graded' ? `${c.grade_label||'PSA'} ${c.grade_value||''}`.trim() : 'Raw',
+          revenue: c.offline_sale_price || 0,
+          cost:    c.purchase_price     || 0,
+          profit:  (c.offline_sale_price||0) - (c.purchase_price||0),
+          fee:     0,
+          channel: 'Offline',
+        })),
+        ...online.map(o => {
+          const l = listings.find(x => String(x.id) === String(o.listing_id));
+          return {
+            date:    new Date(o.created_at).toISOString().slice(0,10),
+            name:    l?.name || 'Marketplace Sale',
+            set:     '',
+            cond:    l?.condition || '',
+            revenue: (o.seller_payout||0) + (o.platform_fee||0),
+            cost:    0,
+            profit:  o.seller_payout || 0,
+            fee:     o.platform_fee  || 0,
+            channel: 'Online',
+          };
+        }),
+      ].sort((a,b) => b.date.localeCompare(a.date));
+    }
+
+    // ── CSV Export (Vendor+) ──────────────────────────────────────────────────
+    function exportSalesCSV() {
+      if (!tierAtLeast('vendor')) { showToast('Vendor+ required'); return; }
+      const rows = _buildSalesRows();
+      const { label } = _salesPeriodRange();
+      const headers = ['Date','Card','Set','Condition','Channel','Revenue','Cost','Fee','Profit'];
+      const csvRows = [headers, ...rows.map(r => [
+        r.date, `"${r.name.replace(/"/g,'""')}"`, `"${r.set.replace(/"/g,'""')}"`,
+        r.cond, r.channel,
+        r.revenue.toFixed(2), r.cost.toFixed(2), r.fee.toFixed(2), r.profit.toFixed(2),
+      ])].map(r => r.join(',')).join('\n');
+
+      const blob = new Blob([csvRows], { type: 'text/csv' });
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = `pathbinder-sales-${label.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      showToast('✓ CSV downloaded');
+    }
+
+    // ── PDF Export — Vendor: itemized transaction list ────────────────────────
+    function exportSalesPDF() {
+      if (!tierAtLeast('vendor')) { showToast('Vendor+ required'); return; }
+      _loadJsPDF(() => {
+        const { jsPDF } = window.jspdf;
+        const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+        const rows = _buildSalesRows();
+        const { label } = _salesPeriodRange();
+        const totalRev    = rows.reduce((s,r) => s + r.revenue, 0);
+        const totalProfit = rows.reduce((s,r) => s + r.profit,  0);
+        const totalFees   = rows.reduce((s,r) => s + r.fee,     0);
+        const seller      = currentUser?.shop_name || currentUser?.username || currentUser?.email || 'PathBinder User';
+        const today       = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+
+        // Header
+        doc.setFont('helvetica','bold'); doc.setFontSize(18);
+        doc.text('PathBinder Sales Report', 20, 22);
+        doc.setFont('helvetica','normal'); doc.setFontSize(10);
+        doc.setTextColor(120);
+        doc.text(`Seller: ${seller}`, 20, 30);
+        doc.text(`Period: ${label}`, 20, 36);
+        doc.text(`Generated: ${today}`, 20, 42);
+        doc.setDrawColor(200); doc.line(20, 46, 192, 46);
+
+        // Summary row
+        doc.setTextColor(0); doc.setFontSize(9);
+        doc.text(`Total Sales: ${rows.length}`, 20, 53);
+        doc.text(`Revenue: $${totalRev.toFixed(2)}`, 70, 53);
+        doc.text(`Fees: $${totalFees.toFixed(2)}`, 120, 53);
+        doc.text(`Profit: $${totalProfit.toFixed(2)}`, 160, 53);
+        doc.line(20, 57, 192, 57);
+
+        // Transaction table
+        doc.autoTable({
+          startY: 61,
+          head: [['Date','Card','Set','Cond.','Channel','Revenue','Cost','Fee','Profit']],
+          body: rows.map(r => [
+            r.date, r.name, r.set, r.cond, r.channel,
+            '$'+r.revenue.toFixed(2), '$'+r.cost.toFixed(2),
+            r.fee > 0 ? '$'+r.fee.toFixed(2) : '—',
+            (r.profit>=0?'+':'')+'$'+Math.abs(r.profit).toFixed(2),
+          ]),
+          styles:      { fontSize: 7.5, cellPadding: 2 },
+          headStyles:  { fillColor: [30,20,10], textColor: 255, fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [248, 246, 240] },
+          columnStyles: {
+            0: { cellWidth: 20 }, 1: { cellWidth: 42 }, 2: { cellWidth: 28 },
+            3: { cellWidth: 14 }, 4: { cellWidth: 16 }, 5: { cellWidth: 20 },
+            6: { cellWidth: 16 }, 7: { cellWidth: 14 }, 8: { cellWidth: 20 },
+          },
+          margin: { left: 20, right: 8 },
+        });
+
+        // Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(7); doc.setTextColor(160);
+          doc.text(`PathBinder — pathbinder.app | Page ${i} of ${pageCount}`, 20, 275);
+        }
+
+        doc.save(`pathbinder-sales-${label.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
+        showToast('✓ PDF downloaded');
+      });
+    }
+
+    // ── PDF Export — Shop: full P&L report ────────────────────────────────────
+    function exportSalesReportPDF() {
+      if (!tierAtLeast('shop')) { showToast('Shop plan required'); return; }
+      _loadJsPDF(() => {
+        const { jsPDF } = window.jspdf;
+        const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+        const allRows = _buildSalesRows();
+        const { label } = _salesPeriodRange();
+        const seller  = currentUser?.shop_name || currentUser?.username || currentUser?.email || 'PathBinder User';
+        const today   = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+
+        const totalRev    = allRows.reduce((s,r) => s + r.revenue, 0);
+        const totalCost   = allRows.reduce((s,r) => s + r.cost,    0);
+        const totalFees   = allRows.reduce((s,r) => s + r.fee,     0);
+        const totalProfit = allRows.reduce((s,r) => s + r.profit,  0);
+        const margin      = totalRev > 0 ? (totalProfit / totalRev * 100) : 0;
+        const offRows     = allRows.filter(r => r.channel === 'Offline');
+        const onRows      = allRows.filter(r => r.channel === 'Online');
+
+        // ── Cover / P&L header ────────────────────────────────────────────
+        doc.setFillColor(20, 12, 2);
+        doc.rect(0, 0, 216, 40, 'F');
+        doc.setTextColor(255, 140, 20);
+        doc.setFont('helvetica','bold'); doc.setFontSize(20);
+        doc.text('PATHBINDER', 20, 16);
+        doc.setFontSize(10); doc.setFont('helvetica','normal');
+        doc.text('Sales & Profit/Loss Report', 20, 24);
+        doc.setTextColor(180); doc.setFontSize(8.5);
+        doc.text(`${seller}  ·  Period: ${label}  ·  Generated: ${today}`, 20, 32);
+
+        // ── P&L Summary section ───────────────────────────────────────────
+        doc.setTextColor(0); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+        doc.text('Profit & Loss Summary', 20, 52);
+        doc.setDrawColor(220); doc.line(20, 55, 192, 55);
+
+        doc.autoTable({
+          startY: 58,
+          body: [
+            ['Gross Revenue',         '$'+totalRev.toFixed(2)],
+            ['Cost of Goods Sold',    '($'+totalCost.toFixed(2)+')'],
+            ['Platform Fees',         '($'+totalFees.toFixed(2)+')'],
+            ['Net Profit',            (totalProfit>=0?'':'(')+' $'+Math.abs(totalProfit).toFixed(2)+(totalProfit<0?')':'')],
+            ['Profit Margin',         margin.toFixed(1)+'%'],
+            ['Total Transactions',    String(allRows.length)],
+            ['Offline Sales',         `${offRows.length} sales  ·  $${offRows.reduce((s,r)=>s+r.revenue,0).toFixed(2)}`],
+            ['Marketplace Sales',     `${onRows.length} sales  ·  $${onRows.reduce((s,r)=>s+r.revenue,0).toFixed(2)}`],
+          ],
+          styles:     { fontSize: 9, cellPadding: 2.5 },
+          headStyles: { fillColor: [20,12,2] },
+          columnStyles: { 0: { fontStyle:'bold', cellWidth:80 }, 1: { cellWidth:50 } },
+          alternateRowStyles: { fillColor: [248,246,240] },
+          margin: { left: 20 },
+        });
+
+        // ── Monthly breakdown table ────────────────────────────────────────
+        const monthMap = {};
+        allRows.forEach(r => {
+          const mo = r.date.slice(0,7);
+          if (!monthMap[mo]) monthMap[mo] = { rev:0, cost:0, profit:0, count:0 };
+          monthMap[mo].rev    += r.revenue;
+          monthMap[mo].cost   += r.cost;
+          monthMap[mo].profit += r.profit;
+          monthMap[mo].count  += 1;
+        });
+        const months = Object.keys(monthMap).sort().reverse();
+
+        const finalY1 = doc.lastAutoTable.finalY + 12;
+        doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(0);
+        doc.text('Monthly Breakdown', 20, finalY1);
+        doc.setDrawColor(220); doc.line(20, finalY1+3, 192, finalY1+3);
+
+        doc.autoTable({
+          startY: finalY1 + 6,
+          head: [['Month','Sales','Revenue','Cost','Profit','Margin']],
+          body: months.map(m => {
+            const { rev, cost, profit, count } = monthMap[m];
+            const mo = new Date(m+'-01').toLocaleString('default',{month:'long',year:'numeric'});
+            return [mo, count, '$'+rev.toFixed(2), '$'+cost.toFixed(2),
+              (profit>=0?'+':'')+'$'+Math.abs(profit).toFixed(2),
+              rev > 0 ? (profit/rev*100).toFixed(1)+'%' : '—'];
+          }),
+          styles:     { fontSize: 8.5, cellPadding: 2 },
+          headStyles: { fillColor: [20,12,2], textColor: 255, fontStyle:'bold' },
+          alternateRowStyles: { fillColor: [248,246,240] },
+          margin: { left: 20, right: 8 },
+        });
+
+        // ── Itemized transactions ─────────────────────────────────────────
+        doc.addPage();
+        doc.setFillColor(20,12,2); doc.rect(0,0,216,16,'F');
+        doc.setTextColor(255,140,20); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+        doc.text('Itemized Transactions', 20, 11);
+
+        doc.autoTable({
+          startY: 22,
+          head: [['Date','Card','Set','Condition','Channel','Revenue','Cost','Fee','Profit']],
+          body: allRows.map(r => [
+            r.date, r.name, r.set, r.cond, r.channel,
+            '$'+r.revenue.toFixed(2), r.cost>0?'$'+r.cost.toFixed(2):'—',
+            r.fee>0?'$'+r.fee.toFixed(2):'—',
+            (r.profit>=0?'+':'')+'$'+Math.abs(r.profit).toFixed(2),
+          ]),
+          styles:     { fontSize: 7.5, cellPadding: 1.8 },
+          headStyles: { fillColor: [30,20,10], textColor:255, fontStyle:'bold' },
+          alternateRowStyles: { fillColor:[248,246,240] },
+          columnStyles: {
+            0:{cellWidth:20}, 1:{cellWidth:40}, 2:{cellWidth:25},
+            3:{cellWidth:15}, 4:{cellWidth:16}, 5:{cellWidth:20},
+            6:{cellWidth:16}, 7:{cellWidth:14}, 8:{cellWidth:20},
+          },
+          margin: { left:20, right:8 },
+        });
+
+        // Footer on every page
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(7); doc.setTextColor(160); doc.setFont('helvetica','normal');
+          doc.text(`PathBinder — pathbinder.app  ·  CONFIDENTIAL  ·  Page ${i} of ${pageCount}`, 20, 275);
+        }
+
+        doc.save(`pathbinder-pl-report-${label.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
+        showToast('✓ Full P&L Report downloaded');
+      });
     }
 
     function renderHistory() {
@@ -5274,13 +5797,16 @@
           'Everything in Collector',
           'Bulk CSV import',
           'Multi-binder organization',
-          'Sales archive & trade log',
+          'Sales archive — daily/weekly/monthly/yearly filters',
+          'Combined offline + marketplace sales view',
+          'CSV export for accounting',
+          'PDF sales report (itemized, tax-ready)',
           'Unlimited Card Fund goals',
           'Grading submission tracker',
           'Early feature access',
           '48-hour support response',
         ],
-        locked: ['White-label storefront','Multi-user access','Dedicated account manager'],
+        locked: ['Monthly revenue chart','Top cards & channel analytics','Full P&L report PDF','Dedicated account manager'],
       },
       {
         id: 'shop', label: 'Shop', monthly: 200, annual: 1800,
@@ -5288,6 +5814,11 @@
         badge: null,
         features: [
           'Everything in Vendor',
+          'Monthly revenue bar chart',
+          'Top-5 cards by revenue',
+          'Channel breakdown (online vs offline)',
+          'Full P&L Report PDF (multi-section, cover page)',
+          'Monthly breakdown table in PDF',
           'White-label storefront page',
           'Multi-user account access',
           'Staff grading pipeline',
