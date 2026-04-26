@@ -3704,6 +3704,79 @@
       if (insertedIds.length) enrichImportedCards(insertedIds);
     }
 
+    // ── Card version picker — shown when multiple different sets are found ─────
+    // Returns a Promise<card|null>. null means the user chose to skip this card.
+    function _pickCardVersion(candidates, itemName, remaining) {
+      return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+          position:fixed;inset:0;background:rgba(0,5,0,.92);z-index:10100;
+          display:flex;align-items:center;justify-content:center;padding:16px;
+        `;
+
+        const box = document.createElement('div');
+        box.style.cssText = `
+          background:var(--surface);border:1px solid var(--border);
+          border-radius:0;padding:22px;width:100%;max-width:520px;
+          max-height:88vh;overflow-y:auto;
+          box-shadow:0 0 30px rgba(255,140,20,0.12);
+          font-family:'Share Tech Mono',monospace;
+        `;
+
+        const queueNote = remaining > 1
+          ? `<span style="color:var(--muted);font-size:.72rem"> — ${remaining - 1} card${remaining - 1 !== 1 ? 's' : ''} queued after this</span>`
+          : '';
+
+        box.innerHTML = `
+          <div style="font-size:.72rem;color:var(--teal);letter-spacing:.08em;margin-bottom:6px">// MULTIPLE VERSIONS FOUND</div>
+          <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:4px">${itemName}${queueNote}</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-bottom:16px">Choose the correct version, or skip to leave unmatched.</div>
+          <div id="_pickerGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:16px"></div>
+          <button id="_pickerSkip" style="width:100%;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">Skip →</button>
+        `;
+
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+
+        function pick(card) {
+          document.body.removeChild(overlay);
+          resolve(card);
+        }
+
+        // Build card tiles
+        const grid = box.querySelector('#_pickerGrid');
+        for (const c of candidates) {
+          const tile = document.createElement('div');
+          tile.style.cssText = `
+            border:1px solid var(--border);border-radius:6px;overflow:hidden;
+            cursor:pointer;transition:border-color .15s,transform .12s;
+            background:var(--surface2);
+          `;
+          tile.onmouseenter = () => { tile.style.borderColor = 'var(--accent)'; tile.style.transform = 'scale(1.03)'; };
+          tile.onmouseleave = () => { tile.style.borderColor = 'var(--border)';  tile.style.transform = ''; };
+          tile.onclick = () => pick(c);
+
+          const img = c.images?.small
+            ? `<img src="${c.images.small}" style="width:100%;aspect-ratio:245/342;object-fit:contain;display:block;background:#111">`
+            : `<div style="width:100%;aspect-ratio:245/342;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">?</div>`;
+
+          tile.innerHTML = `
+            ${img}
+            <div style="padding:5px 6px">
+              <div style="font-size:.65rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.set?.name || '—'}</div>
+              <div style="font-size:.6rem;color:var(--muted)">#${c.number}</div>
+            </div>
+          `;
+          grid.appendChild(tile);
+        }
+
+        box.querySelector('#_pickerSkip').onclick = () => pick(null);
+
+        // Close on backdrop click
+        overlay.addEventListener('click', e => { if (e.target === overlay) pick(null); });
+      });
+    }
+
     // ── Levenshtein distance for fuzzy card name matching ─────────────────────
     function _levenshtein(a, b) {
       a = a.toLowerCase(); b = b.toLowerCase();
@@ -3766,13 +3839,32 @@
           let card = null;
           for (const q of queries) {
             try {
-              const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=4`);
+              const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=8`);
               const data = await res.json();
               if (data?.data?.length) {
-                // If we got multiple results, prefer the one whose number matches exactly
-                card = num
-                  ? (data.data.find(c => String(c.number) === num) || data.data[0])
-                  : data.data[0];
+                // 1. Filter to exact card number match if we have one
+                let candidates = data.data;
+                if (num) {
+                  const byNum = candidates.filter(c => String(c.number) === num);
+                  if (byNum.length) candidates = byNum;
+                }
+
+                // 2. Check if candidates span multiple distinct sets
+                const distinctSets = [...new Set(candidates.map(c => c.set?.id).filter(Boolean))];
+
+                if (candidates.length === 1 || distinctSets.length <= 1) {
+                  // Only one real option — auto-pick
+                  card = candidates[0];
+                } else {
+                  // Multiple versions from different sets — let the user choose
+                  _enrichBanner(null); // hide progress banner while picker is open
+                  card = await _pickCardVersion(
+                    candidates,
+                    item.card_name,
+                    items.length - idx  // how many cards remain including this one
+                  );
+                  // null means user skipped; card stays null → continue loop
+                }
                 break;
               }
             } catch (_) {}
