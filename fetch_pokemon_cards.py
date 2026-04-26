@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
 """
-Fetch all Pokémon TCG cards and create a formatted Excel spreadsheet.
-Run this script on a machine with internet access to fetch data from the Pokémon TCG API.
+Fetch all Pokémon TCG cards set-by-set to avoid deep-pagination rate limits.
+Instead of paginating globally (which triggers a 400 at ~page 54), we:
+  1. Fetch the full list of sets from /v2/sets  (1-2 pages, fast)
+  2. For each set, fetch cards with ?q=set.id:{id}  (most sets fit in 1 page)
+  3. Merge, sort, and write to Excel
+
+Usage:
+  python3 fetch_pokemon_cards.py [output.xlsx] [--resume sets_done.txt]
+
+Options:
+  output.xlsx        Path for the output file (default: pokemon_cards_pricechart.xlsx)
+  --resume FILE      Resume from a checkpoint file listing already-fetched set IDs
+                     (checkpoint is written automatically as sets are completed)
 """
 
-import requests
-import json
-import time
-from urllib.parse import quote
+import sys
+import os
 import re
+import time
+import json
+import requests
+from urllib.parse import quote
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-import os
+
+# ── helpers ──────────────────────────────────────────────────────────────────
 
 def make_slug(name):
-    """Convert card name to PriceCharting slug format"""
     if not name:
         return ""
     slug = name.lower()
@@ -24,177 +37,217 @@ def make_slug(name):
     slug = re.sub(r'-+', '-', slug)
     return slug.strip('-')
 
-def fetch_pokemon_cards():
-    """Fetch all cards from Pokémon TCG API with retry logic"""
-    all_cards = []
-    page_size = 250
-    page = 1          # API is 1-indexed
-    total_count = None
-    base_url = "https://api.pokemontcg.io/v2/cards"
-    max_retries = 5
-
-    print("Fetching Pokémon TCG cards...")
-
-    while True:
-        params = {
-            "pageSize": page_size,
-            "page": page,
-            "orderBy": "set.id,number"
-        }
-
-        success = False
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(base_url, params=params, timeout=30)
-
-                # Rate limited — back off and retry
-                if response.status_code == 429 or response.status_code == 400:
-                    wait = 10 * (attempt + 1)
-                    print(f"  Rate limited on page {page} (attempt {attempt+1}/{max_retries}). Waiting {wait}s...")
-                    time.sleep(wait)
-                    continue
-
-                response.raise_for_status()
-                data = response.json()
-
-                if total_count is None:
-                    total_count = data.get("totalCount", 0)
-                    print(f"Total cards reported by API: {total_count}")
-
-                cards = data.get("data", [])
-                if not cards:
-                    print(f"Page {page}: No more cards. Total fetched: {len(all_cards)}")
-                    return all_cards
-
-                all_cards.extend(cards)
-                print(f"Page {page}: Fetched {len(cards)} cards. Running total: {len(all_cards)}")
-                success = True
-                break
-
-            except Exception as e:
-                wait = 10 * (attempt + 1)
-                print(f"  Error on page {page} attempt {attempt+1}: {e}. Waiting {wait}s...")
+def get_with_retry(url, params=None, max_retries=6, label=""):
+    """GET a URL with exponential back-off on 429 / 400 / network errors."""
+    for attempt in range(max_retries):
+        try:
+            r = requests.get(url, params=params, timeout=30)
+            if r.status_code in (429, 400):
+                wait = 15 * (attempt + 1)
+                print(f"  [{label}] Rate-limited ({r.status_code}), attempt {attempt+1}/{max_retries}. Waiting {wait}s…")
                 time.sleep(wait)
+                continue
+            r.raise_for_status()
+            return r.json()
+        except requests.exceptions.RequestException as e:
+            wait = 10 * (attempt + 1)
+            print(f"  [{label}] Error attempt {attempt+1}/{max_retries}: {e}. Waiting {wait}s…")
+            time.sleep(wait)
+    return None
 
-        if not success:
-            print(f"Failed to fetch page {page} after {max_retries} attempts. Stopping.")
+# ── step 1: fetch all sets ────────────────────────────────────────────────────
+
+def fetch_all_sets():
+    sets = []
+    page = 1
+    print("Fetching set list…")
+    while True:
+        data = get_with_retry(
+            "https://api.pokemontcg.io/v2/sets",
+            params={"pageSize": 250, "page": page},
+            label=f"sets p{page}"
+        )
+        if not data:
+            print("  Failed to fetch sets page, stopping.")
             break
-
-        # Stop when we have everything
-        if total_count and len(all_cards) >= total_count:
+        batch = data.get("data", [])
+        if not batch:
             break
-
+        sets.extend(batch)
+        print(f"  Sets page {page}: {len(batch)} sets (total {len(sets)})")
+        if len(sets) >= data.get("totalCount", 0):
+            break
         page += 1
-        time.sleep(0.8)  # Polite delay between pages to avoid rate limits
+        time.sleep(0.5)
+    print(f"Total sets: {len(sets)}")
+    return sets
 
-        except Exception as e:
-            print(f"Error on page {page}: {e}")
+# ── step 2: fetch cards for one set ──────────────────────────────────────────
+
+def fetch_cards_for_set(set_id, set_name):
+    cards = []
+    page = 1
+    while True:
+        data = get_with_retry(
+            "https://api.pokemontcg.io/v2/cards",
+            params={
+                "q": f"set.id:{set_id}",
+                "pageSize": 250,
+                "page": page,
+            },
+            label=f"{set_id} p{page}"
+        )
+        if not data:
+            print(f"  [{set_id}] Failed to fetch page {page}, stopping.")
             break
+        batch = data.get("data", [])
+        if not batch:
+            break
+        cards.extend(batch)
+        total = data.get("totalCount", 0)
+        if page == 1:
+            print(f"  {set_id} ({set_name}): {total} cards", end="", flush=True)
+        if len(cards) >= total:
+            print(f" ✓")
+            break
+        print(f" p{page}", end="", flush=True)
+        page += 1
+        time.sleep(0.6)
+    return cards
 
-    return all_cards
+# ── step 3: build Excel ───────────────────────────────────────────────────────
 
-def create_excel(cards, output_path):
-    """Create formatted Excel file with card data"""
-    rows = []
+def card_to_row(card):
+    name        = card.get("name", "")
+    set_info    = card.get("set", {})
+    set_name    = set_info.get("name", "")
+    set_code    = set_info.get("id", "")
+    card_number = card.get("number", "")
+    rarity      = card.get("rarity", "")
+    supertype   = card.get("supertype", "")
 
-    for card in cards:
-        name = card.get("name", "")
-        set_info = card.get("set", {})
-        set_name = set_info.get("name", "")
-        set_code = set_info.get("id", "")
-        card_number = card.get("number", "")
-        rarity = card.get("rarity", "")
-        supertype = card.get("supertype", "")
+    tcgplayer_url = card.get("tcgplayer", {}).get("url", "")
+    image_url     = card.get("images", {}).get("small", "")
 
-        tcgplayer_url = card.get("tcgplayer", {}).get("url", "")
+    slug = make_slug(name)
+    pricecharting_url = f"https://www.pricecharting.com/game/pokemon/{slug}"
+    search_url        = f"https://www.pricecharting.com/search-products?q={quote(name)}&type=prices"
 
-        images = card.get("images", {})
-        image_url = images.get("small", "")
+    return [name, set_name, set_code, card_number, rarity, supertype,
+            pricecharting_url, search_url, tcgplayer_url, image_url]
 
-        slug = make_slug(name)
-        pricecharting_url = f"https://www.pricecharting.com/game/pokemon/{slug}"
-        search_url = f"https://www.pricecharting.com/search-products?q={quote(name)}&type=prices"
-
-        rows.append([
-            name,
-            set_name,
-            set_code,
-            card_number,
-            rarity,
-            supertype,
-            pricecharting_url,
-            search_url,
-            tcgplayer_url,
-            image_url
-        ])
-
-    rows.sort(key=lambda x: (x[2], x[3] if x[3] else ""))
-
-    print(f"\nCreating Excel file with {len(rows)} cards...")
+def create_excel(rows, output_path):
+    print(f"\nWriting {len(rows)} rows to {output_path}…")
 
     wb = Workbook()
-    sheet = wb.active
-    sheet.title = "Pokemon Cards"
+    ws = wb.active
+    ws.title = "Pokemon Cards"
 
     headers = [
-        "Card Name",
-        "Set Name",
-        "Set Code",
-        "Card Number",
-        "Rarity",
-        "Supertype",
-        "PriceCharting URL",
-        "PriceCharting Search URL",
-        "TCGPlayer URL",
-        "Card Image URL"
+        "Card Name", "Set Name", "Set Code", "Card Number",
+        "Rarity", "Supertype",
+        "PriceCharting URL", "PriceCharting Search URL",
+        "TCGPlayer URL", "Card Image URL",
     ]
 
-    sheet.append(headers)
+    header_font  = Font(name='Arial', size=9, bold=True, color='FFFFFF')
+    header_fill  = PatternFill(start_color='2D2D2D', end_color='2D2D2D', fill_type='solid')
+    data_font    = Font(name='Arial', size=9)
+    white_fill   = PatternFill(start_color='FFFFFF', end_color='FFFFFF', fill_type='solid')
+    gray_fill    = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
 
-    header_font = Font(name='Arial', size=9, bold=True, color='FFFFFF')
-    header_fill = PatternFill(start_color='2D2D2D', end_color='2D2D2D', fill_type='solid')
-    header_alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-
-    for col_num, header in enumerate(headers, 1):
-        cell = sheet.cell(row=1, column=col_num)
-        cell.value = header
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_alignment
-
-    sheet.row_dimensions[1].height = 20
-
-    data_font = Font(name='Arial', size=9)
-    white_fill = PatternFill(start_color='FFFFFF', end_color='FFFFFF', fill_type='solid')
-    gray_fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
+    ws.append(headers)
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font      = header_font
+        cell.fill      = header_fill
+        cell.alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[1].height = 20
 
     for row_idx, row_data in enumerate(rows, 2):
         fill = gray_fill if row_idx % 2 == 0 else white_fill
-        for col_idx, value in enumerate(row_data, 1):
-            cell = sheet.cell(row=row_idx, column=col_idx)
-            cell.value = value
-            cell.font = data_font
-            cell.fill = fill
+        ws.append(row_data)
+        for col_idx in range(1, len(row_data) + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.font      = data_font
+            cell.fill      = fill
             cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=False)
 
     widths = [30, 28, 10, 8, 18, 12, 55, 55, 55, 55]
     for col_idx, width in enumerate(widths, 1):
-        sheet.column_dimensions[get_column_letter(col_idx)].width = width
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
 
-    sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(rows) + 1}"
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(rows) + 1}"
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
+    print(f"Saved: {output_path}  ({len(rows)} cards)")
 
-    print(f"Excel file saved to: {output_path}")
-    print(f"Total rows: {len(rows)}")
+# ── main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    output_path    = "pokemon_cards_pricechart.xlsx"
+    resume_file    = None
+    checkpoint_file = "fetch_checkpoint.txt"   # written automatically
+
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] == "--resume":
+            resume_file = args[i + 1]
+            i += 2
+        else:
+            output_path = args[i]
+            i += 1
+
+    # Load checkpoint (sets already completed)
+    done_sets = set()
+    cf = resume_file or checkpoint_file
+    if os.path.exists(cf):
+        with open(cf) as f:
+            done_sets = {line.strip() for line in f if line.strip()}
+        print(f"Resuming — {len(done_sets)} sets already fetched (from {cf})")
+
+    sets = fetch_all_sets()
+    if not sets:
+        print("No sets fetched. Check your internet connection.")
+        sys.exit(1)
+
+    all_rows = []
+    total_sets = len(sets)
+
+    for idx, s in enumerate(sets, 1):
+        set_id   = s["id"]
+        set_name = s["name"]
+
+        if set_id in done_sets:
+            print(f"[{idx}/{total_sets}] Skipping {set_id} (already done)")
+            continue
+
+        print(f"[{idx}/{total_sets}] ", end="", flush=True)
+        cards = fetch_cards_for_set(set_id, set_name)
+
+        for card in cards:
+            all_rows.append(card_to_row(card))
+
+        # Mark this set done in the checkpoint file
+        with open(checkpoint_file, "a") as f:
+            f.write(set_id + "\n")
+        done_sets.add(set_id)
+
+        # Polite pause between sets
+        time.sleep(0.8)
+
+    # Sort by set_code then card_number
+    all_rows.sort(key=lambda r: (r[2], r[3] if r[3] else ""))
+
+    create_excel(all_rows, output_path)
+
+    # Clean up checkpoint on success
+    if os.path.exists(checkpoint_file):
+        os.remove(checkpoint_file)
+        print("Checkpoint file removed (fetch complete).")
 
 if __name__ == "__main__":
-    import sys
-    output_path = sys.argv[1] if len(sys.argv) > 1 else 'pokemon_cards_pricechart.xlsx'
-    cards = fetch_pokemon_cards()
-    if cards:
-        create_excel(cards, output_path)
-    else:
-        print("No cards fetched. Check your internet connection and API access.")
+    main()
