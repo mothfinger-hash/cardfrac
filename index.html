@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CardFrac — Card Collection &amp; Marketplace</title>
+  <title>PathBinder — Card Collection &amp; Marketplace</title>
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#ff8c14" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="CardFrac" />
+  <meta name="apple-mobile-web-app-title" content="PathBinder" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
@@ -771,6 +771,7 @@
     .dash-chart-val{font-size:.72rem;color:var(--accent);text-align:right;white-space:nowrap}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script>
     const SUPABASE_URL = 'https://xjamytrhxeaynywcwfun.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_HeBrC8k5nKaBmqA9qMn6-Q_YqL8OEBV';
@@ -795,7 +796,7 @@
 </head>
 <body>
   <nav>
-    <button class="logo" onclick="showPage('landing')">[CARDFRAC_SYS]</button>
+    <button class="logo" onclick="showPage('landing')">[PATHBINDER_SYS]</button>
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Marketplace</button>
@@ -852,7 +853,7 @@
     <div class="modal">
       <button class="modal-close" onclick="closeModal('registerModal')">×</button>
       <h3>Create Account</h3>
-      <p class="modal-sub">Join CardFrac today</p>
+      <p class="modal-sub">Join PathBinder today</p>
       <form onsubmit="handleRegister(event)">
         <div class="form-group">
           <label>Full Name</label>
@@ -893,7 +894,7 @@
   <div class="modal-overlay" id="membershipModal">
     <div class="modal">
       <button class="modal-close" onclick="closeModal('membershipModal')">×</button>
-      <h3>CardFrac Premium</h3>
+      <h3>PathBinder Premium</h3>
       <p class="modal-sub">Unlock exclusive benefits</p>
       <div class="billing-toggle">
         <button class="billing-opt active" onclick="toggleBilling(this,'monthly')">Monthly</button>
@@ -1038,7 +1039,7 @@
       <button class="modal-close" onclick="closeModal('soldOfflineModal')">×</button>
       <h3>Sold_Offline</h3>
       <p class="modal-sub" id="soldOfflineCardName" style="color:var(--accent);text-transform:none;opacity:.85"></p>
-      <p style="font-size:.75rem;color:var(--muted);margin-bottom:16px">Log a sale that happened outside CardFrac. The card will be removed from your active binder and recorded in your sales history.</p>
+      <p style="font-size:.75rem;color:var(--muted);margin-bottom:16px">Log a sale that happened outside PathBinder. The card will be removed from your active binder and recorded in your sales history.</p>
       <div class="atc-grid" style="margin-bottom:14px">
         <div class="form-group">
           <label>Sale Price ($) *</label>
@@ -1069,7 +1070,7 @@
     <div class="modal" style="max-width:520px">
       <button class="modal-close" onclick="closeModal('vendorApplicationModal')">×</button>
       <h3 style="color:var(--accent)">Apply_To_Sell</h3>
-      <p style="font-size:.8rem;color:var(--muted);margin-bottom:20px">CardFrac is a verified vendor marketplace. Fill out the form below and we'll review your application within 2–3 business days.</p>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:20px">PathBinder is a verified vendor marketplace. Fill out the form below and we'll review your application within 2–3 business days.</p>
       <div id="vendorAppStatus" style="display:none;padding:10px 14px;border-radius:6px;font-size:.8rem;margin-bottom:16px"></div>
       <div style="display:flex;flex-direction:column;gap:12px">
         <div>
@@ -1098,6 +1099,42 @@
       <div style="display:flex;gap:10px;margin-top:20px">
         <button onclick="saveVendorApplication()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Submit_Application</button>
         <button onclick="closeModal('vendorApplicationModal')" style="padding:12px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VENDOR BULK IMPORT MODAL -->
+  <div class="modal-overlay" id="vendorImportModal">
+    <div class="modal" style="max-width:560px">
+      <button class="modal-close" onclick="closeModal('vendorImportModal')">×</button>
+      <h3 style="margin-bottom:4px">Bulk_Import_Inventory</h3>
+      <p style="font-size:.78rem;color:var(--muted);margin-bottom:18px">Upload a completed PathBinder vendor template. Each row becomes a live listing on the marketplace.</p>
+
+      <div style="display:flex;gap:10px;margin-bottom:20px">
+        <button onclick="downloadVendorTemplate()" style="flex:1;padding:10px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">⬇ Download_Template</button>
+      </div>
+
+      <div id="importDropZone" onclick="document.getElementById('vendorImportFile').click()"
+        style="border:2px dashed var(--border);padding:28px;text-align:center;cursor:pointer;transition:border-color .15s;border-radius:4px;margin-bottom:16px"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+        ondragleave="this.style.borderColor='var(--border)'"
+        ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleVendorImportFile(event.dataTransfer.files[0])">
+        <div style="font-size:.82rem;color:var(--muted)">Click or drag & drop your completed template here</div>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:6px">.xlsx or .csv accepted</div>
+        <input type="file" id="vendorImportFile" accept=".xlsx,.csv" style="display:none" onchange="handleVendorImportFile(this.files[0])">
+      </div>
+
+      <div id="importPreview" style="display:none;margin-bottom:16px">
+        <div id="importPreviewInfo" style="font-size:.78rem;color:var(--accent);margin-bottom:8px"></div>
+        <div id="importPreviewTable" style="max-height:200px;overflow-y:auto;font-size:.72rem"></div>
+      </div>
+
+      <div id="importError" style="display:none;color:var(--red);font-size:.78rem;margin-bottom:12px"></div>
+      <div id="importProgress" style="display:none;font-size:.78rem;color:var(--muted);margin-bottom:12px"></div>
+
+      <div style="display:flex;gap:10px">
+        <button id="importSubmitBtn" onclick="submitVendorImport()" style="display:none;flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Import_Listings →</button>
+        <button onclick="closeModal('vendorImportModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1378,14 +1415,25 @@
     <p class="subtitle">Your complete card holdings at a glance.</p>
 
     <!-- Binder View Controls -->
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
       <div class="binder-view-toggle">
         <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
         <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
         <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
+        <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
       </div>
-      <button onclick="showPage('addCard');setMobileNav('addCard')"
-        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk_Import</button>
+        <button onclick="showPage('addCard');setMobileNav('addCard')"
+          style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
+      </div>
+    </div>
+    <!-- List view search — only visible in list mode -->
+    <div id="binderListSearchWrap" style="display:none;margin-bottom:12px">
+      <input id="binderListSearch" type="text" placeholder="Search by name, set, or card #…"
+        oninput="renderBinder()"
+        style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;border-radius:0;box-sizing:border-box;outline:none"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
     </div>
 
     <!-- Portfolio Summary -->
@@ -3452,6 +3500,163 @@
       }
     }
 
+    // ===== VENDOR BULK IMPORT =====
+    const VENDOR_TEMPLATE_HEADERS = [
+      'Card Name', 'Set Name', 'Set Code', 'Card Number',
+      'Condition',        // Raw / PSA / BGS / CGC
+      'Grade',            // numeric grade if graded, e.g. 10 / 9.5 / 9
+      'Price',            // asking price in USD
+      'Shipping Price',   // shipping cost in USD (0 for free)
+      'Game Type',        // Pokemon / MTG / Sports / Other
+      'Notes'             // optional seller notes
+    ];
+
+    let vendorImportRows = [];
+
+    function openVendorImportModal() {
+      vendorImportRows = [];
+      document.getElementById('importPreview').style.display = 'none';
+      document.getElementById('importError').style.display = 'none';
+      document.getElementById('importProgress').style.display = 'none';
+      document.getElementById('importSubmitBtn').style.display = 'none';
+      const fi = document.getElementById('vendorImportFile');
+      if (fi) fi.value = '';
+      openModal('vendorImportModal');
+    }
+
+    function downloadVendorTemplate() {
+      if (typeof XLSX === 'undefined') { showToast('Spreadsheet library still loading — try again in a moment'); return; }
+      const wb = XLSX.utils.book_new();
+      // Header row
+      const ws = XLSX.utils.aoa_to_sheet([
+        VENDOR_TEMPLATE_HEADERS,
+        // Example row
+        ['Charizard', 'Base Set', 'base1', '4', 'PSA', '10', '869.51', '0', 'Pokemon', 'Near-perfect centering'],
+        ['Pikachu',   'Base Set', 'base1', '58', 'Raw', '', '12.00', '4.99', 'Pokemon', ''],
+      ]);
+      // Column widths
+      ws['!cols'] = [20,16,10,10,12,8,10,14,12,28].map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+      XLSX.writeFile(wb, 'PathBinder_Vendor_Template.xlsx');
+    }
+
+    function handleVendorImportFile(file) {
+      if (!file) return;
+      const errEl  = document.getElementById('importError');
+      const prevEl = document.getElementById('importPreview');
+      const infoEl = document.getElementById('importPreviewInfo');
+      const tblEl  = document.getElementById('importPreviewTable');
+      const subBtn = document.getElementById('importSubmitBtn');
+      errEl.style.display = 'none';
+
+      if (typeof XLSX === 'undefined') {
+        errEl.textContent = 'Spreadsheet library not loaded yet — refresh and try again.';
+        errEl.style.display = 'block'; return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const wb   = XLSX.read(e.target.result, { type: 'array' });
+          const ws   = wb.Sheets[wb.SheetNames[0]];
+          const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+          if (!data.length) {
+            errEl.textContent = 'No data rows found in the file.';
+            errEl.style.display = 'block'; return;
+          }
+
+          // Validate required columns
+          const firstRow = data[0];
+          const missing = ['Card Name', 'Price'].filter(h => !(h in firstRow));
+          if (missing.length) {
+            errEl.textContent = `Missing required columns: ${missing.join(', ')}. Make sure you are using the PathBinder template.`;
+            errEl.style.display = 'block'; return;
+          }
+
+          vendorImportRows = data.filter(r => r['Card Name'] && r['Price']);
+
+          // Preview table
+          infoEl.textContent = `// ${vendorImportRows.length} listing(s) ready to import`;
+          tblEl.innerHTML = `<table style="width:100%;border-collapse:collapse">
+            <thead><tr style="border-bottom:1px solid var(--border)">${
+              ['Card Name','Set Name','Condition','Grade','Price'].map(h =>
+                `<th style="text-align:left;padding:4px 6px;color:var(--muted)">${h}</th>`).join('')
+            }</tr></thead>
+            <tbody>${vendorImportRows.slice(0,10).map(r => `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">${
+              ['Card Name','Set Name','Condition','Grade','Price'].map(h =>
+                `<td style="padding:4px 6px;color:var(--text)">${r[h] || '—'}</td>`).join('')
+            }</tr>`).join('')}
+            ${vendorImportRows.length > 10 ? `<tr><td colspan="5" style="padding:6px;color:var(--muted)">… and ${vendorImportRows.length - 10} more</td></tr>` : ''}
+            </tbody></table>`;
+
+          prevEl.style.display = 'block';
+          subBtn.style.display = 'block';
+        } catch(err) {
+          errEl.textContent = 'Could not parse file: ' + err.message;
+          errEl.style.display = 'block';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function submitVendorImport() {
+      if (!vendorImportRows.length || !currentUser) return;
+      const btn      = document.getElementById('importSubmitBtn');
+      const progEl   = document.getElementById('importProgress');
+      const errEl    = document.getElementById('importError');
+      btn.disabled   = true;
+      btn.textContent = 'Importing…';
+      progEl.style.display = 'block';
+      errEl.style.display  = 'none';
+
+      let success = 0, failed = 0;
+      for (let i = 0; i < vendorImportRows.length; i++) {
+        const r = vendorImportRows[i];
+        progEl.textContent = `// Importing ${i + 1} / ${vendorImportRows.length}…`;
+
+        const cardName    = String(r['Card Name'] || '').trim();
+        const setName     = String(r['Set Name']  || '').trim();
+        const condition   = String(r['Condition'] || 'Raw').trim();
+        const grade       = String(r['Grade']     || '').trim();
+        const price       = parseFloat(r['Price']) || 0;
+        const shipping    = parseFloat(r['Shipping Price']) || 0;
+        const gameType    = String(r['Game Type'] || 'Pokemon').trim();
+        const notes       = String(r['Notes']     || '').trim();
+        const gradeDisplay = condition.toLowerCase() !== 'raw' && grade
+          ? `${condition} ${grade}` : condition;
+
+        const listingName = setName ? `${cardName} — ${setName}` : cardName;
+
+        const { error } = await sb.from('listings').insert({
+          name:              listingName,
+          game_type:         gameType,
+          grade:             gradeDisplay,
+          value:             price,
+          shipping_price:    shipping,
+          status:            'active',
+          seller_id:         currentUser.id,
+          seller_name:       currentUser.shop_name || currentUser.username || currentUser.name || null,
+          is_vendor_listing: true,
+          total_slots:       1,
+          description:       notes || null,
+          photos:            []
+        });
+
+        if (error) { console.error('Import row error:', error.message); failed++; }
+        else success++;
+      }
+
+      progEl.textContent = `// Done — ${success} imported, ${failed} failed.`;
+      btn.textContent = 'Import_Listings →';
+      btn.disabled = false;
+      vendorImportRows = [];
+      document.getElementById('importSubmitBtn').style.display = 'none';
+      showToast(`✓ ${success} listing${success !== 1 ? 's' : ''} imported to marketplace`);
+      // Reload listings
+      if (typeof loadListings === 'function') loadListings();
+    }
+
     // ===== ADMIN PAGE =====
     // ── Vendor Application Functions ─────────────────────────────────────────
 
@@ -4494,7 +4699,7 @@
       if (error) {
         console.warn('[portfolio_snapshots] Query error:', error.message);
         if (error.message?.includes('does not exist')) {
-          console.log('%c[CardFrac] Run this SQL in Supabase to enable YTD chart:', 'color:orange;font-weight:bold');
+          console.log('%c[PathBinder] Run this SQL in Supabase to enable YTD chart:', 'color:orange;font-weight:bold');
           console.log(`create table if not exists portfolio_snapshots (
   id            bigserial primary key,
   user_id       uuid references auth.users(id) on delete cascade,
@@ -4528,7 +4733,7 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
     function setBinderView(view) {
       binderView = view;
       binderPage = 0;
-      ['3x3','2x2','1x1'].forEach(v => {
+      ['3x3','2x2','1x1','list'].forEach(v => {
         const btn = document.getElementById('binderBtn' + v);
         if (btn) btn.classList.toggle('active', v === view);
       });
@@ -4552,8 +4757,26 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
         return;
       }
 
+      // Show/hide list search bar and vendor bulk import button
+      const searchWrap = document.getElementById('binderListSearchWrap');
+      if (searchWrap) searchWrap.style.display = binderView === 'list' ? 'block' : 'none';
+      const bulkBtn = document.getElementById('vendorBulkImportBtn');
+      if (bulkBtn) bulkBtn.style.display = userIsVendor() ? 'block' : 'none';
+
       // Active items only — exclude sold offline cards from the binder display
-      const activeItems = collectionItems.filter(c => !c.sold_offline);
+      let activeItems = collectionItems.filter(c => !c.sold_offline);
+
+      // In list view, apply search filter
+      if (binderView === 'list') {
+        const q = (document.getElementById('binderListSearch')?.value || '').toLowerCase().trim();
+        if (q) {
+          activeItems = activeItems.filter(c =>
+            (c.card_name || '').toLowerCase().includes(q) ||
+            (c.set_name  || '').toLowerCase().includes(q) ||
+            (c.card_number || '').toLowerCase().includes(q)
+          );
+        }
+      }
 
       if (activeItems.length === 0) {
         if (summary) summary.innerHTML = '';
@@ -4583,55 +4806,83 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
       `;
 
       // Paginate active items only (owned + ghost, no sold)
-      const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : 1;
+      const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : binderView === '1x1' ? 1 : 40;
       const totalPages = Math.ceil(activeItems.length / perPage);
       binderPage = Math.min(binderPage, Math.max(0, totalPages - 1));
       const pageStart = binderPage * perPage;
       const pageItems = activeItems.slice(pageStart, pageStart + perPage);
-      const gridClass = binderView === '3x3' ? 'binder-grid-3x3' : binderView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
 
-      content.innerHTML = `<div class="${gridClass}" id="binderGrid">${pageItems.map((item, pageIdx) => {
-        const globalIdx = pageStart + pageIdx;
-        const isGhost  = item.is_ghost;
-        const isGraded = !isGhost && item.condition && item.condition !== 'raw';
-        const condLabel = isGraded
-          ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
-          : 'Raw';
-        const val  = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
-        const goal = item.savings_goal || 0;
-        const saved= item.amount_saved || 0;
-        const pct  = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
-
-        return `<div class="binder-card${isGhost ? ' ghost-card' : ''}"
-          draggable="true"
-          data-idx="${globalIdx}"
-          data-id="${item.id}"
-          onclick="openBinderCardDetail('${item.id}')"
-          ondragstart="binderDragStart(event,${globalIdx})"
-          ondragover="binderDragOver(event)"
-          ondrop="binderDrop(event,${globalIdx})"
-          ondragend="binderDragEnd(event)"
-          style="cursor:grab">
-          <div class="binder-card-img-wrap">
-            ${item.card_image_url
-              ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
-              : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
-            ${isGhost
-              ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
-              : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`}
-          </div>
-          <div class="binder-card-info">
-            <div class="binder-card-name">${item.card_name}</div>
-            ${binderView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
-            ${isGhost
-              ? (goal > 0
-                  ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
-                     <div style="font-size:.6rem;color:var(--teal)">${pct}% — $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>`
-                  : `<div class="binder-card-value" style="color:var(--teal)">Wishlist</div>`)
-              : `<div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>`}
-          </div>
+      if (binderView === 'list') {
+        content.innerHTML = `<div id="binderGrid" style="display:flex;flex-direction:column">
+          ${pageItems.map(item => {
+            const isGhost  = item.is_ghost;
+            const isGraded = !isGhost && item.condition && item.condition !== 'raw';
+            const condLabel = isGraded
+              ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+              : 'Raw';
+            const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+            return `<div onclick="openBinderCardDetail('${item.id}')"
+              style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
+              onmouseover="this.style.background='rgba(255,140,20,0.05)'" onmouseout="this.style.background=''">
+              <img src="${item.card_image_url || ''}" alt="" loading="lazy"
+                style="width:38px;height:53px;object-fit:cover;border-radius:4px;background:var(--surface2);flex-shrink:0"
+                onerror="this.style.visibility='hidden'">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:.8rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
+                <div style="font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
+              </div>
+              <div style="flex-shrink:0;text-align:right;padding-left:8px">
+                <div style="margin-bottom:3px">${isGhost ? `<span style="color:var(--teal);font-size:.65rem">Wishlist</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.6rem;padding:1px 5px">${condLabel}</span>`}</div>
+                <div style="font-size:.82rem;color:${isGhost ? 'var(--teal)' : 'var(--accent)'};font-weight:700">${isGhost ? '—' : (val > 0 ? '$' + val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—')}</div>
+              </div>
+            </div>`;
+          }).join('')}
         </div>`;
-      }).join('')}</div>`;
+      } else {
+        const gridClass = binderView === '3x3' ? 'binder-grid-3x3' : binderView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
+        content.innerHTML = `<div class="${gridClass}" id="binderGrid">${pageItems.map((item, pageIdx) => {
+          const globalIdx = pageStart + pageIdx;
+          const isGhost  = item.is_ghost;
+          const isGraded = !isGhost && item.condition && item.condition !== 'raw';
+          const condLabel = isGraded
+            ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+            : 'Raw';
+          const val  = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+          const goal = item.savings_goal || 0;
+          const saved= item.amount_saved || 0;
+          const pct  = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
+
+          return `<div class="binder-card${isGhost ? ' ghost-card' : ''}"
+            draggable="true"
+            data-idx="${globalIdx}"
+            data-id="${item.id}"
+            onclick="openBinderCardDetail('${item.id}')"
+            ondragstart="binderDragStart(event,${globalIdx})"
+            ondragover="binderDragOver(event)"
+            ondrop="binderDrop(event,${globalIdx})"
+            ondragend="binderDragEnd(event)"
+            style="cursor:grab">
+            <div class="binder-card-img-wrap">
+              ${item.card_image_url
+                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
+                : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
+              ${isGhost
+                ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
+                : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`}
+            </div>
+            <div class="binder-card-info">
+              <div class="binder-card-name">${item.card_name}</div>
+              ${binderView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
+              ${isGhost
+                ? (goal > 0
+                    ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
+                       <div style="font-size:.6rem;color:var(--teal)">${pct}% — $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>`
+                    : `<div class="binder-card-value" style="color:var(--teal)">Wishlist</div>`)
+                : `<div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>`}
+            </div>
+          </div>`;
+        }).join('')}</div>`;
+      }
 
       if (pagination) {
         if (totalPages > 1) {
@@ -4646,6 +4897,30 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
         }
       }
     }
+
+    // ── Mobile swipe to change binder page ───────────────────────────────
+    (function() {
+      let swipeStartX = null;
+      let swipeStartY = null;
+      document.addEventListener('touchstart', e => {
+        const el = e.target.closest('#collectionContent');
+        if (!el) return;
+        swipeStartX = e.touches[0].clientX;
+        swipeStartY = e.touches[0].clientY;
+      }, { passive: true });
+      document.addEventListener('touchend', e => {
+        if (swipeStartX === null) return;
+        const el = e.target.closest('#collectionContent');
+        if (!el) { swipeStartX = null; return; }
+        const dx = e.changedTouches[0].clientX - swipeStartX;
+        const dy = e.changedTouches[0].clientY - swipeStartY;
+        swipeStartX = null;
+        // Only count horizontal swipes (dx > dy in magnitude, dx > 50px threshold)
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+        if (dx < 0) binderChangePage(1);   // swipe left  → next page
+        else        binderChangePage(-1);  // swipe right → prev page
+      }, { passive: true });
+    })();
 
     // ── Drag-and-drop handlers ────────────────────────────────────────────
     function binderDragStart(e, idx) {
@@ -4919,7 +5194,7 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
       // Find cards that have an api_card_id but no price_source_url saved yet
       const needsUrl = collectionItems.filter(c => c.api_card_id && !c.price_source_url && !c.sold_offline);
       if (!needsUrl.length) return;
-      console.log(`[CardFrac] Backfilling price URLs for ${needsUrl.length} card(s)...`);
+      console.log(`[PathBinder] Backfilling price URLs for ${needsUrl.length} card(s)...`);
 
       // Batch the .in() query in groups of 500 to stay within Supabase limits
       const BATCH = 500;
@@ -4934,7 +5209,7 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
 
       // Write the URLs back to collection_items and update local state
       const toUpdate = needsUrl.filter(c => urlMap[c.api_card_id]);
-      if (!toUpdate.length) { console.log('[CardFrac] No matching URLs found in card_price_urls.'); return; }
+      if (!toUpdate.length) { console.log('[PathBinder] No matching URLs found in card_price_urls.'); return; }
 
       for (const item of toUpdate) {
         const url = urlMap[item.api_card_id];
@@ -4943,13 +5218,13 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
           .eq('id', item.id);
         if (!error) item.price_source_url = url;
       }
-      console.log(`[CardFrac] Backfilled ${toUpdate.length} price URL(s).`);
+      console.log(`[PathBinder] Backfilled ${toUpdate.length} price URL(s).`);
     }
 
     async function autoRefreshUnpricedCards() {
       const unpriced = collectionItems.filter(c => !c.sold_offline && c.price_source_url && !c.current_value);
       if (!unpriced.length) return;
-      console.log(`[CardFrac] Auto-refreshing ${unpriced.length} unpriced card(s)...`);
+      console.log(`[PathBinder] Auto-refreshing ${unpriced.length} unpriced card(s)...`);
       for (const item of unpriced) {
         await refreshBinderCardPrice(item.id);
         // Small pause between requests to be polite to the price API
@@ -5468,7 +5743,7 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
 
         if (paymentStatus === 'success') {
           if (urlParams.get('type') === 'membership') {
-            showToast('🎉 Premium membership activated! Welcome to CardFrac Premium.');
+            showToast('🎉 Premium membership activated! Welcome to PathBinder Premium.');
             // Refresh profile to pick up is_premium flag
             if (currentUser) {
               sb.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
