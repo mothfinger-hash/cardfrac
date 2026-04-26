@@ -1481,6 +1481,7 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk_Import</button>
+          <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share_Binder</button>
           <button onclick="showPage('addCard');setMobileNav('addCard')"
             style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
         </div>
@@ -1525,6 +1526,11 @@
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
     </div>
+  </div>
+
+  <!-- ── PUBLIC BINDER VIEW ─────────────────────────────────────────────── -->
+  <div id="publicBinderPage" class="page">
+    <div id="publicBinderContent" style="max-width:900px;margin:0 auto"></div>
   </div>
 
   <div id="leaderboardPage" class="page">
@@ -2131,6 +2137,7 @@
         renderBinder();
         if (currentUser) Promise.all([loadCollection(), loadBinders()]).then(() => renderBinder()).catch(() => {});
       }
+      if (pageId === 'publicBinder') { /* content managed by loadPublicBinder */ }
       if (pageId === 'addCard') { /* addCardPage ready */ }
       // collection page is accessible directly via nav
       setTimeout(retroLabels, 50);
@@ -3057,6 +3064,155 @@
           </div>`;
         }).join('')}
       </div>`;
+    }
+
+    // ===== SHAREABLE COLLECTION LINKS =====
+
+    function getShareUsername() {
+      // Prefer username slug, fall back to user UUID
+      return currentUser?.username || currentUser?.id || null;
+    }
+
+    function getShareUrl(username) {
+      return `${window.location.origin}${window.location.pathname}?binder=${encodeURIComponent(username)}`;
+    }
+
+    function copyShareLink() {
+      const slug = getShareUsername();
+      if (!slug) { showToast('Sign in to share your binder'); return; }
+      const url = getShareUrl(slug);
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('🔗 Share link copied! Send it to anyone.');
+      }).catch(() => {
+        // Fallback for older browsers
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('🔗 Share link copied!');
+      });
+    }
+
+    // ── Public binder renderer (read-only view for visitors) ──────────────────
+    async function loadPublicBinder(usernameOrId) {
+      const el = document.getElementById('publicBinderContent');
+      if (!el) return;
+      el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">Loading binder…</div>`;
+      showPage('publicBinder');
+
+      try {
+        // Look up profile by username first, then by UUID
+        let profile = null;
+        const { data: byUsername } = await sb.from('profiles')
+          .select('id, name, username, shop_name, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+          .eq('username', usernameOrId)
+          .maybeSingle();
+        if (byUsername) {
+          profile = byUsername;
+        } else {
+          const { data: byId } = await sb.from('profiles')
+            .select('id, name, username, shop_name, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+            .eq('id', usernameOrId)
+            .maybeSingle();
+          profile = byId;
+        }
+
+        if (!profile) {
+          el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">Binder not found.</div>`;
+          return;
+        }
+
+        // Load their collection (public cards only — no ghost/wishlist items)
+        const { data: items, error } = await sb.from('collection_items')
+          .select('id, card_name, set_name, card_number, condition, grade_label, grade_value, quantity, image_url, current_value, purchase_price, is_ghost, sold_offline')
+          .eq('user_id', profile.id)
+          .eq('is_ghost', false)
+          .eq('sold_offline', false)
+          .order('sort_order', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        const displayName = profile.shop_name || profile.name || profile.username || 'Collector';
+        const memberSince = profile.created_at ? new Date(profile.created_at).getFullYear() : '';
+        const cardCount   = items?.length || 0;
+        const totalValue  = (items||[]).reduce((s,c) => s + ((c.current_value||c.purchase_price||0) * (c.quantity||1)), 0);
+
+        // Tier badge
+        const tierColors = { free:'var(--muted)', collector:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
+        const tier = profile.subscription_tier || (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'collector' : 'free');
+        const tierBadge = tier !== 'free'
+          ? `<span style="font-size:.62rem;padding:2px 7px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;margin-left:8px">${tier.toUpperCase()}</span>`
+          : '';
+
+        // Build card grid
+        const gridCards = (items||[]).map(c => {
+          const condLabel = c.condition === 'graded' && c.grade_value
+            ? `${c.grade_label||'PSA'} ${c.grade_value}`
+            : (c.condition||'').toUpperCase();
+          const img = c.image_url
+            ? `<img src="${c.image_url}" alt="${c.card_name}" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block">`
+            : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`;
+          const qtyBadge = c.quantity > 1
+            ? `<span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.7);color:var(--text);font-size:.6rem;padding:1px 5px;border-radius:2px">×${c.quantity}</span>`
+            : '';
+          return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 24px rgba(0,0,0,.5)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+            ${img}
+            ${qtyBadge}
+            <div style="padding:8px 10px">
+              <div style="font-size:.75rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">${c.card_name}</div>
+              ${c.set_name ? `<div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.set_name}${c.card_number?` #${c.card_number}`:''}</div>` : ''}
+              ${condLabel ? `<div style="font-size:.62rem;color:var(--teal);margin-top:2px">${condLabel}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('');
+
+        // CTA for visitors who aren't signed in
+        const ctaHtml = !currentUser ? `
+          <div style="margin-top:32px;padding:20px;background:var(--surface);border:1px solid var(--border);text-align:center">
+            <div style="color:var(--accent);font-size:.9rem;margin-bottom:8px;letter-spacing:.08em">// BUILD YOUR OWN BINDER</div>
+            <div style="color:var(--muted);font-size:.8rem;margin-bottom:16px">PathBinder is the card collector's portfolio tracker. Free to start.</div>
+            <button onclick="openModal('authModal');document.getElementById('authModalTab-register').click()"
+              style="padding:10px 28px;border:none;background:linear-gradient(135deg,var(--accent),var(--gold));color:#080500;font-family:'Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+              Create Free Account →
+            </button>
+          </div>` : '';
+
+        el.innerHTML = `
+          <!-- Header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
+            <div>
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <h2 style="font-size:1.3rem;margin:0">${displayName}'s_Binder</h2>
+                ${tierBadge}
+              </div>
+              ${profile.username ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px">@${profile.username}${memberSince ? ` · Member since ${memberSince}` : ''}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
+              ${currentUser ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>` : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`}
+            </div>
+          </div>
+
+          <!-- Stats bar -->
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;padding:12px 16px;background:var(--surface);border:1px solid var(--border)">
+            <span style="font-size:.78rem;color:var(--muted)">Cards: <span style="color:var(--text)">${cardCount}</span></span>
+            ${totalValue > 0 ? `<span style="font-size:.78rem;color:var(--muted)">Est. Value: <span style="color:var(--green)">$${totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>` : ''}
+          </div>
+
+          <!-- Card grid -->
+          ${cardCount === 0
+            ? `<div style="text-align:center;padding:60px;color:var(--muted)">This binder is empty.</div>`
+            : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px">${gridCards}</div>`}
+
+          ${ctaHtml}`;
+
+      } catch (err) {
+        console.error('loadPublicBinder error:', err);
+        el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--red)">Failed to load binder.</div>`;
+      }
     }
 
     function renderSalesArchive() {
@@ -5715,6 +5871,8 @@
       if (searchWrap) searchWrap.style.display = binderView === 'list' ? 'block' : 'none';
       const bulkBtn = document.getElementById('vendorBulkImportBtn');
       if (bulkBtn) bulkBtn.style.display = hasBulkImport() ? 'block' : 'none';
+      const shareBtn = document.getElementById('shareBinderBtn');
+      if (shareBtn) shareBtn.style.display = currentUser ? 'block' : 'none';
 
       // Render binder tabs (Vendor+ multi-binder)
       renderBinderTabs();
@@ -6977,9 +7135,20 @@
       renderAllContent();
       updateAuthUI();
 
+      // ── URL param routing ───────────────────────────────────────────────
+      // Handles: ?binder=username  and  ?payment=success|cancelled
+      const urlParams = new URLSearchParams(window.location.search);
+
+      // Shareable binder link: ?binder=username or ?binder=uuid
+      const binderParam = urlParams.get('binder');
+      if (binderParam) {
+        window.history.replaceState({}, '', window.location.pathname);
+        loadPublicBinder(binderParam);
+        return; // skip payment handling on binder deep-links
+      }
+
       // ── Post-payment redirect handling ──────────────────────────────────
       // Stripe sends the user back to ?payment=success or ?payment=cancelled
-      const urlParams = new URLSearchParams(window.location.search);
       const paymentStatus = urlParams.get('payment');
       if (paymentStatus) {
         // Clean up URL so refreshing doesn't re-trigger
