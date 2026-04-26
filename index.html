@@ -727,14 +727,19 @@
     /* ── COLLECTION PANEL TRANSITION ───────────────────── */
     #collectionPanel.open{max-height:600px!important}
 
+    /* ── BINDER FRAME — constrained width on desktop, full-width on mobile ── */
+    .binder-frame{width:100%}
+    @media(min-width:481px){
+      .binder-frame{max-width:760px}
+    }
     /* ── BINDER VIEW TOGGLE ── */
     .binder-view-toggle{display:flex;gap:6px}
     .binder-view-btn{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
     .binder-view-btn.active,.binder-view-btn:hover{border-color:var(--accent);color:var(--accent)}
     /* ── BINDER GRIDS ── */
-    .binder-grid-3x3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-items:start}
-    .binder-grid-2x2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start}
-    .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto;align-items:start}
+    .binder-grid-3x3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .binder-grid-2x2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+    .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
     @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
     /* ── BINDER CARD ── */
     .binder-card{background:var(--surface);border:1px solid var(--border);cursor:grab;transition:border-color .15s,transform .1s,opacity .15s;border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:0}
@@ -1414,38 +1419,41 @@
     <h2>My_Binder</h2>
     <p class="subtitle">Your complete card holdings at a glance.</p>
 
-    <!-- Binder View Controls -->
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-      <div class="binder-view-toggle">
-        <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
-        <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
-        <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
-        <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
+    <!-- Binder frame — constrained on desktop, full-width on mobile -->
+    <div class="binder-frame">
+      <!-- Binder View Controls -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <div class="binder-view-toggle">
+          <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
+          <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
+          <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
+          <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk_Import</button>
+          <button onclick="showPage('addCard');setMobileNav('addCard')"
+            style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk_Import</button>
-        <button onclick="showPage('addCard');setMobileNav('addCard')"
-          style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
+      <!-- List view search — only visible in list mode -->
+      <div id="binderListSearchWrap" style="display:none;margin-bottom:12px">
+        <input id="binderListSearch" type="text" placeholder="Search by name, set, or card #…"
+          oninput="renderBinder()"
+          style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;border-radius:0;box-sizing:border-box;outline:none"
+          onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
       </div>
-    </div>
-    <!-- List view search — only visible in list mode -->
-    <div id="binderListSearchWrap" style="display:none;margin-bottom:12px">
-      <input id="binderListSearch" type="text" placeholder="Search by name, set, or card #…"
-        oninput="renderBinder()"
-        style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;border-radius:0;box-sizing:border-box;outline:none"
-        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-    </div>
 
-    <!-- Portfolio Summary -->
-    <div id="collectionSummary" class="coll-summary"></div>
+      <!-- Portfolio Summary -->
+      <div id="collectionSummary" class="coll-summary"></div>
 
-    <!-- Binder Grid -->
-    <div id="collectionContent">
-      <div class="coll-empty">Sign in to view your binder.</div>
-    </div>
+      <!-- Binder Grid -->
+      <div id="collectionContent">
+        <div class="coll-empty">Sign in to view your binder.</div>
+      </div>
 
-    <!-- Pagination -->
-    <div id="binderPagination" class="binder-pagination" style="display:none"></div>
+      <!-- Pagination -->
+      <div id="binderPagination" class="binder-pagination" style="display:none"></div>
+    </div><!-- /.binder-frame -->
   </div>
 
   <div id="addCardPage" class="page">
@@ -3931,41 +3939,65 @@
     }
 
     async function triggerPriceRefresh() {
-      const btn = document.getElementById('refreshPricesBtn');
+      const btn      = document.getElementById('refreshPricesBtn');
       const statusEl = document.getElementById('priceRefreshStatus');
+
+      // Build the list of cards that have a price source URL to look up
+      const toRefresh = collectionItems.filter(c => !c.sold_offline && c.price_source_url);
+      if (!toRefresh.length) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = '[ INFO ] No cards with price URLs found. Add a price source URL to a card first.';
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Refreshing...';
       statusEl.style.display = 'block';
-      statusEl.textContent = '[ FETCHING_PRICES... ]';
-      try {
-        const session = await sb.auth.getSession();
-        const token = session.data.session?.access_token;
-        const res = await fetch('/api/update-prices', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const rawText = await res.text();
-        let data;
-        try { data = JSON.parse(rawText); }
-        catch { statusEl.textContent = `[ SERVER_ERROR ] ${rawText.slice(0, 200)}`; btn.disabled = false; btn.textContent = 'Refresh_Prices'; return; }
-        if (res.ok) {
-          if (data.message && !data.results) { statusEl.textContent = `[ INFO ] ${data.message}`; btn.disabled = false; btn.textContent = 'Refresh_Prices'; return; }
-          const updated = data.results?.filter(r => r.status === 'updated') || [];
-          const lines = updated.length > 0
-            ? updated.map(r => `${r.name}: $${r.old} → $${r.new}`).join(' | ')
-            : 'All prices already up to date.';
-          const errorDetails = data.errors?.length > 0
-            ? ' | Errors: ' + data.errors.map(e => `${e.name}: ${e.reason}`).join(', ')
-            : '';
-          statusEl.textContent = `[ DONE ] ${data.updated} updated, ${data.unchanged ?? 0} unchanged, ${data.errorCount ?? 0} errors. ${lines}${errorDetails}`;
-          if (data.updated > 0) { await initApp(); showToast(`${data.updated} price(s) updated`); }
-        } else {
-          statusEl.textContent = `[ ERROR ] ${data.error || res.statusText}`;
-        }
-      } catch (err) {
-        statusEl.textContent = `[ ERROR ] ${err.message}`;
+
+      let updated = 0, errors = 0;
+      for (let i = 0; i < toRefresh.length; i++) {
+        const item = toRefresh[i];
+        statusEl.textContent = `[ ${i + 1}/${toRefresh.length} ] Looking up ${item.card_name}…`;
+        try {
+          const condition = item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+          const res = await fetch('/api/lookup-price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: item.card_name, condition, url: item.price_source_url })
+          });
+          const data = await res.json();
+          if (data.price) {
+            const oldPrice = item.current_value;
+            const { error } = await sb.from('collection_items')
+              .update({ current_value: data.price })
+              .eq('id', item.id);
+            if (!error) {
+              item.current_value = data.price;
+              if (oldPrice !== data.price) {
+                const todayStr = new Date().toISOString().slice(0, 10);
+                sb.from('price_history').upsert({
+                  collection_item_id: item.id,
+                  user_id: currentUser.id,
+                  recorded_value: data.price,
+                  recorded_at: todayStr
+                }, { onConflict: 'collection_item_id,recorded_at' }).then(null, () => {});
+              }
+              updated++;
+            } else { errors++; }
+          }
+        } catch (_) { errors++; }
+        // Polite pause between requests — avoids hammering the price API
+        await new Promise(r => setTimeout(r, 500));
       }
+
       btn.disabled = false;
       btn.textContent = 'Refresh_Prices';
+      statusEl.textContent = `[ DONE ] ${updated} updated, ${errors} errors out of ${toRefresh.length} cards.`;
+      if (updated > 0) {
+        renderBinder();
+        renderDashboard();
+        showToast(`${updated} price(s) updated`);
+      }
     }
 
     function toggleAddForm() {
@@ -4892,30 +4924,28 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
     }
 
     // ── Mobile swipe to change binder page ───────────────────────────────
+    // Uses time to distinguish a quick swipe (page turn) from a slow drag
+    // (card reorder). Touch must complete in < 500ms to count as a swipe.
     (function() {
-      let swipeStartX = null;
-      let swipeStartY = null;
-      let swipeOnCard  = false;   // track if touch started on a draggable card
+      let swipeStartX = null, swipeStartY = null, swipeStartTime = null;
       document.addEventListener('touchstart', e => {
         const el = e.target.closest('#collectionContent');
         if (!el) return;
-        // Don't hijack touches that start on a binder card — those may be drags
-        swipeOnCard = !!e.target.closest('.binder-card');
-        swipeStartX = e.touches[0].clientX;
-        swipeStartY = e.touches[0].clientY;
+        swipeStartX    = e.touches[0].clientX;
+        swipeStartY    = e.touches[0].clientY;
+        swipeStartTime = Date.now();
       }, { passive: true });
       document.addEventListener('touchend', e => {
         if (swipeStartX === null) return;
         const el = e.target.closest('#collectionContent');
-        if (!el) { swipeStartX = null; swipeOnCard = false; return; }
+        if (!el) { swipeStartX = null; swipeStartTime = null; return; }
         const dx = e.changedTouches[0].clientX - swipeStartX;
         const dy = e.changedTouches[0].clientY - swipeStartY;
-        const wasOnCard = swipeOnCard;
-        swipeStartX = null;
-        swipeOnCard = false;
-        // Skip swipe if touch started on a card (let drag-and-drop handle it)
-        if (wasOnCard) return;
-        // Only count horizontal swipes (dx > dy in magnitude, dx > 50px threshold)
+        const dt = Date.now() - swipeStartTime;
+        swipeStartX = null; swipeStartTime = null;
+        // Too slow → it was a drag, not a page-turn swipe
+        if (dt > 500) return;
+        // Must be clearly horizontal and travel at least 50px
         if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
         if (dx < 0) binderChangePage(1);   // swipe left  → next page
         else        binderChangePage(-1);  // swipe right → prev page
