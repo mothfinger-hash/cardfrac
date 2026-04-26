@@ -2669,7 +2669,7 @@
           <div style="font-size:.75rem;color:var(--accent);margin-bottom:8px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
           <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
             <div style="font-size:1.6rem;color:var(--text);font-weight:700">${currentValue > 0 ? '$' + currentValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div>
-            <div style="font-size:.72rem;color:var(--muted)">Chart populates after prices are refreshed on multiple days — use Refresh_Prices in the admin panel to log today's values.</div>
+            <div style="font-size:.72rem;color:var(--muted)">Chart builds automatically — prices refresh in the background each day you open the app. Check back tomorrow.</div>
           </div>
         </div>`;
       }
@@ -5428,12 +5428,65 @@
       console.log(`[PathBinder] Auto-refreshing ${unpriced.length} unpriced card(s)...`);
       for (const item of unpriced) {
         await refreshBinderCardPrice(item.id);
-        // Small pause between requests to be polite to the price API
         await new Promise(r => setTimeout(r, 400));
       }
-      if (unpriced.length > 0) {
-        renderBinder();
+      if (unpriced.length > 0) { renderBinder(); renderDashboard(); }
+    }
+
+    // ── Daily background price refresh ───────────────────────────────────────
+    // Runs silently once per calendar day for every card that has a price URL.
+    // Keeps price_history populated so the YTD chart has data automatically —
+    // no admin access required.
+    async function dailyPriceRefresh() {
+      const STORAGE_KEY = 'pathbinder_daily_refresh_' + (currentUser?.id || '');
+      const todayStr    = new Date().toISOString().slice(0, 10);
+      try {
+        if (localStorage.getItem(STORAGE_KEY) === todayStr) return; // already ran today
+      } catch (_) {}
+
+      const eligible = collectionItems.filter(c => !c.sold_offline && !c.is_ghost && c.price_source_url);
+      if (!eligible.length) return;
+
+      console.log(`[PathBinder] Daily refresh: ${eligible.length} card(s)…`);
+      let updated = 0;
+      for (const item of eligible) {
+        try {
+          const condition = item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+          const res  = await fetch('/api/lookup-price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: item.card_name, condition, url: item.price_source_url })
+          });
+          const data = await res.json();
+          if (data.price) {
+            const { error } = await sb.from('collection_items')
+              .update({ current_value: data.price }).eq('id', item.id);
+            if (!error) {
+              const oldPrice = item.current_value;
+              item.current_value = data.price;
+              // Log to price_history so YTD chart accumulates
+              if (oldPrice !== data.price && currentUser) {
+                sb.from('price_history').upsert({
+                  collection_item_id: item.id,
+                  user_id:            currentUser.id,
+                  recorded_value:     data.price,
+                  recorded_at:        todayStr
+                }, { onConflict: 'collection_item_id,recorded_at' }).then(null, () => {});
+              }
+              updated++;
+            }
+          }
+        } catch (_) {}
+        // 600 ms between calls — polite to the price API
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      try { localStorage.setItem(STORAGE_KEY, todayStr); } catch (_) {}
+      if (updated > 0) {
+        // Re-write today's portfolio snapshot with fresh values, then re-render
+        await loadPortfolioSnapshots();
         renderDashboard();
+        console.log(`[PathBinder] Daily refresh done — ${updated} price(s) updated.`);
       }
     }
 
@@ -5895,6 +5948,8 @@
           await backfillPriceSourceUrls();
           // Silently refresh any cards that have a price URL but no current_value yet
           autoRefreshUnpricedCards();
+          // Once-per-day background refresh for all priced cards (builds price_history for YTD chart)
+          dailyPriceRefresh();
 
           if (txnResult.data) {
             transactions = txnResult.data.map(t => ({
