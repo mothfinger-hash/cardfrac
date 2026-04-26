@@ -3840,10 +3840,15 @@
             card_number:      num || item.card_number,  // store clean number
             price_source_url: priceSourceUrl,
           };
-          if (tcgplayerUrl) patch.tcgplayer_url = tcgplayerUrl;
+          // Note: tcgplayer_url intentionally excluded — not in collection_items schema
 
           const { error } = await sb.from('collection_items').update(patch).eq('id', item.id);
-          if (!error) { Object.assign(item, patch); matched++; }
+          if (error) {
+            console.error(`[enrich] DB update failed for ${item.card_name}:`, error.message);
+          } else {
+            Object.assign(item, patch);
+            matched++;
+          }
 
           // Re-render binder after each card so images appear as they come in
           renderBinder();
