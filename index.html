@@ -5121,7 +5121,87 @@
       }, { passive: true });
     })();
 
-    // ── Drag-and-drop handlers ────────────────────────────────────────────
+    // ── Touch drag-and-drop (mobile) ─────────────────────────────────────────
+    // HTML5 drag events don't fire on mobile. This replaces them with a
+    // long-press → lift → drag → drop pattern using touch events.
+    (function() {
+      let src = null, clone = null, timer = null, active = false;
+      let offsetX = 0, offsetY = 0;
+
+      function cleanup() {
+        clearTimeout(timer); timer = null;
+        if (clone?.parentNode) clone.parentNode.removeChild(clone);
+        clone = null;
+        if (src) src.style.opacity = '';
+        src = null; active = false;
+        document.querySelectorAll('#binderGrid .binder-card').forEach(c => c.classList.remove('drag-over'));
+      }
+
+      document.addEventListener('touchstart', e => {
+        const card = e.target.closest('#binderGrid .binder-card[data-idx]');
+        if (!card) return;
+        src = card;
+        const t = e.touches[0];
+        const rect = card.getBoundingClientRect();
+        offsetX = t.clientX - rect.left;
+        offsetY = t.clientY - rect.top;
+
+        // Long-press threshold: 420 ms
+        timer = setTimeout(() => {
+          active = true;
+          clone = card.cloneNode(true);
+          Object.assign(clone.style, {
+            position: 'fixed', zIndex: '9999', pointerEvents: 'none',
+            width: rect.width + 'px', height: rect.height + 'px',
+            top: rect.top + 'px', left: rect.left + 'px',
+            opacity: '0.88', borderRadius: '10px',
+            transform: 'scale(1.07) rotate(1.5deg)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+            transition: 'none',
+          });
+          document.body.appendChild(clone);
+          card.style.opacity = '0.25';
+          if (navigator.vibrate) navigator.vibrate(35);
+        }, 420);
+      }, { passive: true });
+
+      document.addEventListener('touchmove', e => {
+        if (!active) {
+          // Finger moved before long-press fired → cancel drag, allow swipe/scroll
+          if (timer) { clearTimeout(timer); timer = null; src = null; }
+          return;
+        }
+        e.preventDefault(); // lock scroll while dragging
+        const t = e.touches[0];
+        clone.style.left = (t.clientX - offsetX) + 'px';
+        clone.style.top  = (t.clientY - offsetY) + 'px';
+
+        // Find which card is under the finger
+        clone.style.visibility = 'hidden';
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        clone.style.visibility = '';
+        document.querySelectorAll('#binderGrid .binder-card').forEach(c => c.classList.remove('drag-over'));
+        const over = el?.closest('#binderGrid .binder-card[data-idx]');
+        if (over && over !== src) over.classList.add('drag-over');
+      }, { passive: false });
+
+      document.addEventListener('touchend', e => {
+        if (!active) { clearTimeout(timer); timer = null; src = null; return; }
+        const t = e.changedTouches[0];
+        clone.style.visibility = 'hidden';
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        const over = el?.closest('#binderGrid .binder-card[data-idx]');
+        if (over && over !== src) {
+          dragSrcIndex = parseInt(src.dataset.idx);
+          binderDrop({ preventDefault: () => {} }, parseInt(over.dataset.idx));
+        }
+        cleanup();
+      }, { passive: true });
+
+      document.addEventListener('touchcancel', cleanup, { passive: true });
+    })();
+
+    // ── Drag-and-drop handlers (desktop / mouse) ──────────────────────────────
     function binderDragStart(e, idx) {
       dragSrcIndex = idx;
       e.dataTransfer.effectAllowed = 'move';
