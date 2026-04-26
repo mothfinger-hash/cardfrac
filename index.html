@@ -3646,17 +3646,25 @@
 
         const cardName   = String(r['Card Name']       || '').trim();
         const setName    = String(r['Set Name']        || '').trim();
-        const cardNumber = String(r['Card Number']     || '').trim();
-        const rawCond    = String(r['Condition']       || 'raw').trim();
-        const grade      = String(r['Grade']           || '').trim();
-        const certNum    = String(r['Certification #'] || '').trim();
-        const cost       = parseFloat(r['Cost'])       || 0;
-        const price      = parseFloat(r['Price'])      || 0;
         const notes      = String(r['Notes']           || '').trim();
 
-        const isGraded  = rawCond.toLowerCase() !== 'raw' && rawCond !== '';
+        // Normalize card number: Excel often stores integers as floats (e.g. 101.0 → "101")
+        let cardNumber = String(r['Card Number'] || '').trim();
+        if (/^\d+\.0$/.test(cardNumber)) cardNumber = cardNumber.slice(0, -2);
+
+        // Cert number: same float issue
+        let certNum = String(r['Certification #'] || '').trim();
+        if (/^\d+\.0$/.test(certNum)) certNum = certNum.slice(0, -2);
+
+        const cost  = parseFloat(r['Cost'])  || 0;
+        const price = parseFloat(r['Price']) || 0;
+
+        // A card is graded if it has a numeric grade value — condition field is descriptive
+        const gradeRaw = String(r['Grade'] || '').trim();
+        const gradeNum = gradeRaw !== '' ? parseFloat(gradeRaw) : null;
+        const isGraded  = gradeNum !== null && !isNaN(gradeNum);
         const condition = isGraded ? 'graded' : 'raw';
-        const gradeVal  = isGraded && grade ? parseFloat(grade) || null : null;
+        const gradeVal  = isGraded ? gradeNum : null;
 
         const { data: newRow, error } = await sb.from('collection_items').insert({
           user_id:        currentUser.id,
@@ -3696,31 +3704,124 @@
       if (insertedIds.length) enrichImportedCards(insertedIds);
     }
 
+    // ── Levenshtein distance for fuzzy card name matching ─────────────────────
+    function _levenshtein(a, b) {
+      a = a.toLowerCase(); b = b.toLowerCase();
+      const m = a.length, n = b.length;
+      const dp = Array.from({ length: m + 1 }, (_, i) =>
+        Array.from({ length: n + 1 }, (_, j) => (j === 0 ? i : 0)));
+      for (let j = 1; j <= n; j++) dp[0][j] = j;
+      for (let i = 1; i <= m; i++)
+        for (let j = 1; j <= n; j++)
+          dp[i][j] = a[i-1] === b[j-1]
+            ? dp[i-1][j-1]
+            : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+      return dp[m][n];
+    }
+
     // ── Match imported cards against Pokémon TCG API to fill in images / IDs ─
+    function _enrichBanner(msg) {
+      let el = document.getElementById('enrichBanner');
+      if (!msg) { if (el) el.remove(); return; }
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'enrichBanner';
+        Object.assign(el.style, {
+          position:'fixed', bottom:'72px', left:'50%', transform:'translateX(-50%)',
+          background:'var(--surface2)', border:'1px solid var(--border)',
+          color:'var(--muted)', fontFamily:"'Share Tech Mono',monospace",
+          fontSize:'.78rem', padding:'7px 18px', borderRadius:'6px',
+          zIndex:'9000', pointerEvents:'none', whiteSpace:'nowrap',
+          boxShadow:'0 4px 20px rgba(0,0,0,0.4)',
+        });
+        document.body.appendChild(el);
+      }
+      el.textContent = msg;
+    }
+
     async function enrichImportedCards(itemIds) {
       const items = collectionItems.filter(c => itemIds.includes(c.id));
       if (!items.length) return;
       console.log(`[PathBinder] Enriching ${items.length} imported card(s)…`);
 
-      for (const item of items) {
+      let matched = 0;
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        _enrichBanner(`// Matching images… ${idx + 1} / ${items.length}`);
         try {
-          // Build query: name is required; add number and set name when available
-          let q = `name:"${item.card_name}"`;
-          if (item.card_number) q += ` number:${item.card_number}`;
-          if (item.set_name)    q += ` set.name:"${item.set_name}"`;
+          // Normalize card number — Excel stores integers as floats (101.0 → "101")
+          const num = item.card_number
+            ? String(item.card_number).replace(/\.0$/, '').trim()
+            : null;
 
-          const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
-          const data = await res.json();
-          const card = data?.data?.[0];
-          if (!card) continue;
+          // Build progressively looser queries until we get a hit
+          // set.name must be quoted when it contains spaces (Lucene stops at whitespace otherwise)
+          const setQ = item.set_name ? `set.name:"${item.set_name}"` : null;
+          const queries = [];
+          if (num && setQ) queries.push(`name:"${item.card_name}" number:${num} ${setQ}`);
+          if (num)         queries.push(`name:"${item.card_name}" number:${num}`);
+          if (setQ)        queries.push(`name:"${item.card_name}" ${setQ}`);
+                           queries.push(`name:"${item.card_name}"`);
 
-          const imageUrl      = card.images?.small  || null;
-          const apiCardId     = card.id             || null;   // e.g. "base1-4"
-          const setCode       = card.set?.id        || null;
-          const setName       = card.set?.name      || item.set_name || null;
-          const tcgplayerUrl  = card.tcgplayer?.url || null;
+          let card = null;
+          for (const q of queries) {
+            try {
+              const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=4`);
+              const data = await res.json();
+              if (data?.data?.length) {
+                // If we got multiple results, prefer the one whose number matches exactly
+                card = num
+                  ? (data.data.find(c => String(c.number) === num) || data.data[0])
+                  : data.data[0];
+                break;
+              }
+            } catch (_) {}
+            await new Promise(r => setTimeout(r, 200));
+          }
 
-          // Look up price source URL from card_price_urls table
+          // ── Fuzzy fallback: prefix wildcard + Levenshtein pick ──────────────
+          // Catches typos like "feraligatir" → finds "Feraligatr" (distance 1)
+          if (!card && item.card_name.length >= 3) {
+            try {
+              // Use first ~55% of name chars as prefix (min 4, capped at full length)
+              const prefixLen = Math.min(item.card_name.length, Math.max(4, Math.floor(item.card_name.length * 0.55)));
+              const prefix = item.card_name.slice(0, prefixLen).replace(/[^a-zA-Z0-9]/g, '');
+              const fuzzyQ = num
+                ? `name:${prefix}* number:${num}`
+                : `name:${prefix}*`;
+              const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(fuzzyQ)}&pageSize=20`);
+              const data = await res.json();
+              if (data?.data?.length) {
+                // Pick candidate with smallest Levenshtein distance to entered name
+                let best = null, bestDist = Infinity;
+                for (const c of data.data) {
+                  const dist = _levenshtein(item.card_name, c.name);
+                  if (dist < bestDist) { bestDist = dist; best = c; }
+                }
+                // Accept only if close enough: within 40% of name length (min tolerance 3)
+                const threshold = Math.max(3, Math.floor(item.card_name.length * 0.4));
+                if (best && bestDist <= threshold) {
+                  card = best;
+                  console.log(`[enrich] fuzzy match: "${item.card_name}" → "${card.name}" (dist ${bestDist})`);
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (!card) {
+            console.log(`[enrich] no match: ${item.card_name} #${num}`);
+            continue;
+          }
+
+          console.log(`[enrich] matched ${item.card_name} → ${card.id}`);
+
+          const imageUrl     = card.images?.small  || null;
+          const apiCardId    = card.id             || null;
+          const setCode      = card.set?.id        || null;
+          const setNameFound = card.set?.name      || item.set_name || null;
+          const tcgplayerUrl = card.tcgplayer?.url || null;
+
+          // Pull price source URL from card_price_urls if we don't have one
           let priceSourceUrl = item.price_source_url || null;
           if (!priceSourceUrl && apiCardId) {
             const { data: urlRow } = await sb
@@ -3731,33 +3832,32 @@
             priceSourceUrl = urlRow?.price_source_url || null;
           }
 
-          // Patch the DB row with everything we found
           const patch = {
             card_image_url:   imageUrl,
             api_card_id:      apiCardId,
             set_code:         setCode,
-            set_name:         setName,
+            set_name:         setNameFound,
+            card_number:      num || item.card_number,  // store clean number
             price_source_url: priceSourceUrl,
           };
           if (tcgplayerUrl) patch.tcgplayer_url = tcgplayerUrl;
 
           const { error } = await sb.from('collection_items').update(patch).eq('id', item.id);
-          if (!error) {
-            // Keep local state in sync so the binder re-renders correctly
-            Object.assign(item, patch);
-          }
+          if (!error) { Object.assign(item, patch); matched++; }
+
+          // Re-render binder after each card so images appear as they come in
+          renderBinder();
         } catch (err) {
           console.warn(`[enrich] ${item.card_name}:`, err.message);
         }
 
-        // Polite pause — TCG API is rate-limited
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 350));
       }
 
-      // Re-render once all images are in
-      renderBinder();
+      _enrichBanner(null);  // hide banner
       renderDashboard();
-      console.log('[PathBinder] Enrichment complete.');
+      if (matched > 0) showToast(`✓ Matched images for ${matched} card${matched !== 1 ? 's' : ''}`);
+      console.log(`[PathBinder] Enrichment complete — ${matched}/${items.length} matched.`);
     }
 
     // ===== ADMIN PAGE =====
