@@ -728,9 +728,24 @@
     #collectionPanel.open{max-height:600px!important}
 
     /* ── BINDER FRAME — constrained width on desktop, full-width on mobile ── */
-    .binder-frame{width:100%}
+    .binder-frame{width:100%;position:relative}
     @media(min-width:481px){
-      .binder-frame{max-width:760px}
+      .binder-frame{max-width:640px}
+    }
+    /* ── BINDER SIDE NAV ARROWS (desktop only) ── */
+    .binder-nav-arrow{
+      display:none;position:absolute;top:50%;transform:translateY(-50%);
+      width:44px;height:80px;background:var(--surface2);border:1px solid var(--border);
+      color:var(--muted);font-size:1.6rem;cursor:pointer;align-items:center;
+      justify-content:center;transition:border-color .15s,color .15s,background .15s;
+      z-index:10;line-height:1;font-family:monospace;padding:0;user-select:none
+    }
+    .binder-nav-arrow:hover{border-color:var(--accent);color:var(--accent);background:rgba(255,140,20,.06)}
+    .binder-nav-arrow:disabled{opacity:.25;cursor:default;pointer-events:none}
+    @media(min-width:900px){
+      .binder-nav-arrow{display:flex}
+      .binder-nav-left{left:-56px}
+      .binder-nav-right{right:-56px}
     }
     /* ── BINDER VIEW TOGGLE ── */
     .binder-view-toggle{display:flex;gap:6px}
@@ -1453,6 +1468,10 @@
 
       <!-- Pagination -->
       <div id="binderPagination" class="binder-pagination" style="display:none"></div>
+
+      <!-- Desktop side-nav arrows (hidden on mobile via CSS) -->
+      <button id="binderArrowPrev" class="binder-nav-arrow binder-nav-left" onclick="flipBinderPage(-1)" disabled>‹</button>
+      <button id="binderArrowNext" class="binder-nav-arrow binder-nav-right" onclick="flipBinderPage(1)" disabled>›</button>
     </div><!-- /.binder-frame -->
   </div>
 
@@ -3509,14 +3528,17 @@
     }
 
     // ===== VENDOR BULK IMPORT =====
+    // Columns match the standard PathBinder vendor upload form
     const VENDOR_TEMPLATE_HEADERS = [
-      'Card Name', 'Set Name', 'Set Code', 'Card Number',
-      'Condition',        // Raw / PSA / BGS / CGC
-      'Grade',            // numeric grade if graded, e.g. 10 / 9.5 / 9
-      'Price',            // asking price in USD
-      'Shipping Price',   // shipping cost in USD (0 for free)
-      'Game Type',        // Pokemon / MTG / Sports / Other
-      'Notes'             // optional seller notes
+      'Card Name',      // required
+      'Set Name',
+      'Card Number',
+      'Condition',      // e.g. Raw, Near Mint, Gem Mint
+      'Grade',          // numeric grade if graded, e.g. 10 / 9.5 / 9
+      'Certification #',// PSA/BGS/CGC cert number
+      'Cost',           // your purchase cost (internal reference, not shown publicly)
+      'Price',          // asking price in USD — required
+      'Notes'           // optional seller notes visible to buyers
     ];
 
     let vendorImportRows = [];
@@ -3535,15 +3557,13 @@
     function downloadVendorTemplate() {
       if (typeof XLSX === 'undefined') { showToast('Spreadsheet library still loading — try again in a moment'); return; }
       const wb = XLSX.utils.book_new();
-      // Header row
       const ws = XLSX.utils.aoa_to_sheet([
         VENDOR_TEMPLATE_HEADERS,
-        // Example row
-        ['Charizard', 'Base Set', 'base1', '4', 'PSA', '10', '869.51', '0', 'Pokemon', 'Near-perfect centering'],
-        ['Pikachu',   'Base Set', 'base1', '58', 'Raw', '', '12.00', '4.99', 'Pokemon', ''],
+        // Example rows matching the standard PathBinder vendor upload form
+        ['Charizard', 'Base Set', '4',  'Gem Mint', '10', '123456789', '450.00', '869.51', 'Near-perfect centering'],
+        ['Pikachu',   'Base Set', '58', 'Raw',      '',   '',          '4.00',   '12.00',  'Lightly played'],
       ]);
-      // Column widths
-      ws['!cols'] = [20,16,10,10,12,8,10,14,12,28].map(w => ({ wch: w }));
+      ws['!cols'] = [20,18,10,14,8,16,10,10,32].map(w => ({ wch: w }));
       XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
       XLSX.writeFile(wb, 'PathBinder_Vendor_Template.xlsx');
     }
@@ -3578,24 +3598,23 @@
           const firstRow = data[0];
           const missing = ['Card Name', 'Price'].filter(h => !(h in firstRow));
           if (missing.length) {
-            errEl.textContent = `Missing required columns: ${missing.join(', ')}. Make sure you are using the PathBinder template.`;
+            errEl.textContent = `Missing required columns: ${missing.join(', ')}. Make sure you're using the PathBinder vendor template.`;
             errEl.style.display = 'block'; return;
           }
 
           vendorImportRows = data.filter(r => r['Card Name'] && r['Price']);
 
           // Preview table
+          const previewCols = ['Card Name','Set Name','Card Number','Condition','Grade','Price'];
           infoEl.textContent = `// ${vendorImportRows.length} listing(s) ready to import`;
-          tblEl.innerHTML = `<table style="width:100%;border-collapse:collapse">
+          tblEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.75rem">
             <thead><tr style="border-bottom:1px solid var(--border)">${
-              ['Card Name','Set Name','Condition','Grade','Price'].map(h =>
-                `<th style="text-align:left;padding:4px 6px;color:var(--muted)">${h}</th>`).join('')
+              previewCols.map(h => `<th style="text-align:left;padding:4px 6px;color:var(--muted)">${h}</th>`).join('')
             }</tr></thead>
             <tbody>${vendorImportRows.slice(0,10).map(r => `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">${
-              ['Card Name','Set Name','Condition','Grade','Price'].map(h =>
-                `<td style="padding:4px 6px;color:var(--text)">${r[h] || '—'}</td>`).join('')
+              previewCols.map(h => `<td style="padding:4px 6px;color:var(--text)">${r[h] || '—'}</td>`).join('')
             }</tr>`).join('')}
-            ${vendorImportRows.length > 10 ? `<tr><td colspan="5" style="padding:6px;color:var(--muted)">… and ${vendorImportRows.length - 10} more</td></tr>` : ''}
+            ${vendorImportRows.length > 10 ? `<tr><td colspan="${previewCols.length}" style="padding:6px;color:var(--muted)">… and ${vendorImportRows.length - 10} more</td></tr>` : ''}
             </tbody></table>`;
 
           prevEl.style.display = 'block';
@@ -3623,25 +3642,31 @@
         const r = vendorImportRows[i];
         progEl.textContent = `// Importing ${i + 1} / ${vendorImportRows.length}…`;
 
-        const cardName    = String(r['Card Name'] || '').trim();
-        const setName     = String(r['Set Name']  || '').trim();
-        const condition   = String(r['Condition'] || 'Raw').trim();
-        const grade       = String(r['Grade']     || '').trim();
-        const price       = parseFloat(r['Price']) || 0;
-        const shipping    = parseFloat(r['Shipping Price']) || 0;
-        const gameType    = String(r['Game Type'] || 'Pokemon').trim();
-        const notes       = String(r['Notes']     || '').trim();
-        const gradeDisplay = condition.toLowerCase() !== 'raw' && grade
-          ? `${condition} ${grade}` : condition;
+        const cardName    = String(r['Card Name']       || '').trim();
+        const setName     = String(r['Set Name']        || '').trim();
+        const cardNumber  = String(r['Card Number']     || '').trim();
+        const condition   = String(r['Condition']       || 'Raw').trim();
+        const grade       = String(r['Grade']           || '').trim();
+        const certNum     = String(r['Certification #'] || '').trim();
+        const price       = parseFloat(r['Price'])      || 0;
+        const notes       = String(r['Notes']           || '').trim();
 
-        const listingName = setName ? `${cardName} — ${setName}` : cardName;
+        // Grade display: "PSA 10", "BGS 9.5", or just the condition for raw cards
+        const isGraded = condition.toLowerCase() !== 'raw' && grade;
+        const gradeDisplay = isGraded ? `${condition} ${grade}` : condition;
+
+        // Build a descriptive listing name
+        const setTag  = setName ? ` — ${setName}` : '';
+        const numTag  = cardNumber ? ` #${cardNumber}` : '';
+        const listingName = `${cardName}${setTag}${numTag}`;
 
         const { error } = await sb.from('listings').insert({
           name:              listingName,
-          game_type:         gameType,
+          game_type:         'Pokémon',
           grade:             gradeDisplay,
+          cert_number:       certNum || null,
           value:             price,
-          shipping_price:    shipping,
+          shipping_price:    0,
           status:            'active',
           seller_id:         currentUser.id,
           seller_name:       currentUser.shop_name || currentUser.username || currentUser.name || null,
@@ -4913,14 +4938,59 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
         if (totalPages > 1) {
           pagination.style.display = 'flex';
           pagination.innerHTML = `
-            <button class="binder-page-btn" onclick="binderChangePage(-1)" ${binderPage === 0 ? 'disabled' : ''}>← Prev</button>
+            <button class="binder-page-btn" onclick="flipBinderPage(-1)" ${binderPage === 0 ? 'disabled' : ''}>← Prev</button>
             <span style="color:var(--muted);font-size:.78rem;align-self:center">${binderPage + 1} / ${totalPages}</span>
-            <button class="binder-page-btn" onclick="binderChangePage(1)" ${binderPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+            <button class="binder-page-btn" onclick="flipBinderPage(1)" ${binderPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
           `;
         } else {
           pagination.style.display = 'none';
         }
       }
+
+      // Update desktop side-arrow state
+      const prevArrow = document.getElementById('binderArrowPrev');
+      const nextArrow = document.getElementById('binderArrowNext');
+      if (prevArrow) prevArrow.disabled = (binderPage === 0);
+      if (nextArrow) nextArrow.disabled = (binderPage >= totalPages - 1 || totalPages <= 1);
+    }
+
+    // ── Animated page turn ───────────────────────────────────────────────────
+    let _flipping = false;
+    function flipBinderPage(dir) {
+      if (_flipping) return;
+      const content = document.getElementById('collectionContent');
+      if (!content || content.children.length === 0) { binderChangePage(dir); return; }
+
+      _flipping = true;
+      // Exit: slide + tilt away in the direction of travel
+      content.style.transition = 'transform .18s ease, opacity .18s ease';
+      content.style.transformOrigin = dir > 0 ? 'left center' : 'right center';
+      content.style.transform = dir > 0
+        ? 'perspective(900px) rotateY(-10deg) translateX(-28px)'
+        : 'perspective(900px) rotateY(10deg) translateX(28px)';
+      content.style.opacity = '0';
+
+      setTimeout(() => {
+        binderPage = Math.max(0, binderPage + dir);
+        renderBinder();  // renders new content
+
+        // Entry: start from opposite side, then ease to centre
+        content.style.transition = 'none';
+        content.style.transformOrigin = dir > 0 ? 'right center' : 'left center';
+        content.style.transform = dir > 0
+          ? 'perspective(900px) rotateY(10deg) translateX(28px)'
+          : 'perspective(900px) rotateY(-10deg) translateX(-28px)';
+        content.style.opacity = '0';
+        content.offsetHeight; // force repaint so transition fires
+        content.style.transition = 'transform .22s ease, opacity .22s ease';
+        content.style.transform = '';
+        content.style.opacity = '1';
+        setTimeout(() => {
+          content.style.transition = '';
+          content.style.transformOrigin = '';
+          _flipping = false;
+        }, 240);
+      }, 180);
     }
 
     // ── Mobile swipe to change binder page ───────────────────────────────
@@ -4947,8 +5017,8 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
         if (dt > 500) return;
         // Must be clearly horizontal and travel at least 50px
         if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
-        if (dx < 0) binderChangePage(1);   // swipe left  → next page
-        else        binderChangePage(-1);  // swipe right → prev page
+        if (dx < 0) flipBinderPage(1);   // swipe left  → next page
+        else        flipBinderPage(-1);  // swipe right → prev page
       }, { passive: true });
     })();
 
@@ -4997,6 +5067,8 @@ create policy "Users manage own snapshots" on portfolio_snapshots for all using 
     }
 
     function binderChangePage(dir) {
+      // Internal: just updates page index + re-renders (no animation).
+      // For animated page turns, call flipBinderPage(dir) instead.
       binderPage = Math.max(0, binderPage + dir);
       renderBinder();
     }
