@@ -2535,13 +2535,24 @@
               ${[...soldOffline].sort((a,b) => (b.offline_sale_date||'').localeCompare(a.offline_sale_date||'')).map(c => {
                 const profit = (c.offline_sale_price || 0) - (c.purchase_price || 0);
                 const sign = profit >= 0 ? '+' : '';
-                return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+                const cost = c.purchase_price || 0;
+                return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
                   <div>
                     <div style="font-size:.75rem;color:var(--text)">${c.card_name}</div>
                     <div style="font-size:.65rem;color:var(--muted)">${c.offline_sale_date || '—'}${c.offline_buyer ? ' · ' + c.offline_buyer : ''}</div>
                   </div>
-                  <div style="font-size:.78rem;color:var(--green);text-align:right">$${(c.offline_sale_price||0).toFixed(2)}</div>
-                  <div style="font-size:.72rem;color:${profit >= 0 ? 'var(--green)' : 'var(--red)'};text-align:right;min-width:56px">${sign}$${Math.abs(profit).toFixed(2)}</div>
+                  <div style="text-align:right">
+                    <div style="font-size:.6rem;color:var(--muted)">cost</div>
+                    <div style="font-size:.72rem;color:var(--muted)">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-size:.6rem;color:var(--muted)">sold</div>
+                    <div style="font-size:.78rem;color:var(--green)">$${(c.offline_sale_price||0).toFixed(2)}</div>
+                  </div>
+                  <div style="text-align:right;min-width:56px">
+                    <div style="font-size:.6rem;color:var(--muted)">profit</div>
+                    <div style="font-size:.72rem;color:${profit >= 0 ? 'var(--green)' : 'var(--red)'}">${sign}$${Math.abs(profit).toFixed(2)}</div>
+                  </div>
                 </div>`;
               }).join('')}
             </div>

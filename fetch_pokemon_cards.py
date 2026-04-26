@@ -28,21 +28,27 @@ def fetch_pokemon_cards():
     """Fetch all cards from Pokémon TCG API"""
     all_cards = []
     page_size = 250
-    page = 0
+    page = 1          # API is 1-indexed
+    total_count = None
     base_url = "https://api.pokemontcg.io/v2/cards"
 
     print("Fetching Pokémon TCG cards...")
 
-    while page < 70:
+    while True:
         params = {
             "pageSize": page_size,
-            "page": page
+            "page": page,
+            "orderBy": "set.id,number"
         }
 
         try:
             response = requests.get(base_url, params=params, timeout=30)
             response.raise_for_status()
             data = response.json()
+
+            if total_count is None:
+                total_count = data.get("totalCount", 0)
+                print(f"Total cards reported by API: {total_count}")
 
             cards = data.get("data", [])
             if not cards:
@@ -51,6 +57,10 @@ def fetch_pokemon_cards():
 
             all_cards.extend(cards)
             print(f"Page {page}: Fetched {len(cards)} cards. Running total: {len(all_cards)}")
+
+            # Stop when we have everything
+            if total_count and len(all_cards) >= total_count:
+                break
 
             page += 1
             time.sleep(0.1)
