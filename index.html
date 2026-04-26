@@ -3861,8 +3861,52 @@
 
       _enrichBanner(null);  // hide banner
       renderDashboard();
-      if (matched > 0) showToast(`✓ Matched images for ${matched} card${matched !== 1 ? 's' : ''}`);
+      if (matched > 0) showToast(`✓ Matched images for ${matched} card${matched !== 1 ? 's' : ''} — fetching prices…`);
       console.log(`[PathBinder] Enrichment complete — ${matched}/${items.length} matched.`);
+
+      // ── Price refresh for newly imported cards ──────────────────────────────
+      // Now that enrichment has filled in price_source_url, look up market prices
+      const toPrice = items.filter(c => c.price_source_url && !c.sold_offline && !c.is_ghost);
+      if (!toPrice.length) return;
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let priced = 0;
+      for (let i = 0; i < toPrice.length; i++) {
+        const item = toPrice[i];
+        _enrichBanner(`// Fetching prices… ${i + 1} / ${toPrice.length}`);
+        try {
+          const condition = _priceCondition(item);
+          const res  = await fetch('/api/lookup-price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: item.card_name, condition, url: item.price_source_url })
+          });
+          const data = await res.json();
+          if (data.price) {
+            const { error } = await sb.from('collection_items')
+              .update({ current_value: data.price }).eq('id', item.id);
+            if (!error) {
+              const old = item.current_value;
+              item.current_value = data.price;
+              priced++;
+              if (old !== data.price) {
+                sb.from('price_history').upsert({
+                  collection_item_id: item.id, user_id: currentUser.id,
+                  recorded_value: data.price, recorded_at: todayStr
+                }, { onConflict: 'collection_item_id,recorded_at' }).catch(() => {});
+              }
+            }
+          }
+        } catch (_) {}
+        await new Promise(r => setTimeout(r, 650));
+      }
+
+      _enrichBanner(null);
+      if (priced > 0) {
+        renderBinder();
+        renderDashboard();
+        showToast(`✓ Prices updated for ${priced} card${priced !== 1 ? 's' : ''}`);
+      }
     }
 
     // ===== ADMIN PAGE =====
@@ -4159,7 +4203,7 @@
         const item = toRefresh[i];
         statusEl.textContent = `[ ${i + 1}/${toRefresh.length} ] Looking up ${item.card_name}…`;
         try {
-          const condition = item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+          const condition = _priceCondition(item);
           const res = await fetch('/api/lookup-price', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -5691,6 +5735,16 @@
     // ── Daily background price refresh ───────────────────────────────────────
     // Runs silently once per calendar day for every card that has a price URL.
     // Keeps price_history populated so the YTD chart has data automatically —
+    // ── Condition → PriceCharting grade string ────────────────────────────────
+    // For graded cards we must pass the actual numeric grade (e.g. "9.5", "10")
+    // so the API can look up the correct graded-price column on PriceCharting.
+    function _priceCondition(item) {
+      if (item.condition === 'graded' && item.grade_value != null) {
+        return String(item.grade_value);   // e.g. "9.5" → grade_9_5_price
+      }
+      return item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+    }
+
     // no admin access required.
     async function dailyPriceRefresh() {
       const STORAGE_KEY = 'pathbinder_daily_refresh_' + (currentUser?.id || '');
@@ -5706,7 +5760,7 @@
       let updated = 0;
       for (const item of eligible) {
         try {
-          const condition = item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+          const condition = _priceCondition(item);
           const res  = await fetch('/api/lookup-price', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -5754,7 +5808,7 @@
       if (status) { status.style.display = 'inline'; status.textContent = ''; }
 
       try {
-        const condition = item.condition === 'raw' ? 'ungraded' : (item.condition || 'NM');
+        const condition = _priceCondition(item);
         const payload = { name: item.card_name, condition };
         if (item.price_source_url) payload.url = item.price_source_url;
         const res = await fetch('/api/lookup-price', {
