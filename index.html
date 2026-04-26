@@ -910,39 +910,40 @@
   </div>
 
 
-  <!-- MEMBERSHIP MODAL -->
-  <div class="modal-overlay" id="membershipModal">
-    <div class="modal">
+  <!-- PRICING MODAL -->
+  <div class="modal-overlay" id="membershipModal" style="align-items:flex-start;padding:20px 12px;overflow-y:auto">
+    <div class="modal" style="max-width:820px;padding:28px 24px">
       <button class="modal-close" onclick="closeModal('membershipModal')">×</button>
-      <h3>PathBinder Premium</h3>
-      <p class="modal-sub">Unlock exclusive benefits</p>
-      <div class="billing-toggle">
-        <button class="billing-opt active" onclick="toggleBilling(this,'monthly')">Monthly</button>
-        <button class="billing-opt" onclick="toggleBilling(this,'yearly')">Yearly</button>
+      <div style="font-size:.7rem;color:var(--teal);letter-spacing:.1em;margin-bottom:4px">// CHOOSE YOUR PLAN</div>
+      <h3 style="margin-bottom:2px;font-size:1.15rem">PathBinder Subscription</h3>
+      <p class="modal-sub" id="pricingSubtitle" style="margin-bottom:18px">All plans include the PathBinder mobile app.</p>
+
+      <!-- Billing toggle — hidden by JS for Collector tier context -->
+      <div class="billing-toggle" id="pricingBillingToggle" style="margin-bottom:20px">
+        <button class="billing-opt active" id="pricingMonthlyBtn" onclick="setPricingBilling('monthly')">Monthly</button>
+        <button class="billing-opt" id="pricingYearlyBtn" onclick="setPricingBilling('yearly')">Yearly</button>
       </div>
-      <div class="perks-list">
-        <div class="perk-item">
-          <div class="perk-icon">★</div>
-          <div class="perk-text"><strong>Lower fees:</strong> 3.9% vs 5% for non-members — pays for itself fast</div>
+
+      <!-- Tier cards -->
+      <div id="pricingGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px"></div>
+
+      <!-- Shop intake form (hidden until Shop CTA is clicked) -->
+      <div id="shopIntakeForm" style="display:none;border:1px solid #993C1D;padding:18px;margin-top:8px">
+        <div style="font-size:.72rem;color:#993C1D;letter-spacing:.08em;margin-bottom:10px">// SHOP TIER — CONTACT US</div>
+        <div class="form-group"><label>Business name</label><input type="text" id="shopBizName" class="atc-input" style="width:100%"></div>
+        <div class="form-group"><label>Business type</label>
+          <select id="shopBizType" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem">
+            <option value="">Select…</option>
+            <option value="brick">Brick &amp; mortar</option>
+            <option value="online">Online store</option>
+            <option value="both">Both</option>
+          </select>
         </div>
-        <div class="perk-item">
-          <div class="perk-icon">★</div>
-          <div class="perk-text"><strong>Priority Support</strong> with faster responses</div>
-        </div>
-        <div class="perk-item">
-          <div class="perk-icon">★</div>
-          <div class="perk-text"><strong>Early Access</strong> to new listings</div>
-        </div>
-        <div class="perk-item">
-          <div class="perk-icon">★</div>
-          <div class="perk-text"><strong>Advanced Analytics</strong> on your portfolio</div>
-        </div>
+        <div class="form-group"><label>Est. monthly card volume</label><input type="text" id="shopVolume" class="atc-input" placeholder="e.g. 500 cards / month" style="width:100%"></div>
+        <div class="form-group"><label>Contact email</label><input type="email" id="shopEmail" class="atc-input" style="width:100%" placeholder="you@shop.com"></div>
+        <button onclick="submitShopIntake()" style="width:100%;padding:11px;background:#993C1D;color:#fff;border:none;font-family:'Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;margin-top:4px">Submit →</button>
+        <button onclick="document.getElementById('shopIntakeForm').style.display='none'" style="width:100%;padding:8px;background:transparent;border:none;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;margin-top:6px">← Back to plans</button>
       </div>
-      <div class="price-pill" style="margin-bottom:16px">
-        <div class="pp-price" id="membershipPrice">$9/mo</div>
-        <div class="pp-label">Billed <span id="membershipBillFreq">monthly</span></div>
-      </div>
-      <button type="button" class="btn btn-gold" onclick="upgradeMembership()">Upgrade_to_Premium</button>
     </div>
   </div>
 
@@ -1049,6 +1050,30 @@
       <div style="display:flex;gap:10px">
         <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(0,204,255,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add_To_Wishlist</button>
         <button onclick="closeModal('addToWishlistModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE / RENAME BINDER MODAL -->
+  <div class="modal-overlay" id="binderEditModal">
+    <div class="modal" style="max-width:400px">
+      <button class="modal-close" onclick="closeModal('binderEditModal')">×</button>
+      <h3 id="binderEditTitle">New_Binder</h3>
+      <p class="modal-sub">Organise your collection into separate binders by set, type, or anything you like.</p>
+      <div class="form-group">
+        <label>Binder name</label>
+        <input type="text" id="binderEditName" class="atc-input" style="width:100%" placeholder="e.g. Base Set, Graded Cards…" maxlength="40">
+      </div>
+      <div class="form-group">
+        <label>Colour tag</label>
+        <div id="binderColorPicker" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button onclick="saveBinder()" style="flex:1;padding:11px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save →</button>
+        <button onclick="closeModal('binderEditModal')" style="flex:1;padding:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+      <div id="binderEditDeleteWrap" style="display:none;margin-top:12px;text-align:center">
+        <button onclick="deleteBinder()" style="background:transparent;border:none;color:#e74c3c;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline">Delete this binder (cards move to default)</button>
       </div>
     </div>
   </div>
@@ -1396,6 +1421,7 @@
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
       <button class="account-tab" onclick="switchAccountTab('myListings')">My_Listings</button>
       <button class="account-tab" onclick="switchAccountTab('myOrders')">Orders<span class="badge-count" id="orderNotification" style="display:none">0</span></button>
+      <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales_Archive</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
     </div>
@@ -1420,6 +1446,10 @@
       <div id="ordersContent"></div>
     </div>
 
+    <div id="salesArchive" class="account-content">
+      <div id="salesArchiveContent"></div>
+    </div>
+
     <div id="watchlist" class="account-content">
       <h3 style="font-size:1rem;margin-bottom:14px">Watchlist</h3>
       <div id="watchlistContent"></div>
@@ -1433,6 +1463,11 @@
   <div id="collectionPage" class="page">
     <h2>My_Binder</h2>
     <p class="subtitle">Your complete card holdings at a glance.</p>
+
+    <!-- Binder tabs (Vendor+ multi-binder) -->
+    <div id="binderTabsWrap" style="display:none;margin-bottom:14px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch">
+      <div id="binderTabs" style="display:inline-flex;gap:6px;align-items:center;padding-bottom:2px"></div>
+    </div>
 
     <!-- Binder frame — constrained on desktop, full-width on mobile -->
     <div class="binder-frame">
@@ -1801,6 +1836,55 @@
     function calcFee(amount) {
       return Math.round(amount * getFeeRate());
     }
+    // ── Subscription tier system ──────────────────────────────────────────────
+    // Tiers: 'free' | 'collector' | 'vendor' | 'shop'
+    // Reads subscription_tier from profile; falls back to legacy flags for existing users.
+    const TIER_ORDER = ['free', 'collector', 'vendor', 'shop'];
+    const TIER_COLORS = {
+      free:      { primary: '#888780', fill: '#F1EFE8', text: '#2C2C2A' },
+      collector: { primary: '#1D9E75', fill: '#E1F5EE', text: '#085041' },
+      vendor:    { primary: '#534AB7', fill: '#EEEDFE', text: '#26215C' },
+      shop:      { primary: '#993C1D', fill: '#FAECE7', text: '#4A1B0C' },
+    };
+
+    function userTier() {
+      if (!currentUser) return 'free';
+      if (currentUser.subscription_tier && TIER_ORDER.includes(currentUser.subscription_tier))
+        return currentUser.subscription_tier;
+      // Legacy flag fallback
+      if (currentUser.is_admin)   return 'shop';
+      if (currentUser.is_vendor)  return 'vendor';
+      if (currentUser.is_premium || currentUser.membershipActive) return 'collector';
+      return 'free';
+    }
+    function tierAtLeast(tier) {
+      return TIER_ORDER.indexOf(userTier()) >= TIER_ORDER.indexOf(tier);
+    }
+
+    // Feature gate helpers
+    function canAddMoreCards() {
+      if (tierAtLeast('collector')) return true;
+      const owned = collectionItems.filter(c => !c.sold_offline && !c.is_ghost).length;
+      return owned < 200;
+    }
+    function remainingCardSlots() {
+      if (tierAtLeast('collector')) return Infinity;
+      const owned = collectionItems.filter(c => !c.sold_offline && !c.is_ghost).length;
+      return Math.max(0, 200 - owned);
+    }
+    function canAddGhostCard() {
+      if (tierAtLeast('collector')) return true;
+      return collectionItems.filter(c => c.is_ghost && !c.sold_offline).length < 1;
+    }
+    function canAddCardFund() {
+      const funds = collectionItems.filter(c => c.is_ghost && c.savings_goal > 0 && !c.sold_offline).length;
+      if (tierAtLeast('vendor'))   return true;
+      if (tierAtLeast('collector')) return funds < 3;
+      return funds < 1;
+    }
+    function hasPriceTracking()  { return tierAtLeast('collector'); }
+    function hasBulkImport()     { return tierAtLeast('vendor'); }
+
     // Admins are automatically treated as premium (no subscription needed)
     function userIsPremium() {
       return !!(currentUser && (currentUser.is_admin || currentUser.is_premium || currentUser.membershipActive));
@@ -2045,7 +2129,7 @@
       if (pageId === 'admin') renderAdmin();
       if (pageId === 'collection') {
         renderBinder();
-        if (currentUser) loadCollection().then(() => renderBinder()).catch(() => {});
+        if (currentUser) Promise.all([loadCollection(), loadBinders()]).then(() => renderBinder()).catch(() => {});
       }
       if (pageId === 'addCard') { /* addCardPage ready */ }
       // collection page is accessible directly via nav
@@ -2453,15 +2537,18 @@
       }
     }
 
-    async function initiateMembershipCheckout(plan) {
+    async function initiateMembershipCheckout(tier) {
       if (!currentUser) { openModal('loginModal'); return; }
+      // Determine billing interval from the pricing modal toggle
+      const billing = _pricingBilling === 'yearly' ? 'annual' : 'monthly';
       showToast('Redirecting to checkout...');
       try {
         const result = await callEdgeFunction('create-checkout-session', {
-          type: 'membership',
-          plan,
+          type: 'subscription',
+          tier,
+          billing,
           successUrl: window.location.origin + window.location.pathname,
-          cancelUrl: window.location.origin + window.location.pathname,
+          cancelUrl:  window.location.origin + window.location.pathname,
         });
         if (result.url) {
           window.location.href = result.url;
@@ -2495,6 +2582,7 @@
       if (contentEl) contentEl.classList.add('active');
       if (tab === 'myOrders') renderOrders();
       if (tab === 'myListings') renderMyListings();
+      if (tab === 'salesArchive') renderSalesArchive();
     }
 
     function switchOrdersTab(tab) {
@@ -2633,11 +2721,11 @@
           }).join('')}
         </div>` : ''}
 
-        ${userIsVendor() && soldOffline.length > 0 ? `
+        ${soldOffline.length > 0 ? `
         <div class="dash-chart-section" style="border-color:rgba(57,255,20,.25);margin-bottom:16px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// SALES_SUMMARY</div>
-            <button onclick="showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('history'),80)" style="background:transparent;border:none;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">→ View Full History</button>
+            <button onclick="showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('salesArchive'),80)" style="background:transparent;border:none;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">→ View Archive</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:10px">
             <div class="coll-stat-box"><div class="coll-stat-label">Offline_Sales</div><div class="coll-stat-value">${soldOffline.length}</div></div>
@@ -2658,6 +2746,22 @@
 
     // ── YTD Portfolio Chart ──────────────────────────────────────────────────
     function buildYtdChart(snapshots, currentValue) {
+      // Free tier: show locked preview with upgrade CTA
+      if (!hasPriceTracking()) {
+        return `<div class="dash-chart-section" style="margin-bottom:16px;position:relative;overflow:hidden">
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:10px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
+          <!-- Fake blurred chart -->
+          <div style="filter:blur(6px);pointer-events:none;opacity:.5">
+            <div style="font-size:1.6rem;color:var(--text);font-weight:700">$2,341.50</div>
+            <svg width="100%" height="90" style="display:block;margin-top:8px"><polyline points="0,70 60,55 120,62 180,40 240,35 300,20 360,28 420,15 480,10" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>
+          </div>
+          <!-- Upgrade overlay -->
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,5,0,.7);gap:10px">
+            <div style="font-size:.78rem;color:var(--text);text-align:center">Live price tracking is a<br><strong style="color:#1D9E75">Collector</strong> feature</div>
+            <button onclick="openPricingModal('collector')" style="padding:8px 20px;background:#1D9E75;color:#fff;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Upgrade →</button>
+          </div>
+        </div>`;
+      }
       const pts = [...snapshots];
       // Append today's live value as the rightmost point
       const todayStr = new Date().toISOString().slice(0, 10);
@@ -2953,6 +3057,129 @@
           </div>`;
         }).join('')}
       </div>`;
+    }
+
+    function renderSalesArchive() {
+      const el = document.getElementById('salesArchiveContent');
+      if (!el || !currentUser) return;
+
+      // ── Offline / manually-archived sales (all tiers) ───────────────────
+      const soldOffline = [...collectionItems.filter(c => c.sold_offline)]
+        .sort((a,b) => (b.offline_sale_date||'').localeCompare(a.offline_sale_date||''));
+
+      const totalOfflineRev    = soldOffline.reduce((s,c) => s + (c.offline_sale_price||0), 0);
+      const totalOfflineProfit = soldOffline.reduce((s,c) => s + ((c.offline_sale_price||0)-(c.purchase_price||0)), 0);
+
+      const offlineRows = soldOffline.length
+        ? soldOffline.map(c => {
+            const profit = (c.offline_sale_price||0) - (c.purchase_price||0);
+            const sign   = profit >= 0 ? '+' : '';
+            const img    = c.image_url
+              ? `<img src="${c.image_url}" style="width:28px;height:39px;object-fit:contain;border-radius:2px;margin-right:8px;vertical-align:middle">`
+              : `<span style="display:inline-block;width:28px;height:39px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;margin-right:8px;vertical-align:middle"></span>`;
+            const gradeTag = c.condition === 'graded' && c.grade_value
+              ? `<span style="font-size:.62rem;color:var(--gold);margin-left:4px">${c.grade_label||''} ${c.grade_value}</span>` : '';
+            return `<tr>
+              <td style="vertical-align:middle">
+                <div style="display:flex;align-items:center">
+                  ${img}
+                  <div>
+                    <div style="color:var(--text);font-size:.8rem">${c.card_name}${gradeTag}</div>
+                    ${c.set_name ? `<div style="font-size:.65rem;color:var(--muted)">${c.set_name}</div>` : ''}
+                    ${c.offline_buyer ? `<div style="font-size:.62rem;color:var(--teal)">Buyer: ${c.offline_buyer}</div>` : ''}
+                  </div>
+                </div>
+              </td>
+              <td style="color:var(--muted);font-size:.78rem;white-space:nowrap">${c.offline_sale_date || '—'}</td>
+              <td>
+                <div style="color:var(--green);font-size:.82rem">$${(c.offline_sale_price||0).toFixed(2)}</div>
+                <div style="font-size:.65rem;color:var(--muted)">cost $${(c.purchase_price||0).toFixed(2)}</div>
+              </td>
+              <td style="color:${profit>=0?'var(--green)':'var(--red)'};font-size:.8rem">${sign}$${Math.abs(profit).toFixed(2)}</td>
+              <td>
+                <button onclick="restoreArchivedCard('${c.id}')" style="padding:3px 8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.65rem;cursor:pointer" title="Restore to binder">↩ Restore</button>
+              </td>
+            </tr>`;
+          }).join('')
+        : `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--muted);font-size:.82rem">No archived sales yet.<br><span style="font-size:.72rem">Mark a card as "Sold Offline" in the binder to archive it here.</span></td></tr>`;
+
+      const offlineSummary = soldOffline.length ? `
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border)">
+          <span style="font-size:.75rem;color:var(--muted)">Cards Sold: <span style="color:var(--text)">${soldOffline.length}</span></span>
+          <span style="font-size:.75rem;color:var(--muted)">Total Revenue: <span style="color:var(--green)">$${totalOfflineRev.toFixed(2)}</span></span>
+          <span style="font-size:.75rem;color:var(--muted)">Total Profit: <span style="color:${totalOfflineProfit>=0?'var(--green)':'var(--red)'}">$${totalOfflineProfit>=0?'+':''}${totalOfflineProfit.toFixed(2)}</span></span>
+        </div>` : '';
+
+      // ── Online marketplace sales (Vendor+ only) ──────────────────────────
+      let onlineHtml = '';
+      if (tierAtLeast('vendor')) {
+        const onlineSales = [...orders.filter(o => o.seller_id === currentUser.id)]
+          .sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        const totalOnlineRev    = onlineSales.reduce((s,o) => s + (o.seller_payout||0), 0);
+        const totalOnlineFees   = onlineSales.reduce((s,o) => s + (o.platform_fee||0), 0);
+
+        const onlineRows = onlineSales.length
+          ? onlineSales.map(o => {
+              const listing = listings.find(l => String(l.id) === String(o.listing_id));
+              return `<tr>
+                <td style="color:var(--text);font-size:.8rem">${listing ? listing.name : 'Marketplace Sale'}</td>
+                <td style="color:var(--muted);font-size:.78rem;white-space:nowrap">${new Date(o.created_at).toLocaleDateString()}</td>
+                <td style="color:var(--green);font-size:.82rem">$${(o.seller_payout||0).toFixed(2)}</td>
+                <td style="color:var(--muted);font-size:.75rem">$${(o.platform_fee||0).toFixed(2)}</td>
+                <td><span style="font-size:.62rem;padding:2px 6px;border:1px solid ${o.status==='completed'?'var(--green)':'var(--border)'};color:${o.status==='completed'?'var(--green)':'var(--muted)'}">${(o.status||'').toUpperCase()}</span></td>
+              </tr>`;
+            }).join('')
+          : `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);font-size:.8rem">No marketplace sales yet</td></tr>`;
+
+        const onlineSummary = onlineSales.length ? `
+          <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border)">
+            <span style="font-size:.75rem;color:var(--muted)">Sales: <span style="color:var(--text)">${onlineSales.length}</span></span>
+            <span style="font-size:.75rem;color:var(--muted)">Payout Total: <span style="color:var(--green)">$${totalOnlineRev.toFixed(2)}</span></span>
+            <span style="font-size:.75rem;color:var(--muted)">Fees Paid: <span style="color:var(--red)">$${totalOnlineFees.toFixed(2)}</span></span>
+          </div>` : '';
+
+        onlineHtml = `
+          <div style="margin-top:32px">
+            <div style="font-size:.75rem;color:var(--teal);letter-spacing:.08em;margin-bottom:12px">// MARKETPLACE_SALES (Online)</div>
+            <div class="tx-table-wrap">
+              <table class="tx-table">
+                <thead><tr><th>Card</th><th>Date</th><th>Payout</th><th>Fee</th><th>Status</th></tr></thead>
+                <tbody>${onlineRows}</tbody>
+              </table>
+            </div>
+            ${onlineSummary}
+          </div>`;
+      }
+
+      el.innerHTML = `
+        <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">// SALES_ARCHIVE</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px">All cards you've sold or archived. Restore any card to move it back into your active binder.</div>
+        <div class="tx-table-wrap">
+          <table class="tx-table">
+            <thead><tr><th>Card</th><th>Date Sold</th><th>Sale Price</th><th>Profit/Loss</th><th></th></tr></thead>
+            <tbody>${offlineRows}</tbody>
+          </table>
+        </div>
+        ${offlineSummary}
+        ${onlineHtml}`;
+    }
+
+    async function restoreArchivedCard(itemId) {
+      if (!confirm('Restore this card to your active binder?')) return;
+      const { error } = await sb.from('collection_items')
+        .update({ sold_offline: false, offline_sale_price: null, offline_sale_date: null, offline_buyer: null })
+        .eq('id', itemId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      if (item) {
+        item.sold_offline = false;
+        item.offline_sale_price = null;
+        item.offline_sale_date = null;
+        item.offline_buyer = null;
+      }
+      renderSalesArchive();
+      renderBinder();
+      showToast('✓ Card restored to binder');
     }
 
     function renderHistory() {
@@ -4855,25 +5082,185 @@
       openLightbox(lightboxIndex, lightboxListingId);
     }
 
-    // ===== MEMBERSHIP =====
-    function toggleBilling(el, mode) {
-      document.querySelectorAll('.billing-opt').forEach(o => o.classList.remove('active'));
-      el.classList.add('active');
-      const price = mode === 'yearly' ? '$99/year' : '$9/mo';
-      const freq = mode === 'yearly' ? 'yearly' : 'monthly';
-      document.getElementById('membershipPrice').textContent = price;
-      document.getElementById('membershipBillFreq').textContent = freq;
+    // ===== PRICING / MEMBERSHIP =====
+    let _pricingBilling = 'monthly';
+
+    const TIER_DEFS = [
+      {
+        id: 'free', label: 'Free', monthly: 0, annual: null,
+        ctaLabel: 'Get started free', ctaAction: null,
+        badge: null,
+        features: [
+          'Up to 200 cards logged',
+          'Card catalog search',
+          'Manual value entry',
+          'Condition tracking',
+          'Collection dashboard',
+          'Basic set completion tracker',
+          '1 Ghost Card goal',
+          '1 Card Fund goal',
+        ],
+        locked: ['Live market prices','Price trend alerts','Collection PDF export','Bulk import','Multi-binder org'],
+      },
+      {
+        id: 'collector', label: 'Collector', monthly: 5, annual: null, // no annual option per spec
+        ctaLabel: 'Start Collector', ctaAction: 'checkout_collector',
+        badge: 'Most popular',
+        features: [
+          'Unlimited cards',
+          'Live market price tracking',
+          'Price trend alerts',
+          'Grading cost calculator',
+          'Collection PDF export',
+          'Monthly market memo',
+          'Unlimited Ghost Card goals',
+          'Up to 3 Card Fund goals',
+          'Lower 3.9% marketplace fee',
+        ],
+        locked: ['Bulk CSV import','Multi-binder org','Weekly market memo','Shareable collection link'],
+      },
+      {
+        id: 'vendor', label: 'Vendor', monthly: 25, annual: 239.99,
+        ctaLabel: 'Start Vendor', ctaAction: 'checkout_vendor',
+        badge: null,
+        features: [
+          'Everything in Collector',
+          'Bulk CSV import',
+          'Multi-binder / set org',
+          'Weekly market memo',
+          'Shareable collection link',
+          'Collection analytics',
+          'Buy / sell / trade log',
+          'Grading submission tracker',
+          'Early feature access',
+          'Unlimited Card Fund goals',
+          '48-hour support response',
+        ],
+        locked: ['White-label storefront','Multi-user access','Staff pipeline'],
+      },
+      {
+        id: 'shop', label: 'Shop', monthly: 200, annual: 1800,
+        ctaLabel: 'Contact us', ctaAction: 'shop_intake',
+        badge: null,
+        features: [
+          'Everything in Vendor',
+          'White-label storefront page',
+          'Multi-user account access',
+          'Staff grading pipeline',
+          'Custom reporting',
+          'Inventory management',
+          'PathBinder partner badge',
+          'Dedicated account manager',
+          'Monthly strategy session',
+          'Onboarding call',
+          '24-hour support response',
+          'First access to all features',
+        ],
+        locked: [],
+      },
+    ];
+
+    function setPricingBilling(mode) {
+      _pricingBilling = mode;
+      document.getElementById('pricingMonthlyBtn').classList.toggle('active', mode === 'monthly');
+      document.getElementById('pricingYearlyBtn').classList.toggle('active', mode === 'yearly');
+      renderPricingGrid();
     }
 
-    document.getElementById('membershipBtn').addEventListener('click', () => openModal('membershipModal'));
+    function renderPricingGrid() {
+      const grid = document.getElementById('pricingGrid');
+      if (!grid) return;
+      const current = userTier();
+      grid.innerHTML = TIER_DEFS.map(t => {
+        const col = TIER_COLORS[t.id];
+        const isCurrent = t.id === current;
+        const isPopular = t.badge === 'Most popular';
 
-    function upgradeMembership() {
-      if (!currentUser) { openModal('loginModal'); closeModal('membershipModal'); return; }
-      const cycle = document.getElementById('membershipBillFreq').textContent;
-      const plan = cycle === 'yearly' ? 'yearly' : 'monthly';
+        // Price line
+        let priceLine = '';
+        if (t.monthly === 0) {
+          priceLine = '<span style="font-size:1.4rem;font-weight:700">Free</span><span style="font-size:.72rem;color:var(--muted)"> forever</span>';
+        } else if (_pricingBilling === 'yearly' && t.annual != null) {
+          const perMo = (t.annual / 12).toFixed(2);
+          priceLine = `<span style="font-size:1.4rem;font-weight:700">$${perMo}</span><span style="font-size:.72rem;color:var(--muted)">/mo</span><br><span style="font-size:.65rem;color:${col.primary}">$${t.annual}/yr — save ${t.id === 'vendor' ? '20' : '25'}%</span>`;
+        } else {
+          priceLine = `<span style="font-size:1.4rem;font-weight:700">$${t.monthly}</span><span style="font-size:.72rem;color:var(--muted)">/mo</span>`;
+        }
+
+        // CTA button
+        let ctaBtn = '';
+        if (isCurrent) {
+          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:${col.primary};border:1px solid ${col.primary};margin-top:auto">✓ Current plan</div>`;
+        } else if (t.ctaAction === 'shop_intake') {
+          ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:${col.primary};color:#fff;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;margin-top:auto">Contact us →</button>`;
+        } else if (t.ctaAction) {
+          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${isPopular ? col.primary : 'transparent'};color:${isPopular ? '#fff' : col.primary};border:1px solid ${col.primary};font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;margin-top:auto">${t.ctaLabel} →</button>`;
+        } else {
+          ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;margin-top:auto">${t.ctaLabel}</button>`;
+        }
+
+        const featureLines = t.features.map(f =>
+          `<div style="font-size:.68rem;color:var(--text);padding:3px 0;display:flex;gap:5px"><span style="color:${col.primary};flex-shrink:0">✓</span>${f}</div>`
+        ).join('');
+        const lockedLines = t.locked.slice(0,3).map(f =>
+          `<div style="font-size:.65rem;color:var(--muted);padding:2px 0;display:flex;gap:5px"><span style="flex-shrink:0">○</span>${f}</div>`
+        ).join('') + (t.locked.length > 3 ? `<div style="font-size:.62rem;color:var(--muted);padding:2px 0">+${t.locked.length-3} more…</div>` : '');
+
+        return `<div style="
+          border:${isPopular ? '2px solid '+col.primary : '1px solid var(--border)'};
+          border-radius:0;padding:16px;display:flex;flex-direction:column;gap:0;
+          background:${isCurrent ? col.fill.replace(')',', .08)').replace('rgb','rgba') : 'var(--surface)'};
+          position:relative;
+        ">
+          ${t.badge ? `<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:${col.primary};color:#fff;font-size:.6rem;font-weight:700;padding:2px 10px;letter-spacing:.06em;white-space:nowrap">${t.badge}</div>` : ''}
+          <div style="font-size:.65rem;letter-spacing:.1em;color:${col.primary};margin-bottom:4px">${t.label.toUpperCase()}</div>
+          <div style="margin-bottom:12px;line-height:1.3">${priceLine}</div>
+          <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;flex:1">${featureLines}${lockedLines ? '<div style="margin-top:6px">'+lockedLines+'</div>' : ''}</div>
+          ${ctaBtn}
+        </div>`;
+      }).join('');
+    }
+
+    function openPricingModal(highlightTier) {
+      document.getElementById('shopIntakeForm').style.display = 'none';
+      renderPricingGrid();
+      openModal('membershipModal');
+    }
+
+    function openShopIntake() {
+      document.getElementById('shopIntakeForm').style.display = 'block';
+      document.getElementById('shopIntakeForm').scrollIntoView({ behavior: 'smooth' });
+      if (currentUser?.email) document.getElementById('shopEmail').value = currentUser.email;
+    }
+
+    async function submitShopIntake() {
+      const bizName = document.getElementById('shopBizName').value.trim();
+      const bizType = document.getElementById('shopBizType').value;
+      const volume  = document.getElementById('shopVolume').value.trim();
+      const email   = document.getElementById('shopEmail').value.trim();
+      if (!bizName || !bizType || !email) { showToast('Please fill in all required fields'); return; }
+      try {
+        await sb.from('shop_inquiries').insert({
+          user_id: currentUser?.id || null,
+          business_name: bizName, business_type: bizType,
+          monthly_volume: volume, contact_email: email,
+          submitted_at: new Date().toISOString(),
+        });
+      } catch (_) {}
+      showToast('✓ Submitted! The PathBinder team will be in touch shortly.');
       closeModal('membershipModal');
-      initiateMembershipCheckout(plan);
     }
+
+    function upgradeTier(tierId) {
+      if (!currentUser) { openModal('loginModal'); closeModal('membershipModal'); return; }
+      closeModal('membershipModal');
+      initiateMembershipCheckout(tierId);
+    }
+
+    document.getElementById('membershipBtn').addEventListener('click', () => openPricingModal());
+
+    // Legacy compat — kept in case other code calls it
+    function upgradeMembership() { openPricingModal(); }
 
     // ===== TOAST & NOTIFICATIONS =====
     function showToast(message) {
@@ -5155,6 +5542,157 @@
       renderBinder();
     }
 
+    // ===== MULTI-BINDER SYSTEM =====
+    let binders        = [];          // [{id, name, color, is_default}]
+    let currentBinderId = null;       // null = "All Cards" / default view
+    let _editingBinderId = null;      // which binder is being edited in the modal
+    const BINDER_COLORS = ['#FF8C14','#1D9E75','#534AB7','#993C1D','#E74C3C','#3498DB','#F39C12','#888780'];
+
+    async function loadBinders() {
+      if (!currentUser) { binders = []; return; }
+      const { data, error } = await sb.from('binders')
+        .select('*').eq('user_id', currentUser.id)
+        .order('created_at', { ascending: true });
+      if (!error && data) binders = data;
+    }
+
+    function renderBinderTabs() {
+      const wrap = document.getElementById('binderTabsWrap');
+      const tabs  = document.getElementById('binderTabs');
+      if (!wrap || !tabs) return;
+
+      // Only show tabs for Vendor+
+      if (!tierAtLeast('vendor') || !currentUser) { wrap.style.display = 'none'; return; }
+      wrap.style.display = 'block';
+
+      const allActive  = currentBinderId === null;
+      let html = `<button onclick="selectBinder(null)" style="
+        padding:6px 14px;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;
+        border:1px solid ${allActive ? 'var(--accent)' : 'var(--border)'};
+        background:${allActive ? 'rgba(255,140,20,.12)' : 'transparent'};
+        color:${allActive ? 'var(--accent)' : 'var(--muted)'};white-space:nowrap;flex-shrink:0
+      ">All Cards</button>`;
+
+      for (const b of binders) {
+        const active = currentBinderId === b.id;
+        const dot = b.color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${b.color};margin-right:5px;flex-shrink:0"></span>` : '';
+        html += `<button onclick="selectBinder('${b.id}')" style="
+          padding:6px 14px;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;
+          border:1px solid ${active ? (b.color || 'var(--accent)') : 'var(--border)'};
+          background:${active ? (b.color ? b.color + '22' : 'rgba(255,140,20,.12)') : 'transparent'};
+          color:${active ? (b.color || 'var(--accent)') : 'var(--muted)'};
+          display:inline-flex;align-items:center;white-space:nowrap;flex-shrink:0
+        ">${dot}${b.name}
+          <span onclick="event.stopPropagation();openEditBinder('${b.id}')" style="margin-left:7px;opacity:.5;font-size:.7rem;cursor:pointer" title="Edit">✎</span>
+        </button>`;
+      }
+
+      html += `<button onclick="openNewBinder()" style="
+        padding:6px 12px;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;
+        border:1px dashed var(--border);background:transparent;color:var(--muted);white-space:nowrap;flex-shrink:0
+      ">+ New</button>`;
+
+      tabs.innerHTML = html;
+    }
+
+    function selectBinder(id) {
+      currentBinderId = id;
+      binderPage = 0;
+      renderBinderTabs();
+      renderBinder();
+    }
+
+    function openNewBinder() {
+      _editingBinderId = null;
+      document.getElementById('binderEditTitle').textContent = 'New_Binder';
+      document.getElementById('binderEditName').value = '';
+      document.getElementById('binderEditDeleteWrap').style.display = 'none';
+      _renderColorPicker(null);
+      openModal('binderEditModal');
+      setTimeout(() => document.getElementById('binderEditName').focus(), 80);
+    }
+
+    function openEditBinder(binderId) {
+      const b = binders.find(x => x.id === binderId);
+      if (!b) return;
+      _editingBinderId = binderId;
+      document.getElementById('binderEditTitle').textContent = 'Edit_Binder';
+      document.getElementById('binderEditName').value = b.name;
+      document.getElementById('binderEditDeleteWrap').style.display = 'block';
+      _renderColorPicker(b.color);
+      openModal('binderEditModal');
+    }
+
+    function _renderColorPicker(selected) {
+      const picker = document.getElementById('binderColorPicker');
+      picker.innerHTML = BINDER_COLORS.map(c => `
+        <div onclick="this.parentElement.querySelectorAll('[data-color]').forEach(x=>x.style.outline='');this.style.outline='2px solid #fff'"
+          data-color="${c}" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;
+          outline:${selected===c ? '2px solid #fff' : 'none'};outline-offset:2px;transition:outline .1s"></div>
+      `).join('') + `<div onclick="this.parentElement.querySelectorAll('[data-color]').forEach(x=>x.style.outline='');this.style.outline='2px solid #fff'"
+        data-color="" style="width:24px;height:24px;border-radius:50%;background:var(--border);cursor:pointer;
+        display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--muted);
+        outline:${!selected ? '2px solid #fff' : 'none'};outline-offset:2px" title="No colour">✕</div>`;
+    }
+
+    function _getSelectedColor() {
+      const active = document.querySelector('#binderColorPicker [data-color][style*="2px solid #fff"]');
+      return active ? (active.dataset.color || null) : null;
+    }
+
+    async function saveBinder() {
+      const name = document.getElementById('binderEditName').value.trim();
+      if (!name) { showToast('Please enter a binder name'); return; }
+      const color = _getSelectedColor();
+
+      if (_editingBinderId) {
+        // Update existing
+        const { error } = await sb.from('binders')
+          .update({ name, color }).eq('id', _editingBinderId);
+        if (error) { showToast('Error: ' + error.message); return; }
+        const b = binders.find(x => x.id === _editingBinderId);
+        if (b) { b.name = name; b.color = color; }
+      } else {
+        // Create new
+        const { data, error } = await sb.from('binders')
+          .insert({ user_id: currentUser.id, name, color })
+          .select('*').single();
+        if (error) { showToast('Error: ' + error.message); return; }
+        binders.push(data);
+      }
+
+      closeModal('binderEditModal');
+      renderBinderTabs();
+      showToast(_editingBinderId ? '✓ Binder updated' : '✓ Binder created');
+    }
+
+    async function deleteBinder() {
+      if (!_editingBinderId) return;
+      if (!confirm('Delete this binder? Cards inside will move to "All Cards".')) return;
+      // Move cards to no binder (null)
+      await sb.from('collection_items')
+        .update({ binder_id: null }).eq('binder_id', _editingBinderId);
+      // Delete binder
+      await sb.from('binders').delete().eq('id', _editingBinderId);
+      binders = binders.filter(b => b.id !== _editingBinderId);
+      if (currentBinderId === _editingBinderId) currentBinderId = null;
+      closeModal('binderEditModal');
+      renderBinderTabs();
+      renderBinder();
+      showToast('✓ Binder deleted');
+    }
+
+    // Called from the card detail modal to move a card to a different binder
+    async function moveCardToBinder(itemId, binderId) {
+      const { error } = await sb.from('collection_items')
+        .update({ binder_id: binderId || null }).eq('id', itemId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      if (item) item.binder_id = binderId || null;
+      renderBinder();
+      showToast('✓ Card moved');
+    }
+
     // ── Binder drag-and-drop state ─────────────────────────────────────────
     let dragSrcIndex = null;   // global index in collectionItems of the card being dragged
     let binderSaveTimer = null;
@@ -5176,10 +5714,18 @@
       const searchWrap = document.getElementById('binderListSearchWrap');
       if (searchWrap) searchWrap.style.display = binderView === 'list' ? 'block' : 'none';
       const bulkBtn = document.getElementById('vendorBulkImportBtn');
-      if (bulkBtn) bulkBtn.style.display = userIsVendor() ? 'block' : 'none';
+      if (bulkBtn) bulkBtn.style.display = hasBulkImport() ? 'block' : 'none';
+
+      // Render binder tabs (Vendor+ multi-binder)
+      renderBinderTabs();
 
       // Active items only — exclude sold offline cards from the binder display
-      let activeItems = collectionItems.filter(c => !c.sold_offline);
+      // If a specific binder is selected, also filter by binder_id
+      let activeItems = collectionItems.filter(c => {
+        if (c.sold_offline) return false;
+        if (currentBinderId !== null) return String(c.binder_id) === String(currentBinderId);
+        return true;
+      });
 
       // In list view, apply search filter
       if (binderView === 'list') {
@@ -5211,7 +5757,28 @@
       const gainSign   = totalGain >= 0 ? '+' : '';
       const soldCount  = collectionItems.filter(c => c.sold_offline).length;
 
-      if (summary) summary.innerHTML = '';
+      // Free tier: show card count + upgrade nudge when approaching / at limit
+      if (summary) {
+        if (!tierAtLeast('collector')) {
+          const owned = ownedItems.reduce((s, c) => s + (c.quantity || 1), 0);
+          const pct = Math.min(100, (owned / 200) * 100);
+          const barColor = owned >= 200 ? '#e74c3c' : owned >= 160 ? 'var(--gold)' : '#1D9E75';
+          summary.innerHTML = `
+            <div style="margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);background:var(--surface2)">
+              <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-bottom:5px">
+                <span>// FREE PLAN — CARD SLOTS</span>
+                <span style="color:${barColor}">${owned} / 200</span>
+              </div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;transition:width .4s"></div>
+              </div>
+              ${owned >= 200 ? `<div style="font-size:.68rem;color:#e74c3c;margin-top:6px">Limit reached — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade to Collector</span> for unlimited cards.</div>` :
+                owned >= 160 ? `<div style="font-size:.68rem;color:var(--gold);margin-top:6px">${200 - owned} slots remaining — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade for unlimited</span></div>` : ''}
+            </div>`;
+        } else {
+          summary.innerHTML = '';
+        }
+      }
 
       // Paginate active items only (owned + ghost, no sold)
       const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : binderView === '1x1' ? 1 : 40;
@@ -5691,6 +6258,12 @@
             style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List_For_Sale</button>
           <button onclick="openSoldOfflineModal('${item.id}')"
             style="padding:8px 18px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">$ Sold_Offline</button>
+          ${tierAtLeast('vendor') && binders.length > 0 ? `<select onchange="moveCardToBinder('${item.id}',this.value);closeModal('binderDetailModal')"
+            style="padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">
+            <option value="">Move to binder…</option>
+            <option value="">— All Cards —</option>
+            ${binders.map(b=>`<option value="${b.id}" ${String(item.binder_id)===String(b.id)?'selected':''}>${b.name}</option>`).join('')}
+          </select>` : ''}
           <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
             style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
@@ -5956,6 +6529,11 @@
 
     function openAddToWishlistModal(cardData) {
       if (!currentUser) { showToast('Sign in to add cards to your wishlist'); return; }
+      if (!canAddGhostCard()) {
+        showToast('Free plan: 1 Ghost Card goal. Upgrade to Collector for unlimited.');
+        openPricingModal('collector');
+        return;
+      }
       pendingCollectionCard = cardData;
       const nameEl = document.getElementById('wishlistCardName');
       if (nameEl) nameEl.textContent = cardData.cardName + (cardData.setName ? ' — ' + cardData.setName : '');
@@ -6144,6 +6722,12 @@
 
     function openAddToCollectionModal(cardData) {
       if (!currentUser) { showToast('Sign in to add cards to your collection'); return; }
+      // Free tier: hard cap at 200 cards
+      if (!canAddMoreCards()) {
+        showToast('Free plan limit: 200 cards reached');
+        openPricingModal('collector');
+        return;
+      }
       pendingCollectionCard = cardData;
       const nameEl = document.getElementById('atcCardName');
       if (nameEl) nameEl.textContent = cardData.cardName + (cardData.setName ? ' — ' + cardData.setName : '');
@@ -6339,18 +6923,21 @@
             .order('created_at', { ascending: false })
             .catch(() => ({ data: null }));
           const offerResult = { data: [] }; // trade_offers deprecated
-          // Load collection, orders, and portfolio snapshots in parallel
+          // Load collection, orders, binders, and portfolio snapshots in parallel
           await Promise.all([
             loadCollection().catch(() => {}),
             loadOrders().catch(() => {}),
-            loadPortfolioSnapshots().catch(() => {})
+            loadPortfolioSnapshots().catch(() => {}),
+            loadBinders().catch(() => {})
           ]);
           // Backfill price_source_url for cards that have api_card_id but no URL yet
           await backfillPriceSourceUrls();
-          // Silently refresh any cards that have a price URL but no current_value yet
-          autoRefreshUnpricedCards();
-          // Once-per-day background refresh for all priced cards (builds price_history for YTD chart)
-          dailyPriceRefresh();
+          if (hasPriceTracking()) {
+            // Silently refresh any cards that have a price URL but no current_value yet
+            autoRefreshUnpricedCards();
+            // Once-per-day background refresh for all priced cards (builds price_history for YTD chart)
+            dailyPriceRefresh();
+          }
 
           if (txnResult.data) {
             transactions = txnResult.data.map(t => ({
@@ -6399,13 +6986,16 @@
         window.history.replaceState({}, '', window.location.pathname);
 
         if (paymentStatus === 'success') {
-          if (urlParams.get('type') === 'membership') {
-            showToast('🎉 Premium membership activated! Welcome to PathBinder Premium.');
-            // Refresh profile to pick up is_premium flag
+          const successType = urlParams.get('type');
+          const successTier = urlParams.get('tier');
+          if (successType === 'subscription' || successType === 'membership') {
+            const tierLabel = successTier ? successTier.charAt(0).toUpperCase() + successTier.slice(1) : 'Premium';
+            showToast(`🎉 ${tierLabel} plan activated! Welcome to PathBinder.`);
+            // Refresh profile to pick up subscription_tier
             if (currentUser) {
               sb.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
                 .then(({ data }) => {
-                  if (data) { currentUser = { ...currentUser, ...data }; updateAuthUI(); }
+                  if (data) { currentUser = { ...currentUser, ...data }; updateAuthUI(); renderBinder(); }
                 });
             }
           } else {
@@ -6471,11 +7061,12 @@
           }
           updateAuthUI();
           renderAllContent();
-          // Load collection + orders + snapshots in background after sign-in, then re-render
+          // Load collection + orders + binders + snapshots in background after sign-in, then re-render
           Promise.all([
             loadCollection().catch(() => {}),
             loadOrders().catch(() => {}),
-            loadPortfolioSnapshots().catch(() => {})
+            loadPortfolioSnapshots().catch(() => {}),
+            loadBinders().catch(() => {})
           ]).then(() => {
             renderBinder();
             renderDashboard();

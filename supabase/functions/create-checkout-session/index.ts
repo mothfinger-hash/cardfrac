@@ -10,6 +10,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// ── Stripe Price ID map ───────────────────────────────────────────────────────
+// Store these in Supabase Edge Function secrets (Dashboard → Edge Functions → Secrets):
+//   STRIPE_PRICE_COLLECTOR_MONTHLY
+//   STRIPE_PRICE_VENDOR_MONTHLY
+//   STRIPE_PRICE_VENDOR_ANNUAL
+//   STRIPE_PRICE_SHOP_MONTHLY
+//   STRIPE_PRICE_SHOP_ANNUAL
+function getPriceId(tier: string, billing: string): string {
+  const map: Record<string, string> = {
+    'collector_monthly': Deno.env.get('STRIPE_PRICE_COLLECTOR_MONTHLY') || '',
+    'vendor_monthly':    Deno.env.get('STRIPE_PRICE_VENDOR_MONTHLY')    || '',
+    'vendor_annual':     Deno.env.get('STRIPE_PRICE_VENDOR_ANNUAL')     || '',
+    'shop_monthly':      Deno.env.get('STRIPE_PRICE_SHOP_MONTHLY')      || '',
+    'shop_annual':       Deno.env.get('STRIPE_PRICE_SHOP_ANNUAL')       || '',
+  }
+  const key = `${tier}_${billing}`
+  const priceId = map[key]
+  if (!priceId) throw new Error(`No Stripe Price ID configured for ${key}`)
+  return priceId
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -28,22 +49,22 @@ Deno.serve(async (req) => {
       authHeader.replace('Bearer ', '')
     )
     if (authErr || !user) throw new Error('Unauthorized')
-    const buyerId = user.id
+    const userId = user.id
 
     const body = await req.json()
-    const { type, items, plan, successUrl, cancelUrl } = body
-    // type: 'slot_purchase' | 'secondary_purchase' | 'membership'
-    // items: [{ listingId, listingName, slotIdx, priceCents }]
-    // plan (membership only): 'monthly' | 'yearly'
+    const { type, items, tier, billing, successUrl, cancelUrl } = body
+    // type: 'slot_purchase' | 'secondary_purchase' | 'subscription'
+    // tier (subscription only): 'collector' | 'vendor' | 'shop'
+    // billing (subscription only): 'monthly' | 'annual'
 
+    // ── Marketplace slot / secondary purchase ─────────────────────────────────
     if (type === 'slot_purchase' || type === 'secondary_purchase') {
       if (!items || !items.length) throw new Error('No items in order')
 
-      // Store the pending order so the webhook can process it atomically
       const { data: order, error: orderErr } = await supabase
         .from('pending_checkouts')
         .insert({
-          buyer_id: buyerId,
+          buyer_id: userId,
           type,
           items,
           total_cents: items.reduce((sum: number, i: any) => sum + Number(i.priceCents), 0),
@@ -59,23 +80,16 @@ Deno.serve(async (req) => {
         line_items: items.map((item: any) => ({
           price_data: {
             currency: 'usd',
-            product_data: {
-              name: `Slot #${item.slotIdx} — ${item.listingName}`,
-            },
+            product_data: { name: `Slot #${item.slotIdx} — ${item.listingName}` },
             unit_amount: Number(item.priceCents),
           },
           quantity: 1,
         })),
-        metadata: {
-          type,
-          order_id: order.id,
-          buyer_id: buyerId,
-        },
+        metadata: { type, order_id: order.id, buyer_id: userId },
         success_url: `${successUrl}?payment=success&order_id=${order.id}`,
-        cancel_url: `${cancelUrl}?payment=cancelled`,
+        cancel_url:  `${cancelUrl}?payment=cancelled`,
       })
 
-      // Attach Stripe session ID to the order for idempotency checks
       await supabase
         .from('pending_checkouts')
         .update({ stripe_session_id: session.id })
@@ -85,31 +99,47 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
 
-    } else if (type === 'membership') {
-      if (!plan) throw new Error('Missing membership plan')
+    // ── Subscription tier upgrade ─────────────────────────────────────────────
+    } else if (type === 'subscription') {
+      if (!tier || !billing) throw new Error('Missing tier or billing interval')
 
-      const session = await stripe.checkout.sessions.create({
+      const priceId = getPriceId(tier, billing)
+
+      // Check if the user already has a Stripe customer ID so we can attach
+      // the new subscription to their existing customer record
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('stripe_customer_id, email')
+        .eq('id', userId)
+        .single()
+
+      const sessionParams: any = {
         mode: 'subscription',
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: 'CardFrac Premium',
-              description: plan === 'yearly' ? 'Annual plan — best value' : 'Monthly plan',
-            },
-            unit_amount: plan === 'yearly' ? 9900 : 900,
-            recurring: { interval: plan === 'yearly' ? 'year' : 'month' },
-          },
-          quantity: 1,
-        }],
-        metadata: { type: 'membership', buyer_id: buyerId, plan },
-        // Store buyer_id on subscription so cancellation webhook can find the user
-        subscription_data: {
-          metadata: { buyer_id: buyerId, plan },
+        line_items: [{ price: priceId, quantity: 1 }],
+        // Pass tier + user_id in metadata so the webhook can update profiles
+        metadata: {
+          type:    'subscription',
+          tier,
+          user_id: userId,
         },
-        success_url: `${successUrl}?payment=success&type=membership`,
-        cancel_url: `${cancelUrl}?payment=cancelled`,
-      })
+        // Also attach to the subscription object itself (needed for
+        // subscription.updated / subscription.deleted events which don't
+        // carry session metadata)
+        subscription_data: {
+          metadata: { type: 'subscription', tier, user_id: userId },
+        },
+        success_url: `${successUrl}?payment=success&type=subscription&tier=${tier}`,
+        cancel_url:  `${cancelUrl}?payment=cancelled`,
+      }
+
+      // Re-use existing Stripe customer if we have one
+      if (profile?.stripe_customer_id) {
+        sessionParams.customer = profile.stripe_customer_id
+      } else if (profile?.email) {
+        sessionParams.customer_email = profile.email
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionParams)
 
       return new Response(JSON.stringify({ url: session.url }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
