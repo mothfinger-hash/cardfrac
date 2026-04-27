@@ -797,6 +797,26 @@
     .binder-page-btn{padding:7px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer;transition:all .15s}
     .binder-page-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
     .binder-page-btn:disabled{opacity:.35;cursor:not-allowed}
+    /* ── BINDER SHELF ── */
+    .binder-shelf-row{display:flex;gap:18px;padding:18px 0 22px;overflow-x:auto;scrollbar-width:thin;align-items:flex-end;-webkit-overflow-scrolling:touch}
+    .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
+    .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
+    .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
+    .binder-book.binder-open{transform:perspective(520px) rotateY(-34deg) translateY(-7px);filter:drop-shadow(8px 14px 28px rgba(0,0,0,.95))}
+    .binder-spine{position:absolute;left:0;top:0;bottom:0;width:14px;border-radius:3px 0 0 3px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .binder-spine-text{writing-mode:vertical-rl;transform:rotate(180deg);font-size:.46rem;font-family:'Share Tech Mono',monospace;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:96px;letter-spacing:.05em;padding:0 1px}
+    .binder-cover{position:absolute;left:14px;top:0;right:0;bottom:0;border-radius:0 4px 4px 0;overflow:hidden;border-left:1px solid rgba(0,0,0,.28)}
+    .binder-cover img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+    .binder-cover-default{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;gap:5px}
+    .binder-cover-text{font-size:.49rem;font-family:'Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word;line-height:1.45;max-width:100%}
+    .binder-book-label{font-size:.62rem;color:var(--muted);font-family:'Share Tech Mono',monospace;text-align:center;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s}
+    .binder-book-wrap.b-active .binder-book-label{color:var(--accent)}
+    .binder-add-btn{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;opacity:.5;transition:opacity .18s;user-select:none}
+    .binder-add-btn:hover{opacity:1}
+    .binder-add-box{width:90px;height:118px;border:2px dashed var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--muted);transition:border-color .15s,color .15s}
+    .binder-add-btn:hover .binder-add-box{border-color:var(--accent);color:var(--accent)}
+    @keyframes binderFlip{0%{transform:perspective(520px) rotateY(-14deg)}55%{transform:perspective(520px) rotateY(-62deg) translateY(-7px)}100%{transform:perspective(520px) rotateY(-34deg) translateY(-7px)}}
+    .binder-book.binder-flipping{animation:binderFlip .44s ease-out forwards}
     /* ── DASHBOARD CHART ── */
     .dash-chart-section{background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
     .dash-chart-row{display:grid;grid-template-columns:110px 1fr 72px;gap:8px;align-items:center;margin-bottom:8px}
@@ -1082,6 +1102,17 @@
       <div class="form-group">
         <label>Colour tag</label>
         <div id="binderColorPicker" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px"></div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:6px">Cover image <span style="color:var(--muted);font-size:.7rem;font-weight:normal">(optional)</span></label>
+        <div id="binderCoverZone" onclick="document.getElementById('binderCoverInput').click()"
+          style="width:100%;height:90px;background:var(--surface2);border:1px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;margin-top:4px;border-radius:3px;transition:border-color .15s"
+          onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+          <span id="binderCoverPlaceholder" style="font-size:.72rem;color:var(--muted);pointer-events:none">↑ Click to upload cover image</span>
+          <img id="binderCoverImg" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;pointer-events:none">
+        </div>
+        <input type="file" id="binderCoverInput" accept="image/*" style="display:none" onchange="previewBinderCover(this)">
+        <button id="binderCoverRemoveBtn" onclick="removeBinderCover()" style="display:none;margin-top:4px;background:transparent;border:none;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;text-decoration:underline">× Remove cover</button>
       </div>
       <div style="display:flex;gap:10px;margin-top:18px">
         <button onclick="saveBinder()" style="flex:1;padding:11px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save →</button>
@@ -1479,7 +1510,12 @@
     <h2>My_Binder</h2>
     <p class="subtitle">Your complete card holdings at a glance.</p>
 
-    <!-- Binder tabs (Vendor+ multi-binder) -->
+    <!-- Binder shelf (visual covers) -->
+    <div id="binderShelfWrap" style="display:none;margin-bottom:0">
+      <div id="binderShelfRow" class="binder-shelf-row"></div>
+    </div>
+
+    <!-- Binder tabs (compact quick-switch, shown when a binder is open) -->
     <div id="binderTabsWrap" style="display:none;margin-bottom:14px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch">
       <div id="binderTabs" style="display:inline-flex;gap:6px;align-items:center;padding-bottom:2px"></div>
     </div>
@@ -1907,7 +1943,12 @@
     }
     function hasPriceTracking()  { return tierAtLeast('collector'); }
     function hasBulkImport()     { return tierAtLeast('vendor'); }
-    function hasMultiBinder()    { return tierAtLeast('vendor'); }
+    function hasMultiBinder()    { return !!currentUser; }
+    function getMaxBinders()    {
+      if (!currentUser) return 0;
+      const t = currentUser.subscription_tier || 'free';
+      return t === 'free' ? 4 : Infinity;
+    }
 
     // Admins are automatically treated as premium (no subscription needed)
     function userIsPremium() {
@@ -2582,7 +2623,21 @@
     let activeOrdersTab = 'buying';
 
     function renderAccount() {
-      if (!currentUser) { showPage('browse'); return; }
+      if (!currentUser) {
+        // Show the account page with a sign-in prompt instead of silently
+        // redirecting to Browse (which made the Dashboard nav button appear broken)
+        const wrap = document.getElementById('dashboardContent');
+        if (wrap) wrap.innerHTML = `
+          <div style="text-align:center;padding:60px 20px">
+            <div style="font-size:.8rem;color:var(--accent);letter-spacing:.1em;margin-bottom:12px">// DASHBOARD</div>
+            <div style="color:var(--muted);font-size:.9rem;margin-bottom:24px">Sign in to view your dashboard, orders, and collection stats.</div>
+            <button onclick="openModal('authModal')"
+              style="padding:11px 28px;border:none;background:var(--accent);color:#080500;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+              Sign In →
+            </button>
+          </div>`;
+        return;
+      }
       renderDashboard();
       renderMyListings();
       renderOrders();
@@ -6555,38 +6610,36 @@
       const tabs  = document.getElementById('binderTabs');
       if (!wrap || !tabs) return;
 
-      // Only show tabs for Vendor+
       if (!hasMultiBinder() || !currentUser) { wrap.style.display = 'none'; return; }
-      wrap.style.display = 'block';
 
-      const allActive  = currentBinderId === null;
-      let html = `<button onclick="selectBinder(null)" style="
-        padding:6px 14px;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;
-        border:1px solid ${allActive ? 'var(--accent)' : 'var(--border)'};
-        background:${allActive ? 'rgba(255,140,20,.12)' : 'transparent'};
-        color:${allActive ? 'var(--accent)' : 'var(--muted)'};white-space:nowrap;flex-shrink:0
-      ">All Cards</button>`;
-
-      for (const b of binders) {
-        const active = currentBinderId === b.id;
-        const dot = b.color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${b.color};margin-right:5px;flex-shrink:0"></span>` : '';
-        html += `<button onclick="selectBinder('${b.id}')" style="
-          padding:6px 14px;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;
-          border:1px solid ${active ? (b.color || 'var(--accent)') : 'var(--border)'};
-          background:${active ? (b.color ? b.color + '22' : 'rgba(255,140,20,.12)') : 'transparent'};
-          color:${active ? (b.color || 'var(--accent)') : 'var(--muted)'};
-          display:inline-flex;align-items:center;white-space:nowrap;flex-shrink:0
-        ">${dot}${b.name}
-          <span onclick="event.stopPropagation();openEditBinder('${b.id}')" style="margin-left:7px;opacity:.5;font-size:.7rem;cursor:pointer" title="Edit">✎</span>
-        </button>`;
+      // Compact tab bar — only show when a specific binder is selected
+      if (currentBinderId === null) {
+        wrap.style.display = 'none';
+      } else {
+        wrap.style.display = 'block';
+        const allActive = false;
+        let html = `<button onclick="selectBinder(null)" style="
+          padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
+          border:1px solid var(--border);background:transparent;color:var(--muted);white-space:nowrap;flex-shrink:0
+        ">← All</button>`;
+        for (const b of binders) {
+          const active = currentBinderId === b.id;
+          const dot = b.color ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${b.color};margin-right:5px;flex-shrink:0"></span>` : '';
+          html += `<button onclick="selectBinder('${b.id}')" style="
+            padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
+            border:1px solid ${active ? (b.color || 'var(--accent)') : 'var(--border)'};
+            background:${active ? (b.color ? b.color + '22' : 'rgba(255,140,20,.12)') : 'transparent'};
+            color:${active ? (b.color || 'var(--accent)') : 'var(--muted)'};
+            display:inline-flex;align-items:center;white-space:nowrap;flex-shrink:0
+          ">${dot}${b.name}
+            <span onclick="event.stopPropagation();openEditBinder('${b.id}')" style="margin-left:7px;opacity:.5;font-size:.7rem;cursor:pointer" title="Edit">✎</span>
+          </button>`;
+        }
+        tabs.innerHTML = html;
       }
 
-      html += `<button onclick="openNewBinder()" style="
-        padding:6px 12px;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;
-        border:1px dashed var(--border);background:transparent;color:var(--muted);white-space:nowrap;flex-shrink:0
-      ">+ New</button>`;
-
-      tabs.innerHTML = html;
+      // Always re-render the shelf
+      renderBinderShelf();
     }
 
     function selectBinder(id) {
@@ -6597,11 +6650,18 @@
     }
 
     function openNewBinder() {
+      if (!currentUser) return;
+      const max = getMaxBinders();
+      if (binders.length >= max) {
+        showToast(`Free plan is limited to ${max} binders — upgrade for unlimited`);
+        return;
+      }
       _editingBinderId = null;
       document.getElementById('binderEditTitle').textContent = 'New_Binder';
       document.getElementById('binderEditName').value = '';
       document.getElementById('binderEditDeleteWrap').style.display = 'none';
       _renderColorPicker(null);
+      _resetBinderCoverUI(null);
       openModal('binderEditModal');
       setTimeout(() => document.getElementById('binderEditName').focus(), 80);
     }
@@ -6614,6 +6674,7 @@
       document.getElementById('binderEditName').value = b.name;
       document.getElementById('binderEditDeleteWrap').style.display = 'block';
       _renderColorPicker(b.color);
+      _resetBinderCoverUI(b.cover_image_url || null);
       openModal('binderEditModal');
     }
 
@@ -6640,18 +6701,40 @@
       const color = _getSelectedColor();
 
       if (_editingBinderId) {
-        // Update existing
+        // ── Update existing binder ──────────────────────────────────────────
+        let cover_image_url = binders.find(x => x.id === _editingBinderId)?.cover_image_url || null;
+
+        // Remove cover if flagged
+        if (_binderCoverRemoving) cover_image_url = null;
+
+        // Upload new cover if pending
+        if (_binderCoverPending) {
+          try { cover_image_url = await _uploadBinderCover(_editingBinderId, _binderCoverPending); }
+          catch(e) { showToast('Cover upload failed: ' + e.message); return; }
+        }
+
         const { error } = await sb.from('binders')
-          .update({ name, color }).eq('id', _editingBinderId);
+          .update({ name, color, cover_image_url }).eq('id', _editingBinderId);
         if (error) { showToast('Error: ' + error.message); return; }
         const b = binders.find(x => x.id === _editingBinderId);
-        if (b) { b.name = name; b.color = color; }
+        if (b) { b.name = name; b.color = color; b.cover_image_url = cover_image_url; }
+
       } else {
-        // Create new
+        // ── Create new binder ───────────────────────────────────────────────
         const { data, error } = await sb.from('binders')
           .insert({ user_id: currentUser.id, name, color })
           .select('*').single();
         if (error) { showToast('Error: ' + error.message); return; }
+
+        // Upload cover now that we have the ID
+        if (_binderCoverPending) {
+          try {
+            const url = await _uploadBinderCover(data.id, _binderCoverPending);
+            await sb.from('binders').update({ cover_image_url: url }).eq('id', data.id);
+            data.cover_image_url = url;
+          } catch(e) { /* non-fatal — binder saved, cover just failed */ }
+        }
+
         binders.push(data);
       }
 
@@ -6685,6 +6768,159 @@
       if (item) item.binder_id = binderId || null;
       renderBinder();
       showToast('✓ Card moved');
+    }
+
+    // ── Binder cover upload state ─────────────────────────────────────────
+    let _binderCoverPending  = null;   // File object waiting for upload
+    let _binderCoverRemoving = false;  // user clicked "remove"
+
+    function _resetBinderCoverUI(existingUrl) {
+      _binderCoverPending  = null;
+      _binderCoverRemoving = false;
+      const img = document.getElementById('binderCoverImg');
+      const ph  = document.getElementById('binderCoverPlaceholder');
+      const rem = document.getElementById('binderCoverRemoveBtn');
+      const fi  = document.getElementById('binderCoverInput');
+      if (fi)  fi.value = '';
+      if (existingUrl) {
+        if (img) { img.src = existingUrl; img.style.display = 'block'; }
+        if (ph)  ph.style.display = 'none';
+        if (rem) rem.style.display = 'inline';
+      } else {
+        if (img) { img.src = ''; img.style.display = 'none'; }
+        if (ph)  ph.style.display = 'inline';
+        if (rem) rem.style.display = 'none';
+      }
+    }
+
+    function previewBinderCover(input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      _binderCoverPending  = file;
+      _binderCoverRemoving = false;
+      const img = document.getElementById('binderCoverImg');
+      const ph  = document.getElementById('binderCoverPlaceholder');
+      const rem = document.getElementById('binderCoverRemoveBtn');
+      const reader = new FileReader();
+      reader.onload = e => {
+        if (img) { img.src = e.target.result; img.style.display = 'block'; }
+        if (ph)  ph.style.display = 'none';
+        if (rem) rem.style.display = 'inline';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeBinderCover() {
+      _binderCoverPending  = null;
+      _binderCoverRemoving = true;
+      const img = document.getElementById('binderCoverImg');
+      const ph  = document.getElementById('binderCoverPlaceholder');
+      const rem = document.getElementById('binderCoverRemoveBtn');
+      const fi  = document.getElementById('binderCoverInput');
+      if (img) { img.src = ''; img.style.display = 'none'; }
+      if (ph)  ph.style.display = 'inline';
+      if (rem) rem.style.display = 'none';
+      if (fi)  fi.value = '';
+    }
+
+    async function _uploadBinderCover(binderId, file) {
+      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${currentUser.id}/${binderId}.${ext}`;
+      const { error } = await sb.storage.from('binder-covers')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data: pub } = sb.storage.from('binder-covers').getPublicUrl(path);
+      // Cache-bust so the new image shows immediately
+      return pub.publicUrl + '?t=' + Date.now();
+    }
+
+    // ── Binder shelf renderer ─────────────────────────────────────────────
+    function renderBinderShelf() {
+      const wrap = document.getElementById('binderShelfWrap');
+      const row  = document.getElementById('binderShelfRow');
+      if (!wrap || !row || !currentUser) return;
+
+      if (!hasMultiBinder()) { wrap.style.display = 'none'; return; }
+      wrap.style.display = 'block';
+
+      const maxB   = getMaxBinders();
+      const canAdd = binders.length < maxB;
+      let html = '';
+
+      // "All Cards" book
+      const allActive = currentBinderId === null;
+      html += `
+        <div class="binder-book-wrap ${allActive ? 'b-active' : ''}" onclick="selectBinder(null)" title="All Cards">
+          <div class="binder-book ${allActive ? 'binder-open' : ''}">
+            <div class="binder-spine" style="background:var(--surface2)"></div>
+            <div class="binder-cover" style="background:var(--surface)">
+              <div class="binder-cover-default">
+                <div style="font-size:1.1rem;opacity:.35;color:var(--text)">◈</div>
+                <div class="binder-cover-text">All_Cards</div>
+              </div>
+            </div>
+          </div>
+          <div class="binder-book-label">${allActive ? '▸ All' : 'All'}</div>
+        </div>`;
+
+      for (const b of binders) {
+        const active   = currentBinderId === b.id;
+        const bgColor  = b.color || '#444';
+        const coverHtml = b.cover_image_url
+          ? `<img src="${b.cover_image_url}" alt="${b.name}" loading="lazy">`
+          : `<div class="binder-cover-default" style="background:${bgColor}28">
+               <div style="font-size:1rem;color:${bgColor};opacity:.8">⬡</div>
+               <div class="binder-cover-text">${b.name}</div>
+             </div>`;
+
+        html += `
+          <div class="binder-book-wrap ${active ? 'b-active' : ''}" id="binderWrap_${b.id}" title="${b.name} (right-click to edit)">
+            <div class="binder-book ${active ? 'binder-open' : ''}" id="binderBook_${b.id}"
+                 onclick="openBinderWithAnimation('${b.id}')"
+                 oncontextmenu="event.preventDefault();openEditBinder('${b.id}')">
+              <div class="binder-spine" style="background:${bgColor}">
+                <span class="binder-spine-text">${b.name}</span>
+              </div>
+              <div class="binder-cover">${coverHtml}</div>
+            </div>
+            <div class="binder-book-label">${active ? '▸ ' : ''}${b.name}</div>
+          </div>`;
+      }
+
+      // Add-new button
+      if (canAdd) {
+        const limitTip = maxB < Infinity ? ` (${binders.length}/${maxB})` : '';
+        html += `
+          <div class="binder-add-btn" onclick="openNewBinder()" title="New binder${limitTip}">
+            <div class="binder-add-box">+</div>
+            <div class="binder-book-label">New${limitTip}</div>
+          </div>`;
+      } else {
+        // Limit reached for free tier
+        html += `
+          <div class="binder-add-btn" onclick="showToast('Upgrade to unlock unlimited binders')" title="Limit reached">
+            <div class="binder-add-box" style="font-size:.65rem;text-align:center;padding:8px;color:var(--muted)">Max<br>${maxB}</div>
+            <div class="binder-book-label" style="color:var(--muted)">Limit reached</div>
+          </div>`;
+      }
+
+      row.innerHTML = html;
+    }
+
+    function openBinderWithAnimation(id) {
+      if (currentBinderId === id) {
+        // Already open — just open the edit modal on double-intent
+        return;
+      }
+      const bookEl = document.getElementById(`binderBook_${id}`);
+      if (bookEl) {
+        bookEl.classList.add('binder-flipping');
+        bookEl.addEventListener('animationend', () => {
+          bookEl.classList.remove('binder-flipping');
+        }, { once: true });
+      }
+      // Short delay so the flip starts visibly before re-render
+      setTimeout(() => selectBinder(id), 200);
     }
 
     // ── Binder drag-and-drop state ─────────────────────────────────────────
