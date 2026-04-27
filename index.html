@@ -6,13 +6,13 @@
   <title>PathBinder — Card Collection &amp; Marketplace</title>
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#ff8c14" />
+  <meta name="theme-color" content="#FF5C00" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="PathBinder" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
   <script>
     function _loadJsPDF(cb) {
@@ -31,65 +31,79 @@
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#080500;--surface:#120900;--surface2:#190d00;--border:#4a2800;
-      --accent:#ff8c14;--accent2:#ffaa00;--green:#39ff14;--red:#ff4455;
-      --yellow:#ffdd44;--gold:#ffcc00;--orange:#ff6600;--teal:#00ccff;
-      --text:#ffd8a8;--muted:#8a5a30;
+      --bg:#0F0D0A;--surface:#1C1810;--surface2:#241C10;--border:#3D3020;
+      --accent:#FF5C00;--accent2:#FFD23F;--green:#7AAF1A;--red:#C8002A;
+      --yellow:#FFD23F;--gold:#FFD23F;--orange:#FF5C00;--teal:#FFD23F;
+      --text:#F2ECD8;--muted:#8B7A60;
+      --shadow:#FF5C00;--premium:#C8002A;--premium-txt:#F2ECD8;
     }
-    body{font-family:'Share Tech Mono',monospace;text-transform:uppercase;background:var(--bg);color:var(--text);min-height:100vh}
+    [data-theme="light"]{
+      --bg:#F2ECD8;--surface:#FFF8EC;--surface2:#F5EED8;--border:#1E1408;
+      --text:#1E1408;--muted:#5C4A30;
+      --shadow:#1E1408;--premium-txt:#FFF8EC;
+    }
+    body{font-family:'Press Start 2P','Share Tech Mono',monospace;text-transform:uppercase;background:var(--bg);color:var(--text);min-height:100vh;transition:background .2s,color .2s}
 
-    /* ── CRT GRID BACKGROUND ── */
+    /* ── PIXEL GRID BACKGROUND ── */
     body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
       background-image:
-        linear-gradient(0deg,transparent 24%,rgba(90,45,0,.05) 25%,rgba(90,45,0,.05) 26%,transparent 27%,transparent 74%,rgba(90,45,0,.05) 75%,rgba(90,45,0,.05) 76%,transparent 77%),
-        linear-gradient(90deg,transparent 24%,rgba(90,45,0,.05) 25%,rgba(90,45,0,.05) 26%,transparent 27%,transparent 74%,rgba(90,45,0,.05) 75%,rgba(90,45,0,.05) 76%,transparent 77%);
-      background-size:50px 50px;pointer-events:none;z-index:1}
+        linear-gradient(0deg,transparent 24%,rgba(255,92,0,.04) 25%,rgba(255,92,0,.04) 26%,transparent 27%,transparent 74%,rgba(255,92,0,.04) 75%,rgba(255,92,0,.04) 76%,transparent 77%),
+        linear-gradient(90deg,transparent 24%,rgba(255,92,0,.04) 25%,rgba(255,92,0,.04) 26%,transparent 27%,transparent 74%,rgba(255,92,0,.04) 75%,rgba(255,92,0,.04) 76%,transparent 77%);
+      background-size:40px 40px;pointer-events:none;z-index:1}
+    [data-theme="light"] body::before{background-image:
+        linear-gradient(0deg,transparent 24%,rgba(30,20,8,.06) 25%,rgba(30,20,8,.06) 26%,transparent 27%,transparent 74%,rgba(30,20,8,.06) 75%,rgba(30,20,8,.06) 76%,transparent 77%),
+        linear-gradient(90deg,transparent 24%,rgba(30,20,8,.06) 25%,rgba(30,20,8,.06) 26%,transparent 27%,transparent 74%,rgba(30,20,8,.06) 75%,rgba(30,20,8,.06) 76%,transparent 77%)}
 
-    /* ── CRT SCANLINES ── */
+    /* ── PIXEL SCANLINES ── */
     body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
-      background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.13),rgba(0,0,0,.13) 1px,transparent 1px,transparent 2px);
-      pointer-events:none;z-index:9998;animation:scanlines 8s linear infinite}
+      background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.06),rgba(0,0,0,.06) 1px,transparent 1px,transparent 3px);
+      pointer-events:none;z-index:9998}
     @keyframes scanlines{0%{transform:translateY(0)}100%{transform:translateY(10px)}}
 
     /* NAV */
-    nav{background:rgba(8,5,0,.97);border-bottom:2px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:9999;box-shadow:0 0 18px rgba(255,140,20,0.096)}
-    .logo{font-size:1.25rem;font-weight:800;color:var(--accent);text-shadow:0 0 8px var(--accent),0 0 18px rgba(255,140,20,0.32);letter-spacing:2px;border:none;padding:0;cursor:pointer;outline:none;background:transparent}
+    nav{background:var(--surface);border-bottom:2px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:9999;box-shadow:0 3px 0 var(--border)}
+    .logo{font-size:.85rem;font-weight:800;color:var(--accent2);letter-spacing:1px;border:2px solid var(--accent);padding:4px 10px;cursor:pointer;outline:none;background:var(--surface);box-shadow:3px 3px 0 var(--accent);transition:all .1s;font-family:'Press Start 2P','Share Tech Mono',monospace}
+    .logo:hover{box-shadow:2px 2px 0 var(--accent);transform:translate(1px,1px)}
+    .logo .logo-b{color:var(--accent)}
     .nav-right{display:flex;align-items:center;gap:10px}
     .nav-tabs{display:flex;gap:4px}
-    button{text-transform:uppercase;font-family:'Share Tech Mono',monospace}
-    .nav-tab{padding:6px 14px;border-radius:0;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:.85rem;font-weight:400;transition:all .15s;position:relative;letter-spacing:.05em}
-    .nav-tab:hover{background:rgba(255,140,20,0.048);color:var(--text);border-color:var(--border)}
-    .nav-tab.active{background:rgba(255,140,20,0.096);color:var(--accent);border-color:var(--accent);text-shadow:0 0 8px rgba(255,140,20,0.4);box-shadow:0 0 10px rgba(255,140,20,0.12)}
-    .nav-tab .badge-count{position:absolute;top:-8px;right:-8px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700}
+    button{text-transform:uppercase;font-family:'Press Start 2P','Share Tech Mono',monospace}
+    .nav-tab{padding:6px 12px;border-radius:0;border:2px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:.62rem;font-weight:400;transition:all .1s;position:relative;letter-spacing:.04em}
+    .nav-tab:hover{background:var(--surface2);color:var(--text);border-color:var(--border)}
+    .nav-tab.active{background:var(--accent);color:var(--surface);border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow)}
+    .nav-tab .badge-count{position:absolute;top:-8px;right:-8px;background:var(--red);color:var(--premium-txt);border-radius:0;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;border:1.5px solid var(--border)}
     .nav-tab[data-page="admin"]{display:none}
     .nav-tab[data-page="admin"].admin-visible{display:flex;align-items:center}
     .auth-buttons{display:flex;gap:8px}
-    .auth-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:0;font-size:.82rem;cursor:pointer;transition:all .15s;letter-spacing:.05em}
-    .auth-btn:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 10px rgba(255,140,20,0.16)}
-    .user-avatar{display:flex;align-items:center;gap:8px;background:rgba(255,140,20,0.064);border:1px solid rgba(255,140,20,0.24);border-radius:0;padding:4px 12px;cursor:pointer;transition:all .15s}
-    .user-avatar:hover{background:rgba(255,140,20,0.12);box-shadow:0 0 10px rgba(255,140,20,0.16)}
-    .avatar-circle{width:28px;height:28px;border-radius:0;background:var(--accent);color:#080500;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
-    .avatar-dropdown{display:none;position:absolute;top:56px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:0;padding:8px 0;min-width:150px;z-index:10001;box-shadow:0 4px 20px rgba(0,0,0,.5),0 0 14px rgba(255,140,20,0.08)}
+    .auth-btn{background:transparent;border:2px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:0;font-size:.6rem;cursor:pointer;transition:all .1s;letter-spacing:.04em}
+    .auth-btn:hover{border-color:var(--accent);color:var(--accent);box-shadow:2px 2px 0 var(--shadow)}
+    .user-avatar{display:flex;align-items:center;gap:8px;background:var(--surface2);border:2px solid var(--border);border-radius:0;padding:4px 10px;cursor:pointer;transition:all .1s}
+    .user-avatar:hover{border-color:var(--accent);box-shadow:2px 2px 0 var(--shadow)}
+    .avatar-circle{width:26px;height:26px;border-radius:0;background:var(--accent);color:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6rem;border:1.5px solid var(--shadow)}
+    .avatar-dropdown{display:none;position:absolute;top:56px;right:24px;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:8px 0;min-width:160px;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
     .avatar-dropdown.open{display:block}
-    .dropdown-item{padding:10px 16px;color:var(--text);cursor:pointer;font-size:.85rem;transition:background .15s;display:flex;align-items:center;gap:8px}
+    .dropdown-item{padding:10px 16px;color:var(--text);cursor:pointer;font-size:.6rem;transition:background .1s;display:flex;align-items:center;gap:8px}
     .dropdown-item:hover{background:var(--surface2)}
-    .dropdown-divider{height:1px;background:var(--border);margin:6px 0}
-    .member-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,170,0,.1);border:1px solid rgba(255,170,0,.35);border-radius:0;padding:4px 10px;font-size:.75rem;font-weight:700;color:var(--gold);cursor:pointer;transition:all .15s;letter-spacing:.05em}
-    .member-chip:hover{background:rgba(240,192,64,.25)}
-    .join-btn{background:linear-gradient(135deg,var(--gold),#e8a020);color:#000;border:none;border-radius:8px;padding:6px 14px;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s}
-    .join-btn:hover{opacity:.88}
+    .dropdown-divider{height:2px;background:var(--border);margin:4px 0}
+    .member-chip{display:inline-flex;align-items:center;gap:5px;background:var(--premium);border:2px solid var(--border);border-radius:0;padding:4px 10px;font-size:.58rem;font-weight:700;color:var(--premium-txt);cursor:pointer;transition:all .1s;letter-spacing:.04em;box-shadow:2px 2px 0 var(--shadow)}
+    .member-chip:hover{box-shadow:3px 3px 0 var(--shadow);transform:translate(-1px,-1px)}
+    .join-btn{background:var(--premium);color:var(--premium-txt);border:2px solid var(--border);border-radius:0;padding:6px 12px;font-size:.6rem;font-weight:700;cursor:pointer;transition:all .1s;box-shadow:2px 2px 0 var(--shadow)}
+    .join-btn:hover{box-shadow:3px 3px 0 var(--shadow);transform:translate(-1px,-1px)}
+    /* THEME TOGGLE */
+    .theme-toggle{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:2px solid var(--border);padding:4px 9px;font-size:.55rem;color:var(--muted);cursor:pointer;transition:all .1s;font-family:'Press Start 2P','Share Tech Mono',monospace;letter-spacing:.04em;text-transform:uppercase}
+    .theme-toggle:hover{border-color:var(--accent2);color:var(--accent2)}
 
     /* PAGES */
     .page{display:none;padding:32px 24px;max-width:1160px;margin:0 auto}
     .page.active{display:block}
-    h2{font-size:1.5rem;font-weight:700;margin-bottom:6px;color:var(--accent);text-shadow:0 0 10px rgba(255,140,20,0.28);letter-spacing:.08em}
+    h2{font-size:1rem;font-weight:700;margin-bottom:6px;color:var(--accent);letter-spacing:.06em}
     .subtitle{color:var(--muted);margin-bottom:20px;font-size:.95rem}
 
     /* ACCOUNT PAGE */
     .account-tabs{display:flex;gap:6px;margin-bottom:20px}
-    .account-tab{padding:8px 16px;border-radius:0;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:.85rem;font-weight:400;transition:all .15s;letter-spacing:.04em}
+    .account-tab{padding:7px 14px;border-radius:0;border:2px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:.6rem;font-weight:400;transition:all .1s;letter-spacing:.04em}
     .account-tab:hover{border-color:var(--accent);color:var(--text)}
-    .account-tab.active{background:rgba(255,140,20,0.064);border-color:var(--accent);color:var(--accent);text-shadow:0 0 6px rgba(255,140,20,0.32)}
+    .account-tab.active{background:var(--accent);border-color:var(--accent);color:var(--surface);box-shadow:3px 3px 0 var(--shadow)}
     .account-content{display:none}
     .account-content.active{display:block}
     .slot-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
@@ -109,7 +123,7 @@
     .offer-actions{display:flex;gap:8px;flex-wrap:wrap}
     .offer-actions .mini-btn{flex:1;min-width:100px}
     .tx-table{width:100%;border-collapse:collapse;font-size:.82rem}
-    .tx-table th{text-align:left;padding:10px 12px;color:var(--accent);font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border);text-shadow:0 0 6px rgba(255,140,20,0.24)}
+    .tx-table th{text-align:left;padding:10px 12px;color:var(--accent);font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border);letter-spacing:.04em}
     .tx-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
     .tx-table tr:hover td{background:var(--surface2)}
     .tx-type-badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:.7rem;font-weight:700;text-transform:uppercase}
@@ -136,9 +150,9 @@
 
     /* SECTION TABS */
     .section-tabs{display:flex;gap:6px;margin-bottom:20px}
-    .section-tab{padding:7px 16px;border-radius:0;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:.85rem;font-weight:400;transition:all .15s;letter-spacing:.04em}
+    .section-tab{padding:6px 14px;border-radius:0;border:2px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:.62rem;font-weight:400;transition:all .1s;letter-spacing:.04em}
     .section-tab:hover{border-color:var(--accent);color:var(--text)}
-    .section-tab.active{background:rgba(255,140,20,0.064);border-color:var(--accent);color:var(--accent);text-shadow:0 0 6px rgba(255,140,20,0.32)}
+    .section-tab.active{background:var(--accent);border-color:var(--accent);color:var(--surface);box-shadow:3px 3px 0 var(--shadow)}
     .section-tab .tab-count{display:inline-block;background:var(--accent);color:#fff;border-radius:99px;font-size:.65rem;padding:1px 6px;margin-left:5px;font-weight:700}
     .section-tab .tab-gold{display:inline-block;background:var(--gold);color:#000;border-radius:99px;font-size:.65rem;padding:1px 6px;margin-left:5px;font-weight:700}
 
@@ -148,8 +162,8 @@
     .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
 
     /* LISTING CARD */
-    .listing-card{background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--border);border-radius:0;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s;position:relative}
-    .listing-card:hover{transform:translateY(-3px);border-color:var(--accent);box-shadow:0 0 20px rgba(255,140,20,0.144),inset 0 0 12px rgba(255,140,20,0.024)}
+    .listing-card{background:var(--surface);border:2px solid var(--border);border-radius:0;overflow:hidden;cursor:pointer;transition:all .1s;position:relative;box-shadow:4px 4px 0 var(--shadow)}
+    .listing-card:hover{transform:translate(-2px,-2px);border-color:var(--accent);box-shadow:6px 6px 0 var(--shadow)}
     .listing-card.early-access-card{border-color:rgba(240,192,64,.35)}
     .listing-card.early-access-card:hover{border-color:var(--gold)}
     .listing-card.locked-card{position:relative}
@@ -198,7 +212,7 @@
     @media(max-width:760px){.detail-layout{grid-template-columns:1fr}}
 
     /* GALLERY */
-    .gallery-wrap{background:var(--surface);border:1px solid var(--border);border-radius:0;overflow:hidden;box-shadow:0 0 16px rgba(255,140,20,0.064)}
+    .gallery-wrap{background:var(--surface);border:2px solid var(--border);border-radius:0;overflow:hidden;box-shadow:4px 4px 0 var(--shadow)}
     .gallery-main{position:relative;background:var(--surface2);display:flex;align-items:center;justify-content:center;height:320px;cursor:zoom-in;overflow:hidden}
     .gallery-main img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .2s}
     .gallery-main:hover img{transform:scale(1.03)}
@@ -213,7 +227,7 @@
     .detail-right h1{font-size:1.55rem;margin-bottom:5px}
     .detail-right .detail-meta{color:var(--muted);font-size:.88rem;margin-bottom:12px}
     .detail-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
-    .stat-box{background:var(--surface);border:1px solid var(--border);border-radius:0;padding:12px 14px;box-shadow:inset 0 0 10px rgba(255,140,20,0.024)}
+    .stat-box{background:var(--surface);border:2px solid var(--border);border-radius:0;padding:12px 14px;box-shadow:3px 3px 0 var(--shadow)}
     .stat-box .stat-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
     .stat-box .stat-val{font-size:1.1rem;font-weight:700;margin-top:2px}
 
@@ -237,7 +251,7 @@
     .slot-cell:hover .tooltip{display:block}
 
     /* CART BAR */
-    .cart-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(8,5,0,.97);border-top:2px solid var(--accent);padding:14px 24px;display:none;align-items:center;justify-content:space-between;gap:16px;z-index:9999;box-shadow:0 -4px 24px rgba(255,140,20,0.16);flex-wrap:wrap}
+    .cart-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:2px solid var(--accent);padding:14px 24px;display:none;align-items:center;justify-content:space-between;gap:16px;z-index:9999;box-shadow:0 -3px 0 var(--shadow);flex-wrap:wrap}
     .cart-bar.visible{display:flex}
     .cart-info{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
     .cart-count{font-weight:700;color:var(--teal);font-size:1rem}
@@ -276,17 +290,17 @@
     .tx-fee{font-size:.72rem;color:var(--yellow)}
 
     /* MODALS */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,5,0,.88);z-index:10002;align-items:center;justify-content:center;padding:16px}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:10002;align-items:center;justify-content:center;padding:16px}
     .modal-overlay.open{display:flex}
-    .modal{background:var(--surface);border:1px solid var(--border);border-radius:0;padding:26px;width:100%;max-width:460px;position:relative;max-height:92vh;overflow-y:auto;box-shadow:0 0 30px rgba(255,140,20,0.096)}
+    .modal{background:var(--surface);border:2px solid var(--border);border-radius:0;padding:26px;width:100%;max-width:460px;position:relative;max-height:92vh;overflow-y:auto;box-shadow:5px 5px 0 var(--shadow)}
     .modal h3{font-size:1.1rem;font-weight:700;margin-bottom:4px}
     .modal .modal-sub{color:var(--muted);font-size:.82rem;margin-bottom:18px}
     .modal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1}
     .modal-close:hover{color:var(--text)}
     .form-group{margin-bottom:13px}
     .form-group label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:5px}
-    .form-group input,.form-group select{width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:0;color:var(--text);font-size:.9rem;outline:none;transition:all .15s;font-family:'Share Tech Mono',monospace}
-    .form-group input:focus,.form-group select:focus{border-color:var(--accent);box-shadow:0 0 8px rgba(255,140,20,0.2)}
+    .form-group input,.form-group select{width:100%;padding:9px 12px;background:var(--surface2);border:2px solid var(--border);border-radius:0;color:var(--text);font-size:.7rem;outline:none;transition:all .1s;font-family:'Press Start 2P','Share Tech Mono',monospace}
+    .form-group input:focus,.form-group select:focus{border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow)}
     .form-error{color:var(--red);font-size:.75rem;margin-top:3px}
     .purchase-summary{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:.85rem}
     .ps-row{display:flex;justify-content:space-between;margin-bottom:6px;color:var(--muted)}
@@ -294,21 +308,22 @@
     .ps-note{font-size:.75rem;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
     .slot-chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
     .slot-chip{background:rgba(6,182,212,.15);border:1px solid var(--teal);color:var(--teal);border-radius:5px;padding:2px 8px;font-size:.72rem;font-weight:600}
-    .btn{display:inline-block;padding:10px 20px;border-radius:0;border:none;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .15s;font-family:'Share Tech Mono',monospace;letter-spacing:.05em}
-    .btn-primary{background:var(--accent);color:#080500;width:100%;padding:12px;font-size:.95rem;box-shadow:0 0 14px rgba(255,140,20,0.24)}
-    .btn-primary:hover{background:var(--accent2);box-shadow:0 0 20px rgba(255,140,20,0.4)}
-    .btn-secondary{background:transparent;border:1px solid var(--border);color:var(--muted);width:100%;padding:12px;font-size:.95rem;margin-top:8px;border-radius:0}
-    .btn-secondary:hover{border-color:var(--accent);color:var(--accent2)}
-    .btn-teal{background:var(--teal);color:#080500;width:100%;padding:12px;font-size:.95rem;font-weight:700;box-shadow:0 0 12px rgba(0,200,255,.25)}
-    .btn-teal:hover{background:#0891b2}
-    .btn-orange{background:var(--orange);color:#fff;width:100%;padding:12px;font-size:.95rem}
-    .btn-orange:hover{background:#ea7b28}
-    .btn-red{background:var(--red);color:#fff;width:100%;padding:12px;font-size:.95rem}
-    .btn-red:hover{background:#dc2626}
-    .btn-gold{background:var(--gold);color:#080500;width:100%;padding:12px;font-size:.95rem;font-weight:800;box-shadow:0 0 12px rgba(255,170,0,.25)}
-    .btn-gold:hover{opacity:.88}
-    .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 14px;font-size:.85rem;border-radius:8px;cursor:pointer}
-    .btn-ghost:hover{border-color:var(--red);color:var(--red)}
+    .btn{display:inline-block;padding:10px 20px;border-radius:0;border:2px solid var(--border);font-size:.7rem;font-weight:700;cursor:pointer;transition:all .1s;font-family:'Press Start 2P','Share Tech Mono',monospace;letter-spacing:.04em;box-shadow:3px 3px 0 var(--shadow)}
+    .btn:hover{box-shadow:2px 2px 0 var(--shadow);transform:translate(1px,1px)}
+    .btn-primary{background:var(--accent);color:var(--surface);width:100%;padding:12px;font-size:.7rem;border-color:var(--border)}
+    .btn-primary:hover{background:var(--accent2);color:var(--surface)}
+    .btn-secondary{background:transparent;border:2px solid var(--border);color:var(--muted);width:100%;padding:12px;font-size:.7rem;margin-top:8px;box-shadow:3px 3px 0 var(--shadow)}
+    .btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+    .btn-teal{background:var(--accent2);color:var(--surface);width:100%;padding:12px;font-size:.7rem;font-weight:700;border-color:var(--border)}
+    .btn-teal:hover{background:var(--accent)}
+    .btn-orange{background:var(--orange);color:var(--surface);width:100%;padding:12px;font-size:.7rem;border-color:var(--border)}
+    .btn-orange:hover{opacity:.88}
+    .btn-red{background:var(--premium);color:var(--premium-txt);width:100%;padding:12px;font-size:.7rem;border-color:var(--border);box-shadow:3px 3px 0 var(--shadow)}
+    .btn-red:hover{opacity:.88}
+    .btn-gold{background:var(--gold);color:var(--surface);width:100%;padding:12px;font-size:.7rem;font-weight:800;border-color:var(--border)}
+    .btn-gold:hover{background:var(--accent)}
+    .btn-ghost{background:transparent;border:2px solid var(--border);color:var(--muted);padding:8px 14px;font-size:.65rem;border-radius:0;cursor:pointer;box-shadow:2px 2px 0 var(--shadow)}
+    .btn-ghost:hover{border-color:var(--premium);color:var(--premium)}
     .success-banner{display:none;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:14px;text-align:center;margin-bottom:14px}
     .success-banner.show{display:block}
     .success-banner .success-icon{font-size:1.8rem;margin-bottom:6px}
@@ -484,19 +499,19 @@
       display:none;
       position:fixed;bottom:0;left:0;right:0;
       height:60px;
-      background:rgba(8,5,0,.97);
+      background:var(--surface);
       border-top:2px solid var(--border);
       z-index:9999;
       align-items:stretch;
-      box-shadow:0 -2px 16px rgba(255,140,20,0.08);
+      box-shadow:0 -3px 0 var(--shadow);
     }
     .mobile-nav-btn{
       flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
       gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;
-      font-size:.65rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
+      font-size:.5rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
       transition:color .15s;padding:0;position:relative;
     }
-    .mobile-nav-btn.active{color:var(--accent);text-shadow:0 0 8px rgba(255,140,20,0.48)}
+    .mobile-nav-btn.active{color:var(--accent)}
     .mobile-nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .mobile-nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700}
     @media(max-width:600px){
@@ -512,10 +527,10 @@
     /* TOAST */
     .toast{
       position:fixed;bottom:20px;left:20px;
-      background:var(--surface);border:1px solid var(--accent);
+      background:var(--surface);border:2px solid var(--accent);
       border-radius:0;padding:12px 16px;
-      color:var(--accent);font-size:.85rem;
-      z-index:10003;box-shadow:0 0 16px rgba(255,140,20,0.16);
+      color:var(--accent);font-size:.65rem;
+      z-index:10003;box-shadow:4px 4px 0 var(--shadow);
       animation:slideInLeft .3s ease;max-width:300px
     }
     @keyframes slideInLeft{
@@ -528,30 +543,30 @@
       padding: 3.5rem 2rem 2rem;
       text-align: center;
       border-bottom: 2px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,140,20,0.032) 0%, transparent 100%);
+      background: var(--surface);
       position: relative;
       z-index: 2;
     }
     .hero-title {
-      font-size: clamp(1.4rem, 4vw, 2.4rem);
-      color: var(--accent);
+      font-size: clamp(.9rem, 3vw, 1.5rem);
+      color: var(--accent2);
       margin-bottom: .75rem;
-      text-shadow: 0 0 15px var(--accent), 0 0 25px rgba(255,140,20,0.32);
       letter-spacing: 3px;
-      line-height: 1.4;
+      line-height: 1.6;
     }
-    .hero-title::before { content: '> '; color: var(--muted); }
-    .hero-title::after  { content: ' <'; color: var(--muted); }
+    .hero-title .ht-b { color: var(--accent); }
+    .hero-title::before { content: ''; }
+    .hero-title::after  { content: ''; }
     .hero-tagline {
-      font-size: .85rem;
+      font-size: .62rem;
       color: var(--muted);
       margin: .75rem 0 1.75rem;
       letter-spacing: 2px;
     }
     .hero-cursor {
       display: inline-block;
-      width: 2px;
-      height: 1em;
+      width: 8px;
+      height: .9em;
       background: var(--accent);
       margin-left: 4px;
       animation: cur-blink 1s steps(2) infinite;
@@ -571,68 +586,45 @@
     .hero-stat-box {
       padding: 1.25rem;
       border: 2px solid var(--border);
-      background: rgba(5,20,10,.5);
-      box-shadow: 0 0 12px rgba(255,140,20,0.096), inset 0 0 12px rgba(255,140,20,0.024);
+      background: var(--surface2);
+      box-shadow: 4px 4px 0 var(--shadow);
       text-align: center;
     }
     .hero-stat-label {
-      font-size: .72rem;
+      font-size: .58rem;
       color: var(--muted);
       letter-spacing: .5px;
-      margin-bottom: .4rem;
+      margin-bottom: .6rem;
       white-space: nowrap;
     }
     .hero-stat-value {
-      font-size: 2rem;
+      font-size: 1.5rem;
       color: var(--accent);
-      text-shadow: 0 0 8px var(--accent);
       font-weight: bold;
     }
     .hero-cta {
       display: inline-block;
-      padding: .7rem 2.2rem;
-      background: var(--accent);
-      color: var(--bg);
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 1rem;
+      padding: .8rem 2.2rem;
+      background: var(--premium);
+      color: var(--premium-txt);
+      font-family: 'Press Start 2P', 'Share Tech Mono', monospace;
+      font-size: .75rem;
       letter-spacing: 2px;
-      border: none;
+      border: 2px solid var(--border);
       cursor: pointer;
-      text-shadow: none;
-      box-shadow: 0 0 14px var(--accent), 0 0 28px rgba(255,140,20,0.28);
-      transition: box-shadow .2s, transform .1s;
+      box-shadow: 4px 4px 0 var(--shadow);
+      transition: all .1s;
     }
     .hero-cta:hover {
-      box-shadow: 0 0 22px var(--accent), 0 0 44px rgba(255,140,20,0.4);
-      transform: translateY(-1px);
+      box-shadow: 6px 6px 0 var(--shadow);
+      transform: translate(-2px,-2px);
     }
     .hero-footer-line {
       margin-top: 1.6rem;
-      font-size: .72rem;
+      font-size: .58rem;
       color: var(--muted);
       letter-spacing: 2px;
       opacity: .7;
-    }
-
-    /* ── CARD PULSE SHINE ─────────────────────────────── */
-    .listing-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 60%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,140,20,0.056), transparent);
-      animation: card-pulse 8s ease-in-out infinite;
-      pointer-events: none;
-      z-index: 1;
-    }
-    @keyframes card-pulse {
-      0%   { left: -60%; opacity: 0; }
-      10%  { opacity: 1; }
-      60%  { left: 130%; opacity: 1; }
-      70%  { opacity: 0; }
-      100% { left: 130%; opacity: 0; }
     }
 
     input,textarea,select{text-transform:none}
@@ -675,40 +667,40 @@
     }
 
     /* ── COLLECTION PAGE ─────────────────────────────── */
-    .coll-search-bar{width:100%;padding:10px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.9rem;letter-spacing:.03em;outline:none;transition:border-color .15s}
-    .coll-search-bar:focus{border-color:var(--accent);box-shadow:0 0 8px rgba(255,140,20,0.16)}
+    .coll-search-bar{width:100%;padding:10px 14px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.03em;outline:none;transition:border-color .1s}
+    .coll-search-bar:focus{border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow)}
     .coll-search-bar::placeholder{color:var(--muted)}
     .card-result-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:16px}
     .card-result{background:var(--surface);border:1px solid var(--border);cursor:pointer;padding:8px;transition:all .15s;text-align:center}
-    .card-result:hover{border-color:var(--accent);box-shadow:0 0 12px rgba(255,140,20,0.2);transform:translateY(-2px)}
+    .card-result:hover{border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow);transform:translate(-1px,-1px)}
     .card-result img{width:100%;height:auto;display:block;margin-bottom:6px;border:1px solid var(--border)}
     .card-result-name{font-size:.72rem;color:var(--text);margin-bottom:2px;line-height:1.3}
     .card-result-set{font-size:.64rem;color:var(--muted)}
     .coll-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
     .coll-stat-box{background:var(--surface);border:1px solid var(--border);padding:16px;text-align:center}
     .coll-stat-label{font-size:.7rem;color:var(--muted);margin-bottom:6px;letter-spacing:.08em}
-    .coll-stat-value{font-size:1.15rem;color:var(--accent);text-shadow:0 0 8px rgba(255,140,20,0.24);font-weight:700}
+    .coll-stat-value{font-size:1.15rem;color:var(--accent);letter-spacing:.04em;font-weight:700}
     .coll-table-wrap{overflow-x:auto}
     .coll-table{width:100%;border-collapse:collapse;font-size:.82rem}
-    .coll-table th{text-align:left;padding:10px 12px;color:var(--accent);font-size:.72rem;letter-spacing:.1em;border-bottom:1px solid var(--border);text-shadow:0 0 6px rgba(255,140,20,0.24);white-space:nowrap}
+    .coll-table th{text-align:left;padding:10px 12px;color:var(--accent);font-size:.72rem;letter-spacing:.1em;border-bottom:1px solid var(--border);letter-spacing:.04em;white-space:nowrap}
     .coll-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
     .coll-table tr:hover td{background:var(--surface2)}
-    .grade-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;font-weight:700;background:rgba(255,140,20,0.12);border:1px solid rgba(255,140,20,0.3);color:var(--accent);letter-spacing:.04em}
+    .grade-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;font-weight:700;background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent);letter-spacing:.04em}
     .raw-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;color:var(--muted);border:1px solid var(--border);letter-spacing:.04em}
     .coll-gain-pos{color:var(--green)}
     .coll-gain-neg{color:var(--red)}
     .coll-add-section{background:var(--surface);border:1px solid var(--border);padding:20px;margin-bottom:24px}
-    .coll-add-title{font-size:.85rem;color:var(--accent);margin-bottom:14px;letter-spacing:.06em;text-shadow:0 0 6px rgba(255,140,20,0.24)}
+    .coll-add-title{font-size:.85rem;color:var(--accent);margin-bottom:14px;letter-spacing:.06em;letter-spacing:.04em}
     .coll-add-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-    .coll-btn-primary{padding:9px 22px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
-    .coll-btn-primary:hover{background:rgba(255,140,20,0.12)}
-    .coll-btn-secondary{padding:9px 22px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
+    .coll-btn-primary{padding:9px 22px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
+    .coll-btn-primary:hover{background:var(--surface2)}
+    .coll-btn-secondary{padding:9px 22px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
     .coll-btn-secondary:hover{border-color:var(--accent);color:var(--text)}
     .coll-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
     .coll-empty{text-align:center;padding:48px;color:var(--muted);font-size:.88rem;line-height:1.8}
     /* ATC Modal inputs */
     .atc-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .atc-input{width:100%;padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;outline:none;transition:border-color .15s}
+    .atc-input{width:100%;padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;outline:none;transition:border-color .15s}
     .atc-input:focus{border-color:var(--accent)}
     .atc-input::placeholder{color:var(--muted)}
     @media(max-width:600px){
@@ -722,7 +714,7 @@
     .cond-nm{background:rgba(57,255,20,.1);border:1px solid rgba(57,255,20,.3);color:var(--green)}
     .cond-lp{background:rgba(255,221,68,.1);border:1px solid rgba(255,221,68,.3);color:var(--yellow)}
     .cond-hp{background:rgba(255,68,85,.1);border:1px solid rgba(255,68,85,.3);color:var(--red)}
-    .cond-graded{background:rgba(255,140,20,.12);border:1px solid rgba(255,140,20,.3);color:var(--accent)}
+    .cond-graded{background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent)}
     .cond-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;font-weight:700;letter-spacing:.06em}
 
     /* ── MARKET PRICE DIFF ─────────────────────────────── */
@@ -755,7 +747,7 @@
       justify-content:center;transition:border-color .15s,color .15s,background .15s;
       z-index:10;line-height:1;font-family:monospace;padding:0;user-select:none
     }
-    .binder-nav-arrow:hover{border-color:var(--accent);color:var(--accent);background:rgba(255,140,20,.06)}
+    .binder-nav-arrow:hover{border-color:var(--accent);color:var(--accent);background:var(--surface2)}
     .binder-nav-arrow:disabled{opacity:.25;cursor:default;pointer-events:none}
     @media(min-width:900px){
       .binder-nav-arrow{display:flex}
@@ -764,7 +756,7 @@
     }
     /* ── BINDER VIEW TOGGLE ── */
     .binder-view-toggle{display:flex;gap:6px}
-    .binder-view-btn{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
+    .binder-view-btn{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
     .binder-view-btn.active,.binder-view-btn:hover{border-color:var(--accent);color:var(--accent)}
     /* ── BINDER GRIDS ── */
     .binder-grid-3x3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -774,7 +766,7 @@
     /* ── BINDER CARD ── */
     .binder-card{background:var(--surface);border:1px solid var(--border);cursor:grab;transition:border-color .15s,transform .1s,opacity .15s;border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
     .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
-    .binder-card.drag-over{border-color:var(--accent);box-shadow:0 0 14px rgba(255,140,20,.35);transform:scale(1.03)}
+    .binder-card.drag-over{border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow);transform:scale(1.03)}
     .binder-card.ghost-card{opacity:.52;border:1px dashed var(--muted);position:relative}
     .binder-card.ghost-card:hover{opacity:.75;border-color:var(--teal);transform:translateY(-2px)}
     .want-badge{background:rgba(0,204,255,.15);border:1px solid rgba(0,204,255,.5);color:var(--teal);font-size:.55rem;padding:2px 5px;position:absolute;bottom:4px;right:4px}
@@ -794,7 +786,7 @@
     .binder-card-value{font-size:.78rem;color:var(--accent);font-weight:700}
     /* ── BINDER PAGINATION ── */
     .binder-pagination{display:flex;justify-content:center;gap:10px;margin-top:18px;align-items:center}
-    .binder-page-btn{padding:7px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer;transition:all .15s}
+    .binder-page-btn{padding:7px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer;transition:all .15s}
     .binder-page-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
     .binder-page-btn:disabled{opacity:.35;cursor:not-allowed}
     /* ── BINDER SHELF ── */
@@ -804,12 +796,12 @@
     .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
     .binder-book.binder-open{transform:perspective(520px) rotateY(-34deg) translateY(-7px);filter:drop-shadow(8px 14px 28px rgba(0,0,0,.95))}
     .binder-spine{position:absolute;left:0;top:0;bottom:0;width:14px;border-radius:3px 0 0 3px;display:flex;align-items:center;justify-content:center;overflow:hidden}
-    .binder-spine-text{writing-mode:vertical-rl;transform:rotate(180deg);font-size:.46rem;font-family:'Share Tech Mono',monospace;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:96px;letter-spacing:.05em;padding:0 1px}
+    .binder-spine-text{writing-mode:vertical-rl;transform:rotate(180deg);font-size:.46rem;font-family:'Press Start 2P','Share Tech Mono',monospace;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:96px;letter-spacing:.05em;padding:0 1px}
     .binder-cover{position:absolute;left:14px;top:0;right:0;bottom:0;border-radius:0 4px 4px 0;overflow:hidden;border-left:1px solid rgba(0,0,0,.28)}
     .binder-cover img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
     .binder-cover-default{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;gap:5px}
-    .binder-cover-text{font-size:.49rem;font-family:'Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word;line-height:1.45;max-width:100%}
-    .binder-book-label{font-size:.62rem;color:var(--muted);font-family:'Share Tech Mono',monospace;text-align:center;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s}
+    .binder-cover-text{font-size:.49rem;font-family:'Press Start 2P','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word;line-height:1.45;max-width:100%}
+    .binder-book-label{font-size:.62rem;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;text-align:center;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s}
     .binder-book-wrap.b-active .binder-book-label{color:var(--accent)}
     .binder-add-btn{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;opacity:.5;transition:opacity .18s;user-select:none}
     .binder-add-btn:hover{opacity:1}
@@ -818,14 +810,14 @@
     @keyframes binderFlip{0%{transform:perspective(520px) rotateY(-14deg)}55%{transform:perspective(520px) rotateY(-62deg) translateY(-7px)}100%{transform:perspective(520px) rotateY(-34deg) translateY(-7px)}}
     .binder-book.binder-flipping{animation:binderFlip .44s ease-out forwards}
     /* Drag-to-shelf states */
-    .binder-book.shelf-drop-available{outline:2px dashed rgba(255,140,20,.35);outline-offset:3px}
-    .binder-book.shelf-drop-hover{transform:perspective(520px) rotateY(-7deg) translateY(-10px) scale(1.06)!important;filter:drop-shadow(0 0 18px rgba(255,140,20,.75))!important;transition:transform .12s ease,filter .12s ease}
+    .binder-book.shelf-drop-available{outline:2px dashed var(--accent);outline-offset:3px}
+    .binder-book.shelf-drop-hover{transform:perspective(520px) rotateY(-7deg) translateY(-10px) scale(1.06)!important;filter:drop-shadow(0 0 18px var(--accent))!important;transition:transform .12s ease,filter .12s ease}
     /* All-cards drag list row */
     .allcards-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:grab;transition:background .1s;user-select:none}
-    .allcards-row:hover{background:rgba(255,140,20,.04)}
+    .allcards-row:hover{background:var(--surface2)}
     .allcards-row:active{cursor:grabbing}
     .allcards-drag-handle{color:var(--border);font-size:.9rem;flex-shrink:0;line-height:1;padding:0 2px;cursor:grab}
-    .allcards-binder-tag{font-size:.58rem;padding:2px 6px;border:1px solid var(--border);color:var(--muted);font-family:'Share Tech Mono',monospace;white-space:nowrap;border-radius:2px;flex-shrink:0}
+    .allcards-binder-tag{font-size:.58rem;padding:2px 6px;border:1px solid var(--border);color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;white-space:nowrap;border-radius:2px;flex-shrink:0}
     /* ── DASHBOARD CHART ── */
     .dash-chart-section{background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
     .dash-chart-row{display:grid;grid-template-columns:110px 1fr 72px;gap:8px;align-items:center;margin-bottom:8px}
@@ -860,7 +852,7 @@
 </head>
 <body>
   <nav>
-    <button class="logo" onclick="showPage('landing')">[PATHBINDER_SYS]</button>
+    <button class="logo" onclick="showPage('landing')"><span style="color:var(--accent2)">PATH</span><span class="logo-b">BINDER</span></button>
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Marketplace</button>
@@ -885,6 +877,7 @@
         </div>
       </div>
       <button class="member-chip" id="membershipBtn">Premium</button>
+      <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">☀</button>
     </div>
   </nav>
 
@@ -976,7 +969,7 @@
         <div style="font-size:.72rem;color:#993C1D;letter-spacing:.08em;margin-bottom:10px">// SHOP TIER — CONTACT US</div>
         <div class="form-group"><label>Business name</label><input type="text" id="shopBizName" class="atc-input" style="width:100%"></div>
         <div class="form-group"><label>Business type</label>
-          <select id="shopBizType" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem">
+          <select id="shopBizType" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem">
             <option value="">Select…</option>
             <option value="brick">Brick &amp; mortar</option>
             <option value="online">Online store</option>
@@ -985,8 +978,8 @@
         </div>
         <div class="form-group"><label>Est. monthly card volume</label><input type="text" id="shopVolume" class="atc-input" placeholder="e.g. 500 cards / month" style="width:100%"></div>
         <div class="form-group"><label>Contact email</label><input type="email" id="shopEmail" class="atc-input" style="width:100%" placeholder="you@shop.com"></div>
-        <button onclick="submitShopIntake()" style="width:100%;padding:11px;background:#993C1D;color:#fff;border:none;font-family:'Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;margin-top:4px">Submit →</button>
-        <button onclick="document.getElementById('shopIntakeForm').style.display='none'" style="width:100%;padding:8px;background:transparent;border:none;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;margin-top:6px">← Back to plans</button>
+        <button onclick="submitShopIntake()" style="width:100%;padding:11px;background:#993C1D;color:#fff;border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;margin-top:4px">Submit →</button>
+        <button onclick="document.getElementById('shopIntakeForm').style.display='none'" style="width:100%;padding:8px;background:transparent;border:none;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;margin-top:6px">← Back to plans</button>
       </div>
     </div>
   </div>
@@ -1057,13 +1050,13 @@
         <input type="text" class="atc-input" id="atcNotes" placeholder="Optional notes" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveToCollection()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add_To_Collection</button>
-        <button onclick="closeModal('addToCollectionModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button onclick="saveToCollection()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add_To_Collection</button>
+        <button onclick="closeModal('addToCollectionModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
       <div style="margin-top:14px;text-align:center;border-top:1px solid var(--border);padding-top:12px">
         <span style="font-size:.75rem;color:var(--muted)">Don't own it yet?</span>
         <button onclick="closeModal('addToCollectionModal');openAddToWishlistModal(pendingCollectionCard||{})"
-          style="margin-left:10px;background:transparent;border:none;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline;padding:0">♡ Add_to_Wishlist_Instead</button>
+          style="margin-left:10px;background:transparent;border:none;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline;padding:0">♡ Add_to_Wishlist_Instead</button>
       </div>
     </div>
   </div>
@@ -1092,8 +1085,8 @@
         <input type="text" class="atc-input" id="wishlistPriceUrl" placeholder="PriceCharting URL for tracking" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(0,204,255,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add_To_Wishlist</button>
-        <button onclick="closeModal('addToWishlistModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(0,204,255,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add_To_Wishlist</button>
+        <button onclick="closeModal('addToWishlistModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1121,14 +1114,14 @@
           <img id="binderCoverImg" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;pointer-events:none">
         </div>
         <input type="file" id="binderCoverInput" accept="image/*" style="display:none" onchange="previewBinderCover(this)">
-        <button id="binderCoverRemoveBtn" onclick="removeBinderCover()" style="display:none;margin-top:4px;background:transparent;border:none;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;text-decoration:underline">× Remove cover</button>
+        <button id="binderCoverRemoveBtn" onclick="removeBinderCover()" style="display:none;margin-top:4px;background:transparent;border:none;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;text-decoration:underline">× Remove cover</button>
       </div>
       <div style="display:flex;gap:10px;margin-top:18px">
-        <button onclick="saveBinder()" style="flex:1;padding:11px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save →</button>
-        <button onclick="closeModal('binderEditModal')" style="flex:1;padding:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button onclick="saveBinder()" style="flex:1;padding:11px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save →</button>
+        <button onclick="closeModal('binderEditModal')" style="flex:1;padding:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
       <div id="binderEditDeleteWrap" style="display:none;margin-top:12px;text-align:center">
-        <button onclick="deleteBinder()" style="background:transparent;border:none;color:#e74c3c;font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline">Delete this binder (cards move to default)</button>
+        <button onclick="deleteBinder()" style="background:transparent;border:none;color:#e74c3c;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline">Delete this binder (cards move to default)</button>
       </div>
     </div>
   </div>
@@ -1159,8 +1152,8 @@
         <input type="text" class="atc-input" id="soNotes" placeholder="Any additional notes" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="confirmSoldOffline()" style="flex:1;padding:12px;background:var(--green);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Mark_As_Sold</button>
-        <button onclick="closeModal('soldOfflineModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button onclick="confirmSoldOffline()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Mark_As_Sold</button>
+        <button onclick="closeModal('soldOfflineModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1179,7 +1172,7 @@
         </div>
         <div>
           <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px">Tell us about your shop *</div>
-          <textarea id="vaDescription" rows="3" placeholder="What you sell, how long you've been in the hobby, physical store or online-only, etc." style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;resize:vertical"></textarea>
+          <textarea id="vaDescription" rows="3" placeholder="What you sell, how long you've been in the hobby, physical store or online-only, etc." style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;resize:vertical"></textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
@@ -1197,8 +1190,8 @@
         </div>
       </div>
       <div style="display:flex;gap:10px;margin-top:20px">
-        <button onclick="saveVendorApplication()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Submit_Application</button>
-        <button onclick="closeModal('vendorApplicationModal')" style="padding:12px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button onclick="saveVendorApplication()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Submit_Application</button>
+        <button onclick="closeModal('vendorApplicationModal')" style="padding:12px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1211,7 +1204,7 @@
       <p style="font-size:.78rem;color:var(--muted);margin-bottom:18px">Upload your inventory spreadsheet — cards are added to your binder. From there you can list any card for sale (with photos), or mark it as sold offline.</p>
 
       <div style="display:flex;gap:10px;margin-bottom:20px">
-        <button onclick="downloadVendorTemplate()" style="flex:1;padding:10px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">⬇ Download_Template</button>
+        <button onclick="downloadVendorTemplate()" style="flex:1;padding:10px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">⬇ Download_Template</button>
       </div>
 
       <div id="importDropZone" onclick="document.getElementById('vendorImportFile').click()"
@@ -1233,8 +1226,8 @@
       <div id="importProgress" style="display:none;font-size:.78rem;color:var(--muted);margin-bottom:12px"></div>
 
       <div style="display:flex;gap:10px">
-        <button id="importSubmitBtn" onclick="submitVendorImport()" style="display:none;flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Import_Listings →</button>
-        <button onclick="closeModal('vendorImportModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button id="importSubmitBtn" onclick="submitVendorImport()" style="display:none;flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Import_Listings →</button>
+        <button onclick="closeModal('vendorImportModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1324,8 +1317,8 @@
 
       <div id="lcSaveError" style="display:none;color:var(--red);font-size:.78rem;padding:8px 12px;border:1px solid var(--red);margin-bottom:10px;background:rgba(239,68,68,.06)"></div>
       <div style="display:flex;gap:10px">
-        <button class="lc-save-btn" onclick="saveMarketplaceListing()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">List_Card</button>
-        <button onclick="closeModal('listCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button class="lc-save-btn" onclick="saveMarketplaceListing()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">List_Card</button>
+        <button onclick="closeModal('listCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1350,8 +1343,8 @@
       </div>
       <input type="hidden" id="buyCardListingId" />
       <div style="display:flex;gap:10px">
-        <button class="buy-confirm-btn" onclick="confirmBuyCard()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Proceed_to_Payment</button>
-        <button onclick="closeModal('buyCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button class="buy-confirm-btn" onclick="confirmBuyCard()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Proceed_to_Payment</button>
+        <button onclick="closeModal('buyCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1378,8 +1371,8 @@
         <input class="atc-input" id="trackingNumber" type="text" placeholder="e.g. 9400111899223821234567" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveTracking()" style="flex:1;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save_&amp;_Notify_Buyer</button>
-        <button onclick="closeModal('addTrackingModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+        <button onclick="saveTracking()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save_&amp;_Notify_Buyer</button>
+        <button onclick="closeModal('addTrackingModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -1404,7 +1397,7 @@
         <label>Comment (optional)</label>
         <textarea class="atc-input" id="ratingComment" rows="2" placeholder="Describe your experience..." style="width:100%;resize:vertical"></textarea>
       </div>
-      <button onclick="submitRating()" style="width:100%;padding:12px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Submit_Rating</button>
+      <button onclick="submitRating()" style="width:100%;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Submit_Rating</button>
     </div>
   </div>
 
@@ -1438,11 +1431,11 @@
     <!-- Browse controls -->
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
       <button onclick="showPage('collection');setMobileNav('collection')"
-        style="padding:7px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s;letter-spacing:.04em"
+        style="padding:7px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s;letter-spacing:.04em"
         onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
         onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 My_Binder</button>
       <button onclick="openListCardModal()"
-        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">List_A_Card</button>
+        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">List_A_Card</button>
     </div>
 
     <div class="section-tabs">
@@ -1488,7 +1481,7 @@
     <div id="myListings" class="account-content">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <h3 style="font-size:1rem">Your_Listings</h3>
-        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">List_A_Card</button>
+        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">List_A_Card</button>
       </div>
       <div id="myListingsContent"></div>
     </div>
@@ -1540,17 +1533,17 @@
           <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk_Import</button>
-          <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share_Binder</button>
+          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk_Import</button>
+          <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share_Binder</button>
           <button onclick="showPage('addCard');setMobileNav('addCard')"
-            style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
+            style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
         </div>
       </div>
       <!-- List view search — only visible in list mode -->
       <div id="binderListSearchWrap" style="display:none;margin-bottom:12px">
         <input id="binderListSearch" type="text" placeholder="Search by name, set, or card #…"
           oninput="renderBinder()"
-          style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem;border-radius:0;box-sizing:border-box;outline:none"
+          style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;border-radius:0;box-sizing:border-box;outline:none"
           onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
       </div>
 
@@ -1725,7 +1718,7 @@
 
 
     <!-- Vendor Applications Panel (admin only) -->
-    <div style="background:var(--surface);border:1px solid rgba(255,140,20,.3);border-radius:14px;padding:18px;margin-bottom:24px">
+    <div style="background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:18px;margin-bottom:24px">
       <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em;margin-bottom:14px">// VENDOR_APPLICATIONS</div>
       <div id="vendorApplicationsPanel"><div style="color:var(--muted);font-size:.8rem">Loading...</div></div>
     </div>
@@ -2157,6 +2150,29 @@
       });
     }
 
+    function toggleTheme() {
+      const html = document.documentElement;
+      const btn = document.getElementById('themeToggleBtn');
+      if (html.getAttribute('data-theme') === 'light') {
+        html.removeAttribute('data-theme');
+        btn.textContent = '☀';
+        localStorage.setItem('pb-theme', 'dark');
+      } else {
+        html.setAttribute('data-theme', 'light');
+        btn.textContent = '◐';
+        localStorage.setItem('pb-theme', 'light');
+      }
+    }
+    // Restore saved theme on load
+    (function() {
+      const saved = localStorage.getItem('pb-theme');
+      if (saved === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+        const btn = document.getElementById('themeToggleBtn');
+        if (btn) btn.textContent = '◐';
+      }
+    })();
+
     function showPage(pageId) {
       // Guard admin page access
       if (pageId === 'admin' || pageId === 'editListing') {
@@ -2281,7 +2297,7 @@
         const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
         const sellerName = listing.sellerName || 'Seller';
         const sellerRating = listing.sellerRating ? `★ ${listing.sellerRating.toFixed(1)}` : '';
-        const vendorBadge = listing.isVendorListing ? `<span style="background:rgba(255,140,20,.18);border:1px solid rgba(255,140,20,.5);color:var(--accent);font-size:.55rem;padding:1px 5px;letter-spacing:.06em;vertical-align:middle;margin-left:4px">VENDOR</span>` : '';
+        const vendorBadge = listing.isVendorListing ? `<span style="background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent);font-size:.55rem;padding:1px 5px;letter-spacing:.06em;vertical-align:middle;margin-left:4px">VENDOR</span>` : '';
 
         // Market price comparison
         const marketPrice = listing.market_price || listing.marketPrice;
@@ -2316,7 +2332,7 @@
               ${isSold
                 ? '<span class="badge badge-full">Sold</span>'
                 : isOwn
-                  ? '<span class="badge" style="background:rgba(255,140,20,.15);border:1px solid rgba(255,140,20,.3);color:var(--accent)">Your Listing</span>'
+                  ? '<span class="badge" style="background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent)">Your Listing</span>'
                   : '<span class="badge badge-open">For Sale</span>'}
             </div>
             ${marketPriceHtml}
@@ -2324,7 +2340,7 @@
               ${sellerName}${vendorBadge}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
             </div>
           </div>
-          ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy_Now_→</button>` : ''}
+          ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy_Now_→</button>` : ''}
         </div>`;
       }).join('');
     }
@@ -2460,7 +2476,7 @@
             ${!isSold && !isOwn ? `
             <div style="margin:20px 0">
               <button onclick="buyCard('${listingId}')"
-                style="width:100%;padding:14px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.95rem;font-weight:700;cursor:pointer;letter-spacing:.06em;margin-bottom:8px">
+                style="width:100%;padding:14px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.95rem;font-weight:700;cursor:pointer;letter-spacing:.06em;margin-bottom:8px">
                 Buy_Now_→ $${total.toFixed(2)}
               </button>
               <div style="font-size:.72rem;color:var(--muted);line-height:1.8;text-align:center">
@@ -2471,7 +2487,7 @@
             <div style="margin:20px 0;padding:14px;border:1px solid var(--border);background:var(--surface2)">
               <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">// Your Listing</div>
               <button onclick="deactivateListing('${listingId}')"
-                style="padding:8px 20px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">
+                style="padding:8px 20px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">
                 Remove Listing
               </button>
             </div>` : ''}
@@ -2641,7 +2657,7 @@
             <div style="font-size:.8rem;color:var(--accent);letter-spacing:.1em;margin-bottom:12px">// DASHBOARD</div>
             <div style="color:var(--muted);font-size:.9rem;margin-bottom:24px">Sign in to view your dashboard, orders, and collection stats.</div>
             <button onclick="openModal('authModal')"
-              style="padding:11px 28px;border:none;background:var(--accent);color:#080500;font-family:'Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+              style="padding:11px 28px;border:none;background:var(--accent);color:var(--surface);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
               Sign In →
             </button>
           </div>`;
@@ -2770,7 +2786,7 @@
               return `<div class="binder-card" onclick="openBinderCardDetail('${item.id}')" style="cursor:pointer">
                 <div class="binder-card-img-wrap">
                   ${item.card_image_url ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy">` : `<div class="binder-card-placeholder">${medals[i]}</div>`}
-                  <span style="position:absolute;top:4px;left:4px;background:${rankColors[i]};color:#080500;font-size:.6rem;font-weight:700;padding:2px 5px">${medals[i]}</span>
+                  <span style="position:absolute;top:4px;left:4px;background:${rankColors[i]};color:var(--surface);font-size:.6rem;font-weight:700;padding:2px 5px">${medals[i]}</span>
                   <span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="position:absolute;bottom:4px;right:4px;font-size:.5rem;padding:1px 4px">${condLabel}</span>
                 </div>
                 <div class="binder-card-info">
@@ -2807,7 +2823,7 @@
         <div class="dash-chart-section" style="border-color:rgba(57,255,20,.25);margin-bottom:16px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// SALES_SUMMARY</div>
-            <button onclick="showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('salesArchive'),80)" style="background:transparent;border:none;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">→ View Archive</button>
+            <button onclick="showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('salesArchive'),80)" style="background:transparent;border:none;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">→ View Archive</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:10px">
             <div class="coll-stat-box"><div class="coll-stat-label">Offline_Sales</div><div class="coll-stat-value">${soldOffline.length}</div></div>
@@ -2817,8 +2833,8 @@
         </div>` : ''}
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-          <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
-          <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My_Binder</button>
+          <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
+          <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My_Binder</button>
         </div>
 
         ${tierAtLeast('shop') ? `
@@ -2826,40 +2842,40 @@
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
             <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em">// MY_STOREFRONT</div>
             <div style="display:flex;gap:8px">
-              <button onclick="copyStoreLink()" style="padding:5px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">⬡ Copy_Store_Link</button>
-              <button onclick="previewStorefront()" style="padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">↗ Preview</button>
+              <button onclick="copyStoreLink()" style="padding:5px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">⬡ Copy_Store_Link</button>
+              <button onclick="previewStorefront()" style="padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">↗ Preview</button>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
             <div>
               <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Shop Name</div>
               <input id="shopSettingName" type="text" value="${(currentUser.shop_name||'').replace(/"/g,'&quot;')}" placeholder="Your shop name"
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;outline:none"
                 onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             </div>
             <div>
               <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Tagline</div>
               <input id="shopSettingTagline" type="text" value="${(currentUser.shop_tagline||'').replace(/"/g,'&quot;')}" placeholder="Short description"
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;outline:none"
                 onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             </div>
             <div>
               <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Instagram</div>
               <input id="shopSettingInstagram" type="text" value="${(currentUser.shop_instagram||'').replace(/"/g,'&quot;')}" placeholder="@handle"
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;outline:none"
                 onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             </div>
             <div>
               <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Website</div>
               <input id="shopSettingWebsite" type="text" value="${(currentUser.shop_website||'').replace(/"/g,'&quot;')}" placeholder="https://..."
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;outline:none"
                 onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             </div>
           </div>
           <div style="margin-bottom:12px">
             <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">About / Description</div>
             <textarea id="shopSettingDesc" rows="2" placeholder="Tell customers about your shop…"
-              style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.78rem;resize:vertical;outline:none"
+              style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;resize:vertical;outline:none"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">${currentUser.shop_description||''}</textarea>
           </div>
           <div style="margin-bottom:12px">
@@ -2872,7 +2888,7 @@
               ).join('')}
             </div>
           </div>
-          <button onclick="saveShopSettings()" style="padding:8px 20px;border:none;background:var(--accent);color:#080500;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Save_Settings</button>
+          <button onclick="saveShopSettings()" style="padding:8px 20px;border:none;background:var(--accent);color:var(--surface);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Save_Settings</button>
           <div id="shopSettingSaved" style="display:inline;margin-left:10px;font-size:.72rem;color:var(--green);display:none">✓ Saved</div>
         </div>` : ''}
       `;
@@ -2895,7 +2911,7 @@
           <!-- Upgrade overlay -->
           <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,5,0,.7);gap:10px">
             <div style="font-size:.78rem;color:var(--text);text-align:center">Live price tracking is a<br><strong style="color:#1D9E75">Collector</strong> feature</div>
-            <button onclick="openPricingModal('collector')" style="padding:8px 20px;background:#1D9E75;color:#fff;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Upgrade →</button>
+            <button onclick="openPricingModal('collector')" style="padding:8px 20px;background:#1D9E75;color:#fff;border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Upgrade →</button>
           </div>
         </div>`;
       }
@@ -3108,7 +3124,7 @@
             <td style="color:var(--accent)">$${Number(price).toLocaleString()}</td>
             <td><span class="badge ${l.status === 'sold' ? 'badge-full' : 'badge-open'}">${l.status || 'Active'}</span></td>
             <td>
-              ${l.status !== 'sold' ? `<button onclick="deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>` : ''}
+              ${l.status !== 'sold' ? `<button onclick="deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>` : ''}
             </td>
           </tr>`;
         }).join('')}</tbody>
@@ -3141,12 +3157,12 @@
         let actionHtml = '';
         if (isBuying && status === 'shipped') {
           actionHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm_Delivery</button>
+            <button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm_Delivery</button>
           </div>`;
         } else if (isBuying && status === 'completed') {
-          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return_Card</button>`;
+          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return_Card</button>`;
         } else if (!isBuying && status === 'paid') {
-          actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add_Tracking_#</button>`;
+          actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add_Tracking_#</button>`;
         }
 
         return `<div style="background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:12px">
@@ -3305,7 +3321,7 @@
             <div style="color:var(--accent);font-size:.9rem;margin-bottom:8px;letter-spacing:.08em">// BUILD YOUR OWN BINDER</div>
             <div style="color:var(--muted);font-size:.8rem;margin-bottom:16px">PathBinder is the card collector's portfolio tracker. Free to start.</div>
             <button onclick="openModal('authModal');document.getElementById('authModalTab-register').click()"
-              style="padding:10px 28px;border:none;background:linear-gradient(135deg,var(--accent),var(--gold));color:#080500;font-family:'Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+              style="padding:10px 28px;border:none;background:var(--accent);color:var(--surface);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
               Create Free Account →
             </button>
           </div>` : '';
@@ -3321,8 +3337,8 @@
               ${profile.username ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px">@${profile.username}${memberSince ? ` · Member since ${memberSince}` : ''}</div>` : ''}
             </div>
             <div style="display:flex;gap:10px">
-              <button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
-              ${currentUser ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>` : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`}
+              <button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
+              ${currentUser ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>` : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`}
             </div>
           </div>
 
@@ -3527,16 +3543,16 @@
             <div style="color:var(--accent);font-size:.88rem;margin-bottom:8px;letter-spacing:.08em">// BUILD YOUR OWN COLLECTION</div>
             <div style="color:var(--muted);font-size:.8rem;margin-bottom:16px">Track your cards, monitor prices, and launch your own storefront with PathBinder.</div>
             <button onclick="openModal('authModal');document.getElementById('authModalTab-register')?.click()"
-              style="padding:10px 28px;border:none;background:linear-gradient(135deg,var(--accent),var(--gold));color:#080500;font-family:'Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+              style="padding:10px 28px;border:none;background:var(--accent);color:var(--surface);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
               Start Free →
             </button>
           </div>` : '';
 
         // Back button logic
-        const backBtn = `<button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>`;
+        const backBtn = `<button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>`;
         const myBtn   = currentUser
-          ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>`
-          : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`;
+          ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>`
+          : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`;
 
         el.innerHTML = `
           <!-- Banner -->
@@ -3666,9 +3682,9 @@
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:20px">
           ${periods.map(p => `
             <button onclick="setSalesPeriod('${p.k}')" style="
-              padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
+              padding:5px 12px;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
               border:1px solid ${_salesPeriod===p.k ? 'var(--accent)' : 'var(--border)'};
-              background:${_salesPeriod===p.k ? 'rgba(255,140,20,.1)' : 'transparent'};
+              background:${_salesPeriod===p.k ? 'var(--accent)' : 'transparent'};
               color:${_salesPeriod===p.k ? 'var(--accent)' : 'var(--muted)'};
             ">${p.l}</button>
           `).join('')}
@@ -3703,10 +3719,10 @@
       // ── Export buttons (Vendor+) ───────────────────────────────────────────
       const exportBtns = isVendorPlus ? `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
-          <button onclick="exportSalesCSV()" style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s"
+          <button onclick="exportSalesCSV()" style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
             onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">⬇ Export CSV</button>
-          <button onclick="${isShop ? 'exportSalesReportPDF()' : 'exportSalesPDF()'}" style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s"
+          <button onclick="${isShop ? 'exportSalesReportPDF()' : 'exportSalesPDF()'}" style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
             onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">⬇ Export PDF${isShop ? ' (Full Report)' : ''}</button>
         </div>` : '';
@@ -3764,7 +3780,7 @@
               <td>
                 <span style="font-size:.6rem;padding:1px 5px;border:1px solid ${r.channel==='Online'?'var(--teal)':'var(--border)'};color:${r.channel==='Online'?'var(--teal)':'var(--muted)'}">${r.channel}</span>
               </td>
-              ${r.isOffline ? `<td><button onclick="restoreArchivedCard('${r.id}')" style="padding:2px 6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.6rem;cursor:pointer">↩</button></td>` : '<td></td>'}
+              ${r.isOffline ? `<td><button onclick="restoreArchivedCard('${r.id}')" style="padding:2px 6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.6rem;cursor:pointer">↩</button></td>` : '<td></td>'}
             </tr>`;
           }).join('')
         : `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--muted);font-size:.82rem">
@@ -3838,7 +3854,7 @@
             const mo   = new Date(m + '-01').toLocaleString('default',{month:'short'});
             const isProfit = prof >= 0;
             return `
-              <rect x="${x}" y="${y}" width="${barW}" height="${bH}" fill="rgba(255,140,20,.7)" rx="1"/>
+              <rect x="${x}" y="${y}" width="${barW}" height="${bH}" fill="var(--accent)" rx="1"/>
               <text x="${x + barW/2}" y="${chartH - padB + 12}" text-anchor="middle" font-size="7" fill="var(--muted)" font-family="Share Tech Mono,monospace">${mo}</text>
               <text x="${x + barW/2}" y="${y - 3}" text-anchor="middle" font-size="7" fill="var(--accent)" font-family="Share Tech Mono,monospace">${rev >= 1000 ? '$'+(rev/1000).toFixed(1)+'k' : '$'+rev.toFixed(0)}</text>
             `;
@@ -4980,8 +4996,8 @@
           background:var(--surface);border:1px solid var(--border);
           border-radius:0;padding:22px;width:100%;max-width:520px;
           max-height:88vh;overflow-y:auto;
-          box-shadow:0 0 30px rgba(255,140,20,0.12);
-          font-family:'Share Tech Mono',monospace;
+          box-shadow:3px 3px 0 var(--shadow);
+          font-family:'Press Start 2P','Share Tech Mono',monospace;
         `;
 
         const queueNote = remaining > 1
@@ -4993,7 +5009,7 @@
           <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:4px">${itemName}${queueNote}</div>
           <div style="font-size:.75rem;color:var(--muted);margin-bottom:16px">Choose the correct version, or skip to leave unmatched.</div>
           <div id="_pickerGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:16px"></div>
-          <button id="_pickerSkip" style="width:100%;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">Skip →</button>
+          <button id="_pickerSkip" style="width:100%;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">Skip →</button>
         `;
 
         overlay.appendChild(box);
@@ -5273,7 +5289,7 @@
       if (data) {
         statusEl.style.display = 'block';
         if (data.status === 'pending') {
-          statusEl.style.background = 'rgba(255,140,20,.1)'; statusEl.style.color = 'var(--accent)';
+          statusEl.style.background = 'var(--accent)'; statusEl.style.color = 'var(--accent)';
           statusEl.textContent = '⏳ Your application is pending review. We\'ll be in touch soon.';
         } else if (data.status === 'approved') {
           statusEl.style.background = 'rgba(57,255,20,.1)'; statusEl.style.color = 'var(--green)';
@@ -5352,8 +5368,8 @@
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
               <span style="font-size:.7rem;color:${statusColor};letter-spacing:.06em;text-transform:uppercase">${a.status}</span>
               ${a.status === 'pending' ? `
-                <button onclick="approveVendorApplication('${a.user_id}','${a.id}')" style="padding:6px 14px;background:rgba(57,255,20,.12);border:1px solid var(--green);color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✓ Approve</button>
-                <button onclick="rejectVendorApplication('${a.id}')" style="padding:6px 14px;background:transparent;border:1px solid var(--red);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✗ Reject</button>
+                <button onclick="approveVendorApplication('${a.user_id}','${a.id}')" style="padding:6px 14px;background:rgba(57,255,20,.12);border:1px solid var(--green);color:var(--green);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✓ Approve</button>
+                <button onclick="rejectVendorApplication('${a.id}')" style="padding:6px 14px;background:transparent;border:1px solid var(--red);color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✗ Reject</button>
               ` : ''}
             </div>
           </div>
@@ -6233,14 +6249,14 @@
         // ── CTA button ──────────────────────────────────────────────────
         let ctaBtn = '';
         if (isCurrent) {
-          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:rgba(255,140,20,.06);letter-spacing:.06em">✓ Current plan</div>`;
+          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:var(--surface2);letter-spacing:.06em">✓ Current plan</div>`;
         } else if (t.ctaAction === 'shop_intake') {
-          ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:#080500;border:none;font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Contact us →</button>`;
+          ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Contact us →</button>`;
         } else if (t.ctaAction) {
           const isAbove = TIER_ORDER.indexOf(t.id) < TIER_ORDER.indexOf(current);
-          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${t.badge ? 'var(--accent)' : 'transparent'};color:${t.badge ? '#080500' : 'var(--accent)'};border:1px solid var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;opacity:${isAbove ? '.5' : '1'}">${t.ctaLabel} →</button>`;
+          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${t.badge ? 'var(--premium)' : 'transparent'};color:${t.badge ? 'var(--premium-txt)' : 'var(--accent)'};border:2px solid var(--border);box-shadow:3px 3px 0 var(--shadow);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;opacity:${isAbove ? '.5' : '1'}">${t.ctaLabel} →</button>`;
         } else {
-          ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">${t.ctaLabel}</button>`;
+          ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">${t.ctaLabel}</button>`;
         }
 
         // ── Feature list ────────────────────────────────────────────────
@@ -6260,13 +6276,13 @@
           ? '2px solid var(--accent)'
           : '1px solid var(--border)';
         const bgStyle = isCurrent
-          ? 'background:rgba(255,140,20,.04)'
+          ? 'background:var(--surface2)'
           : 'background:var(--surface)';
         const headerColor = isCurrent ? 'color:var(--accent)' : 'color:var(--muted)';
-        const glowStyle   = isCurrent ? 'box-shadow:0 0 18px rgba(255,140,20,.08)' : '';
+        const glowStyle   = isCurrent ? 'box-shadow:3px 3px 0 var(--shadow)' : '';
 
         return `<div style="border:${borderStyle};${bgStyle};${glowStyle};padding:18px;display:flex;flex-direction:column;gap:0;position:relative">
-          ${t.badge ? `<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:#080500;font-size:.58rem;font-weight:700;padding:2px 10px;letter-spacing:.08em;white-space:nowrap">${t.badge}</div>` : ''}
+          ${t.badge ? `<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--surface);font-size:.58rem;font-weight:700;padding:2px 10px;letter-spacing:.08em;white-space:nowrap">${t.badge}</div>` : ''}
           ${isCurrent ? `<div style="position:absolute;top:8px;right:10px;font-size:.58rem;color:var(--accent);letter-spacing:.06em;opacity:.7">● ACTIVE</div>` : ''}
           <div style="font-size:.62rem;letter-spacing:.12em;${headerColor};margin-bottom:6px">${t.label.toUpperCase()}</div>
           <div style="margin-bottom:14px;line-height:1.4">${priceLine}</div>
@@ -6628,16 +6644,16 @@
         wrap.style.display = 'block';
         const allActive = false;
         let html = `<button onclick="selectBinder(null)" style="
-          padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
+          padding:5px 12px;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
           border:1px solid var(--border);background:transparent;color:var(--muted);white-space:nowrap;flex-shrink:0
         ">← All</button>`;
         for (const b of binders) {
           const active = currentBinderId === b.id;
           const dot = b.color ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${b.color};margin-right:5px;flex-shrink:0"></span>` : '';
           html += `<button onclick="selectBinder('${b.id}')" style="
-            padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
+            padding:5px 12px;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;
             border:1px solid ${active ? (b.color || 'var(--accent)') : 'var(--border)'};
-            background:${active ? (b.color ? b.color + '22' : 'rgba(255,140,20,.12)') : 'transparent'};
+            background:${active ? (b.color ? b.color + '22' : 'var(--accent)') : 'transparent'};
             color:${active ? (b.color || 'var(--accent)') : 'var(--muted)'};
             display:inline-flex;align-items:center;white-space:nowrap;flex-shrink:0
           ">${dot}${b.name}
@@ -6898,7 +6914,7 @@
               <!-- Always-visible edit button in top-right corner of the cover -->
               <button onclick="event.stopPropagation();openEditBinder('${b.id}')"
                 title="Edit binder"
-                style="position:absolute;top:4px;right:4px;z-index:10;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:.6rem;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:2px;line-height:1;padding:0;font-family:'Share Tech Mono',monospace">✎</button>
+                style="position:absolute;top:4px;right:4px;z-index:10;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:.6rem;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:2px;line-height:1;padding:0;font-family:'Press Start 2P','Share Tech Mono',monospace">✎</button>
             </div>
             <div class="binder-book-label">${active ? '▸ ' : ''}${b.name}</div>
           </div>`;
@@ -7048,7 +7064,7 @@
       if (activeItems.length === 0) {
         if (summary) summary.innerHTML = '';
         if (pagination) pagination.style.display = 'none';
-        content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add_Your_First_Card</button></div>`;
+        content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add_Your_First_Card</button></div>`;
         return;
       }
 
@@ -7605,10 +7621,10 @@
                 <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Update Saved Amount</div>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="number" id="savingsAmountInput_${item.id}" value="${saved}" step="0.01" min="0"
-                    style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.82rem"
+                    style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem"
                     placeholder="0.00" />
                   <button id="savingsUpdateBtn_${item.id}" onclick="updateSavingsAmount('${item.id}', document.getElementById('savingsAmountInput_${item.id}').value)"
-                    style="padding:7px 14px;border:1px solid var(--teal);background:rgba(0,204,255,.1);color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Update</button>
+                    style="padding:7px 14px;border:1px solid var(--teal);background:rgba(0,204,255,.1);color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Update</button>
                 </div>
               </div>
 
@@ -7617,9 +7633,9 @@
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
                     placeholder="PriceCharting or TCGPlayer URL"
-                    style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
+                    style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
                   <button onclick="savePriceSourceUrl('${item.id}')"
-                    style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
+                    style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
                   ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.8rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
                 </div>
               </div>
@@ -7627,13 +7643,13 @@
           </div>
           <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
             <button onclick="convertGhostToOwned('${item.id}')"
-              style="padding:8px 18px;border:1px solid var(--green);background:rgba(57,255,20,.08);color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">✓ Mark_As_Owned</button>
+              style="padding:8px 18px;border:1px solid var(--green);background:rgba(57,255,20,.08);color:var(--green);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">✓ Mark_As_Owned</button>
             <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
-              style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer"
+              style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer"
               onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
             <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
-              style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove</button>
+              style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove</button>
             <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
           </div>
         `;
@@ -7687,7 +7703,7 @@
                 </div>`
               : `<div style="margin-bottom:14px;padding:10px;background:var(--surface2);border:1px dashed var(--border);text-align:center">
                   <div style="font-size:.65rem;color:var(--muted)">// PRICE_TREND — <span style="color:var(--teal)">Collector+</span> feature</div>
-                  <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:6px;padding:4px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Share Tech Mono',monospace;font-size:.65rem;cursor:pointer">Upgrade to unlock →</button>
+                  <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:6px;padding:4px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.65rem;cursor:pointer">Upgrade to unlock →</button>
                 </div>`}
 
             <div style="margin-top:10px">
@@ -7695,9 +7711,9 @@
               <div style="display:flex;gap:8px;align-items:center">
                 <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
                   placeholder="PriceCharting or TCGPlayer URL"
-                  style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
+                  style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
                 <button onclick="savePriceSourceUrl('${item.id}')"
-                  style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
+                  style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
                 ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.8rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
               </div>
             </div>
@@ -7705,21 +7721,21 @@
         </div>
         <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
           <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
-            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List_For_Sale</button>
+            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List_For_Sale</button>
           <button onclick="openSoldOfflineModal('${item.id}')"
-            style="padding:8px 18px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">$ Sold_Offline</button>
+            style="padding:8px 18px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">$ Sold_Offline</button>
           ${tierAtLeast('vendor') && binders.length > 0 ? `<select onchange="moveCardToBinder('${item.id}',this.value);closeModal('binderDetailModal')"
-            style="padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">
+            style="padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">
             <option value="">Move to binder…</option>
             <option value="">— All Cards —</option>
             ${binders.map(b=>`<option value="${b.id}" ${String(item.binder_id)===String(b.id)?'selected':''}>${b.name}</option>`).join('')}
           </select>` : ''}
           <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
-            style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
+            style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
             onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
           <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
-            style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove_Card</button>
+            style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove_Card</button>
           <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
         </div>
       `;
