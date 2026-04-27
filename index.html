@@ -817,6 +817,15 @@
     .binder-add-btn:hover .binder-add-box{border-color:var(--accent);color:var(--accent)}
     @keyframes binderFlip{0%{transform:perspective(520px) rotateY(-14deg)}55%{transform:perspective(520px) rotateY(-62deg) translateY(-7px)}100%{transform:perspective(520px) rotateY(-34deg) translateY(-7px)}}
     .binder-book.binder-flipping{animation:binderFlip .44s ease-out forwards}
+    /* Drag-to-shelf states */
+    .binder-book.shelf-drop-available{outline:2px dashed rgba(255,140,20,.35);outline-offset:3px}
+    .binder-book.shelf-drop-hover{transform:perspective(520px) rotateY(-7deg) translateY(-10px) scale(1.06)!important;filter:drop-shadow(0 0 18px rgba(255,140,20,.75))!important;transition:transform .12s ease,filter .12s ease}
+    /* All-cards drag list row */
+    .allcards-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:grab;transition:background .1s;user-select:none}
+    .allcards-row:hover{background:rgba(255,140,20,.04)}
+    .allcards-row:active{cursor:grabbing}
+    .allcards-drag-handle{color:var(--border);font-size:.9rem;flex-shrink:0;line-height:1;padding:0 2px;cursor:grab}
+    .allcards-binder-tag{font-size:.58rem;padding:2px 6px;border:1px solid var(--border);color:var(--muted);font-family:'Share Tech Mono',monospace;white-space:nowrap;border-radius:2px;flex-shrink:0}
     /* ── DASHBOARD CHART ── */
     .dash-chart-section{background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
     .dash-chart-row{display:grid;grid-template-columns:110px 1fr 72px;gap:8px;align-items:center;margin-bottom:8px}
@@ -1524,7 +1533,7 @@
     <div class="binder-frame">
       <!-- Binder View Controls -->
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-        <div class="binder-view-toggle">
+        <div class="binder-view-toggle" id="binderViewToggle">
           <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
           <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
           <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
@@ -6847,11 +6856,12 @@
       const canAdd = binders.length < maxB;
       let html = '';
 
-      // "All Cards" book
+      // "All Cards" book (drop = remove from binder → unsorted)
       const allActive = currentBinderId === null;
       html += `
-        <div class="binder-book-wrap ${allActive ? 'b-active' : ''}" onclick="selectBinder(null)" title="All Cards">
-          <div class="binder-book ${allActive ? 'binder-open' : ''}">
+        <div class="binder-book-wrap ${allActive ? 'b-active' : ''}" onclick="selectBinder(null)" title="All Cards"
+             ondragover="shelfDragOver(event,null)" ondragleave="shelfDragLeave(event)" ondrop="shelfDrop(event,null)">
+          <div class="binder-book ${allActive ? 'binder-open' : ''}" id="binderBookNull">
             <div class="binder-spine" style="background:var(--surface2)"></div>
             <div class="binder-cover" style="background:var(--surface)">
               <div class="binder-cover-default">
@@ -6874,14 +6884,21 @@
              </div>`;
 
         html += `
-          <div class="binder-book-wrap ${active ? 'b-active' : ''}" id="binderWrap_${b.id}" title="${b.name} (right-click to edit)">
-            <div class="binder-book ${active ? 'binder-open' : ''}" id="binderBook_${b.id}"
-                 onclick="openBinderWithAnimation('${b.id}')"
-                 oncontextmenu="event.preventDefault();openEditBinder('${b.id}')">
-              <div class="binder-spine" style="background:${bgColor}">
-                <span class="binder-spine-text">${b.name}</span>
+          <div class="binder-book-wrap ${active ? 'b-active' : ''}" id="binderWrap_${b.id}"
+               ondragover="shelfDragOver(event,'${b.id}')" ondragleave="shelfDragLeave(event)" ondrop="shelfDrop(event,'${b.id}')">
+            <div style="position:relative;display:inline-block">
+              <div class="binder-book ${active ? 'binder-open' : ''}" id="binderBook_${b.id}"
+                   onclick="openBinderWithAnimation('${b.id}')"
+                   oncontextmenu="event.preventDefault();openEditBinder('${b.id}')">
+                <div class="binder-spine" style="background:${bgColor}">
+                  <span class="binder-spine-text">${b.name}</span>
+                </div>
+                <div class="binder-cover">${coverHtml}</div>
               </div>
-              <div class="binder-cover">${coverHtml}</div>
+              <!-- Always-visible edit button in top-right corner of the cover -->
+              <button onclick="event.stopPropagation();openEditBinder('${b.id}')"
+                title="Edit binder"
+                style="position:absolute;top:4px;right:4px;z-index:10;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:.6rem;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:2px;line-height:1;padding:0;font-family:'Share Tech Mono',monospace">✎</button>
             </div>
             <div class="binder-book-label">${active ? '▸ ' : ''}${b.name}</div>
           </div>`;
@@ -6909,7 +6926,8 @@
 
     function openBinderWithAnimation(id) {
       if (currentBinderId === id) {
-        // Already open — just open the edit modal on double-intent
+        // Already open — tap again to edit
+        openEditBinder(id);
         return;
       }
       const bookEl = document.getElementById(`binderBook_${id}`);
@@ -6921,6 +6939,56 @@
       }
       // Short delay so the flip starts visibly before re-render
       setTimeout(() => selectBinder(id), 200);
+    }
+
+    // ── Drag-card-to-shelf (All Cards → binder assignment) ───────────────────
+    let _shelfDragCardId = null;
+
+    function allCardsDragStart(event, itemId) {
+      _shelfDragCardId = itemId;
+      event.dataTransfer.setData('text/plain', String(itemId));
+      event.dataTransfer.effectAllowed = 'move';
+      // Light up all binder books as drop targets
+      setTimeout(() => {
+        document.querySelectorAll('.binder-book').forEach(el => el.classList.add('shelf-drop-available'));
+      }, 0);
+    }
+
+    function allCardsDragEnd(event) {
+      _shelfDragCardId = null;
+      document.querySelectorAll('.binder-book').forEach(el =>
+        el.classList.remove('shelf-drop-available', 'shelf-drop-hover'));
+    }
+
+    function shelfDragOver(event, binderId) {
+      if (!_shelfDragCardId) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      // Highlight only this book
+      document.querySelectorAll('.binder-book').forEach(el => el.classList.remove('shelf-drop-hover'));
+      const bookEl = document.getElementById(binderId ? `binderBook_${binderId}` : 'binderBookNull');
+      if (bookEl) bookEl.classList.add('shelf-drop-hover');
+    }
+
+    function shelfDragLeave(event) {
+      // Only clear when leaving the entire binder-book-wrap
+      if (event.currentTarget.contains(event.relatedTarget)) return;
+      const bookEl = event.currentTarget.querySelector('.binder-book');
+      if (bookEl) bookEl.classList.remove('shelf-drop-hover');
+    }
+
+    async function shelfDrop(event, binderId) {
+      event.preventDefault();
+      const itemId = event.dataTransfer.getData('text/plain') || _shelfDragCardId;
+      _shelfDragCardId = null;
+      document.querySelectorAll('.binder-book').forEach(el =>
+        el.classList.remove('shelf-drop-available', 'shelf-drop-hover'));
+      if (!itemId) return;
+      // Check if already in this binder
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      if (item && String(item.binder_id) === String(binderId)) return; // no-op
+      await moveCardToBinder(itemId, binderId || null);
+      // moveCardToBinder already calls renderBinder
     }
 
     // ── Binder drag-and-drop state ─────────────────────────────────────────
@@ -6940,9 +7008,15 @@
         return;
       }
 
+      // "All Cards" view: always list + drag-to-binder mode
+      const isAllCards = (currentBinderId === null) && binders.length > 0;
+      const effectiveView = isAllCards ? 'list' : binderView;
+      const viewToggle = document.getElementById('binderViewToggle');
+      if (viewToggle) viewToggle.style.display = isAllCards ? 'none' : '';
+
       // Show/hide list search bar and vendor bulk import button
       const searchWrap = document.getElementById('binderListSearchWrap');
-      if (searchWrap) searchWrap.style.display = binderView === 'list' ? 'block' : 'none';
+      if (searchWrap) searchWrap.style.display = effectiveView === 'list' ? 'block' : 'none';
       const bulkBtn = document.getElementById('vendorBulkImportBtn');
       if (bulkBtn) bulkBtn.style.display = hasBulkImport() ? 'block' : 'none';
       const shareBtn = document.getElementById('shareBinderBtn');
@@ -6960,7 +7034,7 @@
       });
 
       // In list view, apply search filter
-      if (binderView === 'list') {
+      if (effectiveView === 'list') {
         const q = (document.getElementById('binderListSearch')?.value || '').toLowerCase().trim();
         if (q) {
           activeItems = activeItems.filter(c =>
@@ -7013,14 +7087,19 @@
       }
 
       // Paginate active items only (owned + ghost, no sold)
-      const perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : binderView === '1x1' ? 1 : 40;
+      const perPage = effectiveView === '3x3' ? 9 : effectiveView === '2x2' ? 4 : effectiveView === '1x1' ? 1 : 40;
       const totalPages = Math.ceil(activeItems.length / perPage);
       binderPage = Math.max(0, Math.min(binderPage, Math.max(0, totalPages - 1)));
       const pageStart = binderPage * perPage;
       const pageItems = activeItems.slice(pageStart, pageStart + perPage);
 
-      if (binderView === 'list') {
-        content.innerHTML = `<div id="binderGrid" style="display:flex;flex-direction:column">
+      if (effectiveView === 'list') {
+        const dragMode = isAllCards; // drag-to-binder only in "All Cards" view
+        content.innerHTML = `
+          ${dragMode ? `<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            <span>⠿</span><span>Drag a card onto a binder cover above to move it</span>
+          </div>` : ''}
+          <div id="binderGrid" style="display:flex;flex-direction:column">
           ${pageItems.map(item => {
             const isGhost  = item.is_ghost;
             const isGraded = !isGhost && item.condition && item.condition !== 'raw';
@@ -7028,25 +7107,37 @@
               ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
               : 'Raw';
             const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
-            return `<div onclick="openBinderCardDetail('${item.id}')"
-              style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
-              onmouseover="this.style.background='rgba(255,140,20,0.05)'" onmouseout="this.style.background=''">
+            // Binder tag for All Cards mode
+            const binderName = dragMode
+              ? (binders.find(b => String(b.id) === String(item.binder_id))?.name || 'Unsorted')
+              : null;
+            const binderTagHtml = binderName
+              ? `<span class="allcards-binder-tag" style="${binderName !== 'Unsorted' ? 'border-color:var(--teal);color:var(--teal)' : ''}">${binderName}</span>`
+              : '';
+            return `<div
+              class="allcards-row"
+              ${dragMode ? `draggable="true"
+                ondragstart="allCardsDragStart(event,'${item.id}')"
+                ondragend="allCardsDragEnd(event)"` : `style="cursor:pointer"`}
+              onclick="openBinderCardDetail('${item.id}')">
+              ${dragMode ? `<span class="allcards-drag-handle">⠿</span>` : ''}
               <img src="${item.card_image_url || ''}" alt="" loading="lazy"
-                style="width:38px;height:53px;object-fit:cover;border-radius:4px;background:var(--surface2);flex-shrink:0"
+                style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0"
                 onerror="this.style.visibility='hidden'">
               <div style="flex:1;min-width:0">
-                <div style="font-size:.8rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
-                <div style="font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
+                <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
+                <div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
               </div>
-              <div style="flex-shrink:0;text-align:right;padding-left:8px">
-                <div style="margin-bottom:3px">${isGhost ? `<span style="color:var(--teal);font-size:.65rem">Wishlist</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.6rem;padding:1px 5px">${condLabel}</span>`}</div>
-                <div style="font-size:.82rem;color:${isGhost ? 'var(--teal)' : 'var(--accent)'};font-weight:700">${isGhost ? '—' : (val > 0 ? '$' + val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—')}</div>
+              ${binderTagHtml}
+              <div style="flex-shrink:0;text-align:right">
+                <div style="margin-bottom:2px">${isGhost ? `<span style="color:var(--teal);font-size:.62rem">Wishlist</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.58rem;padding:1px 4px">${condLabel}</span>`}</div>
+                <div style="font-size:.8rem;color:${isGhost ? 'var(--teal)' : 'var(--accent)'};font-weight:700">${isGhost ? '—' : (val > 0 ? '$' + val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—')}</div>
               </div>
             </div>`;
           }).join('')}
         </div>`;
       } else {
-        const gridClass = binderView === '3x3' ? 'binder-grid-3x3' : binderView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
+        const gridClass = effectiveView === '3x3' ? 'binder-grid-3x3' : effectiveView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
         content.innerHTML = `<div class="${gridClass}" id="binderGrid">${pageItems.map((item, pageIdx) => {
           const globalIdx = pageStart + pageIdx;
           const isGhost  = item.is_ghost;
@@ -7079,7 +7170,7 @@
             </div>
             <div class="binder-card-info">
               <div class="binder-card-name">${item.card_name}</div>
-              ${binderView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
+              ${effectiveView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
               ${isGhost
                 ? (goal > 0
                     ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
