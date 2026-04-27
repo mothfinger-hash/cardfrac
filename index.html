@@ -42,7 +42,7 @@
       --text:#1E1408;--muted:#5C4A30;
       --shadow:#1E1408;--premium-txt:#FFF8EC;
     }
-    body{font-family:'Press Start 2P','Share Tech Mono',monospace;text-transform:uppercase;background:var(--bg);color:var(--text);min-height:100vh;transition:background .2s,color .2s}
+    body{font-family:'Press Start 2P','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;transition:background .2s,color .2s}
 
     /* ── PIXEL GRID BACKGROUND ── */
     body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
@@ -67,7 +67,7 @@
     .logo .logo-b{color:var(--accent)}
     .nav-right{display:flex;align-items:center;gap:10px}
     .nav-tabs{display:flex;gap:4px}
-    button{text-transform:uppercase;font-family:'Press Start 2P','Share Tech Mono',monospace}
+    button{font-family:'Press Start 2P','Share Tech Mono',monospace}
     .nav-tab{padding:6px 12px;border-radius:0;border:2px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:.62rem;font-weight:400;transition:all .1s;position:relative;letter-spacing:.04em}
     .nav-tab:hover{background:var(--surface2);color:var(--text);border-color:var(--border)}
     .nav-tab.active{background:var(--accent);color:var(--surface);border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow)}
@@ -90,7 +90,7 @@
     .join-btn{background:var(--premium);color:var(--premium-txt);border:2px solid var(--border);border-radius:0;padding:6px 12px;font-size:.6rem;font-weight:700;cursor:pointer;transition:all .1s;box-shadow:2px 2px 0 var(--shadow)}
     .join-btn:hover{box-shadow:3px 3px 0 var(--shadow);transform:translate(-1px,-1px)}
     /* THEME TOGGLE */
-    .theme-toggle{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:2px solid var(--border);padding:4px 9px;font-size:.55rem;color:var(--muted);cursor:pointer;transition:all .1s;font-family:'Press Start 2P','Share Tech Mono',monospace;letter-spacing:.04em;text-transform:uppercase}
+    .theme-toggle{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:2px solid var(--border);padding:4px 9px;font-size:.55rem;color:var(--muted);cursor:pointer;transition:all .1s;font-family:'Press Start 2P','Share Tech Mono',monospace;letter-spacing:.04em}
     .theme-toggle:hover{border-color:var(--accent2);color:var(--accent2)}
 
     /* PAGES */
@@ -424,74 +424,75 @@
 
     /* MOBILE & RESPONSIVE */
     @media(max-width:768px) {
-      .card-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+      .card-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
       .detail-layout{grid-template-columns:1fr}
-      nav{padding:0 16px}
-      .page{padding:24px 16px}
-      .nav-tab{padding:4px 10px;font-size:.8rem}
-      h2{font-size:1.2rem}
-      .detail-right h1{font-size:1.2rem}
-      .modal{max-width:90%;padding:20px}
+      nav{padding:0 12px;height:52px}
+      .page{padding:20px 14px}
+      h2{font-size:.85rem}
+      .detail-right h1{font-size:.9rem}
+      .modal{max-width:94%;padding:18px}
+      .nav-tab{padding:4px 8px;font-size:.52rem}
+      .logo{font-size:.72rem;padding:3px 7px}
+      .auth-btn{font-size:.52rem;padding:4px 8px}
+      .btn,.btn-primary,.btn-secondary,.btn-teal,.btn-orange,.btn-red,.btn-gold{font-size:.6rem}
+      .form-group input,.form-group select{font-size:.6rem;padding:8px 10px}
+      .member-chip{font-size:.5rem;padding:3px 7px}
     }
     @media(max-width:600px) {
-      .card-grid{grid-template-columns:1fr}
-      body{font-size:14px}
-      nav{height:50px}
-      .logo{font-size:1rem}
+      .card-grid{grid-template-columns:1fr 1fr}
+      body{font-size:12px}
+      nav{height:50px;padding:0 10px}
+      .logo{font-size:.62rem !important;padding:3px 6px;letter-spacing:.5px;box-shadow:2px 2px 0 var(--accent)}
       .nav-tabs{display:none}
-      .auth-btn{padding:4px 10px;font-size:.75rem}
-      .btn, .btn-primary, .btn-secondary, .btn-teal, .btn-orange, .btn-red, .btn-gold{min-height:44px;padding:10px 14px}
-      .mini-btn{min-height:36px;padding:8px 12px}
+      .auth-btn{padding:4px 8px;font-size:.5rem}
+      .theme-toggle{font-size:.5rem;padding:3px 6px}
+      .member-chip{font-size:.48rem;padding:3px 6px}
+      .btn,.btn-primary,.btn-secondary,.btn-teal,.btn-orange,.btn-red,.btn-gold{min-height:44px;padding:10px 12px;font-size:.58rem}
+      .mini-btn{min-height:36px;padding:7px 10px;font-size:.56rem}
       .form-row{grid-template-columns:1fr}
+      .form-group input,.form-group select{font-size:.58rem;padding:8px 10px}
       .detail-stats{grid-template-columns:1fr}
-      .card-name{font-size:.95rem}
-      h2{font-size:1.1rem}
-      h1{font-size:1.05rem}
-      .modal{margin:16px}
-      .cart-bar,.batch-action-bar{padding:12px 16px}
+      .card-name{font-size:.75rem}
+      h2{font-size:.78rem}
+      h1{font-size:.82rem}
+      .modal{margin:10px;padding:16px;font-size:.62rem}
+      .modal h3{font-size:.75rem}
+      .cart-bar,.batch-action-bar{padding:10px 14px}
       .revenue-grid{grid-template-columns:1fr 1fr}
-      /* Push page content up so it's not hidden behind bottom nav */
-      .page{padding-bottom:80px}
+      .page{padding-bottom:80px;padding-left:12px;padding-right:12px}
       .cart-bar{bottom:64px}
+      .stat-box .stat-val{font-size:.85rem}
+      .listing-card{box-shadow:3px 3px 0 var(--shadow)}
+      .listing-card:hover{box-shadow:4px 4px 0 var(--shadow)}
 
-      /* Account page — tabs scroll horizontally so all 5 fit */
-      .account-tabs{
-        overflow-x:auto;
-        flex-wrap:nowrap;
-        -webkit-overflow-scrolling:touch;
-        padding-bottom:6px;
-        gap:6px;
-        /* hide scrollbar on mobile */
-        scrollbar-width:none;
-      }
+      /* Account tabs — horizontal scroll */
+      .account-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:6px;gap:4px;scrollbar-width:none}
       .account-tabs::-webkit-scrollbar{display:none}
-      .account-tab{white-space:nowrap;flex-shrink:0;padding:7px 12px;font-size:.8rem}
+      .account-tab{white-space:nowrap;flex-shrink:0;padding:6px 10px;font-size:.52rem}
 
-      /* Offer cards — stack actions vertically */
+      /* Offer/action stacking */
       .offer-actions{flex-direction:column}
       .offer-actions .mini-btn{width:100%}
 
-      /* History table — horizontal scroll */
+      /* Table scroll */
       .tx-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-      .tx-table{font-size:.8rem}
-      /* Holdings table — hide secondary cols on mobile */
-      .hm { display: none; }
-      .holdings-grid { grid-template-columns: 1fr !important; }
+      .tx-table{font-size:.58rem}
+      .hm{display:none}
+      .holdings-grid{grid-template-columns:1fr !important}
 
-      /* Retro mobile nav — tighten logo */
-      .logo { font-size: .85rem !important; letter-spacing: 1px; }
-      /* Search bar — full width on mobile */
-      .search-and-filters { grid-template-columns: 1fr !important; }
-      /* Game pills — wrap nicely */
-      #gameTypePills { gap: 6px; }
-      .game-pill { font-size: .72rem; padding: 5px 10px; }
-      /* Section tabs — scroll on mobile */
-      .section-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; }
-      .section-tabs::-webkit-scrollbar { display: none; }
-      .section-tab { white-space: nowrap; flex-shrink: 0; font-size: .78rem; padding: 6px 12px; }
-      /* Browse page h2 spacing */
-      #browsePage > h2 { margin-bottom: 12px; font-size: 1rem; }
+      /* Search + filters */
+      .search-and-filters{grid-template-columns:1fr !important}
+      #gameTypePills{gap:5px}
+      .game-pill{font-size:.56rem;padding:5px 8px}
 
+      /* Section tabs scroll */
+      .section-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px}
+      .section-tabs::-webkit-scrollbar{display:none}
+      .section-tab{white-space:nowrap;flex-shrink:0;font-size:.54rem;padding:5px 9px}
+
+      #browsePage > h2{margin-bottom:10px;font-size:.78rem}
+      .subtitle{font-size:.58rem}
+      .nav-tab,.coll-btn-primary,.coll-btn-secondary{font-size:.54rem}
     }
 
     /* MOBILE BOTTOM NAV */
@@ -856,14 +857,14 @@
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="browse">Marketplace</button>
-        <button class="nav-tab" data-page="collection">My_Binder</button>
-        <button class="nav-tab" data-page="addCard">Add_Card</button>
+        <button class="nav-tab" data-page="collection">My Binder</button>
+        <button class="nav-tab" data-page="addCard">Add Card</button>
         <button class="nav-tab" data-page="account">Dashboard<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
-        <button class="nav-tab" data-page="admin">Admin_Panel</button>
+        <button class="nav-tab" data-page="admin">Admin</button>
       </div>
       <div id="authSection" class="auth-buttons">
         <button class="auth-btn" id="loginBtn">Login</button>
-        <button class="auth-btn" id="registerBtn">join_network</button>
+        <button class="auth-btn" id="registerBtn">Join</button>
       </div>
       <div id="userSection" style="display:none;position:relative">
         <div class="user-avatar" id="userChip">
@@ -871,9 +872,9 @@
           <span id="userName">User</span>
         </div>
         <div class="avatar-dropdown" id="avatarDropdown">
-          <div class="dropdown-item" id="myAccountBtn">My_Account</div>
+          <div class="dropdown-item" id="myAccountBtn">My Account</div>
           <div class="dropdown-divider"></div>
-          <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">Sign_Out</div>
+          <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">Sign Out</div>
         </div>
       </div>
       <button class="member-chip" id="membershipBtn">Premium</button>
@@ -897,9 +898,9 @@
           <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()" />
         </div>
         <div id="loginError" style="color:#ef4444;font-size:.82rem;margin-bottom:8px;min-height:18px"></div>
-        <button type="button" class="btn btn-primary" onclick="handleLogin()" style="width:100%">Sign_In</button>
+        <button type="button" class="btn btn-primary" onclick="handleLogin()" style="width:100%">Sign In</button>
         <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
-          Don't have an account? <a href="#" onclick="switchModal('loginModal','registerModal');return false" style="color:var(--accent2);text-decoration:none">join_network</a>
+          Don't have an account? <a href="#" onclick="switchModal('loginModal','registerModal');return false" style="color:var(--accent2);text-decoration:none">Join</a>
         </p>
       </div>
     </div>
@@ -938,7 +939,7 @@
           <input type="text" id="regReferralCode" placeholder="Enter referral code if you have one" />
         </div>
         <div id="registerError" class="form-error"></div>
-        <button type="submit" class="btn btn-primary">Create_Account</button>
+        <button type="submit" class="btn btn-primary">Create Account</button>
         <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
           Already have an account? <a href="#" onclick="switchModal('registerModal','loginModal');return false" style="color:var(--accent2);text-decoration:none">Sign In</a>
         </p>
@@ -951,7 +952,7 @@
   <div class="modal-overlay" id="membershipModal" style="align-items:flex-start;padding:20px 12px;overflow-y:auto">
     <div class="modal" style="max-width:820px;padding:28px 24px">
       <button class="modal-close" onclick="closeModal('membershipModal')">×</button>
-      <div style="font-size:.7rem;color:var(--teal);letter-spacing:.1em;margin-bottom:4px">// CHOOSE YOUR PLAN</div>
+      <div style="font-size:.7rem;color:var(--teal);letter-spacing:.1em;margin-bottom:4px">Choose Your Plan</div>
       <h3 style="margin-bottom:2px;font-size:1.15rem">PathBinder Subscription</h3>
       <p class="modal-sub" id="pricingSubtitle" style="margin-bottom:18px">All plans include the PathBinder mobile app.</p>
 
@@ -966,7 +967,7 @@
 
       <!-- Shop intake form (hidden until Shop CTA is clicked) -->
       <div id="shopIntakeForm" style="display:none;border:1px solid #993C1D;padding:18px;margin-top:8px">
-        <div style="font-size:.72rem;color:#993C1D;letter-spacing:.08em;margin-bottom:10px">// SHOP TIER — CONTACT US</div>
+        <div style="font-size:.72rem;color:#993C1D;letter-spacing:.08em;margin-bottom:10px">Shop Tier — Contact Us</div>
         <div class="form-group"><label>Business name</label><input type="text" id="shopBizName" class="atc-input" style="width:100%"></div>
         <div class="form-group"><label>Business type</label>
           <select id="shopBizType" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem">
@@ -989,12 +990,12 @@
   <div class="modal-overlay" id="addToCollectionModal">
     <div class="modal" style="max-width:540px">
       <button class="modal-close" onclick="closeModal('addToCollectionModal')">×</button>
-      <h3>Add_To_Collection</h3>
+      <h3>Add to Collection</h3>
       <p class="modal-sub" id="atcCardName" style="color:var(--accent);text-transform:none"></p>
       <!-- Manual name input (shown only for manual entry) -->
       <div class="form-group" id="atcManualNameRow" style="display:none;margin-bottom:14px">
         <label>Card Name</label>
-        <input type="text" class="atc-input" id="atcManualNameInput" placeholder="e.g. 1986 Michael Jordan Fleer Rookie" style="width:100%" />
+        <input type="text" class="atc-input" id="atcManualNameInput" placeholder="e.g. e.g. Charizard Holo 1st Edition" style="width:100%" />
       </div>
       <div class="atc-grid" style="margin-bottom:14px">
         <div class="form-group">
@@ -1038,7 +1039,7 @@
         </div>
         <div class="form-group">
           <label>Cert # (optional)</label>
-          <input type="text" class="atc-input" id="atcCertNumber" placeholder="PSA/BGS cert number" style="width:100%" />
+          <input type="text" class="atc-input" id="atcCertNumber" placeholder="Grading cert # (optional)" style="width:100%" />
         </div>
       </div>
       <div class="form-group" style="margin-bottom:14px">
@@ -1050,13 +1051,13 @@
         <input type="text" class="atc-input" id="atcNotes" placeholder="Optional notes" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveToCollection()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add_To_Collection</button>
+        <button onclick="saveToCollection()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add to Collection</button>
         <button onclick="closeModal('addToCollectionModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
       <div style="margin-top:14px;text-align:center;border-top:1px solid var(--border);padding-top:12px">
         <span style="font-size:.75rem;color:var(--muted)">Don't own it yet?</span>
         <button onclick="closeModal('addToCollectionModal');openAddToWishlistModal(pendingCollectionCard||{})"
-          style="margin-left:10px;background:transparent;border:none;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline;padding:0">♡ Add_to_Wishlist_Instead</button>
+          style="margin-left:10px;background:transparent;border:none;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline;padding:0">♡ Add to Wishlist Instead</button>
       </div>
     </div>
   </div>
@@ -1065,7 +1066,7 @@
   <div class="modal-overlay" id="addToWishlistModal">
     <div class="modal" style="max-width:440px">
       <button class="modal-close" onclick="closeModal('addToWishlistModal')">×</button>
-      <h3 style="color:var(--teal)">Add_To_Wishlist</h3>
+      <h3 style="color:var(--teal)">Add to Wishlist</h3>
       <p class="modal-sub" id="wishlistCardName" style="color:var(--teal);text-transform:none;opacity:.8"></p>
       <div class="form-group" id="wishlistManualNameRow" style="display:none;margin-bottom:14px">
         <label>Card Name</label>
@@ -1085,7 +1086,7 @@
         <input type="text" class="atc-input" id="wishlistPriceUrl" placeholder="PriceCharting URL for tracking" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(0,204,255,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add_To_Wishlist</button>
+        <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(0,204,255,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add to Wishlist</button>
         <button onclick="closeModal('addToWishlistModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1095,7 +1096,7 @@
   <div class="modal-overlay" id="binderEditModal">
     <div class="modal" style="max-width:400px">
       <button class="modal-close" onclick="closeModal('binderEditModal')">×</button>
-      <h3 id="binderEditTitle">New_Binder</h3>
+      <h3 id="binderEditTitle">New Binder</h3>
       <p class="modal-sub">Organise your collection into separate binders by set, type, or anything you like.</p>
       <div class="form-group">
         <label>Binder name</label>
@@ -1130,7 +1131,7 @@
   <div class="modal-overlay" id="soldOfflineModal">
     <div class="modal" style="max-width:420px">
       <button class="modal-close" onclick="closeModal('soldOfflineModal')">×</button>
-      <h3>Sold_Offline</h3>
+      <h3>Sold Offline</h3>
       <p class="modal-sub" id="soldOfflineCardName" style="color:var(--accent);text-transform:none;opacity:.85"></p>
       <p style="font-size:.75rem;color:var(--muted);margin-bottom:16px">Log a sale that happened outside PathBinder. The card will be removed from your active binder and recorded in your sales history.</p>
       <div class="atc-grid" style="margin-bottom:14px">
@@ -1152,7 +1153,7 @@
         <input type="text" class="atc-input" id="soNotes" placeholder="Any additional notes" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="confirmSoldOffline()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Mark_As_Sold</button>
+        <button onclick="confirmSoldOffline()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Mark as Sold</button>
         <button onclick="closeModal('soldOfflineModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1162,7 +1163,7 @@
   <div class="modal-overlay" id="vendorApplicationModal">
     <div class="modal" style="max-width:520px">
       <button class="modal-close" onclick="closeModal('vendorApplicationModal')">×</button>
-      <h3 style="color:var(--accent)">Apply_To_Sell</h3>
+      <h3 style="color:var(--accent)">Apply to Sell</h3>
       <p style="font-size:.8rem;color:var(--muted);margin-bottom:20px">PathBinder is a verified vendor marketplace. Fill out the form below and we'll review your application within 2–3 business days.</p>
       <div id="vendorAppStatus" style="display:none;padding:10px 14px;border-radius:6px;font-size:.8rem;margin-bottom:16px"></div>
       <div style="display:flex;flex-direction:column;gap:12px">
@@ -1190,7 +1191,7 @@
         </div>
       </div>
       <div style="display:flex;gap:10px;margin-top:20px">
-        <button onclick="saveVendorApplication()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Submit_Application</button>
+        <button onclick="saveVendorApplication()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Submit Application</button>
         <button onclick="closeModal('vendorApplicationModal')" style="padding:12px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1200,11 +1201,11 @@
   <div class="modal-overlay" id="vendorImportModal">
     <div class="modal" style="max-width:560px">
       <button class="modal-close" onclick="closeModal('vendorImportModal')">×</button>
-      <h3 style="margin-bottom:4px">Bulk_Import_Inventory</h3>
+      <h3 style="margin-bottom:4px">Bulk Import</h3>
       <p style="font-size:.78rem;color:var(--muted);margin-bottom:18px">Upload your inventory spreadsheet — cards are added to your binder. From there you can list any card for sale (with photos), or mark it as sold offline.</p>
 
       <div style="display:flex;gap:10px;margin-bottom:20px">
-        <button onclick="downloadVendorTemplate()" style="flex:1;padding:10px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">⬇ Download_Template</button>
+        <button onclick="downloadVendorTemplate()" style="flex:1;padding:10px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">⬇ Download Template</button>
       </div>
 
       <div id="importDropZone" onclick="document.getElementById('vendorImportFile').click()"
@@ -1226,7 +1227,7 @@
       <div id="importProgress" style="display:none;font-size:.78rem;color:var(--muted);margin-bottom:12px"></div>
 
       <div style="display:flex;gap:10px">
-        <button id="importSubmitBtn" onclick="submitVendorImport()" style="display:none;flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Import_Listings →</button>
+        <button id="importSubmitBtn" onclick="submitVendorImport()" style="display:none;flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Import Listings →</button>
         <button onclick="closeModal('vendorImportModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1236,7 +1237,7 @@
   <div class="modal-overlay" id="listCardModal">
     <div class="modal" style="max-width:600px">
       <button class="modal-close" onclick="closeModal('listCardModal')">×</button>
-      <h3>List_Card_For_Sale</h3>
+      <h3>List Card for Sale</h3>
       <p class="modal-sub">Required: front &amp; back photo. Buyers see market price vs. your ask.</p>
 
       <div class="atc-grid" style="margin-bottom:14px">
@@ -1317,7 +1318,7 @@
 
       <div id="lcSaveError" style="display:none;color:var(--red);font-size:.78rem;padding:8px 12px;border:1px solid var(--red);margin-bottom:10px;background:rgba(239,68,68,.06)"></div>
       <div style="display:flex;gap:10px">
-        <button class="lc-save-btn" onclick="saveMarketplaceListing()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">List_Card</button>
+        <button class="lc-save-btn" onclick="saveMarketplaceListing()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">List Card</button>
         <button onclick="closeModal('listCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1327,7 +1328,7 @@
   <div class="modal-overlay" id="buyCardModal">
     <div class="modal" style="max-width:420px">
       <button class="modal-close" onclick="closeModal('buyCardModal')">×</button>
-      <h3>Confirm_Purchase</h3>
+      <h3>Confirm Purchase</h3>
       <p class="modal-sub" id="buyCardName" style="color:var(--accent);text-transform:none;font-size:.95rem"></p>
       <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;margin:16px 0;font-size:.82rem">
         <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--muted)">Card grade</span><span id="buyCardGrade" style="color:var(--text)"></span></div>
@@ -1343,7 +1344,7 @@
       </div>
       <input type="hidden" id="buyCardListingId" />
       <div style="display:flex;gap:10px">
-        <button class="buy-confirm-btn" onclick="confirmBuyCard()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Proceed_to_Payment</button>
+        <button class="buy-confirm-btn" onclick="confirmBuyCard()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Proceed to Payment</button>
         <button onclick="closeModal('buyCardModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1353,7 +1354,7 @@
   <div class="modal-overlay" id="addTrackingModal">
     <div class="modal" style="max-width:400px">
       <button class="modal-close" onclick="closeModal('addTrackingModal')">×</button>
-      <h3>Add_Tracking</h3>
+      <h3>Add Tracking</h3>
       <p class="modal-sub">Ship the card and enter the tracking details below. Buyer will be notified.</p>
       <input type="hidden" id="trackingOrderId" />
       <div class="form-group" style="margin-bottom:14px">
@@ -1371,7 +1372,7 @@
         <input class="atc-input" id="trackingNumber" type="text" placeholder="e.g. 9400111899223821234567" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveTracking()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save_&amp;_Notify_Buyer</button>
+        <button onclick="saveTracking()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save &amp; Notify Buyer</button>
         <button onclick="closeModal('addTrackingModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1381,7 +1382,7 @@
   <div class="modal-overlay" id="rateSellerModal">
     <div class="modal" style="max-width:400px">
       <button class="modal-close" onclick="closeModal('rateSellerModal')">×</button>
-      <h3>Rate_Seller</h3>
+      <h3>Rate Seller</h3>
       <p class="modal-sub" id="rateSellerName"></p>
       <input type="hidden" id="rateOrderId" />
       <input type="hidden" id="rateSellerId" />
@@ -1397,30 +1398,30 @@
         <label>Comment (optional)</label>
         <textarea class="atc-input" id="ratingComment" rows="2" placeholder="Describe your experience..." style="width:100%;resize:vertical"></textarea>
       </div>
-      <button onclick="submitRating()" style="width:100%;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Submit_Rating</button>
+      <button onclick="submitRating()" style="width:100%;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Submit Rating</button>
     </div>
   </div>
 
   <!-- PAGES -->
   <div id="landingPage" class="page active" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
     <div id="heroSection">
-      <h1 class="hero-title">YOUR CARD COLLECTION<br>COMMAND CENTER<span class="hero-cursor"></span></h1>
-      <p class="hero-tagline">TRACK · BUY · SELL // PORTFOLIO ANALYTICS // SECURE ESCROW</p>
+      <h1 class="hero-title">Your card collection,<br>organized and alive<span class="hero-cursor"></span></h1>
+      <p class="hero-tagline">Track · Buy · Sell · Grow your collection</p>
       <div class="hero-stats">
         <div class="hero-stat-box">
-          <div class="hero-stat-label">[ FOR_SALE ]</div>
+          <div class="hero-stat-label">Cards for sale</div>
           <div class="hero-stat-value" id="heroTotalCards">—</div>
         </div>
         <div class="hero-stat-box">
-          <div class="hero-stat-label">[ MKT_VALUE ]</div>
+          <div class="hero-stat-label">Market value</div>
           <div class="hero-stat-value" id="heroMarketCap">—</div>
         </div>
       </div>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        <button class="hero-cta" onclick="showPage('collection');setMobileNav('collection')" style="background:transparent;border:2px solid var(--accent);color:var(--accent)">[MY_BINDER]</button>
-        <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">[MARKETPLACE]</button>
+        <button class="hero-cta" onclick="showPage('collection');setMobileNav('collection')" style="background:transparent;border:2px solid var(--accent);color:var(--accent)">My Binder</button>
+        <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">Marketplace</button>
       </div>
-      <p class="hero-footer-line">PATHBINDER // ALL-IN-ONE COLLECTION TRACKER + P2P MARKETPLACE // 5% PLATFORM FEE</p>
+      <p class="hero-footer-line">All-in-one collection tracker and peer-to-peer marketplace — 5% platform fee</p>
     </div>
   </div>
 
@@ -1433,9 +1434,9 @@
       <button onclick="showPage('collection');setMobileNav('collection')"
         style="padding:7px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s;letter-spacing:.04em"
         onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 My_Binder</button>
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 My Binder</button>
       <button onclick="openListCardModal()"
-        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">List_A_Card</button>
+        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">List a Card</button>
     </div>
 
     <div class="section-tabs">
@@ -1467,9 +1468,9 @@
     <h2>Dashboard</h2>
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
-      <button class="account-tab" onclick="switchAccountTab('myListings')">My_Listings</button>
+      <button class="account-tab" onclick="switchAccountTab('myListings')">My Listings</button>
       <button class="account-tab" onclick="switchAccountTab('myOrders')">Orders<span class="badge-count" id="orderNotification" style="display:none">0</span></button>
-      <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales_Archive</button>
+      <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales Archive</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
     </div>
@@ -1480,8 +1481,8 @@
 
     <div id="myListings" class="account-content">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h3 style="font-size:1rem">Your_Listings</h3>
-        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">List_A_Card</button>
+        <h3 style="font-size:1rem">Your Listings</h3>
+        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">List a Card</button>
       </div>
       <div id="myListingsContent"></div>
     </div>
@@ -1509,7 +1510,7 @@
   </div>
 
   <div id="collectionPage" class="page">
-    <h2>My_Binder</h2>
+    <h2>My Binder</h2>
     <p class="subtitle">Your complete card holdings at a glance.</p>
 
     <!-- Binder shelf (visual covers) -->
@@ -1533,10 +1534,10 @@
           <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk_Import</button>
-          <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share_Binder</button>
+          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk Import</button>
+          <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share Binder</button>
           <button onclick="showPage('addCard');setMobileNav('addCard')"
-            style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add_Card</button>
+            style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add Card</button>
         </div>
       </div>
       <!-- List view search — only visible in list mode -->
@@ -1565,16 +1566,16 @@
   </div>
 
   <div id="addCardPage" class="page">
-    <h2>Add_Card</h2>
+    <h2>Add Card</h2>
     <p class="subtitle">Search the Pokémon TCG database or add any card manually.</p>
     <div class="coll-add-section">
-      <div class="coll-add-title">// ADD_CARD_TO_COLLECTION</div>
+      <div class="coll-add-title"></div>
       <input type="text" class="coll-search-bar" id="cardSearchInput"
         placeholder="Search Pokémon cards by name (e.g. Charizard, Pikachu)..."
         onkeydown="if(event.key==='Enter')searchPokemonCards()" />
       <div class="coll-add-btns">
-        <button class="coll-btn-primary" onclick="searchPokemonCards()">Search_Pokémon_TCG</button>
-        <button class="coll-btn-secondary" onclick="openManualAddModal()">Add_Manually_(Sports_/_Other)</button>
+        <button class="coll-btn-primary" onclick="searchPokemonCards()">Search Cards</button>
+        <button class="coll-btn-secondary" onclick="openManualAddModal()">Add Manually</button>
       </div>
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
@@ -1594,19 +1595,19 @@
   <div id="leaderboardPage" class="page">
     <h2>Leaderboard</h2>
     <div class="section-tabs" style="margin-bottom:24px">
-      <button class="section-tab active" onclick="renderLeaderboard('value')">Portfolio_Value</button>
-      <button class="section-tab" onclick="renderLeaderboard('slots')">Most_Slots</button>
-      <button class="section-tab" onclick="renderLeaderboard('diverse')">Most_Diverse</button>
+      <button class="section-tab active" onclick="renderLeaderboard('value')">Portfolio Value</button>
+      <button class="section-tab" onclick="renderLeaderboard('slots')">Most Cards</button>
+      <button class="section-tab" onclick="renderLeaderboard('diverse')">Most Diverse</button>
     </div>
     <div id="leaderboardContent"><div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div></div>
   </div>
 
   <div id="adminPage" class="page">
     <div class="admin-header">
-      <h2>Admin_Panel</h2>
+      <h2>Admin</h2>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn-outline" id="refreshPricesBtn" onclick="triggerPriceRefresh()" style="font-size:.8rem;padding:6px 12px">Refresh_Prices</button>
-        <button class="btn-outline" onclick="toggleAddForm()">Add_Listing</button>
+        <button class="btn-outline" id="refreshPricesBtn" onclick="triggerPriceRefresh()" style="font-size:.8rem;padding:6px 12px">Refresh Prices</button>
+        <button class="btn-outline" onclick="toggleAddForm()">Add Listing</button>
       </div>
     </div>
     <div id="priceRefreshStatus" style="display:none;font-size:.82rem;padding:10px 14px;border:1px solid var(--border);background:var(--surface2);margin-bottom:16px"></div>
@@ -1620,7 +1621,7 @@
         </div>
         <div class="form-group">
           <label>Grade</label>
-          <input type="text" id="cardGrade" placeholder="e.g., PSA 10" oninput="this.style.border=''" />
+          <input type="text" id="cardGrade" placeholder="e.g., PSA 10 or NM" oninput="this.style.border=''" />
         </div>
       </div>
       <div class="form-row">
@@ -1688,7 +1689,7 @@
         <div id="photoUploadStatus" style="font-size:.8rem;color:var(--muted);margin-top:6px"></div>
       </div>
       <div style="display:flex;gap:10px;margin-top:16px">
-        <button type="button" class="btn btn-primary" onclick="addListing()" style="flex:1">Add_Listing</button>
+        <button type="button" class="btn btn-primary" onclick="addListing()" style="flex:1">Add Listing</button>
         <button type="button" class="btn btn-secondary" onclick="toggleAddForm()">Cancel</button>
       </div>
     </div>
@@ -1719,7 +1720,7 @@
 
     <!-- Vendor Applications Panel (admin only) -->
     <div style="background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:18px;margin-bottom:24px">
-      <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em;margin-bottom:14px">// VENDOR_APPLICATIONS</div>
+      <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em;margin-bottom:14px">Vendor Applications</div>
       <div id="vendorApplicationsPanel"><div style="color:var(--muted);font-size:.8rem">Loading...</div></div>
     </div>
 
@@ -2137,18 +2138,7 @@
 
 
     // ── RETRO LABELS: replace spaces with _ in all button text nodes ──────────
-    function retroLabels() {
-      document.querySelectorAll('button, .dropdown-item').forEach(el => {
-        el.childNodes.forEach(node => {
-          if (node.nodeType === 3 /* TEXT_NODE */) {
-            const trimmed = node.textContent.trim();
-            if (trimmed && trimmed.includes(' ') && !trimmed.startsWith('[')) {
-              node.textContent = node.textContent.replace(/ /g, '_');
-            }
-          }
-        });
-      });
-    }
+    function retroLabels() { /* removed — no longer using underscore labels */ }
 
     function toggleTheme() {
       const html = document.documentElement;
@@ -2225,7 +2215,7 @@
       if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
       if (pageId === 'addCard') { /* addCardPage ready */ }
       // collection page is accessible directly via nav
-      setTimeout(retroLabels, 50);
+      
     }
 
     document.querySelectorAll('[data-page]').forEach(tab => {
@@ -2340,7 +2330,7 @@
               ${sellerName}${vendorBadge}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
             </div>
           </div>
-          ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy_Now_→</button>` : ''}
+          ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy Now →</button>` : ''}
         </div>`;
       }).join('');
     }
@@ -2477,7 +2467,7 @@
             <div style="margin:20px 0">
               <button onclick="buyCard('${listingId}')"
                 style="width:100%;padding:14px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.95rem;font-weight:700;cursor:pointer;letter-spacing:.06em;margin-bottom:8px">
-                Buy_Now_→ $${total.toFixed(2)}
+                Buy Now → $${total.toFixed(2)}
               </button>
               <div style="font-size:.72rem;color:var(--muted);line-height:1.8;text-align:center">
                 ✓ Funds held in escrow · ✓ 7-day buyer protection · ✓ 5% platform fee paid by seller
@@ -2762,18 +2752,18 @@
         ${alertsHtml}
 
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;margin-bottom:24px">
-          <div class="coll-stat-box" style="border-color:var(--accent)"><div class="coll-stat-label" style="color:var(--accent)">Binder_Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Net_Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) : '—'}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Active_Listings</div><div class="coll-stat-value">${activeSales}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Total_Earned</div><div class="coll-stat-value">${totalEarned > 0 ? '$'+totalEarned.toFixed(2) : '—'}</div></div>
-          ${pendingPayouts > 0 ? `<div class="coll-stat-box" style="border-color:var(--red)"><div class="coll-stat-label" style="color:var(--red)">Pending_Payouts</div><div class="coll-stat-value">${pendingPayouts}</div></div>` : ''}
+          <div class="coll-stat-box" style="border-color:var(--accent)"><div class="coll-stat-label" style="color:var(--accent)">Binder Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Net Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) : '—'}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Active Listings</div><div class="coll-stat-value">${activeSales}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Total Earned</div><div class="coll-stat-value">${totalEarned > 0 ? '$'+totalEarned.toFixed(2) : '—'}</div></div>
+          ${pendingPayouts > 0 ? `<div class="coll-stat-box" style="border-color:var(--red)"><div class="coll-stat-label" style="color:var(--red)">Pending Payouts</div><div class="coll-stat-value">${pendingPayouts}</div></div>` : ''}
         </div>
 
         ${ytdHtml}
 
         ${top5.length > 0 ? `
         <div style="margin:24px 0 16px">
-          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// TOP_5_MOST_VALUABLE</div>
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">Top 5 Most Valuable</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">
             ${top5.map((item, i) => {
               const v = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
@@ -2802,7 +2792,7 @@
 
         ${ghostCards.length > 0 ? `
         <div class="dash-chart-section" style="border-color:rgba(0,204,255,.25);margin-top:8px">
-          <div style="font-size:.75rem;color:var(--teal);margin-bottom:14px;letter-spacing:.08em">// WISHLIST_GOALS (${ghostCards.length})</div>
+          <div style="font-size:.75rem;color:var(--teal);margin-bottom:14px;letter-spacing:.08em">Wishlist Goals (${ghostCards.length})</div>
           ${ghostCards.map(c => {
             const goal   = c.savings_goal || 0;
             const saved  = c.amount_saved || 0;
@@ -2822,27 +2812,27 @@
         ${soldOffline.length > 0 ? `
         <div class="dash-chart-section" style="border-color:rgba(57,255,20,.25);margin-bottom:16px">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// SALES_SUMMARY</div>
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">Sales Summary</div>
             <button onclick="showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('salesArchive'),80)" style="background:transparent;border:none;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">→ View Archive</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:10px">
-            <div class="coll-stat-box"><div class="coll-stat-label">Offline_Sales</div><div class="coll-stat-value">${soldOffline.length}</div></div>
+            <div class="coll-stat-box"><div class="coll-stat-label">Offline Sales</div><div class="coll-stat-value">${soldOffline.length}</div></div>
             <div class="coll-stat-box"><div class="coll-stat-label">Revenue</div><div class="coll-stat-value" style="color:var(--green)">$${soldOffline.reduce((s,c)=>s+(c.offline_sale_price||0),0).toFixed(2)}</div></div>
             <div class="coll-stat-box"><div class="coll-stat-label">Profit</div><div class="coll-stat-value" style="color:var(--green)">$${(soldOffline.reduce((s,c)=>s+(c.offline_sale_price||0),0)-soldOffline.reduce((s,c)=>s+(c.purchase_price||0),0)).toFixed(2)}</div></div>
           </div>
         </div>` : ''}
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-          <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List_A_Card_For_Sale</button>
-          <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My_Binder</button>
+          <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List a Card</button>
+          <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My Binder</button>
         </div>
 
         ${tierAtLeast('shop') ? `
         <div style="margin-top:28px;padding:18px;background:var(--surface);border:1px solid var(--accent);border-left-width:3px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-            <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em">// MY_STOREFRONT</div>
+            <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em">My Storefront</div>
             <div style="display:flex;gap:8px">
-              <button onclick="copyStoreLink()" style="padding:5px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">⬡ Copy_Store_Link</button>
+              <button onclick="copyStoreLink()" style="padding:5px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">⬡ Copy Store Link</button>
               <button onclick="previewStorefront()" style="padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">↗ Preview</button>
             </div>
           </div>
@@ -2888,7 +2878,7 @@
               ).join('')}
             </div>
           </div>
-          <button onclick="saveShopSettings()" style="padding:8px 20px;border:none;background:var(--accent);color:var(--surface);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Save_Settings</button>
+          <button onclick="saveShopSettings()" style="padding:8px 20px;border:none;background:var(--accent);color:var(--surface);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Save Settings</button>
           <div id="shopSettingSaved" style="display:inline;margin-left:10px;font-size:.72rem;color:var(--green);display:none">✓ Saved</div>
         </div>` : ''}
       `;
@@ -2902,7 +2892,7 @@
       // Free tier: show locked preview with upgrade CTA
       if (!hasPriceTracking()) {
         return `<div class="dash-chart-section" style="margin-bottom:16px;position:relative;overflow:hidden">
-          <div style="font-size:.75rem;color:var(--accent);margin-bottom:10px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:10px;letter-spacing:.08em">YTD Portfolio Value</div>
           <!-- Fake blurred chart -->
           <div style="filter:blur(6px);pointer-events:none;opacity:.5">
             <div style="font-size:1.6rem;color:var(--text);font-weight:700">$2,341.50</div>
@@ -2923,7 +2913,7 @@
       }
       if (pts.length < 2) {
         return `<div class="dash-chart-section" style="margin-bottom:16px">
-          <div style="font-size:.75rem;color:var(--accent);margin-bottom:8px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
+          <div style="font-size:.75rem;color:var(--accent);margin-bottom:8px;letter-spacing:.08em">YTD Portfolio Value</div>
           <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
             <div style="font-size:1.6rem;color:var(--text);font-weight:700">${currentValue > 0 ? '$' + currentValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div>
             <div style="font-size:.72rem;color:var(--muted)">Chart builds automatically — prices refresh in the background each day you open the app. Check back tomorrow.</div>
@@ -2931,7 +2921,7 @@
         </div>`;
       }
       return `<div class="dash-chart-section" style="margin-bottom:16px">
-        <div style="font-size:.75rem;color:var(--accent);margin-bottom:10px;letter-spacing:.08em">// YTD_PORTFOLIO_VALUE</div>
+        <div style="font-size:.75rem;color:var(--accent);margin-bottom:10px;letter-spacing:.08em">YTD Portfolio Value</div>
         <svg id="ytdChartSvg" width="100%" height="120" style="display:block;overflow:visible"></svg>
       </div>`;
     }
@@ -3031,7 +3021,7 @@
       const top = movers.slice(0, 5);
 
       return `<div class="dash-chart-section" style="margin-bottom:16px">
-        <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">// BIGGEST_MOVERS — 7_DAYS</div>
+        <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">Biggest Movers — 7 Days</div>
         ${top.map(c => {
           const sign = c.delta >= 0 ? '+' : '';
           const color = c.delta >= 0 ? 'var(--green)' : 'var(--red)';
@@ -3157,12 +3147,12 @@
         let actionHtml = '';
         if (isBuying && status === 'shipped') {
           actionHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm_Delivery</button>
+            <button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm Delivery</button>
           </div>`;
         } else if (isBuying && status === 'completed') {
-          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return_Card</button>`;
+          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return</button>`;
         } else if (!isBuying && status === 'paid') {
-          actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add_Tracking_#</button>`;
+          actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add Tracking #</button>`;
         }
 
         return `<div style="background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:12px">
@@ -3331,7 +3321,7 @@
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
             <div>
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                <h2 style="font-size:1.3rem;margin:0">${displayName}'s_Binder</h2>
+                <h2 style="font-size:1.3rem;margin:0">${displayName}'s Binder</h2>
                 ${tierBadge}
               </div>
               ${profile.username ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px">@${profile.username}${memberSince ? ` · Member since ${memberSince}` : ''}</div>` : ''}
@@ -3694,7 +3684,7 @@
       const statTiles = isVendorPlus ? `
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px">
           <div class="coll-stat-box">
-            <div class="coll-stat-label">Total_Sales</div>
+            <div class="coll-stat-label">Total Sales</div>
             <div class="coll-stat-value">${totalCount}</div>
           </div>
           <div class="coll-stat-box">
@@ -3711,7 +3701,7 @@
           </div>
           ${isVendorPlus && onFees > 0 ? `
           <div class="coll-stat-box">
-            <div class="coll-stat-label">Fees_Paid</div>
+            <div class="coll-stat-label">Fees Paid</div>
             <div class="coll-stat-value" style="color:var(--muted)">$${onFees.toFixed(2)}</div>
           </div>` : ''}
         </div>` : '';
@@ -3861,7 +3851,7 @@
           }).join('');
 
           barChartSvg = `
-            <div style="font-size:.72rem;color:var(--accent);letter-spacing:.08em;margin-bottom:8px">// MONTHLY_REVENUE (Last 12 Months)</div>
+            <div style="font-size:.72rem;color:var(--accent);letter-spacing:.08em;margin-bottom:8px">Monthly Revenue (Last 12 Months)</div>
             <div style="overflow-x:auto;margin-bottom:20px">
               <svg width="${chartW}" height="${chartH}" style="display:block;min-width:${chartW}px">
                 <line x1="0" y1="${chartH-padB}" x2="${chartW}" y2="${chartH-padB}" stroke="var(--border)" stroke-width="1"/>
@@ -3886,14 +3876,14 @@
 
         shopAnalytics = `
           <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
-            <div style="font-size:.72rem;color:var(--accent);letter-spacing:.1em;margin-bottom:16px">// SHOP_ANALYTICS</div>
+            <div style="font-size:.72rem;color:var(--accent);letter-spacing:.1em;margin-bottom:16px">Shop Analytics</div>
 
             ${barChartSvg}
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
               <!-- Top 5 cards -->
               <div>
-                <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">TOP_CARDS_BY_REVENUE</div>
+                <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">Top Cards by Revenue</div>
                 ${top5.length ? top5.map(([name, data], i) => `
                   <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(74,40,0,.3)">
                     <div style="font-size:.72rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${i+1}. ${name}</div>
@@ -3903,7 +3893,7 @@
               </div>
               <!-- Channel breakdown -->
               <div>
-                <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">CHANNEL_BREAKDOWN</div>
+                <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">Channel Breakdown</div>
                 <div style="display:flex;flex-direction:column;gap:8px">
                   <div>
                     <div style="display:flex;justify-content:space-between;font-size:.7rem;margin-bottom:3px">
@@ -3926,7 +3916,7 @@
                 </div>
 
                 <div style="margin-top:14px">
-                  <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">MONTHLY_BREAKDOWN</div>
+                  <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">Monthly Breakdown</div>
                   <div class="tx-table-wrap" style="max-height:200px;overflow-y:auto">
                     <table class="tx-table">
                       <thead><tr><th>Month</th><th style="text-align:right">Sales</th><th style="text-align:right">Revenue</th><th style="text-align:right">Profit</th><th style="text-align:right">Margin</th></tr></thead>
@@ -3942,7 +3932,7 @@
       el.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px">
           <div>
-            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">// SALES_ARCHIVE${isVendorPlus ? ' — ' + periodLabel : ''}</div>
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">Sales Archive${isVendorPlus ? ' — ' + periodLabel : ''}</div>
             <div style="font-size:.75rem;color:var(--muted);margin-top:2px">
               ${isVendorPlus ? 'All sales channels combined.' : 'Cards you\'ve sold or archived. Restore any card to your active binder.'}
             </div>
@@ -4298,7 +4288,7 @@
 
         vendorHtml = `
           <div style="margin-top:28px">
-            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">// ONLINE_SALES</div>
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">Online Sales</div>
             <div class="tx-table-wrap">
               <table class="tx-table">
                 <thead><tr><th>Card</th><th>Date</th><th>Payout</th><th>Status</th></tr></thead>
@@ -4307,7 +4297,7 @@
             </div>
           </div>
           <div style="margin-top:28px">
-            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">// OFFLINE_SALES</div>
+            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em;margin-bottom:12px">Offline Sales</div>
             <div class="tx-table-wrap">
               <table class="tx-table">
                 <thead><tr><th>Card</th><th>Date</th><th>Sale Price</th><th>Profit</th></tr></thead>
@@ -4319,7 +4309,7 @@
       }
 
       el.innerHTML = `
-        <div style="font-size:.75rem;color:var(--teal);letter-spacing:.08em;margin-bottom:12px">// PURCHASE_HISTORY</div>
+        <div style="font-size:.75rem;color:var(--teal);letter-spacing:.08em;margin-bottom:12px">Purchase History</div>
         <div class="tx-table-wrap">
           <table class="tx-table">
             <thead><tr><th>Card</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
@@ -4496,7 +4486,7 @@
       if (!panel) return;
       const isOpen = panel.classList.contains('open');
       panel.classList.toggle('open', !isOpen);
-      if (btn) btn.textContent = isOpen ? '+ Add_To_Collection' : '− Add_To_Collection';
+      if (btn) btn.textContent = isOpen ? '+ Add to Collection' : '− Add to Collection';
     }
 
     // ─── Market Price Lookup ───────────────────────────────────────────
@@ -4671,7 +4661,7 @@
         photos: photoUrls
       }).select().single();
 
-      if (saveBtn) { saveBtn.textContent = 'List_Card'; saveBtn.disabled = false; }
+      if (saveBtn) { saveBtn.textContent = 'List Card'; saveBtn.disabled = false; }
       const lcErr = document.getElementById('lcSaveError');
       if (error) {
         if (lcErr) { lcErr.textContent = '// Error: ' + error.message; lcErr.style.display = 'block'; }
@@ -4752,11 +4742,11 @@
           window.location.href = result.url;
         } else {
           showToast('Checkout error: ' + (result.error || 'No URL returned'));
-          if (btn) { btn.textContent = 'Proceed_to_Payment'; btn.disabled = false; }
+          if (btn) { btn.textContent = 'Proceed to Payment'; btn.disabled = false; }
         }
       } catch(err) {
         showToast('Checkout unavailable — Stripe not yet configured');
-        if (btn) { btn.textContent = 'Proceed_to_Payment'; btn.disabled = false; }
+        if (btn) { btn.textContent = 'Proceed to Payment'; btn.disabled = false; }
         closeModal('buyCardModal');
       }
     }
@@ -5319,7 +5309,7 @@
         shop_location: location, instagram, shop_website: website, status: 'pending',
         submitted_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
-      if (btn) { btn.textContent = 'Submit_Application'; btn.disabled = false; }
+      if (btn) { btn.textContent = 'Submit Application'; btn.disabled = false; }
       if (error) { showToast('Error: ' + error.message); return; }
       showToast('Application submitted! We\'ll review it within 2–3 business days.');
       closeModal('vendorApplicationModal');
@@ -5604,7 +5594,7 @@
       }
 
       btn.disabled = false;
-      btn.textContent = 'Refresh_Prices';
+      btn.textContent = 'Refresh Prices';
       statusEl.textContent = `[ DONE ] ${updated} updated, ${errors} errors out of ${toRefresh.length} cards.`;
       if (updated > 0) {
         renderBinder();
@@ -6682,7 +6672,7 @@
         return;
       }
       _editingBinderId = null;
-      document.getElementById('binderEditTitle').textContent = 'New_Binder';
+      document.getElementById('binderEditTitle').textContent = 'New Binder';
       document.getElementById('binderEditName').value = '';
       document.getElementById('binderEditDeleteWrap').style.display = 'none';
       _renderColorPicker(null);
@@ -6882,7 +6872,7 @@
             <div class="binder-cover" style="background:var(--surface)">
               <div class="binder-cover-default">
                 <div style="font-size:1.1rem;opacity:.35;color:var(--text)">◈</div>
-                <div class="binder-cover-text">All_Cards</div>
+                <div class="binder-cover-text">All Cards</div>
               </div>
             </div>
           </div>
@@ -7064,7 +7054,7 @@
       if (activeItems.length === 0) {
         if (summary) summary.innerHTML = '';
         if (pagination) pagination.style.display = 'none';
-        content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add_Your_First_Card</button></div>`;
+        content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add Your First Card</button></div>`;
         return;
       }
 
@@ -7684,7 +7674,7 @@
             ${item.set_name ? `<div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">${item.set_name}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
               <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" style="font-size:1rem">${val > 0 ? '$' + val.toFixed(2) : '—'}</div></div>
-              <div class="coll-stat-box"><div class="coll-stat-label">Cost_Basis</div><div class="coll-stat-value" style="font-size:1rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
+              <div class="coll-stat-box"><div class="coll-stat-label">Cost Basis</div><div class="coll-stat-value" style="font-size:1rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
               <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}" style="font-size:1rem">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
               <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:1rem">${qty}</div></div>
             </div>
@@ -7721,9 +7711,9 @@
         </div>
         <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
           <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
-            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List_For_Sale</button>
+            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List for Sale</button>
           <button onclick="openSoldOfflineModal('${item.id}')"
-            style="padding:8px 18px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">$ Sold_Offline</button>
+            style="padding:8px 18px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">$ Sold Offline</button>
           ${tierAtLeast('vendor') && binders.length > 0 ? `<select onchange="moveCardToBinder('${item.id}',this.value);closeModal('binderDetailModal')"
             style="padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">
             <option value="">Move to binder…</option>
@@ -7735,12 +7725,12 @@
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
             onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
           <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
-            style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove_Card</button>
+            style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Press Start 2P','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove Card</button>
           <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
         </div>
       `;
       const titleEl2 = document.getElementById('binderDetailTitle');
-      if (titleEl2) { titleEl2.textContent = 'Card_Detail'; titleEl2.style.color = ''; }
+      if (titleEl2) { titleEl2.textContent = 'Card Detail'; titleEl2.style.color = ''; }
       openModal('binderDetailModal');
       if (hasPriceTracking()) {
         // Load chart asynchronously after modal is visible
@@ -7795,7 +7785,7 @@
         notes: notes || (document.getElementById('soNotes').value.trim() || null)
       }).eq('id', itemId);
 
-      if (btn) { btn.textContent = '✓ Mark_As_Sold'; btn.disabled = false; }
+      if (btn) { btn.textContent = '✓ Mark as Sold'; btn.disabled = false; }
 
       if (error) {
         // Columns may not exist yet — handle gracefully
@@ -8076,7 +8066,7 @@
         price_source_url: priceUrl
       }).select('id').single();
 
-      if (btn) { btn.textContent = '♡ Add_To_Wishlist'; btn.disabled = false; }
+      if (btn) { btn.textContent = '♡ Add to Wishlist'; btn.disabled = false; }
 
       if (error) {
         if (error.message?.includes('column') || error.message?.includes('schema')) {
@@ -8295,7 +8285,7 @@
         notes
       }).select('id').single();
 
-      if (saveBtn) { saveBtn.textContent = 'Add_To_Collection'; saveBtn.disabled = false; }
+      if (saveBtn) { saveBtn.textContent = 'Add to Collection'; saveBtn.disabled = false; }
 
       if (error) {
         // Friendly message for missing table
@@ -8582,14 +8572,14 @@
       // INITIAL_SESSION: initApp() handles the first render
     });
 
-    initApp().then(() => { retroLabels(); updateHeroStats(); });
+    initApp().then(() => {  updateHeroStats(); });
   </script>
 
   <!-- BINDER CARD DETAIL MODAL -->
   <div class="modal-overlay" id="binderDetailModal">
     <div class="modal" style="max-width:560px">
       <button class="modal-close" onclick="closeModal('binderDetailModal')">×</button>
-      <h3 id="binderDetailTitle">Card_Detail</h3>
+      <h3 id="binderDetailTitle">Card Detail</h3>
       <div id="binderDetailContent"></div>
     </div>
   </div>
@@ -8602,11 +8592,11 @@
     </button>
     <button class="mobile-nav-btn" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
       <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>
-      My_Binder
+      My Binder
     </button>
     <button class="mobile-nav-btn" id="mobileNavAddCard" onclick="showPage('addCard'); setMobileNav('addCard')">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Add_Card
+      Add Card
     </button>
     <button class="mobile-nav-btn" id="mobileNavAccount" onclick="showPage('account'); setMobileNav('account')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
