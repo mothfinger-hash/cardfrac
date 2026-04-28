@@ -3297,12 +3297,12 @@
         // Load their collection (public cards only — no ghost/wishlist items)
         // If a specific binder ID was shared, filter to just that binder
         let itemsQuery = sb.from('collection_items')
-          .select('id, card_name, set_name, card_number, condition, quantity, image_url, current_value, purchase_price, binder_id')
+          .select('id, card_name, set_name, card_number, condition, quantity, card_image_url, current_value, purchase_price, binder_id')
           .eq('user_id', profile.id)
           .eq('is_ghost', false);
         if (binderId) itemsQuery = itemsQuery.eq('binder_id', binderId);
         const { data: items, error } = await itemsQuery.order('created_at', { ascending: true });
-        console.log('[PublicBinder] items query error:', error, '| count:', items?.length, '| sample url:', items?.[0]?.image_url);
+        console.log('[PublicBinder] items query error:', error, '| count:', items?.length, '| sample url:', items?.[0]?.card_image_url);
 
         // Resolve binder name if a specific binder was requested
         let binderName = null;
@@ -3315,7 +3315,7 @@
 
         const displayName = profile.shop_name || profile.name || profile.username || 'Collector';
         const binderTitle = binderName ? `${displayName}'s ${binderName} Binder` : `${displayName}'s Binder`;
-        console.log('[PublicBinder] items loaded:', items?.length, '| sample image_url:', items?.[0]?.image_url);
+        console.log('[PublicBinder] items loaded:', items?.length, '| sample url:', items?.[0]?.card_image_url);
         const memberSince = profile.created_at ? new Date(profile.created_at).getFullYear() : '';
         const cardCount   = items?.length || 0;
         const totalValue  = (items||[]).reduce((s,c) => s + ((c.current_value||c.purchase_price||0) * (c.quantity||1)), 0);
@@ -3332,8 +3332,8 @@
           const condLabel = c.condition === 'graded' && c.grade_value
             ? `${c.grade_label||'PSA'} ${c.grade_value}`
             : (c.condition||'').toUpperCase();
-          const img = c.image_url
-            ? `<img src="${c.image_url}" alt="${c.card_name}" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`+
+          const img = c.card_image_url
+            ? `<img src="${c.card_image_url}" alt="${c.card_name}" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`+
               `<div style="display:none;width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`
             : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`;
           const qtyBadge = c.quantity > 1
@@ -3496,11 +3496,9 @@
 
         // Fetch their active (non-ghost, non-sold) cards
         const { data: items } = await sb.from('collection_items')
-          .select('id, card_name, set_name, card_number, condition, grade_label, grade_value, quantity, image_url, current_value, purchase_price, is_ghost, sold_offline')
+          .select('*')
           .eq('user_id', profile.id)
           .eq('is_ghost', false)
-          .eq('sold_offline', false)
-          .order('sort_order', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: true });
 
         const cards      = items || [];
@@ -3538,8 +3536,8 @@
           const condLabel = c.condition === 'graded' && c.grade_value
             ? `${c.grade_label || 'PSA'} ${c.grade_value}`
             : (c.condition || '').toUpperCase();
-          const img = c.image_url
-            ? `<img src="${c.image_url}" alt="${c.card_name}" loading="lazy"
+          const img = c.card_image_url
+            ? `<img src="${c.card_image_url}" alt="${c.card_name}" loading="lazy"
                  style="width:100%;height:160px;object-fit:contain;background:var(--surface2);border-radius:4px 4px 0 0;display:block">`
             : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.68rem">NO IMAGE</div>`;
           const qtyBadge = (c.quantity || 1) > 1
