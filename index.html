@@ -8772,7 +8772,19 @@
     <div id="scannerViewfinder" style="position:relative;width:100%;max-width:520px;margin:24px auto 0;background:var(--surface2);border:2px solid var(--border);box-shadow:6px 6px 0 var(--shadow)">
       <video id="scannerVideo" autoplay playsinline muted style="width:100%;display:block;max-height:340px;object-fit:cover"></video>
       <canvas id="scannerCanvas" style="display:none"></canvas>
-      <!-- Corner marks -->
+      <canvas id="scannerSampleCanvas" style="display:none" width="64" height="64"></canvas>
+      <!-- Card guide overlay — matches Pokemon card 5:7 aspect ratio -->
+      <div id="scanCardGuide" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62%;aspect-ratio:5/7;border:2px dashed rgba(255,255,255,0.35);border-radius:4px;pointer-events:none;transition:border-color .25s,box-shadow .25s,border-style .25s">
+        <!-- Guide corner accents -->
+        <div style="position:absolute;top:-2px;left:-2px;width:16px;height:16px;border-top:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:2px 0 0 0"></div>
+        <div style="position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 2px 0 0"></div>
+        <div style="position:absolute;bottom:-2px;left:-2px;width:16px;height:16px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:0 0 0 2px"></div>
+        <div style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 0 2px 0"></div>
+        <div style="position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.42rem;color:rgba(255,255,255,0.4);white-space:nowrap;letter-spacing:.08em">ALIGN CARD WITHIN GUIDE</div>
+      </div>
+      <!-- Stability indicator dot — turns green when card is still -->
+      <div id="scanStableDot" style="position:absolute;top:10px;right:10px;width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,0.2);transition:background .2s,box-shadow .2s"></div>
+      <!-- Corner marks (outer frame) -->
       <div style="position:absolute;top:0;left:0;width:28px;height:28px;border-top:3px solid var(--accent);border-left:3px solid var(--accent)"></div>
       <div style="position:absolute;top:0;right:0;width:28px;height:28px;border-top:3px solid var(--accent);border-right:3px solid var(--accent)"></div>
       <div style="position:absolute;bottom:0;left:0;width:28px;height:28px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent)"></div>
@@ -8785,10 +8797,11 @@
     <div id="scannerStatus" style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);margin:14px 0;text-align:center;letter-spacing:.04em;padding:0 20px">Hold a card up to the camera, then press Scan</div>
 
     <!-- Capture / Upload buttons -->
-    <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;justify-content:center">
-      <button id="scanBtn" onclick="captureAndMatch()" style="padding:12px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">SCAN</button>
-      <label style="padding:12px 20px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
-        UPLOAD PHOTO
+    <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;justify-content:center;align-items:center">
+      <button id="scanBtn" onclick="captureAndMatch()" style="padding:12px 32px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">SCAN</button>
+      <button id="autoScanBtn" onclick="toggleAutoScan()" title="Auto-capture when card is held still" style="padding:12px 18px;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em;transition:all .2s">AUTO</button>
+      <label style="padding:12px 18px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
+        UPLOAD
         <input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
       </label>
     </div>
@@ -8809,6 +8822,9 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     @keyframes scanLineMove{0%{top:0}100%{top:calc(100% - 2px)}}
+    @keyframes guidePulse{0%,100%{opacity:1}50%{opacity:.55}}
+    #scanCardGuide.locking{animation:guidePulse .6s ease-in-out infinite}
+    #scanCardGuide.locked{animation:none}
     #scannerModal.open{display:flex}
     .scan-match-card{display:flex;align-items:center;gap:12px;background:var(--surface);border:2px solid var(--border);padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:all .1s;box-shadow:3px 3px 0 var(--shadow)}
     .scan-match-card:hover{border-color:var(--accent);transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--shadow)}
@@ -8900,7 +8916,15 @@
         });
         const video = document.getElementById('scannerVideo');
         video.srcObject = scannerStream;
-        setScanStatus('Hold a card up to the camera, then press SCAN');
+
+        // Auto-scan is ON by default — start loop once video is playing
+        video.onloadedmetadata = () => {
+          setScanStatus('Hold card inside the guide — auto-capture when still');
+          _autoScanOn = true;
+          const btn = document.getElementById('autoScanBtn');
+          if (btn) { btn.textContent = 'AUTO ✓'; btn.style.color = 'var(--accent)'; btn.style.borderColor = 'var(--accent)'; }
+          _startStabilityLoop();
+        };
 
         // Preload CLIP model in background while user positions card
         if (window._preloadClip) window._preloadClip().catch(() => {});
@@ -8910,11 +8934,115 @@
     }
 
     function closeCardScanner() {
+      _stopStabilityLoop();
+      _autoScanOn = false;
       const modal = document.getElementById('scannerModal');
       modal.style.display = 'none';
       if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
       const video = document.getElementById('scannerVideo');
       video.srcObject = null;
+    }
+
+    // ── Auto-scan — frame stability detection ────────────────────────────────
+    let _autoScanOn      = false;
+    let _autoScanTimer   = null;
+    let _prevFramePixels = null;
+    let _stableCount     = 0;
+    let _autoScanCooldown = false;
+
+    function toggleAutoScan() {
+      _autoScanOn = !_autoScanOn;
+      const btn = document.getElementById('autoScanBtn');
+      if (btn) {
+        btn.textContent  = _autoScanOn ? 'AUTO ✓' : 'AUTO';
+        btn.style.color  = _autoScanOn ? 'var(--accent)' : 'var(--muted)';
+        btn.style.borderColor = _autoScanOn ? 'var(--accent)' : 'var(--border)';
+      }
+      if (_autoScanOn) _startStabilityLoop();
+      else              _stopStabilityLoop();
+    }
+
+    function _startStabilityLoop() {
+      _stopStabilityLoop();
+      _prevFramePixels = null;
+      _stableCount = 0;
+      _autoScanCooldown = false;
+      _autoScanTimer = setInterval(_checkStability, 500);
+    }
+
+    function _stopStabilityLoop() {
+      if (_autoScanTimer) { clearInterval(_autoScanTimer); _autoScanTimer = null; }
+      _prevFramePixels = null;
+      _stableCount = 0;
+      _setStableDot('idle');
+    }
+
+    function _setStableDot(state) {
+      const dot = document.getElementById('scanStableDot');
+      if (!dot) return;
+      if (state === 'idle')   { dot.style.background = 'rgba(255,255,255,0.2)'; dot.style.boxShadow = ''; }
+      if (state === 'moving') { dot.style.background = 'var(--muted)';          dot.style.boxShadow = ''; }
+      if (state === 'locking'){ dot.style.background = 'var(--accent2)';        dot.style.boxShadow = ''; }
+      if (state === 'locked') { dot.style.background = 'var(--accent)';         dot.style.boxShadow = '0 0 8px var(--accent)'; }
+    }
+
+    function _setGuideState(state) {
+      const guide = document.getElementById('scanCardGuide');
+      if (!guide) return;
+      guide.classList.remove('locking', 'locked');
+      if (state === 'idle')    { guide.style.borderColor = 'rgba(255,255,255,0.35)'; guide.style.borderStyle = 'dashed'; guide.style.boxShadow = ''; }
+      if (state === 'locking') { guide.style.borderColor = 'var(--accent2)';         guide.style.borderStyle = 'solid';  guide.style.boxShadow = ''; guide.classList.add('locking'); }
+      if (state === 'locked')  { guide.style.borderColor = 'var(--accent)';          guide.style.borderStyle = 'solid';  guide.style.boxShadow = 'inset 0 0 0 2000px rgba(80,200,130,0.10)'; guide.classList.add('locked'); }
+    }
+
+    function _checkStability() {
+      if (_autoScanCooldown) return;
+      const video = document.getElementById('scannerVideo');
+      if (!scannerStream || !video || video.readyState < 2 || video.paused) return;
+
+      // Sample a small 64×64 thumbnail for fast comparison
+      const sc = document.getElementById('scannerSampleCanvas');
+      if (!sc) return;
+      const sctx = sc.getContext('2d');
+      sctx.drawImage(video, 0, 0, 64, 64);
+      const frame = sctx.getImageData(0, 0, 64, 64).data;
+
+      if (_prevFramePixels) {
+        let diff = 0;
+        for (let i = 0; i < frame.length; i += 4) {
+          diff += Math.abs(frame[i]   - _prevFramePixels[i])
+                + Math.abs(frame[i+1] - _prevFramePixels[i+1])
+                + Math.abs(frame[i+2] - _prevFramePixels[i+2]);
+        }
+        // avgDiff is mean per-channel pixel delta (0–255 scale)
+        const avgDiff = diff / (frame.length / 4 * 3);
+
+        if (avgDiff < 10) {
+          _stableCount++;
+          if (_stableCount === 1) _setStableDot('locking'), _setGuideState('locking');
+          if (_stableCount >= 2)  _setStableDot('locked'),  _setGuideState('locked'), _triggerAutoCapture();
+        } else {
+          _stableCount = 0;
+          _setStableDot('moving');
+          _setGuideState('idle');
+        }
+      }
+
+      _prevFramePixels = frame;
+    }
+
+    async function _triggerAutoCapture() {
+      _autoScanCooldown = true;
+      _stopStabilityLoop(); // pause loop while scanning
+      if (navigator.vibrate) navigator.vibrate(60);
+      await captureAndMatch();
+      // Resume loop after 2.5s cooldown (gives time to see results or rescan)
+      setTimeout(() => {
+        _autoScanCooldown = false;
+        _setStableDot('idle');
+        _setGuideState('idle');
+        if (_autoScanOn) _startStabilityLoop();
+      }, 2500);
     }
 
     async function captureAndMatch() {
@@ -8988,7 +9116,13 @@
       if (nameInput) nameInput.value = '';
       const nameResults = document.getElementById('scannerNameResults');
       if (nameResults) nameResults.innerHTML = '';
-      setScanStatus('Hold a card up to the camera, then press SCAN');
+      _setGuideState('idle');
+      if (_autoScanOn) {
+        setScanStatus('Hold card inside the guide — auto-capture when still');
+        _startStabilityLoop();
+      } else {
+        setScanStatus('Hold a card up to the camera, then press SCAN');
+      }
     }
 
     async function confirmScanMatch(cardId, cardName) {
@@ -9311,8 +9445,16 @@
 
         if (final.length === 0) {
           const countRes = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
-          if (!countRes.count || countRes.count === 0) {
-            setScanStatus('Card catalog is empty — run generate_embeddings.py first');
+          const embeddedCount = countRes.count || 0;
+          if (embeddedCount === 0) {
+            // Distinguish between truly empty and RLS-blocked
+            const totalRes = await sb.from('catalog').select('id', { count: 'exact', head: true });
+            const totalCount = totalRes.count || 0;
+            if (totalCount === 0) {
+              setScanStatus('Card catalog is empty — run generate_embeddings.py first');
+            } else {
+              setScanStatus(`Catalog blocked (${totalCount.toLocaleString()} cards exist but can't be read) — run: alter table catalog disable row level security`);
+            }
           } else {
             setScanStatus('No match found — try a clearer photo or use the name search below');
           }
