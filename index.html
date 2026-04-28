@@ -3293,11 +3293,9 @@
 
         // Load their collection (public cards only — no ghost/wishlist items)
         const { data: items, error } = await sb.from('collection_items')
-          .select('id, card_name, set_name, card_number, condition, grade_label, grade_value, quantity, image_url, current_value, purchase_price, is_ghost, sold_offline')
+          .select('*')
           .eq('user_id', profile.id)
           .eq('is_ghost', false)
-          .eq('sold_offline', false)
-          .order('sort_order', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: true });
 
         if (error) throw error;
