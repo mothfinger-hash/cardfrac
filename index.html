@@ -8912,7 +8912,7 @@
 
       try {
         scannerStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } }
         });
         const video = document.getElementById('scannerVideo');
         video.srcObject = scannerStream;
@@ -9059,10 +9059,32 @@
       if (preview) preview.style.display = 'none';
       video.style.display = 'block';
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-      const dataURL = canvas.toDataURL('image/jpeg', 0.85);
+      document.getElementById('scanBtn').textContent = 'Capturing…';
+
+      let dataURL;
+      try {
+        // ImageCapture API: triggers a full-resolution, autofocused, HDR-processed still
+        // — matches the quality of an uploaded photo rather than a raw video frame
+        if (typeof ImageCapture !== 'undefined' && scannerStream) {
+          const track = scannerStream.getVideoTracks()[0];
+          const ic = new ImageCapture(track);
+          const blob = await ic.takePhoto();
+          dataURL = await new Promise((res, rej) => {
+            const reader = new FileReader();
+            reader.onload  = e => res(e.target.result);
+            reader.onerror = rej;
+            reader.readAsDataURL(blob);
+          });
+        } else {
+          throw new Error('fallback');
+        }
+      } catch (_) {
+        // Fallback: grab current video frame (lower quality but always works)
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        dataURL = canvas.toDataURL('image/jpeg', 0.92);
+      }
 
       document.getElementById('scanBtn').textContent = 'Scanning…';
       await runMatch(dataURL);
