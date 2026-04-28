@@ -3245,6 +3245,7 @@
     function copyShareLink() {
       const slug = getShareUsername();
       if (!slug) { showToast('Sign in to share your binder'); return; }
+      console.log('[Share] currentBinderId:', currentBinderId, '| slug:', slug);
       const url = getShareUrl(slug, currentBinderId);
       navigator.clipboard.writeText(url).then(() => {
         showToast('🔗 Share link copied! Send it to anyone.');
@@ -3296,11 +3297,12 @@
         // Load their collection (public cards only — no ghost/wishlist items)
         // If a specific binder ID was shared, filter to just that binder
         let itemsQuery = sb.from('collection_items')
-          .select('*')
+          .select('id, card_name, set_name, card_number, condition, quantity, image_url, current_value, purchase_price, binder_id')
           .eq('user_id', profile.id)
           .eq('is_ghost', false);
         if (binderId) itemsQuery = itemsQuery.eq('binder_id', binderId);
         const { data: items, error } = await itemsQuery.order('created_at', { ascending: true });
+        console.log('[PublicBinder] items query error:', error, '| count:', items?.length, '| sample url:', items?.[0]?.image_url);
 
         // Resolve binder name if a specific binder was requested
         let binderName = null;
@@ -3313,6 +3315,7 @@
 
         const displayName = profile.shop_name || profile.name || profile.username || 'Collector';
         const binderTitle = binderName ? `${displayName}'s ${binderName} Binder` : `${displayName}'s Binder`;
+        console.log('[PublicBinder] items loaded:', items?.length, '| sample image_url:', items?.[0]?.image_url);
         const memberSince = profile.created_at ? new Date(profile.created_at).getFullYear() : '';
         const cardCount   = items?.length || 0;
         const totalValue  = (items||[]).reduce((s,c) => s + ((c.current_value||c.purchase_price||0) * (c.quantity||1)), 0);
@@ -8417,11 +8420,13 @@
 
         // 2. If logged in, fetch user-specific data in parallel
         if (currentUser) {
-          const txnResult = await sb.from('transactions')
-            .select('*, listings(name)')
-            .eq('user_id', currentUser.id)
-            .order('created_at', { ascending: false })
-            .catch(() => ({ data: null }));
+          let txnResult = { data: null };
+          try {
+            txnResult = await sb.from('transactions')
+              .select('*, listings(name)')
+              .eq('user_id', currentUser.id)
+              .order('created_at', { ascending: false });
+          } catch(e) { /* transactions table may not exist yet */ }
           const offerResult = { data: [] }; // trade_offers deprecated
           // Load collection, orders, binders, and portfolio snapshots in parallel
           await Promise.all([
