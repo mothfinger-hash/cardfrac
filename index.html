@@ -8815,8 +8815,17 @@
       <div id="scannerNameResults" style="margin-top:4px"></div>
     </div>
 
+    <!-- Camera / Results toggle bar — shown when results are available -->
+    <div id="scanToggleBar" style="display:none;width:100%;max-width:520px;margin:10px auto 0;padding:0 20px;box-sizing:border-box">
+      <div style="display:flex;gap:8px">
+        <button id="scanToggleCameraBtn" onclick="scanShowCamera()" style="flex:1;padding:9px 0;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">▲ CAMERA</button>
+        <button id="scanToggleResultsBtn" onclick="scanShowResults()" style="flex:1;padding:9px 0;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">▼ RESULTS</button>
+        <button onclick="reopenViewfinder()" style="padding:9px 14px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">↺ NEW</button>
+      </div>
+    </div>
+
     <!-- Match results -->
-    <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:16px auto 0;padding:0 20px 60px"></div>
+    <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:8px auto 0;padding:0 20px 60px"></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -8941,6 +8950,11 @@
       if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
       const video = document.getElementById('scannerVideo');
       video.srcObject = null;
+      // Reset toggle bar and viewfinder for next open
+      const toggleBar = document.getElementById('scanToggleBar');
+      if (toggleBar) toggleBar.style.display = 'none';
+      const viewfinder = document.getElementById('scannerViewfinder');
+      if (viewfinder) { viewfinder.style.maxHeight = ''; viewfinder.style.overflow = ''; viewfinder.style.margin = '24px auto 0'; }
     }
 
     // ── Auto-scan — frame stability detection ────────────────────────────────
@@ -9090,63 +9104,46 @@
       await runMatch(dataURL);
     }
 
-    // Toggle between mini camera strip and full results view
-    function toggleScannerView() {
+    // Show camera full, hide results
+    function scanShowCamera() {
       const viewfinder = document.getElementById('scannerViewfinder');
       const results    = document.getElementById('scannerResults');
-      const hint       = document.getElementById('viewfinderExpandHint');
-      if (!viewfinder || !results) return;
-      const isMini = viewfinder.dataset.mini === '1';
-      if (isMini) {
-        // Expand camera, slide results below
-        viewfinder.style.maxHeight = '';
-        viewfinder.style.overflow  = '';
-        viewfinder.style.margin    = '24px auto 0';
-        viewfinder.dataset.mini    = '0';
-        if (hint) hint.textContent = '▼ TAP TO SEE RESULTS';
-        results.style.display = 'none';
-      } else {
-        // Shrink back to mini strip, show results
-        viewfinder.style.maxHeight = '120px';
-        viewfinder.style.overflow  = 'hidden';
-        viewfinder.style.margin    = '12px auto 0';
-        viewfinder.dataset.mini    = '1';
-        if (hint) hint.textContent = '▲ TAP TO EXPAND CAMERA';
-        results.style.display = 'block';
-      }
+      const camBtn     = document.getElementById('scanToggleCameraBtn');
+      const resBtn     = document.getElementById('scanToggleResultsBtn');
+      if (viewfinder) { viewfinder.style.maxHeight = ''; viewfinder.style.overflow = ''; viewfinder.style.margin = '12px auto 0'; }
+      if (results)    results.style.display = 'none';
+      if (camBtn)     { camBtn.style.background = 'var(--accent)'; camBtn.style.color = 'var(--surface)'; }
+      if (resBtn)     { resBtn.style.background = 'transparent';   resBtn.style.color = 'var(--muted)'; }
+    }
+
+    // Show results, shrink camera to mini strip
+    function scanShowResults() {
+      const viewfinder = document.getElementById('scannerViewfinder');
+      const results    = document.getElementById('scannerResults');
+      const camBtn     = document.getElementById('scanToggleCameraBtn');
+      const resBtn     = document.getElementById('scanToggleResultsBtn');
+      if (viewfinder) { viewfinder.style.maxHeight = '110px'; viewfinder.style.overflow = 'hidden'; viewfinder.style.margin = '12px auto 0'; }
+      if (results)    results.style.display = 'block';
+      if (camBtn)     { camBtn.style.background = 'transparent';  camBtn.style.color = 'var(--muted)'; }
+      if (resBtn)     { resBtn.style.background = 'var(--accent)'; resBtn.style.color = 'var(--surface)'; }
     }
 
     function showScanResults(matches) {
-      // Shrink viewfinder to a live mini strip — tap to expand
-      const viewfinder = document.getElementById('scannerViewfinder');
+      const viewfinder    = document.getElementById('scannerViewfinder');
       const uploadPreview = document.getElementById('uploadPreview');
-      if (viewfinder) {
-        viewfinder.style.maxHeight  = '120px';
-        viewfinder.style.overflow   = 'hidden';
-        viewfinder.style.margin     = '12px auto 0';
-        viewfinder.style.cursor     = 'pointer';
-        viewfinder.dataset.mini     = '1';
-        viewfinder.onclick          = toggleScannerView;
-        // Add expand hint overlay if not already there
-        let hint = document.getElementById('viewfinderExpandHint');
-        if (!hint) {
-          hint = document.createElement('div');
-          hint.id = 'viewfinderExpandHint';
-          hint.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.52);color:#fff;font-family:"Space Mono","Share Tech Mono",monospace;font-size:.5rem;text-align:center;padding:6px 0;letter-spacing:.07em;pointer-events:none';
-          viewfinder.appendChild(hint);
-        }
-        hint.textContent = '▲ TAP TO EXPAND CAMERA';
-        hint.style.display = 'block';
-      }
-      if (uploadPreview && uploadPreview.style.display !== 'none') uploadPreview.style.maxHeight = '120px';
+      if (uploadPreview && uploadPreview.style.display !== 'none') uploadPreview.style.maxHeight = '110px';
+
+      // Show toggle bar
+      const toggleBar = document.getElementById('scanToggleBar');
+      if (toggleBar) toggleBar.style.display = 'block';
+
+      // Start in results view
+      scanShowResults();
 
       const wrap = document.getElementById('scannerResults');
       wrap.style.display = 'block';
       wrap.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;color:var(--accent2);letter-spacing:.06em">${matches.length} POSSIBLE MATCHES — tap to add</div>
-          <button onclick="reopenViewfinder()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;cursor:pointer">↺ Rescan</button>
-        </div>` +
+        <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:var(--accent2);letter-spacing:.06em;margin-bottom:10px">${matches.length} POSSIBLE MATCHES — tap to add</div>` +
         matches.map((m, i) => {
           const pct = Math.round(m.similarity * 100);
           const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
@@ -9177,10 +9174,9 @@
         viewfinder.style.margin    = '24px auto 0';
         viewfinder.style.cursor    = '';
         viewfinder.onclick         = null;
-        viewfinder.dataset.mini    = '0';
-        const hint = document.getElementById('viewfinderExpandHint');
-        if (hint) hint.style.display = 'none';
       }
+      const toggleBar = document.getElementById('scanToggleBar');
+      if (toggleBar) toggleBar.style.display = 'none';
       document.getElementById('scannerResults').style.display = 'none';
       const nameInput = document.getElementById('scannerNameInput');
       if (nameInput) nameInput.value = '';
