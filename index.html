@@ -8611,7 +8611,7 @@
   </div>
 
   <!-- ── CARD SCANNER MODAL ─────────────────────────────────────────────── -->
-  <div id="scannerModal" style="display:none;position:fixed;inset:0;z-index:99999;background:#0F0D0A;flex-direction:column;align-items:center;justify-content:flex-start;padding:0">
+  <div id="scannerModal" style="position:fixed;inset:0;z-index:99999;background:#0F0D0A;flex-direction:column;align-items:center;justify-content:flex-start;padding:0;display:none">
 
     <!-- Header -->
     <div style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:2px solid var(--border);background:var(--surface)">
@@ -8724,7 +8724,7 @@
 
     async function openCardScanner() {
       const modal = document.getElementById('scannerModal');
-      modal.classList.add('open');
+      modal.style.display = 'flex';
       document.getElementById('scannerResults').style.display = 'none';
       setScanStatus('Starting camera…');
 
@@ -8745,7 +8745,7 @@
 
     function closeCardScanner() {
       const modal = document.getElementById('scannerModal');
-      modal.classList.remove('open');
+      modal.style.display = 'none';
       if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
       const video = document.getElementById('scannerVideo');
       video.srcObject = null;
