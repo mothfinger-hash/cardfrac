@@ -1601,6 +1601,7 @@
       <div class="coll-add-btns">
         <button class="coll-btn-primary" onclick="searchPokemonCards()">Search Cards</button>
         <button class="coll-btn-secondary" onclick="openManualAddModal()">Add Manually</button>
+        <button class="coll-btn-secondary" onclick="openCardScanner()" style="border-color:var(--accent2);color:var(--accent2)">&#9654; Scan a Card</button>
       </div>
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
@@ -8609,6 +8610,50 @@
     </div>
   </div>
 
+  <!-- ── CARD SCANNER MODAL ─────────────────────────────────────────────── -->
+  <div id="scannerModal" style="display:none;position:fixed;inset:0;z-index:99999;background:#0F0D0A;flex-direction:column;align-items:center;justify-content:flex-start;padding:0">
+
+    <!-- Header -->
+    <div style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:2px solid var(--border);background:var(--surface)">
+      <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;color:var(--accent2);letter-spacing:.06em">CARD SCANNER</div>
+      <button onclick="closeCardScanner()" style="background:transparent;border:2px solid var(--border);color:var(--muted);padding:5px 12px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;cursor:pointer">✕ Close</button>
+    </div>
+
+    <!-- Viewfinder -->
+    <div id="scannerViewfinder" style="position:relative;width:100%;max-width:520px;margin:24px auto 0;background:var(--surface2);border:2px solid var(--border);box-shadow:6px 6px 0 var(--shadow)">
+      <video id="scannerVideo" autoplay playsinline muted style="width:100%;display:block;max-height:340px;object-fit:cover"></video>
+      <canvas id="scannerCanvas" style="display:none"></canvas>
+      <!-- Corner marks -->
+      <div style="position:absolute;top:0;left:0;width:28px;height:28px;border-top:3px solid var(--accent);border-left:3px solid var(--accent)"></div>
+      <div style="position:absolute;top:0;right:0;width:28px;height:28px;border-top:3px solid var(--accent);border-right:3px solid var(--accent)"></div>
+      <div style="position:absolute;bottom:0;left:0;width:28px;height:28px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent)"></div>
+      <div style="position:absolute;bottom:0;right:0;width:28px;height:28px;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent)"></div>
+      <!-- Scan line animation -->
+      <div id="scanLine" style="position:absolute;left:0;right:0;height:2px;background:var(--accent);opacity:.7;animation:scanLineMove 2s linear infinite"></div>
+    </div>
+
+    <!-- Status -->
+    <div id="scannerStatus" style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);margin:14px 0;text-align:center;letter-spacing:.04em;padding:0 20px">Hold a card up to the camera, then press Scan</div>
+
+    <!-- Capture button -->
+    <button id="scanBtn" onclick="captureAndMatch()" style="margin-top:4px;padding:12px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">SCAN</button>
+
+    <!-- Match results -->
+    <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:20px auto 0;padding:0 0 40px"></div>
+  </div>
+
+  <style>
+    @keyframes scanLineMove{0%{top:0}100%{top:calc(100% - 2px)}}
+    #scannerModal.open{display:flex}
+    .scan-match-card{display:flex;align-items:center;gap:12px;background:var(--surface);border:2px solid var(--border);padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:all .1s;box-shadow:3px 3px 0 var(--shadow)}
+    .scan-match-card:hover{border-color:var(--accent);transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--shadow)}
+    .scan-match-thumb{width:52px;height:68px;object-fit:contain;background:var(--surface2);padding:4px;flex-shrink:0}
+    .scan-match-info{flex:1}
+    .scan-match-name{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;color:var(--text);margin-bottom:3px}
+    .scan-match-sim{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:var(--accent2)}
+    .scan-match-add{background:var(--accent);color:var(--surface);border:none;padding:6px 14px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;cursor:pointer;font-weight:700}
+  </style>
+
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
   <div class="mobile-nav" id="mobileNav">
     <button class="mobile-nav-btn active" id="mobileNavBrowse" onclick="showPage('browse'); setMobileNav('browse')">
@@ -8629,6 +8674,163 @@
       <span class="mobile-nav-badge" id="mobileTradeNotification" style="display:none">0</span>
     </button>
   </div>
+
+  <!-- ── CARD SCANNER JS ── -->
+  <script type="module">
+    // transformers.js — CLIP ViT-B/32 running entirely in the browser
+    import { AutoProcessor, CLIPVisionModelWithProjection, RawImage }
+      from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
+
+    let clipProcessor = null;
+    let clipModel = null;
+    let modelLoading = false;
+    let modelReady = false;
+
+    async function loadClip() {
+      if (modelReady) return;
+      if (modelLoading) { while (!modelReady) await new Promise(r => setTimeout(r, 100)); return; }
+      modelLoading = true;
+      setScanStatus('Loading AI model… (first time only, ~40MB)');
+      clipProcessor = await AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch32');
+      clipModel = await CLIPVisionModelWithProjection.from_pretrained('Xenova/clip-vit-base-patch32');
+      modelReady = true;
+      setScanStatus('Model ready — hold a card up and press SCAN');
+    }
+
+    async function getEmbedding(dataURL) {
+      await loadClip();
+      const img = await RawImage.fromURL(dataURL);
+      const inputs = await clipProcessor(img);
+      const { image_embeds } = await clipModel(inputs);
+      const vec = image_embeds.tolist()[0];
+      // L2 normalise to match Python CLIP output
+      const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
+      return vec.map(v => v / norm);
+    }
+
+    // Expose to window so non-module functions can call it
+    window._getClipEmbedding = getEmbedding;
+    window._preloadClip = loadClip;
+  </script>
+
+  <script>
+    /* ── SCANNER CONTROLLER ── */
+    let scannerStream = null;
+
+    function setScanStatus(msg) {
+      const el = document.getElementById('scannerStatus');
+      if (el) el.textContent = msg;
+    }
+
+    async function openCardScanner() {
+      const modal = document.getElementById('scannerModal');
+      modal.classList.add('open');
+      document.getElementById('scannerResults').style.display = 'none';
+      setScanStatus('Starting camera…');
+
+      try {
+        scannerStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        const video = document.getElementById('scannerVideo');
+        video.srcObject = scannerStream;
+        setScanStatus('Hold a card up to the camera, then press SCAN');
+
+        // Preload CLIP model in background while user positions card
+        if (window._preloadClip) window._preloadClip().catch(() => {});
+      } catch (err) {
+        setScanStatus('Camera access denied — please allow camera permission and retry');
+      }
+    }
+
+    function closeCardScanner() {
+      const modal = document.getElementById('scannerModal');
+      modal.classList.remove('open');
+      if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+      const video = document.getElementById('scannerVideo');
+      video.srcObject = null;
+    }
+
+    async function captureAndMatch() {
+      const btn = document.getElementById('scanBtn');
+      const video = document.getElementById('scannerVideo');
+      const canvas = document.getElementById('scannerCanvas');
+
+      if (!scannerStream || video.readyState < 2) {
+        setScanStatus('Camera not ready — try again');
+        return;
+      }
+
+      // Capture frame
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const dataURL = canvas.toDataURL('image/jpeg', 0.85);
+
+      btn.disabled = true;
+      btn.textContent = 'Scanning…';
+      setScanStatus('Generating image embedding…');
+
+      try {
+        // Get CLIP embedding in browser
+        const embedding = await window._getClipEmbedding(dataURL);
+        setScanStatus('Searching catalog…');
+
+        // Query Supabase via RPC (sb is the global client defined in the main script)
+        const { data, error } = await sb.rpc('match_cards', {
+          query_embedding: embedding,
+          match_threshold: 0.55,
+          match_count: 4
+        });
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          setScanStatus('No close match found — try better lighting or a cleaner angle');
+        } else {
+          setScanStatus(`Found ${data.length} match${data.length > 1 ? 'es' : ''} — tap one to add it to your binder`);
+          showScanResults(data);
+        }
+      } catch (err) {
+        console.error('[Scanner]', err);
+        setScanStatus('Error during scan: ' + (err.message || err));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'SCAN';
+      }
+    }
+
+    function showScanResults(matches) {
+      const wrap = document.getElementById('scannerResults');
+      wrap.style.display = 'block';
+      wrap.innerHTML = matches.map((m, i) => {
+        const pct = Math.round(m.similarity * 100);
+        const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
+        return `
+          <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
+            <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
+            <div class="scan-match-info">
+              <div class="scan-match-name">${m.name || 'Unknown Card'}</div>
+              <div class="scan-match-sim">${pct}% match${bar}</div>
+            </div>
+            <button class="scan-match-add">+ Add</button>
+          </div>`;
+      }).join('');
+    }
+
+    async function confirmScanMatch(cardId, cardName) {
+      // Re-use existing add-to-binder flow if it exists, otherwise show alert
+      if (typeof openBinderSelectModal === 'function') {
+        openBinderSelectModal(cardId);
+      } else {
+        const ok = confirm(`Add "${cardName}" to your binder?`);
+        if (ok && typeof addCardToBinder === 'function') addCardToBinder(cardId);
+      }
+      closeCardScanner();
+    }
+
+    // sb is already a global defined in the main script block — scanner uses it directly
+  </script>
 
   <!-- ── SPUNK FEATURES ── -->
   <canvas id="grainCanvas"></canvas>
