@@ -3271,7 +3271,7 @@
         let profile = null;
         console.log('[PublicBinder] looking up:', usernameOrId);
         const { data: byUsername, error: e1 } = await sb.from('profiles')
-          .select('id, name, username, shop_name, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+          .select('*')
           .eq('username', usernameOrId)
           .maybeSingle();
         console.log('[PublicBinder] byUsername result:', byUsername, 'error:', e1);
@@ -3279,7 +3279,7 @@
           profile = byUsername;
         } else {
           const { data: byId, error: e2 } = await sb.from('profiles')
-            .select('id, name, username, shop_name, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+            .select('*')
             .eq('id', usernameOrId)
             .maybeSingle();
           console.log('[PublicBinder] byId result:', byId, 'error:', e2);
