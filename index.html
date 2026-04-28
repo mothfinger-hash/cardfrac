@@ -8787,6 +8787,15 @@
       </label>
     </div>
 
+    <!-- Name search fallback -->
+    <div style="width:100%;max-width:520px;margin:16px auto 0;padding:0 20px">
+      <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:6px;letter-spacing:.04em">NOT THE RIGHT CARD? SEARCH BY NAME:</div>
+      <input id="scannerNameInput" type="text" placeholder="e.g. Charizard, Haunter..."
+        oninput="scannerNameSearch(this.value)"
+        style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;box-sizing:border-box">
+      <div id="scannerNameResults" style="margin-top:4px"></div>
+    </div>
+
     <!-- Match results -->
     <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:16px auto 0;padding:0 20px 60px"></div>
   </div>
@@ -8963,18 +8972,72 @@
         viewfinder.style.margin = '24px auto 0';
       }
       document.getElementById('scannerResults').style.display = 'none';
+      const nameInput = document.getElementById('scannerNameInput');
+      if (nameInput) nameInput.value = '';
+      const nameResults = document.getElementById('scannerNameResults');
+      if (nameResults) nameResults.innerHTML = '';
       setScanStatus('Hold a card up to the camera, then press SCAN');
     }
 
     async function confirmScanMatch(cardId, cardName) {
-      // Re-use existing add-to-binder flow if it exists, otherwise show alert
-      if (typeof openBinderSelectModal === 'function') {
-        openBinderSelectModal(cardId);
-      } else {
-        const ok = confirm(`Add "${cardName}" to your binder?`);
-        if (ok && typeof addCardToBinder === 'function') addCardToBinder(cardId);
-      }
+      // Fetch full card data from catalog then open the standard add-to-collection modal
+      const { data: card } = await sb.from('catalog').select('*').eq('id', cardId).maybeSingle();
+      if (!card) { showToast('Card not found in catalog'); return; }
+
       closeCardScanner();
+
+      // Build a pendingCollectionCard compatible object and open the modal
+      pendingCollectionCard = {
+        apiCardId:    card.id,
+        cardName:     card.name,
+        setName:      card.set_name  || '',
+        setCode:      card.set_code  || '',
+        cardNumber:   card.card_number || '',
+        cardImageUrl: card.image_url || '',
+        gameType:     'pokemon'
+      };
+
+      const nameEl = document.getElementById('atcCardName');
+      if (nameEl) nameEl.textContent = card.name + (card.set_name ? ' — ' + card.set_name : '');
+      const manualRow = document.getElementById('atcManualNameRow');
+      if (manualRow) manualRow.style.display = 'none';
+      document.getElementById('atcCondition').value = 'raw';
+      document.getElementById('atcGrade').value = '10';
+      document.getElementById('atcQuantity').value = '1';
+      document.getElementById('atcPurchasePrice').value = '';
+      document.getElementById('atcPurchaseDate').value = '';
+      document.getElementById('atcCertNumber').value = '';
+      document.getElementById('atcPriceUrl').value = '';
+      document.getElementById('atcNotes').value = '';
+      populateBinderDropdown('atcBinderId', currentBinderId);
+      toggleGradeField();
+      openModal('addToCollectionModal');
+    }
+
+    // Search catalog by name — shown in scanner when user wants to find exact version
+    let _scanSearchTimer = null;
+    async function scannerNameSearch(val) {
+      clearTimeout(_scanSearchTimer);
+      const out = document.getElementById('scannerNameResults');
+      if (!val || val.length < 2) { if (out) out.innerHTML = ''; return; }
+      _scanSearchTimer = setTimeout(async () => {
+        const { data } = await sb.from('catalog')
+          .select('id, name, set_name, card_number, rarity, image_url')
+          .ilike('name', `%${val}%`)
+          .limit(12);
+        if (!out) return;
+        out.innerHTML = (data || []).map(m => {
+          const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
+          return `<div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
+            <img class="scan-match-thumb" src="${m.image_url||''}" alt="${m.name}" onerror="this.style.display='none'">
+            <div class="scan-match-info">
+              <div class="scan-match-name">${m.name}</div>
+              ${setInfo ? `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted)">${setInfo}</div>` : ''}
+            </div>
+            <button class="scan-match-add">+ Add</button>
+          </div>`;
+        }).join('') || '<div style="padding:10px;font-size:.7rem;color:var(--muted);font-family:\'Space Mono\',monospace">No cards found</div>';
+      }, 280);
     }
 
     // Upload a file and match it
