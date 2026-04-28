@@ -8635,8 +8635,14 @@
     <!-- Status -->
     <div id="scannerStatus" style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);margin:14px 0;text-align:center;letter-spacing:.04em;padding:0 20px">Hold a card up to the camera, then press Scan</div>
 
-    <!-- Capture button -->
-    <button id="scanBtn" onclick="captureAndMatch()" style="margin-top:4px;padding:12px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">SCAN</button>
+    <!-- Capture / Upload buttons -->
+    <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;justify-content:center">
+      <button id="scanBtn" onclick="captureAndMatch()" style="padding:12px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">SCAN</button>
+      <label style="padding:12px 20px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
+        UPLOAD PHOTO
+        <input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
+      </label>
+    </div>
 
     <!-- Match results -->
     <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:20px auto 0;padding:0 0 40px"></div>
@@ -8677,12 +8683,13 @@
 
   <!-- ── CARD SCANNER JS ── -->
   <script type="module">
-    // transformers.js — CLIP ViT-B/32 running entirely in the browser
-    import { AutoProcessor, CLIPVisionModelWithProjection, RawImage }
+    import { pipeline, env }
       from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
 
-    let clipProcessor = null;
-    let clipModel = null;
+    // Use remote models (no local caching issues)
+    env.allowLocalModels = false;
+
+    let extractor = null;
     let modelLoading = false;
     let modelReady = false;
 
@@ -8691,24 +8698,18 @@
       if (modelLoading) { while (!modelReady) await new Promise(r => setTimeout(r, 100)); return; }
       modelLoading = true;
       setScanStatus('Loading AI model… (first time only, ~40MB)');
-      clipProcessor = await AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch32');
-      clipModel = await CLIPVisionModelWithProjection.from_pretrained('Xenova/clip-vit-base-patch32');
+      extractor = await pipeline('image-feature-extraction', 'Xenova/clip-vit-base-patch32', { revision: 'main' });
       modelReady = true;
-      setScanStatus('Model ready — hold a card up and press SCAN');
+      setScanStatus('Model ready — press SCAN or upload a photo');
     }
 
     async function getEmbedding(dataURL) {
       await loadClip();
-      const img = await RawImage.fromURL(dataURL);
-      const inputs = await clipProcessor(img);
-      const { image_embeds } = await clipModel(inputs);
-      const vec = image_embeds.tolist()[0];
-      // L2 normalise to match Python CLIP output
-      const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-      return vec.map(v => v / norm);
+      const output = await extractor(dataURL, { pooling: 'mean', normalize: true });
+      // output.data is a Float32Array of 512 values
+      return Array.from(output.data);
     }
 
-    // Expose to window so non-module functions can call it
     window._getClipEmbedding = getEmbedding;
     window._preloadClip = loadClip;
   </script>
@@ -8752,7 +8753,6 @@
     }
 
     async function captureAndMatch() {
-      const btn = document.getElementById('scanBtn');
       const video = document.getElementById('scannerVideo');
       const canvas = document.getElementById('scannerCanvas');
 
@@ -8761,45 +8761,18 @@
         return;
       }
 
-      // Capture frame
+      // Hide any upload preview, show video
+      const preview = document.getElementById('uploadPreview');
+      if (preview) preview.style.display = 'none';
+      video.style.display = 'block';
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext('2d').drawImage(video, 0, 0);
       const dataURL = canvas.toDataURL('image/jpeg', 0.85);
 
-      btn.disabled = true;
-      btn.textContent = 'Scanning…';
-      setScanStatus('Generating image embedding…');
-
-      try {
-        // Get CLIP embedding in browser
-        const embedding = await window._getClipEmbedding(dataURL);
-        setScanStatus('Searching catalog…');
-
-        // Query Supabase via RPC (sb is the global client defined in the main script)
-        const { data, error } = await sb.rpc('match_cards', {
-          query_embedding: embedding,
-          match_threshold: 0.0,
-          match_count: 4
-        });
-
-        if (error) throw error;
-
-        console.log('[Scanner] top matches:', data?.map(m => `${m.name} (${(m.similarity*100).toFixed(1)}%)`));
-
-        if (!data || data.length === 0) {
-          setScanStatus('No close match found — try better lighting or a cleaner angle');
-        } else {
-          setScanStatus(`Found ${data.length} match${data.length > 1 ? 'es' : ''} — tap one to add it to your binder`);
-          showScanResults(data);
-        }
-      } catch (err) {
-        console.error('[Scanner]', err);
-        setScanStatus('Error during scan: ' + (err.message || err));
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'SCAN';
-      }
+      document.getElementById('scanBtn').textContent = 'Scanning…';
+      await runMatch(dataURL);
     }
 
     function showScanResults(matches) {
@@ -8829,6 +8802,59 @@
         if (ok && typeof addCardToBinder === 'function') addCardToBinder(cardId);
       }
       closeCardScanner();
+    }
+
+    // Upload a file and match it
+    async function matchFromFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataURL = e.target.result;
+        // Show a preview in the viewfinder
+        const video = document.getElementById('scannerVideo');
+        video.style.display = 'none';
+        let preview = document.getElementById('uploadPreview');
+        if (!preview) {
+          preview = document.createElement('img');
+          preview.id = 'uploadPreview';
+          preview.style.cssText = 'width:100%;max-height:340px;object-fit:contain;display:block;background:var(--surface2)';
+          video.parentNode.insertBefore(preview, video);
+        }
+        preview.src = dataURL;
+        await runMatch(dataURL);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Core match logic shared by camera capture and file upload
+    async function runMatch(dataURL) {
+      const btn = document.getElementById('scanBtn');
+      btn.disabled = true;
+      setScanStatus('Generating image embedding…');
+      try {
+        const embedding = await window._getClipEmbedding(dataURL);
+        setScanStatus('Searching 20,000+ cards…');
+        const { data, error } = await sb.rpc('match_cards', {
+          query_embedding: embedding,
+          match_threshold: 0.0,
+          match_count: 5
+        });
+        if (error) throw error;
+        console.log('[Scanner] top matches:', data?.map(m => `${m.name} (${(m.similarity*100).toFixed(1)}%)`));
+        if (!data || data.length === 0) {
+          setScanStatus('No matches found — try a clearer photo');
+        } else {
+          setScanStatus(`Best match: ${data[0].name} (${Math.round(data[0].similarity*100)}%) — tap to add`);
+          showScanResults(data);
+        }
+      } catch(err) {
+        console.error('[Scanner]', err);
+        setScanStatus('Error: ' + (err.message || err));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'SCAN';
+      }
     }
 
     // sb is already a global defined in the main script block — scanner uses it directly
