@@ -8769,7 +8769,7 @@
     </div>
 
     <!-- Viewfinder -->
-    <div id="scannerViewfinder" style="position:relative;width:100%;max-width:520px;margin:24px auto 0;background:var(--surface2);border:2px solid var(--border);box-shadow:6px 6px 0 var(--shadow)">
+    <div id="scannerViewfinder" style="position:relative;width:100%;max-width:520px;margin:24px auto 0;background:var(--surface2);border:2px solid var(--border);box-shadow:6px 6px 0 var(--shadow);transition:max-height .3s ease,margin .3s ease">
       <video id="scannerVideo" autoplay playsinline muted style="width:100%;display:block;max-height:340px;object-fit:cover"></video>
       <canvas id="scannerCanvas" style="display:none"></canvas>
       <canvas id="scannerSampleCanvas" style="display:none" width="64" height="64"></canvas>
@@ -9033,16 +9033,16 @@
 
     async function _triggerAutoCapture() {
       _autoScanCooldown = true;
-      _stopStabilityLoop(); // pause loop while scanning
+      _stopStabilityLoop();
+      // Turn AUTO off after one snap — must be re-enabled manually
+      _autoScanOn = false;
+      const autoBtn = document.getElementById('autoScanBtn');
+      if (autoBtn) { autoBtn.textContent = 'AUTO'; autoBtn.style.color = 'var(--muted)'; autoBtn.style.borderColor = 'var(--border)'; }
       if (navigator.vibrate) navigator.vibrate(60);
       await captureAndMatch();
-      // Resume loop after 2.5s cooldown (gives time to see results or rescan)
-      setTimeout(() => {
-        _autoScanCooldown = false;
-        _setStableDot('idle');
-        _setGuideState('idle');
-        if (_autoScanOn) _startStabilityLoop();
-      }, 2500);
+      _autoScanCooldown = false;
+      _setStableDot('idle');
+      _setGuideState('idle');
     }
 
     async function captureAndMatch() {
@@ -9090,11 +9090,54 @@
       await runMatch(dataURL);
     }
 
+    // Toggle between mini camera strip and full results view
+    function toggleScannerView() {
+      const viewfinder = document.getElementById('scannerViewfinder');
+      const results    = document.getElementById('scannerResults');
+      const hint       = document.getElementById('viewfinderExpandHint');
+      if (!viewfinder || !results) return;
+      const isMini = viewfinder.dataset.mini === '1';
+      if (isMini) {
+        // Expand camera, slide results below
+        viewfinder.style.maxHeight = '';
+        viewfinder.style.overflow  = '';
+        viewfinder.style.margin    = '24px auto 0';
+        viewfinder.dataset.mini    = '0';
+        if (hint) hint.textContent = '▼ TAP TO SEE RESULTS';
+        results.style.display = 'none';
+      } else {
+        // Shrink back to mini strip, show results
+        viewfinder.style.maxHeight = '120px';
+        viewfinder.style.overflow  = 'hidden';
+        viewfinder.style.margin    = '12px auto 0';
+        viewfinder.dataset.mini    = '1';
+        if (hint) hint.textContent = '▲ TAP TO EXPAND CAMERA';
+        results.style.display = 'block';
+      }
+    }
+
     function showScanResults(matches) {
-      // Collapse viewfinder to make room for results
+      // Shrink viewfinder to a live mini strip — tap to expand
       const viewfinder = document.getElementById('scannerViewfinder');
       const uploadPreview = document.getElementById('uploadPreview');
-      if (viewfinder) viewfinder.style.maxHeight = '0px', viewfinder.style.overflow = 'hidden', viewfinder.style.margin = '0';
+      if (viewfinder) {
+        viewfinder.style.maxHeight  = '120px';
+        viewfinder.style.overflow   = 'hidden';
+        viewfinder.style.margin     = '12px auto 0';
+        viewfinder.style.cursor     = 'pointer';
+        viewfinder.dataset.mini     = '1';
+        viewfinder.onclick          = toggleScannerView;
+        // Add expand hint overlay if not already there
+        let hint = document.getElementById('viewfinderExpandHint');
+        if (!hint) {
+          hint = document.createElement('div');
+          hint.id = 'viewfinderExpandHint';
+          hint.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.52);color:#fff;font-family:"Space Mono","Share Tech Mono",monospace;font-size:.5rem;text-align:center;padding:6px 0;letter-spacing:.07em;pointer-events:none';
+          viewfinder.appendChild(hint);
+        }
+        hint.textContent = '▲ TAP TO EXPAND CAMERA';
+        hint.style.display = 'block';
+      }
       if (uploadPreview && uploadPreview.style.display !== 'none') uploadPreview.style.maxHeight = '120px';
 
       const wrap = document.getElementById('scannerResults');
@@ -9130,8 +9173,13 @@
       const viewfinder = document.getElementById('scannerViewfinder');
       if (viewfinder) {
         viewfinder.style.maxHeight = '';
-        viewfinder.style.overflow = '';
-        viewfinder.style.margin = '24px auto 0';
+        viewfinder.style.overflow  = '';
+        viewfinder.style.margin    = '24px auto 0';
+        viewfinder.style.cursor    = '';
+        viewfinder.onclick         = null;
+        viewfinder.dataset.mini    = '0';
+        const hint = document.getElementById('viewfinderExpandHint');
+        if (hint) hint.style.display = 'none';
       }
       document.getElementById('scannerResults').style.display = 'none';
       const nameInput = document.getElementById('scannerNameInput');
