@@ -8958,16 +8958,18 @@
           const pct = Math.round(m.similarity * 100);
           const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
           const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
-          const sourceBadge = m._ocr
-            ? `<span style="background:var(--teal);color:#000;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">OCR</span>`
-            : `<span style="color:var(--muted);font-size:.55rem;margin-left:6px">${pct}%</span>`;
+          const sourceBadge = m._exact
+            ? `<span style="background:var(--accent);color:#fff;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">EXACT</span>`
+            : m._ocr
+              ? `<span style="background:var(--teal);color:#000;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">OCR</span>`
+              : `<span style="color:var(--muted);font-size:.55rem;margin-left:6px">${pct}%</span>`;
           return `
             <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
               <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
               <div class="scan-match-info">
                 <div class="scan-match-name">${m.name || 'Unknown Card'}${sourceBadge}</div>
                 ${setInfo ? `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:2px">${setInfo}</div>` : ''}
-                ${!m._ocr ? `<div class="scan-match-sim">${bar}</div>` : ''}
+                ${!m._ocr && !m._exact ? `<div class="scan-match-sim">${bar}</div>` : ''}
               </div>
               <button class="scan-match-add">+ Add</button>
             </div>`;
@@ -9098,84 +9100,227 @@
       }
     }
 
-    // Extract card number like "4/102", "SV001/SV122", "TG01/TG30"
-    function parseCardNumber(text) {
-      const m = text.match(/\b([A-Z]{0,4}\d+)\s*\/\s*([A-Z]{0,4}\d+)\b/);
-      return m ? `${m[1]}/${m[2]}` : null;
+    // ── Zone-based image helpers ─────────────────────────────────────────────
+
+    // Crop a rectangular region from a dataURL (fractions 0–1 of image dimensions)
+    function cropZone(dataURL, xFrac, yFrac, wFrac, hFrac) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const cx = Math.round(img.width  * xFrac);
+          const cy = Math.round(img.height * yFrac);
+          const cw = Math.round(img.width  * wFrac);
+          const ch = Math.round(img.height * hFrac);
+          if (cw < 4 || ch < 4) { resolve(null); return; }
+          const canvas = document.createElement('canvas');
+          canvas.width  = cw;
+          canvas.height = ch;
+          canvas.getContext('2d').drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(null);
+        img.src = dataURL;
+      });
     }
 
-    // Extract card name — longest ALL-CAPS or Title Case word cluster, avoiding numbers/HP/etc
+    // Scale up + hard threshold — dramatically improves Tesseract OCR accuracy
+    function enhanceForOCR(dataURL, scale) {
+      scale = scale || 3;
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const w = img.width  * scale;
+          const h = img.height * scale;
+          const canvas = document.createElement('canvas');
+          canvas.width  = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const id = ctx.getImageData(0, 0, w, h);
+          const d  = id.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+            const val = lum > 140 ? 255 : 0;
+            d[i] = d[i+1] = d[i+2] = val;
+            d[i+3] = 255;
+          }
+          ctx.putImageData(id, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(null);
+        img.src = dataURL;
+      });
+    }
+
+    // Call match_set_symbol RPC — returns best set match or null if confidence too low
+    async function matchSetSymbol(symbolEmbedding) {
+      try {
+        const res = await sb.rpc('match_set_symbol', {
+          query_embedding: symbolEmbedding,
+          match_count: 3
+        });
+        if (res.error) { console.warn('[SymbolMatch]', res.error); return null; }
+        const matches = res.data || [];
+        console.log('[SymbolMatch]', matches.map(function(m){ return m.set_code+'('+(m.similarity*100).toFixed(1)+'%)'; }).join(' '));
+        return (matches.length > 0 && matches[0].similarity > 0.60) ? matches[0] : null;
+      } catch(e) {
+        console.warn('[SymbolMatch]', e);
+        return null;
+      }
+    }
+
+    // Exact card lookup by set_code + card_number via lookup_card RPC
+    async function lookupExactCard(setCode, cardNumber) {
+      const variants = [cardNumber];
+      const stripped = cardNumber.replace(/^0+/, '');
+      if (stripped !== cardNumber) variants.push(stripped);
+      for (let i = 0; i < variants.length; i++) {
+        try {
+          const res = await sb.rpc('lookup_card', { p_set_code: setCode, p_card_number: variants[i] });
+          if (!res.error && res.data && res.data.length > 0) {
+            return Object.assign({}, res.data[0], { similarity: 1.0, _exact: true });
+          }
+        } catch(e) { /* try next */ }
+      }
+      return null;
+    }
+
+    // Extract card number like "4/102", "SV001/SV122", "TG01/TG30"
+    function parseCardNumber(text) {
+      if (!text) return null;
+      const m = text.match(/\b([A-Z]{0,4}\d+)\s*[\/\\|]\s*([A-Z]{0,4}\d+)\b/);
+      return m ? (m[1] + '/' + m[2]) : null;
+    }
+
+    // Extract card name — title-cased cluster, no digits, from top lines
     function parseCardName(text) {
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      // Card name is usually one of the first few lines, title-cased, no digits
-      for (const line of lines.slice(0, 6)) {
-        if (/^[A-ZÀ-Ö][a-zA-ZÀ-ö\s\-']+$/.test(line) && line.length > 2 && line.length < 30) {
+      if (!text) return null;
+      const lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+      for (let i = 0; i < Math.min(6, lines.length); i++) {
+        const line = lines[i];
+        if (/^[A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê]+$/.test(line) && line.length > 2 && line.length < 35) {
           return line.trim();
         }
       }
       return null;
     }
 
-    // Core match logic — runs CLIP and OCR in parallel then merges results
+    // ── Tier 3 scanner — zone preprocessing + set symbol CLIP + OCR + CLIP fallback ──
     async function runMatch(dataURL) {
       const btn = document.getElementById('scanBtn');
       btn.disabled = true;
-      setScanStatus('Scanning… (visual + OCR)');
+      setScanStatus('Analyzing card zones…');
       try {
-        // Run CLIP embedding and OCR simultaneously
-        const [embedding, ocrText] = await Promise.all([
-          window._getClipEmbedding(dataURL),
-          ocrCardText(dataURL)
+        // Step 1: Crop three zones in parallel
+        // Pokemon card portrait layout: name top-left, set symbol bottom-left, number bottom-right
+        const cropResults = await Promise.all([
+          cropZone(dataURL, 0.03, 0.03, 0.68, 0.13),   // name zone (top area)
+          cropZone(dataURL, 0.50, 0.83, 0.47, 0.12),   // number zone (bottom-right)
+          cropZone(dataURL, 0.03, 0.83, 0.28, 0.12),   // symbol zone (bottom-left)
         ]);
+        const nameZone   = cropResults[0];
+        const numberZone = cropResults[1];
+        const symbolZone = cropResults[2];
 
-        console.log('[OCR] raw text:', ocrText);
-        const cardNum  = parseCardNumber(ocrText);
-        const cardName = parseCardName(ocrText);
-        console.log('[OCR] parsed — number:', cardNum, '| name:', cardName);
+        // Step 2: Enhance name + number zones for OCR
+        setScanStatus('Enhancing image zones…');
+        const enhanceResults = await Promise.all([
+          nameZone   ? enhanceForOCR(nameZone,   3) : Promise.resolve(null),
+          numberZone ? enhanceForOCR(numberZone, 3) : Promise.resolve(null),
+        ]);
+        const nameEnhanced   = enhanceResults[0];
+        const numberEnhanced = enhanceResults[1];
 
-        // Run CLIP vector search and OCR text search in parallel
+        // Step 3: Run all analysis in parallel — full CLIP + symbol zone CLIP + zone OCRs
+        setScanStatus('Running visual + OCR analysis…');
+        const analysisResults = await Promise.all([
+          window._getClipEmbedding(dataURL),
+          symbolZone ? window._getClipEmbedding(symbolZone) : Promise.resolve(null),
+          nameEnhanced   ? ocrCardText(nameEnhanced)   : ocrCardText(dataURL),
+          numberEnhanced ? ocrCardText(numberEnhanced) : Promise.resolve(''),
+        ]);
+        const fullEmbedding   = analysisResults[0];
+        const symbolEmbedding = analysisResults[1];
+        const nameText        = analysisResults[2];
+        const numberText      = analysisResults[3];
+
+        const cardNum  = parseCardNumber(numberText) || parseCardNumber(nameText);
+        const cardName = parseCardName(nameText);
+        console.log('[Tier3] number OCR:', JSON.stringify((numberText||'').slice(0,60)));
+        console.log('[Tier3] name OCR:',   JSON.stringify((nameText||'').slice(0,60)));
+        console.log('[Tier3] parsed → number:', cardNum, '| name:', cardName);
+
+        // Step 4: Match set symbol
+        setScanStatus('Matching set symbol…');
+        const symbolMatch = symbolEmbedding ? await matchSetSymbol(symbolEmbedding) : null;
+        if (symbolMatch) {
+          console.log('[Tier3] set:', symbolMatch.set_code, symbolMatch.set_name, (symbolMatch.similarity*100).toFixed(1)+'%');
+        }
+
+        // Step 5: Three-signal search
         setScanStatus('Searching catalog…');
-        const [clipRes, ocrRes] = await Promise.all([
-          sb.rpc('match_cards', { query_embedding: embedding, match_threshold: 0.0, match_count: 8 }),
+
+        // Signal A: set symbol + card number → exact lookup (near-certain)
+        let exactMatch = null;
+        if (symbolMatch && cardNum) {
+          const numOnly = cardNum.split('/')[0];
+          exactMatch = await lookupExactCard(symbolMatch.set_code, numOnly);
+          console.log('[Tier3] exact lookup:', exactMatch ? exactMatch.name : 'miss');
+        }
+
+        // Signal B (OCR text) + Signal C (CLIP visual) — run in parallel
+        const searchResults = await Promise.all([
+          sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
           cardNum
-            ? sb.from('catalog').select('id,name,set_name,card_number,rarity,image_url').ilike('card_number', cardNum).limit(6)
+            ? sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url').ilike('card_number', cardNum).limit(8)
             : cardName
-              ? sb.from('catalog').select('id,name,set_name,card_number,rarity,image_url').ilike('name', `%${cardName}%`).limit(6)
+              ? sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url').ilike('name', '%' + cardName + '%').limit(8)
               : Promise.resolve({ data: [] })
         ]);
+        const clipRes = searchResults[0];
+        const ocrRes  = searchResults[1];
 
         if (clipRes.error) {
-          if (clipRes.error.code === 'PGRST202' || clipRes.error.message?.includes('match_cards')) {
+          if (clipRes.error.code === 'PGRST202' || (clipRes.error.message && clipRes.error.message.includes('match_cards'))) {
             setScanStatus('Run scanner_setup.sql in Supabase first');
           } else throw clipRes.error;
           return;
         }
 
         const clipMatches = clipRes.data || [];
-        const ocrMatches  = (ocrRes.data || []).map(m => ({ ...m, similarity: 1.0, _ocr: true }));
 
-        console.log('[Scanner] CLIP:', clipMatches.map(m => `${m.name} (${(m.similarity*100).toFixed(1)}%)`));
-        console.log('[Scanner] OCR:', ocrMatches.map(m => m.name + ' ' + m.set_name));
+        // Boost OCR results that agree with the detected set
+        let ocrMatches = (ocrRes.data || []).map(function(m) {
+          return Object.assign({}, m, {
+            similarity: (symbolMatch && m.set_code === symbolMatch.set_code) ? 1.0 : 0.85,
+            _ocr: true
+          });
+        });
+        ocrMatches.sort(function(a, b) { return b.similarity - a.similarity; });
 
-        // Merge: OCR matches first (deduplicated), then CLIP fills remaining slots
-        const seen = new Set(ocrMatches.map(m => m.id));
-        const merged = [
-          ...ocrMatches,
-          ...clipMatches.filter(m => !seen.has(m.id))
-        ].slice(0, 10);
+        console.log('[Tier3] CLIP top 3:', clipMatches.slice(0,3).map(function(m){ return m.name+'('+(m.similarity*100).toFixed(0)+'%)'; }).join(' '));
+        console.log('[Tier3] OCR hits:', ocrMatches.map(function(m){ return m.name+(m.set_code?'/'+m.set_code:''); }).join(', '));
 
-        if (merged.length === 0) {
-          const { count } = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
-          if (!count || count === 0) {
+        // Merge: EXACT → OCR (set-boosted) → CLIP (deduplicated)
+        const merged = [];
+        const seen   = new Set();
+        if (exactMatch) { merged.push(exactMatch); seen.add(exactMatch.id); }
+        ocrMatches.forEach(function(m)  { if (!seen.has(m.id)) { merged.push(m);  seen.add(m.id); } });
+        clipMatches.forEach(function(m) { if (!seen.has(m.id)) { merged.push(m);  seen.add(m.id); } });
+        const final = merged.slice(0, 10);
+
+        if (final.length === 0) {
+          const countRes = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
+          if (!countRes.count || countRes.count === 0) {
             setScanStatus('Card catalog is empty — run generate_embeddings.py first');
           } else {
             setScanStatus('No match found — try a clearer photo or use the name search below');
           }
         } else {
-          const topName   = merged[0].name;
-          const topSource = merged[0]._ocr ? 'OCR' : `${Math.round(merged[0].similarity*100)}% visual`;
-          setScanStatus(`Best match: ${topName} (${topSource}) — tap to add`);
-          showScanResults(merged);
+          const top = final[0];
+          const src = top._exact ? 'EXACT' : (top._ocr ? 'OCR' : (Math.round(top.similarity * 100) + '% visual'));
+          setScanStatus('Best match: ' + top.name + ' (' + src + ') — tap to add');
+          showScanResults(final);
         }
       } catch(err) {
         console.error('[Scanner]', err);
