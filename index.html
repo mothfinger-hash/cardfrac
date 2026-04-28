@@ -8779,11 +8779,13 @@
         // Query Supabase via RPC (sb is the global client defined in the main script)
         const { data, error } = await sb.rpc('match_cards', {
           query_embedding: embedding,
-          match_threshold: 0.55,
+          match_threshold: 0.0,
           match_count: 4
         });
 
         if (error) throw error;
+
+        console.log('[Scanner] top matches:', data?.map(m => `${m.name} (${(m.similarity*100).toFixed(1)}%)`));
 
         if (!data || data.length === 0) {
           setScanStatus('No close match found — try better lighting or a cleaner angle');
