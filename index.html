@@ -8754,7 +8754,7 @@
   </div>
 
   <!-- ── CARD SCANNER MODAL ─────────────────────────────────────────────── -->
-  <div id="scannerModal" style="position:fixed;inset:0;z-index:99999;background:#0F0D0A;flex-direction:column;align-items:center;justify-content:flex-start;padding:0;display:none">
+  <div id="scannerModal" style="position:fixed;inset:0;z-index:99999;background:#0F0D0A;flex-direction:column;align-items:center;justify-content:flex-start;padding:0;display:none;overflow-y:auto">
 
     <!-- Header -->
     <div style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:2px solid var(--border);background:var(--surface)">
@@ -8788,7 +8788,7 @@
     </div>
 
     <!-- Match results -->
-    <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:20px auto 0;padding:0 0 40px"></div>
+    <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:16px auto 0;padding:0 20px 60px"></div>
   </div>
 
   <style>
@@ -8925,21 +8925,45 @@
     }
 
     function showScanResults(matches) {
+      // Collapse viewfinder to make room for results
+      const viewfinder = document.getElementById('scannerViewfinder');
+      const uploadPreview = document.getElementById('uploadPreview');
+      if (viewfinder) viewfinder.style.maxHeight = '0px', viewfinder.style.overflow = 'hidden', viewfinder.style.margin = '0';
+      if (uploadPreview && uploadPreview.style.display !== 'none') uploadPreview.style.maxHeight = '120px';
+
       const wrap = document.getElementById('scannerResults');
       wrap.style.display = 'block';
-      wrap.innerHTML = matches.map((m, i) => {
-        const pct = Math.round(m.similarity * 100);
-        const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
-        return `
-          <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
-            <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
-            <div class="scan-match-info">
-              <div class="scan-match-name">${m.name || 'Unknown Card'}</div>
-              <div class="scan-match-sim">${pct}% match${bar}</div>
-            </div>
-            <button class="scan-match-add">+ Add</button>
-          </div>`;
-      }).join('');
+      wrap.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;color:var(--accent2);letter-spacing:.06em">${matches.length} POSSIBLE MATCHES — tap to add</div>
+          <button onclick="reopenViewfinder()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;cursor:pointer">↺ Rescan</button>
+        </div>` +
+        matches.map((m, i) => {
+          const pct = Math.round(m.similarity * 100);
+          const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
+          const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
+          return `
+            <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
+              <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
+              <div class="scan-match-info">
+                <div class="scan-match-name">${m.name || 'Unknown Card'}</div>
+                ${setInfo ? `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:2px">${setInfo}</div>` : ''}
+                <div class="scan-match-sim">${pct}% match${bar}</div>
+              </div>
+              <button class="scan-match-add">+ Add</button>
+            </div>`;
+        }).join('');
+    }
+
+    function reopenViewfinder() {
+      const viewfinder = document.getElementById('scannerViewfinder');
+      if (viewfinder) {
+        viewfinder.style.maxHeight = '';
+        viewfinder.style.overflow = '';
+        viewfinder.style.margin = '24px auto 0';
+      }
+      document.getElementById('scannerResults').style.display = 'none';
+      setScanStatus('Hold a card up to the camera, then press SCAN');
     }
 
     async function confirmScanMatch(cardId, cardName) {
@@ -8987,7 +9011,7 @@
         const { data, error } = await sb.rpc('match_cards', {
           query_embedding: embedding,
           match_threshold: 0.0,
-          match_count: 5
+          match_count: 8
         });
         if (error) {
           console.error('[Scanner] RPC error:', error);

@@ -39,11 +39,11 @@ except ImportError:
 # CONFIG
 # ══════════════════════════════════════════════════════════════════════
 XLSX_PATH       = "combined_final.xlsx"
-SUPABASE_URL    = os.environ.get("SUPABASE_URL")          or input("Supabase URL: ").strip()
-SUPABASE_KEY    = os.environ.get("SUPABASE_SERVICE_KEY")  or input("Service role key: ").strip()
+SUPABASE_URL    = "https://xjamytrhxeaynywcwfun.supabase.co"
+SUPABASE_KEY    = os.environ.get("SUPABASE_SERVICE_KEY")  or input("Service role key (Settings → API → service_role): ").strip()
 BATCH_SIZE      = 32
 UPSERT_BATCH    = 50
-SKIP_EXISTING   = False   # False = re-embed everything for clean compatibility
+SKIP_EXISTING   = True    # True = skip cards that already have embeddings
 REQUEST_TIMEOUT = 12
 
 
@@ -59,9 +59,20 @@ print(f"  Running on: {device}")
 
 
 # ══════════════════════════════════════════════════════════════════════
-# CONNECT TO SUPABASE
+# CONNECT TO SUPABASE + VERIFY
 # ══════════════════════════════════════════════════════════════════════
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+print("\nVerifying Supabase connection...")
+try:
+    res = sb.table("catalog").select("id", count="exact").limit(1).execute()
+    print(f"  ✓ Connected — catalog table exists, current row count: {res.count}")
+except Exception as e:
+    sys.exit(f"  ✗ Cannot reach catalog table: {e}\n\n"
+             "  Make sure you:\n"
+             "  1. Ran scanner_setup.sql in Supabase SQL Editor\n"
+             "  2. Used the correct Supabase URL (https://...supabase.co)\n"
+             "  3. Used the service_role key (NOT the anon key)")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -135,11 +146,20 @@ def embed_batch(pil_images):
         embeds = embeds / embeds.norm(dim=-1, keepdim=True)           # L2 normalise
     return embeds.cpu().tolist()
 
+_upsert_errors = 0
 def upsert(rows):
+    global _upsert_errors
     try:
-        sb.table("catalog").upsert(rows, on_conflict="id").execute()
+        res = sb.table("catalog").upsert(rows, on_conflict="id").execute()
+        # Print first successful upsert so we know writes are working
+        if _upsert_errors == 0 and not hasattr(upsert, '_confirmed'):
+            upsert._confirmed = True
+            print(f"\n  ✓ First upsert confirmed — writes are working")
     except Exception as e:
-        print(f"\n  ✗ Upsert error: {e}")
+        _upsert_errors += 1
+        print(f"\n  ✗ Upsert error #{_upsert_errors}: {e}")
+        if _upsert_errors >= 3:
+            sys.exit("\n  Too many upsert errors — check your service_role key and catalog table")
 
 
 # ══════════════════════════════════════════════════════════════════════
