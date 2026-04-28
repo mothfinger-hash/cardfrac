@@ -1886,6 +1886,7 @@
     let slots = [];
     let profilesMap = {};
     let freshSignIn = false; // true only when user just clicked Sign In / Create Account // userId -> { id, name, username } — populated after slots load
+    let isPublicView = false; // true when opened via ?binder= share link — prevents auth redirect overriding the public binder page
     let currentUser = null;
     let cart = [];
     let lightboxIndex = 0;
@@ -3261,6 +3262,7 @@
     async function loadPublicBinder(usernameOrId) {
       const el = document.getElementById('publicBinderContent');
       if (!el) return;
+      isPublicView = true; // prevent onAuthStateChange from redirecting to browse
       el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">Loading binder…</div>`;
       showPage('publicBinder');
 
@@ -8527,7 +8529,7 @@
         if (!currentUser) currentUser = { ...session.user };
         updateAuthUI();
         renderAllContent();
-        if (freshSignIn) { freshSignIn = false; showPage('browse'); }
+        if (freshSignIn && !isPublicView) { freshSignIn = false; showPage('browse'); }
 
         // Then enrich with profile + fresh data in background
         const uid = session.user.id;
