@@ -8800,6 +8800,7 @@
     <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:16px auto 0;padding:0 20px 60px"></div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     @keyframes scanLineMove{0%{top:0}100%{top:calc(100% - 2px)}}
     #scannerModal.open{display:flex}
@@ -8951,13 +8952,16 @@
           const pct = Math.round(m.similarity * 100);
           const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
           const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
+          const sourceBadge = m._ocr
+            ? `<span style="background:var(--teal);color:#000;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">OCR</span>`
+            : `<span style="color:var(--muted);font-size:.55rem;margin-left:6px">${pct}%</span>`;
           return `
             <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
               <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
               <div class="scan-match-info">
-                <div class="scan-match-name">${m.name || 'Unknown Card'}</div>
+                <div class="scan-match-name">${m.name || 'Unknown Card'}${sourceBadge}</div>
                 ${setInfo ? `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:2px">${setInfo}</div>` : ''}
-                <div class="scan-match-sim">${pct}% match${bar}</div>
+                ${!m._ocr ? `<div class="scan-match-sim">${bar}</div>` : ''}
               </div>
               <button class="scan-match-add">+ Add</button>
             </div>`;
@@ -9063,42 +9067,109 @@
       reader.readAsDataURL(file);
     }
 
-    // Core match logic shared by camera capture and file upload
+    // ── Tesseract OCR helpers ────────────────────────────────────────────────
+    let _tWorker = null;
+
+    async function getTesseractWorker() {
+      if (_tWorker) return _tWorker;
+      setScanStatus('Loading OCR engine… (first time only)');
+      _tWorker = await Tesseract.createWorker('eng', 1, {
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+        corePath:   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
+        logger: () => {}
+      });
+      return _tWorker;
+    }
+
+    async function ocrCardText(dataURL) {
+      try {
+        const worker = await getTesseractWorker();
+        const { data: { text } } = await worker.recognize(dataURL);
+        return text || '';
+      } catch (e) {
+        console.warn('[OCR]', e);
+        return '';
+      }
+    }
+
+    // Extract card number like "4/102", "SV001/SV122", "TG01/TG30"
+    function parseCardNumber(text) {
+      const m = text.match(/\b([A-Z]{0,4}\d+)\s*\/\s*([A-Z]{0,4}\d+)\b/);
+      return m ? `${m[1]}/${m[2]}` : null;
+    }
+
+    // Extract card name — longest ALL-CAPS or Title Case word cluster, avoiding numbers/HP/etc
+    function parseCardName(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      // Card name is usually one of the first few lines, title-cased, no digits
+      for (const line of lines.slice(0, 6)) {
+        if (/^[A-ZÀ-Ö][a-zA-ZÀ-ö\s\-']+$/.test(line) && line.length > 2 && line.length < 30) {
+          return line.trim();
+        }
+      }
+      return null;
+    }
+
+    // Core match logic — runs CLIP and OCR in parallel then merges results
     async function runMatch(dataURL) {
       const btn = document.getElementById('scanBtn');
       btn.disabled = true;
-      setScanStatus('Generating image embedding…');
+      setScanStatus('Scanning… (visual + OCR)');
       try {
-        const embedding = await window._getClipEmbedding(dataURL);
-        setScanStatus('Searching 20,000+ cards…');
-        const { data, error } = await sb.rpc('match_cards', {
-          query_embedding: embedding,
-          match_threshold: 0.0,
-          match_count: 8
-        });
-        if (error) {
-          console.error('[Scanner] RPC error:', error);
-          // If the function doesn't exist yet, give a clear setup message
-          if (error.code === 'PGRST202' || error.message?.includes('match_cards')) {
-            setScanStatus('Run scanner_setup.sql in Supabase first — see setup guide');
-          } else {
-            throw error;
-          }
+        // Run CLIP embedding and OCR simultaneously
+        const [embedding, ocrText] = await Promise.all([
+          window._getClipEmbedding(dataURL),
+          ocrCardText(dataURL)
+        ]);
+
+        console.log('[OCR] raw text:', ocrText);
+        const cardNum  = parseCardNumber(ocrText);
+        const cardName = parseCardName(ocrText);
+        console.log('[OCR] parsed — number:', cardNum, '| name:', cardName);
+
+        // Run CLIP vector search and OCR text search in parallel
+        setScanStatus('Searching catalog…');
+        const [clipRes, ocrRes] = await Promise.all([
+          sb.rpc('match_cards', { query_embedding: embedding, match_threshold: 0.0, match_count: 8 }),
+          cardNum
+            ? sb.from('catalog').select('id,name,set_name,card_number,rarity,image_url').ilike('card_number', cardNum).limit(6)
+            : cardName
+              ? sb.from('catalog').select('id,name,set_name,card_number,rarity,image_url').ilike('name', `%${cardName}%`).limit(6)
+              : Promise.resolve({ data: [] })
+        ]);
+
+        if (clipRes.error) {
+          if (clipRes.error.code === 'PGRST202' || clipRes.error.message?.includes('match_cards')) {
+            setScanStatus('Run scanner_setup.sql in Supabase first');
+          } else throw clipRes.error;
           return;
         }
-        console.log('[Scanner] top matches:', data?.map(m => `${m.name} (${(m.similarity*100).toFixed(1)}%)`));
-        if (!data || data.length === 0) {
-          // Check if catalog has any embeddings at all
+
+        const clipMatches = clipRes.data || [];
+        const ocrMatches  = (ocrRes.data || []).map(m => ({ ...m, similarity: 1.0, _ocr: true }));
+
+        console.log('[Scanner] CLIP:', clipMatches.map(m => `${m.name} (${(m.similarity*100).toFixed(1)}%)`));
+        console.log('[Scanner] OCR:', ocrMatches.map(m => m.name + ' ' + m.set_name));
+
+        // Merge: OCR matches first (deduplicated), then CLIP fills remaining slots
+        const seen = new Set(ocrMatches.map(m => m.id));
+        const merged = [
+          ...ocrMatches,
+          ...clipMatches.filter(m => !seen.has(m.id))
+        ].slice(0, 10);
+
+        if (merged.length === 0) {
           const { count } = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
-          console.log('[Scanner] catalog embedded count:', count);
           if (!count || count === 0) {
             setScanStatus('Card catalog is empty — run generate_embeddings.py first');
           } else {
-            setScanStatus(`No match found (${count.toLocaleString()} cards scanned) — try a clearer photo or different angle`);
+            setScanStatus('No match found — try a clearer photo or use the name search below');
           }
         } else {
-          setScanStatus(`Best match: ${data[0].name} (${Math.round(data[0].similarity*100)}%) — tap to add`);
-          showScanResults(data);
+          const topName   = merged[0].name;
+          const topSource = merged[0]._ocr ? 'OCR' : `${Math.round(merged[0].similarity*100)}% visual`;
+          setScanStatus(`Best match: ${topName} (${topSource}) — tap to add`);
+          showScanResults(merged);
         }
       } catch(err) {
         console.error('[Scanner]', err);
