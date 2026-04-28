@@ -1093,7 +1093,7 @@
       </div>
       <div style="margin-top:14px;text-align:center;border-top:1px solid var(--border);padding-top:12px">
         <span style="font-size:.75rem;color:var(--muted)">Don't own it yet?</span>
-        <button onclick="closeModal('addToCollectionModal');openAddToWishlistModal(pendingCollectionCard||{})"
+        <button onclick="closeModal('addToCollectionModal');_returnToScanner=true;openAddToWishlistModal(pendingCollectionCard||{})"
           style="margin-left:10px;background:transparent;border:none;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;text-decoration:underline;padding:0">♡ Add to Wishlist Instead</button>
       </div>
     </div>
@@ -2015,6 +2015,12 @@
     }
     function closeModal(modalId) {
       document.getElementById(modalId).classList.remove('open');
+      // If scanner was hidden to show this modal, bring it back
+      if (_returnToScanner && (modalId === 'addToCollectionModal' || modalId === 'addToWishlistModal')) {
+        _returnToScanner = false;
+        const scanModal = document.getElementById('scannerModal');
+        if (scanModal) scanModal.style.display = 'flex';
+      }
     }
     function switchModal(from, to) {
       closeModal(from);
@@ -8238,6 +8244,7 @@
       }
 
       showToast('♡ ' + cardName + ' added to wishlist!');
+      _returnToScanner = false; // saved successfully — don't reopen scanner
       closeModal('addToWishlistModal');
       pendingCollectionCard = null;
       await loadCollection();
@@ -8470,6 +8477,7 @@
       }
 
       showToast(cardName + ' added to collection!');
+      _returnToScanner = false; // saved successfully — don't reopen scanner
       closeModal('addToCollectionModal');
       pendingCollectionCard = null;
       await loadCollection();
@@ -9191,12 +9199,16 @@
       }
     }
 
+    let _returnToScanner = false;
+
     async function confirmScanMatch(cardId, cardName) {
       // Fetch full card data from catalog then open the standard add-to-collection modal
       const { data: card } = await sb.from('catalog').select('*').eq('id', cardId).maybeSingle();
       if (!card) { showToast('Card not found in catalog'); return; }
 
-      closeCardScanner();
+      // Hide scanner modal but keep stream + results alive so cancel brings user back
+      _returnToScanner = true;
+      document.getElementById('scannerModal').style.display = 'none';
 
       // Build a pendingCollectionCard compatible object and open the modal
       pendingCollectionCard = {
