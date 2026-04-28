@@ -3316,18 +3316,22 @@
         const { data: items, error } = await itemsQuery.order('created_at', { ascending: true });
         console.log('[PublicBinder] items query error:', error, '| count:', items?.length, '| sample url:', items?.[0]?.card_image_url);
 
-        // Resolve binder name if a specific binder was requested
-        let binderName = null;
+        // Resolve binder metadata (name, cover, color)
+        let binderName = null, binderCoverUrl = null, binderColor = '#444';
         if (binderId) {
-          const { data: binderRow } = await sb.from('binders').select('name').eq('id', binderId).maybeSingle();
-          binderName = binderRow?.name || null;
+          const { data: binderRow } = await sb.from('binders').select('name, cover_image_url, color').eq('id', binderId).maybeSingle();
+          binderName     = binderRow?.name || null;
+          binderCoverUrl = binderRow?.cover_image_url || null;
+          binderColor    = binderRow?.color || '#444';
+        } else {
+          // All Cards — use the default cover
+          binderCoverUrl = 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.png';
         }
 
         if (error) throw error;
 
         const displayName = profile.shop_name || profile.name || profile.username || 'Collector';
         const binderTitle = binderName ? `${displayName}'s ${binderName} Binder` : `${displayName}'s Binder`;
-        console.log('[PublicBinder] items loaded:', items?.length, '| sample url:', items?.[0]?.card_image_url);
         const memberSince = profile.created_at ? new Date(profile.created_at).getFullYear() : '';
         const cardCount   = items?.length || 0;
         const totalValue  = (items||[]).reduce((s,c) => s + ((c.current_value||c.purchase_price||0) * (c.quantity||1)), 0);
@@ -3339,7 +3343,7 @@
           ? `<span style="font-size:.62rem;padding:2px 7px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;margin-left:8px">${tier.toUpperCase()}</span>`
           : '';
 
-        // Build card grid
+        // Build card grid (hidden initially)
         const gridCards = (items||[]).map(c => {
           const condLabel = c.condition === 'graded' && c.grade_value
             ? `${c.grade_label||'PSA'} ${c.grade_value}`
@@ -3373,15 +3377,21 @@
             </button>
           </div>` : '';
 
+        // Binder cover art
+        const coverArt = binderCoverUrl
+          ? `<img src="${binderCoverUrl}" alt="${binderName||'Binder'}" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none">`
+          : `<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${binderColor}22;padding:16px">
+               <div style="font-size:2rem;color:${binderColor};opacity:.8">⬡</div>
+               <div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||displayName}</div>
+             </div>`;
+
         el.innerHTML = `
-          <!-- Header -->
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
-            <div>
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                <h2 style="font-size:1.3rem;margin:0">${binderTitle}</h2>
-                ${tierBadge}
-              </div>
-              ${profile.username ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px">@${profile.username}${memberSince ? ` · Member since ${memberSince}` : ''}</div>` : ''}
+          <!-- Top nav row -->
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:32px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:.8rem;color:var(--muted)">@${profile.username||displayName}</span>
+              ${tierBadge}
+              ${memberSince ? `<span style="font-size:.72rem;color:var(--muted)">· since ${memberSince}</span>` : ''}
             </div>
             <div style="display:flex;gap:10px">
               <button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
@@ -3389,23 +3399,105 @@
             </div>
           </div>
 
-          <!-- Stats bar -->
-          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;padding:12px 16px;background:var(--surface);border:1px solid var(--border)">
-            <span style="font-size:.78rem;color:var(--muted)">Cards: <span style="color:var(--text)">${cardCount}</span></span>
-            ${totalValue > 0 ? `<span style="font-size:.78rem;color:var(--muted)">Est. Value: <span style="color:var(--green)">$${totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>` : ''}
+          <!-- ══ COVER STATE ══ -->
+          <div id="pbCoverState" style="display:flex;flex-direction:column;align-items:center;gap:28px;padding:20px 0 40px">
+            <div style="text-align:center">
+              <h2 style="font-size:1.4rem;margin:0 0 4px">${binderTitle}</h2>
+              <div style="font-size:.78rem;color:var(--muted)">${cardCount} card${cardCount!==1?'s':''}</div>
+            </div>
+
+            <!-- Big binder book -->
+            <div id="pbBinderBook" style="
+              position:relative;width:180px;height:236px;
+              transform:perspective(900px) rotateY(-18deg);
+              filter:drop-shadow(8px 16px 32px rgba(0,0,0,.85));
+              transition:transform .5s cubic-bezier(.22,1,.36,1),filter .5s ease;
+              cursor:pointer" onclick="openPublicBinder()" title="Open Binder">
+              <!-- Spine -->
+              <div style="position:absolute;left:0;top:0;bottom:0;width:28px;border-radius:5px 0 0 5px;background:${binderColor};display:flex;align-items:center;justify-content:center;overflow:hidden">
+                <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:.7rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:190px;letter-spacing:.05em">${binderName||displayName}</span>
+              </div>
+              <!-- Cover -->
+              <div style="position:absolute;left:28px;top:0;right:0;bottom:0;border-radius:0 6px 6px 0;overflow:hidden;border-left:2px solid rgba(0,0,0,.3)">
+                ${coverArt}
+              </div>
+            </div>
+
+            <button onclick="openPublicBinder()" style="
+              padding:12px 36px;border:none;background:var(--accent);
+              color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;
+              font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.06em;
+              transition:transform .1s,box-shadow .1s">
+              Open Binder →
+            </button>
           </div>
 
-          <!-- Card grid -->
-          ${cardCount === 0
-            ? `<div style="text-align:center;padding:60px;color:var(--muted)">This binder is empty.</div>`
-            : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px">${gridCards}</div>`}
+          <!-- ══ CARDS STATE (hidden until opened) ══ -->
+          <div id="pbCardsState" style="display:none;opacity:0;transition:opacity .4s ease">
+            <!-- Stats bar -->
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;padding:12px 16px;background:var(--surface);border:1px solid var(--border)">
+              <span style="font-size:.78rem;color:var(--muted)">Cards: <span style="color:var(--text)">${cardCount}</span></span>
+              ${totalValue > 0 ? `<span style="font-size:.78rem;color:var(--muted)">Est. Value: <span style="color:var(--green)">$${totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>` : ''}
+              <button onclick="showPublicBinderCover()" style="margin-left:auto;background:transparent;border:none;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;padding:0">← Close</button>
+            </div>
+            <!-- Card grid -->
+            ${cardCount === 0
+              ? `<div style="text-align:center;padding:60px;color:var(--muted)">This binder is empty.</div>`
+              : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px">${gridCards}</div>`}
+            ${ctaHtml}
+          </div>`;
 
-          ${ctaHtml}`;
+
 
       } catch (err) {
         console.error('loadPublicBinder error:', err);
         el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--red)">Failed to load binder.</div>`;
       }
+    }
+
+    // ── Public binder open/close animation ──────────────────────────────────
+    function openPublicBinder() {
+      const book   = document.getElementById('pbBinderBook');
+      const cover  = document.getElementById('pbCoverState');
+      const cards  = document.getElementById('pbCardsState');
+      if (!book || !cover || !cards) return;
+
+      // Flip the binder open
+      book.style.transform = 'perspective(900px) rotateY(-52deg) translateY(-12px)';
+      book.style.filter    = 'drop-shadow(12px 20px 40px rgba(0,0,0,.95))';
+
+      // After the flip, swap to card grid
+      setTimeout(() => {
+        cover.style.opacity = '0';
+        cover.style.transition = 'opacity .25s ease';
+        setTimeout(() => {
+          cover.style.display = 'none';
+          cards.style.display = 'block';
+          requestAnimationFrame(() => {
+            cards.style.opacity = '1';
+          });
+        }, 250);
+      }, 380);
+    }
+
+    function showPublicBinderCover() {
+      const cover = document.getElementById('pbCoverState');
+      const cards = document.getElementById('pbCardsState');
+      const book  = document.getElementById('pbBinderBook');
+      if (!cover || !cards || !book) return;
+
+      cards.style.opacity = '0';
+      setTimeout(() => {
+        cards.style.display = 'none';
+        cover.style.display = 'flex';
+        cover.style.opacity = '0';
+        book.style.transform = 'perspective(900px) rotateY(-18deg)';
+        book.style.filter    = 'drop-shadow(8px 16px 32px rgba(0,0,0,.85))';
+        requestAnimationFrame(() => {
+          cover.style.transition = 'opacity .3s ease';
+          cover.style.opacity = '1';
+        });
+      }, 250);
     }
 
     // ── Storefront helper functions ──────────────────────────────────────────
@@ -8897,10 +8989,26 @@
           match_threshold: 0.0,
           match_count: 5
         });
-        if (error) throw error;
+        if (error) {
+          console.error('[Scanner] RPC error:', error);
+          // If the function doesn't exist yet, give a clear setup message
+          if (error.code === 'PGRST202' || error.message?.includes('match_cards')) {
+            setScanStatus('Run scanner_setup.sql in Supabase first — see setup guide');
+          } else {
+            throw error;
+          }
+          return;
+        }
         console.log('[Scanner] top matches:', data?.map(m => `${m.name} (${(m.similarity*100).toFixed(1)}%)`));
         if (!data || data.length === 0) {
-          setScanStatus('No matches found — try a clearer photo');
+          // Check if catalog has any embeddings at all
+          const { count } = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
+          console.log('[Scanner] catalog embedded count:', count);
+          if (!count || count === 0) {
+            setScanStatus('Card catalog is empty — run generate_embeddings.py first');
+          } else {
+            setScanStatus(`No match found (${count.toLocaleString()} cards scanned) — try a clearer photo or different angle`);
+          }
         } else {
           setScanStatus(`Best match: ${data[0].name} (${Math.round(data[0].similarity*100)}%) — tap to add`);
           showScanResults(data);
