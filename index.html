@@ -1071,6 +1071,12 @@
         <label>Price Source URL (optional)</label>
         <input type="text" class="atc-input" id="atcPriceUrl" placeholder="PriceCharting or eBay URL for auto-price tracking" style="width:100%" />
       </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Add to Binder</label>
+        <select class="atc-input" id="atcBinderId" style="width:100%">
+          <option value="">— Unsorted / All Cards —</option>
+        </select>
+      </div>
       <div class="form-group" style="margin-bottom:18px">
         <label>Notes</label>
         <input type="text" class="atc-input" id="atcNotes" placeholder="Optional notes" style="width:100%" />
@@ -1106,9 +1112,15 @@
         <label>Amount Already Saved ($)</label>
         <input type="number" class="atc-input" id="wishlistSaved" placeholder="0.00" step="0.01" min="0" style="width:100%" />
       </div>
-      <div class="form-group" style="margin-bottom:18px">
+      <div class="form-group" style="margin-bottom:14px">
         <label>Price Source URL (optional)</label>
         <input type="text" class="atc-input" id="wishlistPriceUrl" placeholder="PriceCharting URL for tracking" style="width:100%" />
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Add to Binder</label>
+        <select class="atc-input" id="wishlistBinderId" style="width:100%">
+          <option value="">— Unsorted / All Cards —</option>
+        </select>
       </div>
       <div style="display:flex;gap:10px">
         <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(0,204,255,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add to Wishlist</button>
@@ -8043,6 +8055,7 @@
       document.getElementById('wishlistGoal').value = '';
       document.getElementById('wishlistSaved').value = '';
       document.getElementById('wishlistPriceUrl').value = '';
+      populateBinderDropdown('wishlistBinderId', currentBinderId);
       openModal('addToWishlistModal');
       // Auto-populate price URL from pre-mapped lookup table
       if (cardData.apiCardId) {
@@ -8069,6 +8082,7 @@
       document.getElementById('wishlistGoal').value = '';
       document.getElementById('wishlistSaved').value = '';
       document.getElementById('wishlistPriceUrl').value = '';
+      populateBinderDropdown('wishlistBinderId', currentBinderId);
       openModal('addToWishlistModal');
     }
 
@@ -8077,6 +8091,7 @@
       const savingsGoal  = parseFloat(document.getElementById('wishlistGoal').value)  || 0;
       const amountSaved  = parseFloat(document.getElementById('wishlistSaved').value)  || 0;
       const priceUrl     = document.getElementById('wishlistPriceUrl').value.trim() || null;
+      const binderId     = document.getElementById('wishlistBinderId')?.value || null;
 
       // Use manual name input if the row is visible
       let cardName = pendingCollectionCard.cardName;
@@ -8104,7 +8119,8 @@
         is_ghost:         true,
         savings_goal:     savingsGoal,
         amount_saved:     amountSaved,
-        price_source_url: priceUrl
+        price_source_url: priceUrl,
+        binder_id:        binderId || null
       }).select('id').single();
 
       if (btn) { btn.textContent = '♡ Add to Wishlist'; btn.disabled = false; }
@@ -8245,6 +8261,7 @@
       document.getElementById('atcCertNumber').value = '';
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
+      populateBinderDropdown('atcBinderId', currentBinderId);
       toggleGradeField();
       openModal('addToCollectionModal');
       // Auto-populate price URL from pre-mapped lookup table
@@ -8258,6 +8275,19 @@
           })
           .catch(() => { urlField.placeholder = 'PriceCharting or eBay URL for auto-price tracking'; });
       }
+    }
+
+    function populateBinderDropdown(selectId, defaultBinderId) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Unsorted / All Cards —</option>';
+      (binders || []).forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = b.name;
+        if (defaultBinderId && String(b.id) === String(defaultBinderId)) opt.selected = true;
+        sel.appendChild(opt);
+      });
     }
 
     function openManualAddModal() {
@@ -8275,6 +8305,7 @@
       document.getElementById('atcCertNumber').value = '';
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
+      populateBinderDropdown('atcBinderId', currentBinderId);
       toggleGradeField();
       openModal('addToCollectionModal');
     }
@@ -8296,6 +8327,7 @@
       const certNumber    = document.getElementById('atcCertNumber').value.trim() || null;
       const priceSourceUrl= document.getElementById('atcPriceUrl').value.trim() || null;
       const notes         = document.getElementById('atcNotes').value.trim() || null;
+      const binderId      = document.getElementById('atcBinderId')?.value || null;
 
       let cardName = pendingCollectionCard.cardName;
       const manualInput = document.getElementById('atcManualNameInput');
@@ -8323,7 +8355,8 @@
         purchase_price:  purchasePrice,
         purchase_date:   purchaseDate,
         price_source_url: priceSourceUrl,
-        notes
+        notes,
+        binder_id:       binderId || null
       }).select('id').single();
 
       if (saveBtn) { saveBtn.textContent = 'Add to Collection'; saveBtn.disabled = false; }
