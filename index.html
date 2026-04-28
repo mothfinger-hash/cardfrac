@@ -3269,22 +3269,25 @@
       try {
         // Look up profile by username first, then by UUID
         let profile = null;
-        const { data: byUsername } = await sb.from('profiles')
+        console.log('[PublicBinder] looking up:', usernameOrId);
+        const { data: byUsername, error: e1 } = await sb.from('profiles')
           .select('id, name, username, shop_name, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
           .eq('username', usernameOrId)
           .maybeSingle();
+        console.log('[PublicBinder] byUsername result:', byUsername, 'error:', e1);
         if (byUsername) {
           profile = byUsername;
         } else {
-          const { data: byId } = await sb.from('profiles')
+          const { data: byId, error: e2 } = await sb.from('profiles')
             .select('id, name, username, shop_name, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
             .eq('id', usernameOrId)
             .maybeSingle();
+          console.log('[PublicBinder] byId result:', byId, 'error:', e2);
           profile = byId;
         }
 
         if (!profile) {
-          el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">Binder not found.</div>`;
+          el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">Binder not found.<br><span style="font-size:.7rem;color:var(--muted)">Looking for: "${usernameOrId}"</span></div>`;
           return;
         }
 
