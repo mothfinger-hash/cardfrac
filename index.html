@@ -9458,7 +9458,7 @@
             : Promise.resolve({ data: [] }),
           // G — set fingerprint RPC (requires SQL function below)
           (numStripped && numTotal)
-            ? sb.rpc('match_card_in_set_by_total', { p_number: numStripped, p_total: numTotal }).catch(() => ({ data: [] }))
+            ? Promise.resolve(sb.rpc('match_card_in_set_by_total', { p_number: numStripped, p_total: numTotal })).catch(() => ({ data: [] }))
             : Promise.resolve({ data: [] })
         ]);
 
