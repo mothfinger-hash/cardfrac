@@ -9393,109 +9393,94 @@
       return null;
     }
 
-    // ── Tier 3 scanner — zone preprocessing + set symbol CLIP + OCR + CLIP fallback ──
+    // ── Scanner — full-image OCR + name×number search + CLIP fallback ──────────
     async function runMatch(dataURL) {
-      // Disable photo buttons while processing
       const photoLabel = document.getElementById('scanPhotoLabel');
       if (photoLabel) photoLabel.style.pointerEvents = 'none';
-      setScanStatus('Analyzing card zones…');
+      setScanStatus('Reading card text…');
       try {
-        // Step 1: Crop three zones in parallel
-        // Pokemon card portrait layout: name top-left, set symbol bottom-left, number bottom-right
-        const cropResults = await Promise.all([
-          cropZone(dataURL, 0.03, 0.03, 0.68, 0.13),   // name zone (top area)
-          cropZone(dataURL, 0.50, 0.83, 0.47, 0.12),   // number zone (bottom-right)
-          cropZone(dataURL, 0.03, 0.83, 0.28, 0.12),   // symbol zone (bottom-left)
+        // Step 1: OCR the full image + start CLIP embedding in parallel
+        // Full-image OCR is more reliable than zone crops because it doesn't
+        // assume the card fills the entire frame.
+        const [fullText, fullEmbedding] = await Promise.all([
+          ocrCardText(dataURL),
+          window._getClipEmbedding(dataURL)
         ]);
-        const nameZone   = cropResults[0];
-        const numberZone = cropResults[1];
-        const symbolZone = cropResults[2];
 
-        // Step 2: Enhance name + number zones for OCR
-        setScanStatus('Enhancing image zones…');
-        const enhanceResults = await Promise.all([
-          nameZone   ? enhanceForOCR(nameZone,   3) : Promise.resolve(null),
-          numberZone ? enhanceForOCR(numberZone, 3) : Promise.resolve(null),
-        ]);
-        const nameEnhanced   = enhanceResults[0];
-        const numberEnhanced = enhanceResults[1];
+        // Extract card number (stored in catalog without the /total part)
+        // e.g. OCR reads "4/102" → numPrefix = "4"
+        const cardNumRaw  = parseCardNumber(fullText);
+        const numPrefix   = cardNumRaw ? cardNumRaw.split('/')[0] : null;
+        const cardName    = parseCardName(fullText);
 
-        // Step 3: Run all analysis in parallel — full CLIP + symbol zone CLIP + zone OCRs
-        setScanStatus('Running visual + OCR analysis…');
-        const analysisResults = await Promise.all([
-          window._getClipEmbedding(dataURL),
-          symbolZone ? window._getClipEmbedding(symbolZone) : Promise.resolve(null),
-          nameEnhanced   ? ocrCardText(nameEnhanced)   : ocrCardText(dataURL),
-          numberEnhanced ? ocrCardText(numberEnhanced) : Promise.resolve(''),
-        ]);
-        const fullEmbedding   = analysisResults[0];
-        const symbolEmbedding = analysisResults[1];
-        const nameText        = analysisResults[2];
-        const numberText      = analysisResults[3];
+        console.log('[Scanner] OCR raw:', JSON.stringify(fullText.slice(0,120)));
+        console.log('[Scanner] parsed → number:', cardNumRaw, '| numPrefix:', numPrefix, '| name:', cardName);
 
-        const cardNum  = parseCardNumber(numberText) || parseCardNumber(nameText);
-        const cardName = parseCardName(nameText);
-        console.log('[Tier3] number OCR:', JSON.stringify((numberText||'').slice(0,60)));
-        console.log('[Tier3] name OCR:',   JSON.stringify((nameText||'').slice(0,60)));
-        console.log('[Tier3] parsed → number:', cardNum, '| name:', cardName);
-
-        // Step 4: Match set symbol
-        setScanStatus('Matching set symbol…');
-        const symbolMatch = symbolEmbedding ? await matchSetSymbol(symbolEmbedding) : null;
-        if (symbolMatch) {
-          console.log('[Tier3] set:', symbolMatch.set_code, symbolMatch.set_name, (symbolMatch.similarity*100).toFixed(1)+'%');
-        }
-
-        // Step 5: Three-signal search
         setScanStatus('Searching catalog…');
 
-        // Signal A: set symbol + card number → exact lookup (near-certain)
-        let exactMatch = null;
-        if (symbolMatch && cardNum) {
-          const numOnly = cardNum.split('/')[0];
-          exactMatch = await lookupExactCard(symbolMatch.set_code, numOnly);
-          console.log('[Tier3] exact lookup:', exactMatch ? exactMatch.name : 'miss');
-        }
+        // Build text search queries — most precise first
+        // Query A: name + number together (very precise — narrows to ~1 card)
+        // Query B: number-only (gets all cards with that number across sets)
+        // Query C: name-only (good for when number is unreadable)
+        // Query D: CLIP visual (always runs as fallback)
+        const base = sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url');
 
-        // Signal B (OCR text) + Signal C (CLIP visual) — run in parallel
-        const searchResults = await Promise.all([
+        const [clipRes, nameNumRes, numRes, nameRes] = await Promise.all([
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
-          cardNum
-            ? sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url').ilike('card_number', cardNum).limit(8)
-            : cardName
-              ? sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url').ilike('name', '%' + cardName + '%').limit(8)
-              : Promise.resolve({ data: [] })
+          // A: name + number (most precise)
+          (numPrefix && cardName)
+            ? base.ilike('name', '%' + cardName + '%').eq('card_number', numPrefix).limit(5)
+            : Promise.resolve({ data: [] }),
+          // B: number only (precise if set symbol also matches)
+          numPrefix
+            ? base.eq('card_number', numPrefix).limit(20)
+            : Promise.resolve({ data: [] }),
+          // C: name only
+          cardName
+            ? base.ilike('name', '%' + cardName + '%').limit(12)
+            : Promise.resolve({ data: [] })
         ]);
-        const clipRes = searchResults[0];
-        const ocrRes  = searchResults[1];
 
         if (clipRes.error) {
           if (clipRes.error.code === 'PGRST202' || (clipRes.error.message && clipRes.error.message.includes('match_cards'))) {
-            setScanStatus('Run scanner_setup.sql in Supabase first');
+            setScanStatus('Run scanner_setup.sql in Supabase first'); return;
           } else throw clipRes.error;
-          return;
         }
 
-        const clipMatches = clipRes.data || [];
+        const clipMatches  = clipRes.data  || [];
+        const nameNumHits  = nameNumRes.data || [];
+        const numHits      = numRes.data    || [];
+        const nameHits     = nameRes.data   || [];
 
-        // Boost OCR results that agree with the detected set
-        let ocrMatches = (ocrRes.data || []).map(function(m) {
-          return Object.assign({}, m, {
-            similarity: (symbolMatch && m.set_code === symbolMatch.set_code) ? 1.0 : 0.85,
-            _ocr: true
-          });
-        });
-        ocrMatches.sort(function(a, b) { return b.similarity - a.similarity; });
+        console.log('[Scanner] name+num hits:', nameNumHits.map(function(m){return m.name+'/'+m.set_code;}).join(', '));
+        console.log('[Scanner] num-only hits:', numHits.length, '| name-only hits:', nameHits.length);
+        console.log('[Scanner] CLIP top3:', clipMatches.slice(0,3).map(function(m){return m.name+'('+(m.similarity*100).toFixed(0)+'%)';}).join(' '));
 
-        console.log('[Tier3] CLIP top 3:', clipMatches.slice(0,3).map(function(m){ return m.name+'('+(m.similarity*100).toFixed(0)+'%)'; }).join(' '));
-        console.log('[Tier3] OCR hits:', ocrMatches.map(function(m){ return m.name+(m.set_code?'/'+m.set_code:''); }).join(', '));
+        // Rank OCR results: name+number > number-only (set-confirmed) > name-only
+        // When multiple number-only hits exist, use CLIP similarity to break ties
+        function scoreOcr(m, source) {
+          var base = source === 'nameNum' ? 1.0 : source === 'num' ? 0.88 : 0.78;
+          // Boost if CLIP also ranks this card highly
+          var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
+          var clipBoost = clipEntry ? clipEntry.similarity * 0.12 : 0;
+          return base + clipBoost;
+        }
 
-        // Merge: EXACT → OCR (set-boosted) → CLIP (deduplicated)
         const merged = [];
         const seen   = new Set();
-        if (exactMatch) { merged.push(exactMatch); seen.add(exactMatch.id); }
-        ocrMatches.forEach(function(m)  { if (!seen.has(m.id)) { merged.push(m);  seen.add(m.id); } });
-        clipMatches.forEach(function(m) { if (!seen.has(m.id)) { merged.push(m);  seen.add(m.id); } });
+        function addHits(hits, source) {
+          hits.forEach(function(m) {
+            if (!seen.has(m.id)) {
+              merged.push(Object.assign({}, m, { similarity: scoreOcr(m, source), _ocr: true }));
+              seen.add(m.id);
+            }
+          });
+        }
+        addHits(nameNumHits, 'nameNum');
+        addHits(numHits,     'num');
+        addHits(nameHits,    'name');
+        clipMatches.forEach(function(m) { if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); } });
+        merged.sort(function(a, b) { return b.similarity - a.similarity; });
         const final = merged.slice(0, 10);
 
         if (final.length === 0) {
