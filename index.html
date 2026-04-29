@@ -9267,27 +9267,46 @@
       return m ? (m[1] + '/' + m[2]) : null;
     }
 
-    // Extract card name — skip stage/type keywords, grab what follows them
+    // Extract card name — handles all Pokemon card name formats
     function parseCardName(text) {
       if (!text) return null;
       const lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
 
-      // Words that appear on Pokemon cards but are never the card name
-      const SKIP = /^(Basic|Stage\s*[12]|VMAX|VSTAR|GX|EX|V|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.)$/i;
+      // Card type suffixes that appear in the name (catalog stores as "Name SUFFIX")
+      const SUFFIX = /^(VSTAR|VMAX|GX|EX|V|VUNION)$/i;
 
-      // Stage indicators — the card name is on the very next line
+      // Stage indicators — the card name is on the very next non-empty line
       const STAGE = /^(Basic|Stage\s*[12])$/i;
+
+      // Words that are never part of the card name
+      const SKIP = /^(Basic|Stage\s*[12]|VMAX|VSTAR|GX|EX|V|VUNION|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule)$/i;
 
       for (let i = 0; i < Math.min(10, lines.length); i++) {
         const line = lines[i];
-        // If this line is a stage indicator, the next line is the name
+
+        // Pattern: "VSTAR Lugia" or "VMAX Rayquaza" — suffix printed before name on card
+        // Flip to catalog format: "Lugia VSTAR"
+        const prefixMatch = line.match(/^(VSTAR|VMAX|GX|EX|V)\s+([A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+)$/);
+        if (prefixMatch) {
+          return prefixMatch[2].trim() + ' ' + prefixMatch[1].toUpperCase();
+        }
+
+        // Pattern: "Lugia\nVSTAR" — name on one line, suffix on next
+        if (i + 1 < lines.length && SUFFIX.test(lines[i + 1])) {
+          if (/^[A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+$/.test(line) && line.length > 1 && line.length < 35) {
+            return line + ' ' + lines[i + 1].toUpperCase();
+          }
+        }
+
+        // Pattern: "Basic\nDucklett" — stage on one line, name on next
         if (STAGE.test(line) && i + 1 < lines.length) {
           const next = lines[i + 1].trim();
           if (/^[A-ZÀ-Öa-z][a-zA-ZÀ-ö\s\-'éèê&]+$/.test(next) && next.length > 1 && next.length < 40) {
             return next;
           }
         }
-        // Otherwise skip known non-name words and grab the first valid title-case line
+
+        // Fallback: first valid title-case line that isn't a keyword
         if (!SKIP.test(line) && /^[A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+$/.test(line) && line.length > 2 && line.length < 40) {
           return line;
         }
@@ -9324,30 +9343,42 @@
 
         const base = sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url');
 
+        // Base name without suffix — "Lugia" from "Lugia VSTAR"
+        // catches secret rares and alt arts that share the base Pokémon name
+        const SUFFIX_RE = /\s+(VSTAR|VMAX|GX|EX|V|VUNION)$/i;
+        const baseName = cardName && SUFFIX_RE.test(cardName)
+          ? cardName.replace(SUFFIX_RE, '').trim()
+          : null;
+
         // Run all searches in parallel:
-        // A: name + stripped number   B: name + raw (zero-padded) number
-        // C: stripped number only     D: name only    E: CLIP visual
-        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes] = await Promise.all([
+        // A: full name + stripped number   B: full name + padded number
+        // C: stripped number only          D: padded number only
+        // E: full name only                F: base Pokémon name only
+        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes] = await Promise.all([
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
-          // A: name + stripped number
+          // A
           (numStripped && cardName)
             ? base.ilike('name', '%' + cardName + '%').eq('card_number', numStripped).limit(5)
             : Promise.resolve({ data: [] }),
-          // B: name + zero-padded number (only if different from stripped)
+          // B
           (numRaw && numRaw !== numStripped && cardName)
             ? base.ilike('name', '%' + cardName + '%').eq('card_number', numRaw).limit(5)
             : Promise.resolve({ data: [] }),
-          // C: stripped number only
+          // C
           numStripped
             ? base.eq('card_number', numStripped).limit(20)
             : Promise.resolve({ data: [] }),
-          // D: zero-padded number only (only if different)
+          // D
           (numRaw && numRaw !== numStripped)
             ? base.eq('card_number', numRaw).limit(20)
             : Promise.resolve({ data: [] }),
-          // E: name only
+          // E
           cardName
             ? base.ilike('name', '%' + cardName + '%').limit(12)
+            : Promise.resolve({ data: [] }),
+          // F
+          baseName
+            ? base.ilike('name', '%' + baseName + '%').limit(12)
             : Promise.resolve({ data: [] })
         ]);
 
@@ -9358,11 +9389,11 @@
         }
 
         const clipMatches  = clipRes.data       || [];
-        // Merge name+number hits from both stripped and raw lookups
         const nameNumHits  = [...(nameNumRes.data || []), ...(nameNumRawRes.data || [])];
-        // Merge number-only hits from both stripped and raw lookups
         const numHits      = [...(numRes.data || []), ...(numRawRes.data || [])];
-        const nameHits     = nameRes.data       || [];
+        // Merge full name + base name hits (base name gets slightly lower score)
+        const nameHits     = [...(nameRes.data || []), ...(baseNameRes.data || [])];
+        console.log('[Scanner] baseName search:', baseName, '→', (baseNameRes.data||[]).length, 'hits');
 
         console.log('[Scanner] name+num hits:', nameNumHits.map(function(m){return m.name+'/'+m.set_code;}).join(', '));
         console.log('[Scanner] num-only hits:', numHits.length, '| name-only hits:', nameHits.length);
