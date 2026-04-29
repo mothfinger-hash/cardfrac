@@ -860,6 +860,7 @@
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
     const SUPABASE_URL = 'https://xjamytrhxeaynywcwfun.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_HeBrC8k5nKaBmqA9qMn6-Q_YqL8OEBV';
@@ -1747,6 +1748,10 @@
 
       <!-- ── STATE 1: Card input ─────────────────────────────────────────── -->
       <div id="ftInputState">
+
+        <!-- Session banner — hidden until a session is created/joined -->
+        <div id="ftSessionBanner" style="display:none;background:var(--surface2);border:1px solid var(--accent);padding:12px 16px;margin-bottom:14px"></div>
+
         <!-- Two sides -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
 
@@ -1825,15 +1830,31 @@
           </div>
         </div>
 
-        <!-- Analyze button -->
-        <div style="text-align:center;margin-bottom:20px">
+        <!-- Analyze + session buttons -->
+        <div style="text-align:center;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
           <button id="ftAnalyzeBtn" onclick="ftAnalyzeTrade()"
             style="padding:11px 36px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.85rem;cursor:pointer;letter-spacing:.08em">
             ⇌ Analyze Trade
           </button>
+          <button id="ftCreateSessionBtn" onclick="ftCreateSession()"
+            style="padding:11px 20px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            🔗 Create Trade Link
+          </button>
           <button onclick="ftReset()"
-            style="margin-left:12px;padding:11px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            style="padding:11px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
             Reset
+          </button>
+        </div>
+
+        <!-- Join by code (for guests / manual entry) -->
+        <div style="text-align:center;margin-bottom:20px">
+          <span style="font-size:.7rem;color:var(--muted)">Have a trade code? </span>
+          <input id="ftJoinCodeInput" type="text" maxlength="8" placeholder="TR4K9X"
+            style="width:80px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:monospace;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase"
+            oninput="this.value=this.value.toUpperCase()"/>
+          <button onclick="ftJoinFromInput()"
+            style="margin-left:6px;padding:5px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.75rem;cursor:pointer">
+            Join
           </button>
         </div>
       </div>
@@ -9015,6 +9036,11 @@
     var _ftSearchTimeout = {};
 
     function ftInitPage() {
+      // Stop any active session polling but don't destroy the session —
+      // user can re-open the banner by clicking "Create Trade Link" again
+      if (_ftSession) { _ftStopPolling(); _ftSession = null; }
+      clearTimeout(_ftSyncDebounce);
+
       // Reset to input state
       _ftCards = { A: [], B: [] };
       _ftBinderOpen  = { A: false, B: false };
@@ -9149,6 +9175,283 @@
       if (searchEl && document.activeElement !== searchEl) {
         // Only move focus if the user was already typing in this picker
         if (q) searchEl.focus();
+      }
+    }
+
+    // ── P2P Fair Trade Sessions ──────────────────────────────────────────
+    //
+    // Requires this table in Supabase (run once in the SQL editor):
+    //
+    //   create table if not exists fair_trade_sessions (
+    //     id        text        primary key,
+    //     side_a    jsonb       not null default '[]'::jsonb,
+    //     side_b    jsonb       not null default '[]'::jsonb,
+    //     cash_a    numeric     not null default 0,
+    //     cash_b    numeric     not null default 0,
+    //     created_at timestamptz not null default now(),
+    //     expires_at timestamptz not null default (now() + interval '5 minutes')
+    //   );
+    //   alter table fair_trade_sessions disable row level security;
+    //
+    // expires_at is refreshed to now()+10min on every sync write, so the session
+    // stays alive as long as either device is active. Goes quiet for 10 minutes
+    // and it expires naturally. Clean up with:
+    //   delete from fair_trade_sessions where expires_at < now();
+    // ─────────────────────────────────────────────────────────────────────
+
+    var _ftSession = null;
+    // shape: { id, role: 'a'|'b', pollInterval, lastSeenA, lastSeenB }
+
+    var _ftSyncDebounce = null;
+
+    function _ftGenSessionId() {
+      // 6-char code (no 0/O/1/I confusion), prefixed with "TR"
+      var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      var id = 'TR';
+      for (var i = 0; i < 4; i++) id += chars[Math.floor(Math.random() * chars.length)];
+      return id;
+    }
+
+    function _ftCardsToSession(side) {
+      return _ftCards[side].map(function(c) {
+        return { id: c.id, name: c.name, set: c.set, number: c.number,
+                 image: c.image, qty: c.qty || 1, apiCardId: c.apiCardId || null };
+      });
+    }
+
+    function _ftSessionToCards(arr) {
+      if (!Array.isArray(arr)) return [];
+      return arr.map(function(c) {
+        return { id: c.id, name: c.name || '', set: c.set || '',
+                 number: c.number || '', image: c.image || '',
+                 qty: c.qty || 1, apiCardId: c.apiCardId || null,
+                 prices: null, avgPrice: null };
+      });
+    }
+
+    async function ftCreateSession() {
+      var btn = document.getElementById('ftCreateSessionBtn');
+      if (_ftSession) {
+        // Already in a session — re-show the banner (QR might have been scrolled past)
+        _ftRenderSessionBanner();
+        showToast('Session ' + _ftSession.id + ' is still active');
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+      var id = _ftGenSessionId();
+      var sideA = _ftCardsToSession('A');
+      var cashA = parseFloat(document.getElementById('ftCashA')?.value) || 0;
+
+      try {
+        var { error } = await sb.from('fair_trade_sessions').insert({
+          id: id, side_a: sideA, side_b: [], cash_a: cashA, cash_b: 0,
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        });
+        if (error) throw error;
+
+        _ftSession = { id: id, role: 'a', lastSeenA: JSON.stringify(sideA), lastSeenB: '[]',
+                       lastCashA: cashA, lastCashB: 0, pollInterval: null };
+        _ftStartPolling();
+        _ftRenderSessionBanner();
+        _ftLockOtherSide();
+        showToast('Trade session created — share the QR or code');
+      } catch(e) {
+        console.error('[FairTrade] Create session error:', e);
+        showToast('Could not create session — check connection');
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '🔗 Create Trade Link'; }
+    }
+
+    async function ftJoinSession(sessionId) {
+      var id = (sessionId || '').toUpperCase().trim();
+      if (!id) return;
+
+      try {
+        var { data, error } = await sb.from('fair_trade_sessions').select('*').eq('id', id).maybeSingle();
+        if (error || !data) { showToast('Trade session not found or expired'); return; }
+        if (data.expires_at && new Date(data.expires_at) < new Date()) {
+          showToast('This trade session has expired'); return;
+        }
+
+        // Populate both sides from session
+        _ftCards.A = _ftSessionToCards(data.side_a || []);
+        _ftCards.B = _ftSessionToCards(data.side_b || []);
+        _ftRenderCards('A');
+        _ftRenderCards('B');
+
+        var cashAEl = document.getElementById('ftCashA');
+        var cashBEl = document.getElementById('ftCashB');
+        if (cashAEl) cashAEl.value = data.cash_a || '';
+        if (cashBEl) cashBEl.value = data.cash_b || '';
+
+        _ftSession = { id: id, role: 'b',
+                       lastSeenA: JSON.stringify(data.side_a || []),
+                       lastSeenB: JSON.stringify(data.side_b || []),
+                       lastCashA: data.cash_a || 0, lastCashB: data.cash_b || 0,
+                       pollInterval: null };
+        _ftStartPolling();
+        _ftRenderSessionBanner();
+        _ftLockOtherSide();
+        showToast('Joined trade session ' + id + ' — you\'re on Side B');
+      } catch(e) {
+        console.error('[FairTrade] Join session error:', e);
+        showToast('Could not join session — check connection');
+      }
+    }
+
+    function ftJoinFromInput() {
+      var input = document.getElementById('ftJoinCodeInput');
+      var code = input ? input.value.trim().toUpperCase() : '';
+      if (!code) { showToast('Enter a trade code'); return; }
+      ftJoinSession(code);
+    }
+
+    async function _ftSyncSession() {
+      if (!_ftSession) return;
+      var id   = _ftSession.id;
+      var role = _ftSession.role;          // 'a' or 'b'
+      var mine = role === 'a' ? 'A' : 'B';
+      var theirs = role === 'a' ? 'B' : 'A';
+
+      // Build our current state
+      var myCards = _ftCardsToSession(mine);
+      var myCash  = parseFloat(document.getElementById('ftCash' + mine)?.value) || 0;
+
+      // Write our side (only if changed to reduce writes)
+      var myCardsStr = JSON.stringify(myCards);
+      var lastMine   = role === 'a' ? _ftSession.lastSeenA : _ftSession.lastSeenB;
+      var lastMyCash = role === 'a' ? _ftSession.lastCashA : _ftSession.lastCashB;
+      if (myCardsStr !== lastMine || myCash !== lastMyCash) {
+        var patch = {};
+        patch['side_' + role] = myCards;
+        patch['cash_' + role] = myCash;
+        // Refresh the inactivity timer — session lives 10 min from last sync
+        patch['expires_at'] = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        try {
+          await sb.from('fair_trade_sessions').update(patch).eq('id', id);
+          if (role === 'a') { _ftSession.lastSeenA = myCardsStr; _ftSession.lastCashA = myCash; }
+          else              { _ftSession.lastSeenB = myCardsStr; _ftSession.lastCashB = myCash; }
+        } catch(_) {}
+      }
+
+      // Read their side
+      try {
+        var { data } = await sb.from('fair_trade_sessions').select('*').eq('id', id).maybeSingle();
+        if (!data) return;
+
+        var theirCardsRaw = role === 'a' ? (data.side_b || []) : (data.side_a || []);
+        var theirCash     = role === 'a' ? (data.cash_b || 0)  : (data.cash_a || 0);
+        var theirCashEl   = document.getElementById('ftCash' + theirs);
+        var lastTheirs    = role === 'a' ? _ftSession.lastSeenB : _ftSession.lastSeenA;
+        var theirStr      = JSON.stringify(theirCardsRaw);
+
+        if (theirStr !== lastTheirs) {
+          _ftCards[theirs] = _ftSessionToCards(theirCardsRaw);
+          _ftRenderCards(theirs);
+          if (role === 'a') _ftSession.lastSeenB = theirStr;
+          else              _ftSession.lastSeenA = theirStr;
+          // Update their cash field without disturbing focus
+          if (theirCashEl && document.activeElement !== theirCashEl) {
+            theirCashEl.value = theirCash || '';
+          }
+          _ftRenderSessionBanner(); // refresh connected status
+        }
+      } catch(_) {}
+    }
+
+    // Debounced sync — call after every card add/remove so other device sees it fast
+    function _ftDebouncedSync() {
+      if (!_ftSession) return;
+      clearTimeout(_ftSyncDebounce);
+      _ftSyncDebounce = setTimeout(_ftSyncSession, 400);
+    }
+
+    function _ftStartPolling() {
+      _ftStopPolling();
+      _ftSyncSession(); // immediate sync
+      _ftSession.pollInterval = setInterval(_ftSyncSession, 3000);
+    }
+
+    function _ftStopPolling() {
+      if (_ftSession && _ftSession.pollInterval) {
+        clearInterval(_ftSession.pollInterval);
+        _ftSession.pollInterval = null;
+      }
+    }
+
+    function ftEndSession() {
+      _ftStopPolling();
+      _ftSession = null;
+      clearTimeout(_ftSyncDebounce);
+      var banner = document.getElementById('ftSessionBanner');
+      if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+      showToast('Session ended');
+    }
+
+    function _ftRenderSessionBanner() {
+      var banner = document.getElementById('ftSessionBanner');
+      if (!banner || !_ftSession) { if (banner) banner.style.display = 'none'; return; }
+
+      var id    = _ftSession.id;
+      var role  = _ftSession.role;
+      var url   = window.location.origin + window.location.pathname + '?trade=' + id;
+      var theirSideHasCards = _ftCards[role === 'a' ? 'B' : 'A'].length > 0;
+      var statusMsg = role === 'a'
+        ? (theirSideHasCards ? '🟢 Side B connected' : '⏳ Waiting for Side B to join…')
+        : '🟢 Joined as Side B — add your cards below';
+
+      banner.style.display = 'block';
+      banner.innerHTML =
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
+          '<div>' +
+            '<div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;color:var(--muted);margin-bottom:4px">LIVE TRADE SESSION</div>' +
+            '<div style="font-size:1.6rem;font-weight:700;letter-spacing:.2em;color:var(--accent);font-family:monospace;line-height:1">' + id + '</div>' +
+            '<div style="font-size:.72rem;color:var(--muted);margin-top:6px">' + statusMsg + '</div>' +
+            (role === 'b' ? '<div style="font-size:.68rem;color:var(--muted);margin-top:2px">Side A is read-only on your screen</div>' : '') +
+          '</div>' +
+          (role === 'a' ?
+            '<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">' +
+              '<div id="ftQrContainer" style="background:white;padding:5px;line-height:0;flex-shrink:0"></div>' +
+              '<div style="display:flex;flex-direction:column;gap:6px;padding-top:2px">' +
+                '<div style="font-size:.62rem;color:var(--muted)">Scan to join on another device</div>' +
+                '<button onclick="ftCopyTradeLink(\'' + url.replace(/'/g, '&#39;') + '\')" ' +
+                  'style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.04em;white-space:nowrap">📋 Copy Link</button>' +
+                '<button onclick="ftEndSession()" ' +
+                  'style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;white-space:nowrap">End Session</button>' +
+              '</div>' +
+            '</div>'
+          :
+            '<button onclick="ftEndSession()" ' +
+              'style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;align-self:flex-start">Leave Session</button>'
+          ) +
+        '</div>';
+
+      // Render QR code once (creator only) — check if already rendered
+      if (role === 'a') {
+        var qrEl = document.getElementById('ftQrContainer');
+        if (qrEl && !qrEl.dataset.rendered && window.QRCode) {
+          try {
+            new window.QRCode(qrEl, {
+              text: url, width: 100, height: 100,
+              colorDark: '#000000', colorLight: '#ffffff',
+              correctLevel: window.QRCode.CorrectLevel.M
+            });
+            qrEl.dataset.rendered = '1';
+          } catch(_) {}
+        }
+      }
+    }
+
+    function ftCopyTradeLink(url) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(function() { showToast('Link copied!'); });
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); showToast('Link copied!'); } catch(_) {}
+        document.body.removeChild(ta);
       }
     }
 
@@ -9336,16 +9639,34 @@
       if (existing) {
         existing.qty = (existing.qty || 1) + 1;
       } else {
-        _ftCards[side].push({ id: card.id, name: card.name, set: card.set, number: card.number, image: card.image, qty: 1, prices: null, avgPrice: null });
+        _ftCards[side].push({ id: card.id, name: card.name, set: card.set, number: card.number,
+                              image: card.image, qty: 1, apiCardId: card.apiCardId || null,
+                              binderPrice: card.binderPrice || null, prices: null, avgPrice: null });
       }
       _ftRenderCards(side);
       ftRecalc();
+      _ftDebouncedSync(); // push change to other device if session active
     }
 
     function ftRemoveCard(side, cardId) {
       _ftCards[side] = _ftCards[side].filter(function(c) { return c.id !== cardId; });
       _ftRenderCards(side);
       ftRecalc();
+      _ftDebouncedSync(); // push change to other device if session active
+    }
+
+    function _ftLockOtherSide() {
+      // When in a session, dim & disable inputs on the side we don't own
+      if (!_ftSession) return;
+      var mine   = _ftSession.role === 'a' ? 'A' : 'B';
+      var theirs = _ftSession.role === 'a' ? 'B' : 'A';
+      // Disable search + scan + binder buttons on their side
+      ['ftSearch','ftScanInput','ftBinderBtn'].forEach(function(pfx) {
+        var el = document.getElementById(pfx + theirs);
+        if (el) { el.disabled = true; el.style.opacity = '0.4'; el.style.pointerEvents = 'none'; }
+      });
+      var scanBtn = document.querySelector('[onclick="ftScanTrigger(\'' + theirs + '\')"]');
+      if (scanBtn) { scanBtn.disabled = true; scanBtn.style.opacity = '0.4'; scanBtn.style.pointerEvents = 'none'; }
     }
 
     function _ftRenderCards(side) {
@@ -9705,6 +10026,16 @@
       if (storeParam) {
         window.history.replaceState({}, '', window.location.pathname);
         loadStorefront(storeParam);
+        return;
+      }
+
+      // P2P Fair Trade session link: ?trade=TR4K9X
+      const tradeParam = urlParams.get('trade');
+      if (tradeParam) {
+        window.history.replaceState({}, '', window.location.pathname);
+        showPage('fairTrade'); setMobileNav('');
+        // Small delay so the page renders before joining
+        setTimeout(function() { ftJoinSession(tradeParam); }, 150);
         return;
       }
 
