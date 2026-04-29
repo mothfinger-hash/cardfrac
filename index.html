@@ -8798,7 +8798,7 @@
     <!-- Photo buttons -->
     <div style="display:flex;gap:10px;margin-top:12px;justify-content:center;flex-wrap:wrap">
       <label id="scanPhotoLabel" style="padding:13px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
-        📷 TAKE PHOTO
+        SCAN CARD
         <input id="scanCameraInput" type="file" accept="image/*" capture="environment" onchange="matchFromFile(this)" style="display:none">
       </label>
       <label style="padding:13px 20px;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
@@ -8831,7 +8831,6 @@
     <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:8px auto 0;padding:0 20px 60px"></div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     @keyframes scanLineMove{0%{top:0}100%{top:calc(100% - 2px)}}
     @keyframes guidePulse{0%,100%{opacity:1}50%{opacity:.55}}
@@ -9263,81 +9262,42 @@
       reader.readAsDataURL(file);
     }
 
-    // ── Tesseract OCR helpers ────────────────────────────────────────────────
-    let _tWorker = null;
-
-    async function getTesseractWorker() {
-      if (_tWorker) return _tWorker;
-      setScanStatus('Loading OCR engine… (first time only)');
-      _tWorker = await Tesseract.createWorker('eng', 1, {
-        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
-        corePath:   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
-        logger: () => {}
-      });
-      return _tWorker;
-    }
+    // ── Google Cloud Vision OCR ──────────────────────────────────────────────
+    // Paste your API key here. In Google Cloud Console, restrict it to
+    // the Vision API and your domain to prevent abuse.
+    const GCV_API_KEY = 'AIzaSyBu0Ez_XENH4WKNZySxXPpcmCQ3IPtDYzg';
 
     async function ocrCardText(dataURL) {
+      if (!GCV_API_KEY || GCV_API_KEY.startsWith('PASTE')) {
+        console.warn('[GCV] No API key set');
+        return '';
+      }
       try {
-        const worker = await getTesseractWorker();
-        const { data: { text } } = await worker.recognize(dataURL);
-        return text || '';
+        // Strip the data:image/...;base64, prefix
+        const base64 = dataURL.split(',')[1];
+        const res = await fetch(
+          'https://vision.googleapis.com/v1/images:annotate?key=' + GCV_API_KEY,
+          {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requests: [{
+                image:    { content: base64 },
+                features: [{ type: 'TEXT_DETECTION', maxResults: 1 }]
+              }]
+            })
+          }
+        );
+        if (!res.ok) throw new Error('GCV HTTP ' + res.status);
+        const json = await res.json();
+        const text = (json.responses[0].textAnnotations || [])[0]?.description || '';
+        console.log('[GCV] raw text:', JSON.stringify(text.slice(0, 200)));
+        return text;
       } catch (e) {
-        console.warn('[OCR]', e);
+        console.warn('[GCV] error:', e.message);
         return '';
       }
     }
-
-    // ── Zone-based image helpers ─────────────────────────────────────────────
-
-    // Crop a rectangular region from a dataURL (fractions 0–1 of image dimensions)
-    function cropZone(dataURL, xFrac, yFrac, wFrac, hFrac) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const cx = Math.round(img.width  * xFrac);
-          const cy = Math.round(img.height * yFrac);
-          const cw = Math.round(img.width  * wFrac);
-          const ch = Math.round(img.height * hFrac);
-          if (cw < 4 || ch < 4) { resolve(null); return; }
-          const canvas = document.createElement('canvas');
-          canvas.width  = cw;
-          canvas.height = ch;
-          canvas.getContext('2d').drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => resolve(null);
-        img.src = dataURL;
-      });
-    }
-
-    // Scale up + hard threshold — dramatically improves Tesseract OCR accuracy
-    function enhanceForOCR(dataURL, scale) {
-      scale = scale || 3;
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const w = img.width  * scale;
-          const h = img.height * scale;
-          const canvas = document.createElement('canvas');
-          canvas.width  = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          const id = ctx.getImageData(0, 0, w, h);
-          const d  = id.data;
-          for (let i = 0; i < d.length; i += 4) {
-            const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-            const val = lum > 140 ? 255 : 0;
-            d[i] = d[i+1] = d[i+2] = val;
-            d[i+3] = 255;
-          }
-          ctx.putImageData(id, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => resolve(null);
-        img.src = dataURL;
-      });
     }
 
     // Call match_set_symbol RPC — returns best set match or null if confidence too low
