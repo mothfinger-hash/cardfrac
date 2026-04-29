@@ -1282,6 +1282,75 @@
     </div>
   </div>
 
+  <!-- MULTI-SCAN MODAL (vendor+) -->
+  <div class="modal-overlay" id="multiScanModal">
+    <div class="modal" style="max-width:620px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:88vh">
+      <!-- Header -->
+      <div style="padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;font-weight:700;letter-spacing:.08em;color:var(--gold)">&#9638; MULTI-SCAN</span>
+          <span style="font-size:.6rem;padding:2px 6px;background:var(--gold);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-weight:700;letter-spacing:.06em">VENDOR</span>
+        </div>
+        <button onclick="closeModal('multiScanModal')" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px">×</button>
+      </div>
+
+      <!-- Picker view: choose mode -->
+      <div id="msPickerView" style="padding:20px;flex-shrink:0">
+        <p style="font-size:.75rem;color:var(--muted);margin:0 0 18px">Scan up to 20 cards at once, or photograph a spread and let PathBinder split it into individual cards.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px">
+          <label style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 12px;border:2px solid var(--accent2);border-radius:6px;cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;font-weight:700;color:var(--accent2);text-align:center;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            <span style="font-size:1.6rem">📸</span>
+            Multiple Photos
+            <span style="font-size:.62rem;color:var(--muted);font-weight:400;font-family:inherit">One photo per card — up to 20</span>
+            <input type="file" id="msMultiInput" accept="image/*" multiple style="display:none" onchange="handleMultiScanFiles(this.files)">
+          </label>
+          <label style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 12px;border:2px solid var(--gold);border-radius:6px;cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;font-weight:700;color:var(--gold);text-align:center;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            <span style="font-size:1.6rem">🗂️</span>
+            Spread Photo
+            <span style="font-size:.62rem;color:var(--muted);font-weight:400;font-family:inherit">Cards laid out — pick grid size</span>
+            <input type="file" id="msSpreadInput" accept="image/*" style="display:none" onchange="handleSpreadScanFile(this.files[0])">
+          </label>
+        </div>
+      </div>
+
+      <!-- Spread grid picker (appears after spread photo selected) -->
+      <div id="msSpreadPicker" style="display:none;padding:20px;flex-shrink:0">
+        <img id="msSpreadThumb" style="display:none;max-width:100%;max-height:180px;object-fit:contain;border-radius:4px;margin-bottom:14px;border:1px solid var(--border)">
+        <div style="font-size:.72rem;font-family:'Space Mono','Share Tech Mono',monospace;color:var(--text);margin-bottom:10px;font-weight:700">How many cards are in the grid?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button onclick="processSpreadGrid(1,2)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">1 × 2</button>
+          <button onclick="processSpreadGrid(2,2)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">2 × 2</button>
+          <button onclick="processSpreadGrid(2,3)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">2 × 3</button>
+          <button onclick="processSpreadGrid(3,3)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">3 × 3</button>
+          <button onclick="processSpreadGrid(3,4)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">3 × 4</button>
+          <button onclick="processSpreadGrid(4,4)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">4 × 4</button>
+        </div>
+        <button onclick="document.getElementById('msPickerView').style.display='block';document.getElementById('msSpreadPicker').style.display='none'" style="margin-top:14px;background:none;border:none;color:var(--muted);font-size:.72rem;cursor:pointer;padding:0">← Back</button>
+      </div>
+
+      <!-- Progress view -->
+      <div id="msProgressView" style="display:none;padding:20px;flex:1;overflow-y:auto">
+        <div id="msProgressStatus" style="font-size:.75rem;color:var(--muted);margin-bottom:10px">Processing…</div>
+        <div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-bottom:16px">
+          <div id="msProgressBar" style="height:100%;background:var(--accent2);width:0%;transition:width .25s ease;border-radius:3px"></div>
+        </div>
+        <div id="msProgressList" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
+      <!-- Review view -->
+      <div id="msReviewView" style="display:none;flex:1;overflow-y:auto;padding:16px 20px"></div>
+
+      <!-- Footer (binder + add button) -->
+      <div id="msFooter" style="display:none;padding:14px 20px;border-top:1px solid var(--border);flex-direction:column;gap:10px;flex-shrink:0">
+        <select class="atc-input" id="msBinder" style="width:100%"></select>
+        <div style="display:flex;gap:10px">
+          <button onclick="closeModal('multiScanModal')" style="flex:1;padding:10px 0;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Cancel</button>
+          <button id="msAddBtn" onclick="bulkAddMultiScan()" style="flex:2;padding:10px 0;background:var(--accent2);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.05em">ADD 0 CARDS →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- LIST CARD MODAL -->
   <div class="modal-overlay" id="listCardModal">
     <div class="modal" style="max-width:600px">
@@ -1626,6 +1695,7 @@
         <button class="coll-btn-primary" onclick="searchPokemonCards()">Search Cards</button>
         <button class="coll-btn-secondary" onclick="openManualAddModal()">Add Manually</button>
         <label class="coll-btn-secondary" style="border-color:var(--accent2);color:var(--accent2);cursor:pointer;display:inline-block;text-align:center">&#9654; Scan a Card<input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none"></label>
+        <button class="coll-btn-secondary" onclick="openMultiScan()" style="border-color:var(--gold);color:var(--gold)">&#9638; Scan Multiple</button>
       </div>
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
@@ -9429,8 +9499,10 @@
     }
 
     // ── Scanner — full-image OCR + name×number search + CLIP fallback ──────────
-    async function runMatch(dataURL) {
-      setScanStatus('Reading card text…');
+    // opts.silent=true → skip all UI updates, return match array (used by multi-scan)
+    async function runMatch(dataURL, opts) {
+      const silent = !!(opts && opts.silent);
+      if (!silent) setScanStatus('Reading card text…');
       try {
         // Step 1: OCR the full image + start CLIP embedding in parallel
         // Full-image OCR is more reliable than zone crops because it doesn't
@@ -9458,7 +9530,7 @@
         console.log('[Scanner] OCR raw:', JSON.stringify(rawFullText.slice(0,120)));
         console.log('[Scanner] parsed → number:', parsed?.full, '| num:', numStripped, '| total:', numTotal, '| name:', cardName, '| expanded:', expandedName, '| pokemon:', trainerPokemon);
 
-        setScanStatus('Searching catalog…');
+        if (!silent) setScanStatus('Searching catalog…');
 
         // Factory — Supabase query builders are mutable, so create a fresh one each time
         const q = () => sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url');
@@ -9533,7 +9605,8 @@
 
         if (clipRes.error) {
           if (clipRes.error.code === 'PGRST202' || (clipRes.error.message && clipRes.error.message.includes('match_cards'))) {
-            setScanStatus('Run scanner_setup.sql in Supabase first'); return;
+            if (!silent) setScanStatus('Run scanner_setup.sql in Supabase first');
+            return [];
           } else throw clipRes.error;
         }
 
@@ -9601,33 +9674,235 @@
         merged.sort(function(a, b) { return b.similarity - a.similarity; });
         const final = merged.slice(0, 10);
 
-        if (final.length === 0) {
-          const countRes = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
-          const embeddedCount = countRes.count || 0;
-          if (embeddedCount === 0) {
-            // Distinguish between truly empty and RLS-blocked
-            const totalRes = await sb.from('catalog').select('id', { count: 'exact', head: true });
-            const totalCount = totalRes.count || 0;
-            if (totalCount === 0) {
-              setScanStatus('Card catalog is empty — run generate_embeddings.py first');
+        if (!silent) {
+          if (final.length === 0) {
+            const countRes = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
+            const embeddedCount = countRes.count || 0;
+            if (embeddedCount === 0) {
+              const totalRes = await sb.from('catalog').select('id', { count: 'exact', head: true });
+              const totalCount = totalRes.count || 0;
+              if (totalCount === 0) {
+                setScanStatus('Card catalog is empty — run generate_embeddings.py first');
+              } else {
+                setScanStatus(`Catalog blocked (${totalCount.toLocaleString()} cards exist but can't be read) — run: alter table catalog disable row level security`);
+              }
             } else {
-              setScanStatus(`Catalog blocked (${totalCount.toLocaleString()} cards exist but can't be read) — run: alter table catalog disable row level security`);
+              setScanStatus('No match found — try a clearer photo or use the name search below');
             }
           } else {
-            setScanStatus('No match found — try a clearer photo or use the name search below');
+            const top = final[0];
+            const src = top._exact ? 'EXACT' : (top._ocr ? 'OCR' : (Math.round(top.similarity * 100) + '% visual'));
+            setScanStatus('Best match: ' + top.name + ' (' + src + ') — tap to add');
+            showScanResults(final);
           }
-        } else {
-          const top = final[0];
-          const src = top._exact ? 'EXACT' : (top._ocr ? 'OCR' : (Math.round(top.similarity * 100) + '% visual'));
-          setScanStatus('Best match: ' + top.name + ' (' + src + ') — tap to add');
-          showScanResults(final);
         }
+        return final;
       } catch(err) {
         console.error('[Scanner]', err);
-        setScanStatus('Error: ' + (err.message || err));
+        if (!silent) setScanStatus('Error: ' + (err.message || err));
+        return [];
       } finally {
         // nothing to re-enable — sheet stays open
       }
+    }
+
+    // ── MULTI-SCAN (vendor+) ───────────────────────────────────────────────────
+    let _multiScanResults = [];
+    let _msSpreadDataURL  = null;
+
+    function openMultiScan() {
+      if (!currentUser) { showToast('Sign in to use multi-scan'); return; }
+      if (!tierAtLeast('vendor')) { openPricingModal('vendor'); return; }
+      _multiScanResults = [];
+      _msSpreadDataURL  = null;
+      // Reset to picker view
+      document.getElementById('msPickerView').style.display   = 'block';
+      document.getElementById('msSpreadPicker').style.display = 'none';
+      document.getElementById('msProgressView').style.display = 'none';
+      document.getElementById('msReviewView').style.display   = 'none';
+      document.getElementById('msFooter').style.display       = 'none';
+      document.getElementById('msMultiInput').value   = '';
+      document.getElementById('msSpreadInput').value  = '';
+      openModal('multiScanModal');
+    }
+
+    // Utility: read a File (or {_dataURL}) as a dataURL
+    function readFileAsDataURL(file) {
+      if (file._dataURL) return Promise.resolve(file._dataURL);
+      return new Promise(function(resolve, reject) {
+        var r = new FileReader();
+        r.onload  = function(e) { resolve(e.target.result); };
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+
+    // Crop an image dataURL into rows*cols sub-images using canvas
+    function cropImageGrid(dataURL, rows, cols) {
+      return new Promise(function(resolve) {
+        var img = new Image();
+        img.onload = function() {
+          var cw = Math.floor(img.width  / cols);
+          var ch = Math.floor(img.height / rows);
+          var crops = [];
+          for (var r = 0; r < rows; r++) {
+            for (var c = 0; c < cols; c++) {
+              var cv = document.createElement('canvas');
+              cv.width = cw; cv.height = ch;
+              cv.getContext('2d').drawImage(img, c*cw, r*ch, cw, ch, 0, 0, cw, ch);
+              crops.push(cv.toDataURL('image/jpeg', 0.88));
+            }
+          }
+          resolve(crops);
+        };
+        img.src = dataURL;
+      });
+    }
+
+    // Called when user picks one spread photo — show grid size picker
+    async function handleSpreadScanFile(file) {
+      if (!file) return;
+      _msSpreadDataURL = await readFileAsDataURL(file);
+      var thumb = document.getElementById('msSpreadThumb');
+      if (thumb) { thumb.src = _msSpreadDataURL; thumb.style.display = 'block'; }
+      document.getElementById('msPickerView').style.display   = 'none';
+      document.getElementById('msSpreadPicker').style.display = 'block';
+    }
+
+    // Called by grid size buttons in spread picker
+    async function processSpreadGrid(rows, cols) {
+      if (!_msSpreadDataURL) return;
+      var crops = await cropImageGrid(_msSpreadDataURL, rows, cols);
+      startMultiScanProcessing(crops);
+    }
+
+    // Called when user picks multiple photos
+    async function handleMultiScanFiles(fileList) {
+      if (!fileList || fileList.length === 0) return;
+      if (fileList.length > 20) { showToast('Max 20 images at once'); return; }
+      var dataURLs = await Promise.all(Array.from(fileList).map(readFileAsDataURL));
+      startMultiScanProcessing(dataURLs);
+    }
+
+    // Core processing loop — receives array of dataURL strings
+    async function startMultiScanProcessing(dataURLs) {
+      _multiScanResults = dataURLs.map(function(url) {
+        return { thumb: url, status: 'pending', matches: [], included: true, selectedMatch: null };
+      });
+
+      // Switch to progress view
+      document.getElementById('msPickerView').style.display   = 'none';
+      document.getElementById('msSpreadPicker').style.display = 'none';
+      document.getElementById('msProgressView').style.display = 'block';
+
+      var listEl = document.getElementById('msProgressList');
+      listEl.innerHTML = _multiScanResults.map(function(r, i) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0">'
+          + '<img src="' + r.thumb + '" style="width:30px;height:42px;object-fit:cover;border-radius:2px;border:1px solid var(--border);flex-shrink:0">'
+          + '<span id="msprog-s-' + i + '" style="font-size:.72rem;color:var(--muted)">Waiting…</span>'
+          + '</div>';
+      }).join('');
+
+      // Process in batches of 3 to avoid GCV rate limits
+      var done = 0;
+      for (var i = 0; i < dataURLs.length; i += 3) {
+        var batch = dataURLs.slice(i, i + 3);
+        // Mark as scanning
+        batch.forEach(function(_, j) {
+          var el = document.getElementById('msprog-s-' + (i+j));
+          if (el) el.textContent = 'Scanning…';
+        });
+        var batchMatches = await Promise.all(
+          batch.map(function(url) { return runMatch(url, { silent: true }).catch(function() { return []; }); })
+        );
+        batchMatches.forEach(function(matches, j) {
+          var idx = i + j;
+          _multiScanResults[idx].matches       = matches || [];
+          _multiScanResults[idx].selectedMatch = (matches && matches.length > 0) ? matches[0] : null;
+          _multiScanResults[idx].status        = 'done';
+          done++;
+          var pct = Math.round(done / dataURLs.length * 100);
+          document.getElementById('msProgressBar').style.width   = pct + '%';
+          document.getElementById('msProgressStatus').textContent = 'Processing ' + done + ' of ' + dataURLs.length + '…';
+          var el = document.getElementById('msprog-s-' + idx);
+          if (el) el.textContent = matches && matches.length > 0 ? '✓ ' + matches[0].name : '— no match';
+        });
+      }
+      renderMultiScanReview();
+    }
+
+    function renderMultiScanReview() {
+      var container  = document.getElementById('msReviewView');
+      var matched    = _multiScanResults.filter(function(r) { return r.selectedMatch; });
+
+      container.innerHTML = '<div style="font-size:.72rem;color:var(--muted);margin-bottom:14px">'
+        + matched.length + ' of ' + _multiScanResults.length + ' cards matched. Uncheck any you want to skip.'
+        + '</div>'
+        + _multiScanResults.map(function(r, i) {
+          var m = r.selectedMatch;
+          if (!m) {
+            return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);opacity:.45">'
+              + '<img src="' + r.thumb + '" style="width:40px;height:56px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0">'
+              + '<div style="font-size:.72rem;color:var(--muted)">No match found</div></div>';
+          }
+          var conf = m._exact ? 'EXACT' : m._ocr ? 'OCR' : Math.round((m.similarity||0)*100) + '% visual';
+          return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
+            + '<img src="' + r.thumb + '" style="width:40px;height:56px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0">'
+            + (m.image_url ? '<img src="' + m.image_url + '" style="width:40px;height:56px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0" onerror="this.style.display=\'none\'">' : '')
+            + '<div style="flex:1;min-width:0">'
+            + '<div style="font-size:.8rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + m.name + '</div>'
+            + '<div style="font-size:.65rem;color:var(--muted)">' + (m.set_name||m.set_code||'') + ' · #' + (m.card_number||'?') + '</div>'
+            + '<div style="font-size:.62rem;color:var(--accent2)">' + conf + '</div>'
+            + '</div>'
+            + '<input type="checkbox" ' + (r.included?'checked':'') + ' onchange="_multiScanResults[' + i + '].included=this.checked;updateMsAddBtn()" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent2);flex-shrink:0">'
+            + '</div>';
+        }).join('');
+
+      populateBinderDropdown('msBinder', currentBinderId);
+      document.getElementById('msProgressView').style.display = 'none';
+      document.getElementById('msReviewView').style.display   = 'block';
+      document.getElementById('msFooter').style.display       = 'flex';
+      updateMsAddBtn();
+    }
+
+    function updateMsAddBtn() {
+      var n = _multiScanResults.filter(function(r) { return r.included && r.selectedMatch; }).length;
+      var btn = document.getElementById('msAddBtn');
+      if (btn) btn.textContent = 'ADD ' + n + ' CARD' + (n !== 1 ? 'S' : '') + ' →';
+    }
+
+    async function bulkAddMultiScan() {
+      var binderId = document.getElementById('msBinder') ? document.getElementById('msBinder').value || null : null;
+      var toAdd    = _multiScanResults.filter(function(r) { return r.included && r.selectedMatch; });
+      if (toAdd.length === 0) { showToast('No cards selected'); return; }
+
+      var btn = document.getElementById('msAddBtn');
+      if (btn) { btn.textContent = 'Adding…'; btn.disabled = true; }
+
+      var success = 0, failed = 0;
+      for (var ri = 0; ri < toAdd.length; ri++) {
+        var m = toAdd[ri].selectedMatch;
+        var res = await sb.from('collection_items').insert({
+          user_id:        currentUser.id,
+          api_card_id:    m.id            || null,
+          card_name:      m.name,
+          set_name:       m.set_name      || null,
+          set_code:       m.set_code      || null,
+          card_number:    m.card_number   || null,
+          card_image_url: m.image_url     || null,
+          game_type:      'pokemon',
+          quantity:       1,
+          binder_id:      binderId        || null,
+        });
+        if (res.error) { console.error('Multi-scan add error:', res.error.message); failed++; }
+        else success++;
+      }
+
+      closeModal('multiScanModal');
+      await loadCollection();
+      renderCollection();
+      showToast('✓ ' + success + ' card' + (success !== 1 ? 's' : '') + ' added' + (failed > 0 ? ' (' + failed + ' failed)' : '!'));
+      if (btn) { btn.disabled = false; }
     }
 
     // sb is already a global defined in the main script block — scanner uses it directly
