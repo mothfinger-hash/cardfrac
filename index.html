@@ -2528,6 +2528,28 @@
       }
     })();
 
+    // Pages that live in the browser history stack (back/forward navigable).
+    // publicBinder / storefront / payment have their own ?param= routing and
+    // are excluded here. admin / editListing are excluded for security/UX.
+    // NOTE: when PathBinder ships as a native iOS/Android app (Capacitor etc.)
+    // history.pushState is a no-op inside a WebView — that's fine, the popstate
+    // listener simply won't fire and the app behaves as it always has.
+    const _historyPages = new Set(['browse','collection','addCard','account','leaderboard','fairTrade']);
+    let _suppressHistoryPush = false;  // true during popstate handling to avoid double-push
+
+    function _pushPageState(pageId) {
+      if (_suppressHistoryPush) return;
+      if (!_historyPages.has(pageId)) return;
+      // Use replaceState for the very first entry so the initial load doesn't
+      // add a spurious extra entry; pushState for all subsequent navigations.
+      const url = '?page=' + pageId;
+      if (!history.state || history.state.page === undefined) {
+        history.replaceState({ page: pageId }, '', url);
+      } else if (history.state.page !== pageId) {
+        history.pushState({ page: pageId }, '', url);
+      }
+    }
+
     function showPage(pageId) {
       // Guard admin page access
       if (pageId === 'admin' || pageId === 'editListing') {
@@ -2540,6 +2562,7 @@
 
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(pageId + 'Page').classList.add('active');
+      _pushPageState(pageId);
       if (pageId === 'leaderboard') renderLeaderboard();
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const navTab = document.querySelector(`[data-page="${pageId}"]`);
@@ -9412,6 +9435,15 @@
         return;
       }
 
+      // Direct page link: ?page=collection etc. (set by pushState on navigation)
+      const pageParam = urlParams.get('page');
+      if (pageParam && _historyPages.has(pageParam)) {
+        window.history.replaceState({ page: pageParam }, '', '?page=' + pageParam);
+        showPage(pageParam);
+        setMobileNav(pageParam);
+        // Don't return — still need to process payment params if somehow combined
+      }
+
       // ── Post-payment redirect handling ──────────────────────────────────
       // Stripe sends the user back to ?payment=success or ?payment=cancelled
       const paymentStatus = urlParams.get('payment');
@@ -9527,7 +9559,23 @@
       // INITIAL_SESSION: initApp() handles the first render
     });
 
-    initApp().then(() => {  updateHeroStats(); });
+    initApp().then(() => { updateHeroStats(); });
+
+    // ── Browser back / forward support ──────────────────────────────────────
+    // Fires when the user presses the browser Back or Forward button.
+    // We read the page name from history.state and navigate there without
+    // pushing a new entry onto the stack.
+    // Native app note: WebViews (Capacitor / Cordova) don't fire popstate from
+    // the OS back gesture — that's handled at the native layer instead.
+    window.addEventListener('popstate', function(e) {
+      var page = (e.state && e.state.page) ? e.state.page : 'browse';
+      // Only act on pages we manage; ignore external ?binder= / ?store= states
+      if (!_historyPages.has(page)) page = 'browse';
+      _suppressHistoryPush = true;
+      showPage(page);
+      setMobileNav(page);
+      _suppressHistoryPush = false;
+    });
   </script>
 
   <!-- BINDER CARD DETAIL MODAL -->
