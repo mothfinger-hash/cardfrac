@@ -1734,7 +1734,9 @@
   <!-- ── FAIR TRADE CHECK ──────────────────────────────────────────────── -->
   <div id="fairTradePage" class="page">
     <div style="max-width:860px;margin:0 auto">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+
+      <!-- Header (always visible) -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
         <div>
           <h2 style="margin:0">⇌ Fair Trade Check</h2>
           <p class="subtitle" style="margin:4px 0 0">Compare proposed trades side-by-side — for in-person evaluation only.</p>
@@ -1743,99 +1745,159 @@
           style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.75rem;cursor:pointer;letter-spacing:.04em">← Back to Binder</button>
       </div>
 
-      <!-- Balance Scale Visual -->
-      <div style="text-align:center;margin:18px 0 10px;user-select:none">
-        <svg id="ftScaleSvg" viewBox="0 0 320 130" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible">
-          <!-- Base pillar -->
-          <rect x="156" y="60" width="8" height="65" rx="2" fill="var(--border)"/>
-          <rect x="128" y="120" width="64" height="8" rx="3" fill="var(--border)"/>
-          <!-- Beam — rotates around center -->
-          <g id="ftScaleBeam" style="transform-origin:160px 62px;transform:rotate(0deg);transition:transform .7s cubic-bezier(.34,1.56,.64,1)">
-            <line x1="40" y1="62" x2="280" y2="62" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
-            <!-- Left pan strings -->
-            <line x1="60"  y1="62" x2="42"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-            <line x1="60"  y1="62" x2="78"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-            <!-- Right pan strings -->
-            <line x1="260" y1="62" x2="242" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-            <line x1="260" y1="62" x2="278" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-            <!-- Left pan -->
-            <rect id="ftPanLeft"  x="30" y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
-            <!-- Right pan -->
-            <rect id="ftPanRight" x="230" y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
-          </g>
-          <!-- Center pivot -->
-          <circle cx="160" cy="62" r="5" fill="var(--accent)"/>
-          <!-- Value labels inside pans -->
-          <text id="ftLabelLeft"  x="60"  y="104" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="monospace"></text>
-          <text id="ftLabelRight" x="260" y="104" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="monospace"></text>
+      <!-- ── STATE 1: Card input ─────────────────────────────────────────── -->
+      <div id="ftInputState">
+        <!-- Two sides -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+
+          <!-- SIDE A -->
+          <div style="background:var(--surface2);border:1px solid var(--border);padding:14px">
+            <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--teal);margin-bottom:10px">SIDE A</div>
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+              <input id="ftSearchA" type="text" placeholder="Search card name…"
+                style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
+                onkeydown="if(event.key==='Enter')ftSearch('A')" />
+              <button onclick="ftSearch('A')"
+                style="padding:7px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
+            </div>
+            <div id="ftResultsA" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
+            <div id="ftCardsA" style="min-height:40px"></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+              <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
+              <input id="ftCashA" type="number" min="0" step="0.01" placeholder="0.00"
+                style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
+            </div>
+          </div>
+
+          <!-- SIDE B -->
+          <div style="background:var(--surface2);border:1px solid var(--border);padding:14px">
+            <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">SIDE B</div>
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+              <input id="ftSearchB" type="text" placeholder="Search card name…"
+                style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
+                onkeydown="if(event.key==='Enter')ftSearch('B')" />
+              <button onclick="ftSearch('B')"
+                style="padding:7px 12px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
+            </div>
+            <div id="ftResultsB" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
+            <div id="ftCardsB" style="min-height:40px"></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+              <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
+              <input id="ftCashB" type="number" min="0" step="0.01" placeholder="0.00"
+                style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analyze button -->
+        <div style="text-align:center;margin-bottom:20px">
+          <button id="ftAnalyzeBtn" onclick="ftAnalyzeTrade()"
+            style="padding:11px 36px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.85rem;cursor:pointer;letter-spacing:.08em">
+            ⇌ Analyze Trade
+          </button>
+          <button onclick="ftReset()"
+            style="margin-left:12px;padding:11px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- ── STATE 2: Pikachu thinking (loading) ────────────────────────── -->
+      <div id="ftLoadingState" style="display:none;text-align:center;padding:30px 0 20px">
+        <svg viewBox="0 0 160 180" xmlns="http://www.w3.org/2000/svg" style="width:140px;margin:0 auto;display:block">
+          <!-- Ears -->
+          <polygon points="38,55 20,8 55,42"  fill="#FFD93D"/>
+          <polygon points="122,55 140,8 105,42" fill="#FFD93D"/>
+          <polygon points="38,55 26,20 50,42"  fill="#333"/>
+          <polygon points="122,55 134,20 110,42" fill="#333"/>
+          <!-- Head -->
+          <ellipse cx="80" cy="82" rx="52" ry="48" fill="#FFD93D"/>
+          <!-- Cheeks -->
+          <ellipse cx="40" cy="96" rx="14" ry="10" fill="#FF6B6B" opacity=".85"/>
+          <ellipse cx="120" cy="96" rx="14" ry="10" fill="#FF6B6B" opacity=".85"/>
+          <!-- Eyes — looking up/thinking -->
+          <ellipse cx="62" cy="72" rx="8" ry="9" fill="#1a1a1a"/>
+          <ellipse cx="98" cy="72" rx="8" ry="9" fill="#1a1a1a"/>
+          <circle  cx="65" cy="69" r="2.5" fill="white"/>
+          <circle  cx="101" cy="69" r="2.5" fill="white"/>
+          <!-- Eyebrows raised — thinking -->
+          <path d="M55,60 Q62,55 70,59" stroke="#1a1a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          <path d="M90,59 Q98,55 105,60" stroke="#1a1a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          <!-- Mouth — small hmm smile -->
+          <path d="M68,100 Q80,110 92,100" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <!-- Body -->
+          <ellipse cx="80" cy="148" rx="36" ry="26" fill="#FFD93D"/>
+          <!-- Belly patch -->
+          <ellipse cx="80" cy="152" rx="20" ry="14" fill="#F0B429" opacity=".6"/>
+          <!-- Tail stub -->
+          <path d="M116,140 Q138,128 130,110 Q122,92 138,82" stroke="#FFD93D" stroke-width="8" fill="none" stroke-linecap="round"/>
+          <!-- Lightning bolt on tail -->
+          <polyline points="130,110 138,98 126,96 134,82" stroke="#FFD93D" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Thinking bubbles -->
+          <circle id="ftBubble1" cx="128" cy="70" r="5" fill="var(--muted)" opacity="0.5"/>
+          <circle id="ftBubble2" cx="140" cy="55" r="7" fill="var(--muted)" opacity="0.5"/>
+          <circle id="ftBubble3" cx="150" cy="38" r="10" fill="var(--muted)" opacity="0.5"/>
+          <!-- "..." in thought bubble -->
+          <text x="150" y="42" text-anchor="middle" font-size="9" fill="var(--surface)" font-weight="700">…</text>
         </svg>
-        <div id="ftVerdict" style="font-size:.85rem;font-weight:700;letter-spacing:.06em;margin-top:2px;min-height:20px;transition:color .4s"></div>
+        <div id="ftLoadingMsg" style="font-size:.82rem;color:var(--muted);margin-top:14px;letter-spacing:.04em">Checking prices…</div>
+        <div id="ftLoadingProgress" style="font-size:.72rem;color:var(--muted);margin-top:4px"></div>
+        <!-- Animated dots -->
+        <style>
+          @keyframes ftBubblePulse {
+            0%,100% { opacity:.25; transform:scale(.85); }
+            50%      { opacity:.8;  transform:scale(1.1); }
+          }
+          #ftBubble1 { animation: ftBubblePulse 1.4s ease-in-out 0s   infinite; }
+          #ftBubble2 { animation: ftBubblePulse 1.4s ease-in-out .3s  infinite; }
+          #ftBubble3 { animation: ftBubblePulse 1.4s ease-in-out .6s  infinite; }
+        </style>
       </div>
 
-      <!-- Two sides -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <!-- ── STATE 3: Results (scale + breakdown) ───────────────────────── -->
+      <div id="ftResultsState" style="display:none">
 
-        <!-- ── SIDE A ── -->
-        <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;position:relative">
-          <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--teal);margin-bottom:10px">SIDE A</div>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <input id="ftSearchA" type="text" placeholder="Search card name…"
-              style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
-              onkeydown="if(event.key==='Enter')ftSearch('A')" />
-            <button onclick="ftSearch('A')"
-              style="padding:7px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
-          </div>
-          <div id="ftResultsA" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-          <div id="ftCardsA" style="min-height:40px"></div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-            <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
-            <input id="ftCashA" type="number" min="0" step="0.01" placeholder="0.00"
-              oninput="ftRecalc()"
-              style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
-          </div>
+        <!-- Balance Scale -->
+        <div style="text-align:center;margin:10px 0 14px;user-select:none">
+          <svg id="ftScaleSvg" viewBox="0 0 320 130" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible">
+            <rect x="156" y="60" width="8" height="65" rx="2" fill="var(--border)"/>
+            <rect x="128" y="120" width="64" height="8" rx="3" fill="var(--border)"/>
+            <g id="ftScaleBeam" style="transform-origin:160px 62px;transform:rotate(0deg);transition:transform .9s cubic-bezier(.34,1.56,.64,1)">
+              <line x1="40" y1="62" x2="280" y2="62" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+              <line x1="60"  y1="62" x2="42"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+              <line x1="60"  y1="62" x2="78"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+              <line x1="260" y1="62" x2="242" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+              <line x1="260" y1="62" x2="278" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+              <rect id="ftPanLeft"  x="30"  y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
+              <rect id="ftPanRight" x="230" y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
+              <text id="ftLabelLeft"  x="60"  y="101" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
+              <text id="ftLabelRight" x="260" y="101" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
+            </g>
+            <circle cx="160" cy="62" r="5" fill="var(--accent)"/>
+            <text x="60"  y="115" text-anchor="middle" font-size="8" fill="var(--teal)" font-family="monospace">SIDE A</text>
+            <text x="260" y="115" text-anchor="middle" font-size="8" fill="var(--gold)" font-family="monospace">SIDE B</text>
+          </svg>
+          <div id="ftVerdict" style="font-size:.9rem;font-weight:700;letter-spacing:.06em;margin-top:6px;min-height:22px;transition:color .4s"></div>
         </div>
 
-        <!-- ── SIDE B ── -->
-        <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;position:relative">
-          <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">SIDE B</div>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <input id="ftSearchB" type="text" placeholder="Search card name…"
-              style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
-              onkeydown="if(event.key==='Enter')ftSearch('B')" />
-            <button onclick="ftSearch('B')"
-              style="padding:7px 12px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
-          </div>
-          <div id="ftResultsB" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-          <div id="ftCardsB" style="min-height:40px"></div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-            <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
-            <input id="ftCashB" type="number" min="0" step="0.01" placeholder="0.00"
-              oninput="ftRecalc()"
-              style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
-          </div>
+        <!-- Breakdown table -->
+        <div id="ftBreakdown">
+          <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PRICE BREAKDOWN</div>
+          <div id="ftBreakdownContent"></div>
+          <p style="font-size:.62rem;color:var(--muted);margin-top:12px;line-height:1.6;text-align:center">
+            Prices sourced from TCGPlayer (via Pokémon TCG API) and PriceCharting. Values are estimates — verify before trading.
+          </p>
+        </div>
+
+        <!-- Start Over -->
+        <div style="text-align:center;margin-top:20px;padding-bottom:10px">
+          <button onclick="ftReset()"
+            style="padding:10px 28px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            ← Start Over
+          </button>
         </div>
       </div>
 
-      <!-- Analyze button -->
-      <div style="text-align:center;margin-bottom:20px">
-        <button id="ftAnalyzeBtn" onclick="ftAnalyzeTrade()"
-          style="padding:11px 36px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.85rem;cursor:pointer;letter-spacing:.08em">
-          ⇌ Analyze Trade
-        </button>
-        <button onclick="ftReset()"
-          style="margin-left:12px;padding:11px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-          Reset
-        </button>
-      </div>
-
-      <!-- Breakdown table -->
-      <div id="ftBreakdown" style="display:none">
-        <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PRICE BREAKDOWN</div>
-        <div id="ftBreakdownContent"></div>
-        <p style="font-size:.62rem;color:var(--muted);margin-top:12px;line-height:1.6;text-align:center">
-          Prices sourced from TCGPlayer (via Pokémon TCG API) and PriceCharting. Values shown are estimates — verify with seller before trading.
-        </p>
-      </div>
     </div>
   </div>
 
@@ -5731,8 +5793,17 @@
     let vendorApplications = [];
     async function loadVendorApplications() {
       if (!currentUser?.is_admin) return;
-      const { data } = await sb.from('vendor_applications').select('*, profiles(email, username)').order('submitted_at', { ascending: false });
-      vendorApplications = data || [];
+      // Fetch applications first (no join — avoids 400 if FK not in schema cache)
+      const { data: apps } = await sb.from('vendor_applications').select('*').order('submitted_at', { ascending: false });
+      if (!apps || !apps.length) { vendorApplications = []; return; }
+      // Then fetch matching profiles separately and merge in
+      const userIds = [...new Set(apps.map(a => a.user_id).filter(Boolean))];
+      let profileMap = {};
+      if (userIds.length) {
+        const { data: profs } = await sb.from('profiles').select('id, email, username').in('id', userIds);
+        if (profs) profs.forEach(p => { profileMap[p.id] = p; });
+      }
+      vendorApplications = apps.map(a => ({ ...a, profiles: profileMap[a.user_id] || null }));
     }
 
     async function approveVendorApplication(userId, appId) {
@@ -8863,23 +8934,47 @@
     // ═══════════════════════════════════════════════════════════════════════
     // ── FAIR TRADE CHECK  (client-side, in-person evaluation tool) ─────────
     // ═══════════════════════════════════════════════════════════════════════
+    //
+    // CURRENT DESIGN: Single-device, single-session tool. Both traders add
+    // their cards on the same screen (card show / trade table scenario).
+    // No backend, no accounts required, state resets on page leave.
+    //
+    // FUTURE ENHANCEMENT — Two-device flow:
+    //   Allow each trader to add cards on their own phone simultaneously.
+    //   Would require:
+    //     • A shareable session ID (e.g. ?trade=<shortcode>)
+    //     • Light backend storage (Supabase table: fair_trade_sessions)
+    //       with two card lists, polling or Supabase Realtime channel
+    //     • "Start Trade" generates the code; partner enters it to join
+    //     • Both sides see the scale update in real time as cards are added
+    //   Complexity: medium — mostly plumbing, UI logic is already here.
+    // ═══════════════════════════════════════════════════════════════════════
 
     // State — keyed by side 'A' or 'B'
     var _ftCards = { A: [], B: [] };   // [{id, name, set, number, image, prices:{tcg,pc}, avgPrice, qty}]
     var _ftSearchTimeout = {};
 
     function ftInitPage() {
-      // Reset state and UI each time the page is opened
+      // Reset to input state
       _ftCards = { A: [], B: [] };
+      _ftShowState('input');
       _ftRenderCards('A');
       _ftRenderCards('B');
       _ftResetScale();
-      var bd = document.getElementById('ftBreakdown');
-      if (bd) bd.style.display = 'none';
-      ['ftSearchA','ftSearchB'].forEach(id => { var el = document.getElementById(id); if (el) el.value = ''; });
-      ['ftCashA','ftCashB'].forEach(id => { var el = document.getElementById(id); if (el) el.value = ''; });
-      ['ftResultsA','ftResultsB'].forEach(id => { var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = ''; } });
-      document.getElementById('ftVerdict').textContent = '';
+      ['ftSearchA','ftSearchB'].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+      ['ftCashA','ftCashB'].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+      ['ftResultsA','ftResultsB'].forEach(function(id) { var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = ''; } });
+      var v = document.getElementById('ftVerdict'); if (v) v.textContent = '';
+    }
+
+    function _ftShowState(state) {
+      // state: 'input' | 'loading' | 'results'
+      var input   = document.getElementById('ftInputState');
+      var loading = document.getElementById('ftLoadingState');
+      var results = document.getElementById('ftResultsState');
+      if (input)   input.style.display   = state === 'input'   ? '' : 'none';
+      if (loading) loading.style.display = state === 'loading' ? '' : 'none';
+      if (results) results.style.display = state === 'results' ? '' : 'none';
     }
 
     // ── Card search (pokemontcg.io) ──────────────────────────────────────
@@ -9051,25 +9146,38 @@
 
     // ── Analyze: fetch prices from TCGPlayer + PriceCharting ─────────────
     async function ftAnalyzeTrade() {
-      var btn = document.getElementById('ftAnalyzeBtn');
-      if (btn) { btn.disabled = true; btn.textContent = '⇌ Fetching prices…'; }
+      // Collect unique cards across both sides
+      var allCards = [];
+      var seen = {};
+      ['A','B'].forEach(function(side) {
+        _ftCards[side].forEach(function(c) {
+          if (!seen[c.id]) { seen[c.id] = true; allCards.push(c); }
+        });
+      });
 
-      var allCards = [
-        ..._ftCards.A.map(function(c) { return { side: 'A', card: c }; }),
-        ..._ftCards.B.map(function(c) { return { side: 'B', card: c }; })
-      ];
-
-      if (!allCards.length) {
+      if (!_ftCards.A.length && !_ftCards.B.length) {
         showToast('Add cards to at least one side first');
-        if (btn) { btn.disabled = false; btn.textContent = '⇌ Analyze Trade'; }
         return;
       }
 
-      // Fetch prices for each unique card
+      // Switch to loading state — Pikachu appears
+      _ftShowState('loading');
+      var msgEl  = document.getElementById('ftLoadingMsg');
+      var progEl = document.getElementById('ftLoadingProgress');
+
+      var loadingMsgs = [
+        'Pikachu is checking the market…',
+        'Consulting the Pokédex…',
+        'Running price checks…',
+        'Crunching the numbers…',
+        'Almost there…'
+      ];
+
       var fetched = {};  // keyed by card.id
       for (var i = 0; i < allCards.length; i++) {
-        var c = allCards[i].card;
-        if (fetched[c.id] !== undefined) continue;  // already fetched
+        var c = allCards[i];
+        if (msgEl) msgEl.textContent = loadingMsgs[Math.min(i, loadingMsgs.length - 1)];
+        if (progEl) progEl.textContent = 'Card ' + (i + 1) + ' of ' + allCards.length + ' — ' + c.name;
 
         var tcgPrice = null;
         var pcPrice  = null;
@@ -9081,13 +9189,11 @@
             var apiData = await apiRes.json();
             var pricesObj = apiData.data && apiData.data.tcgplayer && apiData.data.tcgplayer.prices;
             if (pricesObj) {
-              // Pick first available variant price in priority order
               var variants = ['holofoil','reverseHolofoil','normal','1stEditionHolofoil','unlimitedHolofoil'];
-              for (var v = 0; v < variants.length; v++) {
-                var vp = pricesObj[variants[v]];
+              for (var vi = 0; vi < variants.length; vi++) {
+                var vp = pricesObj[variants[vi]];
                 if (vp && vp.market != null) { tcgPrice = vp.market; break; }
               }
-              // fallback: take any market price
               if (tcgPrice == null) {
                 for (var key in pricesObj) {
                   if (pricesObj[key] && pricesObj[key].market != null) { tcgPrice = pricesObj[key].market; break; }
@@ -9110,36 +9216,30 @@
           }
         } catch(_) {}
 
-        // Compute average of available sources
         var sources = [tcgPrice, pcPrice].filter(function(p) { return p != null; });
         var avg = sources.length ? sources.reduce(function(a, b) { return a + b; }, 0) / sources.length : null;
-
         fetched[c.id] = { tcg: tcgPrice, pc: pcPrice, avg: avg };
 
-        // Small delay between PriceCharting calls
         if (i < allCards.length - 1) await new Promise(function(r) { setTimeout(r, 400); });
       }
 
-      // Apply prices back to card objects
+      // Apply prices back
       ['A','B'].forEach(function(side) {
         _ftCards[side].forEach(function(c) {
           var p = fetched[c.id];
-          if (p) {
-            c.prices = { tcg: p.tcg, pc: p.pc };
-            c.avgPrice = p.avg;
-          } else {
-            c.prices = { tcg: null, pc: null };
-            c.avgPrice = null;
-          }
+          if (p) { c.prices = { tcg: p.tcg, pc: p.pc }; c.avgPrice = p.avg; }
+          else   { c.prices = { tcg: null, pc: null };   c.avgPrice = null;  }
         });
       });
 
-      _ftRenderCards('A');
-      _ftRenderCards('B');
+      // Small dramatic pause so the scale reveal feels intentional
+      if (progEl) progEl.textContent = 'Weighing the trade…';
+      await new Promise(function(r) { setTimeout(r, 600); });
+
+      // Switch to results state
+      _ftShowState('results');
       ftRecalc();
       _ftRenderBreakdown(fetched);
-
-      if (btn) { btn.disabled = false; btn.textContent = '⇌ Analyze Trade'; }
     }
 
     function _ftRenderBreakdown(fetched) {
@@ -9188,7 +9288,7 @@
     }
 
     function ftReset() {
-      ftInitPage();
+      ftInitPage();  // resets state to 'input' and clears all cards/fields
     }
 
     function _escHtml(str) {
