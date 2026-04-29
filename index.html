@@ -8799,7 +8799,7 @@
     <div style="display:flex;gap:10px;margin-top:12px;justify-content:center;flex-wrap:wrap">
       <label id="scanPhotoLabel" style="padding:13px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em;display:inline-block;text-align:center">
         SCAN CARD
-        <input type="file" accept="image/*" capture="environment" onchange="matchFromFile(this)" style="display:none">
+        <input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
       </label>
       <label style="padding:13px 20px;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em;display:inline-block;text-align:center">
         GALLERY
@@ -9283,7 +9283,19 @@
             })
           }
         );
-        if (!res.ok) throw new Error('GCV HTTP ' + res.status);
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          const reason = errJson?.error?.message || ('HTTP ' + res.status);
+          if (res.status === 403) {
+            console.error('[GCV] 403 — check two things in Google Cloud Console:\n' +
+              '  1. Cloud Vision API is enabled for your project\n' +
+              '  2. Your API key has no HTTP referrer restrictions blocking ' + location.hostname);
+            setScanStatus('Vision API key error (403) — see console for fix');
+          } else {
+            console.error('[GCV] error:', reason);
+          }
+          return '';
+        }
         const json = await res.json();
         const text = (json.responses[0].textAnnotations || [])[0]?.description || '';
         console.log('[GCV] raw text:', JSON.stringify(text.slice(0, 200)));
