@@ -9311,6 +9311,50 @@
       return null;
     }
 
+    // Normalise OCR text before any parsing.
+    // All unicode chars are written as \uXXXX escapes and replacements use String.fromCharCode
+    // to prevent editor/browser quote-curling from corrupting the function.
+    //   ‘/’ (curly apostrophes), ′/‵ (prime), ` (grave) → ‘ straight apos
+    //   “/” (curly double quotes), ″ (double prime) → “ straight double-quote
+    //   –/—/― (en/em/horizontal bar) → hyphen
+    //   ​/‌/‍/﻿ (zero-width) → removed
+    function normalizeOcr(text) {
+      if (!text) return text;
+      var sq = String.fromCharCode(0x27);  // straight apostrophe ‘
+      var dq = String.fromCharCode(0x22);  // straight double-quote “
+      return text
+        .replace(/[‘’‚‛′‵`]/g, sq)
+        .replace(/[“”„‟″]/g, dq)
+        .replace(/[–—―]/g, ‘-’)
+        .replace(/[​‌‍﻿]/g, ‘’);
+    }
+
+    // Given a parsed card name, derive additional search strings:
+    //   expandedName — trainer-card names with missing 's fixed:
+    //     "N'Zekrom"  → "N's Zekrom"   (GCV drops the s from single-letter trainers)
+    //   pokemonBase  — the Pokémon part stripped of trainer prefix:
+    //     "N's Zekrom"          → "Zekrom"
+    //     "Lt. Surge's Raichu"  → "Raichu"
+    //     "Misty's Tentacruel"  → "Tentacruel"
+    function deriveSearchNames(name) {
+      if (!name) return { expandedName: null, pokemonBase: null };
+
+      let expanded = name;
+
+      // Fix missing 's: "N'Zekrom" → "N's Zekrom"
+      // Pattern: single capital letter + apostrophe + capitalised word (no space between)
+      expanded = expanded.replace(/^([A-Z])'([A-Z])/, "$1's $2");
+
+      // Extract Pokémon name after trainer prefix "X's "
+      const trainerMatch = expanded.match(/^.+?'s\s+(.+)$/);
+      const pokemonBase = trainerMatch ? trainerMatch[1].trim() : null;
+
+      // Only return expandedName if it actually differs from the original
+      const expandedName = (expanded !== name) ? expanded : null;
+
+      return { expandedName, pokemonBase };
+    }
+
     // Extract card number like "4/102", "SV001/SV122", "TG01/TG30"
     // Returns { full, num, total } e.g. { full:"094/165", num:"94", total:"165" }
     function parseCardNumber(text) {
@@ -9328,6 +9372,7 @@
     // Extract card name — handles all Pokemon card name formats
     function parseCardName(text) {
       if (!text) return null;
+      text = normalizeOcr(text);  // normalise smart quotes/dashes before parsing
       const lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
 
       const SUFFIX    = /^(VSTAR|VMAX|GX|EX|V|VUNION|TAG\s*TEAM)$/i;
@@ -9391,10 +9436,13 @@
         // Step 1: OCR the full image + start CLIP embedding in parallel
         // Full-image OCR is more reliable than zone crops because it doesn't
         // assume the card fills the entire frame.
-        const [fullText, fullEmbedding] = await Promise.all([
+        const [rawFullText, fullEmbedding] = await Promise.all([
           ocrCardText(dataURL),
           window._getClipEmbedding(dataURL)
         ]);
+
+        // Normalise smart quotes / dashes from GCV before any parsing
+        const fullText = normalizeOcr(rawFullText);
 
         // parseCardNumber now returns { full, num, numRaw, total }
         const parsed     = parseCardNumber(fullText);
@@ -9403,8 +9451,13 @@
         const numTotal    = parsed ? parsed.total  : null;  // "165" — set base size fingerprint
         const cardName    = parseCardName(fullText);
 
-        console.log('[Scanner] OCR raw:', JSON.stringify(fullText.slice(0,120)));
-        console.log('[Scanner] parsed → number:', parsed?.full, '| num:', numStripped, '| total:', numTotal, '| name:', cardName);
+        // Derive extra name variants for trainer-card mismatches:
+        //   "N'Zekrom" → expandedName="N's Zekrom", pokemonBase="Zekrom"
+        //   "Misty's Tentacruel" → expandedName=null, pokemonBase="Tentacruel"
+        const { expandedName, pokemonBase: trainerPokemon } = deriveSearchNames(cardName);
+
+        console.log('[Scanner] OCR raw:', JSON.stringify(rawFullText.slice(0,120)));
+        console.log('[Scanner] parsed → number:', parsed?.full, '| num:', numStripped, '| total:', numTotal, '| name:', cardName, '| expanded:', expandedName, '| pokemon:', trainerPokemon);
 
         setScanStatus('Searching catalog…');
 
@@ -9428,11 +9481,12 @@
         // Run all searches in parallel:
         // A: name + number   B: name + padded number
         // C: number only     D: padded number only
-        // E: full name       F: base name
-        // G: set fingerprint RPC     H: set confirmation (client-side — which sets actually contain card numTotal?)
-        //    H is the key signal: if a set has a card numbered exactly numTotal, it's the right-sized set.
-        //    e.g. for 094/165 → find set_codes containing card_number '165'; only sv3pt5 qualifies, not hgss4.
-        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes] = await Promise.all([
+        // E: full name       F: base name (VSTAR/TAG suffix stripped)
+        // G: set fingerprint RPC     H: set confirmation (which set_codes contain card #numTotal?)
+        // I: expanded trainer name   J: Pokémon-only name from trainer card
+        //    I+J handle trainer cards where OCR drops the 's (N'Zekrom → N's Zekrom → Zekrom)
+        //    H is the set-size fingerprint: sv3pt5 has card #165, hgss4 doesn't
+        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes] = await Promise.all([
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
           // A
           (numStripped && cardName)
@@ -9466,6 +9520,15 @@
           //     No extra SQL needed — query the existing catalog table directly.
           numTotal
             ? q().select('set_code').eq('card_number', numTotal).limit(100)
+            : Promise.resolve({ data: [] }),
+          // I — expanded trainer name: "N's Zekrom" (when OCR produced "N'Zekrom")
+          expandedName
+            ? q().ilike('name', '%' + expandedName + '%').limit(10)
+            : Promise.resolve({ data: [] }),
+          // J — Pokémon-only name from trainer card: "Zekrom" from "N's Zekrom"
+          //     Broadest fallback — catches any version of this Pokémon across sets
+          trainerPokemon
+            ? q().ilike('name', '%' + trainerPokemon + '%').limit(12)
             : Promise.resolve({ data: [] })
         ]);
 
@@ -9475,11 +9538,13 @@
           } else throw clipRes.error;
         }
 
-        const clipMatches  = clipRes.data       || [];
-        const setTotalHits = setTotalRes.data   || [];  // most precise — number + set fingerprint
-        const nameNumHits  = [...(nameNumRes.data || []), ...(nameNumRawRes.data || [])];
-        const numHits      = [...(numRes.data || []), ...(numRawRes.data || [])];
-        const nameHits     = [...(nameRes.data || []), ...(baseNameRes.data || [])];
+        const clipMatches    = clipRes.data         || [];
+        const setTotalHits   = setTotalRes.data     || [];  // most precise — number + set fingerprint
+        const nameNumHits    = [...(nameNumRes.data || []), ...(nameNumRawRes.data || [])];
+        const numHits        = [...(numRes.data || []), ...(numRawRes.data || [])];
+        const nameHits       = [...(nameRes.data || []), ...(baseNameRes.data || [])];
+        const expandedHits   = expandedRes.data     || [];  // trainer name expanded (N's Zekrom)
+        const trainerPokHits = trainerPokemonRes.data || []; // Pokémon name only (Zekrom)
 
         // H — set_codes that contain a card numbered exactly numTotal (e.g. '165')
         // These are confirmed to be the right-sized set for this card's numbering system.
@@ -9488,22 +9553,29 @@
         console.log('[Scanner] set-fingerprint hits (best):', setTotalHits.map(function(m){return m.name+' '+m.set_code;}).join(', ') || 'none');
         console.log('[Scanner] name+num hits:', nameNumHits.map(function(m){return m.name+'/'+m.set_code;}).join(', '));
         console.log('[Scanner] num-only hits:', numHits.length, '| name-only hits:', nameHits.length);
+        console.log('[Scanner] expanded/trainer hits:', expandedHits.map(function(m){return m.name+'/'+m.set_code;}).join(', ') || 'none');
         console.log('[Scanner] confirmed sets (contain card #'+numTotal+'):', [...confirmedSets].join(', ') || 'none');
         console.log('[Scanner] CLIP top3:', clipMatches.slice(0,3).map(function(m){return m.name+'('+(m.similarity*100).toFixed(0)+'%)';}).join(' '));
 
-        // Rank OCR results:
-        //   setTotal (1.15)  → RPC confirmed set+number match
-        //   nameNum confirmed (1.20) → name+number match AND set contains card #numTotal ← best for multi-set Pokémon
-        //   nameNum (1.0)    → name+number match
-        //   num (0.88)       → number only
-        //   name (0.78)      → name only
+        // Scoring tiers (higher = more confident match):
+        //   1.22  nameNum + set confirmed by size fingerprint  (sv3pt5 Gengar vs hgss4 Gengar)
+        //   1.15  setTotal RPC                                 (number + RPC set fingerprint)
+        //   1.05  expanded trainer name match                  (N's Zekrom)
+        //   1.00  name + number match
+        //   0.88  number only
+        //   0.80  Pokémon name from trainer card               (broadest — Zekrom)
+        //   0.78  name only / base name
+        //
+        // CLIP similarity is added as a ×0.12 tiebreaker within each tier.
         function scoreOcr(m, source) {
-          var base = source === 'setTotal' ? 1.15
-                   : source === 'nameNum'  ? 1.0
-                   : source === 'num'      ? 0.88
-                   :                        0.78;
-          // +0.22 boost when name+number match AND the card's set is confirmed by size fingerprint
-          // This pushes sv3pt5 Gengar (set has card #165) above hgss4 Gengar (only 102 cards, no #165)
+          var base = source === 'setTotal'   ? 1.15
+                   : source === 'nameNum'    ? 1.0
+                   : source === 'expanded'   ? 1.05
+                   : source === 'trainerPok' ? 0.80
+                   : source === 'num'        ? 0.88
+                   :                          0.78;
+          // +0.22 when name+number match AND the card's set contains card #numTotal
+          // (sv3pt5 has card #165 in its set; hgss4 tops out at ~102)
           var setConfirmedBoost = (source === 'nameNum' && numTotal && confirmedSets.has(m.set_code)) ? 0.22 : 0;
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
           var clipBoost = clipEntry ? clipEntry.similarity * 0.12 : 0;
@@ -9520,10 +9592,12 @@
             }
           });
         }
-        addHits(setTotalHits, 'setTotal'); // highest score — number + set fingerprint
-        addHits(nameNumHits,  'nameNum');
-        addHits(numHits,      'num');
-        addHits(nameHits,     'name');
+        addHits(setTotalHits,   'setTotal');    // number + RPC set fingerprint
+        addHits(nameNumHits,    'nameNum');      // name + number (+ set-confirm boost)
+        addHits(expandedHits,   'expanded');     // trainer name expansion (N's Zekrom)
+        addHits(numHits,        'num');          // number only
+        addHits(nameHits,       'name');         // full name / base name
+        addHits(trainerPokHits, 'trainerPok');  // Pokémon name from trainer card
         clipMatches.forEach(function(m) { if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); } });
         merged.sort(function(a, b) { return b.similarity - a.similarity; });
         const final = merged.slice(0, 10);
