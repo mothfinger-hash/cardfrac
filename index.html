@@ -9429,9 +9429,10 @@
         // A: name + number   B: name + padded number
         // C: number only     D: padded number only
         // E: full name       F: base name
-        // G: set fingerprint — card number within the set whose highest card = numTotal
-        //    This is the key signal for disambiguating the same Pokémon across 172 sets.
-        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes] = await Promise.all([
+        // G: set fingerprint RPC     H: set confirmation (client-side — which sets actually contain card numTotal?)
+        //    H is the key signal: if a set has a card numbered exactly numTotal, it's the right-sized set.
+        //    e.g. for 094/165 → find set_codes containing card_number '165'; only sv3pt5 qualifies, not hgss4.
+        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes] = await Promise.all([
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
           // A
           (numStripped && cardName)
@@ -9457,9 +9458,14 @@
           baseName
             ? q().ilike('name', '%' + baseName + '%').limit(12)
             : Promise.resolve({ data: [] }),
-          // G — set fingerprint RPC (requires SQL function below)
+          // G — set fingerprint RPC (requires SQL function)
           (numStripped && numTotal)
             ? Promise.resolve(sb.rpc('match_card_in_set_by_total', { p_number: numStripped, p_total: numTotal })).catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+          // H — client-side set confirmation: which set_codes contain a card numbered exactly numTotal?
+          //     No extra SQL needed — query the existing catalog table directly.
+          numTotal
+            ? q().select('set_code').eq('card_number', numTotal).limit(100)
             : Promise.resolve({ data: [] })
         ]);
 
@@ -9475,23 +9481,33 @@
         const numHits      = [...(numRes.data || []), ...(numRawRes.data || [])];
         const nameHits     = [...(nameRes.data || []), ...(baseNameRes.data || [])];
 
-        console.log('[Scanner] set-fingerprint hits (best):', setTotalHits.map(function(m){return m.name+' '+m.set_code;}).join(', ') || 'none — run match_card_in_set_by_total SQL');
+        // H — set_codes that contain a card numbered exactly numTotal (e.g. '165')
+        // These are confirmed to be the right-sized set for this card's numbering system.
+        const confirmedSets = new Set((setConfirmRes.data || []).map(function(r){ return r.set_code; }));
+
+        console.log('[Scanner] set-fingerprint hits (best):', setTotalHits.map(function(m){return m.name+' '+m.set_code;}).join(', ') || 'none');
         console.log('[Scanner] name+num hits:', nameNumHits.map(function(m){return m.name+'/'+m.set_code;}).join(', '));
         console.log('[Scanner] num-only hits:', numHits.length, '| name-only hits:', nameHits.length);
+        console.log('[Scanner] confirmed sets (contain card #'+numTotal+'):', [...confirmedSets].join(', ') || 'none');
         console.log('[Scanner] CLIP top3:', clipMatches.slice(0,3).map(function(m){return m.name+'('+(m.similarity*100).toFixed(0)+'%)';}).join(' '));
 
-        // Rank OCR results: name+number > number-only (set-confirmed) > name-only
-        // When multiple number-only hits exist, use CLIP similarity to break ties
+        // Rank OCR results:
+        //   setTotal (1.15)  → RPC confirmed set+number match
+        //   nameNum confirmed (1.20) → name+number match AND set contains card #numTotal ← best for multi-set Pokémon
+        //   nameNum (1.0)    → name+number match
+        //   num (0.88)       → number only
+        //   name (0.78)      → name only
         function scoreOcr(m, source) {
-          // setTotal = card number matches AND set is identified by its size fingerprint
-          // This is the most precise signal — beats name+number for multi-set Pokémon
           var base = source === 'setTotal' ? 1.15
                    : source === 'nameNum'  ? 1.0
                    : source === 'num'      ? 0.88
                    :                        0.78;
+          // +0.22 boost when name+number match AND the card's set is confirmed by size fingerprint
+          // This pushes sv3pt5 Gengar (set has card #165) above hgss4 Gengar (only 102 cards, no #165)
+          var setConfirmedBoost = (source === 'nameNum' && numTotal && confirmedSets.has(m.set_code)) ? 0.22 : 0;
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
           var clipBoost = clipEntry ? clipEntry.similarity * 0.12 : 0;
-          return base + clipBoost;
+          return base + setConfirmedBoost + clipBoost;
         }
 
         const merged = [];
