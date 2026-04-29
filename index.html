@@ -9285,6 +9285,8 @@
         // next line may continue the name ("Charizard")
         if (STAGE_PRE.test(line)) {
           let namePart = line.replace(STAGE_PRE, '').trim();
+          // Normalize missing space before & ("Reshiram&" → "Reshiram &")
+          namePart = namePart.replace(/(\S)&/, '$1 &');
           if (namePart.endsWith('&') && i + 1 < lines.length) {
             namePart = namePart + ' ' + lines[i + 1].trim();
           }
@@ -9353,12 +9355,19 @@
 
         const base = sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url');
 
-        // Base name without suffix — "Lugia" from "Lugia VSTAR"
-        // catches secret rares and alt arts that share the base Pokémon name
+        // Derive a shorter base name for broader fallback searching:
+        //   "Lugia VSTAR"            → "Lugia"
+        //   "Reshiram & Charizard"   → "Reshiram"  (first partner only)
         const SUFFIX_RE = /\s+(VSTAR|VMAX|GX|EX|V|VUNION)$/i;
-        const baseName = cardName && SUFFIX_RE.test(cardName)
-          ? cardName.replace(SUFFIX_RE, '').trim()
-          : null;
+        let baseName = null;
+        if (cardName) {
+          if (SUFFIX_RE.test(cardName)) {
+            baseName = cardName.replace(SUFFIX_RE, '').trim();
+          } else if (cardName.includes('&')) {
+            // TAG TEAM: search by first partner name
+            baseName = cardName.split('&')[0].trim();
+          }
+        }
 
         // Run all searches in parallel:
         // A: full name + stripped number   B: full name + padded number
