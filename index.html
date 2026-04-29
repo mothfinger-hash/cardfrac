@@ -10038,35 +10038,6 @@
       if (scanBtn) { scanBtn.disabled = true; scanBtn.style.opacity = '0.4'; scanBtn.style.pointerEvents = 'none'; }
     }
 
-    function _ftRenderCards(side) {
-      var container = document.getElementById('ftCards' + side);
-      if (!container) return;
-      var cards = _ftCards[side];
-      if (!cards.length) {
-        container.innerHTML = '<div style="font-size:.72rem;color:var(--muted);padding:6px 0">No cards added yet</div>';
-        return;
-      }
-      container.innerHTML = cards.map(function(c) {
-        var priceStr = c.avgPrice != null ? '$' + c.avgPrice.toFixed(2) + (c.qty > 1 ? ' ea' : '') : '—';
-        var totalStr = c.avgPrice != null && c.qty > 1 ? ' ($' + (c.avgPrice * c.qty).toFixed(2) + ')' : '';
-        var color = side === 'A' ? 'var(--teal)' : 'var(--gold)';
-        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.75rem">' +
-          (c.image ? '<img src="' + c.image + '" style="width:28px;height:auto;flex-shrink:0">' :
-                     '<div style="width:28px;height:38px;background:var(--surface);flex-shrink:0;border:1px solid var(--border)"></div>') +
-          '<div style="flex:1;min-width:0">' +
-            '<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(c.name) + '</div>' +
-            '<div style="color:var(--muted);font-size:.67rem">' + _escHtml(c.set || '') + (c.number ? ' #' + c.number : '') + '</div>' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">' +
-            '<span style="color:' + color + ';font-weight:700">' + priceStr + '</span>' +
-            (totalStr ? '<span style="color:var(--muted);font-size:.67rem">' + totalStr + '</span>' : '') +
-            '<button onclick="ftRemoveCard(\'' + side + '\',\'' + c.id + '\')" title="Remove" ' +
-              'style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:0 2px;line-height:1">×</button>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-    }
-
     function ftRecalc() {
       var totalA = _ftSideTotal('A');
       var totalB = _ftSideTotal('B');
@@ -10208,6 +10179,31 @@
             if (pcData && pcData.price) pcPrice = pcData.price;
           }
         } catch(_) {}
+
+        // 3. If TCG lookup missed (no apiCardId), try TCG name search as fallback
+        if (tcgPrice == null && c.name) {
+          try {
+            var nameQ = c.name.includes(' ') ? 'name:"' + c.name + '"' : 'name:' + c.name + '*';
+            var searchRes = await fetch('https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(nameQ) + '&pageSize=4&orderBy=name');
+            if (searchRes.ok) {
+              var searchData = await searchRes.json();
+              var matches = (searchData.data || []).filter(function(m) {
+                return m.name.toLowerCase() === c.name.toLowerCase();
+              });
+              if (!matches.length && searchData.data && searchData.data.length) matches = [searchData.data[0]];
+              for (var mi = 0; mi < matches.length; mi++) {
+                var mPrices = matches[mi].tcgplayer && matches[mi].tcgplayer.prices;
+                if (!mPrices) continue;
+                var mVariants = ['holofoil','reverseHolofoil','normal','1stEditionHolofoil','unlimitedHolofoil'];
+                for (var mvi = 0; mvi < mVariants.length; mvi++) {
+                  var mvp = mPrices[mVariants[mvi]];
+                  if (mvp && mvp.market != null) { tcgPrice = mvp.market; break; }
+                }
+                if (tcgPrice != null) break;
+              }
+            }
+          } catch(_) {}
+        }
 
         var sources = [tcgPrice, pcPrice].filter(function(p) { return p != null; });
         var avg = sources.length ? sources.reduce(function(a, b) { return a + b; }, 0) / sources.length : null;
