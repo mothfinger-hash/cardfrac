@@ -9323,6 +9323,12 @@
     var _ftLocked = { A: false, B: false };   // lock-in state for each side
     var _ftAnalyzingFromLock = false;          // prevents double-trigger when both lock
 
+    // Returns the display name for the current user (username, email prefix, or 'Guest')
+    function _ftDisplayName() {
+      if (!currentUser) return 'Guest';
+      return currentUser.username || (currentUser.email ? currentUser.email.split('@')[0] : 'Guest');
+    }
+
     var _ftSyncDebounce = null;
 
     function _ftGenSessionId() {
@@ -9365,14 +9371,17 @@
       var cashA = parseFloat(document.getElementById('ftCashA')?.value) || 0;
 
       try {
+        var myName = _ftDisplayName();
         var { error } = await sb.from('fair_trade_sessions').insert({
           id: id, side_a: sideA, side_b: [], cash_a: cashA, cash_b: 0,
+          name_a: myName, name_b: 'Guest',
           expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
         });
         if (error) throw error;
 
         _ftSession = { id: id, role: 'a', lastSeenA: JSON.stringify(sideA), lastSeenB: '[]',
-                       lastCashA: cashA, lastCashB: 0, pollInterval: null, bJoined: false };
+                       lastCashA: cashA, lastCashB: 0, pollInterval: null, bJoined: false,
+                       nameA: myName, nameB: 'Guest' };
         _ftLocked = { A: false, B: false };
         _ftAnalyzingFromLock = false;
         _ftStartPolling();
@@ -9409,18 +9418,21 @@
         if (cashAEl) cashAEl.value = data.cash_a || '';
         if (cashBEl) cashBEl.value = data.cash_b || '';
 
+        var myName = _ftDisplayName();
         _ftSession = { id: id, role: 'b',
                        lastSeenA: JSON.stringify(data.side_a || []),
                        lastSeenB: JSON.stringify(data.side_b || []),
                        lastCashA: data.cash_a || 0, lastCashB: data.cash_b || 0,
-                       pollInterval: null, bJoined: true };
+                       pollInterval: null, bJoined: true,
+                       nameA: data.name_a || 'Player A', nameB: myName };
         _ftLocked = { A: !!data.locked_a, B: !!data.locked_b };
         _ftAnalyzingFromLock = false;
 
-        // Signal to Side A that B has joined
+        // Signal to Side A: B has joined, include display name
         try {
           await sb.from('fair_trade_sessions').update({
             joined_b: true,
+            name_b:   myName,
             expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
           }).eq('id', id);
         } catch(_) {}
@@ -9483,8 +9495,12 @@
         var theirStr      = JSON.stringify(theirCardsRaw);
 
         if (theirStr !== lastTheirs) {
+          // Save scroll before DOM update — prevents layout shifts from jumping
+          // Player B's view when Player A adds cards (and vice-versa)
+          var _savedScroll = window.scrollY;
           _ftCards[theirs] = _ftSessionToCards(theirCardsRaw);
           _ftRenderCards(theirs);
+          requestAnimationFrame(function() { window.scrollTo(0, _savedScroll); });
           if (role === 'a') _ftSession.lastSeenB = theirStr;
           else              _ftSession.lastSeenA = theirStr;
           // Update their cash field without disturbing focus
@@ -9497,7 +9513,8 @@
         // ── Join notification (Side A only) ──────────────────────────────
         if (role === 'a' && !_ftSession.bJoined && data.joined_b) {
           _ftSession.bJoined = true;
-          showToast('🟢 Side B has joined the trade!');
+          _ftSession.nameB = data.name_b || 'Guest';
+          showToast('🟢 ' + _ftSession.nameB + ' has joined the trade!');
           var banner = document.getElementById('ftSessionBanner');
           if (banner) {
             banner.classList.remove('ft-session-joined'); // force reflow so animation restarts
@@ -9566,18 +9583,22 @@
       var id    = _ftSession.id;
       var role  = _ftSession.role;
       var url   = window.location.origin + window.location.pathname + '?trade=' + id;
-      var theirs = role === 'a' ? 'B' : 'A';
-      var mine   = role === 'a' ? 'A' : 'B';
-      var bHasJoined = !!(role === 'a' ? _ftSession.bJoined : true); // B always knows they joined
+      var theirs  = role === 'a' ? 'B' : 'A';
+      var mine    = role === 'a' ? 'A' : 'B';
+      var nameA   = _ftSession.nameA || 'Player A';
+      var nameB   = _ftSession.nameB || 'Guest';
+      var myName  = role === 'a' ? nameA : nameB;
+      var theirName = role === 'a' ? nameB : nameA;
+      var bHasJoined = !!(role === 'a' ? _ftSession.bJoined : true);
       var statusMsg = (_ftLocked.A && _ftLocked.B)
         ? '🔐 Both sides locked — analyzing…'
         : (_ftLocked[mine]
-            ? '✓ Your offer locked — waiting for Side ' + theirs + ' to lock in'
+            ? '✓ Your offer locked — waiting for ' + theirName + ' to lock in'
           : (_ftLocked[theirs]
-            ? '⚡ Side ' + theirs + ' is locked — lock in your offer!'
+            ? '⚡ ' + theirName + ' is locked — lock in your offer!'
           : (bHasJoined
-            ? (role === 'a' ? '🟢 Side B has joined — add your cards' : '🟢 Joined as Side B — add your cards below')
-            : '⏳ Waiting for Side B to join…')));
+            ? (role === 'a' ? '🟢 ' + nameB + ' has joined — add your cards' : '🟢 Joined as ' + nameB + ' — add your cards below')
+            : '⏳ Waiting for partner to join…')));
 
       banner.style.display = 'block';
       banner.innerHTML =
@@ -9586,7 +9607,7 @@
             '<div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;color:var(--muted);margin-bottom:4px">LIVE TRADE SESSION</div>' +
             '<div style="font-size:1.6rem;font-weight:700;letter-spacing:.2em;color:var(--accent);font-family:monospace;line-height:1">' + id + '</div>' +
             '<div style="font-size:.72rem;color:var(--muted);margin-top:6px">' + statusMsg + '</div>' +
-            (role === 'b' ? '<div style="font-size:.68rem;color:var(--muted);margin-top:2px">Side A is read-only on your screen</div>' : '') +
+            (role === 'b' ? '<div style="font-size:.68rem;color:var(--muted);margin-top:2px">' + nameA + '\'s side is read-only on your screen</div>' : '') +
           '</div>' +
           (role === 'a' ?
             '<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">' +
@@ -9637,10 +9658,26 @@
     // Uses the same runMatch() + monthly scan limit as the main card scanner.
     // Runs silently (no scanner modal UI) and shows inline match results.
 
-    function ftScanTrigger(side) {
-      if (!currentUser) { showToast('Sign in to use the scanner'); return; }
+    var FT_GUEST_SCAN_LIMIT = 2;
+    var FT_GUEST_SCAN_KEY   = 'pb_ft_guest_scans';
 
-      // Check limit before opening the file picker (same gate as runMatch)
+    function ftGuestScansUsed()  { return parseInt(localStorage.getItem(FT_GUEST_SCAN_KEY) || '0', 10); }
+    function ftGuestScansLeft()  { return Math.max(0, FT_GUEST_SCAN_LIMIT - ftGuestScansUsed()); }
+    function ftIncrGuestScan()   { localStorage.setItem(FT_GUEST_SCAN_KEY, String(ftGuestScansUsed() + 1)); }
+
+    function ftScanTrigger(side) {
+      if (!currentUser) {
+        // Guest mode — allow 2 free scans stored in localStorage
+        if (ftGuestScansLeft() <= 0) {
+          showToast('Guests get ' + FT_GUEST_SCAN_LIMIT + ' free scans — sign up for more!');
+          return;
+        }
+        var input = document.getElementById('ftScanInput' + side);
+        if (input) { input.value = ''; input.click(); }
+        return;
+      }
+
+      // Logged-in: check monthly scan limit (same gate as main scanner)
       var used  = getUsageCount('scan');
       var limit = scannerLimit();
       if (used >= limit) {
@@ -9688,13 +9725,19 @@
         reader.readAsDataURL(file);
       });
 
-      // Deduct scan now (before runMatch so silent mode doesn't double-count)
-      incrementUsage('scan');
-      var left = scannerLimit() - getUsageCount('scan');
-      if (!tierAtLeast('collector') && left <= 2) {
-        setFtScanStatus('Scanning… (' + (left === 0 ? 'last free scan this month' : left + ' free scan' + (left === 1 ? '' : 's') + ' left') + ')');
+      // Deduct scan — guests tracked in localStorage, members in usage counter
+      if (!currentUser) {
+        ftIncrGuestScan();
+        var gLeft = ftGuestScansLeft();
+        setFtScanStatus('Scanning… (' + (gLeft === 0 ? 'last free guest scan used' : gLeft + ' guest scan' + (gLeft === 1 ? '' : 's') + ' left') + ')');
       } else {
-        setFtScanStatus('Scanning…');
+        incrementUsage('scan');
+        var left = scannerLimit() - getUsageCount('scan');
+        if (!tierAtLeast('collector') && left <= 2) {
+          setFtScanStatus('Scanning… (' + (left === 0 ? 'last free scan this month' : left + ' free scan' + (left === 1 ? '' : 's') + ' left') + ')');
+        } else {
+          setFtScanStatus('Scanning…');
+        }
       }
 
       // Run match silently — no scanner modal, just get back the result array
