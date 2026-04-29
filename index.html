@@ -534,6 +534,10 @@
       z-index:10003;box-shadow:4px 4px 0 var(--shadow);
       animation:slideInLeft .3s ease;max-width:300px
     }
+    /* Lift toast above mobile nav bar */
+    @media(max-width:600px){
+      .toast{bottom:72px;left:12px;right:12px;max-width:none;font-size:.7rem}
+    }
     @keyframes slideInLeft{
       from{transform:translateX(-100%);opacity:0}
       to{transform:translateX(0);opacity:1}
@@ -735,6 +739,103 @@
     /* ── COLLECTION PANEL TRANSITION ───────────────────── */
     #collectionPanel.open{max-height:600px!important}
 
+    /* ── FAIR TRADE — card stack viewer + side panels ──── */
+    .ft-side-panel{background:var(--surface2);border:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:0}
+    .ft-side-label{font-size:.72rem;font-weight:700;letter-spacing:.1em;margin-bottom:10px}
+
+    /* Card stack viewer */
+    .ft-card-viewer{min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 0 8px;position:relative}
+    .ft-card-empty{text-align:center;color:var(--muted);font-size:.72rem;line-height:1.8;padding:20px;border:1px dashed var(--border);width:100%;box-sizing:border-box}
+    .ft-card-empty small{font-size:.65rem;opacity:.7}
+
+    /* Stack wrapper */
+    .ft-stack-wrap{position:relative;width:180px;margin:0 auto;cursor:pointer}
+    .ft-stack-shadow{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:8px;border:1px solid var(--border)}
+    .ft-stack-s2{background:var(--surface);transform:rotate(-2.5deg) translate(-4px,6px);z-index:0}
+    .ft-stack-s1{background:var(--surface2);transform:rotate(2deg) translate(3px,4px);z-index:1}
+    .ft-card-front{position:relative;z-index:2;border-radius:8px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+    .ft-card-front img{width:100%;display:block;border-radius:8px}
+    .ft-card-no-img{width:100%;aspect-ratio:63/88;background:var(--surface);display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:.7rem;color:var(--muted);text-align:center;padding:12px;box-sizing:border-box}
+    /* Slide animation */
+    @keyframes ftSlideNext{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes ftSlidePrev{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
+    .ft-card-front.slide-next{animation:ftSlideNext .2s ease}
+    .ft-card-front.slide-prev{animation:ftSlidePrev .2s ease}
+
+    /* Nav buttons */
+    .ft-nav-btn{position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.55);border:none;color:#fff;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:background .15s;line-height:1}
+    .ft-nav-btn:hover{background:rgba(0,0,0,.8)}
+    .ft-nav-prev{left:-15px}
+    .ft-nav-next{right:-15px}
+
+    /* Remove + qty badges */
+    .ft-card-remove{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.65);border:none;color:#fff;font-size:.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:6;line-height:1}
+    .ft-card-qty-badge{position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,.7);color:#fff;font-size:.62rem;font-weight:700;padding:2px 6px;border-radius:3px;z-index:6}
+
+    /* Card info below image */
+    .ft-card-meta{margin-top:10px;text-align:center;width:180px}
+    .ft-card-meta-name{font-size:.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ft-card-meta-set{font-size:.62rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ft-card-counter{font-size:.62rem;color:var(--muted);font-family:monospace;margin-top:4px;text-align:center}
+
+    /* Add controls */
+    .ft-add-controls{margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+    .ft-search-row{display:flex;gap:6px}
+    .ft-search-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;min-width:0}
+    .ft-search-btn,.ft-scan-btn{padding:7px 10px;background:transparent;font-family:inherit;font-size:.72rem;cursor:pointer;white-space:nowrap;letter-spacing:.03em}
+    .ft-btn-accent{border:1px solid var(--accent);color:var(--accent)}
+    .ft-btn-teal{border:1px solid var(--teal);color:var(--teal);flex:1}
+    .ft-btn-gold{border:1px solid var(--gold);color:var(--gold);flex:1}
+    .ft-scan-status{display:none;font-size:.7rem;color:var(--muted);padding:2px 0}
+    .ft-dropdown-results{display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border)}
+    .ft-binder-btn{width:100%;padding:6px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.7rem;cursor:pointer;letter-spacing:.04em;text-align:left}
+    .ft-cash-row{display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px}
+    .ft-cash-label{font-size:.72rem;color:var(--muted)}
+    .ft-cash-input{width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit}
+
+    /* Scale SVG — force it to render at full size, fix iOS transform-origin */
+    #ftScaleSvg{width:min(320px,90vw);overflow:visible;display:block;margin:0 auto}
+    #ftScaleBeam{transform-box:fill-box;transform-origin:50% 0% !important} /* fixes Safari/iOS: percentages + fill-box resolve correctly; absolute px do not */
+
+    /* ── FAIR TRADE — mobile layout ─────────────────────── */
+    /* Two-column sides stack to single column on small screens */
+    .ft-sides-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+    @media(max-width:600px){
+      .ft-sides-grid{grid-template-columns:1fr;gap:10px}
+
+      /* Session banner: stack QR + buttons below the code */
+      #ftSessionBanner > div{flex-direction:column !important;align-items:flex-start !important}
+
+      /* Analyze button row: full-width buttons */
+      #ftInputState > div[style*="justify-content:center"] button{
+        flex:1 1 100%;min-width:0
+      }
+
+      /* Join-by-code row */
+      #ftJoinCodeInput{width:100px}
+
+      /* Scan/search button rows inside each side: allow wrap */
+      .ft-side-search-row{flex-wrap:wrap}
+      .ft-side-search-row input{min-width:0;flex:1 1 120px}
+
+      /* Results state scale: a bit smaller */
+      #ftScaleSvg{width:min(280px,88vw)}
+
+      /* Breakdown tables: allow horizontal scroll */
+      #ftBreakdownContent table{font-size:.68rem}
+      #ftBreakdownContent td,#ftBreakdownContent th{padding:4px 5px}
+
+      /* Loading Pikachu: a bit smaller */
+      #ftLoadingState svg{width:110px}
+
+      /* Balance scale labels: larger hit targets */
+      #ftVerdict{font-size:.8rem;padding:0 8px;text-align:center}
+    }
+    @media(max-width:380px){
+      .ft-sides-grid{gap:8px}
+      #ftSessionBanner{padding:10px 12px}
+    }
+
     /* ── BINDER FRAME — constrained width on desktop, full-width on mobile ── */
     .binder-frame{width:100%;position:relative}
     @media(min-width:481px){
@@ -853,10 +954,9 @@
     #grainCanvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9997;opacity:.045}
 
     /* ── PREVENT iOS ZOOM ON INPUT FOCUS ── */
-    /* iOS Safari zooms when font-size < 16px — this stops that without disabling user zoom */
-    @media screen and (max-width: 768px) {
-      input, select, textarea { font-size: 16px !important; }
-    }
+    /* iOS Safari zooms any input with font-size < 16px regardless of screen size.
+       Apply unconditionally — visual size is controlled by the element's own styles. */
+    input, select, textarea { font-size: 16px !important; }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -1753,88 +1853,88 @@
         <div id="ftSessionBanner" style="display:none;background:var(--surface2);border:1px solid var(--accent);padding:12px 16px;margin-bottom:14px"></div>
 
         <!-- Two sides -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+        <div class="ft-sides-grid">
 
           <!-- SIDE A -->
-          <div style="background:var(--surface2);border:1px solid var(--border);padding:14px">
-            <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--teal);margin-bottom:10px">SIDE A</div>
-            <!-- Search row -->
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <input id="ftSearchA" type="text" placeholder="Search card name…"
-                style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
-                onkeydown="if(event.key==='Enter')ftSearch('A')" />
-              <button onclick="ftSearch('A')"
-                style="padding:7px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
+          <div class="ft-side-panel ft-side-a">
+            <div class="ft-side-label" style="color:var(--teal)">SIDE A</div>
+
+            <!-- Card stack viewer -->
+            <div id="ftCardsA" class="ft-card-viewer"></div>
+
+            <!-- Add controls (search / scan / binder) -->
+            <div class="ft-add-controls">
+              <div class="ft-search-row">
+                <input id="ftSearchA" type="text" placeholder="Search card…"
+                  class="ft-search-input"
+                  onkeydown="if(event.key==='Enter')ftSearch('A')" />
+                <button onclick="ftSearch('A')" class="ft-search-btn ft-btn-accent">Search</button>
+              </div>
+              <div class="ft-search-row">
+                <button onclick="ftScanTrigger('A')" class="ft-scan-btn ft-btn-teal">📷 Scan Card</button>
+                <input id="ftScanInputA" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('A',this)"/>
+              </div>
+              <div id="ftScanStatusA" class="ft-scan-status"></div>
+              <div id="ftScanMatchesA" class="ft-dropdown-results"></div>
+              <button onclick="ftToggleBinder('A')" id="ftBinderBtnA" class="ft-binder-btn">⊞ Pick from My Binder</button>
+              <div id="ftBinderPickerA" class="ft-dropdown-results"></div>
+              <div id="ftResultsA" class="ft-dropdown-results"></div>
             </div>
-            <!-- Scan button -->
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <button onclick="ftScanTrigger('A')"
-                style="flex:1;padding:6px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.04em">
-                📷 Scan Card
-              </button>
-              <input id="ftScanInputA" type="file" accept="image/*" capture="environment" style="display:none"
-                onchange="ftHandleScan('A',this)"/>
-            </div>
-            <div id="ftScanStatusA" style="display:none;font-size:.72rem;color:var(--muted);margin-bottom:6px;padding:4px 0"></div>
-            <div id="ftScanMatchesA" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-            <!-- Binder picker button -->
-            <button onclick="ftToggleBinder('A')" id="ftBinderBtnA"
-              style="width:100%;padding:6px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;margin-bottom:8px;letter-spacing:.04em;text-align:left">
-              ⊞ Pick from My Binder
-            </button>
-            <div id="ftBinderPickerA" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-            <div id="ftResultsA" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-            <div id="ftCardsA" style="min-height:40px"></div>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-              <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
-              <input id="ftCashA" type="number" min="0" step="0.01" placeholder="0.00"
-                style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
+
+            <div class="ft-cash-row">
+              <span class="ft-cash-label">+ Cash</span>
+              <input id="ftCashA" type="number" min="0" step="0.01" placeholder="0.00" class="ft-cash-input"/>
             </div>
           </div>
 
           <!-- SIDE B -->
-          <div style="background:var(--surface2);border:1px solid var(--border);padding:14px">
-            <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">SIDE B</div>
-            <!-- Search row -->
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <input id="ftSearchB" type="text" placeholder="Search card name…"
-                style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
-                onkeydown="if(event.key==='Enter')ftSearch('B')" />
-              <button onclick="ftSearch('B')"
-                style="padding:7px 12px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
+          <div class="ft-side-panel ft-side-b">
+            <div class="ft-side-label" style="color:var(--gold)">SIDE B</div>
+
+            <!-- Card stack viewer -->
+            <div id="ftCardsB" class="ft-card-viewer"></div>
+
+            <!-- Add controls -->
+            <div class="ft-add-controls">
+              <div class="ft-search-row">
+                <input id="ftSearchB" type="text" placeholder="Search card…"
+                  class="ft-search-input"
+                  onkeydown="if(event.key==='Enter')ftSearch('B')" />
+                <button onclick="ftSearch('B')" class="ft-search-btn ft-btn-gold">Search</button>
+              </div>
+              <div class="ft-search-row">
+                <button onclick="ftScanTrigger('B')" class="ft-scan-btn ft-btn-gold">📷 Scan Card</button>
+                <input id="ftScanInputB" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('B',this)"/>
+              </div>
+              <div id="ftScanStatusB" class="ft-scan-status"></div>
+              <div id="ftScanMatchesB" class="ft-dropdown-results"></div>
+              <button onclick="ftToggleBinder('B')" id="ftBinderBtnB" class="ft-binder-btn">⊞ Pick from My Binder</button>
+              <div id="ftBinderPickerB" class="ft-dropdown-results"></div>
+              <div id="ftResultsB" class="ft-dropdown-results"></div>
             </div>
-            <!-- Scan button -->
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <button onclick="ftScanTrigger('B')"
-                style="flex:1;padding:6px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.04em">
-                📷 Scan Card
-              </button>
-              <input id="ftScanInputB" type="file" accept="image/*" capture="environment" style="display:none"
-                onchange="ftHandleScan('B',this)"/>
-            </div>
-            <div id="ftScanStatusB" style="display:none;font-size:.72rem;color:var(--muted);margin-bottom:6px;padding:4px 0"></div>
-            <div id="ftScanMatchesB" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-            <!-- Binder picker button -->
-            <button onclick="ftToggleBinder('B')" id="ftBinderBtnB"
-              style="width:100%;padding:6px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;margin-bottom:8px;letter-spacing:.04em;text-align:left">
-              ⊞ Pick from My Binder
-            </button>
-            <div id="ftBinderPickerB" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-            <div id="ftResultsB" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
-            <div id="ftCardsB" style="min-height:40px"></div>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-              <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
-              <input id="ftCashB" type="number" min="0" step="0.01" placeholder="0.00"
-                style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
+
+            <div class="ft-cash-row">
+              <span class="ft-cash-label">+ Cash</span>
+              <input id="ftCashB" type="number" min="0" step="0.01" placeholder="0.00" class="ft-cash-input"/>
             </div>
           </div>
         </div>
 
         <!-- Analyze + session buttons -->
         <div style="text-align:center;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
+          <!-- Solo mode: single analyze button -->
           <button id="ftAnalyzeBtn" onclick="ftAnalyzeTrade()"
             style="padding:11px 36px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.85rem;cursor:pointer;letter-spacing:.08em">
             ⇌ Analyze Trade
+          </button>
+          <!-- Session mode: per-side lock-in buttons (shown instead of analyze) -->
+          <button id="ftLockBtnA" onclick="ftLockIn('A')"
+            style="display:none;padding:11px 22px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            🔒 Lock In Side A
+          </button>
+          <button id="ftLockBtnB" onclick="ftLockIn('B')"
+            style="display:none;padding:11px 22px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            🔒 Lock In Side B
           </button>
           <button id="ftCreateSessionBtn" onclick="ftCreateSession()"
             style="padding:11px 20px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
@@ -1919,7 +2019,7 @@
           <svg id="ftScaleSvg" viewBox="0 0 320 130" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible">
             <rect x="156" y="60" width="8" height="65" rx="2" fill="var(--border)"/>
             <rect x="128" y="120" width="64" height="8" rx="3" fill="var(--border)"/>
-            <g id="ftScaleBeam" style="transform-origin:160px 62px;transform:rotate(0deg);transition:transform .9s cubic-bezier(.34,1.56,.64,1)">
+            <g id="ftScaleBeam" style="transform:rotate(0deg);transition:transform .9s cubic-bezier(.34,1.56,.64,1)">
               <line x1="40" y1="62" x2="280" y2="62" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
               <line x1="60"  y1="62" x2="42"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
               <line x1="60"  y1="62" x2="78"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
@@ -9036,13 +9136,15 @@
     var _ftSearchTimeout = {};
 
     function ftInitPage() {
-      // Stop any active session polling but don't destroy the session —
-      // user can re-open the banner by clicking "Create Trade Link" again
+      // Stop any active session polling
       if (_ftSession) { _ftStopPolling(); _ftSession = null; }
       clearTimeout(_ftSyncDebounce);
 
       // Reset to input state
       _ftCards = { A: [], B: [] };
+      _ftCardIndex = { A: 0, B: 0 };
+      _ftLocked = { A: false, B: false };
+      _ftAnalyzingFromLock = false;
       _ftBinderOpen  = { A: false, B: false };
       _ftBinderSearch = { A: '', B: '' };
       _ftShowState('input');
@@ -9061,6 +9163,7 @@
         var el = document.getElementById(id); if (el) el.textContent = '⊞ Pick from My Binder';
       });
       var v = document.getElementById('ftVerdict'); if (v) v.textContent = '';
+      _ftUpdateSessionButtons();
     }
 
     function _ftShowState(state) {
@@ -9202,6 +9305,9 @@
     var _ftSession = null;
     // shape: { id, role: 'a'|'b', pollInterval, lastSeenA, lastSeenB }
 
+    var _ftLocked = { A: false, B: false };   // lock-in state for each side
+    var _ftAnalyzingFromLock = false;          // prevents double-trigger when both lock
+
     var _ftSyncDebounce = null;
 
     function _ftGenSessionId() {
@@ -9252,9 +9358,12 @@
 
         _ftSession = { id: id, role: 'a', lastSeenA: JSON.stringify(sideA), lastSeenB: '[]',
                        lastCashA: cashA, lastCashB: 0, pollInterval: null };
+        _ftLocked = { A: false, B: false };
+        _ftAnalyzingFromLock = false;
         _ftStartPolling();
         _ftRenderSessionBanner();
         _ftLockOtherSide();
+        _ftUpdateSessionButtons();
         showToast('Trade session created — share the QR or code');
       } catch(e) {
         console.error('[FairTrade] Create session error:', e);
@@ -9290,9 +9399,12 @@
                        lastSeenB: JSON.stringify(data.side_b || []),
                        lastCashA: data.cash_a || 0, lastCashB: data.cash_b || 0,
                        pollInterval: null };
+        _ftLocked = { A: !!data.locked_a, B: !!data.locked_b };
+        _ftAnalyzingFromLock = false;
         _ftStartPolling();
         _ftRenderSessionBanner();
         _ftLockOtherSide();
+        _ftUpdateSessionButtons();
         showToast('Joined trade session ' + id + ' — you\'re on Side B');
       } catch(e) {
         console.error('[FairTrade] Join session error:', e);
@@ -9355,7 +9467,24 @@
           if (theirCashEl && document.activeElement !== theirCashEl) {
             theirCashEl.value = theirCash || '';
           }
-          _ftRenderSessionBanner(); // refresh connected status
+          _ftRenderSessionBanner(); // refresh connected status + lock status
+        }
+
+        // ── Lock-in sync ─────────────────────────────────────────────────
+        var theirLockKey = role === 'a' ? 'locked_b' : 'locked_a';
+        var newTheirLock = !!data[theirLockKey];
+        if (newTheirLock && !_ftLocked[theirs]) {
+          _ftLocked[theirs] = true;
+          _ftUpdateSessionButtons();
+          showToast('Side ' + theirs + ' has locked in their offer!');
+        }
+
+        // If both sides are locked trigger analyze once
+        if (data.locked_a && data.locked_b && !_ftAnalyzingFromLock) {
+          _ftAnalyzingFromLock = true;
+          _ftStopPolling();
+          showToast('Both sides locked — analyzing trade…');
+          ftAnalyzeTrade();
         }
       } catch(_) {}
     }
@@ -9383,9 +9512,12 @@
     function ftEndSession() {
       _ftStopPolling();
       _ftSession = null;
+      _ftLocked = { A: false, B: false };
+      _ftAnalyzingFromLock = false;
       clearTimeout(_ftSyncDebounce);
       var banner = document.getElementById('ftSessionBanner');
       if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+      _ftUpdateSessionButtons();
       showToast('Session ended');
     }
 
@@ -9396,10 +9528,15 @@
       var id    = _ftSession.id;
       var role  = _ftSession.role;
       var url   = window.location.origin + window.location.pathname + '?trade=' + id;
-      var theirSideHasCards = _ftCards[role === 'a' ? 'B' : 'A'].length > 0;
-      var statusMsg = role === 'a'
-        ? (theirSideHasCards ? '🟢 Side B connected' : '⏳ Waiting for Side B to join…')
-        : '🟢 Joined as Side B — add your cards below';
+      var theirs = role === 'a' ? 'B' : 'A';
+      var mine   = role === 'a' ? 'A' : 'B';
+      var theirSideHasCards = _ftCards[theirs].length > 0;
+      var lockStatus = (_ftLocked.A && _ftLocked.B)
+        ? '🔐 Both sides locked — analyzing…'
+        : (_ftLocked[mine] ? '✓ Your offer locked — waiting for Side ' + theirs + ' to lock in'
+          : (_ftLocked[theirs] ? '⚡ Side ' + theirs + ' is locked — lock in your offer!'
+            : (theirSideHasCards ? '🟢 Side ' + theirs + ' connected' : (role === 'a' ? '⏳ Waiting for Side B to join…' : '🟢 Joined as Side B — add your cards below'))));
+      var statusMsg = lockStatus;
 
       banner.style.display = 'block';
       banner.innerHTML =
@@ -9638,10 +9775,14 @@
       var existing = _ftCards[side].find(function(c) { return c.id === card.id; });
       if (existing) {
         existing.qty = (existing.qty || 1) + 1;
+        // Stay on this card
+        _ftCardIndex[side] = _ftCards[side].indexOf(existing);
       } else {
         _ftCards[side].push({ id: card.id, name: card.name, set: card.set, number: card.number,
                               image: card.image, qty: 1, apiCardId: card.apiCardId || null,
                               binderPrice: card.binderPrice || null, prices: null, avgPrice: null });
+        // Jump to the newly added card
+        _ftCardIndex[side] = _ftCards[side].length - 1;
       }
       _ftRenderCards(side);
       ftRecalc();
@@ -9650,9 +9791,180 @@
 
     function ftRemoveCard(side, cardId) {
       _ftCards[side] = _ftCards[side].filter(function(c) { return c.id !== cardId; });
+      // Clamp index in case we removed the last card or a card before current
+      if (_ftCardIndex[side] >= _ftCards[side].length) {
+        _ftCardIndex[side] = Math.max(0, _ftCards[side].length - 1);
+      }
       _ftRenderCards(side);
       ftRecalc();
       _ftDebouncedSync(); // push change to other device if session active
+    }
+
+    var _ftCardIndex = { A: 0, B: 0 };
+
+    function _ftRenderCards(side) {
+      var container = document.getElementById('ftCards' + side);
+      if (!container) return;
+      var cards = _ftCards[side];
+
+      if (!cards.length) {
+        container.innerHTML = '<div class="ft-card-empty">No cards yet<br><small>Search, scan, or pick from binder above</small></div>';
+        return;
+      }
+
+      // Clamp index
+      if (_ftCardIndex[side] >= cards.length) _ftCardIndex[side] = cards.length - 1;
+      if (_ftCardIndex[side] < 0) _ftCardIndex[side] = 0;
+      var idx = _ftCardIndex[side];
+      var card = cards[idx];
+      var accentColor = side === 'A' ? 'var(--teal)' : 'var(--gold)';
+
+      // Shadow cards (visual depth — only show when >1 card)
+      var shadows = cards.length > 1
+        ? '<div class="ft-stack-shadow ft-stack-s2"></div><div class="ft-stack-shadow ft-stack-s1"></div>'
+        : (cards.length === 1 ? '<div class="ft-stack-shadow ft-stack-s1"></div>' : '');
+
+      // Card image or placeholder
+      var cardFace = card.image
+        ? '<img src="' + _escHtml(card.image) + '" alt="' + _escHtml(card.name) + '" draggable="false">'
+        : '<div class="ft-card-no-img">' + _escHtml(card.name) + '</div>';
+
+      // Qty badge
+      var qtyBadge = (card.qty || 1) > 1
+        ? '<div class="ft-card-qty-badge">×' + (card.qty) + '</div>'
+        : '';
+
+      // Nav buttons (only when >1 card)
+      var navBtns = cards.length > 1
+        ? '<button class="ft-nav-btn ft-nav-prev" onclick="ftNavCard(\'' + side + '\',-1)">‹</button>' +
+          '<button class="ft-nav-btn ft-nav-next" onclick="ftNavCard(\'' + side + '\',1)">›</button>'
+        : '';
+
+      // Counter
+      var counter = cards.length > 1
+        ? '<div class="ft-card-counter">' + (idx + 1) + ' / ' + cards.length + '</div>'
+        : '<div class="ft-card-counter" style="opacity:0">1/1</div>';
+
+      var setStr = [card.set, card.number ? '#' + card.number : ''].filter(Boolean).join(' ');
+
+      container.innerHTML =
+        '<div class="ft-stack-wrap" id="ftStack' + side + '">' +
+          shadows +
+          '<div class="ft-card-front" id="ftCardFront' + side + '">' +
+            cardFace +
+            '<button class="ft-card-remove" onclick="ftRemoveCard(\'' + side + '\',\'' + card.id + '\')">×</button>' +
+            qtyBadge +
+          '</div>' +
+          navBtns +
+        '</div>' +
+        '<div class="ft-card-meta">' +
+          '<div class="ft-card-meta-name">' + _escHtml(card.name) + '</div>' +
+          '<div class="ft-card-meta-set">' + _escHtml(setStr) + '</div>' +
+        '</div>' +
+        counter;
+
+      // Touch / swipe support
+      var stackEl = document.getElementById('ftStack' + side);
+      if (stackEl) {
+        var _tx = null;
+        stackEl.addEventListener('touchstart', function(e) { _tx = e.touches[0].clientX; }, { passive: true });
+        stackEl.addEventListener('touchend', function(e) {
+          if (_tx === null) return;
+          var dx = e.changedTouches[0].clientX - _tx;
+          if (Math.abs(dx) > 38) ftNavCard(side, dx < 0 ? 1 : -1);
+          _tx = null;
+        }, { passive: true });
+      }
+    }
+
+    function ftNavCard(side, dir) {
+      var cards = _ftCards[side];
+      if (cards.length <= 1) return;
+      var newIdx = _ftCardIndex[side] + dir;
+      if (newIdx < 0) newIdx = cards.length - 1;
+      if (newIdx >= cards.length) newIdx = 0;
+      _ftCardIndex[side] = newIdx;
+      _ftRenderCards(side);
+      // Slide animation
+      var front = document.getElementById('ftCardFront' + side);
+      if (front) {
+        var cls = dir > 0 ? 'slide-next' : 'slide-prev';
+        front.classList.add(cls);
+        setTimeout(function() { front.classList.remove(cls); }, 220);
+      }
+    }
+
+    // Show lock-in buttons (session mode) or analyze button (solo mode)
+    function _ftUpdateSessionButtons() {
+      var inSession  = !!_ftSession;
+      var analyzeBtn = document.getElementById('ftAnalyzeBtn');
+      var lockBtnA   = document.getElementById('ftLockBtnA');
+      var lockBtnB   = document.getElementById('ftLockBtnB');
+
+      if (analyzeBtn) analyzeBtn.style.display = inSession ? 'none' : '';
+      if (lockBtnA)   lockBtnA.style.display   = inSession ? '' : 'none';
+      if (lockBtnB)   lockBtnB.style.display   = inSession ? '' : 'none';
+
+      if (!inSession) return;
+
+      var mine   = _ftSession.role === 'a' ? 'A' : 'B';
+      var theirs = _ftSession.role === 'a' ? 'B' : 'A';
+
+      function _styleBtn(btn, side, isOwner) {
+        if (!btn) return;
+        var locked = _ftLocked[side];
+        if (locked) {
+          btn.textContent = '✓ Side ' + side + ' Locked';
+          btn.disabled    = true;
+          btn.style.opacity   = '0.55';
+          btn.style.cursor    = 'default';
+        } else if (!isOwner) {
+          btn.textContent = '⏳ Waiting on Side ' + side + '…';
+          btn.disabled    = true;
+          btn.style.opacity   = '0.4';
+          btn.style.cursor    = 'default';
+        } else {
+          btn.textContent = '🔒 Lock In Side ' + side;
+          btn.disabled    = false;
+          btn.style.opacity   = '';
+          btn.style.cursor    = 'pointer';
+        }
+      }
+
+      _styleBtn(lockBtnA, 'A', mine === 'A');
+      _styleBtn(lockBtnB, 'B', mine === 'B');
+    }
+
+    // Called when user taps "Lock In Side X" — only valid for their own side
+    async function ftLockIn(side) {
+      if (!_ftSession) return;
+      var mine = _ftSession.role === 'a' ? 'A' : 'B';
+      if (side !== mine) return;       // can't lock the other person's side
+      if (_ftLocked[mine]) return;     // already locked
+
+      _ftLocked[mine] = true;
+      _ftUpdateSessionButtons();
+
+      // Write lock to DB immediately
+      var patch = {};
+      patch['locked_' + _ftSession.role] = true;
+      patch['expires_at'] = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      try {
+        await sb.from('fair_trade_sessions').update(patch).eq('id', _ftSession.id);
+      } catch(e) {
+        console.error('[FairTrade] Lock error:', e);
+      }
+
+      var theirs = mine === 'A' ? 'B' : 'A';
+      if (_ftLocked[theirs]) {
+        // Other side already locked — run analyze now
+        showToast('Both sides locked — analyzing trade…');
+        _ftAnalyzingFromLock = true;
+        _ftStopPolling();
+        ftAnalyzeTrade();
+      } else {
+        showToast('Side ' + mine + ' locked — waiting for Side ' + theirs + ' to lock in');
+      }
     }
 
     function _ftLockOtherSide() {
