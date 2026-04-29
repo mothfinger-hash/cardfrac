@@ -1681,6 +1681,8 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk Import</button>
           <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share Binder</button>
+          <button onclick="showPage('fairTrade');setMobileNav('')"
+            style="padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⇌ Trade Check</button>
           <button onclick="showPage('addCard');setMobileNav('addCard')"
             style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add Card</button>
         </div>
@@ -1726,6 +1728,114 @@
       </div>
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ── FAIR TRADE CHECK ──────────────────────────────────────────────── -->
+  <div id="fairTradePage" class="page">
+    <div style="max-width:860px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+        <div>
+          <h2 style="margin:0">⇌ Fair Trade Check</h2>
+          <p class="subtitle" style="margin:4px 0 0">Compare proposed trades side-by-side — for in-person evaluation only.</p>
+        </div>
+        <button onclick="showPage('collection');setMobileNav('collection')"
+          style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.75rem;cursor:pointer;letter-spacing:.04em">← Back to Binder</button>
+      </div>
+
+      <!-- Balance Scale Visual -->
+      <div style="text-align:center;margin:18px 0 10px;user-select:none">
+        <svg id="ftScaleSvg" viewBox="0 0 320 130" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible">
+          <!-- Base pillar -->
+          <rect x="156" y="60" width="8" height="65" rx="2" fill="var(--border)"/>
+          <rect x="128" y="120" width="64" height="8" rx="3" fill="var(--border)"/>
+          <!-- Beam — rotates around center -->
+          <g id="ftScaleBeam" style="transform-origin:160px 62px;transform:rotate(0deg);transition:transform .7s cubic-bezier(.34,1.56,.64,1)">
+            <line x1="40" y1="62" x2="280" y2="62" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+            <!-- Left pan strings -->
+            <line x1="60"  y1="62" x2="42"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+            <line x1="60"  y1="62" x2="78"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+            <!-- Right pan strings -->
+            <line x1="260" y1="62" x2="242" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+            <line x1="260" y1="62" x2="278" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
+            <!-- Left pan -->
+            <rect id="ftPanLeft"  x="30" y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
+            <!-- Right pan -->
+            <rect id="ftPanRight" x="230" y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
+          </g>
+          <!-- Center pivot -->
+          <circle cx="160" cy="62" r="5" fill="var(--accent)"/>
+          <!-- Value labels inside pans -->
+          <text id="ftLabelLeft"  x="60"  y="104" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="monospace"></text>
+          <text id="ftLabelRight" x="260" y="104" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="monospace"></text>
+        </svg>
+        <div id="ftVerdict" style="font-size:.85rem;font-weight:700;letter-spacing:.06em;margin-top:2px;min-height:20px;transition:color .4s"></div>
+      </div>
+
+      <!-- Two sides -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+
+        <!-- ── SIDE A ── -->
+        <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;position:relative">
+          <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--teal);margin-bottom:10px">SIDE A</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <input id="ftSearchA" type="text" placeholder="Search card name…"
+              style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
+              onkeydown="if(event.key==='Enter')ftSearch('A')" />
+            <button onclick="ftSearch('A')"
+              style="padding:7px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
+          </div>
+          <div id="ftResultsA" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
+          <div id="ftCardsA" style="min-height:40px"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+            <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
+            <input id="ftCashA" type="number" min="0" step="0.01" placeholder="0.00"
+              oninput="ftRecalc()"
+              style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
+          </div>
+        </div>
+
+        <!-- ── SIDE B ── -->
+        <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;position:relative">
+          <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">SIDE B</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <input id="ftSearchB" type="text" placeholder="Search card name…"
+              style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
+              onkeydown="if(event.key==='Enter')ftSearch('B')" />
+            <button onclick="ftSearch('B')"
+              style="padding:7px 12px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
+          </div>
+          <div id="ftResultsB" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
+          <div id="ftCardsB" style="min-height:40px"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+            <span style="font-size:.72rem;color:var(--muted)">+ Cash</span>
+            <input id="ftCashB" type="number" min="0" step="0.01" placeholder="0.00"
+              oninput="ftRecalc()"
+              style="width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.78rem"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analyze button -->
+      <div style="text-align:center;margin-bottom:20px">
+        <button id="ftAnalyzeBtn" onclick="ftAnalyzeTrade()"
+          style="padding:11px 36px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.85rem;cursor:pointer;letter-spacing:.08em">
+          ⇌ Analyze Trade
+        </button>
+        <button onclick="ftReset()"
+          style="margin-left:12px;padding:11px 20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+          Reset
+        </button>
+      </div>
+
+      <!-- Breakdown table -->
+      <div id="ftBreakdown" style="display:none">
+        <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PRICE BREAKDOWN</div>
+        <div id="ftBreakdownContent"></div>
+        <p style="font-size:.62rem;color:var(--muted);margin-top:12px;line-height:1.6;text-align:center">
+          Prices sourced from TCGPlayer (via Pokémon TCG API) and PriceCharting. Values shown are estimates — verify with seller before trading.
+        </p>
+      </div>
     </div>
   </div>
 
@@ -2407,6 +2517,7 @@
       if (pageId === 'publicBinder')  { /* content managed by loadPublicBinder */ }
       if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
       if (pageId === 'addCard') { /* addCardPage ready */ }
+      if (pageId === 'fairTrade') { ftInitPage(); }
       // collection page is accessible directly via nav
       
     }
@@ -8748,6 +8859,344 @@
         countdown: null
       };
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── FAIR TRADE CHECK  (client-side, in-person evaluation tool) ─────────
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // State — keyed by side 'A' or 'B'
+    var _ftCards = { A: [], B: [] };   // [{id, name, set, number, image, prices:{tcg,pc}, avgPrice, qty}]
+    var _ftSearchTimeout = {};
+
+    function ftInitPage() {
+      // Reset state and UI each time the page is opened
+      _ftCards = { A: [], B: [] };
+      _ftRenderCards('A');
+      _ftRenderCards('B');
+      _ftResetScale();
+      var bd = document.getElementById('ftBreakdown');
+      if (bd) bd.style.display = 'none';
+      ['ftSearchA','ftSearchB'].forEach(id => { var el = document.getElementById(id); if (el) el.value = ''; });
+      ['ftCashA','ftCashB'].forEach(id => { var el = document.getElementById(id); if (el) el.value = ''; });
+      ['ftResultsA','ftResultsB'].forEach(id => { var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = ''; } });
+      document.getElementById('ftVerdict').textContent = '';
+    }
+
+    // ── Card search (pokemontcg.io) ──────────────────────────────────────
+    async function ftSearch(side) {
+      var inputId = 'ftSearch' + side;
+      var resultsId = 'ftResults' + side;
+      var input = document.getElementById(inputId);
+      var resultsEl = document.getElementById(resultsId);
+      if (!input || !resultsEl) return;
+      var q = input.value.trim();
+      if (!q) return;
+
+      resultsEl.style.display = 'block';
+      resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Searching…</div>';
+
+      try {
+        var res = await fetch('https://api.pokemontcg.io/v2/cards?q=name:' + encodeURIComponent(q) + '*&pageSize=30&orderBy=name');
+        if (!res.ok) throw new Error('API error');
+        var data = await res.json();
+        var cards = data.data || [];
+        if (!cards.length) {
+          resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">No results — try a different name</div>';
+          return;
+        }
+        // Build result nodes and attach click handlers via dataset (safe for apostrophes)
+        resultsEl.innerHTML = '';
+        cards.forEach(function(c) {
+          var setName = (c.set && c.set.name) || '';
+          var num = c.number || '';
+          var img = (c.images && c.images.small) || '';
+          var node = document.createElement('div');
+          node.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s';
+          node.addEventListener('mouseover', function() { this.style.background = 'var(--surface2)'; });
+          node.addEventListener('mouseout',  function() { this.style.background = ''; });
+          node.dataset.ftCard = JSON.stringify({ id: c.id, name: c.name, set: setName, number: num, image: img });
+          node.dataset.ftSide = side;
+          node.addEventListener('click', function() {
+            ftAddCard(this.dataset.ftSide, JSON.parse(this.dataset.ftCard));
+          });
+          node.innerHTML = (img ? '<img src="' + img + '" style="width:36px;height:auto;flex-shrink:0">' :
+                                  '<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border:1px solid var(--border)"></div>') +
+            '<div><div style="font-size:.78rem;font-weight:600">' + _escHtml(c.name) + '</div>' +
+            '<div style="font-size:.68rem;color:var(--muted)">' + _escHtml(setName) + (num ? ' #' + _escHtml(num) : '') + '</div></div>';
+          resultsEl.appendChild(node);
+        });
+      } catch(e) {
+        resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Search failed — check connection</div>';
+      }
+    }
+
+    function ftAddCard(side, card) {
+      // Hide results, clear input
+      var resultsEl = document.getElementById('ftResults' + side);
+      if (resultsEl) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; }
+      var inputEl = document.getElementById('ftSearch' + side);
+      if (inputEl) inputEl.value = '';
+
+      // Avoid duplicates (same card id)
+      var existing = _ftCards[side].find(function(c) { return c.id === card.id; });
+      if (existing) {
+        existing.qty = (existing.qty || 1) + 1;
+      } else {
+        _ftCards[side].push({ id: card.id, name: card.name, set: card.set, number: card.number, image: card.image, qty: 1, prices: null, avgPrice: null });
+      }
+      _ftRenderCards(side);
+      ftRecalc();
+    }
+
+    function ftRemoveCard(side, cardId) {
+      _ftCards[side] = _ftCards[side].filter(function(c) { return c.id !== cardId; });
+      _ftRenderCards(side);
+      ftRecalc();
+    }
+
+    function _ftRenderCards(side) {
+      var container = document.getElementById('ftCards' + side);
+      if (!container) return;
+      var cards = _ftCards[side];
+      if (!cards.length) {
+        container.innerHTML = '<div style="font-size:.72rem;color:var(--muted);padding:6px 0">No cards added yet</div>';
+        return;
+      }
+      container.innerHTML = cards.map(function(c) {
+        var priceStr = c.avgPrice != null ? '$' + c.avgPrice.toFixed(2) + (c.qty > 1 ? ' ea' : '') : '—';
+        var totalStr = c.avgPrice != null && c.qty > 1 ? ' ($' + (c.avgPrice * c.qty).toFixed(2) + ')' : '';
+        var color = side === 'A' ? 'var(--teal)' : 'var(--gold)';
+        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.75rem">' +
+          (c.image ? '<img src="' + c.image + '" style="width:28px;height:auto;flex-shrink:0">' :
+                     '<div style="width:28px;height:38px;background:var(--surface);flex-shrink:0;border:1px solid var(--border)"></div>') +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(c.name) + '</div>' +
+            '<div style="color:var(--muted);font-size:.67rem">' + _escHtml(c.set || '') + (c.number ? ' #' + c.number : '') + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">' +
+            '<span style="color:' + color + ';font-weight:700">' + priceStr + '</span>' +
+            (totalStr ? '<span style="color:var(--muted);font-size:.67rem">' + totalStr + '</span>' : '') +
+            '<button onclick="ftRemoveCard(\'' + side + '\',\'' + c.id + '\')" title="Remove" ' +
+              'style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:0 2px;line-height:1">×</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function ftRecalc() {
+      var totalA = _ftSideTotal('A');
+      var totalB = _ftSideTotal('B');
+      _ftUpdateScale(totalA, totalB);
+    }
+
+    function _ftSideTotal(side) {
+      var cash = parseFloat(document.getElementById('ftCash' + side)?.value) || 0;
+      var cards = _ftCards[side].reduce(function(sum, c) {
+        return sum + (c.avgPrice != null ? c.avgPrice * (c.qty || 1) : 0);
+      }, 0);
+      return cards + cash;
+    }
+
+    function _ftUpdateScale(totalA, totalB) {
+      var beam = document.getElementById('ftScaleBeam');
+      var verdict = document.getElementById('ftVerdict');
+      var labelL = document.getElementById('ftLabelLeft');
+      var labelR = document.getElementById('ftLabelRight');
+      if (!beam) return;
+
+      var hasValues = (totalA > 0 || totalB > 0);
+      if (!hasValues) {
+        beam.style.transform = 'rotate(0deg)';
+        if (verdict) { verdict.textContent = ''; verdict.style.color = 'var(--muted)'; }
+        if (labelL) labelL.textContent = '';
+        if (labelR) labelR.textContent = '';
+        return;
+      }
+
+      // Angle: max ±18deg, proportional to difference vs larger side
+      var diff = totalA - totalB;
+      var maxSide = Math.max(totalA, totalB, 0.01);
+      var ratio = Math.max(-1, Math.min(1, diff / maxSide));
+      var angle = ratio * 18;  // Side A heavier → tilts left (negative = A side down)
+      beam.style.transform = 'rotate(' + (-angle) + 'deg)';
+
+      if (labelL) labelL.textContent = totalA > 0 ? '$' + totalA.toFixed(2) : '';
+      if (labelR) labelR.textContent = totalB > 0 ? '$' + totalB.toFixed(2) : '';
+
+      if (!verdict) return;
+      var pct = maxSide > 0 ? Math.abs(diff) / maxSide * 100 : 0;
+      if (pct <= 10) {
+        verdict.textContent = '✓ Fair Trade  (' + pct.toFixed(1) + '% difference)';
+        verdict.style.color = '#22c55e';
+      } else if (pct <= 25) {
+        verdict.textContent = '~ Close — ' + pct.toFixed(1) + '% difference';
+        verdict.style.color = '#f59e0b';
+      } else {
+        var whoWins = totalA > totalB ? 'Side A' : 'Side B';
+        verdict.textContent = '⚠ Uneven — ' + whoWins + ' gives ' + pct.toFixed(1) + '% more value';
+        verdict.style.color = '#ef4444';
+      }
+    }
+
+    function _ftResetScale() {
+      var beam = document.getElementById('ftScaleBeam');
+      if (beam) beam.style.transform = 'rotate(0deg)';
+      var verdict = document.getElementById('ftVerdict');
+      if (verdict) { verdict.textContent = ''; verdict.style.color = 'var(--muted)'; }
+      var labelL = document.getElementById('ftLabelLeft');
+      var labelR = document.getElementById('ftLabelRight');
+      if (labelL) labelL.textContent = '';
+      if (labelR) labelR.textContent = '';
+    }
+
+    // ── Analyze: fetch prices from TCGPlayer + PriceCharting ─────────────
+    async function ftAnalyzeTrade() {
+      var btn = document.getElementById('ftAnalyzeBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '⇌ Fetching prices…'; }
+
+      var allCards = [
+        ..._ftCards.A.map(function(c) { return { side: 'A', card: c }; }),
+        ..._ftCards.B.map(function(c) { return { side: 'B', card: c }; })
+      ];
+
+      if (!allCards.length) {
+        showToast('Add cards to at least one side first');
+        if (btn) { btn.disabled = false; btn.textContent = '⇌ Analyze Trade'; }
+        return;
+      }
+
+      // Fetch prices for each unique card
+      var fetched = {};  // keyed by card.id
+      for (var i = 0; i < allCards.length; i++) {
+        var c = allCards[i].card;
+        if (fetched[c.id] !== undefined) continue;  // already fetched
+
+        var tcgPrice = null;
+        var pcPrice  = null;
+
+        // 1. TCGPlayer via pokemontcg.io
+        try {
+          var apiRes = await fetch('https://api.pokemontcg.io/v2/cards/' + encodeURIComponent(c.id));
+          if (apiRes.ok) {
+            var apiData = await apiRes.json();
+            var pricesObj = apiData.data && apiData.data.tcgplayer && apiData.data.tcgplayer.prices;
+            if (pricesObj) {
+              // Pick first available variant price in priority order
+              var variants = ['holofoil','reverseHolofoil','normal','1stEditionHolofoil','unlimitedHolofoil'];
+              for (var v = 0; v < variants.length; v++) {
+                var vp = pricesObj[variants[v]];
+                if (vp && vp.market != null) { tcgPrice = vp.market; break; }
+              }
+              // fallback: take any market price
+              if (tcgPrice == null) {
+                for (var key in pricesObj) {
+                  if (pricesObj[key] && pricesObj[key].market != null) { tcgPrice = pricesObj[key].market; break; }
+                }
+              }
+            }
+          }
+        } catch(_) {}
+
+        // 2. PriceCharting via /api/lookup-price
+        try {
+          var pcRes = await fetch('/api/lookup-price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: c.name, condition: 'raw' })
+          });
+          if (pcRes.ok) {
+            var pcData = await pcRes.json();
+            if (pcData && pcData.price) pcPrice = pcData.price;
+          }
+        } catch(_) {}
+
+        // Compute average of available sources
+        var sources = [tcgPrice, pcPrice].filter(function(p) { return p != null; });
+        var avg = sources.length ? sources.reduce(function(a, b) { return a + b; }, 0) / sources.length : null;
+
+        fetched[c.id] = { tcg: tcgPrice, pc: pcPrice, avg: avg };
+
+        // Small delay between PriceCharting calls
+        if (i < allCards.length - 1) await new Promise(function(r) { setTimeout(r, 400); });
+      }
+
+      // Apply prices back to card objects
+      ['A','B'].forEach(function(side) {
+        _ftCards[side].forEach(function(c) {
+          var p = fetched[c.id];
+          if (p) {
+            c.prices = { tcg: p.tcg, pc: p.pc };
+            c.avgPrice = p.avg;
+          } else {
+            c.prices = { tcg: null, pc: null };
+            c.avgPrice = null;
+          }
+        });
+      });
+
+      _ftRenderCards('A');
+      _ftRenderCards('B');
+      ftRecalc();
+      _ftRenderBreakdown(fetched);
+
+      if (btn) { btn.disabled = false; btn.textContent = '⇌ Analyze Trade'; }
+    }
+
+    function _ftRenderBreakdown(fetched) {
+      var bd = document.getElementById('ftBreakdown');
+      var content = document.getElementById('ftBreakdownContent');
+      if (!bd || !content) return;
+
+      function sideTable(side, label, color) {
+        var cards = _ftCards[side];
+        if (!cards.length) return '';
+        var rows = cards.map(function(c) {
+          var p = fetched[c.id] || { tcg: null, pc: null, avg: null };
+          var tcgStr = p.tcg != null ? '$' + p.tcg.toFixed(2) : '—';
+          var pcStr  = p.pc  != null ? '$' + p.pc.toFixed(2)  : '—';
+          var avgStr = p.avg != null ? '$' + p.avg.toFixed(2) : '—';
+          var totalStr = (p.avg != null && c.qty > 1) ? '$' + (p.avg * c.qty).toFixed(2) : '';
+          return '<tr style="border-bottom:1px solid var(--border)">' +
+            '<td style="padding:6px 8px;font-size:.75rem">' + _escHtml(c.name) +
+              '<div style="font-size:.63rem;color:var(--muted)">' + _escHtml(c.set || '') + (c.number ? ' #' + c.number : '') + '</div></td>' +
+            '<td style="padding:6px 8px;font-size:.75rem;text-align:center">' + c.qty + '</td>' +
+            '<td style="padding:6px 8px;font-size:.75rem;text-align:right;color:var(--muted)">' + tcgStr + '</td>' +
+            '<td style="padding:6px 8px;font-size:.75rem;text-align:right;color:var(--muted)">' + pcStr + '</td>' +
+            '<td style="padding:6px 8px;font-size:.75rem;text-align:right;font-weight:700">' + avgStr +
+              (totalStr ? '<div style="font-size:.63rem;color:var(--muted)">×' + c.qty + ' = ' + totalStr + '</div>' : '') + '</td>' +
+          '</tr>';
+        }).join('');
+        var sideTotal = _ftSideTotal(side);
+        var cash = parseFloat(document.getElementById('ftCash' + side)?.value) || 0;
+        return '<div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;color:' + color + ';margin-bottom:6px">SIDE ' + label + '</div>' +
+          '<table style="width:100%;border-collapse:collapse;background:var(--surface2);margin-bottom:4px">' +
+            '<thead><tr style="border-bottom:1px solid var(--border)">' +
+              '<th style="padding:6px 8px;font-size:.67rem;text-align:left;color:var(--muted);font-weight:600">CARD</th>' +
+              '<th style="padding:6px 8px;font-size:.67rem;text-align:center;color:var(--muted);font-weight:600">QTY</th>' +
+              '<th style="padding:6px 8px;font-size:.67rem;text-align:right;color:var(--muted);font-weight:600">TCGPlayer</th>' +
+              '<th style="padding:6px 8px;font-size:.67rem;text-align:right;color:var(--muted);font-weight:600">PriceCharting</th>' +
+              '<th style="padding:6px 8px;font-size:.67rem;text-align:right;color:var(--muted);font-weight:600">AVG</th>' +
+            '</tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+          '</table>' +
+          (cash > 0 ? '<div style="font-size:.73rem;color:var(--muted);text-align:right;margin-bottom:2px">+ Cash: $' + cash.toFixed(2) + '</div>' : '') +
+          '<div style="font-size:.78rem;font-weight:700;text-align:right;color:' + color + ';margin-bottom:14px">Side ' + label + ' Total: $' + sideTotal.toFixed(2) + '</div>';
+      }
+
+      content.innerHTML = sideTable('A', 'A', 'var(--teal)') + sideTable('B', 'B', 'var(--gold)');
+      bd.style.display = 'block';
+    }
+
+    function ftReset() {
+      ftInitPage();
+    }
+
+    function _escHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── End Fair Trade ─────────────────────────────────────────────────────
 
     async function initApp() {
       const browseGrid = document.getElementById('browseGrid');
