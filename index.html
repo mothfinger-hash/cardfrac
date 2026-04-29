@@ -1619,7 +1619,7 @@
       <div class="coll-add-btns">
         <button class="coll-btn-primary" onclick="searchPokemonCards()">Search Cards</button>
         <button class="coll-btn-secondary" onclick="openManualAddModal()">Add Manually</button>
-        <button class="coll-btn-secondary" onclick="openCardScanner()" style="border-color:var(--accent2);color:var(--accent2)">&#9654; Scan a Card</button>
+        <label class="coll-btn-secondary" style="border-color:var(--accent2);color:var(--accent2);cursor:pointer;display:inline-block;text-align:center">&#9654; Scan a Card<input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none"></label>
       </div>
       <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
       <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
@@ -8767,68 +8767,43 @@
     </div>
   </div>
 
-  <!-- ── CARD SCANNER MODAL ─────────────────────────────────────────────── -->
-  <div id="scannerModal" style="position:fixed;inset:0;z-index:99999;background:#0F0D0A;flex-direction:column;align-items:center;justify-content:flex-start;padding:0;display:none;overflow-y:auto">
-
-    <!-- Header -->
-    <div style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:2px solid var(--border);background:var(--surface)">
-      <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;color:var(--accent2);letter-spacing:.06em">CARD SCANNER</div>
-      <button onclick="closeCardScanner()" style="background:transparent;border:2px solid var(--border);color:var(--muted);padding:5px 12px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;cursor:pointer">✕ Close</button>
-    </div>
-
-    <!-- Photo preview area -->
-    <div id="scannerViewfinder" style="position:relative;width:100%;max-width:520px;margin:20px auto 0;background:var(--surface2);border:2px solid var(--border);box-shadow:6px 6px 0 var(--shadow);transition:max-height .3s ease,margin .3s ease;overflow:hidden">
-      <!-- Placeholder shown before a photo is taken -->
-      <div id="scanPlaceholder" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;min-height:180px">
-        <div style="font-size:2.8rem;opacity:.3;margin-bottom:14px">📷</div>
-        <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.07em;text-align:center">TAP BELOW TO PHOTOGRAPH A CARD</div>
+  <!-- ── CARD SCANNER RESULTS SHEET ────────────────────────────────────── -->
+  <!-- Slides up from bottom after a photo is taken. No full-screen modal. -->
+  <div id="scannerModal" style="position:fixed;inset:0;z-index:99999;display:none;align-items:flex-end;justify-content:center">
+    <!-- Backdrop -->
+    <div onclick="closeCardScanner()" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>
+    <!-- Sheet -->
+    <div style="position:relative;width:100%;max-width:560px;max-height:82vh;background:var(--surface);border-top:2px solid var(--border);border-left:2px solid var(--border);border-right:2px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+      <!-- Sheet header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:2px solid var(--border);flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px">
+          <img id="uploadPreview" style="display:none;width:38px;height:50px;object-fit:contain;border:1px solid var(--border)">
+          <div>
+            <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;color:var(--accent2);letter-spacing:.06em">SCAN RESULTS</div>
+            <div id="scannerStatus" style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-top:2px">Scanning…</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="padding:6px 12px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;font-weight:700;cursor:pointer;letter-spacing:.05em">
+            📷 RETAKE<input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
+          </label>
+          <button onclick="closeCardScanner()" style="background:transparent;border:2px solid var(--border);color:var(--muted);padding:5px 10px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;cursor:pointer">✕</button>
+        </div>
       </div>
-      <!-- Taken photo preview -->
-      <img id="uploadPreview" style="display:none;width:100%;max-height:340px;object-fit:contain;display:none">
-      <!-- Corner marks -->
-      <div style="position:absolute;top:0;left:0;width:22px;height:22px;border-top:2px solid var(--accent);border-left:2px solid var(--accent);pointer-events:none"></div>
-      <div style="position:absolute;top:0;right:0;width:22px;height:22px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none"></div>
-      <div style="position:absolute;bottom:0;left:0;width:22px;height:22px;border-bottom:2px solid var(--accent);border-left:2px solid var(--accent);pointer-events:none"></div>
-      <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-bottom:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none"></div>
-    </div>
-
-    <!-- Status -->
-    <div id="scannerStatus" style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);margin:12px 0 0;text-align:center;letter-spacing:.04em;padding:0 20px">Tap below to photograph a card</div>
-
-    <!-- Photo buttons — label wraps input for iOS compatibility (no JS .click() needed) -->
-    <div style="display:flex;gap:10px;margin-top:12px;justify-content:center;flex-wrap:wrap">
-      <label id="scanPhotoLabel" style="padding:13px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em;display:inline-block;text-align:center">
-        SCAN CARD
-        <input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
-      </label>
-      <label style="padding:13px 20px;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em;display:inline-block;text-align:center">
-        GALLERY
-        <input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
-      </label>
-    </div>
-
-    <!-- Name search fallback -->
-    <div style="width:100%;max-width:520px;margin:16px auto 0;padding:0 20px">
-      <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:6px;letter-spacing:.04em">NOT THE RIGHT CARD? SEARCH BY NAME:</div>
-      <input id="scannerNameInput" type="text" placeholder="e.g. Charizard, Haunter..."
-        oninput="scannerNameSearch(this.value)"
-        style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;box-sizing:border-box">
-      <div id="scannerNameResults" style="margin-top:4px"></div>
-    </div>
-
-    <!-- Camera / Results toggle bar — shown when results are available -->
-    <div id="scanToggleBar" style="display:none;width:100%;max-width:520px;margin:10px auto 0;padding:0 20px;box-sizing:border-box">
-      <div style="display:flex;gap:8px">
-        <button id="scanToggleCameraBtn" onclick="scanShowCamera()" style="flex:1;padding:9px 0;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">▲ PHOTO</button>
-        <button id="scanToggleResultsBtn" onclick="scanShowResults()" style="flex:1;padding:9px 0;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">▼ RESULTS</button>
-        <label style="padding:9px 14px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">
-          📷 RETAKE<input type="file" accept="image/*" onchange="reopenViewfinder();matchFromFile(this)" style="display:none">
-        </label>
+      <!-- Scrollable results -->
+      <div style="overflow-y:auto;flex:1;padding:12px 16px 20px">
+        <!-- Match results list -->
+        <div id="scannerResults"></div>
+        <!-- Name search fallback -->
+        <div style="margin-top:12px">
+          <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.55rem;color:var(--muted);margin-bottom:6px;letter-spacing:.04em">NOT THE RIGHT CARD? SEARCH BY NAME:</div>
+          <input id="scannerNameInput" type="text" placeholder="e.g. Charizard, Haunter..."
+            oninput="scannerNameSearch(this.value)"
+            style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;box-sizing:border-box">
+          <div id="scannerNameResults" style="margin-top:4px"></div>
+        </div>
       </div>
     </div>
-
-    <!-- Match results -->
-    <div id="scannerResults" style="display:none;width:100%;max-width:520px;margin:8px auto 0;padding:0 20px 60px"></div>
   </div>
 
   <style>
@@ -8908,38 +8883,44 @@
 
   <script>
     /* ── SCANNER CONTROLLER ── */
-    let scannerStream = null;
 
     function setScanStatus(msg) {
       const el = document.getElementById('scannerStatus');
       if (el) el.textContent = msg;
     }
 
+    // Called directly from the "Scan a Card" label on the Add Card page.
+    // Opens the results sheet and kicks off the match pipeline.
+    function scanFromAddCard(input) {
+      const file = input.files[0];
+      if (!file) return;
+      input.value = '';
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataURL = e.target.result;
+        // Show sheet immediately so user sees progress
+        openCardScanner();
+        // Show thumbnail
+        const preview = document.getElementById('uploadPreview');
+        if (preview) { preview.style.display = 'block'; preview.src = dataURL; }
+        setScanStatus('Scanning…');
+        document.getElementById('scannerResults').innerHTML = '';
+        const nameResults = document.getElementById('scannerNameResults');
+        if (nameResults) nameResults.innerHTML = '';
+        await runMatch(dataURL);
+      };
+      reader.readAsDataURL(file);
+    }
+
     function openCardScanner() {
       const modal = document.getElementById('scannerModal');
       modal.style.display = 'flex';
-      document.getElementById('scannerResults').style.display = 'none';
-      const toggleBar = document.getElementById('scanToggleBar');
-      if (toggleBar) toggleBar.style.display = 'none';
-      // Reset preview
-      const preview = document.getElementById('uploadPreview');
-      if (preview) preview.style.display = 'none';
-      const placeholder = document.getElementById('scanPlaceholder');
-      if (placeholder) placeholder.style.display = 'flex';
-      const vf = document.getElementById('scannerViewfinder');
-      if (vf) { vf.style.maxHeight = ''; vf.style.overflow = 'hidden'; vf.style.margin = '20px auto 0'; }
-      setScanStatus('Tap below to photograph a card');
-      // Preload CLIP model in background
       if (window._preloadClip) window._preloadClip().catch(() => {});
     }
 
     function closeCardScanner() {
       const modal = document.getElementById('scannerModal');
       modal.style.display = 'none';
-      const toggleBar = document.getElementById('scanToggleBar');
-      if (toggleBar) toggleBar.style.display = 'none';
-      const vf = document.getElementById('scannerViewfinder');
-      if (vf) { vf.style.maxHeight = ''; vf.style.overflow = 'hidden'; vf.style.margin = '20px auto 0'; }
     }
 
     // ── Auto-scan — frame stability detection ────────────────────────────────
@@ -9089,47 +9070,11 @@
       await runMatch(dataURL);
     }
 
-    // Show the taken photo full-size, hide results
-    function scanShowCamera() {
-      const viewfinder = document.getElementById('scannerViewfinder');
-      const results    = document.getElementById('scannerResults');
-      const camBtn     = document.getElementById('scanToggleCameraBtn');
-      const resBtn     = document.getElementById('scanToggleResultsBtn');
-      if (viewfinder) { viewfinder.style.maxHeight = ''; viewfinder.style.overflow = 'hidden'; viewfinder.style.margin = '12px auto 0'; }
-      if (results)    results.style.display = 'none';
-      if (camBtn)     { camBtn.style.background = 'var(--accent)'; camBtn.style.color = 'var(--surface)'; }
-      if (resBtn)     { resBtn.style.background = 'transparent';   resBtn.style.color = 'var(--muted)'; }
-    }
-
-    // Show results, shrink camera to mini strip
-    function scanShowResults() {
-      const viewfinder = document.getElementById('scannerViewfinder');
-      const results    = document.getElementById('scannerResults');
-      const camBtn     = document.getElementById('scanToggleCameraBtn');
-      const resBtn     = document.getElementById('scanToggleResultsBtn');
-      if (viewfinder) { viewfinder.style.maxHeight = '110px'; viewfinder.style.overflow = 'hidden'; viewfinder.style.margin = '12px auto 0'; }
-      if (results)    results.style.display = 'block';
-      if (camBtn)     { camBtn.style.background = 'transparent';  camBtn.style.color = 'var(--muted)'; }
-      if (resBtn)     { resBtn.style.background = 'var(--accent)'; resBtn.style.color = 'var(--surface)'; }
-    }
-
     function showScanResults(matches) {
-      const viewfinder    = document.getElementById('scannerViewfinder');
-      const uploadPreview = document.getElementById('uploadPreview');
-      if (uploadPreview && uploadPreview.style.display !== 'none') uploadPreview.style.maxHeight = '110px';
-
-      // Show toggle bar
-      const toggleBar = document.getElementById('scanToggleBar');
-      if (toggleBar) toggleBar.style.display = 'block';
-
-      // Start in results view
-      scanShowResults();
-
       const wrap = document.getElementById('scannerResults');
-      wrap.style.display = 'block';
       wrap.innerHTML = `
         <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:var(--accent2);letter-spacing:.06em;margin-bottom:10px">${matches.length} POSSIBLE MATCHES — tap to add</div>` +
-        matches.map((m, i) => {
+        matches.map((m) => {
           const pct = Math.round(m.similarity * 100);
           const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
           const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
@@ -9149,24 +9094,6 @@
               <button class="scan-match-add">+ Add</button>
             </div>`;
         }).join('');
-    }
-
-    function reopenViewfinder() {
-      // Reset to initial "ready to photograph" state
-      const viewfinder = document.getElementById('scannerViewfinder');
-      if (viewfinder) { viewfinder.style.maxHeight = ''; viewfinder.style.overflow = 'hidden'; viewfinder.style.margin = '20px auto 0'; }
-      const toggleBar = document.getElementById('scanToggleBar');
-      if (toggleBar) toggleBar.style.display = 'none';
-      document.getElementById('scannerResults').style.display = 'none';
-      const preview = document.getElementById('uploadPreview');
-      if (preview) preview.style.display = 'none';
-      const placeholder = document.getElementById('scanPlaceholder');
-      if (placeholder) placeholder.style.display = 'flex';
-      const nameInput = document.getElementById('scannerNameInput');
-      if (nameInput) nameInput.value = '';
-      const nameResults = document.getElementById('scannerNameResults');
-      if (nameResults) nameResults.innerHTML = '';
-      setScanStatus('Tap below to photograph a card');
     }
 
     let _returnToScanner = false;
@@ -9234,24 +9161,18 @@
       }, 280);
     }
 
-    // Receive a photo and run the full analysis pipeline
+    // Receive a photo from the RETAKE button inside the sheet
     async function matchFromFile(input) {
       const file = input.files[0];
       if (!file) return;
-      // Reset input so the same file can be re-selected
       input.value = '';
       const reader = new FileReader();
       reader.onload = async (e) => {
         const dataURL = e.target.result;
-        // Show photo preview, hide placeholder
-        const placeholder = document.getElementById('scanPlaceholder');
-        if (placeholder) placeholder.style.display = 'none';
         const preview = document.getElementById('uploadPreview');
         if (preview) { preview.style.display = 'block'; preview.src = dataURL; }
-        // Hide toggle bar while scanning
-        const toggleBar = document.getElementById('scanToggleBar');
-        if (toggleBar) toggleBar.style.display = 'none';
-        document.getElementById('scannerResults').style.display = 'none';
+        document.getElementById('scannerResults').innerHTML = '';
+        setScanStatus('Scanning…');
         await runMatch(dataURL);
       };
       reader.readAsDataURL(file);
@@ -9361,8 +9282,6 @@
 
     // ── Scanner — full-image OCR + name×number search + CLIP fallback ──────────
     async function runMatch(dataURL) {
-      const photoLabel = document.getElementById('scanPhotoLabel');
-      if (photoLabel) photoLabel.style.pointerEvents = 'none';
       setScanStatus('Reading card text…');
       try {
         // Step 1: OCR the full image + start CLIP embedding in parallel
@@ -9474,8 +9393,7 @@
         console.error('[Scanner]', err);
         setScanStatus('Error: ' + (err.message || err));
       } finally {
-        const photoLabel = document.getElementById('scanPhotoLabel');
-        if (photoLabel) photoLabel.style.pointerEvents = '';
+        // nothing to re-enable — sheet stays open
       }
     }
 
