@@ -8797,14 +8797,8 @@
 
     <!-- Photo buttons -->
     <div style="display:flex;gap:10px;margin-top:12px;justify-content:center;flex-wrap:wrap">
-      <label id="scanPhotoLabel" style="padding:13px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
-        SCAN CARD
-        <input id="scanCameraInput" type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
-      </label>
-      <label style="padding:13px 20px;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
-        GALLERY
-        <input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
-      </label>
+      <button id="scanPhotoLabel" onclick="document.getElementById('scanCameraInput').click()" style="padding:13px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">SCAN CARD</button>
+      <button onclick="document.getElementById('scanGalleryInput').click()" style="padding:13px 20px;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">GALLERY</button>
     </div>
 
     <!-- Name search fallback -->
@@ -9597,5 +9591,9 @@
       });
     }
   </script>
+
+  <!-- File inputs for scanner — must be at body level so overflow:auto on the modal doesn't clip them -->
+  <input id="scanCameraInput" type="file" accept="image/*" onchange="matchFromFile(this)" style="position:fixed;left:-9999px;top:-9999px;opacity:0;width:1px;height:1px;pointer-events:none">
+  <input id="scanGalleryInput" type="file" accept="image/*" onchange="matchFromFile(this)" style="position:fixed;left:-9999px;top:-9999px;opacity:0;width:1px;height:1px;pointer-events:none">
 </body>
 </html>
