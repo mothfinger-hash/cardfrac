@@ -743,19 +743,20 @@
     .ft-side-panel{background:var(--surface2);border:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:0}
     .ft-side-label{font-size:.72rem;font-weight:700;letter-spacing:.1em;margin-bottom:10px}
 
-    /* Card stack viewer — stretches to fill the side panel */
-    .ft-card-viewer{display:flex;flex-direction:column;align-items:stretch;padding:10px 18px 8px;position:relative}
+    /* Card stack viewer — stretches to fill the side panel; extra right padding for fan */
+    .ft-card-viewer{display:flex;flex-direction:column;align-items:stretch;padding:10px 42px 8px 14px;position:relative}
     .ft-card-empty{text-align:center;color:var(--muted);font-size:.72rem;line-height:1.8;padding:30px 20px;border:1px dashed var(--border);width:100%;box-sizing:border-box}
     .ft-card-empty small{font-size:.65rem;opacity:.7}
 
-    /* Stack wrap — fills viewer width; overflow:visible so peeking back cards show */
+    /* Stack wrap — fills viewer width; overflow:visible so fanned back cards show */
     .ft-stack-wrap{position:relative;width:100%;overflow:visible;cursor:pointer;touch-action:pan-y}
 
-    /* Back layers: same footprint as front card, offset by transform to create peek */
-    .ft-stack-back{position:absolute;inset:0;border-radius:10px;overflow:hidden}
+    /* Back layers: same footprint as front, rotated around bottom-center to fan right */
+    .ft-stack-back{position:absolute;inset:0;border-radius:10px;overflow:hidden;transform-origin:50% 92%}
     .ft-stack-back img{width:100%;display:block}
-    .ft-stack-back-1{z-index:2;transform:rotate(3.5deg) translate(7px,4px);box-shadow:0 3px 12px rgba(0,0,0,.3)}
-    .ft-stack-back-2{z-index:1;transform:rotate(-2.5deg) translate(-6px,8px);box-shadow:0 2px 8px rgba(0,0,0,.22)}
+    .ft-stack-back-1{z-index:2;transform:rotate(5deg);box-shadow:0 4px 14px rgba(0,0,0,.32)}
+    .ft-stack-back-2{z-index:1;transform:rotate(9deg);box-shadow:0 3px 10px rgba(0,0,0,.25)}
+    .ft-stack-back-3{z-index:0;transform:rotate(13deg);box-shadow:0 2px 8px rgba(0,0,0,.18)}
 
     /* Front card — position:relative drives the container height */
     .ft-stack-front{position:relative;z-index:3;border-radius:10px;overflow:hidden;box-shadow:0 10px 32px rgba(0,0,0,.5)}
@@ -841,6 +842,14 @@
       .ft-sides-grid{gap:8px}
       #ftSessionBanner{padding:10px 12px}
     }
+
+    /* ── FAIR TRADE — session join notification ── */
+    @keyframes ftJoinPulse{
+      0%  {box-shadow:0 0 0 0 rgba(20,184,166,.7);border-color:var(--teal)}
+      60% {box-shadow:0 0 0 10px rgba(20,184,166,0);border-color:var(--teal)}
+      100%{box-shadow:none;border-color:var(--teal)}
+    }
+    .ft-session-joined{animation:ftJoinPulse .9s ease 3;border-color:var(--teal)!important}
 
     /* ── BINDER FRAME — constrained width on desktop, full-width on mobile ── */
     .binder-frame{width:100%;position:relative}
@@ -9363,7 +9372,7 @@
         if (error) throw error;
 
         _ftSession = { id: id, role: 'a', lastSeenA: JSON.stringify(sideA), lastSeenB: '[]',
-                       lastCashA: cashA, lastCashB: 0, pollInterval: null };
+                       lastCashA: cashA, lastCashB: 0, pollInterval: null, bJoined: false };
         _ftLocked = { A: false, B: false };
         _ftAnalyzingFromLock = false;
         _ftStartPolling();
@@ -9404,9 +9413,18 @@
                        lastSeenA: JSON.stringify(data.side_a || []),
                        lastSeenB: JSON.stringify(data.side_b || []),
                        lastCashA: data.cash_a || 0, lastCashB: data.cash_b || 0,
-                       pollInterval: null };
+                       pollInterval: null, bJoined: true };
         _ftLocked = { A: !!data.locked_a, B: !!data.locked_b };
         _ftAnalyzingFromLock = false;
+
+        // Signal to Side A that B has joined
+        try {
+          await sb.from('fair_trade_sessions').update({
+            joined_b: true,
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+          }).eq('id', id);
+        } catch(_) {}
+
         _ftStartPolling();
         _ftRenderSessionBanner();
         _ftLockOtherSide();
@@ -9476,6 +9494,20 @@
           _ftRenderSessionBanner(); // refresh connected status + lock status
         }
 
+        // ── Join notification (Side A only) ──────────────────────────────
+        if (role === 'a' && !_ftSession.bJoined && data.joined_b) {
+          _ftSession.bJoined = true;
+          showToast('🟢 Side B has joined the trade!');
+          var banner = document.getElementById('ftSessionBanner');
+          if (banner) {
+            banner.classList.remove('ft-session-joined'); // force reflow so animation restarts
+            void banner.offsetWidth;
+            banner.classList.add('ft-session-joined');
+            setTimeout(function() { banner.classList.remove('ft-session-joined'); }, 2800);
+          }
+          _ftRenderSessionBanner();
+        }
+
         // ── Lock-in sync ─────────────────────────────────────────────────
         var theirLockKey = role === 'a' ? 'locked_b' : 'locked_a';
         var newTheirLock = !!data[theirLockKey];
@@ -9536,13 +9568,16 @@
       var url   = window.location.origin + window.location.pathname + '?trade=' + id;
       var theirs = role === 'a' ? 'B' : 'A';
       var mine   = role === 'a' ? 'A' : 'B';
-      var theirSideHasCards = _ftCards[theirs].length > 0;
-      var lockStatus = (_ftLocked.A && _ftLocked.B)
+      var bHasJoined = !!(role === 'a' ? _ftSession.bJoined : true); // B always knows they joined
+      var statusMsg = (_ftLocked.A && _ftLocked.B)
         ? '🔐 Both sides locked — analyzing…'
-        : (_ftLocked[mine] ? '✓ Your offer locked — waiting for Side ' + theirs + ' to lock in'
-          : (_ftLocked[theirs] ? '⚡ Side ' + theirs + ' is locked — lock in your offer!'
-            : (theirSideHasCards ? '🟢 Side ' + theirs + ' connected' : (role === 'a' ? '⏳ Waiting for Side B to join…' : '🟢 Joined as Side B — add your cards below'))));
-      var statusMsg = lockStatus;
+        : (_ftLocked[mine]
+            ? '✓ Your offer locked — waiting for Side ' + theirs + ' to lock in'
+          : (_ftLocked[theirs]
+            ? '⚡ Side ' + theirs + ' is locked — lock in your offer!'
+          : (bHasJoined
+            ? (role === 'a' ? '🟢 Side B has joined — add your cards' : '🟢 Joined as Side B — add your cards below')
+            : '⏳ Waiting for Side B to join…')));
 
       banner.style.display = 'block';
       banner.innerHTML =
@@ -9842,6 +9877,10 @@
           var _b2 = cards[(idx - 2 + cards.length) % cards.length];
           backs = _backLayer(_b2, 'ft-stack-back-2') + backs;
         }
+        if (cards.length >= 4) {
+          var _b3 = cards[(idx - 3 + cards.length) % cards.length];
+          backs = _backLayer(_b3, 'ft-stack-back-3') + backs;
+        }
       }
 
       // Front card
@@ -10133,8 +10172,12 @@
         var pcPrice  = null;
 
         // 1. TCGPlayer via pokemontcg.io
+        // Cards added from the binder have a "binder_<uuid>" id — use apiCardId instead.
+        // Cards added via search/scan already have a real pokemontcg.io id.
+        var tcgLookupId = c.apiCardId || (c.id && !c.id.startsWith('binder_') ? c.id : null);
         try {
-          var apiRes = await fetch('https://api.pokemontcg.io/v2/cards/' + encodeURIComponent(c.id));
+          if (!tcgLookupId) throw new Error('no tcg id');
+          var apiRes = await fetch('https://api.pokemontcg.io/v2/cards/' + encodeURIComponent(tcgLookupId));
           if (apiRes.ok) {
             var apiData = await apiRes.json();
             var pricesObj = apiData.data && apiData.data.tcgplayer && apiData.data.tcgplayer.prices;
