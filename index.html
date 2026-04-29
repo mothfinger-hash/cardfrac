@@ -1753,13 +1753,31 @@
           <!-- SIDE A -->
           <div style="background:var(--surface2);border:1px solid var(--border);padding:14px">
             <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--teal);margin-bottom:10px">SIDE A</div>
-            <div style="display:flex;gap:6px;margin-bottom:8px">
+            <!-- Search row -->
+            <div style="display:flex;gap:6px;margin-bottom:6px">
               <input id="ftSearchA" type="text" placeholder="Search card name…"
                 style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
                 onkeydown="if(event.key==='Enter')ftSearch('A')" />
               <button onclick="ftSearch('A')"
                 style="padding:7px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
             </div>
+            <!-- Scan button -->
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <button onclick="ftScanTrigger('A')"
+                style="flex:1;padding:6px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.04em">
+                📷 Scan Card
+              </button>
+              <input id="ftScanInputA" type="file" accept="image/*" capture="environment" style="display:none"
+                onchange="ftHandleScan('A',this)"/>
+            </div>
+            <div id="ftScanStatusA" style="display:none;font-size:.72rem;color:var(--muted);margin-bottom:6px;padding:4px 0"></div>
+            <div id="ftScanMatchesA" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
+            <!-- Binder picker button -->
+            <button onclick="ftToggleBinder('A')" id="ftBinderBtnA"
+              style="width:100%;padding:6px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;margin-bottom:8px;letter-spacing:.04em;text-align:left">
+              ⊞ Pick from My Binder
+            </button>
+            <div id="ftBinderPickerA" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
             <div id="ftResultsA" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
             <div id="ftCardsA" style="min-height:40px"></div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
@@ -1772,13 +1790,31 @@
           <!-- SIDE B -->
           <div style="background:var(--surface2);border:1px solid var(--border);padding:14px">
             <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">SIDE B</div>
-            <div style="display:flex;gap:6px;margin-bottom:8px">
+            <!-- Search row -->
+            <div style="display:flex;gap:6px;margin-bottom:6px">
               <input id="ftSearchB" type="text" placeholder="Search card name…"
                 style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;font-family:inherit;font-size:.78rem"
                 onkeydown="if(event.key==='Enter')ftSearch('B')" />
               <button onclick="ftSearch('B')"
                 style="padding:7px 12px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.75rem;cursor:pointer;white-space:nowrap">Search</button>
             </div>
+            <!-- Scan button -->
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <button onclick="ftScanTrigger('B')"
+                style="flex:1;padding:6px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.04em">
+                📷 Scan Card
+              </button>
+              <input id="ftScanInputB" type="file" accept="image/*" capture="environment" style="display:none"
+                onchange="ftHandleScan('B',this)"/>
+            </div>
+            <div id="ftScanStatusB" style="display:none;font-size:.72rem;color:var(--muted);margin-bottom:6px;padding:4px 0"></div>
+            <div id="ftScanMatchesB" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
+            <!-- Binder picker button -->
+            <button onclick="ftToggleBinder('B')" id="ftBinderBtnB"
+              style="width:100%;padding:6px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;margin-bottom:8px;letter-spacing:.04em;text-align:left">
+              ⊞ Pick from My Binder
+            </button>
+            <div id="ftBinderPickerB" style="display:none;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
             <div id="ftResultsB" style="display:none;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);margin-bottom:8px"></div>
             <div id="ftCardsB" style="min-height:40px"></div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
@@ -1886,6 +1922,7 @@
           <div id="ftBreakdownContent"></div>
           <p style="font-size:.62rem;color:var(--muted);margin-top:12px;line-height:1.6;text-align:center">
             Prices sourced from TCGPlayer (via Pokémon TCG API) and PriceCharting. Values are estimates — verify before trading.
+          * Price pulled from your binder (no market data found for this card).
           </p>
         </div>
 
@@ -8980,13 +9017,23 @@
     function ftInitPage() {
       // Reset to input state
       _ftCards = { A: [], B: [] };
+      _ftBinderOpen  = { A: false, B: false };
+      _ftBinderSearch = { A: '', B: '' };
       _ftShowState('input');
       _ftRenderCards('A');
       _ftRenderCards('B');
       _ftResetScale();
       ['ftSearchA','ftSearchB'].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
       ['ftCashA','ftCashB'].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
-      ['ftResultsA','ftResultsB'].forEach(function(id) { var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = ''; } });
+      ['ftResultsA','ftResultsB','ftBinderPickerA','ftBinderPickerB','ftScanMatchesA','ftScanMatchesB'].forEach(function(id) {
+        var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+      });
+      ['ftScanStatusA','ftScanStatusB'].forEach(function(id) {
+        var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; }
+      });
+      ['ftBinderBtnA','ftBinderBtnB'].forEach(function(id) {
+        var el = document.getElementById(id); if (el) el.textContent = '⊞ Pick from My Binder';
+      });
       var v = document.getElementById('ftVerdict'); if (v) v.textContent = '';
     }
 
@@ -8998,6 +9045,230 @@
       if (input)   input.style.display   = state === 'input'   ? '' : 'none';
       if (loading) loading.style.display = state === 'loading' ? '' : 'none';
       if (results) results.style.display = state === 'results' ? '' : 'none';
+    }
+
+    // ── Binder picker ────────────────────────────────────────────────────
+    var _ftBinderOpen = { A: false, B: false };
+    var _ftBinderSearch = { A: '', B: '' };
+
+    function ftToggleBinder(side) {
+      _ftBinderOpen[side] = !_ftBinderOpen[side];
+      var picker = document.getElementById('ftBinderPicker' + side);
+      var btn    = document.getElementById('ftBinderBtn' + side);
+      if (!picker) return;
+      if (_ftBinderOpen[side]) {
+        picker.style.display = 'block';
+        if (btn) btn.textContent = '⊟ Hide Binder';
+        _ftRenderBinderPicker(side);
+      } else {
+        picker.style.display = 'none';
+        if (btn) btn.textContent = '⊞ Pick from My Binder';
+      }
+    }
+
+    function _ftRenderBinderPicker(side) {
+      var picker = document.getElementById('ftBinderPicker' + side);
+      if (!picker) return;
+
+      if (!currentUser) {
+        picker.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Sign in to access your binder</div>';
+        return;
+      }
+      if (!collectionItems || !collectionItems.length) {
+        picker.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Your binder is empty</div>';
+        return;
+      }
+
+      // Filter out ghost/wishlist cards; filter by search term if any
+      var q = (_ftBinderSearch[side] || '').toLowerCase().trim();
+      var items = collectionItems.filter(function(c) {
+        if (c.is_ghost) return false;
+        if (!q) return true;
+        return (c.card_name || '').toLowerCase().includes(q) ||
+               (c.set_name  || '').toLowerCase().includes(q);
+      });
+
+      // Search box + list
+      var searchId = 'ftBPSearch' + side;
+      picker.innerHTML =
+        '<div style="padding:6px 8px;border-bottom:1px solid var(--border)">' +
+          '<input id="' + searchId + '" type="text" placeholder="Filter binder…" value="' + _escHtml(q) + '" ' +
+            'oninput="_ftBinderSearch[\'' + side + '\']=this.value;_ftRenderBinderPicker(\'' + side + '\')" ' +
+            'style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;font-size:.75rem;box-sizing:border-box">' +
+        '</div>' +
+        (items.length === 0
+          ? '<div style="padding:10px;font-size:.75rem;color:var(--muted)">No cards match</div>'
+          : items.map(function(c) {
+              var img    = c.card_image_url || '';
+              var price  = c.current_value  || c.purchase_price || null;
+              var priceStr = price ? '$' + parseFloat(price).toFixed(2) : '';
+              var setInfo  = [c.set_name, c.card_number ? '#' + c.card_number : ''].filter(Boolean).join(' ');
+              // Build safe dataset — use JSON stringified card object
+              var cardObj = JSON.stringify({
+                id:     'binder_' + c.id,
+                name:   c.card_name  || '',
+                set:    c.set_name   || '',
+                number: c.card_number || '',
+                image:  img,
+                // Carry the binder's known price so Analyze can use it if API fails
+                binderPrice: price || null,
+                // api_card_id for TCGPlayer lookup
+                apiCardId: c.api_card_id || null
+              });
+              return '<div data-ftbcard=\'' + cardObj.replace(/'/g, '&#39;') + '\' data-ftbside="' + side + '" ' +
+                'style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" ' +
+                'onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">' +
+                (img ? '<img src="' + img + '" style="width:30px;height:auto;flex-shrink:0">'
+                     : '<div style="width:30px;height:42px;background:var(--surface2);flex-shrink:0;border:1px solid var(--border)"></div>') +
+                '<div style="flex:1;min-width:0">' +
+                  '<div style="font-size:.76rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(c.card_name || '') + '</div>' +
+                  '<div style="font-size:.65rem;color:var(--muted)">' + _escHtml(setInfo) + '</div>' +
+                '</div>' +
+                (priceStr ? '<span style="font-size:.72rem;color:var(--muted);flex-shrink:0">' + priceStr + '</span>' : '') +
+              '</div>';
+            }).join('')
+        );
+
+      // Attach click handlers (safe — avoids inline onclick with JSON)
+      picker.querySelectorAll('[data-ftbcard]').forEach(function(node) {
+        node.addEventListener('click', function() {
+          var card = JSON.parse(this.dataset.ftbcard);
+          var s    = this.dataset.ftbside;
+          ftAddCard(s, card);
+          // Close the picker after selecting
+          _ftBinderOpen[s] = false;
+          var p = document.getElementById('ftBinderPicker' + s);
+          var b = document.getElementById('ftBinderBtn' + s);
+          if (p) p.style.display = 'none';
+          if (b) b.textContent = '⊞ Pick from My Binder';
+        });
+      });
+
+      // Re-focus search after re-render
+      var searchEl = document.getElementById(searchId);
+      if (searchEl && document.activeElement !== searchEl) {
+        // Only move focus if the user was already typing in this picker
+        if (q) searchEl.focus();
+      }
+    }
+
+    // ── Fair Trade scanner ───────────────────────────────────────────────
+    // Uses the same runMatch() + monthly scan limit as the main card scanner.
+    // Runs silently (no scanner modal UI) and shows inline match results.
+
+    function ftScanTrigger(side) {
+      if (!currentUser) { showToast('Sign in to use the scanner'); return; }
+
+      // Check limit before opening the file picker (same gate as runMatch)
+      var used  = getUsageCount('scan');
+      var limit = scannerLimit();
+      if (used >= limit) {
+        var nextTier = tierAtLeast('vendor') ? null
+                     : tierAtLeast('collector') ? 'vendor' : 'collector';
+        showToast('Monthly scan limit reached (' + limit + '/month).');
+        setTimeout(function() {
+          if (nextTier) openPricingModalWithPromo(nextTier);
+          else { openPricingModal(); setTimeout(openShopIntake, 300); }
+        }, 600);
+        return;
+      }
+
+      var input = document.getElementById('ftScanInput' + side);
+      if (input) { input.value = ''; input.click(); }
+    }
+
+    async function ftHandleScan(side, inputEl) {
+      var file = inputEl ? inputEl.files[0] : null;
+      if (!file) return;
+      if (inputEl) inputEl.value = '';
+
+      var statusEl  = document.getElementById('ftScanStatus'  + side);
+      var matchesEl = document.getElementById('ftScanMatches' + side);
+
+      function setFtScanStatus(msg) {
+        if (!statusEl) return;
+        statusEl.style.display = msg ? 'block' : 'none';
+        statusEl.textContent = msg;
+      }
+      function clearFtScanMatches() {
+        if (!matchesEl) return;
+        matchesEl.style.display = 'none';
+        matchesEl.innerHTML = '';
+      }
+
+      setFtScanStatus('Reading image…');
+      clearFtScanMatches();
+
+      // Read file as dataURL
+      var dataURL = await new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload  = function(e) { resolve(e.target.result); };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // Deduct scan now (before runMatch so silent mode doesn't double-count)
+      incrementUsage('scan');
+      var left = scannerLimit() - getUsageCount('scan');
+      if (!tierAtLeast('collector') && left <= 2) {
+        setFtScanStatus('Scanning… (' + (left === 0 ? 'last free scan this month' : left + ' free scan' + (left === 1 ? '' : 's') + ' left') + ')');
+      } else {
+        setFtScanStatus('Scanning…');
+      }
+
+      // Run match silently — no scanner modal, just get back the result array
+      var results = [];
+      try {
+        results = await runMatch(dataURL, { silent: true }) || [];
+      } catch(e) {
+        setFtScanStatus('Scan failed — try a clearer photo');
+        return;
+      }
+
+      if (!results.length) {
+        setFtScanStatus('No match found — try a clearer photo or use Search above');
+        return;
+      }
+
+      // Show top matches (up to 4) as a selectable list
+      setFtScanStatus('Pick the card to add:');
+      var top = results.slice(0, 4);
+      matchesEl.style.display = 'block';
+      matchesEl.innerHTML = top.map(function(card) {
+        var conf = card._exact ? 'Exact match' : (card._ocr ? 'OCR match' : Math.round((card.similarity || 0) * 100) + '% match');
+        var img  = card.image_url || '';
+        var set  = [card.set_name, card.card_number ? '#' + card.card_number : ''].filter(Boolean).join(' ');
+        var safeCard = JSON.stringify({
+          id:     card.id || ('scan_' + Date.now()),
+          name:   card.name  || '',
+          set:    card.set_name || '',
+          number: card.card_number || '',
+          image:  img,
+          apiCardId: card.id || null
+        });
+        return '<div data-ftscard=\'' + safeCard.replace(/'/g, '&#39;') + '\' data-ftside="' + side + '" ' +
+          'style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" ' +
+          'onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">' +
+          (img ? '<img src="' + img + '" style="width:32px;height:auto;flex-shrink:0">'
+               : '<div style="width:32px;height:44px;background:var(--surface2);border:1px solid var(--border);flex-shrink:0"></div>') +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:.76rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(card.name || '') + '</div>' +
+            '<div style="font-size:.65rem;color:var(--muted)">' + _escHtml(set) + '</div>' +
+          '</div>' +
+          '<span style="font-size:.65rem;color:var(--muted);flex-shrink:0;text-align:right">' + conf + '</span>' +
+        '</div>';
+      }).join('');
+
+      // Attach click handlers
+      matchesEl.querySelectorAll('[data-ftscard]').forEach(function(node) {
+        node.addEventListener('click', function() {
+          var card = JSON.parse(this.dataset.ftscard);
+          var s    = this.dataset.ftside;
+          ftAddCard(s, card);
+          clearFtScanMatches();
+          setFtScanStatus('');
+        });
+      });
     }
 
     // ── Card search (pokemontcg.io) ──────────────────────────────────────
@@ -9246,7 +9517,9 @@
 
         var sources = [tcgPrice, pcPrice].filter(function(p) { return p != null; });
         var avg = sources.length ? sources.reduce(function(a, b) { return a + b; }, 0) / sources.length : null;
-        fetched[c.id] = { tcg: tcgPrice, pc: pcPrice, avg: avg };
+        // If both API sources failed but card came from the binder with a known price, use that
+        if (avg == null && c.binderPrice) avg = parseFloat(c.binderPrice);
+        fetched[c.id] = { tcg: tcgPrice, pc: pcPrice, avg: avg, fromBinder: (!tcgPrice && !pcPrice && avg != null) };
 
         if (i < allCards.length - 1) await new Promise(function(r) { setTimeout(r, 400); });
       }
@@ -9282,7 +9555,7 @@
           var p = fetched[c.id] || { tcg: null, pc: null, avg: null };
           var tcgStr = p.tcg != null ? '$' + p.tcg.toFixed(2) : '—';
           var pcStr  = p.pc  != null ? '$' + p.pc.toFixed(2)  : '—';
-          var avgStr = p.avg != null ? '$' + p.avg.toFixed(2) : '—';
+          var avgStr = p.avg != null ? '$' + p.avg.toFixed(2) + (p.fromBinder ? ' *' : '') : '—';
           var totalStr = (p.avg != null && c.qty > 1) ? '$' + (p.avg * c.qty).toFixed(2) : '';
           return '<tr style="border-bottom:1px solid var(--border)">' +
             '<td style="padding:6px 8px;font-size:.75rem">' + _escHtml(c.name) +
