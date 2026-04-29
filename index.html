@@ -9272,42 +9272,52 @@
       if (!text) return null;
       const lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
 
-      // Card type suffixes that appear in the name (catalog stores as "Name SUFFIX")
-      const SUFFIX = /^(VSTAR|VMAX|GX|EX|V|VUNION)$/i;
+      const SUFFIX    = /^(VSTAR|VMAX|GX|EX|V|VUNION|TAG\s*TEAM)$/i;
+      const STAGE_PRE = /^(Basic|Stage\s*[12])\s+/i;  // stage as prefix on same line
+      const STAGE     = /^(Basic|Stage\s*[12])$/i;     // stage alone on its own line
+      const SKIP      = /^(Basic|Stage\s*[12]|VMAX|VSTAR|GX|EX|V|VUNION|TAG\s*TEAM|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule|DX)$/i;
+      const NAME_RE   = /^[A-ZÀ-Ö][a-zA-ZÀ-ö0-9\s\-'éèê&]+$/;
 
-      // Stage indicators — the card name is on the very next non-empty line
-      const STAGE = /^(Basic|Stage\s*[12])$/i;
-
-      // Words that are never part of the card name
-      const SKIP = /^(Basic|Stage\s*[12]|VMAX|VSTAR|GX|EX|V|VUNION|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule)$/i;
-
-      for (let i = 0; i < Math.min(10, lines.length); i++) {
+      for (let i = 0; i < Math.min(12, lines.length); i++) {
         const line = lines[i];
 
-        // Pattern: "VSTAR Lugia" or "VMAX Rayquaza" — suffix printed before name on card
-        // Flip to catalog format: "Lugia VSTAR"
+        // Pattern: "BASIC Reshiram&" — stage prefix inline with partial name
+        // next line may continue the name ("Charizard")
+        if (STAGE_PRE.test(line)) {
+          let namePart = line.replace(STAGE_PRE, '').trim();
+          if (namePart.endsWith('&') && i + 1 < lines.length) {
+            namePart = namePart + ' ' + lines[i + 1].trim();
+          }
+          if (namePart.length > 1) return namePart;
+        }
+
+        // Pattern: "VSTAR Lugia" — type suffix before name, flip to "Lugia VSTAR"
         const prefixMatch = line.match(/^(VSTAR|VMAX|GX|EX|V)\s+([A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+)$/);
         if (prefixMatch) {
           return prefixMatch[2].trim() + ' ' + prefixMatch[1].toUpperCase();
         }
 
-        // Pattern: "Lugia\nVSTAR" — name on one line, suffix on next
+        // Pattern: "Lugia\nVSTAR" — name then suffix on next line
         if (i + 1 < lines.length && SUFFIX.test(lines[i + 1])) {
-          if (/^[A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+$/.test(line) && line.length > 1 && line.length < 35) {
-            return line + ' ' + lines[i + 1].toUpperCase();
+          if (NAME_RE.test(line) && !SKIP.test(line) && line.length > 1 && line.length < 35) {
+            return line + ' ' + lines[i + 1].replace(/\s+/g, ' ').toUpperCase();
           }
         }
 
-        // Pattern: "Basic\nDucklett" — stage on one line, name on next
+        // Pattern: "Reshiram&\nCharizard" — name split across lines by ampersand
+        if (line.endsWith('&') && i + 1 < lines.length) {
+          const joined = line + ' ' + lines[i + 1].trim();
+          if (NAME_RE.test(joined) && joined.length < 50) return joined;
+        }
+
+        // Pattern: "Basic\nDucklett" — stage alone, name follows
         if (STAGE.test(line) && i + 1 < lines.length) {
           const next = lines[i + 1].trim();
-          if (/^[A-ZÀ-Öa-z][a-zA-ZÀ-ö\s\-'éèê&]+$/.test(next) && next.length > 1 && next.length < 40) {
-            return next;
-          }
+          if (NAME_RE.test(next) && next.length > 1 && next.length < 40) return next;
         }
 
         // Fallback: first valid title-case line that isn't a keyword
-        if (!SKIP.test(line) && /^[A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+$/.test(line) && line.length > 2 && line.length < 40) {
+        if (!SKIP.test(line) && NAME_RE.test(line) && line.length > 2 && line.length < 40) {
           return line;
         }
       }
