@@ -9408,7 +9408,8 @@
 
         setScanStatus('Searching catalog…');
 
-        const base = sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url');
+        // Factory — Supabase query builders are mutable, so create a fresh one each time
+        const q = () => sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url');
 
         // Derive a shorter base name for broader fallback searching:
         //   "Lugia VSTAR"            → "Lugia"
@@ -9434,27 +9435,27 @@
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
           // A
           (numStripped && cardName)
-            ? base.ilike('name', '%' + cardName + '%').eq('card_number', numStripped).limit(5)
+            ? q().ilike('name', '%' + cardName + '%').eq('card_number', numStripped).limit(5)
             : Promise.resolve({ data: [] }),
           // B
           (numRaw && numRaw !== numStripped && cardName)
-            ? base.ilike('name', '%' + cardName + '%').eq('card_number', numRaw).limit(5)
+            ? q().ilike('name', '%' + cardName + '%').eq('card_number', numRaw).limit(5)
             : Promise.resolve({ data: [] }),
           // C
           numStripped
-            ? base.eq('card_number', numStripped).limit(20)
+            ? q().eq('card_number', numStripped).limit(20)
             : Promise.resolve({ data: [] }),
           // D
           (numRaw && numRaw !== numStripped)
-            ? base.eq('card_number', numRaw).limit(20)
+            ? q().eq('card_number', numRaw).limit(20)
             : Promise.resolve({ data: [] }),
           // E
           cardName
-            ? base.ilike('name', '%' + cardName + '%').limit(12)
+            ? q().ilike('name', '%' + cardName + '%').limit(12)
             : Promise.resolve({ data: [] }),
           // F
           baseName
-            ? base.ilike('name', '%' + baseName + '%').limit(12)
+            ? q().ilike('name', '%' + baseName + '%').limit(12)
             : Promise.resolve({ data: [] }),
           // G — set fingerprint RPC (requires SQL function below)
           (numStripped && numTotal)
