@@ -8799,7 +8799,7 @@
     <div style="display:flex;gap:10px;margin-top:12px;justify-content:center;flex-wrap:wrap">
       <label id="scanPhotoLabel" style="padding:13px 36px;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
         SCAN CARD
-        <input id="scanCameraInput" type="file" accept="image/*" capture="environment" onchange="matchFromFile(this)" style="display:none">
+        <input id="scanCameraInput" type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
       </label>
       <label style="padding:13px 20px;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--shadow);letter-spacing:.06em">
         GALLERY
@@ -8822,7 +8822,7 @@
         <button id="scanToggleCameraBtn" onclick="scanShowCamera()" style="flex:1;padding:9px 0;background:var(--accent);color:var(--surface);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">▲ PHOTO</button>
         <button id="scanToggleResultsBtn" onclick="scanShowResults()" style="flex:1;padding:9px 0;background:transparent;color:var(--muted);border:2px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">▼ RESULTS</button>
         <label style="padding:9px 14px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">
-          📷 RETAKE<input type="file" accept="image/*" capture="environment" onchange="reopenViewfinder();matchFromFile(this)" style="display:none">
+          📷 RETAKE<input type="file" accept="image/*" onchange="reopenViewfinder();matchFromFile(this)" style="display:none">
         </label>
       </div>
     </div>
@@ -8931,11 +8931,6 @@
       setScanStatus('Tap below to photograph a card');
       // Preload CLIP model in background
       if (window._preloadClip) window._preloadClip().catch(() => {});
-      // Auto-open camera — works because this is called from a user gesture
-      setTimeout(() => {
-        const inp = document.getElementById('scanCameraInput');
-        if (inp) inp.click();
-      }, 80);
     }
 
     function closeCardScanner() {
