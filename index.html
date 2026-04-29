@@ -994,7 +994,14 @@
       </div>
 
       <!-- Tier cards -->
-      <div id="pricingGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px"></div>
+      <div id="pricingGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:12px"></div>
+
+      <!-- Subscription disclosure -->
+      <p style="font-size:.62rem;color:var(--muted);text-align:center;margin:0 0 18px;line-height:1.6">
+        Paid plans are <strong style="color:var(--text)">monthly subscriptions</strong> that renew automatically at the full plan price until cancelled.
+        Cancel anytime from your account settings — no cancellation fees.
+        Annual billing locks in a discounted rate for 12 months.
+      </p>
 
       <!-- Shop intake form (hidden until Shop CTA is clicked) -->
       <div id="shopIntakeForm" style="display:none;border:1px solid #993C1D;padding:18px;margin-top:8px">
@@ -1322,8 +1329,6 @@
           <button onclick="processSpreadGrid(2,2)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">2 × 2</button>
           <button onclick="processSpreadGrid(2,3)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">2 × 3</button>
           <button onclick="processSpreadGrid(3,3)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">3 × 3</button>
-          <button onclick="processSpreadGrid(3,4)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">3 × 4</button>
-          <button onclick="processSpreadGrid(4,4)" style="padding:8px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:4px">4 × 4</button>
         </div>
         <button onclick="document.getElementById('msPickerView').style.display='block';document.getElementById('msSpreadPicker').style.display='none'" style="margin-top:14px;background:none;border:none;color:var(--muted);font-size:.72rem;cursor:pointer;padding:0">← Back</button>
       </div>
@@ -2079,7 +2084,7 @@
     }
     function canAddGhostCard() {
       if (tierAtLeast('collector')) return true;
-      return collectionItems.filter(c => c.is_ghost && !c.sold_offline).length < 1;
+      return collectionItems.filter(c => c.is_ghost && !c.sold_offline).length < 2;
     }
     function canAddCardFund() {
       const funds = collectionItems.filter(c => c.is_ghost && c.savings_goal > 0 && !c.sold_offline).length;
@@ -2090,6 +2095,45 @@
     function hasPriceTracking()  { return tierAtLeast('collector'); }
     function hasBulkImport()     { return tierAtLeast('vendor'); }
     function hasMultiBinder()    { return !!currentUser; }
+
+    // ── Monthly usage tracking (localStorage, per-user per-month) ────────────
+    function _usageKey(prefix) {
+      var now = new Date();
+      return 'pb_' + prefix + '_' + (currentUser ? currentUser.id : 'guest')
+           + '_' + now.getFullYear() + '-' + (now.getMonth() + 1);
+    }
+    function getUsageCount(prefix) {
+      try { return parseInt(localStorage.getItem(_usageKey(prefix)) || '0', 10); } catch(_) { return 0; }
+    }
+    function incrementUsage(prefix) {
+      try { localStorage.setItem(_usageKey(prefix), String(getUsageCount(prefix) + 1)); } catch(_) {}
+    }
+
+    // ── Per-tier limits ──────────────────────────────────────────────────────
+    function scannerLimit() {
+      if (tierAtLeast('shop'))      return Infinity;   // unlimited
+      if (tierAtLeast('collector')) return 1000;       // vendor inherits this too
+      return 5;                                        // free
+    }
+    function bulkSessionLimit() {
+      if (tierAtLeast('shop'))      return Infinity;
+      if (tierAtLeast('vendor'))    return 1000;
+      if (tierAtLeast('collector')) return 5;
+      return 0;  // free: bulk scan not available
+    }
+    function bulkCardsPerSession() {
+      if (tierAtLeast('vendor'))    return Infinity;
+      if (tierAtLeast('collector')) return 35;
+      return 0;
+    }
+
+    // ── Upgrade prompt with 25 % first-month discount ────────────────────────
+    var _limitPromoTier = null;   // set before opening pricing modal at a limit wall
+
+    function openPricingModalWithPromo(targetTier) {
+      _limitPromoTier = targetTier;
+      openPricingModal(targetTier);
+    }
     function getMaxBinders()    {
       if (!currentUser) return 0;
       const t = currentUser.subscription_tier || 'free';
@@ -6389,16 +6433,17 @@
         badge: null,
         features: [
           'Up to 200 cards logged',
-          'Card catalog search & auto-fill',
+          'Card catalog search & auto-fill (unlimited)',
+          '5 photo card scans / month',
           'Manual value entry',
           'Condition & grade tracking',
           'Collection dashboard',
-          '1 Wishlist goal',
+          '2 Wishlist goals',
           '1 Card Fund goal',
           'Shareable binder link',
           'Marketplace access',
         ],
-        locked: ['Live market prices','Price trend charts','Bulk CSV import','Multi-binder org'],
+        locked: ['Live market prices','Price trend charts','Bulk CSV import','Multi-binder org','Bulk photo scanning'],
       },
       {
         id: 'collector', label: 'Collector', monthly: 5, annual: null,
@@ -6406,6 +6451,9 @@
         badge: 'Most popular',
         features: [
           'Unlimited cards',
+          '1,000 photo card scans / month',
+          '5 bulk photo scan sessions / month',
+          'Up to 35 cards per bulk session',
           'Live market price tracking',
           'Daily auto price refresh',
           'Per-card price trend charts',
@@ -6423,6 +6471,7 @@
         badge: null,
         features: [
           'Everything in Collector',
+          '1,000 bulk photo scan sessions / month',
           'Bulk CSV import',
           'Multi-binder organization',
           'Sales archive — daily/weekly/monthly/yearly filters',
@@ -6442,6 +6491,8 @@
         badge: null,
         features: [
           'Everything in Vendor',
+          'Unlimited photo card scans',
+          'Unlimited bulk scan sessions',
           'Monthly revenue bar chart',
           'Top-5 cards by revenue',
           'Channel breakdown (online vs offline)',
@@ -6493,6 +6544,12 @@
           }
         }
 
+        // ── Promo banner (shown when user hit a usage limit) ─────────────
+        const isPromoTarget = (_limitPromoTier === t.id) && !isCurrent;
+        const promoBanner = isPromoTarget
+          ? `<div style="background:var(--accent2);color:var(--surface);font-size:.6rem;font-weight:700;letter-spacing:.08em;text-align:center;padding:4px 8px;margin-bottom:8px">🎟 25% OFF YOUR FIRST MONTH — upgrade now</div>`
+          : '';
+
         // ── CTA button ──────────────────────────────────────────────────
         let ctaBtn = '';
         if (isCurrent) {
@@ -6501,10 +6558,13 @@
           ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Contact us →</button>`;
         } else if (t.ctaAction) {
           const isAbove = TIER_ORDER.indexOf(t.id) < TIER_ORDER.indexOf(current);
-          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${t.badge ? 'var(--premium)' : 'transparent'};color:${t.badge ? 'var(--premium-txt)' : 'var(--accent)'};border:2px solid var(--border);box-shadow:3px 3px 0 var(--shadow);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;opacity:${isAbove ? '.5' : '1'}">${t.ctaLabel} →</button>`;
+          const btnBg = isPromoTarget ? 'var(--accent2)' : (t.badge ? 'var(--premium)' : 'transparent');
+          const btnColor = isPromoTarget ? 'var(--surface)' : (t.badge ? 'var(--premium-txt)' : 'var(--accent)');
+          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${btnBg};color:${btnColor};border:2px solid var(--border);box-shadow:3px 3px 0 var(--shadow);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;opacity:${isAbove ? '.5' : '1'}">${isPromoTarget ? 'Upgrade & Save 25% →' : t.ctaLabel + ' →'}</button>`;
         } else {
           ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">${t.ctaLabel}</button>`;
         }
+        ctaBtn = promoBanner + ctaBtn;
 
         // ── Feature list ────────────────────────────────────────────────
         const featureLines = t.features.map(f =>
@@ -6546,6 +6606,13 @@
       document.getElementById('shopIntakeForm').style.display = 'none';
       renderPricingGrid();
       openModal('membershipModal');
+      // Clear promo once the modal closes so it doesn't appear on future opens
+      const overlay = document.getElementById('membershipModal');
+      if (overlay) {
+        overlay.addEventListener('click', function clearPromo(e) {
+          if (e.target === overlay) { _limitPromoTier = null; overlay.removeEventListener('click', clearPromo); }
+        });
+      }
     }
 
     function openShopIntake() {
@@ -8258,7 +8325,8 @@
     function openAddToWishlistModal(cardData) {
       if (!currentUser) { showToast('Sign in to add cards to your wishlist'); return; }
       if (!canAddGhostCard()) {
-        showToast('Free plan: 1 Ghost Card goal. Upgrade to Collector for unlimited.');
+        showToast('Free plan: 2 Wishlist goals. Upgrade to Collector for unlimited.');
+        setTimeout(() => openPricingModalWithPromo('collector'), 800);
         openPricingModal('collector');
         return;
       }
@@ -9531,6 +9599,36 @@
     // opts.silent=true → skip all UI updates, return match array (used by multi-scan)
     async function runMatch(dataURL, opts) {
       const silent = !!(opts && opts.silent);
+
+      // ── Per-tier monthly scanner usage gate (non-silent scans only) ─────────
+      if (!silent && currentUser) {
+        const used  = getUsageCount('scan');
+        const limit = scannerLimit();
+        if (used >= limit) {
+          // Determine which tier to upsell to
+          const nextTier = tierAtLeast('vendor') ? null
+                         : tierAtLeast('collector') ? 'vendor' : 'collector';
+          const remaining = 'Monthly scan limit reached (' + limit + '/month).';
+          setScanStatus(remaining + (nextTier ? ' Upgrade for more.' : ' Contact us to move to Shop.'));
+          if (nextTier) {
+            setTimeout(() => openPricingModalWithPromo(nextTier), 900);
+          } else {
+            // Vendor at limit — direct to shop contact form
+            setTimeout(() => { openPricingModal(); setTimeout(openShopIntake, 300); }, 900);
+          }
+          return [];
+        }
+        // Count the scan
+        incrementUsage('scan');
+        // Show remaining uses for free tier as a soft nudge
+        if (!tierAtLeast('collector')) {
+          const left = limit - used - 1;
+          if (left <= 2) setScanStatus(left === 0
+            ? 'Last free scan this month — upgrade for more.'
+            : left + ' free scan' + (left === 1 ? '' : 's') + ' remaining this month.');
+        }
+      }
+
       if (!silent) setScanStatus('Reading card text…');
       try {
         // Step 1: OCR the full image + start CLIP embedding in parallel
@@ -9741,7 +9839,24 @@
 
     function openMultiScan() {
       if (!currentUser) { showToast('Sign in to use multi-scan'); return; }
-      if (!tierAtLeast('vendor')) { openPricingModal('vendor'); return; }
+      // Collector+ can access bulk scan (vendor is collector+)
+      if (!tierAtLeast('collector')) { openPricingModalWithPromo('collector'); return; }
+
+      // Monthly bulk-session gate
+      const bulkUsed  = getUsageCount('bulk');
+      const bulkLimit = bulkSessionLimit();
+      if (bulkUsed >= bulkLimit) {
+        const nextTier = tierAtLeast('vendor') ? null : 'vendor';
+        if (nextTier) {
+          showToast('Monthly bulk scan limit reached (' + bulkLimit + '). Upgrading unlocks more.');
+          setTimeout(() => openPricingModalWithPromo(nextTier), 600);
+        } else {
+          // Vendor at their limit — contact us
+          showToast('Monthly bulk limit reached (' + bulkLimit + '). Contact us to move to Shop.');
+          setTimeout(() => { openPricingModal(); setTimeout(openShopIntake, 300); }, 600);
+        }
+        return;
+      }
       _multiScanResults = [];
       _msSpreadDataURL  = null;
       // Reset to picker view
@@ -9801,6 +9916,8 @@
     // Called by grid size buttons in spread picker
     async function processSpreadGrid(rows, cols) {
       if (!_msSpreadDataURL) return;
+      // Hard cap: max 3×3 grid to keep OCR reliable
+      if (rows > 3 || cols > 3) { showToast('Max grid size is 3 × 3'); return; }
       var crops = await cropImageGrid(_msSpreadDataURL, rows, cols);
       startMultiScanProcessing(crops);
     }
@@ -9808,13 +9925,22 @@
     // Called when user picks multiple photos
     async function handleMultiScanFiles(fileList) {
       if (!fileList || fileList.length === 0) return;
-      if (fileList.length > 20) { showToast('Max 20 images at once'); return; }
+      // Per-session card cap based on tier
+      var sessionCap = bulkCardsPerSession();
+      if (fileList.length > sessionCap) {
+        showToast('Your plan allows up to ' + sessionCap + ' cards per bulk scan session.');
+        return;
+      }
+      // Absolute safety cap (no one should need more than 100 individual photos at once)
+      if (fileList.length > 100) { showToast('Max 100 images at once'); return; }
       var dataURLs = await Promise.all(Array.from(fileList).map(readFileAsDataURL));
       startMultiScanProcessing(dataURLs);
     }
 
     // Core processing loop — receives array of dataURL strings
     async function startMultiScanProcessing(dataURLs) {
+      // Count this as one bulk session
+      incrementUsage('bulk');
       _multiScanResults = dataURLs.map(function(url) {
         return { thumb: url, status: 'pending', matches: [], included: true, selectedMatch: null };
       });
