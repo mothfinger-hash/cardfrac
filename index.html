@@ -1734,6 +1734,7 @@
       <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales Archive</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
+      <button class="account-tab" onclick="switchAccountTab('tradeHistory')">Trades</button>
     </div>
 
     <div id="dashboard" class="account-content active">
@@ -1767,6 +1768,12 @@
 
     <div id="history" class="account-content">
       <div id="historyContent"></div>
+    </div>
+
+    <div id="tradeHistory" class="account-content">
+      <div id="tradeHistoryContent">
+        <div style="text-align:center;padding:40px;color:var(--muted)">Loading trade history…</div>
+      </div>
     </div>
   </div>
 
@@ -2062,8 +2069,14 @@
           </p>
         </div>
 
-        <!-- Start Over -->
-        <div style="text-align:center;margin-top:20px;padding-bottom:10px">
+        <!-- Accept Trade / Start Over -->
+        <div style="text-align:center;margin-top:20px;padding-bottom:10px;display:flex;flex-direction:column;align-items:center;gap:10px">
+          <button id="ftAcceptBtn" onclick="ftAcceptTrade()"
+            style="padding:12px 32px;border:2px solid var(--green,#7AAF1A);background:transparent;color:var(--green,#7AAF1A);font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s,color .15s"
+            onmouseover="this.style.background='var(--green,#7AAF1A)';this.style.color='var(--surface)'"
+            onmouseout="this.style.background='transparent';this.style.color='var(--green,#7AAF1A)'">
+            ✅ Accept Trade
+          </button>
           <button onclick="ftReset()"
             style="padding:10px 28px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
             ← Start Over
@@ -2082,6 +2095,13 @@
   <!-- ── STOREFRONT PAGE ────────────────────────────────────────────────── -->
   <div id="storefrontPage" class="page" style="padding:0;max-width:100%">
     <div id="storefrontContent"></div>
+  </div>
+
+  <!-- ── SETS COMPLETION TRACKER ────────────────────────────────────────── -->
+  <div id="setsPage" class="page">
+    <div id="setsPageContent">
+      <div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>
+    </div>
   </div>
 
   <div id="leaderboardPage" class="page">
@@ -2776,8 +2796,9 @@
       if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
       if (pageId === 'addCard') { /* addCardPage ready */ }
       if (pageId === 'fairTrade') { ftInitPage(); }
+      if (pageId === 'sets') { loadSetsPage(); }
       // collection page is accessible directly via nav
-      
+
     }
 
     document.querySelectorAll('[data-page]').forEach(tab => {
@@ -3199,6 +3220,88 @@
     // ===== ACCOUNT PAGE =====
     let activeOrdersTab = 'buying';
 
+    async function renderTradeHistory() {
+      const el = document.getElementById('tradeHistoryContent');
+      if (!el) return;
+      if (!currentUser) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Log in to view your trade history.</div>';
+        return;
+      }
+
+      el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Loading…</div>';
+
+      try {
+        const { data: rows, error } = await sb
+          .from('trade_history')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+
+        if (!rows || !rows.length) {
+          el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
+            <div style="font-size:2rem;margin-bottom:12px">🤝</div>
+            <div style="font-size:.9rem;margin-bottom:6px">No trades yet</div>
+            <div style="font-size:.78rem">Use the Fair Trade Analyzer and hit <strong>Accept Trade</strong> to log your trades here.</div>
+          </div>`;
+          return;
+        }
+
+        const cards = rows.map(r => {
+          const date = r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '—';
+          const offered  = Array.isArray(r.offered_cards)  ? r.offered_cards  : [];
+          const received = Array.isArray(r.received_cards) ? r.received_cards : [];
+          const offVal = r.offered_value  != null ? '$' + Number(r.offered_value).toFixed(2)  : '—';
+          const recVal = r.received_value != null ? '$' + Number(r.received_value).toFixed(2) : '—';
+          const verdict = r.verdict || '';
+          const verdictColor = verdict.toLowerCase().includes('even') ? 'var(--muted)'
+            : verdict.toLowerCase().includes('favor') && verdict.includes('A') ? 'var(--teal)'
+            : verdict.toLowerCase().includes('favor') && verdict.includes('B') ? 'var(--gold)'
+            : 'var(--accent2)';
+          const partner = r.partner_name ? `<span style="color:var(--text)">${_escHtml(r.partner_name)}</span>` : '<span style="color:var(--muted)">Solo</span>';
+
+          const offerList = offered.length
+            ? offered.map(c => `<div style="font-size:.7rem;color:var(--muted)">↗ ${_escHtml(c.name)}${c.qty > 1 ? ' ×' + c.qty : ''}${c.avg ? ' · $' + Number(c.avg).toFixed(2) : ''}</div>`).join('')
+            : '<div style="font-size:.7rem;color:var(--muted)">—</div>';
+          const recvList = received.length
+            ? received.map(c => `<div style="font-size:.7rem;color:var(--muted)">↙ ${_escHtml(c.name)}${c.qty > 1 ? ' ×' + c.qty : ''}${c.avg ? ' · $' + Number(c.avg).toFixed(2) : ''}</div>`).join('')
+            : '<div style="font-size:.7rem;color:var(--muted)">—</div>';
+
+          return `<div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:4px">
+              <div>
+                <span style="font-size:.76rem;font-weight:700">${date}</span>
+                <span style="font-size:.72rem;color:var(--muted);margin-left:10px">with ${partner}</span>
+              </div>
+              ${verdict ? `<span style="font-size:.67rem;font-weight:700;color:${verdictColor};border:1px solid ${verdictColor};padding:2px 8px;letter-spacing:.05em">${_escHtml(verdict)}</span>` : ''}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <div style="font-size:.63rem;font-weight:700;letter-spacing:.08em;color:var(--teal);margin-bottom:4px">YOU OFFERED · ${offVal}</div>
+                ${offerList}
+              </div>
+              <div>
+                <div style="font-size:.63rem;font-weight:700;letter-spacing:.08em;color:var(--gold);margin-bottom:4px">YOU RECEIVED · ${recVal}</div>
+                ${recvList}
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+
+        el.innerHTML = `<div>
+          <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:var(--muted);padding:10px 16px 8px">TRADE HISTORY (${rows.length})</div>
+          <div style="border:1px solid var(--border)">${cards}</div>
+        </div>`;
+      } catch(e) {
+        el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
+          Could not load trade history.<br>
+          <span style="font-size:.72rem">${e.message && e.message.includes('does not exist') ? 'Run the SQL migration to create the trade_history table first.' : _escHtml(e.message || '')}</span>
+        </div>`;
+      }
+    }
+
     function renderAccount() {
       if (!currentUser) {
         // Show the account page with a sign-in prompt instead of silently
@@ -3233,6 +3336,7 @@
       if (tab === 'myOrders') renderOrders();
       if (tab === 'myListings') renderMyListings();
       if (tab === 'salesArchive') renderSalesArchive();
+      if (tab === 'tradeHistory') renderTradeHistory();
     }
 
     function switchOrdersTab(tab) {
@@ -10325,12 +10429,306 @@
       ftInitPage();  // resets state to 'input' and clears all cards/fields
     }
 
+    async function ftAcceptTrade() {
+      if (!currentUser) {
+        showToast('Log in to accept trades and update your binder');
+        return;
+      }
+
+      const btn = document.getElementById('ftAcceptBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+
+      try {
+        // Determine which side the current user is on
+        var mySide   = (_ftSession && _ftSession.role === 'b') ? 'B' : 'A';
+        var theirSide = mySide === 'A' ? 'B' : 'A';
+        var offered   = _ftCards[mySide]   || [];
+        var received  = _ftCards[theirSide] || [];
+
+        if (!offered.length && !received.length) {
+          showToast('No cards on either side to accept');
+          if (btn) { btn.disabled = false; btn.textContent = '✅ Accept Trade'; }
+          return;
+        }
+
+        var errors = [];
+
+        // ── 1. Remove offered cards from binder ────────────────────────
+        for (var i = 0; i < offered.length; i++) {
+          var oc = offered[i];
+          var qty = oc.qty || 1;
+          if (oc.id && oc.id.startsWith('binder_')) {
+            // Direct binder card — we have the collection_items UUID
+            var binderUuid = oc.id.replace(/^binder_/, '');
+            var existing = collectionItems.find(function(c) { return String(c.id) === binderUuid; });
+            if (existing) {
+              if ((existing.quantity || 1) <= qty) {
+                // Remove entirely
+                var { error: delErr } = await sb.from('collection_items').delete().eq('id', existing.id);
+                if (!delErr) collectionItems = collectionItems.filter(function(c) { return String(c.id) !== binderUuid; });
+                else errors.push('Remove ' + oc.name + ': ' + delErr.message);
+              } else {
+                // Decrement quantity
+                var newQty = (existing.quantity || 1) - qty;
+                var { error: updErr } = await sb.from('collection_items').update({ quantity: newQty }).eq('id', existing.id);
+                if (!updErr) existing.quantity = newQty;
+                else errors.push('Update qty ' + oc.name + ': ' + updErr.message);
+              }
+            }
+          } else {
+            // Scanned/searched card — match by api_card_id or name
+            var match = collectionItems.find(function(c) {
+              return !c.is_ghost && !c.sold_offline &&
+                ((oc.apiCardId && c.api_card_id === oc.apiCardId) ||
+                 (c.card_name && c.card_name.toLowerCase() === (oc.name || '').toLowerCase()));
+            });
+            if (match) {
+              if ((match.quantity || 1) <= qty) {
+                var { error: delErr2 } = await sb.from('collection_items').delete().eq('id', match.id);
+                if (!delErr2) collectionItems = collectionItems.filter(function(c) { return c.id !== match.id; });
+                else errors.push('Remove ' + oc.name + ': ' + delErr2.message);
+              } else {
+                var newQty2 = (match.quantity || 1) - qty;
+                var { error: updErr2 } = await sb.from('collection_items').update({ quantity: newQty2 }).eq('id', match.id);
+                if (!updErr2) match.quantity = newQty2;
+                else errors.push('Update qty ' + oc.name + ': ' + updErr2.message);
+              }
+            }
+          }
+        }
+
+        // ── 2. Add received cards to binder ────────────────────────────
+        var now = new Date().toISOString();
+        for (var j = 0; j < received.length; j++) {
+          var rc = received[j];
+          var insertData = {
+            user_id:        currentUser.id,
+            card_name:      rc.name || 'Unknown Card',
+            game_type:      'pokemon',
+            condition:      'raw',
+            grade_value:    null,
+            card_image_url: rc.image || null,
+            api_card_id:    rc.apiCardId || (rc.id && !rc.id.startsWith('binder_') ? rc.id : null),
+            set_name:       rc.set || null,
+            card_number:    rc.number || null,
+            purchase_price: rc.avgPrice || rc.binderPrice || 0,
+            current_value:  rc.avgPrice || rc.binderPrice || 0,
+            quantity:       rc.qty || 1,
+            purchase_date:  now.slice(0, 10),
+            notes:          'trade_received'
+          };
+          var { data: newItem, error: insErr } = await sb.from('collection_items').insert(insertData).select().single();
+          if (!insErr && newItem) {
+            collectionItems.unshift(newItem);
+          } else if (insErr) {
+            errors.push('Add ' + rc.name + ': ' + insErr.message);
+          }
+        }
+
+        // ── 3. Log to trade_history ──────────────────────────────────
+        var verdict = (document.getElementById('ftVerdict') || {}).textContent || '';
+        var partnerName = '';
+        if (_ftSession) {
+          partnerName = mySide === 'A' ? (_ftSession.nameB || 'Guest') : (_ftSession.nameA || 'Guest');
+        }
+        var offeredVal  = _ftSideTotal ? _ftSideTotal(mySide)   : 0;
+        var receivedVal = _ftSideTotal ? _ftSideTotal(theirSide) : 0;
+
+        var historyRow = {
+          user_id:         currentUser.id,
+          session_id:      _ftSession ? _ftSession.id : null,
+          partner_name:    partnerName || null,
+          my_side:         mySide,
+          offered_cards:   offered.map(function(c) { return { name: c.name, qty: c.qty || 1, avg: c.avgPrice || null }; }),
+          received_cards:  received.map(function(c) { return { name: c.name, qty: c.qty || 1, avg: c.avgPrice || null }; }),
+          offered_value:   offeredVal,
+          received_value:  receivedVal,
+          verdict:         verdict || null
+        };
+        try {
+          await sb.from('trade_history').insert(historyRow);
+        } catch(_) { /* table may not exist yet — non-fatal */ }
+
+        if (errors.length) {
+          showToast('Trade accepted with errors: ' + errors[0]);
+        } else {
+          showToast('Trade accepted! Binder updated ✅');
+        }
+
+        // Give the user a moment to see the toast, then reset
+        setTimeout(function() { ftReset(); }, 1200);
+
+      } catch(e) {
+        console.error('[ftAcceptTrade]', e);
+        showToast('Error accepting trade: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Accept Trade'; }
+      }
+    }
+
     function _escHtml(str) {
       if (!str) return '';
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
     // ── End Fair Trade ─────────────────────────────────────────────────────
+
+    // ══════════════════════════════════════════════════════════════════════
+    // SETS COMPLETION TRACKER
+    // ══════════════════════════════════════════════════════════════════════
+    var _setsCache = null;  // { timestamp, sets }
+    var _setsDetailCache = {};  // setId → { timestamp, cards }
+
+    async function loadSetsPage() {
+      const el = document.getElementById('setsPageContent');
+      if (!el) return;
+
+      el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>';
+
+      try {
+        // Fetch sets from pokemontcg.io (cache for 10 min)
+        let sets;
+        const now = Date.now();
+        if (_setsCache && (now - _setsCache.timestamp < 600000)) {
+          sets = _setsCache.sets;
+        } else {
+          const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250');
+          if (!res.ok) throw new Error('API error ' + res.status);
+          const data = await res.json();
+          sets = data.data || [];
+          _setsCache = { timestamp: now, sets };
+        }
+
+        // Build a lookup: set_name → count of owned cards (non-ghost)
+        const ownedBySet = {};
+        if (currentUser) {
+          collectionItems.filter(c => !c.is_ghost && !c.sold_offline).forEach(c => {
+            const sn = (c.set_name || '').trim();
+            if (sn) ownedBySet[sn] = (ownedBySet[sn] || 0) + (c.quantity || 1);
+          });
+        }
+
+        const rows = sets.map(s => {
+          const owned  = ownedBySet[s.name] || 0;
+          const total  = s.total || s.printedTotal || 1;
+          const pct    = Math.min(100, Math.round((owned / total) * 100));
+          const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+          const logoHtml = s.images && s.images.logo
+            ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
+            : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
+          return `<div onclick="loadSetDetail('${s.id}','${_escHtml(s.name)}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            ${logoHtml}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.name)}</div>
+              <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.series || ''} · ${s.releaseDate || ''} · ${total} cards</div>
+              <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
+              </div>
+            </div>
+            <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${owned}/${total}</div>
+          </div>`;
+        }).join('');
+
+        const totalOwned = Object.values(ownedBySet).reduce((a, b) => a + b, 0);
+
+        el.innerHTML = `
+          <div style="padding:16px 0 8px">
+            <h2 style="font-size:1.1rem;margin-bottom:4px">Set Completion</h2>
+            <p style="font-size:.76rem;color:var(--muted);margin-bottom:16px">
+              ${currentUser ? totalOwned + ' cards owned across your binder' : 'Log in to track your collection'}
+            </p>
+            <div style="background:var(--surface);border:1px solid var(--border)">
+              ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No sets found</div>'}
+            </div>
+          </div>`;
+      } catch(e) {
+        el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">Failed to load sets.<br><button onclick="loadSetsPage()" style="margin-top:12px;padding:6px 16px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;cursor:pointer;font-size:.8rem">Retry</button></div>`;
+      }
+    }
+
+    async function loadSetDetail(setId, setName) {
+      const el = document.getElementById('setsPageContent');
+      if (!el) return;
+
+      el.innerHTML = `<div style="padding:12px 0 8px">
+        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+        <h2 style="font-size:1.05rem;margin-bottom:4px">${_escHtml(setName)}</h2>
+        <div style="text-align:center;padding:40px;color:var(--muted)">Loading cards…</div>
+      </div>`;
+
+      try {
+        const now = Date.now();
+        let cards;
+        if (_setsDetailCache[setId] && (now - _setsDetailCache[setId].timestamp < 600000)) {
+          cards = _setsDetailCache[setId].cards;
+        } else {
+          let allCards = [], page = 1, total = null;
+          do {
+            const r = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(setId)}&pageSize=250&page=${page}&orderBy=number`);
+            if (!r.ok) break;
+            const d = await r.json();
+            if (total === null) total = d.totalCount || 0;
+            allCards = allCards.concat(d.data || []);
+            page++;
+          } while (allCards.length < total && page <= 4);
+          cards = allCards;
+          _setsDetailCache[setId] = { timestamp: now, cards };
+        }
+
+        // Build owned lookup: api_card_id → collectionItem
+        const ownedMap = {};
+        if (currentUser) {
+          collectionItems.filter(c => !c.is_ghost && !c.sold_offline).forEach(c => {
+            if (c.api_card_id) ownedMap[c.api_card_id] = c;
+          });
+        }
+
+        let ownedCount = 0;
+        const cardRows = cards.map(card => {
+          const ci = ownedMap[card.id];
+          const owned = !!ci;
+          if (owned) ownedCount++;
+          const qty = ci ? (ci.quantity || 1) : 0;
+          const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
+          const img = card.images && card.images.small ? card.images.small : '';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);opacity:${owned?'1':'.45'}">
+            ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
+              <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
+            </div>
+            ${owned
+              ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}${price ? ' · $' + Number(price).toFixed(2) : ''}</span>`
+              : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
+          </div>`;
+        }).join('');
+
+        const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
+        const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+
+        el.innerHTML = `<div style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <h2 style="font-size:1.05rem;margin-bottom:8px">${_escHtml(setName)}</h2>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+            <div style="flex:1">
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
+              <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .5s"></div>
+              </div>
+            </div>
+            <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border)">
+            ${cardRows || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
+          </div>
+        </div>`;
+      } catch(e) {
+        el.innerHTML = `<div style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load set cards.</div>
+        </div>`;
+      }
+    }
+    // ── End Sets Completion Tracker ────────────────────────────────────────
 
     async function initApp() {
       const browseGrid = document.getElementById('browseGrid');
@@ -10670,6 +11068,10 @@
     <button class="mobile-nav-btn" id="mobileNavAddCard" onclick="showPage('addCard'); setMobileNav('addCard')">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Add Card
+    </button>
+    <button class="mobile-nav-btn" id="mobileNavSets" onclick="showPage('sets'); setMobileNav('sets')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l5 3"/></svg>
+      Sets
     </button>
     <button class="mobile-nav-btn" id="mobileNavAccount" onclick="showPage('account'); setMobileNav('account')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
