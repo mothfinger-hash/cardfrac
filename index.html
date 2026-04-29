@@ -8991,7 +8991,12 @@
       resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Searching…</div>';
 
       try {
-        var res = await fetch('https://api.pokemontcg.io/v2/cards?q=name:' + encodeURIComponent(q) + '*&pageSize=30&orderBy=name');
+        // pokemontcg.io Lucene: wildcard only valid on single tokens.
+        // Multi-word queries must use a quoted phrase (no wildcard).
+        var nameQuery = q.includes(' ')
+          ? 'name:"' + q + '"'
+          : 'name:' + q + '*';
+        var res = await fetch('https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(nameQuery) + '&pageSize=30&orderBy=name');
         if (!res.ok) throw new Error('API error');
         var data = await res.json();
         var cards = data.data || [];

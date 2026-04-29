@@ -5,6 +5,26 @@
 //   - If `url` is provided it is fetched directly and parsed (most reliable)
 //   - If only `name` is provided we attempt a slug guess + search fallback
 // Returns: { price: number | null, source: string | null }
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// PRE-LAUNCH UPGRADE: Switch to the official PriceCharting API
+// ─────────────────────────────────────────────────────────────────────────────
+// Current approach scrapes HTML which is fragile and can return wrong cards.
+// The official API (https://www.pricecharting.com/api/) returns clean JSON
+// with exact per-condition prices and eliminates all parsing guesswork.
+//
+// Migration plan:
+//   1. Obtain a PriceCharting API key (free tier available at pricecharting.com)
+//   2. Store as PRICECHARTING_API_KEY in Vercel environment variables
+//   3. Replace lookupFromName() with:
+//        GET /api/products?q={name}  → pick best match by name similarity
+//        GET /api/product?id={id}    → returns { "ungraded-price", "grade-10-price", ... }
+//   4. Prices come back in cents — divide by 100 (same as current logic)
+//   5. Remove all HTML fetch / parse code below
+//
+// This would also enable caching product IDs in Supabase so repeat lookups
+// for the same card skip the search step entirely.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
 
@@ -48,6 +68,19 @@ function gradeToId(grade) {
   return 'used_price';
 }
 
+// Map grade → ordered list of PriceCharting JSON keys to check (cents-based)
+function gradeCandidateKeys(grade) {
+  if (!grade) return ['ungraded', 'loose', 'used'];
+  const g = grade.toLowerCase();
+  if (g.includes('10'))  return ['grade_10',  'ungraded'];
+  if (g.includes('9.5')) return ['grade_9_5', 'ungraded'];
+  if (g.includes('9'))   return ['grade_9',   'ungraded'];
+  if (g.includes('8'))   return ['grade_8',   'ungraded'];
+  if (g.includes('7'))   return ['grade_7',   'ungraded'];
+  // raw / ungraded / nm / lp — never fall through to a graded price
+  return ['ungraded', 'loose', 'used'];
+}
+
 // Parse a price from PriceCharting HTML given a grade
 function parsePriceChartingHtml(html, grade) {
   // 1. Embedded JS price object (most reliable — pricecharting stores cents)
@@ -56,12 +89,11 @@ function parsePriceChartingHtml(html, grade) {
   if (jsonMatch) {
     try {
       const prices = JSON.parse(jsonMatch[1]);
-      const gradeKey = gradeToId(grade).replace('_price', '').replace('used', 'used');
-      const candidates = [gradeKey, 'grade_10', 'used'];
+      const candidates = gradeCandidateKeys(grade);
       for (const k of candidates) {
+        // PriceCharting stores prices as integer cents — divide by 100
         const val = prices[k] ?? prices[k + '_price'];
         if (val != null) {
-          // PriceCharting ALWAYS stores prices as integer cents — always divide by 100
           const n = parseFloat((Number(val) / 100).toFixed(2));
           if (n > 0) return n;
         }
@@ -69,8 +101,12 @@ function parsePriceChartingHtml(html, grade) {
     } catch (_) {}
   }
 
-  // 2. Element ID patterns
-  const idOrder = [gradeToId(grade), 'grade_10_price', 'used_price'];
+  // 2. Element ID patterns (HTML scrape fallback)
+  // Build id list that matches the grade — raw cards should NOT fall to grade_10_price
+  const isRaw = !grade || /raw|ungraded|nm|lp/i.test(grade);
+  const idOrder = isRaw
+    ? [gradeToId(grade), 'used_price']          // raw: never try grade_10
+    : [gradeToId(grade), 'used_price'];         // graded: already specific
   for (const id of idOrder) {
     const patterns = [
       new RegExp(`id="${id}"[^>]*>[^<$]*\\$?([0-9,]+\\.?[0-9]*)`, 'i'),
@@ -80,7 +116,7 @@ function parsePriceChartingHtml(html, grade) {
       const m = html.match(p);
       if (m) {
         const price = extractNumber(m[1]);
-        if (price && price > 0.5) return price;
+        if (price && price > 0) return price;  // allow sub-$0.50 cards
       }
     }
   }
@@ -94,11 +130,11 @@ function parsePriceChartingHtml(html, grade) {
     } catch (_) {}
   }
 
-  // 4. Last resort: any dollar figure near common price labels
+  // 4. Last resort: dollar figure near ungraded/raw price labels
   const fallback = html.match(/(?:ungraded|near.?mint|used)[^$\d]{0,60}\$([0-9,]+\.?[0-9]*)/i);
   if (fallback) {
     const price = extractNumber(fallback[1]);
-    if (price && price > 0.5) return price;
+    if (price && price > 0) return price;  // allow cheap cards
   }
 
   return null;
@@ -162,12 +198,31 @@ async function lookupFromName(name, grade) {
     const searchHtml = await fetchUrl(searchUrl).catch(() => null);
     if (!searchHtml) return null;
 
-    // Grab first result link from search page
-    const match = searchHtml.match(/href="(\/game\/[^"]+)"/);
-    if (match) {
-      const resultHtml = await fetchUrl('https://www.pricecharting.com' + match[1]).catch(() => null);
-      if (resultHtml) return parsePriceChartingHtml(resultHtml, grade);
+    // Collect all /game/ links from the search page and pick the best match
+    // Prefer a link whose path contains the card name words (avoids grabbing
+    // a graded-slab page or a completely unrelated card at the top of results)
+    const linkRe = /href="(\/game\/[^"]+)"/g;
+    const links = [];
+    let lm;
+    while ((lm = linkRe.exec(searchHtml)) !== null) {
+      // Skip links that are clearly graded/slab pages
+      if (/graded|psa|bgs|cgc|sgc/i.test(lm[1])) continue;
+      links.push(lm[1]);
     }
+
+    if (!links.length) return null;
+
+    // Score each link by how many name words appear in the URL slug
+    const nameWords = name.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+    let bestLink = links[0];
+    let bestScore = -1;
+    for (const link of links.slice(0, 6)) {  // only check top 6 to stay fast
+      const score = nameWords.filter(w => link.toLowerCase().includes(w)).length;
+      if (score > bestScore) { bestScore = score; bestLink = link; }
+    }
+
+    const resultHtml = await fetchUrl('https://www.pricecharting.com' + bestLink).catch(() => null);
+    if (resultHtml) return parsePriceChartingHtml(resultHtml, grade);
 
     return null;
   } catch (e) {
