@@ -1079,9 +1079,15 @@
       </div>
       <div class="form-group" style="margin-bottom:14px">
         <label>Add to Binder</label>
-        <select class="atc-input" id="atcBinderId" style="width:100%">
+        <select class="atc-input" id="atcBinderId" style="width:100%" onchange="handleBinderDropdownChange(this)">
           <option value="">— Unsorted / All Cards —</option>
         </select>
+        <!-- Inline upsell shown when free user hits binder limit -->
+        <div id="atcBinderUpsell" style="display:none;margin-top:8px;padding:12px 14px;background:var(--surface2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace">
+          <div style="font-size:.62rem;color:var(--accent2);font-weight:700;letter-spacing:.06em;margin-bottom:4px">MAX BINDERS REACHED</div>
+          <div style="font-size:.6rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Free plan is limited to 4 binders. Upgrade to Collector for unlimited binders — <span style="color:var(--accent);font-weight:700">25% off your first month</span> as a welcome offer.</div>
+          <button onclick="openPricingModal('collector')" style="padding:7px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">UPGRADE → COLLECTOR</button>
+        </div>
       </div>
       <div class="form-group" style="margin-bottom:18px">
         <label>Notes</label>
@@ -6910,6 +6916,12 @@
         }
 
         binders.push(data);
+
+        // If triggered from a dropdown (e.g. add-card modal), auto-select the new binder
+        if (_binderDropdownSourceId) {
+          populateBinderDropdown(_binderDropdownSourceId, data.id);
+          _binderDropdownSourceId = null;
+        }
       }
 
       closeModal('binderEditModal');
@@ -8393,6 +8405,45 @@
         if (defaultBinderId && String(b.id) === String(defaultBinderId)) opt.selected = true;
         sel.appendChild(opt);
       });
+      // Always append a "create new" option at the bottom
+      const newOpt = document.createElement('option');
+      newOpt.value = '_new_binder';
+      newOpt.textContent = '＋ New Binder';
+      sel.appendChild(newOpt);
+    }
+
+    // Tracks which dropdown triggered binder creation so we can auto-select after save
+    let _binderDropdownSourceId = null;
+
+    function handleBinderDropdownChange(sel) {
+      if (sel.value !== '_new_binder') {
+        // Hide upsell if user picks a real binder
+        const upsell = document.getElementById('atcBinderUpsell');
+        if (upsell) upsell.style.display = 'none';
+        return;
+      }
+
+      // Revert selection immediately — we'll set it properly after creation
+      sel.value = '';
+
+      const max = getMaxBinders();
+      if (userTier() === 'free' && binders.length >= max) {
+        // Show inline upsell instead of opening modal
+        const upsell = document.getElementById('atcBinderUpsell');
+        if (upsell) upsell.style.display = 'block';
+        return;
+      }
+
+      // Open the binder creation modal, remembering which dropdown to update
+      _binderDropdownSourceId = sel.id;
+      _editingBinderId = null;
+      document.getElementById('binderEditTitle').textContent = 'New Binder';
+      document.getElementById('binderEditName').value = '';
+      document.getElementById('binderEditDeleteWrap').style.display = 'none';
+      _renderColorPicker(null);
+      _resetBinderCoverUI(null);
+      openModal('binderEditModal');
+      setTimeout(() => document.getElementById('binderEditName').focus(), 80);
     }
 
     function openManualAddModal() {
@@ -9261,10 +9312,17 @@
     }
 
     // Extract card number like "4/102", "SV001/SV122", "TG01/TG30"
+    // Returns { full, num, total } e.g. { full:"094/165", num:"94", total:"165" }
     function parseCardNumber(text) {
       if (!text) return null;
       const m = text.match(/\b([A-Z]{0,4}\d+)\s*[\/\\|]\s*([A-Z]{0,4}\d+)\b/);
-      return m ? (m[1] + '/' + m[2]) : null;
+      if (!m) return null;
+      return {
+        full:  m[1] + '/' + m[2],
+        num:   String(parseInt(m[1], 10)),   // stripped, e.g. "94"
+        numRaw: m[1],                         // as-read, e.g. "094"
+        total: String(parseInt(m[2], 10)),   // set base size, e.g. "165"
+      };
     }
 
     // Extract card name — handles all Pokemon card name formats
@@ -9338,18 +9396,15 @@
           window._getClipEmbedding(dataURL)
         ]);
 
-        // Extract card number. Catalog may store with or without leading zeros
-        // e.g. OCR reads "094/165" → try both "094" and "94"
-        const cardNumRaw  = parseCardNumber(fullText);
-        const numRaw      = cardNumRaw ? cardNumRaw.split('/')[0] : null;
-        // Strip leading zeros for catalog lookup (most sets stored as "94" not "094")
-        const numStripped = numRaw ? String(parseInt(numRaw, 10)) : null;
-        // Keep padded version too in case catalog uses zero-padding
-        const numPrefix   = numStripped;
+        // parseCardNumber now returns { full, num, numRaw, total }
+        const parsed     = parseCardNumber(fullText);
+        const numStripped = parsed ? parsed.num    : null;  // "94"
+        const numRaw      = parsed ? parsed.numRaw : null;  // "094"
+        const numTotal    = parsed ? parsed.total  : null;  // "165" — set base size fingerprint
         const cardName    = parseCardName(fullText);
 
         console.log('[Scanner] OCR raw:', JSON.stringify(fullText.slice(0,120)));
-        console.log('[Scanner] parsed → number:', cardNumRaw, '| trying:', numStripped, '(stripped) &', numRaw, '(raw) | name:', cardName);
+        console.log('[Scanner] parsed → number:', parsed?.full, '| num:', numStripped, '| total:', numTotal, '| name:', cardName);
 
         setScanStatus('Searching catalog…');
 
@@ -9370,10 +9425,12 @@
         }
 
         // Run all searches in parallel:
-        // A: full name + stripped number   B: full name + padded number
-        // C: stripped number only          D: padded number only
-        // E: full name only                F: base Pokémon name only
-        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes] = await Promise.all([
+        // A: name + number   B: name + padded number
+        // C: number only     D: padded number only
+        // E: full name       F: base name
+        // G: set fingerprint — card number within the set whose highest card = numTotal
+        //    This is the key signal for disambiguating the same Pokémon across 172 sets.
+        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes] = await Promise.all([
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
           // A
           (numStripped && cardName)
@@ -9398,6 +9455,10 @@
           // F
           baseName
             ? base.ilike('name', '%' + baseName + '%').limit(12)
+            : Promise.resolve({ data: [] }),
+          // G — set fingerprint RPC (requires SQL function below)
+          (numStripped && numTotal)
+            ? sb.rpc('match_card_in_set_by_total', { p_number: numStripped, p_total: numTotal }).catch(() => ({ data: [] }))
             : Promise.resolve({ data: [] })
         ]);
 
@@ -9408,12 +9469,12 @@
         }
 
         const clipMatches  = clipRes.data       || [];
+        const setTotalHits = setTotalRes.data   || [];  // most precise — number + set fingerprint
         const nameNumHits  = [...(nameNumRes.data || []), ...(nameNumRawRes.data || [])];
         const numHits      = [...(numRes.data || []), ...(numRawRes.data || [])];
-        // Merge full name + base name hits (base name gets slightly lower score)
         const nameHits     = [...(nameRes.data || []), ...(baseNameRes.data || [])];
-        console.log('[Scanner] baseName search:', baseName, '→', (baseNameRes.data||[]).length, 'hits');
 
+        console.log('[Scanner] set-fingerprint hits (best):', setTotalHits.map(function(m){return m.name+' '+m.set_code;}).join(', ') || 'none — run match_card_in_set_by_total SQL');
         console.log('[Scanner] name+num hits:', nameNumHits.map(function(m){return m.name+'/'+m.set_code;}).join(', '));
         console.log('[Scanner] num-only hits:', numHits.length, '| name-only hits:', nameHits.length);
         console.log('[Scanner] CLIP top3:', clipMatches.slice(0,3).map(function(m){return m.name+'('+(m.similarity*100).toFixed(0)+'%)';}).join(' '));
@@ -9421,8 +9482,12 @@
         // Rank OCR results: name+number > number-only (set-confirmed) > name-only
         // When multiple number-only hits exist, use CLIP similarity to break ties
         function scoreOcr(m, source) {
-          var base = source === 'nameNum' ? 1.0 : source === 'num' ? 0.88 : 0.78;
-          // Boost if CLIP also ranks this card highly
+          // setTotal = card number matches AND set is identified by its size fingerprint
+          // This is the most precise signal — beats name+number for multi-set Pokémon
+          var base = source === 'setTotal' ? 1.15
+                   : source === 'nameNum'  ? 1.0
+                   : source === 'num'      ? 0.88
+                   :                        0.78;
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
           var clipBoost = clipEntry ? clipEntry.similarity * 0.12 : 0;
           return base + clipBoost;
@@ -9438,9 +9503,10 @@
             }
           });
         }
-        addHits(nameNumHits, 'nameNum');
-        addHits(numHits,     'num');
-        addHits(nameHits,    'name');
+        addHits(setTotalHits, 'setTotal'); // highest score — number + set fingerprint
+        addHits(nameNumHits,  'nameNum');
+        addHits(numHits,      'num');
+        addHits(nameHits,     'name');
         clipMatches.forEach(function(m) { if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); } });
         merged.sort(function(a, b) { return b.similarity - a.similarity; });
         const final = merged.slice(0, 10);
