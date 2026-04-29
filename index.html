@@ -9320,13 +9320,15 @@
     //   ​/‌/‍/﻿ (zero-width) → removed
     function normalizeOcr(text) {
       if (!text) return text;
-      var sq = String.fromCharCode(0x27);  // straight apostrophe ‘
-      var dq = String.fromCharCode(0x22);  // straight double-quote “
+      var sq  = String.fromCharCode(0x27);  // ‘ straight apostrophe
+      var dq  = String.fromCharCode(0x22);  // “ straight double-quote
+      var hyp = String.fromCharCode(0x2D);  // - hyphen
+      var mty = sq.slice(1);                // empty string (no literal quotes needed)
       return text
         .replace(/[‘’‚‛′‵`]/g, sq)
         .replace(/[“”„‟″]/g, dq)
-        .replace(/[–—―]/g, ‘-’)
-        .replace(/[​‌‍﻿]/g, ‘’);
+        .replace(/[–—―]/g, hyp)
+        .replace(/[​‌‍﻿]/g, mty);
     }
 
     // Given a parsed card name, derive additional search strings:
