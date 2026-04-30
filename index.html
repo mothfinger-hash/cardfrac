@@ -867,10 +867,7 @@
     .ft-session-joined{animation:ftJoinPulse .9s ease 3;border-color:var(--teal)!important}
 
     /* ── BINDER FRAME — constrained width on desktop, full-width on mobile ── */
-    .binder-frame{width:100%;position:relative}
-    @media(min-width:481px){
-      .binder-frame{max-width:576px;margin-left:auto;margin-right:auto}
-    }
+    .binder-frame{width:100%;position:relative;max-width:620px;margin-left:auto;margin-right:auto}
     /* ── BINDER SIDE NAV ARROWS (desktop only) ── */
     .binder-nav-arrow{
       display:none;position:absolute;top:50%;transform:translateY(-50%);
@@ -1650,17 +1647,38 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   display: flex; gap: 0; overflow: visible; flex: 1; min-height: 0;
 }
 .av-preview-col {
-  width: 200px; min-width: 180px; flex-shrink: 0;
+  width: 170px; min-width: 150px; flex-shrink: 0;
   display: flex; flex-direction: column; align-items: center;
-  gap: 10px; padding: 14px 12px;
+  gap: 10px; padding: 18px 12px 18px;
   background: #000;
   border-right: 2px solid #1a1a1a;
   overflow-y: visible;
 }
 .av-controls-col {
-  flex: 1; overflow-y: visible; padding: 14px 16px;
+  flex: 1; overflow-y: visible; padding: 0;
+  background: transparent; display: flex; flex-direction: column;
+}
+/* Category tabs */
+.av-cat-tabs {
+  display: flex; flex-wrap: wrap; gap: 0;
+  border-bottom: 2px solid #1a1a1a; background: #050505;
+}
+.av-cat-tab {
+  font-family: 'Press Start 2P', monospace; font-size: 6px;
+  padding: 9px 10px; cursor: pointer; color: #555;
+  border: none; background: transparent; letter-spacing: .08em;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  transition: color .1s;
+}
+.av-cat-tab:hover { color: #aaa; }
+.av-cat-tab.active { color: #FF5722; border-bottom-color: #FF5722; }
+/* Groups panel */
+.av-groups-panel {
+  flex: 1; overflow-y: auto; padding: 16px 18px;
   background: transparent;
 }
+.av-group { display: none; }
+.av-group.active { display: block; }
 .av-label {
   font-family: 'Press Start 2P', monospace;
   font-size: 7px; color: #555; letter-spacing: 1px;
@@ -1765,9 +1783,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 @media (max-width: 640px) {
   .av-panel { max-width: 100%; }
   .av-panel-body { flex-direction: column; }
-  .av-preview-col { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 2px solid #1a1a1a; }
-  .av-stage { width: 100px; flex-shrink: 0; }
-  .av-controls-col { max-height: 60vh; }
+  .av-preview-col { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 2px solid #1a1a1a; gap: 12px; }
+  .av-stage { width: 110px; flex-shrink: 0; }
+  .av-actions { flex: 1; min-width: 140px; }
+  .av-label.av-seed { display: none; }
+  .av-groups-panel { max-height: 55vh; overflow-y: auto; }
 }
   </style>
   <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -1854,134 +1874,135 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <button id="av-randomize">🎲 RANDOM</button>
               <button id="av-exportBtn" class="av-primary">💾 SET AS PFP</button>
             </div>
-            <div class="av-divider"></div>
-            <div class="av-account-links">
-              <div class="av-account-btn" id="avMyAccountBtn">⬡ My Account</div>
-              <div class="av-account-btn av-danger" id="avSignOutBtn">⏻ Sign Out</div>
-            </div>
           </div>
           <div class="av-controls-col" id="av-controls">
-            <div class="av-group">
-              <h3 class="av-group-title">BODY</h3>
-              <div class="av-opts" data-avkey="body">
-                <button class="av-opt" data-val="femme">FEMME</button>
-                <button class="av-opt" data-val="masc">MASC</button>
-              </div>
-              <div class="av-mini-lbl">SKIN</div>
-              <div class="av-swatches" id="av-sw-skin"></div>
-              <div class="av-mini-lbl">EYES</div>
-              <div class="av-swatches" id="av-sw-eye"></div>
+            <!-- Category tab bar -->
+            <div class="av-cat-tabs" id="avCatTabs">
+              <button class="av-cat-tab active" data-avcat="body">BODY</button>
+              <button class="av-cat-tab" data-avcat="hair">HAIR</button>
+              <button class="av-cat-tab" data-avcat="head">HEAD</button>
+              <button class="av-cat-tab" data-avcat="face">FACE</button>
+              <button class="av-cat-tab" data-avcat="top">TOP</button>
+              <button class="av-cat-tab" data-avcat="bottom">BOTTOM</button>
+              <button class="av-cat-tab" data-avcat="shoes">SHOES</button>
             </div>
-            <div class="av-group">
-              <h3 class="av-group-title">HAIR</h3>
-              <div class="av-opts" data-avkey="hair">
-                <button class="av-opt" data-val="buzz">BUZZ</button>
-                <button class="av-opt" data-val="fade">FADE</button>
-                <button class="av-opt" data-val="frosted">FROSTED</button>
-                <button class="av-opt" data-val="topknot">TOP KNOT</button>
-                <button class="av-opt" data-val="shag">SHAG</button>
-                <button class="av-opt" data-val="mullet">MULLET</button>
-                <button class="av-opt" data-val="curtain">CURTAIN</button>
-                <button class="av-opt" data-val="bowl">BOWL</button>
-                <button class="av-opt" data-val="bob">CHOPPY BOB</button>
-                <button class="av-opt" data-val="pigtails">PIGTAILS</button>
-                <button class="av-opt" data-val="buns">SPACE BUNS</button>
-                <button class="av-opt" data-val="lowpony">LOW PONY</button>
-                <button class="av-opt" data-val="bald">BALD</button>
+            <!-- Category panels -->
+            <div class="av-groups-panel">
+              <div class="av-group active" data-avgrp="body">
+                <div class="av-opts" data-avkey="body">
+                  <button class="av-opt" data-val="femme">FEMME</button>
+                  <button class="av-opt" data-val="masc">MASC</button>
+                </div>
+                <div class="av-mini-lbl">SKIN</div>
+                <div class="av-swatches" id="av-sw-skin"></div>
+                <div class="av-mini-lbl">EYES</div>
+                <div class="av-swatches" id="av-sw-eye"></div>
               </div>
-              <div class="av-mini-lbl">COLOR</div>
-              <div class="av-swatches" id="av-sw-hair"></div>
-            </div>
-            <div class="av-group">
-              <h3 class="av-group-title">HEADWEAR</h3>
-              <div class="av-opts" data-avkey="hat">
-                <button class="av-opt" data-val="none">NONE</button>
-                <button class="av-opt" data-val="bucket">BUCKET</button>
-                <button class="av-opt" data-val="trucker">TRUCKER</button>
-                <button class="av-opt" data-val="beanie">BEANIE</button>
-                <button class="av-opt" data-val="visor">VISOR</button>
+              <div class="av-group" data-avgrp="hair">
+                <div class="av-opts" data-avkey="hair">
+                  <button class="av-opt" data-val="buzz">BUZZ</button>
+                  <button class="av-opt" data-val="fade">FADE</button>
+                  <button class="av-opt" data-val="frosted">FROSTED</button>
+                  <button class="av-opt" data-val="topknot">TOP KNOT</button>
+                  <button class="av-opt" data-val="shag">SHAG</button>
+                  <button class="av-opt" data-val="mullet">MULLET</button>
+                  <button class="av-opt" data-val="curtain">CURTAIN</button>
+                  <button class="av-opt" data-val="bowl">BOWL</button>
+                  <button class="av-opt" data-val="bob">CHOPPY BOB</button>
+                  <button class="av-opt" data-val="pigtails">PIGTAILS</button>
+                  <button class="av-opt" data-val="buns">SPACE BUNS</button>
+                  <button class="av-opt" data-val="lowpony">LOW PONY</button>
+                  <button class="av-opt" data-val="bald">BALD</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-hair"></div>
               </div>
-              <div class="av-mini-lbl">COLOR</div>
-              <div class="av-swatches" id="av-sw-hat"></div>
-            </div>
-            <div class="av-group">
-              <h3 class="av-group-title">FACE</h3>
-              <div class="av-opts" data-avkey="face">
-                <button class="av-opt" data-val="none">NONE</button>
-                <button class="av-opt" data-val="shades">TINY SHADES</button>
-                <button class="av-opt" data-val="bigshades">OVERSIZED</button>
-                <button class="av-opt" data-val="nosering">NOSE RING</button>
-                <button class="av-opt" data-val="lipring">LIP RING</button>
+              <div class="av-group" data-avgrp="head">
+                <div class="av-opts" data-avkey="hat">
+                  <button class="av-opt" data-val="none">NONE</button>
+                  <button class="av-opt" data-val="bucket">BUCKET</button>
+                  <button class="av-opt" data-val="trucker">TRUCKER</button>
+                  <button class="av-opt" data-val="beanie">BEANIE</button>
+                  <button class="av-opt" data-val="visor">VISOR</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-hat"></div>
               </div>
-              <div class="av-mini-lbl">EARRINGS</div>
-              <div class="av-opts" data-avkey="earrings">
-                <button class="av-opt" data-val="none">NONE</button>
-                <button class="av-opt" data-val="hoops">HOOPS</button>
-                <button class="av-opt" data-val="studs">STUDS</button>
-                <button class="av-opt" data-val="dangle">DANGLE</button>
+              <div class="av-group" data-avgrp="face">
+                <div class="av-opts" data-avkey="face">
+                  <button class="av-opt" data-val="none">NONE</button>
+                  <button class="av-opt" data-val="shades">TINY SHADES</button>
+                  <button class="av-opt" data-val="bigshades">OVERSIZED</button>
+                  <button class="av-opt" data-val="nosering">NOSE RING</button>
+                  <button class="av-opt" data-val="lipring">LIP RING</button>
+                </div>
+                <div class="av-mini-lbl">EARRINGS</div>
+                <div class="av-opts" data-avkey="earrings">
+                  <button class="av-opt" data-val="none">NONE</button>
+                  <button class="av-opt" data-val="hoops">HOOPS</button>
+                  <button class="av-opt" data-val="studs">STUDS</button>
+                  <button class="av-opt" data-val="dangle">DANGLE</button>
+                </div>
+                <div class="av-mini-lbl">FACIAL HAIR (MASC)</div>
+                <div class="av-opts" data-avkey="facial">
+                  <button class="av-opt" data-val="none">CLEAN</button>
+                  <button class="av-opt" data-val="mustache">MUSTACHE</button>
+                  <button class="av-opt" data-val="goatee">GOATEE</button>
+                  <button class="av-opt" data-val="beard">FULL BEARD</button>
+                  <button class="av-opt" data-val="soul">SOUL PATCH</button>
+                </div>
               </div>
-              <div class="av-mini-lbl">FACIAL HAIR (MASC)</div>
-              <div class="av-opts" data-avkey="facial">
-                <button class="av-opt" data-val="none">CLEAN</button>
-                <button class="av-opt" data-val="mustache">MUSTACHE</button>
-                <button class="av-opt" data-val="goatee">GOATEE</button>
-                <button class="av-opt" data-val="beard">FULL BEARD</button>
-                <button class="av-opt" data-val="soul">SOUL PATCH</button>
+              <div class="av-group" data-avgrp="top">
+                <div class="av-opts" data-avkey="top">
+                  <button class="av-opt" data-val="bigtee">BIG TEE</button>
+                  <button class="av-opt" data-val="hoodie">HOODIE</button>
+                  <button class="av-opt" data-val="windbreaker">WINDBREAKER</button>
+                  <button class="av-opt" data-val="coach">COACH</button>
+                  <button class="av-opt" data-val="jersey">JERSEY</button>
+                  <button class="av-opt" data-val="bowling">BOWLING</button>
+                  <button class="av-opt" data-val="velour">TRACKSUIT</button>
+                  <button class="av-opt" data-val="polo">POLO</button>
+                  <button class="av-opt" data-val="babytee">BABY TEE</button>
+                  <button class="av-opt" data-val="tube">TUBE TOP</button>
+                  <button class="av-opt" data-val="halter">HALTER</button>
+                  <button class="av-opt" data-val="tank">TANK</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-top"></div>
+                <div class="av-mini-lbl">GRAPHIC</div>
+                <div class="av-opts" data-avkey="graphic">
+                  <button class="av-opt" data-val="pathbinder">PATHBINDER</button>
+                  <button class="av-opt" data-val="heart">♥</button>
+                  <button class="av-opt" data-val="star">★</button>
+                  <button class="av-opt" data-val="logo">LOGO</button>
+                  <button class="av-opt" data-val="none">NONE</button>
+                </div>
               </div>
-            </div>
-            <div class="av-group">
-              <h3 class="av-group-title">TOP</h3>
-              <div class="av-opts" data-avkey="top">
-                <button class="av-opt" data-val="bigtee">BIG TEE</button>
-                <button class="av-opt" data-val="hoodie">HOODIE</button>
-                <button class="av-opt" data-val="windbreaker">WINDBREAKER</button>
-                <button class="av-opt" data-val="coach">COACH</button>
-                <button class="av-opt" data-val="jersey">JERSEY</button>
-                <button class="av-opt" data-val="bowling">BOWLING</button>
-                <button class="av-opt" data-val="velour">TRACKSUIT</button>
-                <button class="av-opt" data-val="polo">POLO</button>
-                <button class="av-opt" data-val="babytee">BABY TEE</button>
-                <button class="av-opt" data-val="tube">TUBE TOP</button>
-                <button class="av-opt" data-val="halter">HALTER</button>
-                <button class="av-opt" data-val="tank">TANK</button>
+              <div class="av-group" data-avgrp="bottom">
+                <div class="av-opts" data-avkey="bottom">
+                  <button class="av-opt" data-val="baggy">BAGGY JEANS</button>
+                  <button class="av-opt" data-val="cargo">CARGO</button>
+                  <button class="av-opt" data-val="parachute">PARACHUTE</button>
+                  <button class="av-opt" data-val="bball">B-BALL SHORTS</button>
+                  <button class="av-opt" data-val="sweats">SWEATS</button>
+                  <button class="av-opt" data-val="lowrise">LOW-RISE</button>
+                  <button class="av-opt" data-val="capris">CAPRIS</button>
+                  <button class="av-opt" data-val="mini">MINI SKIRT</button>
+                  <button class="av-opt" data-val="dukes">DAISY DUKES</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-bottom"></div>
               </div>
-              <div class="av-mini-lbl">COLOR</div>
-              <div class="av-swatches" id="av-sw-top"></div>
-              <div class="av-mini-lbl">GRAPHIC</div>
-              <div class="av-opts" data-avkey="graphic">
-                <button class="av-opt" data-val="pathbinder">PATHBINDER</button>
-                <button class="av-opt" data-val="heart">♥</button>
-                <button class="av-opt" data-val="star">★</button>
-                <button class="av-opt" data-val="logo">LOGO</button>
-                <button class="av-opt" data-val="none">NONE</button>
+              <div class="av-group" data-avgrp="shoes">
+                <div class="av-opts" data-avkey="shoes">
+                  <button class="av-opt" data-val="chunky">CHUNKY</button>
+                  <button class="av-opt" data-val="platforms">PLATFORMS</button>
+                  <button class="av-opt" data-val="jellies">JELLIES</button>
+                  <button class="av-opt" data-val="maryjanes">MARY JANES</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-shoes"></div>
               </div>
-            </div>
-            <div class="av-group">
-              <h3 class="av-group-title">BOTTOM</h3>
-              <div class="av-opts" data-avkey="bottom">
-                <button class="av-opt" data-val="baggy">BAGGY JEANS</button>
-                <button class="av-opt" data-val="cargo">CARGO</button>
-                <button class="av-opt" data-val="parachute">PARACHUTE</button>
-                <button class="av-opt" data-val="bball">B-BALL SHORTS</button>
-                <button class="av-opt" data-val="sweats">SWEATS</button>
-                <button class="av-opt" data-val="lowrise">LOW-RISE</button>
-                <button class="av-opt" data-val="capris">CAPRIS</button>
-                <button class="av-opt" data-val="mini">MINI SKIRT</button>
-                <button class="av-opt" data-val="dukes">DAISY DUKES</button>
-              </div>
-              <div class="av-mini-lbl">COLOR</div>
-              <div class="av-swatches" id="av-sw-bottom"></div>
-            </div>
-            <div class="av-group">
-              <h3 class="av-group-title">SHOES</h3>
-              <div class="av-opts" data-avkey="shoes">
-                <button class="av-opt" data-val="chunky">CHUNKY</button>
-                <button class="av-opt" data-val="platforms">PLATFORMS</button>
-                <button class="av-opt" data-val="jellies">JELLIES</button>
-                <button class="av-opt" data-val="maryjanes">MARY JANES</button>
-              </div>
-              <div class="av-mini-lbl">COLOR</div>
-              <div class="av-swatches" id="av-sw-shoes"></div>
             </div>
           </div>
         </div>
@@ -15512,6 +15533,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   });
 
   const PFP_KEY = 'pathbinder_avatar_pfp_v1';
+  // Crop to face+shoulders: top 46 of 96 rows (~48%)
+  function makePfpCrop(srcCanvas) {
+    const cropH = Math.round(srcCanvas.height * 0.48); // ~46px of 96
+    const tmp = document.createElement('canvas');
+    tmp.width  = srcCanvas.width;   // 64
+    tmp.height = cropH;             // ~46
+    tmp.getContext('2d').drawImage(srcCanvas, 0, 0, srcCanvas.width, cropH, 0, 0, srcCanvas.width, cropH);
+    return tmp.toDataURL('image/png');
+  }
   function applyPfpToChip(dataUrl) {
     const chip = document.getElementById('avatarInitials');
     if (!chip) return;
@@ -15529,7 +15559,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   })();
 
   document.getElementById('av-exportBtn').addEventListener('click', () => {
-    const dataUrl = canvas.toDataURL('image/png');
+    const dataUrl = makePfpCrop(canvas);
     localStorage.setItem(PFP_KEY, dataUrl);
     applyPfpToChip(dataUrl);
     try { if (typeof updateAvatarBtnLabel === 'function') updateAvatarBtnLabel(); } catch(_) {}
@@ -15563,6 +15593,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   initSwatches();
   syncOptButtons();
   update();
+
+  // ── Category tab switching ──────────────────────────────────────
+  document.querySelectorAll('#avCatTabs .av-cat-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#avCatTabs .av-cat-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const cat = tab.dataset.avcat;
+      document.querySelectorAll('#av-controls .av-group').forEach(g => {
+        g.classList.toggle('active', g.dataset.avgrp === cat);
+      });
+    });
+  });
 })();
 
   </script>
