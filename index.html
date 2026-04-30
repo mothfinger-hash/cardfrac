@@ -972,6 +972,23 @@
     /* iOS Safari zooms any input with font-size < 16px regardless of screen size.
        Apply unconditionally — visual size is controlled by the element's own styles. */
     input, select, textarea { font-size: 16px !important; }
+
+    /* ── INPUT TEXT OVERFLOW FIX ── */
+    /* Prevent placeholder / value text from overflowing narrow inputs on mobile */
+    input[type="text"],input[type="number"],input[type="email"],input[type="password"],input[type="search"]{
+      text-overflow:ellipsis;max-width:100%;min-width:0;
+    }
+    @media(max-width:600px){
+      .ft-cash-input{width:68px !important;padding:5px 6px !important}
+      .ft-search-input{box-sizing:border-box}
+      .form-group{min-width:0}
+      .form-group input,.form-group select{max-width:100%;box-sizing:border-box}
+      /* Tighten session banner text so it doesn't push off screen */
+      #ftSessionBanner{font-size:.72rem;word-break:break-word}
+    }
+
+    /* ── BETA BADGE ── */
+    .beta-badge{display:inline-block;padding:1px 7px;font-size:.52rem;font-weight:700;letter-spacing:.1em;background:var(--accent2);color:var(--surface);border-radius:2px;vertical-align:middle;margin-left:8px;text-transform:uppercase;position:relative;top:-1px}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -1000,12 +1017,12 @@
 </head>
 <body>
   <nav>
-    <button class="logo" data-text="PATHBINDER" onclick="showPage('landing')"><span style="color:var(--accent2)">PATH</span><span class="logo-b">BINDER</span></button>
+    <button class="logo" data-text="PATHBINDER" onclick="showPage('collection');setMobileNav('collection')"><span style="color:var(--accent2)">PATH</span><span class="logo-b">BINDER</span></button>
     <div class="nav-right">
       <div class="nav-tabs">
-        <button class="nav-tab active" data-page="browse">Marketplace</button>
-        <button class="nav-tab" data-page="collection">My Binder</button>
+        <button class="nav-tab active" data-page="collection">My Binder</button>
         <button class="nav-tab" data-page="addCard">Add Card</button>
+        <button class="nav-tab" data-page="sets">Sets</button>
         <button class="nav-tab" data-page="account">Dashboard<span class="badge-count" id="tradeNotification" style="display:none;">0</span></button>
         <button class="nav-tab" data-page="admin">Admin</button>
       </div>
@@ -1664,7 +1681,7 @@
   </div>
 
   <!-- PAGES -->
-  <div id="landingPage" class="page active" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
+  <div id="landingPage" class="page" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
     <div id="heroSection">
       <h1 class="hero-title">Your card collection,<br>organized and alive<span class="hero-cursor"></span></h1>
       <p class="hero-tagline">Track · Buy · Sell · Grow your collection</p>
@@ -1725,7 +1742,7 @@
     <div id="detailView"></div>
   </div>
 
-  <div id="accountPage" class="page">
+  <div id="accountPage" class="page active">
     <h2>Dashboard</h2>
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
@@ -1805,7 +1822,7 @@
           <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk Import</button>
           <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share Binder</button>
           <button onclick="showPage('fairTrade');setMobileNav('')"
-            style="padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⇌ Trade Check</button>
+            style="padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⇌ Trade Analyst <span class="beta-badge">BETA</span></button>
           <button onclick="showPage('addCard');setMobileNav('addCard')"
             style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add Card</button>
         </div>
@@ -1861,7 +1878,7 @@
       <!-- Header (always visible) -->
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
         <div>
-          <h2 style="margin:0">⇌ Fair Trade Check</h2>
+          <h2 style="margin:0">⇌ Trade Analyst <span class="beta-badge">BETA</span></h2>
           <p class="subtitle" style="margin:4px 0 0">Compare proposed trades side-by-side — for in-person evaluation only.</p>
         </div>
         <button onclick="showPage('collection');setMobileNav('collection')"
@@ -2577,7 +2594,7 @@
       // listings, profile data, and re-render once the full data is ready
       currentUser = { ...authData.user };
       updateAuthUI();
-      showPage('browse');
+      showPage('account'); setMobileNav('account');
       showToast('Welcome back!');
     }
 
@@ -2618,7 +2635,7 @@
         showToast('Account created! Check your email to confirm.');
         freshSignIn = true;
         closeModal('registerModal');
-        showPage('browse');
+        showPage('account'); setMobileNav('account');
       } catch (err) {
         console.error('Register error:', err);
         errorEl.textContent = 'An error occurred. Please try again.';
@@ -2672,7 +2689,7 @@
       updateCartBar();
       updateAuthUI();
       document.getElementById('avatarDropdown').classList.remove('open');
-      showPage('browse');
+      showPage('collection'); setMobileNav('collection');
       showToast('Signed out');
       // Sign out in background (onAuthStateChange SIGNED_OUT will re-render with fresh public listings)
       sb.auth.signOut().catch(err => console.error('Logout error:', err));
@@ -2727,7 +2744,7 @@
     // NOTE: when PathBinder ships as a native iOS/Android app (Capacitor etc.)
     // history.pushState is a no-op inside a WebView — that's fine, the popstate
     // listener simply won't fire and the app behaves as it always has.
-    const _historyPages = new Set(['browse','collection','addCard','account','leaderboard','fairTrade']);
+    const _historyPages = new Set(['browse','collection','addCard','account','leaderboard','fairTrade','sets']);
     let _suppressHistoryPush = false;  // true during popstate handling to avoid double-push
 
     function _pushPageState(pageId) {
@@ -2748,7 +2765,7 @@
       if (pageId === 'admin' || pageId === 'editListing') {
         if (!currentUser || !currentUser.is_admin) {
           showToast('Access denied');
-          showPage('browse');
+          showPage('collection'); setMobileNav('collection');
           return;
         }
       }
@@ -7007,7 +7024,7 @@
       if (!grid) return;
       const current = userTier();
 
-      grid.innerHTML = TIER_DEFS.map(t => {
+      grid.innerHTML = TIER_DEFS.filter(t => t.id !== 'shop').map(t => {
         const isCurrent = t.id === current;
 
         // ── Price line ──────────────────────────────────────────────────
@@ -10858,6 +10875,12 @@
         // Don't return — still need to process payment params if somehow combined
       }
 
+      // ── Default page ────────────────────────────────────────────────────
+      // If no URL param routed us somewhere specific, land on Dashboard
+      if (!binderParam && !storeParam && !tradeParam && !pageParam) {
+        showPage('account'); setMobileNav('account');
+      }
+
       // ── Post-payment redirect handling ──────────────────────────────────
       // Stripe sends the user back to ?payment=success or ?payment=cancelled
       const paymentStatus = urlParams.get('payment');
@@ -10904,7 +10927,7 @@
         if (!currentUser) currentUser = { ...session.user };
         updateAuthUI();
         renderAllContent();
-        if (freshSignIn && !isPublicView) { freshSignIn = false; showPage('browse'); }
+        if (freshSignIn && !isPublicView) { freshSignIn = false; showPage('account'); setMobileNav('account'); }
 
         // Then enrich with profile + fresh data in background
         const uid = session.user.id;
@@ -10961,7 +10984,7 @@
         orders = [];
         updateAuthUI();
         renderAllContent();
-        showPage('browse');
+        showPage('collection'); setMobileNav('collection');
 
         // Re-fetch public listings in background
         sb.from('listings').select('*').order('created_at', { ascending: false })
@@ -10982,9 +11005,9 @@
     // Native app note: WebViews (Capacitor / Cordova) don't fire popstate from
     // the OS back gesture — that's handled at the native layer instead.
     window.addEventListener('popstate', function(e) {
-      var page = (e.state && e.state.page) ? e.state.page : 'browse';
+      var page = (e.state && e.state.page) ? e.state.page : 'collection';
       // Only act on pages we manage; ignore external ?binder= / ?store= states
-      if (!_historyPages.has(page)) page = 'browse';
+      if (!_historyPages.has(page)) page = 'collection';
       _suppressHistoryPush = true;
       showPage(page);
       setMobileNav(page);
@@ -11057,11 +11080,7 @@
 
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
   <div class="mobile-nav" id="mobileNav">
-    <button class="mobile-nav-btn active" id="mobileNavBrowse" onclick="showPage('browse'); setMobileNav('browse')">
-      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      Marketplace
-    </button>
-    <button class="mobile-nav-btn" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
+    <button class="mobile-nav-btn active" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
       <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>
       My Binder
     </button>
