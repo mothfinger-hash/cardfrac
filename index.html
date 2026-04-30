@@ -80,6 +80,10 @@
     .user-avatar{display:flex;align-items:center;gap:8px;background:var(--surface2);border:2px solid var(--border);border-radius:0;padding:4px 10px;cursor:pointer;transition:all .1s}
     .user-avatar:hover{border-color:var(--accent);box-shadow:2px 2px 0 var(--shadow)}
     .avatar-circle{width:26px;height:26px;border-radius:0;background:var(--accent);color:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6rem;border:1.5px solid var(--shadow)}
+    .nav-logo-img{height:36px;width:auto;display:block;object-fit:contain;image-rendering:auto}
+    .logo-img-btn{background:none!important;border:none!important;padding:0!important;cursor:pointer;line-height:0;box-shadow:none!important;min-width:0!important;letter-spacing:0}
+    .logo-img-btn:hover{opacity:.85}
+    @media(max-width:600px){.nav-logo-img{height:28px}}
     .avatar-dropdown{display:none;position:absolute;top:56px;right:0;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:8px 0;min-width:220px;max-width:92vw;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
     .avatar-dropdown.open{display:block}
     .dd-badge-section{padding:10px 12px 6px;border-bottom:2px solid var(--border)}
@@ -1794,7 +1798,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 </head>
 <body>
   <nav>
-    <button class="logo" data-text="PATHBINDER" onclick="showPage('collection');setMobileNav('collection')"><span style="color:var(--accent2)">PATH</span><span class="logo-b">BINDER</span></button>
+    <button class="logo logo-img-btn" data-text="PATHBINDER" onclick="showPage('collection');setMobileNav('collection')"><img src="pathbinder-logo.png" alt="PathBinder" class="nav-logo-img"></button>
     <div class="nav-right">
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="collection">My Binder</button>
@@ -1824,8 +1828,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">⏻ Sign Out</div>
         </div>
       </div>
-      <!-- AVATAR CREATOR PAGE -->
-      <div id="avatarPage" class="page">
+
+      <button class="member-chip" id="membershipBtn">Premium</button>
+      <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">☀</button>
+    </div>
+  </nav>
+
+  <div id="avatarPage" class="page">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
           <h2 style="font-family:'Press Start 2P',monospace;font-size:11px;color:var(--accent);letter-spacing:2px">★ AVATAR CREATOR ★<span style="display:block;font-size:7px;color:var(--muted);margin-top:6px;letter-spacing:3px">SF · KOF · Y2K</span></h2>
           <button onclick="showPage('account');setMobileNav('account')" style="padding:7px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
@@ -1976,10 +1985,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
         </div>
       </div>
-      <button class="member-chip" id="membershipBtn">Premium</button>
-      <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">☀</button>
-    </div>
-  </nav>
+
 
   <!-- LOGIN MODAL -->
   <div class="modal-overlay" id="loginModal">
@@ -2729,7 +2735,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>
     </div>
 
-    <div id="badgesTab" class="account-content">
+    <div id="badges" class="account-content">
       <div style="margin-bottom:16px">
         <h3 style="font-size:.82rem;letter-spacing:.1em;color:var(--accent);font-family:'Press Start 2P',monospace">★ GYM BADGES ★</h3>
         <p style="font-size:.7rem;color:var(--muted);margin-top:6px">Collect all 8 badges by completing milestones. Some require multiple steps. One is hidden.</p>
