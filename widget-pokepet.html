@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PokéPet</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0F0D0A;--surface:#1C1810;--surface2:#241C10;--border:#3D3020;
+    --accent:#FF5C00;--accent2:#FFD23F;--green:#7AAF1A;--red:#C8002A;
+    --text:#F2ECD8;--muted:#8B7A60;--shadow:#1E1408;
+    --screen:#9BBC0F;--screen-dark:#0F380F;
+  }
+  html,body{height:100%}
+  body{
+    font-family:'Share Tech Mono',monospace;
+    background:transparent;color:var(--text);
+    display:flex;align-items:center;justify-content:center;padding:8px;
+    image-rendering:pixelated;-webkit-font-smoothing:none;
+  }
+  .device{
+    width:100%;max-width:280px;
+    background:linear-gradient(160deg,#FF5C00 0%,#C8002A 100%);
+    border:3px solid var(--shadow);border-radius:24px 24px 60px 24px;
+    padding:14px 14px 18px;box-shadow:0 6px 0 var(--shadow),inset 0 2px 0 rgba(255,255,255,.15);
+    user-select:none;
+  }
+  .brand{
+    font-family:'Press Start 2P',monospace;font-size:8px;color:#FFF8EC;
+    text-align:center;letter-spacing:1px;margin-bottom:8px;text-shadow:1px 1px 0 var(--shadow);
+  }
+  .screen{
+    background:var(--screen);border:3px solid var(--screen-dark);border-radius:8px;
+    padding:8px;position:relative;overflow:hidden;
+    box-shadow:inset 0 2px 6px rgba(15,56,15,.6);
+  }
+  .screen::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(15,56,15,.08) 0 2px,transparent 2px 4px);
+  }
+  .stats{display:flex;justify-content:space-between;font-family:'Press Start 2P',monospace;font-size:7px;color:var(--screen-dark);margin-bottom:4px}
+  .stat{display:flex;align-items:center;gap:3px}
+  .bar{width:24px;height:5px;background:rgba(15,56,15,.25);border:1px solid var(--screen-dark)}
+  .bar>i{display:block;height:100%;background:var(--screen-dark);transition:width .3s}
+  .stage{height:120px;display:flex;align-items:flex-end;justify-content:center;position:relative}
+  #pet{image-rendering:pixelated;width:80px;height:80px;transition:transform .15s;filter:drop-shadow(2px 2px 0 var(--screen-dark))}
+  #pet.bounce{animation:hop .6s ease-in-out infinite}
+  #pet.sleep{animation:none;opacity:.85}
+  @keyframes hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .ground{position:absolute;left:0;right:0;bottom:0;height:6px;background:var(--screen-dark);opacity:.35}
+  .name{position:absolute;top:4px;left:50%;transform:translateX(-50%);font-family:'Press Start 2P',monospace;font-size:7px;color:var(--screen-dark)}
+  .msg{
+    position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
+    background:var(--screen-dark);color:var(--screen);
+    font-family:'Press Start 2P',monospace;font-size:6px;padding:3px 5px;
+    border-radius:2px;opacity:0;transition:opacity .2s;white-space:nowrap;
+  }
+  .msg.show{opacity:1}
+  .zzz{position:absolute;font-family:'Press Start 2P',monospace;font-size:8px;color:var(--screen-dark);animation:float 1.6s ease-in-out infinite}
+  @keyframes float{0%{transform:translateY(0);opacity:0}30%{opacity:1}100%{transform:translateY(-20px);opacity:0}}
+  .pad{margin-top:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  button{
+    font-family:'Press Start 2P',monospace;font-size:7px;
+    background:var(--surface);color:var(--text);
+    border:2px solid var(--shadow);border-radius:6px;
+    padding:8px 4px;cursor:pointer;
+    box-shadow:0 2px 0 var(--shadow);
+    transition:transform .05s,box-shadow .05s;
+  }
+  button:hover{background:var(--surface2)}
+  button:active{transform:translateY(2px);box-shadow:0 0 0 var(--shadow)}
+  button .ic{display:block;font-size:14px;margin-bottom:3px;font-family:inherit}
+  .age{text-align:center;font-family:'Press Start 2P',monospace;font-size:6px;color:#FFF8EC;margin-top:8px;opacity:.8;cursor:pointer}
+  .age:hover{opacity:1;text-decoration:underline}
+
+  /* ── PICKER OVERLAY ─────────────────────────────────── */
+  .picker{position:fixed;inset:0;background:rgba(15,13,10,.92);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .picker.show{display:flex}
+  .picker-box{
+    background:var(--surface);border:3px solid var(--shadow);border-radius:12px;
+    padding:14px;width:100%;max-width:340px;max-height:90vh;display:flex;flex-direction:column;gap:10px;
+    box-shadow:0 6px 0 var(--shadow);
+  }
+  .picker-title{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--accent2);text-align:center;letter-spacing:1px}
+  .picker-sub{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted);text-align:center}
+  .picker-search{
+    background:var(--surface2);border:2px solid var(--border);color:var(--text);
+    font-family:'Share Tech Mono',monospace;font-size:12px;padding:6px 8px;border-radius:4px;width:100%;
+  }
+  .picker-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+    overflow-y:auto;max-height:50vh;padding:2px;
+  }
+  .pick-card{
+    background:var(--surface2);border:2px solid var(--border);border-radius:4px;
+    padding:3px;cursor:pointer;text-align:center;transition:border-color .1s;
+  }
+  .pick-card:hover{border-color:var(--accent)}
+  .pick-card.active{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2)}
+  .pick-card img{width:100%;height:60px;object-fit:contain;display:block;image-rendering:pixelated}
+  .pick-card .pn{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .picker-empty{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted);text-align:center;padding:20px 8px;line-height:1.5}
+  .picker-actions{display:flex;gap:6px}
+  .picker-actions button{flex:1}
+
+  /* card-image pet rendering */
+  #petImg{
+    width:96px;height:96px;object-fit:contain;
+    image-rendering:pixelated;display:none;
+    filter:drop-shadow(2px 2px 0 var(--screen-dark));
+    transition:transform .15s;
+  }
+  #petImg.bounce{animation:hop .6s ease-in-out infinite}
+  #petImg.sleep{opacity:.7;filter:drop-shadow(2px 2px 0 var(--screen-dark)) grayscale(.4)}
+</style>
+</head>
+<body>
+  <div class="device" id="device">
+    <div class="brand">PATHBINDER · POKéPET</div>
+    <div class="screen">
+      <div class="stats">
+        <div class="stat">HP<div class="bar"><i id="bar-hp"></i></div></div>
+        <div class="stat">FN<div class="bar"><i id="bar-fun"></i></div></div>
+        <div class="stat">EN<div class="bar"><i id="bar-en"></i></div></div>
+      </div>
+      <div class="stage">
+        <div class="name" id="name">EGG</div>
+        <canvas id="pet" width="16" height="16"></canvas>
+        <img id="petImg" alt="" />
+        <div class="ground"></div>
+        <div class="msg" id="msg"></div>
+      </div>
+    </div>
+    <div class="pad">
+      <button data-act="feed"><span class="ic">🍎</span>FEED</button>
+      <button data-act="play"><span class="ic">⚽</span>PLAY</button>
+      <button data-act="sleep"><span class="ic">💤</span>REST</button>
+      <button data-act="clean"><span class="ic">🧼</span>CLEAN</button>
+    </div>
+    <div class="age" id="age" title="Tap to choose a Pokémon from your collection">AGE 0 · LV 1</div>
+  </div>
+
+  <!-- ── PICKER OVERLAY ── -->
+  <div class="picker" id="picker">
+    <div class="picker-box">
+      <div class="picker-title">CHOOSE YOUR PET</div>
+      <div class="picker-sub" id="pickerSub">Pick a Pokémon from your binder</div>
+      <input class="picker-search" id="pickerSearch" placeholder="Search your collection…" />
+      <div class="picker-grid" id="pickerGrid"></div>
+      <div class="picker-actions">
+        <button id="pickerDefault">⟲ DEFAULT</button>
+        <button id="pickerClose">✕ CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'pathbinder_pokepet_v1';
+  const SAVE_DEBOUNCE = 500;
+
+  // 16x16 pixel sprites — palette indices. 0=transparent
+  // Palette tuned for Game Boy green screen contrast.
+  const PAL = [null,'#0F380F','#306230','#8BAC0F','#FF5C00','#C8002A','#FFD23F','#F2ECD8'];
+
+  // Egg, baby (pichu-ish), child (pikachu-ish), adult (raichu-ish)
+  // Each 16x16, hex digits index into PAL.
+  const SPRITES = {
+    egg: [
+      "0000001111000000",
+      "0000011771100000",
+      "0000177777110000",
+      "0001777677711000",
+      "0017776777771100",
+      "0177777777777110",
+      "0177767777677110",
+      "1777777777777711",
+      "1777677776777711",
+      "1777777777777711",
+      "1777777667777711",
+      "0177766776677110",
+      "0177777777777110",
+      "0017777777771100",
+      "0001777777711000",
+      "0000111111100000",
+    ],
+    baby: [
+      "0000003333000000",
+      "0000333663330000",
+      "0033666666633000",
+      "0036666666663300",
+      "0366611666116630",
+      "0366611666116630",
+      "0366666666666630",
+      "0366616666616630",
+      "0336661111666330",
+      "0033666666663300",
+      "0003666666663000",
+      "0000366666630000",
+      "0000036663300000",
+      "0000033333000000",
+      "0000300000300000",
+      "0003300003300000",
+    ],
+    child: [
+      "0000666006660000",
+      "0006666066660000",
+      "0066666666666000",
+      "0066611661116600",
+      "0066611661116600",
+      "0666666666666660",
+      "0666616666616660",
+      "0666661111666660",
+      "0666666666666660",
+      "0066655555566000",
+      "0066656556566000",
+      "0006655555560000",
+      "0000666006660000",
+      "0006660006666000",
+      "0066600000066600",
+      "0066000000006600",
+    ],
+    adult: [
+      "4400666666660044",
+      "4440666006660444",
+      "0444666666664440",
+      "0044666116660440",
+      "0046661111666640",
+      "0466616116616640",
+      "0466661111666640",
+      "0466666666666640",
+      "0466655555566640",
+      "0466656556566640",
+      "0466655555566440",
+      "0046666666664400",
+      "0004666006664000",
+      "0044660006664400",
+      "0440000000004400",
+      "4400000000004400",
+    ],
+  };
+
+  const NAMES = ['EGG','PIPI','PICHA','PIKARO'];
+  const STAGES = ['egg','baby','child','adult'];
+
+  const state = load() || {
+    born: Date.now(),
+    lastTick: Date.now(),
+    hp: 100, fun: 80, en: 90,
+    clean: 100, alive: true,
+    sleeping: false, dirty: 0,
+    name: 'PIPI', xp: 0, lv: 1,
+    pet: null, // {id, name, image, set} from collection — or null for default sprite
+  };
+  let collection = []; // injected by parent app
+
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)); }catch{ return null; }
+  }
+  let saveTimer;
+  function save(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), SAVE_DEBOUNCE);
+  }
+
+  function ageHours(){ return (Date.now() - state.born) / 3.6e6; }
+  function stageIdx(){
+    const h = ageHours();
+    if (h < 0.05) return 0;          // egg ~3 min
+    if (h < 1)    return 1;          // baby
+    if (h < 6)    return 2;          // child
+    return 3;                         // adult
+  }
+
+  const canvas = document.getElementById('pet');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  function draw(){
+    const key = SPRITES[STAGES[stageIdx()]];
+    ctx.clearRect(0,0,16,16);
+    for (let y=0;y<16;y++){
+      const row = key[y];
+      for (let x=0;x<16;x++){
+        const c = PAL[parseInt(row[x],16)];
+        if (!c) continue;
+        ctx.fillStyle = c;
+        ctx.fillRect(x,y,1,1);
+      }
+    }
+  }
+
+  function clamp(n){ return Math.max(0, Math.min(100, n)); }
+
+  function tick(){
+    const now = Date.now();
+    const dtMin = (now - state.lastTick) / 60000;
+    state.lastTick = now;
+    if (!state.alive) return render();
+
+    const decay = state.sleeping ? 0.3 : 1;
+    state.hp  = clamp(state.hp  - 0.6 * dtMin * decay);
+    state.fun = clamp(state.fun - 0.9 * dtMin * decay);
+    state.en  = clamp(state.en  + (state.sleeping ? 4 : -0.7) * dtMin);
+    state.dirty = clamp(state.dirty + 0.4 * dtMin);
+
+    if (state.sleeping && state.en >= 99) state.sleeping = false;
+
+    if (state.hp <= 0){ state.alive = false; flash('FAINTED…'); }
+
+    // level by age and care
+    const targetLv = Math.min(99, 1 + Math.floor(ageHours() * 2));
+    if (targetLv > state.lv) state.lv = targetLv;
+
+    save();
+    render();
+  }
+
+  function render(){
+    document.getElementById('bar-hp').style.width  = state.hp+'%';
+    document.getElementById('bar-fun').style.width = state.fun+'%';
+    document.getElementById('bar-en').style.width  = state.en+'%';
+
+    const usingCard = !!state.pet && stageIdx() > 0;
+    const displayName = usingCard
+      ? (state.pet.name || '').toUpperCase().slice(0,12)
+      : NAMES[stageIdx()];
+    document.getElementById('name').textContent = displayName;
+    document.getElementById('age').textContent =
+      `AGE ${ageHours().toFixed(1)}H · LV ${state.lv}` + (state.alive ? '' : ' · KO') + ' · TAP TO PICK';
+
+    const petCanvas = document.getElementById('pet');
+    const petImg    = document.getElementById('petImg');
+
+    if (usingCard) {
+      petCanvas.style.display = 'none';
+      petImg.style.display = 'block';
+      if (petImg.dataset.src !== state.pet.image) {
+        petImg.dataset.src = state.pet.image;
+        petImg.src = state.pet.image;
+      }
+      petImg.classList.toggle('sleep', state.sleeping);
+      petImg.classList.toggle('bounce', !state.sleeping && state.alive && state.fun > 30);
+      petImg.style.filter = state.dirty > 60
+        ? 'drop-shadow(2px 2px 0 #0F380F) sepia(.6) hue-rotate(330deg) saturate(.6)'
+        : (state.sleeping ? 'drop-shadow(2px 2px 0 #0F380F) grayscale(.4)' : 'drop-shadow(2px 2px 0 #0F380F)');
+    } else {
+      petImg.style.display = 'none';
+      petCanvas.style.display = 'block';
+      petCanvas.classList.toggle('sleep', state.sleeping);
+      petCanvas.classList.toggle('bounce', !state.sleeping && state.alive && state.fun > 30);
+      petCanvas.style.filter = state.dirty > 60
+        ? 'drop-shadow(2px 2px 0 #0F380F) sepia(.6) hue-rotate(330deg) saturate(.6)'
+        : 'drop-shadow(2px 2px 0 #0F380F)';
+      draw();
+    }
+    renderZzz();
+  }
+
+  let zzzTimer;
+  function renderZzz(){
+    clearInterval(zzzTimer);
+    document.querySelectorAll('.zzz').forEach(n=>n.remove());
+    if (!state.sleeping) return;
+    const stage = document.querySelector('.stage');
+    zzzTimer = setInterval(()=>{
+      const z = document.createElement('div');
+      z.className = 'zzz';
+      z.textContent = 'z';
+      z.style.left = (50 + (Math.random()*20-10)) + '%';
+      z.style.bottom = '60%';
+      stage.appendChild(z);
+      setTimeout(()=>z.remove(), 1700);
+    }, 700);
+  }
+
+  let msgTimer;
+  function flash(txt){
+    const m = document.getElementById('msg');
+    m.textContent = txt;
+    m.classList.add('show');
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(()=>m.classList.remove('show'), 1400);
+  }
+
+  const ACTIONS = {
+    feed(){
+      if (!state.alive) return flash('REVIVE FIRST');
+      if (state.sleeping) return flash('SHHH… ASLEEP');
+      if (state.hp >= 98) return flash('TOO FULL!');
+      state.hp = clamp(state.hp + 22);
+      state.dirty = clamp(state.dirty + 6);
+      flash('YUM!');
+    },
+    play(){
+      if (!state.alive) return flash('REVIVE FIRST');
+      if (state.sleeping) return flash('SHHH… ASLEEP');
+      if (state.en < 10) return flash('TOO TIRED');
+      state.fun = clamp(state.fun + 25);
+      state.en  = clamp(state.en - 12);
+      state.hp  = clamp(state.hp - 4);
+      flash('FUN!');
+    },
+    sleep(){
+      state.sleeping = !state.sleeping;
+      flash(state.sleeping ? 'NIGHTY…' : 'WAKEY!');
+    },
+    clean(){
+      if (state.dirty < 10) return flash('SPARKLY!');
+      state.dirty = 0;
+      state.fun = clamp(state.fun + 5);
+      flash('SQUEAKY!');
+    },
+  };
+
+  // revive on long-press feed
+  document.querySelectorAll('button[data-act]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if (!state.alive && b.dataset.act === 'feed'){
+        state.alive = true; state.hp = 50; state.fun=50; state.en=50; state.dirty=0;
+        state.born = Date.now() - 1000*60*60; // restart as baby
+        flash('REVIVED!');
+      } else {
+        ACTIONS[b.dataset.act]();
+      }
+      tick();
+    });
+  });
+
+  // ── PICKER ─────────────────────────────────────────────
+  const picker = document.getElementById('picker');
+  const grid   = document.getElementById('pickerGrid');
+  const search = document.getElementById('pickerSearch');
+  const sub    = document.getElementById('pickerSub');
+
+  function normalizeCollection(items){
+    return (items || [])
+      .map(c => ({
+        id:    c.id ?? c.card_id ?? `${c.card_name}-${c.card_number||''}`,
+        name:  c.card_name || c.name || 'Unknown',
+        image: c.card_image_url || c.image_url || c.image || '',
+        set:   c.set_name || c.set || '',
+        sold:  !!(c.sold_offline || c.is_ghost),
+      }))
+      .filter(c => c.image && !c.sold);
+  }
+
+  function renderPicker(filter=''){
+    const f = filter.trim().toLowerCase();
+    const items = collection.filter(c =>
+      !f || c.name.toLowerCase().includes(f) || c.set.toLowerCase().includes(f)
+    );
+    if (!collection.length){
+      sub.textContent = 'No collection detected';
+      grid.innerHTML = `<div class="picker-empty" style="grid-column:1/-1">
+        Your binder is empty or not connected.<br>
+        Add cards in PathBinder, or call<br>
+        <code style="color:var(--accent2)">PokePet.setCollection([...])</code><br>
+        from the host app.
+      </div>`;
+      return;
+    }
+    sub.textContent = `${collection.length} card${collection.length===1?'':'s'} in your binder`;
+    if (!items.length){
+      grid.innerHTML = `<div class="picker-empty" style="grid-column:1/-1">No matches</div>`;
+      return;
+    }
+    grid.innerHTML = items.slice(0, 60).map(c => `
+      <div class="pick-card ${state.pet && String(state.pet.id)===String(c.id)?'active':''}" data-id="${c.id}">
+        <img src="${c.image}" alt="${c.name}" loading="lazy" onerror="this.style.opacity='.3'">
+        <div class="pn">${c.name}</div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.pick-card').forEach(el => {
+      el.addEventListener('click', () => {
+        const chosen = collection.find(c => String(c.id) === el.dataset.id);
+        if (!chosen) return;
+        state.pet = chosen;
+        // hatching: reset to baby age so the chosen card "evolves"
+        if (state.pet && ageHours() < 0.05) state.born = Date.now() - 1000*60*4;
+        flash(`HATCHED ${chosen.name.toUpperCase().slice(0,8)}!`);
+        save();
+        render();
+        closePicker();
+      });
+    });
+  }
+
+  function openPicker(){ picker.classList.add('show'); search.value=''; renderPicker(); search.focus(); }
+  function closePicker(){ picker.classList.remove('show'); }
+
+  document.getElementById('age').addEventListener('click', openPicker);
+  document.getElementById('pickerClose').addEventListener('click', closePicker);
+  document.getElementById('pickerDefault').addEventListener('click', () => {
+    state.pet = null;
+    flash('DEFAULT PET');
+    save(); render(); closePicker();
+  });
+  search.addEventListener('input', e => renderPicker(e.target.value));
+  picker.addEventListener('click', e => { if (e.target === picker) closePicker(); });
+
+  // ── PARENT-APP MESSAGING ───────────────────────────────
+  // Parent can postMessage({type:'pokepet:collection', items:[...]}) into the iframe.
+  window.addEventListener('message', e => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'pokepet:collection') {
+      collection = normalizeCollection(e.data.items);
+      // if current pet was removed from the binder, fall back to default
+      if (state.pet && !collection.some(c => String(c.id) === String(state.pet.id))) {
+        state.pet = null; save();
+      }
+      if (picker.classList.contains('show')) renderPicker(search.value);
+      render();
+    }
+    if (e.data.type === 'pokepet:open') openPicker();
+  });
+
+  // first paint + heartbeat
+  render();
+  tick();
+  setInterval(tick, 5000);
+
+  // expose for parent app integration (stats sync, theming, etc.)
+  window.PokePet = {
+    getState: () => ({...state, stage: STAGES[stageIdx()], ageHours: ageHours()}),
+    reset: () => { localStorage.removeItem(STORAGE_KEY); location.reload(); },
+    setCollection: (items) => {
+      collection = normalizeCollection(items);
+      if (state.pet && !collection.some(c => String(c.id) === String(state.pet.id))) {
+        state.pet = null; save();
+      }
+      if (picker.classList.contains('show')) renderPicker(search.value);
+      render();
+    },
+    openPicker,
+    setPetById: (id) => {
+      const c = collection.find(x => String(x.id) === String(id));
+      if (c) { state.pet = c; save(); render(); }
+    },
+    onAction: (cb) => { window.addEventListener('pokepet:action', e => cb(e.detail)); },
+  };
+
+  // auto-pull from same-origin parent if available
+  try {
+    if (window.parent && window.parent !== window && window.parent.collectionItems) {
+      window.PokePet.setCollection(window.parent.collectionItems);
+    }
+  } catch {}
+})();
+</script>
+</body>
+</html>

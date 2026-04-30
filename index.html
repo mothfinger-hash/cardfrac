@@ -1172,7 +1172,7 @@ nav {
 
 .user-avatar { border-color: var(--border); }
 .user-avatar:hover { border-color: var(--accent); box-shadow: 2px 2px 0 var(--accent); }
-.avatar-circle { background: var(--accent) !important; color: #000 !important; border-color: #000 !important; }
+.avatar-circle { background: var(--accent) !important; color: #000 !important; border-color: #000 !important; overflow: hidden; }
 
 .member-chip {
   background: var(--gold) !important;
@@ -1501,6 +1501,258 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   .r404-marquee { font-size: 8px; }
   .listing-card:hover { transform: translate(-2px,-2px) !important; }
 }
+
+/* ─── 22. BADGE SYSTEM ──────────────────────────────────────────── */
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 18px; padding: 4px 0 24px;
+}
+.badge-tile {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; cursor: default;
+}
+.badge-hex {
+  width: 96px; height: 96px; position: relative;
+  clip-path: polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
+  transition: filter .2s, transform .2s;
+}
+.badge-tile.earned .badge-hex {
+  filter: drop-shadow(0 0 10px rgba(197,255,61,.5));
+}
+.badge-tile.earned:hover .badge-hex {
+  filter: drop-shadow(0 0 18px rgba(197,255,61,.8));
+  transform: scale(1.05);
+}
+.badge-tile.locked .badge-hex { filter: grayscale(1) brightness(0.35); }
+.badge-tile.partial .badge-hex { filter: grayscale(0.5) brightness(0.65); }
+.badge-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px; letter-spacing: .08em;
+  text-align: center; color: var(--text);
+  max-width: 120px;
+}
+.badge-tile.locked .badge-name { color: var(--muted); }
+.badge-desc {
+  font-size: .62rem; color: var(--muted);
+  text-align: center; max-width: 130px;
+  line-height: 1.4;
+}
+.badge-part-pip {
+  display: flex; gap: 4px; margin-top: -4px;
+}
+.badge-part-pip span {
+  width: 8px; height: 8px;
+  border: 1.5px solid var(--muted);
+  display: block;
+}
+.badge-part-pip span.done {
+  background: #C5FF3D; border-color: #C5FF3D;
+}
+.badge-unlock-toast {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+  z-index: 999999; background: #000; border: 2px solid #C5FF3D;
+  padding: 14px 22px; display: flex; align-items: center; gap: 14px;
+  box-shadow: 0 0 24px rgba(197,255,61,.35);
+  animation: badgeSlideUp .4s ease-out;
+  pointer-events: none; white-space: nowrap;
+  font-family: 'Press Start 2P', monospace;
+}
+@keyframes badgeSlideUp {
+  from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+}
+.badge-unlock-toast .but-icon { width: 40px; height: 40px; flex-shrink: 0; }
+.badge-unlock-toast .but-text { display: flex; flex-direction: column; gap: 4px; }
+.badge-unlock-toast .but-label { font-size: 6px; color: #666; letter-spacing: .15em; }
+.badge-unlock-toast .but-name  { font-size: 9px; color: #C5FF3D; }
+
+/* ─── 23. SOCIAL FOOTER ──────────────────────────────────────────── */
+.social-footer {
+  display: flex; align-items: center; justify-content: center;
+  gap: 18px; padding: 14px 16px 10px;
+  border-top: 1px solid #111; margin-top: 32px;
+  flex-wrap: wrap;
+}
+.social-footer a {
+  display: flex; align-items: center; gap: 6px;
+  color: #444; font-family: 'Press Start 2P', monospace;
+  font-size: 6px; letter-spacing: .1em;
+  text-decoration: none; transition: color .15s;
+}
+.social-footer a:hover { color: #C5FF3D; }
+.social-footer a svg { width: 18px; height: 18px; flex-shrink: 0; }
+.social-footer .discord-link:hover { color: #5865F2; }
+@media (max-width: 600px) {
+  .badges-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+  .badge-hex { width: 76px; height: 76px; }
+  .badge-name { font-size: 6px; }
+}
+
+/* ─── 24. AVATAR CREATOR MODAL ──────────────────────────────────── */
+.av-modal-overlay {
+  position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.82);
+  display: flex; align-items: stretch; justify-content: flex-end;
+  backdrop-filter: blur(2px);
+}
+.av-panel {
+  width: 100%; max-width: 760px;
+  background: #050505;
+  border-left: 2px solid #C5FF3D;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  box-shadow: -6px 0 32px rgba(197,255,61,0.12);
+  animation: avSlideIn .18s ease-out;
+}
+@keyframes avSlideIn { from { transform: translateX(60px); opacity: 0; } to { transform: none; opacity: 1; } }
+.av-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 2px solid #C5FF3D;
+  background: #000;
+  flex-shrink: 0;
+}
+.av-panel-title {
+  font-family: 'Press Start 2P', 'Space Mono', monospace;
+  font-size: 10px; color: #C5FF3D; letter-spacing: 2px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.av-panel-title small {
+  font-size: 7px; color: #666; letter-spacing: 3px;
+}
+.av-close {
+  background: transparent; border: 2px solid #333;
+  color: #C5FF3D; font-size: 20px; line-height: 1;
+  width: 34px; height: 34px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: monospace;
+  transition: border-color .1s, background .1s;
+}
+.av-close:hover { border-color: #C5FF3D; background: rgba(197,255,61,0.08); }
+.av-panel-body {
+  display: flex; gap: 0; overflow: hidden; flex: 1;
+}
+.av-preview-col {
+  width: 200px; min-width: 180px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 14px 12px;
+  background: #000;
+  border-right: 2px solid #1a1a1a;
+  overflow-y: auto;
+}
+.av-controls-col {
+  flex: 1; overflow-y: auto; padding: 14px 16px;
+  background: #050505;
+}
+.av-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px; color: #555; letter-spacing: 1px;
+  text-align: center;
+}
+.av-seed { color: #444; font-size: 6px; }
+.av-stage {
+  width: 100%;
+  background: linear-gradient(180deg,#0d0d0d 0%,#050505 100%);
+  border: 2px solid #C5FF3D;
+  padding: 12px; position: relative; overflow: hidden;
+}
+.av-stage::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg,rgba(197,255,61,.04) 0 2px,transparent 2px 4px);
+}
+.av-canvas-wrap { position: relative; width: 100%; line-height: 0; }
+#av-canvas {
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  width: 100%; height: auto; display: block; position: relative;
+}
+#av-chestLogo {
+  position: absolute; left: 50%; top: 23.96%;
+  transform: translateX(-50%);
+  width: 28.125%; pointer-events: none;
+  image-rendering: auto; display: none; z-index: 2;
+}
+#av-chestLogo.show { display: block; }
+#av-chestLogo.femme { width: 19.69%; top: 26.04%; }
+.av-actions { display: flex; gap: 6px; width: 100%; }
+.av-actions button { flex: 1; }
+.av-divider { height: 2px; background: #1a1a1a; width: 100%; }
+.av-account-links { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.av-account-btn {
+  font-family: 'Press Start 2P', monospace; font-size: 7px;
+  padding: 10px 8px; text-align: center; cursor: pointer;
+  background: #0a0a0a; border: 2px solid #222; color: #888;
+  transition: all .1s; letter-spacing: 1px;
+}
+.av-account-btn:hover { border-color: #C5FF3D; color: #C5FF3D; }
+.av-account-btn.av-danger { color: #FF5722; border-color: #2a1200; }
+.av-account-btn.av-danger:hover { border-color: #FF5722; background: rgba(255,87,34,0.07); }
+.av-group {
+  margin-bottom: 16px; padding-bottom: 14px;
+  border-bottom: 1px dashed #1e1e1e;
+}
+.av-group:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.av-group-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px; color: #FF5722; margin-bottom: 8px; letter-spacing: 1px;
+}
+.av-opts { display: flex; flex-wrap: wrap; gap: 5px; }
+.av-opt {
+  font-family: 'Press Start 2P', monospace; font-size: 6px;
+  background: #0a0a0a; color: #888;
+  border: 2px solid #1e1e1e; padding: 6px 8px; cursor: pointer;
+  letter-spacing: 1px; transition: all .1s;
+}
+.av-opt:hover { border-color: #C5FF3D; color: #C5FF3D; }
+.av-opt.active {
+  background: rgba(197,255,61,0.12); border-color: #C5FF3D; color: #C5FF3D;
+  box-shadow: 0 0 8px rgba(197,255,61,0.2);
+}
+.av-swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+.av-sw {
+  width: 22px; height: 22px; border: 2px solid #222; cursor: pointer;
+  transition: transform .1s, border-color .1s, box-shadow .1s;
+}
+.av-sw:hover { transform: scale(1.15); }
+.av-sw.active { border-color: #C5FF3D; box-shadow: 0 0 0 2px #C5FF3D, 0 0 10px rgba(197,255,61,.4); }
+.av-mini-lbl {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px; color: #444; margin: 7px 0 5px; letter-spacing: 1px;
+}
+#av-controls button:not(.av-opt):not(.av-sw) {
+  font-family: 'Press Start 2P', monospace; font-size: 7px;
+  background: #0a0a0a; color: #888;
+  border: 2px solid #1e1e1e; padding: 8px 10px; cursor: pointer;
+  letter-spacing: 1px; box-shadow: 0 2px 0 #000;
+  transition: transform .05s, box-shadow .05s;
+}
+#av-controls button:not(.av-opt):not(.av-sw):hover { background: #111; color: #C5FF3D; border-color: #C5FF3D; }
+.av-preview-col button {
+  font-family: 'Press Start 2P', monospace; font-size: 7px;
+  background: #0a0a0a; color: #888;
+  border: 2px solid #1e1e1e; padding: 8px 6px; cursor: pointer;
+  letter-spacing: 1px; box-shadow: 0 2px 0 #000;
+  transition: all .1s;
+}
+.av-preview-col button:hover { border-color: #C5FF3D; color: #C5FF3D; }
+.av-preview-col button:active { transform: translateY(2px); box-shadow: none; }
+.av-primary {
+  background: rgba(197,255,61,0.1) !important;
+  border-color: #C5FF3D !important; color: #C5FF3D !important;
+}
+.av-primary:hover { background: rgba(197,255,61,0.2) !important; }
+/* Nav chip canvas thumbnail */
+.av-nav-canvas {
+  width: 26px; height: 26px; image-rendering: pixelated;
+  border: 1.5px solid var(--shadow); display: block;
+}
+@media (max-width: 640px) {
+  .av-panel { max-width: 100%; }
+  .av-panel-body { flex-direction: column; }
+  .av-preview-col { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 2px solid #1a1a1a; }
+  .av-stage { width: 100px; flex-shrink: 0; }
+  .av-controls-col { max-height: 60vh; }
+}
   </style>
   <!-- ═══════════════════════════════════════════════════════════════ -->
 
@@ -1549,10 +1801,160 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="avatar-circle" id="avatarInitials">A</div>
           <span id="userName">User</span>
         </div>
-        <div class="avatar-dropdown" id="avatarDropdown">
-          <div class="dropdown-item" id="myAccountBtn">My Account</div>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">Sign Out</div>
+        <div class="avatar-dropdown" id="avatarDropdown" style="display:none!important"></div>
+      </div>
+      <!-- AVATAR CREATOR MODAL -->
+      <div id="avatarModal" class="av-modal-overlay" style="display:none">
+        <div class="av-panel">
+          <div class="av-panel-header">
+            <span class="av-panel-title">★ AVATAR CREATOR ★<small>SF · KOF · Y2K</small></span>
+            <button class="av-close" id="avCloseBtn">×</button>
+          </div>
+          <div class="av-panel-body">
+            <div class="av-preview-col">
+              <div class="av-label">YOUR FIT</div>
+              <div class="av-stage">
+                <div class="av-canvas-wrap">
+                  <canvas id="av-canvas" width="64" height="96"></canvas>
+                  <img id="av-chestLogo" alt="" />
+                </div>
+              </div>
+              <div class="av-label av-seed" id="av-seedLabel">—</div>
+              <div class="av-actions">
+                <button id="av-randomize">🎲 RANDOM</button>
+                <button id="av-exportBtn" class="av-primary">💾 SET AS PFP</button>
+              </div>
+              <div class="av-divider"></div>
+              <div class="av-account-links">
+                <div class="av-account-btn" id="avMyAccountBtn">⬡ My Account</div>
+                <div class="av-account-btn av-danger" id="avSignOutBtn">⏻ Sign Out</div>
+              </div>
+            </div>
+            <div class="av-controls-col" id="av-controls">
+              <div class="av-group">
+                <h3 class="av-group-title">BODY</h3>
+                <div class="av-opts" data-avkey="body">
+                  <button class="av-opt" data-val="femme">FEMME</button>
+                  <button class="av-opt" data-val="masc">MASC</button>
+                </div>
+                <div class="av-mini-lbl">SKIN</div>
+                <div class="av-swatches" id="av-sw-skin"></div>
+                <div class="av-mini-lbl">EYES</div>
+                <div class="av-swatches" id="av-sw-eye"></div>
+              </div>
+              <div class="av-group">
+                <h3 class="av-group-title">HAIR</h3>
+                <div class="av-opts" data-avkey="hair">
+                  <button class="av-opt" data-val="buzz">BUZZ</button>
+                  <button class="av-opt" data-val="fade">FADE</button>
+                  <button class="av-opt" data-val="frosted">FROSTED</button>
+                  <button class="av-opt" data-val="topknot">TOP KNOT</button>
+                  <button class="av-opt" data-val="shag">SHAG</button>
+                  <button class="av-opt" data-val="mullet">MULLET</button>
+                  <button class="av-opt" data-val="curtain">CURTAIN</button>
+                  <button class="av-opt" data-val="bowl">BOWL</button>
+                  <button class="av-opt" data-val="bob">CHOPPY BOB</button>
+                  <button class="av-opt" data-val="pigtails">PIGTAILS</button>
+                  <button class="av-opt" data-val="buns">SPACE BUNS</button>
+                  <button class="av-opt" data-val="lowpony">LOW PONY</button>
+                  <button class="av-opt" data-val="bald">BALD</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-hair"></div>
+              </div>
+              <div class="av-group">
+                <h3 class="av-group-title">HEADWEAR</h3>
+                <div class="av-opts" data-avkey="hat">
+                  <button class="av-opt" data-val="none">NONE</button>
+                  <button class="av-opt" data-val="bucket">BUCKET</button>
+                  <button class="av-opt" data-val="trucker">TRUCKER</button>
+                  <button class="av-opt" data-val="beanie">BEANIE</button>
+                  <button class="av-opt" data-val="visor">VISOR</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-hat"></div>
+              </div>
+              <div class="av-group">
+                <h3 class="av-group-title">FACE</h3>
+                <div class="av-opts" data-avkey="face">
+                  <button class="av-opt" data-val="none">NONE</button>
+                  <button class="av-opt" data-val="shades">TINY SHADES</button>
+                  <button class="av-opt" data-val="bigshades">OVERSIZED</button>
+                  <button class="av-opt" data-val="nosering">NOSE RING</button>
+                  <button class="av-opt" data-val="lipring">LIP RING</button>
+                </div>
+                <div class="av-mini-lbl">EARRINGS</div>
+                <div class="av-opts" data-avkey="earrings">
+                  <button class="av-opt" data-val="none">NONE</button>
+                  <button class="av-opt" data-val="hoops">HOOPS</button>
+                  <button class="av-opt" data-val="studs">STUDS</button>
+                  <button class="av-opt" data-val="dangle">DANGLE</button>
+                </div>
+                <div class="av-mini-lbl">FACIAL HAIR (MASC)</div>
+                <div class="av-opts" data-avkey="facial">
+                  <button class="av-opt" data-val="none">CLEAN</button>
+                  <button class="av-opt" data-val="mustache">MUSTACHE</button>
+                  <button class="av-opt" data-val="goatee">GOATEE</button>
+                  <button class="av-opt" data-val="beard">FULL BEARD</button>
+                  <button class="av-opt" data-val="soul">SOUL PATCH</button>
+                </div>
+              </div>
+              <div class="av-group">
+                <h3 class="av-group-title">TOP</h3>
+                <div class="av-opts" data-avkey="top">
+                  <button class="av-opt" data-val="bigtee">BIG TEE</button>
+                  <button class="av-opt" data-val="hoodie">HOODIE</button>
+                  <button class="av-opt" data-val="windbreaker">WINDBREAKER</button>
+                  <button class="av-opt" data-val="coach">COACH</button>
+                  <button class="av-opt" data-val="jersey">JERSEY</button>
+                  <button class="av-opt" data-val="bowling">BOWLING</button>
+                  <button class="av-opt" data-val="velour">TRACKSUIT</button>
+                  <button class="av-opt" data-val="polo">POLO</button>
+                  <button class="av-opt" data-val="babytee">BABY TEE</button>
+                  <button class="av-opt" data-val="tube">TUBE TOP</button>
+                  <button class="av-opt" data-val="halter">HALTER</button>
+                  <button class="av-opt" data-val="tank">TANK</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-top"></div>
+                <div class="av-mini-lbl">GRAPHIC</div>
+                <div class="av-opts" data-avkey="graphic">
+                  <button class="av-opt" data-val="pathbinder">PATHBINDER</button>
+                  <button class="av-opt" data-val="heart">♥</button>
+                  <button class="av-opt" data-val="star">★</button>
+                  <button class="av-opt" data-val="logo">LOGO</button>
+                  <button class="av-opt" data-val="none">NONE</button>
+                </div>
+              </div>
+              <div class="av-group">
+                <h3 class="av-group-title">BOTTOM</h3>
+                <div class="av-opts" data-avkey="bottom">
+                  <button class="av-opt" data-val="baggy">BAGGY JEANS</button>
+                  <button class="av-opt" data-val="cargo">CARGO</button>
+                  <button class="av-opt" data-val="parachute">PARACHUTE</button>
+                  <button class="av-opt" data-val="bball">B-BALL SHORTS</button>
+                  <button class="av-opt" data-val="sweats">SWEATS</button>
+                  <button class="av-opt" data-val="lowrise">LOW-RISE</button>
+                  <button class="av-opt" data-val="capris">CAPRIS</button>
+                  <button class="av-opt" data-val="mini">MINI SKIRT</button>
+                  <button class="av-opt" data-val="dukes">DAISY DUKES</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-bottom"></div>
+              </div>
+              <div class="av-group">
+                <h3 class="av-group-title">SHOES</h3>
+                <div class="av-opts" data-avkey="shoes">
+                  <button class="av-opt" data-val="chunky">CHUNKY</button>
+                  <button class="av-opt" data-val="platforms">PLATFORMS</button>
+                  <button class="av-opt" data-val="jellies">JELLIES</button>
+                  <button class="av-opt" data-val="maryjanes">MARY JANES</button>
+                </div>
+                <div class="av-mini-lbl">COLOR</div>
+                <div class="av-swatches" id="av-sw-shoes"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <button class="member-chip" id="membershipBtn">Premium</button>
@@ -2266,6 +2668,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
       <button class="account-tab" onclick="switchAccountTab('tradeHistory')">Trades</button>
+      <button class="account-tab" onclick="switchAccountTab('badges')">Badges</button>
     </div>
 
     <div id="dashboard" class="account-content active">
@@ -2305,6 +2708,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <div id="tradeHistoryContent">
         <div style="text-align:center;padding:40px;color:var(--muted)">Loading trade history…</div>
       </div>
+    </div>
+
+    <div id="badgesTab" class="account-content">
+      <div style="margin-bottom:16px">
+        <h3 style="font-size:.82rem;letter-spacing:.1em;color:var(--accent);font-family:'Press Start 2P',monospace">★ GYM BADGES ★</h3>
+        <p style="font-size:.7rem;color:var(--muted);margin-top:6px">Collect all 8 badges by completing milestones. Some require multiple steps. One is hidden.</p>
+      </div>
+      <div id="badgesGrid" class="badges-grid"></div>
     </div>
   </div>
 
@@ -3165,7 +3576,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         userSection.style.display = 'block';
         const displayName = currentUser.name || currentUser.user_metadata?.name || currentUser.email || 'User';
         const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-        document.getElementById('avatarInitials').textContent = initials;
+        const chipEl = document.getElementById('avatarInitials');
+        const savedPfp = localStorage.getItem('pathbinder_avatar_pfp_v1');
+        if (savedPfp) {
+          chipEl.textContent = '';
+          chipEl.style.backgroundImage = 'url(' + savedPfp + ')';
+          chipEl.style.backgroundSize = 'cover';
+          chipEl.style.backgroundPosition = 'top center';
+          chipEl.style.backgroundRepeat = 'no-repeat';
+          chipEl.style.imageRendering = 'pixelated';
+        } else {
+          chipEl.textContent = initials;
+          chipEl.style.backgroundImage = '';
+        }
         document.getElementById('userName').textContent = currentUser.username || currentUser.email?.split('@')[0] || 'User';
         // Show admin tab only if user is admin
         if (currentUser.is_admin) {
@@ -3189,23 +3612,31 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     document.getElementById('loginBtn').addEventListener('click', () => openModal('loginModal'));
     document.getElementById('registerBtn').addEventListener('click', () => openModal('registerModal'));
     document.getElementById('userChip').addEventListener('click', () => {
-      document.getElementById('avatarDropdown').classList.toggle('open');
+      const modal = document.getElementById('avatarModal');
+      if (modal) { modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
     });
-    document.getElementById('myAccountBtn').addEventListener('click', () => {
-      document.getElementById('avatarDropdown').classList.remove('open');
+    document.getElementById('avCloseBtn').addEventListener('click', () => {
+      const modal = document.getElementById('avatarModal');
+      if (modal) { modal.style.display = 'none'; document.body.style.overflow = ''; }
+    });
+    document.getElementById('avatarModal').addEventListener('click', function(e) {
+      if (e.target === this) { this.style.display = 'none'; document.body.style.overflow = ''; }
+    });
+    document.getElementById('avMyAccountBtn').addEventListener('click', () => {
+      document.getElementById('avatarModal').style.display = 'none';
+      document.body.style.overflow = '';
       showPage('account');
     });
-    document.getElementById('signOutBtn').addEventListener('click', () => {
-      // Update UI instantly — don't wait for the network call
+    document.getElementById('avSignOutBtn').addEventListener('click', () => {
       currentUser = null;
       cart = [];
       tradeOffers = [];
       updateCartBar();
       updateAuthUI();
-      document.getElementById('avatarDropdown').classList.remove('open');
+      document.getElementById('avatarModal').style.display = 'none';
+      document.body.style.overflow = '';
       showPage('collection'); setMobileNav('collection');
       showToast('Signed out');
-      // Sign out in background (onAuthStateChange SIGNED_OUT will re-render with fresh public listings)
       sb.auth.signOut().catch(err => console.error('Logout error:', err));
     });
 
@@ -3748,6 +4179,291 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ─── BADGE SYSTEM ───────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    const _BADGE_KEY       = 'pathbinder_badges_v1';
+    const _SCAN_TOTAL_KEY  = 'pathbinder_scan_total_v1';
+    const _GHOST_P1_KEY    = 'pathbinder_ghost_p1_v1';
+
+    const BADGE_DEFS = [
+      {
+        id: 'stacked', name: 'STACKED', part: 1, maxPart: 1,
+        desc: 'Add 50 cards to your collection',
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- card stack -->
+          <rect x="28" y="54" width="40" height="28" rx="2" fill="#1a1a1a" stroke="#C5FF3D" stroke-width="2"/>
+          <rect x="24" y="46" width="40" height="28" rx="2" fill="#111" stroke="#888" stroke-width="1.5"/>
+          <rect x="20" y="38" width="40" height="28" rx="2" fill="#0a0a0a" stroke="#555" stroke-width="1.5"/>
+          <!-- shine lines -->
+          <line x1="26" y1="43" x2="34" y2="43" stroke="#C5FF3D" stroke-width="1.5" opacity=".7"/>
+          <line x1="26" y1="47" x2="30" y2="47" stroke="#C5FF3D" stroke-width="1" opacity=".4"/>
+          <!-- 50 text -->
+          <text x="48" y="74" font-family="monospace" font-size="14" font-weight="bold" fill="#C5FF3D" text-anchor="middle">50</text>
+          <!-- rays -->
+          <line x1="48" y1="8" x2="48" y2="18" stroke="#C5FF3D" stroke-width="2" opacity=".5"/>
+          <line x1="72" y1="14" x2="66" y2="22" stroke="#C5FF3D" stroke-width="2" opacity=".4"/>
+          <line x1="24" y1="14" x2="30" y2="22" stroke="#C5FF3D" stroke-width="2" opacity=".4"/>
+        </svg>`
+      },
+      {
+        id: 'phantom', name: 'PHANTOM', part: 0, maxPart: 2,
+        desc: 'Wishlist a ghost card, then acquire it',
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- ghost body -->
+          <path d="M30 62 Q30 30 48 24 Q66 30 66 62 L66 72 L58 66 L50 72 L42 66 L34 72 Z"
+            fill="#0d1a1a" stroke="#C5FF3D" stroke-width="2"/>
+          <!-- eyes -->
+          <ellipse cx="41" cy="50" rx="5" ry="6" fill="#C5FF3D" opacity=".9"/>
+          <ellipse cx="55" cy="50" rx="5" ry="6" fill="#C5FF3D" opacity=".9"/>
+          <ellipse cx="41" cy="51" rx="2.5" ry="3" fill="#050505"/>
+          <ellipse cx="55" cy="51" rx="2.5" ry="3" fill="#050505"/>
+          <!-- glow -->
+          <ellipse cx="48" cy="50" rx="22" ry="26" fill="none" stroke="#C5FF3D" stroke-width="1" opacity=".2"/>
+          <!-- part pips rendered in JS -->
+        </svg>`
+      },
+      {
+        id: 'linked', name: 'LINKED', part: 1, maxPart: 1,
+        desc: 'Start a trade and have someone join',
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- left node -->
+          <rect x="10" y="36" width="28" height="24" rx="3" fill="#0a1a0a" stroke="#C5FF3D" stroke-width="2"/>
+          <text x="24" y="52" font-family="monospace" font-size="9" fill="#C5FF3D" text-anchor="middle">YOU</text>
+          <!-- right node -->
+          <rect x="58" y="36" width="28" height="24" rx="3" fill="#0a1a0a" stroke="#C5FF3D" stroke-width="2"/>
+          <text x="72" y="52" font-family="monospace" font-size="9" fill="#C5FF3D" text-anchor="middle">THEM</text>
+          <!-- chain links -->
+          <line x1="38" y1="48" x2="58" y2="48" stroke="#C5FF3D" stroke-width="2" stroke-dasharray="4 3"/>
+          <circle cx="44" cy="48" r="3" fill="none" stroke="#C5FF3D" stroke-width="2"/>
+          <circle cx="52" cy="48" r="3" fill="none" stroke="#C5FF3D" stroke-width="2"/>
+          <!-- pulse rings -->
+          <circle cx="24" cy="48" r="17" fill="none" stroke="#C5FF3D" stroke-width="1" opacity=".2"/>
+          <circle cx="72" cy="48" r="17" fill="none" stroke="#C5FF3D" stroke-width="1" opacity=".2"/>
+        </svg>`
+      },
+      {
+        id: 'init', name: 'INIT://', part: 1, maxPart: 1,
+        desc: 'Create your account',
+        hint: '★ there\'s more to find...',
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- terminal window -->
+          <rect x="14" y="20" width="68" height="56" rx="3" fill="#050505" stroke="#C5FF3D" stroke-width="2"/>
+          <rect x="14" y="20" width="68" height="12" rx="3" fill="#0a1a0a" stroke="#C5FF3D" stroke-width="2"/>
+          <!-- traffic dots -->
+          <circle cx="24" cy="26" r="3" fill="#FF5722"/>
+          <circle cx="34" cy="26" r="3" fill="#FFB800"/>
+          <circle cx="44" cy="26" r="3" fill="#C5FF3D"/>
+          <!-- cursor prompt -->
+          <text x="22" y="50" font-family="monospace" font-size="11" fill="#C5FF3D">&#62;_</text>
+          <text x="22" y="64" font-family="monospace" font-size="7" fill="#888">INIT://</text>
+          <!-- blink cursor line -->
+          <rect x="38" y="42" width="6" height="2" fill="#C5FF3D" opacity=".8"/>
+          <!-- question mark hint -->
+          <text x="74" y="74" font-family="monospace" font-size="11" fill="#FF5722" opacity=".6">?</text>
+        </svg>`
+      },
+      {
+        id: 'archived', name: 'ARCHIVED', part: 1, maxPart: 1,
+        desc: 'Create your first binder',
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- binder body -->
+          <rect x="22" y="18" width="52" height="60" rx="2" fill="#0a1a0a" stroke="#C5FF3D" stroke-width="2"/>
+          <!-- spine -->
+          <rect x="22" y="18" width="14" height="60" rx="2" fill="#050505" stroke="#C5FF3D" stroke-width="2"/>
+          <!-- rings (3 binder rings) -->
+          <circle cx="29" cy="36" r="5" fill="none" stroke="#C5FF3D" stroke-width="2"/>
+          <circle cx="29" cy="48" r="5" fill="none" stroke="#C5FF3D" stroke-width="2"/>
+          <circle cx="29" cy="60" r="5" fill="none" stroke="#C5FF3D" stroke-width="2"/>
+          <!-- page lines -->
+          <line x1="44" y1="32" x2="66" y2="32" stroke="#333" stroke-width="1.5"/>
+          <line x1="44" y1="40" x2="66" y2="40" stroke="#333" stroke-width="1.5"/>
+          <line x1="44" y1="48" x2="66" y2="48" stroke="#333" stroke-width="1.5"/>
+          <line x1="44" y1="56" x2="60" y2="56" stroke="#333" stroke-width="1.5"/>
+          <!-- accent star -->
+          <text x="68" y="24" font-family="monospace" font-size="9" fill="#C5FF3D">★</text>
+        </svg>`
+      },
+      {
+        id: 'rendered', name: 'RENDERED', part: 1, maxPart: 1,
+        desc: 'Set your pixel avatar as profile pic',
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- pixel person — simplified 8-bit silhouette -->
+          <!-- head -->
+          <rect x="38" y="14" width="20" height="18" fill="#C5FF3D" rx="1"/>
+          <!-- eyes -->
+          <rect x="42" y="20" width="4" height="4" fill="#050505"/>
+          <rect x="50" y="20" width="4" height="4" fill="#050505"/>
+          <!-- neck -->
+          <rect x="44" y="32" width="8" height="6" fill="#C5FF3D"/>
+          <!-- torso -->
+          <rect x="34" y="38" width="28" height="24" fill="#1a2a1a" stroke="#C5FF3D" stroke-width="1.5"/>
+          <!-- arms -->
+          <rect x="22" y="38" width="12" height="16" fill="#C5FF3D" rx="1"/>
+          <rect x="62" y="38" width="12" height="16" fill="#C5FF3D" rx="1"/>
+          <!-- legs -->
+          <rect x="34" y="62" width="12" height="18" fill="#C5FF3D" rx="1"/>
+          <rect x="50" y="62" width="12" height="18" fill="#C5FF3D" rx="1"/>
+          <!-- logo on chest -->
+          <text x="48" y="53" font-family="monospace" font-size="7" fill="#C5FF3D" text-anchor="middle">PB</text>
+        </svg>`
+      },
+      {
+        id: 'scanner', name: 'SCANNER.EXE', part: 1, maxPart: 1,
+        desc: 'Scan 50 cards with the card scanner',
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- card -->
+          <rect x="24" y="20" width="48" height="64" rx="3" fill="#0a1a0a" stroke="#555" stroke-width="1.5"/>
+          <!-- scan beam (horizontal) -->
+          <rect x="24" y="46" width="48" height="3" fill="#C5FF3D" opacity=".85"/>
+          <rect x="24" y="44" width="48" height="1" fill="#C5FF3D" opacity=".3"/>
+          <rect x="24" y="50" width="48" height="1" fill="#C5FF3D" opacity=".3"/>
+          <!-- scan bar on sides -->
+          <rect x="16" y="38" width="6" height="20" rx="1" fill="#C5FF3D" opacity=".6"/>
+          <rect x="74" y="38" width="6" height="20" rx="1" fill="#C5FF3D" opacity=".6"/>
+          <!-- card details (fake) -->
+          <rect x="30" y="26" width="36" height="14" rx="1" fill="#111"/>
+          <rect x="30" y="56" width="24" height="3" rx="1" fill="#222"/>
+          <rect x="30" y="62" width="18" height="3" rx="1" fill="#1a1a1a"/>
+          <!-- scan count -->
+          <text x="68" y="82" font-family="monospace" font-size="9" fill="#C5FF3D" text-anchor="end">×50</text>
+        </svg>`
+      },
+      {
+        id: 'signal', name: '[DATA EXPUNGED]', part: 0, maxPart: 1,
+        desc: '???', hidden: true,
+        svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+          <rect width="96" height="96" fill="#050505"/>
+          <!-- Discord ghost content (censored) -->
+          <path d="M20 28 Q48 14 76 28 L76 60 Q76 72 60 76 L48 82 L36 76 Q20 72 20 60 Z" fill="#111" opacity=".5"/>
+          <!-- censorship bars -->
+          <rect x="18" y="26" width="60" height="10" rx="1" fill="#000" opacity=".95"/>
+          <rect x="18" y="42" width="60" height="10" rx="1" fill="#000" opacity=".95"/>
+          <rect x="18" y="58" width="60" height="10" rx="1" fill="#000" opacity=".95"/>
+          <!-- small Discord hint (very subtle) -->
+          <text x="48" y="88" font-family="monospace" font-size="6" fill="#222" text-anchor="middle">SIGNAL LOST</text>
+          <!-- tiny question marks in the bars -->
+          <text x="48" y="35" font-family="monospace" font-size="8" fill="#1a1a1a" text-anchor="middle">████████</text>
+          <text x="48" y="51" font-family="monospace" font-size="8" fill="#1a1a1a" text-anchor="middle">████████</text>
+        </svg>`
+      },
+    ];
+
+    function _getBadges() {
+      try { return JSON.parse(localStorage.getItem(_BADGE_KEY) || '[]'); } catch { return []; }
+    }
+    function _hasBadge(id) { return _getBadges().includes(id); }
+    function _awardBadge(id) {
+      if (_hasBadge(id)) return false;
+      const badges = _getBadges();
+      badges.push(id);
+      localStorage.setItem(_BADGE_KEY, JSON.stringify(badges));
+      _showBadgeUnlock(id);
+      // Refresh badge grid if open
+      const grid = document.getElementById('badgesGrid');
+      if (grid && grid.innerHTML !== '') renderBadges();
+      return true;
+    }
+    function _showBadgeUnlock(id) {
+      const def = BADGE_DEFS.find(b => b.id === id);
+      if (!def) return;
+      const existing = document.getElementById('_badgeUnlockToast');
+      if (existing) existing.remove();
+      const toast = document.createElement('div');
+      toast.id = '_badgeUnlockToast';
+      toast.className = 'badge-unlock-toast';
+      const displayName = def.hidden ? '[DATA EXPUNGED]' : def.name;
+      toast.innerHTML = `
+        <div class="but-icon">${def.svg}</div>
+        <div class="but-text">
+          <div class="but-label">★ BADGE UNLOCKED</div>
+          <div class="but-name">${displayName}</div>
+        </div>`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.transition = 'opacity .4s';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 450);
+      }, 3500);
+    }
+
+    // ── Badge check functions ────────────────────────────────────────
+    function checkBadge_stacked() {
+      if (_hasBadge('stacked')) return;
+      const owned = collectionItems.filter(c => !c.is_ghost && !c.sold_offline).length;
+      if (owned >= 50) _awardBadge('stacked');
+    }
+    function checkBadge_phantom_p1() {
+      localStorage.setItem(_GHOST_P1_KEY, '1');
+      // update badge tile if visible
+      const grid = document.getElementById('badgesGrid');
+      if (grid && grid.innerHTML !== '') renderBadges();
+    }
+    function checkBadge_phantom_p2() {
+      if (!_hasBadge('phantom') && localStorage.getItem(_GHOST_P1_KEY) === '1') {
+        _awardBadge('phantom');
+      }
+    }
+    function checkBadge_linked()   { if (!_hasBadge('linked'))   _awardBadge('linked');   }
+    function checkBadge_init()     { if (!_hasBadge('init'))     _awardBadge('init');     }
+    function checkBadge_archived() { if (!_hasBadge('archived')) _awardBadge('archived'); }
+    function checkBadge_rendered() { if (!_hasBadge('rendered')) _awardBadge('rendered'); }
+    function checkBadge_scanner() {
+      let total = parseInt(localStorage.getItem(_SCAN_TOTAL_KEY) || '0', 10) + 1;
+      localStorage.setItem(_SCAN_TOTAL_KEY, String(total));
+      if (!_hasBadge('scanner') && total >= 50) _awardBadge('scanner');
+    }
+    function unlockDiscordBadge(e) {
+      e.preventDefault();
+      checkBadge_signal_discord();
+      setTimeout(() => { window.open('https://discord.gg/pathbinder', '_blank', 'noopener'); }, 600);
+    }
+    function checkBadge_signal_discord() { if (!_hasBadge('signal')) _awardBadge('signal'); }
+
+    // ── Badge renderer ───────────────────────────────────────────────
+    function renderBadges() {
+      const grid = document.getElementById('badgesGrid');
+      if (!grid) return;
+      const earned = _getBadges();
+      const ghostP1Done = localStorage.getItem(_GHOST_P1_KEY) === '1';
+
+      grid.innerHTML = BADGE_DEFS.map(def => {
+        const isEarned  = earned.includes(def.id);
+        const isHidden  = def.hidden && !isEarned;
+        const isPartial = def.id === 'phantom' && !isEarned && ghostP1Done;
+        const stateClass = isEarned ? 'earned' : (isPartial ? 'partial' : 'locked');
+
+        const pips = def.maxPart > 1
+          ? `<div class="badge-part-pip">
+               <span class="${ghostP1Done || isEarned ? 'done' : ''}"></span>
+               <span class="${isEarned ? 'done' : ''}"></span>
+             </div>` : '';
+
+        const hintHtml = def.hint && isEarned
+          ? `<div style="font-size:.55rem;color:#FF5722;text-align:center;margin-top:-6px;font-family:'Press Start 2P',monospace">${def.hint}</div>` : '';
+
+        return `
+          <div class="badge-tile ${stateClass}">
+            <div class="badge-hex">${def.svg}</div>
+            <div class="badge-name">${isHidden ? '???' : def.name}</div>
+            ${pips}
+            <div class="badge-desc">${isHidden ? 'Keep exploring...' : def.desc}</div>
+            ${hintHtml}
+          </div>`;
+      }).join('');
+    }
+
+    // ─── Check init badge on auth ────────────────────────────────────
+    // (called after user signs in — if they just created account they get it)
+
+    // ═══════════════════════════════════════════════════════════════
     // ===== ACCOUNT PAGE =====
     let activeOrdersTab = 'buying';
 
@@ -3868,6 +4584,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (tab === 'myListings') renderMyListings();
       if (tab === 'salesArchive') renderSalesArchive();
       if (tab === 'tradeHistory') renderTradeHistory();
+      if (tab === 'badges') renderBadges();
     }
 
     function switchOrdersTab(tab) {
@@ -8099,6 +8816,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       closeModal('binderEditModal');
       renderBinderTabs();
       showToast(_editingBinderId ? '✓ Binder updated' : '✓ Binder created');
+      if (!_editingBinderId) { try { checkBadge_archived(); } catch(_) {} }
     }
 
     async function deleteBinder() {
@@ -9436,6 +10154,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       showToast('♡ ' + cardName + ' added to wishlist!');
+      try { checkBadge_phantom_p1(); } catch(_) {}
       _returnToScanner = false; // saved successfully — don't reopen scanner
       closeModal('addToWishlistModal');
       pendingCollectionCard = null;
@@ -9475,6 +10194,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (error) { showToast('Error: ' + error.message); return; }
       if (item) { item.is_ghost = false; item.savings_goal = 0; item.amount_saved = 0; }
       showToast('Card moved to your collection!');
+      try { checkBadge_phantom_p2(); } catch(_) {}
       closeModal('binderDetailModal');
       renderBinder();
       renderDashboard();
@@ -9708,6 +10428,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       showToast(cardName + ' added to collection!');
+      try { await loadCollection(); checkBadge_stacked(); } catch(_) {}
       _returnToScanner = false; // saved successfully — don't reopen scanner
       closeModal('addToCollectionModal');
       pendingCollectionCard = null;
@@ -10150,6 +10871,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           _ftSession.bJoined = true;
           _ftSession.nameB = data.name_b || 'Guest';
           showToast('🟢 ' + _ftSession.nameB + ' has joined the trade!');
+          try { checkBadge_linked(); } catch(_) {}
           var banner = document.getElementById('ftSessionBanner');
           if (banner) {
             banner.classList.remove('ft-session-joined'); // force reflow so animation restarts
@@ -10224,6 +10946,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var nameB   = _ftSession.nameB || 'Guest';
       var myName  = role === 'a' ? nameA : nameB;
       var theirName = role === 'a' ? nameB : nameA;
+      // Avatar thumbnails
+      var myPfp = localStorage.getItem('pathbinder_avatar_pfp_v1') || '';
+      var myAvEl = myPfp
+        ? `<div style="width:26px;height:26px;overflow:hidden;border:1.5px solid var(--accent);flex-shrink:0;background:var(--surface2)"><img src="${myPfp}" style="width:100%;height:100%;object-fit:cover;object-position:top;image-rendering:pixelated" /></div>`
+        : `<div style="width:26px;height:26px;border:1.5px solid var(--accent);background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;flex-shrink:0;color:var(--surface)">${myName[0]||'?'}</div>`;
       var bHasJoined = !!(role === 'a' ? _ftSession.bJoined : true);
       var statusMsg = (_ftLocked.A && _ftLocked.B)
         ? '🔐 Both sides locked — analyzing…'
@@ -10241,7 +10968,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           '<div>' +
             '<div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;color:var(--muted);margin-bottom:4px">LIVE TRADE SESSION</div>' +
             '<div style="font-size:1.6rem;font-weight:700;letter-spacing:.2em;color:var(--accent);font-family:monospace;line-height:1">' + id + '</div>' +
-            '<div style="font-size:.72rem;color:var(--muted);margin-top:6px">' + statusMsg + '</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;margin-top:7px">' + myAvEl +
+              '<span style="font-size:.78rem;color:var(--text);font-weight:600">' + myName + '</span>' +
+              '<span style="font-size:.65rem;color:var(--muted)">(you)</span>' +
+            '</div>' +
+            '<div style="font-size:.72rem;color:var(--muted);margin-top:4px">' + statusMsg + '</div>' +
             (role === 'b' ? '<div style="font-size:.68rem;color:var(--muted);margin-top:2px">' + nameA + '\'s side is read-only on your screen</div>' : '') +
           '</div>' +
           (role === 'a' ?
@@ -10367,6 +11098,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         setFtScanStatus('Scanning… (' + (gLeft === 0 ? 'last free guest scan used' : gLeft + ' guest scan' + (gLeft === 1 ? '' : 's') + ' left') + ')');
       } else {
         incrementUsage('scan');
+        try { checkBadge_scanner(); } catch(_) {}
         var left = scannerLimit() - getUsageCount('scan');
         if (!tierAtLeast('collector') && left <= 2) {
           setFtScanStatus('Scanning… (' + (left === 0 ? 'last free scan this month' : left + ' free scan' + (left === 1 ? '' : 's') + ' left') + ')');
@@ -11442,6 +12174,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         updateAuthUI();
         renderAllContent();
         if (freshSignIn && !isPublicView) { freshSignIn = false; showPage('account'); setMobileNav('account'); }
+        // Award "INIT" badge — any logged-in user earns this (hints at easter egg)
+        try { if (typeof checkBadge_init === 'function') checkBadge_init(); } catch(_) {}
 
         // Then enrich with profile + fresh data in background
         const uid = session.user.id;
@@ -11593,6 +12327,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </style>
 
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
+  <!-- ═══ SOCIAL FOOTER ════════════════════════════════════════════════════ -->
+  <div class="social-footer" id="socialFooter">
+    <a href="https://instagram.com/pathbinderapp" target="_blank" rel="noopener" title="Instagram">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+      INSTAGRAM
+    </a>
+    <a href="https://tiktok.com/@pathbinderapp" target="_blank" rel="noopener" title="TikTok">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.19a8.24 8.24 0 004.83 1.56V6.3a4.85 4.85 0 01-1.06-.39z"/></svg>
+      TIKTOK
+    </a>
+    <a href="https://x.com/pathbinderapp" target="_blank" rel="noopener" title="X / Twitter">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.736-8.861L2.25 2.25h6.891l4.259 5.631 4.844-5.631zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      X
+    </a>
+    <a href="#" class="discord-link" id="discordFooterLink" title="Join our Discord" onclick="unlockDiscordBadge(event)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028 14.09 14.09 0 001.226-1.994.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+      DISCORD
+    </a>
+  </div>
+
   <div class="mobile-nav" id="mobileNav">
     <button class="mobile-nav-btn active" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
       <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>
@@ -12173,6 +12927,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         // Count the scan
         incrementUsage('scan');
+        try { checkBadge_scanner(); } catch(_) {}
         // Show remaining uses for free tier as a soft nudge
         if (!tierAtLeast('collector')) {
           const left = limit - used - 1;
@@ -12945,7 +13700,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     '◢◣ PATHBINDER//404',
     'TRADE ANALYST',
     'SCAN.COLLECT.TRADE',
-    '雲烟縹渺',
+    '一期一会',
     'NO.SLEEP',
     'KNOW.YOUR.CARDS',
     'NEW DROPS WEEKLY',
@@ -13018,6 +13773,1727 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   }
 })();
   </script>
+
+  <!-- ═══ AVATAR CREATOR ENGINE ═══════════════════════════════════════════ -->
+  <script>
+(() => {
+  'use strict';
+  const STORAGE_KEY = 'pathbinder_avatar_sf_v1';
+
+  // ── PALETTES ─────────────────────────────────────────
+  const SKIN  = ['#FFE4C4','#F4C29B','#C68863','#8D5524','#5E3719'];
+  const EYE   = ['#3D2817','#5B89C7','#5BAA68','#9B59B6','#C77B59','#D4A017','#6FF7E0','#FF2A6D'];
+  const HAIR  = ['#1A1530','#3D2817','#FFE38A','#FFB1CC','#C8FF5C','#B5E2FF','#C9B4FF','#FF2A6D','#D8D8E8','#FF6B35','#6FF7E0','#FFE94A'];
+  const CLOTH = ['#FFB1CC','#B5E2FF','#C8FF5C','#C9B4FF','#FF6B35','#6F4FFF','#FAF7E8','#1A1530','#FF2A6D','#D8D8E8','#FFF1A0','#6FF7E0','#FFE94A','#5B89C7'];
+  const SHOE  = ['#1A1530','#FAF7E8','#FFB1CC','#FF2A6D','#C8FF5C','#B5E2FF','#FF6B35','#6FF7E0','#D8D8E8'];
+  const HAT   = ['#FFB1CC','#B5E2FF','#C8FF5C','#1A1530','#FF2A6D','#FAF7E8','#FF6B35','#6FF7E0','#D8D8E8'];
+  const OUTLINE = '#2D1B45';
+
+  // ── SPRITE LAYOUT (single source of truth — every zone connects) ──
+  // 64×96 canvas. SF/KOF proportions: small head (~16% of body), long torso, long legs.
+  const CX = 32;
+  const Y = {
+    HAIR_TOP: 2,
+    HEAD_T:   4,    // top of skull/face — head is 16 rows tall (y=4..19) — bumped from 14
+    // Face features pushed 2 rows down to give hair more clearance above the eyes.
+    BROW:    11,
+    EYE:     12,    // eye row (2 tall: 12-13) — on the head midline
+    NOSE:    14,
+    MOUTH:   16,
+    HEAD_B:  19,    // bottom of chin
+    NECK_T:  20,
+    NECK_B:  22,
+    SHOULDER:23,    // shoulders begin (pushed down 2)
+    CHEST:   27,
+    BUST:    30,
+    WAIST:   42,    // unchanged — torso still ends at row 50
+    TORSO_B: 50,
+    HIP_T:   51,
+    HIP_B:   54,
+    LEG_T:   51,
+    KNEE:    68,
+    LEG_B:   83,
+    FEET_T:  84,
+    FEET_B:  91,
+    GROUND:  92,
+  };
+
+  const DEFAULT = {
+    body:'masc', skin:1, eyeColor:1,
+    hair:'fade', hairColor:0,
+    hat:'none', hatColor:0,
+    face:'none', facial:'none', earrings:'none',
+    top:'bigtee', topColor:7, graphic:'pathbinder',
+    bottom:'baggy', bottomColor:13,
+    shoes:'chunky', shoesColor:0,
+  };
+  let state = load() || {...DEFAULT};
+  function load(){ try{return JSON.parse(localStorage.getItem(STORAGE_KEY));}catch{return null;} }
+  function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  // ── CANVAS HELPERS ──────────────────────────────────
+  const canvas = document.getElementById('av-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const W = 64, H = 96;
+
+  // ── PathBinder logo image (rendered as a separate <img> overlay) ──
+  // The avatar canvas is CSS-scaled with image-rendering: pixelated, so anything painted on
+  // the canvas gets nearest-neighbor crunched. To keep the logo crisp we use a sibling
+  // <img> with image-rendering: auto, positioned over the chest with CSS percentages.
+  const chestLogo = document.getElementById('av-chestLogo');
+  let logoLoaded = false;
+  chestLogo.onload  = () => {
+    logoLoaded = true;
+    console.log('[Avatar] PathBinder logo loaded:', chestLogo.naturalWidth + '×' + chestLogo.naturalHeight);
+    if (typeof update === 'function') update();
+  };
+  chestLogo.onerror = () => {
+    logoLoaded = false;
+    console.warn('[Avatar] pathbinder-logo.png failed to load from "' + chestLogo.src +
+                 '" — using pixel-art fallback. Make sure the file exists at the same path as this widget.');
+  };
+  // Cache-bust so the browser doesn't keep serving a stale 404 from a previous load.
+  chestLogo.src = 'pathbinder-logo.png?v=' + Date.now();
+  // Handle the case where the browser cached the image and onload never fires.
+  if (chestLogo.complete && chestLogo.naturalWidth > 0) logoLoaded = true;
+  // Backwards-compat handle (kept so the canvas fallback can still detect load state)
+  const logoImg = chestLogo;
+  const fill = (x,y,w,h,c) => { ctx.fillStyle = c; ctx.fillRect(x,y,w,h); };
+  const px   = (x,y,c)     => { ctx.fillStyle = c; ctx.fillRect(x,y,1,1); };
+  function shade(hex, amt){
+    const n = parseInt(hex.slice(1),16);
+    let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+    r=Math.max(0,Math.min(255,r+amt));
+    g=Math.max(0,Math.min(255,g+amt));
+    b=Math.max(0,Math.min(255,b+amt));
+    return '#'+((r<<16)|(g<<8)|b).toString(16).padStart(6,'0');
+  }
+  const isLight = hex => {
+    const n = parseInt(hex.slice(1),16);
+    return (((n>>16)&255)*0.299 + ((n>>8)&255)*0.587 + (n&255)*0.114) > 160;
+  };
+
+  // Cel-shaded rect
+  function cel(x, y, w, h, color, opts = {}){
+    fill(x, y, w, h, color);
+    const sh = shade(color, -28);
+    if (opts.shR !== false) fill(x+w-1, y+1, 1, h-2, sh);
+    if (opts.shB !== false) fill(x+1, y+h-1, w-2, 1, sh);
+    if (opts.outline !== false){
+      fill(x, y, w, 1, OUTLINE);
+      fill(x, y+h-1, w, 1, OUTLINE);
+      fill(x, y, 1, h, OUTLINE);
+      fill(x+w-1, y, 1, h, OUTLINE);
+    }
+  }
+
+  // Filled span (single row stripe)
+  const span = (y, x0, x1, c) => fill(x0, y, x1-x0+1, 1, c);
+
+  // Body silhouette per gender — defines outline of EVERYTHING (head, torso, legs).
+  // Returns array of [y, xL, xR] inclusive spans.
+  function silhouette(femme){
+    // ── Width parameters — strong gender contrast ──
+    // Femme: hourglass (narrow shoulders, pinched waist, hip flare)
+    // Masc:  V-shape (broad shoulders, slight waist, narrower hips)
+    const sH = femme ? 9  : 12;   // shoulder half
+    const wH = femme ? 5  : 10;
+    const hH = femme ? 9  : 11;   // masc hips bumped 9 → 11 so the silhouette doesn't taper down
+    const ll = femme ? 4  : 6;    // masc leg-center widened 5 → 6 to match the wider hips
+    const lw = femme ? 3  : 5;    // masc legs thickened 4 → 5
+    const neckHalf = femme ? 2 : 4;
+
+    const out = [];
+    // Head — 16 rows now (was 14). Wider too: femme max 7 (14 wide), masc max 8 (16 wide).
+    const skullHalf = femme
+      ? [3,4,5,6,7,7,7,7,7,7,7,6,6,5,5,4]
+      : [3,5,6,7,8,8,8,8,8,8,8,8,7,7,6,5];
+    for (let i = 0; i < skullHalf.length; i++){
+      const y = Y.HEAD_T + i;
+      out.push([y, CX - skullHalf[i], CX - 1 + skullHalf[i]]);
+    }
+    for (let y = Y.NECK_T; y <= Y.NECK_B; y++){
+      out.push([y, CX - neckHalf, CX - 1 + neckHalf]);
+    }
+    // Shoulders flare to full width over 2 rows
+    out.push([Y.SHOULDER,   CX - sH + 1, CX - 1 + sH - 1]);
+    out.push([Y.SHOULDER+1, CX - sH,     CX - 1 + sH]);
+    // Chest → waist taper (femme curves in slightly)
+    const torsoStart = Y.SHOULDER + 2;
+    for (let y = torsoStart; y <= Y.TORSO_B; y++){
+      const t = (y - torsoStart) / (Y.TORSO_B - torsoStart);
+      // ease: shoulder → narrowest at WAIST → hip flare back out
+      let half;
+      const waistT = (Y.WAIST - torsoStart) / (Y.TORSO_B - torsoStart);
+      if (t < waistT){
+        const u = t / waistT;
+        half = sH + (wH - sH) * u;     // shoulder → waist
+      } else {
+        const u = (t - waistT) / (1 - waistT);
+        half = wH + (hH - wH) * u;     // waist → hip
+      }
+      half = Math.round(half);
+      out.push([y, CX - half, CX - 1 + half]);
+    }
+    // Hips
+    for (let y = Y.HIP_T; y <= Y.HIP_B; y++){
+      out.push([y, CX - hH, CX - 1 + hH]);
+    }
+    // Legs (two columns, gap in middle)
+    const legSpans = [];
+    for (let y = Y.HIP_B + 1; y <= Y.LEG_B; y++){
+      // each leg is 2*lw wide, centered ll from CX
+      legSpans.push({y,
+        L: [CX - ll - lw, CX - ll + lw - 1],
+        R: [CX + ll - lw, CX + ll + lw - 1],
+      });
+    }
+    return { spans: out, legSpans, dims: { sH, wH, hH, ll, lw } };
+  }
+
+  // ── DRAW ────────────────────────────────────────────
+  function drawAvatar(){
+    ctx.clearRect(0, 0, W, H);
+    _oversizedRanges = [];
+    _bridgeEndY = -1;
+    _outerLegSkipRange = null;
+
+    const femme = state.body === 'femme';
+    const skinC = SKIN[state.skin];
+    const eyeC  = EYE[state.eyeColor];
+    const hairC = HAIR[state.hairColor];
+    const topC  = CLOTH[state.topColor];
+    const botC  = CLOTH[state.bottomColor];
+    const shoeC = SHOE[state.shoesColor];
+    const hatC  = HAT[state.hatColor];
+
+    const sil = silhouette(femme);
+
+    // Cast shadow first (behind sprite)
+    drawCastShadow();
+
+    // Skin base for entire silhouette (then clothes paint over)
+    drawSkinBase(sil, skinC);
+
+    // Bottom + legs first so torso paints over hip seam
+    drawBottom(state.bottom, botC, sil, skinC, femme);
+    drawShoes(state.shoes, shoeC, sil);
+    // Torso (covers hip waistband appropriately)
+    drawTorso(state.top, topC, sil, skinC, femme);
+    drawArms(state.top, topC, skinC, femme, sil);
+    drawGraphic(state.graphic, topC, state.top, femme);
+    // Head/face on top
+    drawHead(sil, skinC, eyeC, femme);
+    // Facial hair (between head and hair so sideburns slot into hair)
+    drawFacialHair(state.facial, hairC, femme);
+    // Outline pass FIRST — paints the head/body silhouette outline.
+    // Hair and hat draw on top so they can cover the top-of-head outline naturally.
+    drawOutline(sil);
+    // Hair, hat, glasses (highest layer — above outline so head top can disappear under them)
+    drawHair(state.hair, hairC, femme);
+    drawHat(state.hat, hatC, femme);
+    drawFaceAcc(state.face);
+  }
+
+  function drawCastShadow(){
+    fill(20, Y.GROUND, 24, 1, 'rgba(0,0,0,0.45)');
+    fill(18, Y.GROUND-1, 28, 1, 'rgba(0,0,0,0.20)');
+    fill(18, Y.GROUND+1, 28, 1, 'rgba(0,0,0,0.20)');
+  }
+
+  // Paint skin everywhere the silhouette occupies — torso/legs will be painted over.
+  // Adds 3-tone body shading so any exposed skin shows depth.
+  function drawSkinBase(sil, skin){
+    // Deeper contrast → more 3D pop
+    const skSh  = shade(skin, -32);
+    const skSh2 = shade(skin, -55);
+    const skHi  = shade(skin, 18);
+    sil.spans.forEach(([y, x0, x1]) => {
+      fill(x0, y, x1-x0+1, 1, skin);
+      if (x1 - x0 > 3){
+        px(x1 - 1, y, skSh);     // right-side shadow column
+        px(x0 + 1, y, skHi);     // left-side rim light
+      }
+      if (x1 - x0 > 6){
+        px(x1 - 2, y, skSh);     // second shadow row for wider sections
+      }
+    });
+    sil.legSpans.forEach(({y, L, R}) => {
+      fill(L[0], y, L[1]-L[0]+1, 1, skin);
+      fill(R[0], y, R[1]-R[0]+1, 1, skin);
+      // outer-edge highlight + inner-edge shadow (toned legs)
+      px(L[0] + 1, y, skHi);
+      px(R[1] - 1, y, skSh);
+      px(L[1] - 1, y, skSh);     // inner shadow on left leg
+      px(R[0] + 1, y, skHi);     // outer hi on right leg
+      // knee bump highlight
+      if (y === Y.KNEE - 1){
+        px(L[0] + 1, y, skHi);
+        px(R[1] - 2, y, skHi);
+      }
+    });
+    // Collarbone + cast shadow from the chin onto the upper chest (3D pop)
+    // 1) Hard cast shadow row directly under the neck
+    const neckHalf = 4;
+    fill(CX - neckHalf - 2, Y.SHOULDER, neckHalf * 2 + 4, 1, skSh);
+    fill(CX - neckHalf - 1, Y.SHOULDER + 1, neckHalf * 2 + 2, 1, skSh2);
+    // 2) Collarbone fade — softer shadow flaring outward
+    fill(CX - 6, Y.SHOULDER + 2, 2, 1, skSh);
+    fill(CX + 4, Y.SHOULDER + 2, 2, 1, skSh);
+    // 3) Center light catch — keeps the sternum bright (suggests forward chest curve)
+    px(CX - 1, Y.SHOULDER + 2, skHi);
+    px(CX,     Y.SHOULDER + 2, skHi);
+  }
+
+  // Draw the boundary outline at the very end so silhouette stays crisp.
+  // Skips rows that are inside an oversized garment (so the body outline doesn't
+  // run as a vertical strip down the middle of an oversized top).
+  function drawOutline(sil){
+    const isOversized = y => _oversizedRanges.some(([s, e]) => y >= s && y <= e);
+    sil.spans.forEach(([y, x0, x1]) => {
+      if (isOversized(y)) return;
+      px(x0, y, OUTLINE);
+      px(x1, y, OUTLINE);
+    });
+    // Top of head
+    const top = sil.spans[0];
+    fill(top[1], top[0], top[2]-top[1]+1, 1, OUTLINE);
+    // Leg outlines (left/right of each leg)
+    sil.legSpans.forEach(({y, L, R}) => {
+      // Outer edges — skip rows where cloth extends past the silhouette and paints its own
+      const skipOuter = _outerLegSkipRange &&
+        y >= _outerLegSkipRange.from && y <= _outerLegSkipRange.to;
+      if (!skipOuter){
+        px(L[0], y, OUTLINE);
+        px(R[1], y, OUTLINE);
+      }
+      // Inner edges — skip while still inside the crotch bridge (pants only)
+      if (y > _bridgeEndY){
+        px(L[1], y, OUTLINE);
+        px(R[0], y, OUTLINE);
+      }
+    });
+    // Bottom of feet
+    const lastLeg = sil.legSpans[sil.legSpans.length-1];
+    if (lastLeg){
+      fill(lastLeg.L[0], lastLeg.y, lastLeg.L[1]-lastLeg.L[0]+1, 1, OUTLINE);
+      fill(lastLeg.R[0], lastLeg.y, lastLeg.R[1]-lastLeg.R[0]+1, 1, OUTLINE);
+    }
+  }
+
+  // ── HEAD / FACE ─────────────────────────────────────
+  function drawHead(sil, skin, eye, femme){
+    const skSh  = shade(skin, -28);
+    const skSh2 = shade(skin, -50);
+    const skHi  = shade(skin, 18);
+    // Right-side cheek shadow — 2 columns now for more rounding
+    sil.spans.forEach(([y, x0, x1]) => {
+      if (y > Y.HEAD_T && y < Y.HEAD_B && x1 - x0 > 4){
+        px(x1 - 1, y, skSh);
+        if (x1 - x0 > 8) px(x1 - 2, y, skSh);  // subtle 2nd shadow column
+      }
+    });
+    // Chin underside shadow
+    span(Y.HEAD_B, CX - 2, CX + 1, skSh);
+    // Brow ridge shadow — thin band just above the eye, suggests brow bone
+    fill(CX - 4, Y.EYE - 1, 9, 1, skSh);
+    // Cheekbone highlight (left side, mid-face)
+    px(CX - 5, Y.NOSE,     skHi);
+    px(CX - 4, Y.NOSE - 1, skHi);
+    // Forehead highlight (light from upper-left)
+    fill(CX - 4, Y.HEAD_T + 2, 3, 1, skHi);
+    // Temple shadow (right side, above eye)
+    px(CX + 4, Y.EYE - 2, skSh);
+    px(CX + 5, Y.EYE - 1, skSh);
+
+    // Eyes (small, SF-style — 3 wide total per eye, with 1px iris)
+    drawEye(CX - 5, eye, femme, 'L');
+    drawEye(CX + 2, eye, femme, 'R');
+
+    // Eyebrows
+    if (femme){
+      // thin arched
+      fill(CX - 5, Y.BROW, 3, 1, OUTLINE);
+      fill(CX + 2, Y.BROW, 3, 1, OUTLINE);
+      px(CX - 3, Y.BROW - 1, OUTLINE);
+      px(CX + 4, Y.BROW - 1, OUTLINE);
+    } else {
+      // thicker
+      fill(CX - 5, Y.BROW - 1, 4, 1, OUTLINE);
+      fill(CX - 5, Y.BROW, 4, 1, OUTLINE);
+      fill(CX + 2, Y.BROW - 1, 4, 1, OUTLINE);
+      fill(CX + 2, Y.BROW, 4, 1, OUTLINE);
+    }
+
+    // Nose (1-2 px hint)
+    if (femme){
+      px(CX, Y.NOSE,     skSh);
+      px(CX, Y.NOSE + 1, shade(skin, -35));
+    } else {
+      px(CX - 1, Y.NOSE,     skSh);
+      fill(CX - 1, Y.NOSE + 1, 1, 2, skSh);
+      px(CX, Y.NOSE + 2, shade(skin, -35));
+    }
+
+    // Mouth
+    if (femme){
+      fill(CX - 2, Y.MOUTH, 4, 1, OUTLINE);
+      fill(CX - 2, Y.MOUTH + 1, 4, 1, '#FF2A6D');
+      px(CX - 1, Y.MOUTH + 1, '#FFB1CC');  // gloss
+    } else {
+      fill(CX - 2, Y.MOUTH, 4, 1, OUTLINE);
+      px(CX, Y.MOUTH + 1, shade(skin, -35));
+    }
+
+    // Cheek blush (femme) — placed 1px inside the silhouette so the outline pass doesn't overwrite it
+    if (femme){
+      px(CX - 5, Y.MOUTH - 2, '#FF6FA8');
+      px(CX + 4, Y.MOUTH - 2, '#FF6FA8');
+    }
+
+    // Ears (head max half: femme 7, masc 8)
+    const earY = Y.NOSE - 1;
+    const headLeft  = CX - (femme ? 7 : 8);
+    const headRight = CX - 1 + (femme ? 7 : 8);
+    px(headLeft - 1, earY,     OUTLINE);
+    px(headLeft - 1, earY + 1, skin);
+    px(headLeft - 1, earY + 2, OUTLINE);
+    px(headRight + 1, earY,     OUTLINE);
+    px(headRight + 1, earY + 1, skin);
+    px(headRight + 1, earY + 2, OUTLINE);
+
+    // Earrings (state-driven — works for any body)
+    drawEarrings(state.earrings, headLeft, headRight, earY);
+  }
+
+  function drawEarrings(style, headLeft, headRight, earY){
+    if (style === 'none') return;
+    const lx = headLeft - 1, rx = headRight + 1;
+    if (style === 'hoops'){
+      // gold hoop dangling
+      px(lx, earY + 3, '#FFD700');
+      px(rx, earY + 3, '#FFD700');
+      px(lx - 1, earY + 4, '#FFD700');
+      px(rx + 1, earY + 4, '#FFD700');
+      px(lx, earY + 5, '#FFD700');
+      px(rx, earY + 5, '#FFD700');
+    }
+    else if (style === 'studs'){
+      // single bright stud at lobe
+      px(lx, earY + 2, '#FFD700');
+      px(rx, earY + 2, '#FFD700');
+      px(lx - 1, earY + 2, OUTLINE);
+      px(rx + 1, earY + 2, OUTLINE);
+    }
+    else if (style === 'dangle'){
+      // Gold chain + larger gold drop
+      const GOLD = '#FFD700';
+      const GOLD_D = '#C9A100';
+      px(lx, earY + 3, GOLD);
+      px(rx, earY + 3, GOLD);
+      px(lx, earY + 4, GOLD);
+      px(rx, earY + 4, GOLD);
+      px(lx, earY + 5, GOLD);
+      px(rx, earY + 5, GOLD);
+      px(lx, earY + 6, GOLD_D);
+      px(rx, earY + 6, GOLD_D);
+    }
+  }
+
+  function drawEye(x, eyeC, femme, side){
+    // 4 wide × 2 tall. Bottom row: outline / iris / pupil / outline.
+    // The previous version painted the iris and then immediately overwrote it with
+    // OUTLINE, which is why the eye-color picker had no visible effect.
+    fill(x, Y.EYE, 4, 1, OUTLINE);              // top lash line
+    px(x,     Y.EYE + 1, OUTLINE);              // outer corner left
+    px(x + 1, Y.EYE + 1, eyeC);                 // ← iris (THE color the user picks)
+    px(x + 2, Y.EYE + 1, OUTLINE);              // pupil
+    px(x + 3, Y.EYE + 1, OUTLINE);              // outer corner right
+    // Glint at top of iris
+    px(x + 1, Y.EYE, '#FFFFFF');
+    // Femme: outer-corner lash flick
+    if (femme){
+      if (side === 'L') px(x - 1, Y.EYE, OUTLINE);
+      else              px(x + 4, Y.EYE, OUTLINE);
+    }
+  }
+
+  // ── HAIR ────────────────────────────────────────────
+  function drawHair(style, c, femme){
+    if (style === 'bald') return;
+    const sh = shade(c, -25);
+    const hi = shade(c, 20);
+    const headTop = Y.HEAD_T;
+
+    if (style === 'pigtails'){
+      // ── Crown — covers the top of the (now 16-row) head ──
+      fill(CX - 7, headTop - 2, 14, 1, OUTLINE);   // y=2 top edge
+      fill(CX - 7, headTop - 1, 14, 6, c);         // y=3-8 hair fill
+      fill(CX - 8, headTop - 1, 1, 8, OUTLINE);    // y=3-10 left side
+      fill(CX + 7, headTop - 1, 1, 8, OUTLINE);    // y=3-10 right side
+
+      // ── Bangs — short, stop just at the brow line so eyes stay clear ──
+      fill(CX - 6, headTop + 5, 12, 2, c);         // y=9-10
+      fill(CX - 6, headTop + 7, 12, 1, OUTLINE);   // y=11 (brow row hairline)
+
+      // ── Pigtail puffs — attached at hairline, hang down past the ears ──
+      // Each puff is 4 wide × 8 tall, sitting flush against the side of the head.
+      [CX - 11, CX + 7].forEach(px0 => {
+        // Body
+        fill(px0, headTop + 4, 4, 8, c);            // y=8-15
+        // Outlines (top + bottom + both sides)
+        fill(px0,     headTop + 4,  4, 1, OUTLINE);
+        fill(px0,     headTop + 11, 4, 1, OUTLINE);
+        fill(px0,     headTop + 5,  1, 6, OUTLINE);
+        fill(px0 + 3, headTop + 5,  1, 6, OUTLINE);
+        // Highlight strand (left) + shadow strand (right)
+        fill(px0 + 1, headTop + 5, 1, 6, hi);
+        fill(px0 + 2, headTop + 5, 1, 6, sh);
+      });
+
+      // ── Scrunchies — cherry-red band at the top of each puff ──
+      fill(CX - 11, headTop + 4, 4, 1, '#FF2A6D');
+      fill(CX + 7,  headTop + 4, 4, 1, '#FF2A6D');
+
+      // ── Butterfly clips on the crown ──
+      px(CX - 4, headTop,     '#FF6FA8'); px(CX - 3, headTop,     '#FF6FA8');
+      px(CX - 4, headTop + 1, '#C9B4FF'); px(CX - 3, headTop + 1, '#C9B4FF');
+      px(CX + 3, headTop,     '#6FF7E0'); px(CX + 4, headTop,     '#6FF7E0');
+      px(CX + 3, headTop + 1, '#FFE94A'); px(CX + 4, headTop + 1, '#FFE94A');
+    }
+    else if (style === 'buns'){
+      // Crown
+      fill(CX - 6, headTop, 12, 4, c);
+      fill(CX - 6, headTop, 12, 1, OUTLINE);
+      fill(CX - 7, headTop + 1, 1, 4, OUTLINE);
+      fill(CX + 6, headTop + 1, 1, 4, OUTLINE);
+      // Bangs
+      fill(CX - 5, headTop + 3, 10, 1, c);
+      // Two buns up top
+      [CX - 9, CX + 5].forEach(bx => {
+        fill(bx, headTop - 4, 4, 4, c);
+        fill(bx, headTop - 4, 4, 1, OUTLINE);
+        fill(bx, headTop, 4, 1, OUTLINE);
+        fill(bx, headTop - 4, 1, 4, OUTLINE);
+        fill(bx + 3, headTop - 4, 1, 4, OUTLINE);
+        px(bx + 1, headTop - 3, hi);
+        px(bx + 2, headTop - 2, sh);
+      });
+      // Side strands past ears
+      fill(CX - 7, headTop + 5, 1, 6, c);
+      fill(CX + 6, headTop + 5, 1, 6, c);
+    }
+    else if (style === 'bowl'){
+      fill(CX - 7, headTop - 1, 14, 4, c);
+      fill(CX - 7, headTop - 1, 14, 1, OUTLINE);
+      fill(CX - 8, headTop, 1, 4, OUTLINE);
+      fill(CX + 7, headTop, 1, 4, OUTLINE);
+      // Straight cut bangs end ABOVE the brow line
+      fill(CX - 6, headTop + 3, 12, 2, c);     // y=7-8
+      fill(CX - 6, headTop + 5, 12, 1, OUTLINE); // y=9 — runs along brow row
+      fill(CX - 5, headTop, 4, 1, hi);
+      fill(CX + 1, headTop, 4, 1, sh);
+    }
+    else if (style === 'frosted'){
+      // Spiky base
+      fill(CX - 6, headTop, 12, 3, c);
+      fill(CX - 6, headTop, 12, 1, OUTLINE);
+      // 4 spikes pointing up, frosted tips
+      [-5, -2, 1, 4].forEach(dx => {
+        const x = CX + dx;
+        fill(x, headTop - 3, 2, 4, c);
+        fill(x, headTop - 3, 2, 1, OUTLINE);
+        px(x, headTop - 3, OUTLINE);
+        // FROSTED TIP
+        px(x,     headTop - 2, '#FAF7E8');
+        px(x + 1, headTop - 2, '#FAF7E8');
+      });
+      // shading on right
+      fill(CX + 3, headTop, 3, 2, sh);
+    }
+    else if (style === 'bob'){
+      // Choppy bob covering ears
+      fill(CX - 7, headTop - 1, 14, 3, c);
+      fill(CX - 7, headTop - 1, 14, 1, OUTLINE);
+      // Side curtains down to jaw
+      fill(CX - 8, headTop + 2, 2, 11, c);
+      fill(CX + 6, headTop + 2, 2, 11, c);
+      fill(CX - 8, headTop + 2, 1, 11, OUTLINE);
+      fill(CX + 7, headTop + 2, 1, 11, OUTLINE);
+      // Bangs
+      fill(CX - 6, headTop + 2, 12, 2, c);
+      fill(CX - 6, headTop + 4, 12, 1, OUTLINE);
+      // Choppy uneven hem — only at the side curtains, not crossing the face
+      const hem = headTop + 13;
+      px(CX - 8, hem, OUTLINE);
+      px(CX - 7, hem - 1, OUTLINE);
+      px(CX - 6, hem, OUTLINE);
+      px(CX + 5, hem, OUTLINE);
+      px(CX + 6, hem - 1, OUTLINE);
+      px(CX + 7, hem, OUTLINE);
+      // chunky highlights
+      fill(CX - 5, headTop + 1, 1, 5, hi);
+      fill(CX + 4, headTop + 1, 1, 5, sh);
+    }
+    else if (style === 'curtain'){
+      fill(CX - 7, headTop - 1, 14, 3, c);
+      fill(CX - 7, headTop - 1, 14, 1, OUTLINE);
+      fill(CX - 8, headTop, 1, 4, OUTLINE);
+      fill(CX + 7, headTop, 1, 4, OUTLINE);
+      // Center-part curtain bangs sweeping each way
+      fill(CX - 6, headTop + 2, 6, 3, c);
+      fill(CX, headTop + 2, 6, 3, c);
+      fill(CX - 6, headTop + 5, 6, 1, OUTLINE);
+      fill(CX, headTop + 5, 6, 1, OUTLINE);
+      // sides past ears
+      fill(CX - 8, headTop + 4, 1, 7, c);
+      fill(CX + 7, headTop + 4, 1, 7, c);
+      // shine
+      fill(CX - 4, headTop, 3, 1, hi);
+    }
+    else if (style === 'buzz'){
+      // Very short — thin layer of color across the top of the skull
+      const halves = femme ? [3,4,5,6,6,6] : [3,5,6,7,7,7];
+      for (let i = 0; i < halves.length; i++){
+        fill(CX - halves[i] + 1, headTop + i, halves[i] * 2 - 2, 1, c);
+      }
+      // hairline shading
+      for (let x = CX - 5; x <= CX + 4; x += 2) px(x, headTop + 5, sh);
+      // subtle highlight
+      fill(CX - 2, headTop + 1, 4, 1, hi);
+    }
+    else if (style === 'fade'){
+      // Longer on top, faded short on the sides
+      // Top block (taller)
+      fill(CX - 5, headTop, 10, 5, c);
+      fill(CX - 5, headTop, 10, 1, OUTLINE);
+      fill(CX - 6, headTop + 1, 1, 4, OUTLINE);
+      fill(CX + 5, headTop + 1, 1, 4, OUTLINE);
+      // small forward swoop
+      fill(CX + 1, headTop + 4, 4, 1, c);
+      px(CX + 4, headTop + 5, c);
+      // faded sides — stippled into skin
+      for (let y = headTop + 2; y <= headTop + 7; y++){
+        if ((y & 1) === 0){
+          px(CX - 6, y, sh);
+          px(CX + 5, y, sh);
+        }
+        if (y >= headTop + 5){
+          px(CX - 6, y, sh);
+          px(CX + 5, y, sh);
+        }
+      }
+      // shine
+      fill(CX - 3, headTop + 1, 4, 1, hi);
+    }
+    else if (style === 'topknot'){
+      // Tight pulled-back top with a small bun, sides are short
+      // Bun at top
+      fill(CX - 2, headTop - 4, 4, 4, c);
+      fill(CX - 2, headTop - 4, 4, 1, OUTLINE);
+      fill(CX - 2, headTop, 4, 1, OUTLINE);
+      fill(CX - 2, headTop - 4, 1, 4, OUTLINE);
+      fill(CX + 1, headTop - 4, 1, 4, OUTLINE);
+      px(CX - 1, headTop - 3, hi);
+      px(CX, headTop - 2, sh);
+      // hair tie / undercut line
+      fill(CX - 4, headTop - 1, 8, 2, c);
+      fill(CX - 4, headTop - 1, 8, 1, OUTLINE);
+      // undercut sides (very short, stippled stubble)
+      for (let y = headTop + 1; y <= headTop + 5; y++){
+        if ((y & 1) === 0){
+          px(CX - 6, y, sh);
+          px(CX - 5, y, sh);
+          px(CX + 5, y, sh);
+          px(CX + 4, y, sh);
+        }
+      }
+    }
+    else if (style === 'shag'){
+      // Shaggy mid-length, layered, uneven hem near jaw
+      // Crown
+      fill(CX - 7, headTop - 1, 14, 4, c);
+      fill(CX - 7, headTop - 1, 14, 1, OUTLINE);
+      fill(CX - 8, headTop, 1, 5, OUTLINE);
+      fill(CX + 7, headTop, 1, 5, OUTLINE);
+      // forehead bangs
+      fill(CX - 6, headTop + 3, 12, 2, c);
+      fill(CX - 6, headTop + 5, 12, 1, OUTLINE);
+      // long sides past ears
+      fill(CX - 8, headTop + 4, 1, 8, c);
+      fill(CX + 7, headTop + 4, 1, 8, c);
+      fill(CX - 8, headTop + 4, 1, 8, OUTLINE);
+      fill(CX + 8, headTop + 4, 1, 8, OUTLINE);
+      // uneven hem points (shaggy ends)
+      px(CX - 8, headTop + 12, OUTLINE); px(CX - 7, headTop + 11, OUTLINE);
+      px(CX + 8, headTop + 12, OUTLINE); px(CX + 7, headTop + 11, OUTLINE);
+      // layered chunky highlights (Y2K)
+      fill(CX - 5, headTop + 1, 1, 4, hi);
+      fill(CX + 4, headTop + 1, 1, 4, sh);
+    }
+    else if (style === 'mullet'){
+      // Business in front, party in back. Y2K Joe Dirt energy.
+      // crown
+      fill(CX - 6, headTop, 12, 4, c);
+      fill(CX - 6, headTop, 12, 1, OUTLINE);
+      fill(CX - 7, headTop + 1, 1, 3, OUTLINE);
+      fill(CX + 6, headTop + 1, 1, 3, OUTLINE);
+      // short bangs
+      fill(CX - 5, headTop + 3, 10, 1, c);
+      // SHORT sides at temples
+      fill(CX - 7, headTop + 4, 1, 4, c);
+      fill(CX + 6, headTop + 4, 1, 4, c);
+      fill(CX - 7, headTop + 4, 1, 4, OUTLINE);
+      fill(CX + 7, headTop + 4, 1, 4, OUTLINE);
+      // LONG TAIL trailing down past shoulder (right side)
+      fill(CX + 5, headTop + 4, 4, 16, c);
+      fill(CX + 5, headTop + 4, 4, 1, OUTLINE);
+      fill(CX + 5, headTop + 19, 4, 1, OUTLINE);
+      fill(CX + 8, headTop + 4, 1, 16, OUTLINE);
+      px(CX + 6, headTop + 18, OUTLINE);
+      // chunky highlight stripe down tail
+      fill(CX + 6, headTop + 5, 1, 13, hi);
+    }
+    else if (style === 'lowpony'){
+      // Crown
+      fill(CX - 6, headTop, 12, 3, c);
+      fill(CX - 6, headTop, 12, 1, OUTLINE);
+      fill(CX - 7, headTop + 1, 1, 4, OUTLINE);
+      fill(CX + 6, headTop + 1, 1, 4, OUTLINE);
+      // Bangs swept
+      fill(CX - 5, headTop + 2, 9, 2, c);
+      // Sides extending continuously down to the base of the head
+      fill(CX - 7, headTop + 3, 1, 11, c);   // y=7-17
+      fill(CX + 6, headTop + 3, 1, 11, c);
+      fill(CX - 7, headTop + 3, 1, 11, OUTLINE);
+      fill(CX + 7, headTop + 3, 1, 11, OUTLINE);
+      // Hair gathering at base of skull, attached to the head
+      fill(CX + 5, headTop + 11, 3, 4, c);   // y=15-18
+      fill(CX + 5, headTop + 11, 3, 1, OUTLINE);
+      fill(CX + 7, headTop + 11, 1, 4, OUTLINE);
+      // Pony tail trailing down past shoulder, attached to the gather
+      fill(CX + 6, headTop + 14, 3, 14, c);
+      fill(CX + 6, headTop + 14, 3, 1, OUTLINE);
+      fill(CX + 6, headTop + 27, 3, 1, OUTLINE);
+      fill(CX + 6, headTop + 14, 1, 14, OUTLINE);
+      fill(CX + 8, headTop + 14, 1, 14, OUTLINE);
+      fill(CX + 7, headTop + 15, 1, 12, sh);
+      // Hair tie / scrunchie
+      fill(CX + 5, headTop + 14, 4, 1, '#FF2A6D');
+      // Crown shine
+      fill(CX - 3, headTop + 1, 4, 1, hi);
+    }
+  }
+
+  // ── FACIAL HAIR (masc only) ─────────────────────────
+  function drawFacialHair(style, hairC, femme){
+    if (style === 'none' || femme) return;
+    const sh = shade(hairC, -25);
+    const M = Y.MOUTH;   // 16 — anchor everything to the mouth row
+    const N = Y.NOSE;    // 14
+
+    if (style === 'stubble'){
+      // Sparse 5-o'clock-shadow pattern across jaw, chin, upper lip
+      for (let y = M - 1; y <= Y.HEAD_B - 1; y++){
+        for (let x = CX - 5; x <= CX + 4; x++){
+          if (((x + y) & 1) === 0) px(x, y, sh);
+        }
+      }
+      // Upper-lip stubble
+      px(CX - 3, M - 1, sh); px(CX - 1, M - 1, sh); px(CX + 1, M - 1, sh);
+    }
+    else if (style === 'mustache'){
+      // Pixelated handlebar above the lip
+      fill(CX - 3, M - 1, 6, 1, hairC);
+      px(CX - 4, M - 1, sh); px(CX + 3, M - 1, sh);   // outer wisps
+      px(CX - 4, M,     sh); px(CX + 3, M,     sh);   // droop down to lip line
+      px(CX - 2, M,     sh); px(CX + 1, M,     sh);   // shadow under mustache
+    }
+    else if (style === 'goatee'){
+      // Chin-patch goatee
+      fill(CX - 2, M + 1, 4, 2, hairC);
+      fill(CX - 1, M + 3, 2, 1, hairC);
+      px(CX - 2, M + 1, sh); px(CX + 1, M + 1, sh);
+      // Tiny soul-patch connector
+      px(CX, M, hairC);
+    }
+    else if (style === 'beard'){
+      // Mustache band
+      fill(CX - 3, M - 1, 6, 1, hairC);
+      px(CX - 4, M - 1, sh); px(CX + 3, M - 1, sh);
+      // Jaw + chin
+      fill(CX - 5, M + 1, 10, 2, hairC);
+      fill(CX - 4, M + 3, 8,  1, hairC);
+      // Sideburns up to ears
+      px(CX - 6, N - 1, hairC); px(CX - 6, N, hairC);
+      px(CX + 5, N - 1, hairC); px(CX + 5, N, hairC);
+      // Shading layer
+      fill(CX - 4, M + 2, 8, 1, sh);
+      px(CX - 5, M + 1, sh); px(CX + 4, M + 1, sh);
+    }
+    else if (style === 'soul'){
+      // Tiny patch directly under bottom lip
+      fill(CX - 1, M + 1, 2, 1, hairC);
+      px(CX, M + 2, sh);
+    }
+  }
+
+  // ── HEADWEAR ────────────────────────────────────────
+  function drawHat(style, c){
+    if (style === 'none') return;
+    const sh = shade(c, -25);
+    const hi = shade(c, 20);
+    const top = Y.HEAD_T;
+
+    if (style === 'bucket'){
+      // Crown — chamfered top (slightly narrower at the very top so it isn't square)
+      fill(CX - 5, top - 2, 10, 1, c);                // narrow top row (10 wide)
+      fill(CX - 6, top - 1, 12, 4, c);                // wider body (12 wide × 4)
+      fill(CX - 5, top - 2, 10, 1, OUTLINE);          // top-edge outline
+      px(CX - 6, top - 1, OUTLINE);                   // top-left chamfer corner
+      px(CX + 5, top - 1, OUTLINE);                   // top-right chamfer corner
+      fill(CX - 7, top - 1, 1, 4, OUTLINE);
+      fill(CX + 6, top - 1, 1, 4, OUTLINE);
+      // Brim — taller (4 rows instead of 2) so it hangs over the brow/eyes
+      fill(CX - 10, top + 3, 20, 4, c);          // y=7-10
+      fill(CX - 10, top + 3, 20, 1, OUTLINE);    // top edge
+      fill(CX - 10, top + 6, 20, 1, OUTLINE);    // bottom edge
+      fill(CX - 10, top + 3, 1, 4, OUTLINE);
+      fill(CX + 9, top + 3, 1, 4, OUTLINE);
+      // Underside shadow band on face just below brim
+      fill(CX - 6, top + 7, 12, 1, shade(c, -55));
+      // Inner brim shading (suggests depth under the hat)
+      fill(CX - 9, top + 5, 18, 1, shade(c, -25));
+      // Stripe band on crown
+      fill(CX - 6, top, 12, 1, hi);
+    }
+    else if (style === 'trucker'){
+      fill(CX - 6, top - 2, 12, 5, c);
+      fill(CX - 6, top - 2, 12, 1, OUTLINE);
+      fill(CX - 7, top - 1, 1, 4, OUTLINE);
+      fill(CX + 6, top - 1, 1, 4, OUTLINE);
+      // brim
+      fill(CX - 9, top + 3, 18, 2, c);
+      fill(CX - 9, top + 3, 18, 1, OUTLINE);
+      fill(CX - 9, top + 5, 18, 1, OUTLINE);
+      fill(CX - 9, top + 3, 1, 2, OUTLINE);
+      fill(CX + 8, top + 3, 1, 2, OUTLINE);
+      fill(CX - 6, top + 5, 12, 1, shade(c, -50));
+      // mesh back
+      fill(CX + 4, top - 1, 2, 4, hi);
+      px(CX + 4, top, c); px(CX + 5, top + 1, c);
+      // logo patch
+      fill(CX - 3, top, 6, 2, '#FAF7E8');
+      fill(CX - 3, top, 6, 1, OUTLINE);
+      fill(CX - 3, top + 1, 1, 1, OUTLINE);
+      fill(CX + 2, top + 1, 1, 1, OUTLINE);
+      px(CX, top + 1, OUTLINE);
+    }
+    else if (style === 'beanie'){
+      fill(CX - 6, top - 3, 12, 7, c);
+      fill(CX - 6, top - 3, 12, 1, OUTLINE);
+      fill(CX - 7, top - 2, 1, 6, OUTLINE);
+      fill(CX + 6, top - 2, 1, 6, OUTLINE);
+      // cuff
+      fill(CX - 7, top + 2, 14, 3, c);
+      fill(CX - 7, top + 2, 14, 1, OUTLINE);
+      fill(CX - 7, top + 5, 14, 1, OUTLINE);
+      fill(CX - 7, top + 2, 1, 3, OUTLINE);
+      fill(CX + 6, top + 2, 1, 3, OUTLINE);
+      fill(CX - 6, top + 3, 13, 2, sh);
+      // pompom
+      fill(CX - 1, top - 5, 3, 3, c);
+      fill(CX - 1, top - 5, 3, 1, OUTLINE);
+      fill(CX - 1, top - 3, 3, 1, OUTLINE);
+      fill(CX - 1, top - 5, 1, 3, OUTLINE);
+      fill(CX + 1, top - 5, 1, 3, OUTLINE);
+      px(CX, top - 4, hi);
+    }
+    else if (style === 'visor'){
+      fill(CX - 9, top + 3, 18, 2, c);
+      fill(CX - 9, top + 3, 18, 1, OUTLINE);
+      fill(CX - 9, top + 5, 18, 1, OUTLINE);
+      fill(CX - 9, top + 3, 1, 2, OUTLINE);
+      fill(CX + 8, top + 3, 1, 2, OUTLINE);
+      fill(CX - 6, top + 5, 12, 1, shade(c, -50));
+      // strap
+      fill(CX - 6, top + 1, 12, 1, c);
+      fill(CX - 6, top + 1, 12, 1, OUTLINE);
+    }
+  }
+
+  // ── FACE ACCESSORY ──────────────────────────────────
+  function drawFaceAcc(style){
+    if (style === 'none') return;
+    if (style === 'shades'){
+      // small Y2K shades across eye row
+      fill(CX - 6, Y.EYE, 5, 2, '#1A1530');
+      fill(CX + 1, Y.EYE, 5, 2, '#1A1530');
+      fill(CX - 6, Y.EYE - 1, 5, 1, OUTLINE);
+      fill(CX + 1, Y.EYE - 1, 5, 1, OUTLINE);
+      fill(CX - 6, Y.EYE + 2, 5, 1, OUTLINE);
+      fill(CX + 1, Y.EYE + 2, 5, 1, OUTLINE);
+      fill(CX - 6, Y.EYE - 1, 1, 4, OUTLINE);
+      fill(CX - 2, Y.EYE - 1, 1, 4, OUTLINE);
+      fill(CX + 1, Y.EYE - 1, 1, 4, OUTLINE);
+      fill(CX + 5, Y.EYE - 1, 1, 4, OUTLINE);
+      fill(CX - 1, Y.EYE, 2, 1, OUTLINE);
+      // gleam
+      px(CX - 5, Y.EYE, '#FF2A6D');
+      px(CX + 4, Y.EYE, '#6FF7E0');
+    }
+    else if (style === 'bigshades'){
+      fill(CX - 7, Y.EYE - 1, 7, 4, '#1A1530');
+      fill(CX, Y.EYE - 1, 7, 4, '#1A1530');
+      fill(CX - 7, Y.EYE - 2, 7, 1, OUTLINE);
+      fill(CX, Y.EYE - 2, 7, 1, OUTLINE);
+      fill(CX - 7, Y.EYE + 3, 7, 1, OUTLINE);
+      fill(CX, Y.EYE + 3, 7, 1, OUTLINE);
+      fill(CX - 7, Y.EYE - 2, 1, 6, OUTLINE);
+      fill(CX - 1, Y.EYE - 2, 1, 6, OUTLINE);
+      fill(CX, Y.EYE - 2, 1, 6, OUTLINE);
+      fill(CX + 6, Y.EYE - 2, 1, 6, OUTLINE);
+      // gradient gleams
+      fill(CX - 6, Y.EYE - 1, 3, 1, '#9B59B6');
+      fill(CX + 1, Y.EYE - 1, 3, 1, '#FF6B35');
+      fill(CX - 6, Y.EYE, 2, 1, '#FF2A6D');
+      fill(CX + 1, Y.EYE, 2, 1, '#6FF7E0');
+    }
+    else if (style === 'nosering'){
+      // Gold side-of-nose stud — sits next to the nose at the nostril row
+      const GOLD = '#FFD700';
+      const GOLD_D = '#C9A100';
+      px(CX + 1, Y.NOSE,     GOLD);
+      px(CX + 2, Y.NOSE,     GOLD);
+      px(CX + 1, Y.NOSE + 1, GOLD_D);
+    }
+    else if (style === 'lipring'){
+      // Gold labret-style lip ring directly under the lower lip, slightly left of center
+      const GOLD = '#FFD700';
+      const GOLD_D = '#C9A100';
+      px(CX - 1, Y.MOUTH + 1, GOLD);
+      px(CX,     Y.MOUTH + 1, GOLD);
+      px(CX - 1, Y.MOUTH + 2, GOLD_D);
+      px(CX,     Y.MOUTH + 2, GOLD_D);
+    }
+  }
+
+  // ── TORSO / TOP ─────────────────────────────────────
+  // Helper: paint clothing rows that follow the silhouette spans (so it always fits)
+  // Tracks rows where clothing extends beyond the body silhouette so drawOutline
+  // skips painting the body boundary there (keeps oversized garments looking oversized).
+  let _oversizedRanges = [];
+  // Pants-specific: highest leg row that is still inside the crotch bridge — drawOutline
+  // skips inner-leg outlines for rows ≤ this so they don't show as phantom lines inside the bridge.
+  let _bridgeEndY = -1;
+  // Pants-specific: Y-range where drawOutline should skip silhouette leg outer edges
+  // (cloth extends past the body silhouette and paints its own outline at the cloth edge).
+  // null = no skip, {from, to} = inclusive row range.
+  let _outerLegSkipRange = null;
+
+  // Paint over silhouette + extend N pixels beyond on each side (for oversized garments).
+  function paintOversizedBand(sil, yStart, yEnd, color, extraW, opts = {}){
+    paintSilhouetteBand(sil, yStart, yEnd, color, opts);
+    sil.spans.forEach(([y, x0, x1]) => {
+      if (y < yStart || y > yEnd) return;
+      // Cover the silhouette boundary columns themselves so skin doesn't show through
+      px(x0, y, color);
+      px(x1, y, color);
+      // Extra cloth columns extending beyond the body
+      for (let i = 1; i <= extraW; i++){
+        px(x0 - i, y, color);
+        px(x1 + i, y, color);
+      }
+      // Outer outline of the oversized garment
+      px(x0 - extraW - 1, y, OUTLINE);
+      px(x1 + extraW + 1, y, OUTLINE);
+    });
+    _oversizedRanges.push([yStart, yEnd]);
+  }
+
+  // 3-tone shading: highlight (left edge) + base + shadow (right) + deep shadow (deepest right)
+  function paintSilhouetteBand(sil, yStart, yEnd, color, opts = {}){
+    const sh  = shade(color, -28);
+    const sh2 = shade(color, -55);
+    const hi  = shade(color, 22);
+    const rows = [];
+    sil.spans.forEach(([y, x0, x1]) => {
+      if (y >= yStart && y <= yEnd) rows.push([y, x0+1, x1-1]);  // inset 1 for outline
+    });
+    rows.forEach(([y, x0, x1], i) => {
+      fill(x0, y, x1-x0+1, 1, color);
+      if (opts.noShade) return;
+      // Right column: shadow + deeper shadow strip
+      px(x1, y, sh);
+      if (x1 - x0 > 4) px(x1 - 1, y, sh);
+      // Left column: highlight (rim light from upper-left)
+      if (opts.hi !== false) px(x0, y, hi);
+      // Top edge highlight (shoulder cap / collar light)
+      if (i === 0) fill(x0 + 1, y, Math.min(3, x1 - x0 - 1), 1, hi);
+      // Bottom edge — soft shadow (hem)
+      if (i === rows.length - 1) fill(x0 + 1, y, x1 - x0 - 1, 1, sh);
+      // Sub-pixel deeper-shadow accents (quick depth)
+      if (i === Math.floor(rows.length * 0.7)) px(x1 - 2, y, sh2);
+    });
+  }
+
+  function drawTorso(style, c, sil, skin, femme){
+    const sh = shade(c, -28);
+    const sh2 = shade(c, -52);
+    const hi = shade(c, 20);
+
+    if (style === 'babytee'){
+      // Cropped to mid-torso
+      const cropY = Y.WAIST - 2;  // shows midriff below
+      paintSilhouetteBand(sil, Y.SHOULDER, cropY, c);
+      // collar
+      fill(CX - 3, Y.SHOULDER, 6, 1, OUTLINE);
+      // hem
+      paintSilhouetteBand(sil, cropY, cropY, sh, {noShade:true});
+      // bust shading (femme)
+      if (femme){
+        fill(CX - 5, Y.BUST, 2, 1, sh);
+        fill(CX + 3, Y.BUST, 2, 1, sh);
+      }
+      // belly button
+      px(CX, Y.WAIST + 4, shade(skin, -30));
+    }
+    else if (style === 'tube'){
+      // Half-length tube — barely covers the bust
+      const tubeT = Y.CHEST - 1;
+      const tubeB = Math.floor((tubeT + Y.WAIST - 2) / 2);  // ~half the original length
+      paintSilhouetteBand(sil, tubeT, tubeB, c);
+      // band detail stripes
+      paintSilhouetteBand(sil, tubeT + 1, tubeT + 1, hi, {noShade:true});
+      paintSilhouetteBand(sil, tubeB - 1, tubeB - 1, sh, {noShade:true});
+      if (femme){
+        fill(CX - 5, tubeT + 3, 2, 1, sh);
+        fill(CX + 3, tubeT + 3, 2, 1, sh);
+      }
+    }
+    else if (style === 'halter'){
+      // Half-length halter
+      const halterT = Y.CHEST - 1;
+      const halterB = Math.floor((halterT + Y.WAIST - 2) / 2);
+      paintSilhouetteBand(sil, halterT, halterB, c);
+      // V-neck strap up to neck
+      fill(CX - 3, Y.NECK_T, 1, Y.CHEST - Y.NECK_T, c);
+      fill(CX + 2, Y.NECK_T, 1, Y.CHEST - Y.NECK_T, c);
+      px(CX - 3, Y.NECK_T, OUTLINE);
+      px(CX + 2, Y.NECK_T, OUTLINE);
+      // V-neck dip on top
+      fill(CX - 1, halterT, 2, 2, skin);
+      px(CX - 1, halterT, OUTLINE);
+      px(CX, halterT, OUTLINE);
+      if (femme){
+        fill(CX - 5, halterT + 3, 2, 1, sh);
+        fill(CX + 3, halterT + 3, 2, 1, sh);
+      }
+    }
+    else if (style === 'velour'){
+      paintSilhouetteBand(sil, Y.SHOULDER, Y.TORSO_B, c);
+      // Center zipper line (full length)
+      fill(CX, Y.SHOULDER + 1, 1, Y.TORSO_B - Y.SHOULDER - 1, sh);
+      fill(CX + 1, Y.SHOULDER + 1, 1, Y.TORSO_B - Y.SHOULDER - 1, OUTLINE);
+      // Zipper pull
+      fill(CX - 1, Y.SHOULDER + 3, 3, 1, '#D8D8E8');
+      // Velour shimmer pixels
+      [[CX-4,Y.CHEST+2],[CX+3,Y.CHEST+5],[CX-3,Y.WAIST-2],[CX+2,Y.WAIST+3]].forEach(([x,y]) => px(x,y,hi));
+    }
+    else if (style === 'polo'){
+      paintSilhouetteBand(sil, Y.SHOULDER, Y.TORSO_B, c);
+      // collar (folded V)
+      fill(CX - 4, Y.SHOULDER, 8, 2, c);
+      fill(CX - 4, Y.SHOULDER, 8, 1, OUTLINE);
+      px(CX - 4, Y.SHOULDER + 1, OUTLINE);
+      px(CX + 3, Y.SHOULDER + 1, OUTLINE);
+      // button placket
+      fill(CX, Y.SHOULDER, 1, 4, OUTLINE);
+      px(CX, Y.SHOULDER + 1, hi);
+      px(CX, Y.SHOULDER + 3, hi);
+      // V split
+      fill(CX - 1, Y.SHOULDER + 2, 3, 1, sh);
+      // bottom stripes
+      fill(CX - 6, Y.TORSO_B - 2, 13, 1, hi);
+    }
+    else if (style === 'tank'){
+      // Racer back tank — narrow straps further out from the neck
+      paintSilhouetteBand(sil, Y.SHOULDER + 2, Y.TORSO_B, c);
+      // straps (shifted 2 px further from the neck on each side)
+      fill(CX - 7, Y.SHOULDER, 2, 2, c);
+      fill(CX + 5, Y.SHOULDER, 2, 2, c);
+      if (femme){
+        fill(CX - 5, Y.BUST, 2, 1, sh);
+        fill(CX + 3, Y.BUST, 2, 1, sh);
+      }
+    }
+    else if (style === 'bigtee'){
+      // Oversized crew tee — extends 2 px beyond body, drops past hips, boxy
+      paintOversizedBand(sil, Y.SHOULDER, Y.TORSO_B, c, 2);
+      // crew neckline
+      fill(CX - 4, Y.SHOULDER, 8, 1, OUTLINE);
+      fill(CX - 3, Y.SHOULDER + 1, 6, 1, sh);
+      // boxy hem (extend past silhouette slightly to look oversized)
+      fill(CX - sil.dims.hH - 1, Y.TORSO_B, sil.dims.hH * 2 + 2, 1, c);
+      fill(CX - sil.dims.hH - 1, Y.TORSO_B, sil.dims.hH * 2 + 2, 1, OUTLINE);
+      // chest/contour shading for masc
+      if (!femme){
+        fill(CX - 4, Y.CHEST + 4, 8, 1, sh);
+        px(CX, Y.CHEST + 4, sh2);
+      }
+    }
+    else if (style === 'hoodie'){
+      // Baggy oversized hoodie with kangaroo pocket + drawstrings
+      paintOversizedBand(sil, Y.SHOULDER, Y.TORSO_B, c, 2);
+      // hood ring around neck
+      fill(CX - 4, Y.SHOULDER - 1, 8, 2, c);
+      fill(CX - 4, Y.SHOULDER - 1, 8, 1, OUTLINE);
+      fill(CX - 4, Y.SHOULDER - 1, 1, 2, OUTLINE);
+      fill(CX + 3, Y.SHOULDER - 1, 1, 2, OUTLINE);
+      fill(CX - 3, Y.SHOULDER, 6, 1, sh);
+      // drawstrings
+      fill(CX - 2, Y.SHOULDER, 1, 4, '#FAF7E8');
+      fill(CX + 1, Y.SHOULDER, 1, 4, '#FAF7E8');
+      px(CX - 2, Y.SHOULDER + 4, OUTLINE);
+      px(CX + 1, Y.SHOULDER + 4, OUTLINE);
+      // kangaroo pocket — wide horizontal panel
+      const pocketTop = Y.WAIST - 4;
+      const pocketBot = Y.TORSO_B - 1;
+      fill(CX - sil.dims.wH + 1, pocketTop, sil.dims.wH * 2 - 2, pocketBot - pocketTop, sh);
+      fill(CX - sil.dims.wH + 1, pocketTop, sil.dims.wH * 2 - 2, 1, OUTLINE);
+      fill(CX - sil.dims.wH + 1, pocketBot, sil.dims.wH * 2 - 2, 1, OUTLINE);
+      fill(CX, pocketTop + 1, 1, pocketBot - pocketTop - 1, OUTLINE);
+      // pocket inner highlight
+      fill(CX - sil.dims.wH + 2, pocketTop + 1, 2, 1, c);
+      // ribbed hem
+      fill(CX - sil.dims.hH + 1, Y.TORSO_B - 1, sil.dims.hH * 2 - 2, 1, sh2);
+    }
+    else if (style === 'jersey'){
+      // Basketball jersey — straps closer to neck, square armholes
+      paintSilhouetteBand(sil, Y.SHOULDER + 2, Y.TORSO_B, c);
+      // SHOULDER STRAPS — pulled 2 px in toward the neck
+      const strapW = 3;
+      fill(CX - sil.dims.sH + 3, Y.SHOULDER, strapW, 3, c);
+      fill(CX + sil.dims.sH - strapW - 3, Y.SHOULDER, strapW, 3, c);
+      // strap outlines
+      fill(CX - sil.dims.sH + 3, Y.SHOULDER, strapW, 1, OUTLINE);
+      fill(CX + sil.dims.sH - strapW - 3, Y.SHOULDER, strapW, 1, OUTLINE);
+      // square neckline
+      fill(CX - 3, Y.SHOULDER + 1, 6, 1, OUTLINE);
+      fill(CX - 3, Y.SHOULDER + 2, 6, 1, c);
+      fill(CX - 3, Y.SHOULDER + 3, 6, 1, OUTLINE);
+      // exposed inner shoulders/skin
+      // contrast piping — colored stripe down sides
+      fill(CX - sil.dims.sH + 1, Y.SHOULDER + 2, 1, Y.TORSO_B - Y.SHOULDER - 2, '#FAF7E8');
+      fill(CX + sil.dims.sH - 2, Y.SHOULDER + 2, 1, Y.TORSO_B - Y.SHOULDER - 2, '#FAF7E8');
+      // chest contour for masc
+      if (!femme){
+        fill(CX - 5, Y.CHEST - 1, 10, 1, sh);
+      }
+    }
+    else if (style === 'windbreaker'){
+      // Loose oversized colorblock half-zip windbreaker — Y2K shell jacket
+      paintOversizedBand(sil, Y.SHOULDER, Y.TORSO_B, c, 2);
+      // Top half is contrast (lighter) panel
+      const altC = '#FAF7E8';
+      paintOversizedBand(sil, Y.SHOULDER, Y.CHEST + 3, altC, 2);
+      // panel divider
+      fill(CX - sil.dims.sH + 1, Y.CHEST + 4, sil.dims.sH * 2 - 2, 1, OUTLINE);
+      // collar
+      fill(CX - 3, Y.SHOULDER, 6, 2, c);
+      fill(CX - 3, Y.SHOULDER, 6, 1, OUTLINE);
+      // half-zip down center (only top half)
+      fill(CX, Y.SHOULDER, 1, 8, OUTLINE);
+      // zipper teeth
+      for (let y = Y.SHOULDER + 1; y < Y.SHOULDER + 7; y++){
+        if (y & 1) px(CX - 1, y, '#D8D8E8');
+      }
+      // zipper pull
+      fill(CX - 1, Y.SHOULDER + 7, 3, 1, '#D8D8E8');
+      px(CX, Y.SHOULDER + 7, OUTLINE);
+      // bottom drawcord/cuff hem
+      fill(CX - sil.dims.hH + 1, Y.TORSO_B - 2, sil.dims.hH * 2 - 2, 1, sh);
+      fill(CX - sil.dims.hH + 1, Y.TORSO_B - 1, sil.dims.hH * 2 - 2, 1, sh2);
+    }
+    else if (style === 'coach'){
+      // Coach jacket — boxy snap-front, very Y2K skater
+      paintSilhouetteBand(sil, Y.SHOULDER, Y.TORSO_B, c);
+      // Wide camp collar
+      fill(CX - 5, Y.SHOULDER, 10, 2, sh);
+      fill(CX - 5, Y.SHOULDER, 10, 1, OUTLINE);
+      fill(CX - 5, Y.SHOULDER + 2, 10, 1, OUTLINE);
+      px(CX - 5, Y.SHOULDER + 1, OUTLINE);
+      px(CX + 4, Y.SHOULDER + 1, OUTLINE);
+      // snap closure column
+      fill(CX, Y.SHOULDER + 3, 1, Y.TORSO_B - Y.SHOULDER - 4, OUTLINE);
+      // snap dots
+      [4, 8, 12, 16, 20].forEach(d => {
+        const yy = Y.SHOULDER + d;
+        if (yy < Y.TORSO_B - 2) fill(CX - 1, yy, 2, 1, '#D8D8E8');
+      });
+      // chest pocket (right side)
+      cel(CX + 2, Y.CHEST + 2, 5, 4, sh, {outline:true});
+      // boxy bottom hem
+      fill(CX - sil.dims.hH, Y.TORSO_B - 1, sil.dims.hH * 2, 1, sh2);
+    }
+    else if (style === 'bowling'){
+      // Y2K bowling shirt — short sleeves, button placket, two-tone panel
+      paintSilhouetteBand(sil, Y.SHOULDER, Y.TORSO_B, c);
+      // contrast top panel (lighter)
+      const panelC = shade(c, 35);
+      fill(CX - sil.dims.sH + 1, Y.SHOULDER + 1, sil.dims.sH * 2 - 2, 4, panelC);
+      fill(CX - sil.dims.sH + 1, Y.SHOULDER + 5, sil.dims.sH * 2 - 2, 1, OUTLINE);
+      // collar (camp/notch)
+      fill(CX - 4, Y.SHOULDER, 3, 2, panelC);
+      fill(CX + 1, Y.SHOULDER, 3, 2, panelC);
+      fill(CX - 4, Y.SHOULDER, 3, 1, OUTLINE);
+      fill(CX + 1, Y.SHOULDER, 3, 1, OUTLINE);
+      px(CX - 4, Y.SHOULDER + 1, OUTLINE);
+      px(CX + 3, Y.SHOULDER + 1, OUTLINE);
+      // button placket
+      fill(CX, Y.SHOULDER + 2, 1, Y.TORSO_B - Y.SHOULDER - 2, OUTLINE);
+      [4, 8, 12, 16, 20].forEach(d => {
+        if (Y.SHOULDER + d < Y.TORSO_B - 2) px(CX - 1, Y.SHOULDER + d, '#FAF7E8');
+      });
+      // chest pocket
+      cel(CX - 6, Y.CHEST + 2, 4, 4, sh, {outline:true});
+    }
+  }
+
+  // ── ARMS ────────────────────────────────────────────
+  function drawArms(topStyle, c, skin, femme, sil){
+    const sh = shade(c, -28);
+    const skSh = shade(skin, -22);
+    const sH = sil.dims.sH;
+    // Arms hang from shoulders along outside of torso silhouette.
+    // Masc arms are 1 px wider for a beefier silhouette.
+    const armW = femme ? 2 : 3;
+    const lArmX = CX - sH - armW;
+    const rArmX = CX + sH + 1;
+    const armTop = Y.SHOULDER + 1;
+    const handY  = Y.WAIST + 4;     // hands rest at hip level
+    const handH  = 4;
+
+    // Sleeve length per top style (where sleeve ends, skin arm begins)
+    const sleeveEnd = ({
+      babytee:   armTop + 4,
+      tank:      armTop + 1,
+      tube:      armTop,        // no sleeves, full skin arm
+      halter:    armTop,
+      polo:      armTop + 5,
+      velour:    handY - 1,     // long sleeves all the way
+      bigtee:    armTop + 6,    // dropped shoulder sleeve
+      hoodie:    handY - 1,     // long
+      jersey:    armTop,        // sleeveless
+      bowling:   armTop + 5,    // short
+      windbreaker: handY - 1,   // long shell-jacket sleeves
+      coach:     handY - 1,     // long
+    })[topStyle] || armTop + 4;
+
+    // Sleeve (clothing color)
+    if (sleeveEnd > armTop){
+      fill(lArmX, armTop, armW, sleeveEnd - armTop, c);
+      fill(rArmX, armTop, armW, sleeveEnd - armTop, c);
+      fill(lArmX + armW - 1, armTop, 1, sleeveEnd - armTop, sh);
+      fill(rArmX + armW - 1, armTop, 1, sleeveEnd - armTop, sh);
+      // sleeve outline
+      fill(lArmX - 1, armTop, 1, sleeveEnd - armTop, OUTLINE);
+      fill(lArmX + armW, armTop, 1, sleeveEnd - armTop, OUTLINE);
+      fill(rArmX - 1, armTop, 1, sleeveEnd - armTop, OUTLINE);
+      fill(rArmX + armW, armTop, 1, sleeveEnd - armTop, OUTLINE);
+      // sleeve hem
+      fill(lArmX, sleeveEnd - 1, armW, 1, OUTLINE);
+      fill(rArmX, sleeveEnd - 1, armW, 1, OUTLINE);
+    }
+
+    // Forearm (skin)
+    if (sleeveEnd < handY){
+      fill(lArmX, sleeveEnd, armW, handY - sleeveEnd, skin);
+      fill(rArmX, sleeveEnd, armW, handY - sleeveEnd, skin);
+      fill(lArmX - 1, sleeveEnd, 1, handY - sleeveEnd, OUTLINE);
+      fill(lArmX + armW, sleeveEnd, 1, handY - sleeveEnd, OUTLINE);
+      fill(rArmX - 1, sleeveEnd, 1, handY - sleeveEnd, OUTLINE);
+      fill(rArmX + armW, sleeveEnd, 1, handY - sleeveEnd, OUTLINE);
+      fill(lArmX + armW - 1, sleeveEnd, 1, handY - sleeveEnd, skSh);
+      fill(rArmX + armW - 1, sleeveEnd, 1, handY - sleeveEnd, skSh);
+    }
+
+    // Hands (slightly wider)
+    [lArmX - 1, rArmX - 1].forEach(hx => {
+      fill(hx, handY, armW + 2, handH, skin);
+      fill(hx, handY, armW + 2, 1, OUTLINE);
+      fill(hx, handY + handH - 1, armW + 2, 1, OUTLINE);
+      fill(hx, handY, 1, handH, OUTLINE);
+      fill(hx + armW + 1, handY, 1, handH, OUTLINE);
+      // shading
+      fill(hx + armW, handY + 1, 1, handH - 2, skSh);
+    });
+  }
+
+  // ── BOTTOMS ─────────────────────────────────────────
+  function drawBottom(style, c, sil, skin, femme){
+    const sh = shade(c, -28);
+    const sh2 = shade(c, -50);
+    const hi = shade(c, 18);
+    const yT = Y.HIP_T;
+    const yWaist = Y.HIP_T;       // waistband level
+    const baggy = (style === 'cargo' || style === 'parachute' || style === 'baggy' || style === 'sweats');
+    const veryBaggy = (style === 'baggy');
+    const lw = veryBaggy ? 6 : (baggy ? 5 : sil.dims.lw + 1);  // leg cloth width per side
+
+    // Determine pant length
+    const yBot = ({
+      capris: Y.KNEE + 8,
+      dukes:  Y.HIP_B + 5,
+      mini:   Y.HIP_B + 5,
+      bball:  Y.KNEE + 4,
+    })[style] || Y.LEG_B;
+
+    if (style === 'mini'){
+      // Mini skirt — flares out wider than hips
+      const skX = CX - 10;
+      cel(skX, Y.HIP_T, 20, yBot - Y.HIP_T, c);
+      // pleats
+      for (let p = 2; p < 20; p += 3){
+        fill(skX + p, Y.HIP_T + 1, 1, yBot - Y.HIP_T - 2, sh);
+      }
+      fill(skX, Y.HIP_T, 20, 1, hi);
+      return;
+    }
+    if (style === 'dukes'){
+      // Cutoff shorts — short, frayed hem
+      const sxL = CX - sil.dims.ll - lw;
+      const sxR = CX + sil.dims.ll - lw;
+      cel(CX - sil.dims.hH, yT, sil.dims.hH * 2, yBot - yT, c);
+      // frayed hem
+      const hemY = yBot - 1;
+      for (let i = -7; i <= 7; i += 2){
+        px(CX + i, hemY, OUTLINE);
+        px(CX + i + 1, hemY + 1, OUTLINE);
+      }
+      // belt loops
+      px(CX - 4, yT, OUTLINE);
+      px(CX + 3, yT, OUTLINE);
+      return;
+    }
+
+    // ── Pants / cargos / parachute / capris / bball / sweats / baggy ──
+    const looseFit = (style === 'baggy' || style === 'parachute' || style === 'sweats');
+    const crotchDrop = looseFit ? 6 : 3;
+    const lInnerEdge = CX - sil.dims.ll + sil.dims.lw - 1;  // = sil.legSpans[*].L[1]
+    const rInnerEdge = CX + sil.dims.ll - sil.dims.lw;      // = sil.legSpans[*].R[0]
+    const llx = CX - sil.dims.ll - lw;
+    const lLegW = lInnerEdge - llx + 1;
+    const rlx = rInnerEdge;
+    const rEnd = CX + sil.dims.ll + lw - 1;
+    const rLegW = rEnd - rlx + 1;
+    const legTop = yWaist + 2 + crotchDrop;
+    const bridgeH = 3 + crotchDrop;
+
+    // ── Fill: waistband + crotch bridge as one continuous block (plain fill, no auto outline) ──
+    fill(CX - sil.dims.hH, yWaist, sil.dims.hH * 2, bridgeH, c);
+    // shading on the bridge (right column shadow + top-left highlight)
+    fill(CX - sil.dims.hH + sil.dims.hH * 2 - 1, yWaist + 1, 1, bridgeH - 2, sh);
+    fill(CX - sil.dims.hH + 1, yWaist + 1, 2, 1, hi);
+    // bridge outlines: TOP + LEFT + RIGHT only — never a horizontal across the legs.
+    // Sides stop one row above legTop so they don't double-up with the leg outlines.
+    fill(CX - sil.dims.hH, yWaist, sil.dims.hH * 2, 1, OUTLINE);
+    fill(CX - sil.dims.hH, yWaist, 1, legTop - yWaist, OUTLINE);
+    fill(CX - sil.dims.hH + sil.dims.hH * 2 - 1, yWaist, 1, legTop - yWaist, OUTLINE);
+
+    // ── Fill: legs (no auto outline; drawOutline + manual hem do the edges) ──
+    fill(llx, legTop, lLegW, yBot - legTop, c);
+    fill(rlx, legTop, rLegW, yBot - legTop, c);
+    // 3-tone shading + outer rim light
+    fill(lInnerEdge, legTop + 1, 1, yBot - legTop - 2, sh);
+    fill(rInnerEdge, legTop + 1, 1, yBot - legTop - 2, sh);
+    fill(llx + 1,         legTop + 1, 1, yBot - legTop - 2, hi);
+    fill(rlx + rLegW - 2, legTop + 1, 1, yBot - legTop - 2, hi);
+
+    // Underside of crotch — single horizontal outline at the inseam, ONLY between the legs
+    if (rInnerEdge - lInnerEdge > 1){
+      fill(lInnerEdge + 1, legTop, rInnerEdge - lInnerEdge - 1, 1, OUTLINE);
+    }
+    // Hem outline (bottom of each leg)
+    fill(llx, yBot - 1, lLegW, 1, OUTLINE);
+    fill(rlx, yBot - 1, rLegW, 1, OUTLINE);
+
+    // Pants always extend past the silhouette by 1+ px — paint OUR outer outlines at the
+    // cloth edge and tell drawOutline to skip the silhouette outer edges in cloth-covered rows.
+    fill(llx - 1, legTop, 1, yBot - legTop, OUTLINE);
+    fill(rlx + rLegW, legTop, 1, yBot - legTop, OUTLINE);
+    _outerLegSkipRange = { from: legTop, to: yBot - 1 };
+    // Stop drawOutline from painting inner-leg outlines while we're still inside the bridge.
+    _bridgeEndY = legTop;
+
+    // Knee crease shadow
+    if (yBot > Y.KNEE){
+      fill(llx + 2, Y.KNEE, lLegW - 3, 1, sh2);
+      fill(rlx + 2, Y.KNEE, rLegW - 3, 1, sh2);
+    }
+
+    // Belt for low-rise
+    if (style === 'lowrise'){
+      fill(CX - sil.dims.hH, yWaist, sil.dims.hH * 2, 1, OUTLINE);
+      fill(CX - sil.dims.hH, yWaist + 2, sil.dims.hH * 2, 1, OUTLINE);
+      fill(CX - sil.dims.hH, yWaist + 1, sil.dims.hH * 2, 1, '#3D2817');
+      fill(CX - 1, yWaist, 3, 2, '#FFD700');
+      fill(CX - 1, yWaist, 3, 1, OUTLINE);
+      fill(CX - 1, yWaist + 1, 3, 1, OUTLINE);
+    }
+    // Cargo pockets
+    if (style === 'cargo'){
+      cel(llx + 1, Y.KNEE - 4, lLegW - 2, 5, sh);
+      cel(rlx + 1, Y.KNEE - 4, rLegW - 2, 5, sh);
+      fill(llx + 2, Y.KNEE - 4, lLegW - 4, 1, hi);
+      fill(rlx + 2, Y.KNEE - 4, rLegW - 4, 1, hi);
+    }
+    // Parachute — bulges out wider at the knees (Y2K MC Hammer flare), tapered drawcord ankle
+    if (style === 'parachute'){
+      // Knee flare — extend cloth outward 2 px on the outside of each leg
+      const kneeT = Y.KNEE - 4, kneeB = Y.KNEE + 4;
+      for (let y = kneeT; y <= kneeB; y++){
+        const dist = Math.abs(Y.KNEE - y);
+        const flare = Math.max(0, 2 - Math.floor(dist / 2));
+        if (flare > 0){
+          fill(llx - flare, y, flare, 1, c);
+          fill(rlx + rLegW, y, flare, 1, c);
+        }
+      }
+      // outline of the flare bulge
+      fill(llx - 2, Y.KNEE - 2, 1, 5, OUTLINE);
+      fill(rlx + rLegW + 1, Y.KNEE - 2, 1, 5, OUTLINE);
+      // ankle drawcord
+      fill(llx, yBot - 3, lLegW, 2, sh);
+      fill(rlx, yBot - 3, rLegW, 2, sh);
+      px(llx + Math.floor(lLegW / 2), yBot - 2, hi);
+      px(rlx + Math.floor(rLegW / 2), yBot - 2, hi);
+    }
+    // Baggy JNCO-style — wide flare at hem + chunky stitching
+    if (style === 'baggy'){
+      fill(llx - 1, yBot - 4, 1, 4, c);
+      fill(llx - 1, yBot - 4, 1, 1, OUTLINE);
+      fill(llx - 1, yBot - 1, 1, 1, OUTLINE);
+      fill(rlx + rLegW, yBot - 4, 1, 4, c);
+      fill(rlx + rLegW, yBot - 4, 1, 1, OUTLINE);
+      fill(rlx + rLegW, yBot - 1, 1, 1, OUTLINE);
+      for (let y = legTop + 2; y < yBot - 1; y += 3){
+        px(llx + 1, y, hi); px(rlx + rLegW - 2, y, hi);
+      }
+      cel(llx + 2, legTop + 2, lLegW - 4, 4, sh, {outline:false});
+      cel(rlx + 2, legTop + 2, rLegW - 4, 4, sh, {outline:false});
+    }
+    // Basketball shorts — knee-length, side stripe, mesh look
+    if (style === 'bball'){
+      fill(llx + 1, legTop, 1, yBot - legTop, '#FAF7E8');
+      fill(llx + 3, legTop, 1, yBot - legTop, '#FAF7E8');
+      fill(rlx + rLegW - 4, legTop, 1, yBot - legTop, '#FAF7E8');
+      fill(rlx + rLegW - 2, legTop, 1, yBot - legTop, '#FAF7E8');
+      fill(llx, yBot - 1, lLegW, 1, OUTLINE);
+      fill(rlx, yBot - 1, rLegW, 1, OUTLINE);
+      fill(CX - 2, yWaist + 1, 4, 1, '#FAF7E8');
+      px(CX - 2, yWaist + 2, OUTLINE);
+      px(CX + 1, yWaist + 2, OUTLINE);
+    }
+    // Sweats — soft fleece, ankle cuff, drawstring
+    if (style === 'sweats'){
+      fill(llx, yBot - 4, lLegW, 4, sh);
+      fill(rlx, yBot - 4, rLegW, 4, sh);
+      fill(llx, yBot - 4, lLegW, 1, OUTLINE);
+      fill(rlx, yBot - 4, rLegW, 1, OUTLINE);
+      for (let y = yBot - 3; y < yBot - 1; y++){
+        for (let x = llx + 1; x < llx + lLegW - 1; x += 2) px(x, y, sh2);
+        for (let x = rlx + 1; x < rlx + rLegW - 1; x += 2) px(x, y, sh2);
+      }
+      fill(CX - 2, yWaist + 1, 4, 1, '#FAF7E8');
+      px(CX - 1, yWaist + 2, '#FAF7E8');
+      px(CX + 2, yWaist + 2, '#FAF7E8');
+    }
+
+    // Visible skin between hem and shoes (capris, mini, dukes, bball)
+    if (yBot < Y.LEG_B){
+      const skSh = shade(skin, -22);
+      const lInnerX = CX - sil.dims.ll + sil.dims.lw - 1;
+      const rInnerX = CX + sil.dims.ll - sil.dims.lw;
+      fill(lInnerX, yBot, 1, Y.LEG_B - yBot + 1, skSh);
+      fill(rInnerX, yBot, 1, Y.LEG_B - yBot + 1, skSh);
+    }
+  }
+
+  // ── SHOES ───────────────────────────────────────────
+  function drawShoes(style, c, sil){
+    const sh = shade(c, -25);
+    const hi = shade(c, 25);
+    const yT = Y.FEET_T;
+    const yB = Y.FEET_B;
+    const fH = yB - yT + 1;          // 8
+    // Shoes attach to leg ends — center under each leg
+    const ll = sil.dims.ll, lw = sil.dims.lw;
+    const lFootX = CX - ll - lw - 1;
+    const rFootX = CX + ll - lw;
+    const fW = (lw * 2) + 2;          // shoe slightly wider than leg
+
+    [lFootX, rFootX].forEach(fx => {
+      cel(fx, yT, fW, fH, c);
+
+      if (style === 'chunky'){
+        // White rubber sole bottom 3px
+        fill(fx, yB - 2, fW, 3, '#FAF7E8');
+        fill(fx, yB - 2, fW, 1, OUTLINE);
+        fill(fx, yB, fW, 1, OUTLINE);
+        fill(fx, yB - 2, 1, 3, OUTLINE);
+        fill(fx + fW - 1, yB - 2, 1, 3, OUTLINE);
+        // laces
+        fill(fx + 1, yT + 1, fW - 2, 1, '#FAF7E8');
+        fill(fx + 1, yT + 3, fW - 2, 1, '#FAF7E8');
+      }
+      else if (style === 'platforms'){
+        // Tall platform — lower 5 px is white sole
+        fill(fx, yB - 4, fW, 5, '#FAF7E8');
+        fill(fx, yB - 4, fW, 1, OUTLINE);
+        fill(fx, yB, fW, 1, OUTLINE);
+        fill(fx, yB - 4, 1, 5, OUTLINE);
+        fill(fx + fW - 1, yB - 4, 1, 5, OUTLINE);
+        fill(fx + 1, yB - 2, fW - 2, 1, shade('#FAF7E8', -25));
+        // toe strap accent
+        fill(fx + 1, yT + 1, fW - 2, 1, hi);
+      }
+      else if (style === 'jellies'){
+        // translucent jelly with criss-cross straps
+        fill(fx + 1, yT + 1, fW - 2, 1, OUTLINE);
+        fill(fx + 2, yT + 3, fW - 4, 1, OUTLINE);
+        fill(fx, yB, fW, 1, OUTLINE);
+      }
+      else if (style === 'maryjanes'){
+        // Round shoe with strap
+        fill(fx, yT + 1, fW, 1, OUTLINE);
+        fill(fx, yB - 1, fW, 1, sh);
+        px(fx + Math.floor(fW/2), yT + 1, '#FFD700');
+      }
+    });
+  }
+
+  // ── GRAPHIC ─────────────────────────────────────────
+  function drawGraphic(style, topC, topStyle, femme){
+    if (style === 'none') return;
+    if (topStyle === 'tube' || topStyle === 'halter') return;
+    const ink = isLight(topC) ? OUTLINE : '#FAF7E8';
+    const accent = isLight(topC) ? '#FF2A6D' : '#FFE94A';
+    const cy = Y.CHEST + 5;
+
+    if (style === 'heart'){
+      px(CX - 2, cy, accent); px(CX + 1, cy, accent);
+      fill(CX - 3, cy + 1, 7, 1, accent);
+      fill(CX - 3, cy + 2, 7, 1, accent);
+      fill(CX - 2, cy + 3, 5, 1, accent);
+      fill(CX - 1, cy + 4, 3, 1, accent);
+      px(CX, cy + 5, accent);
+      // outline
+      px(CX - 3, cy, ink); px(CX, cy, ink); px(CX + 2, cy, ink);
+      px(CX - 4, cy + 1, ink); px(CX + 3, cy + 1, ink);
+      // gloss
+      px(CX - 2, cy + 1, '#FFFFFF');
+    }
+    else if (style === 'star'){
+      px(CX, cy, accent);
+      fill(CX - 1, cy + 1, 3, 1, accent);
+      fill(CX - 3, cy + 2, 7, 1, accent);
+      fill(CX - 2, cy + 3, 5, 1, accent);
+      fill(CX - 2, cy + 4, 2, 1, accent); fill(CX + 1, cy + 4, 2, 1, accent);
+      px(CX - 3, cy + 5, accent); px(CX + 2, cy + 5, accent);
+    }
+    else if (style === 'logo'){
+      fill(CX - 4, cy, 9, 1, ink);
+      fill(CX - 4, cy + 2, 9, 1, ink);
+      fill(CX - 4, cy + 1, 9, 1, accent);
+      fill(CX - 3, cy + 3, 7, 1, ink);
+    }
+    else if (style === 'pathbinder'){
+      // If the real logo image loaded, the CSS overlay <img> shows it crisply and we draw
+      // nothing on the canvas. If it failed, the pixel-art crest below acts as a fallback.
+      if (logoLoaded) return;
+      // ── pixel-art fallback ──
+      const RED   = '#C8002A';
+      const RED_D = '#7A0019';
+      const GREEN = '#9BBC0F';
+      const GR_DK = '#5C8C0E';
+      const YEL   = '#FFD23F';
+      const ORG   = '#FF6B35';
+      // Anchor: shift left so device sits on left half of chest
+      const x0 = CX - 5;          // device left edge
+      const y0 = cy - 1;          // device top
+      // Device body (red Pokédex shape) 7 wide × 5 tall
+      fill(x0, y0,     7, 5, RED);
+      fill(x0, y0,     7, 1, OUTLINE);
+      fill(x0, y0 + 4, 7, 1, OUTLINE);
+      fill(x0, y0,     1, 5, OUTLINE);
+      fill(x0 + 6, y0, 1, 5, OUTLINE);
+      // hinge stripe on left
+      fill(x0 + 1, y0 + 1, 1, 3, RED_D);
+      // status LED dot
+      px(x0 + 2, y0 + 1, GREEN);
+      // green screen
+      fill(x0 + 3, y0 + 1, 3, 3, GREEN);
+      // reticle in screen
+      px(x0 + 4, y0 + 2, OUTLINE);
+      // bottom-right corner button hint
+      px(x0 + 5, y0 + 3, RED_D);
+      // Lightning bolt to the right of the device
+      px(x0 + 8, y0 - 1, YEL);
+      px(x0 + 8, y0,     YEL);
+      px(x0 + 9, y0,     YEL);
+      px(x0 + 8, y0 + 1, YEL);
+      px(x0 + 9, y0 + 1, ORG);
+      px(x0 + 9, y0 + 2, ORG);
+      px(x0 + 8, y0 + 3, ORG);
+      px(x0 + 8, y0 + 4, ORG);
+      // Chevron banner under device — green ribbon
+      fill(x0, y0 + 6, 10, 1, GR_DK);
+      fill(x0 + 1, y0 + 7, 8, 1, GR_DK);
+      // sparkle stars (Y2K)
+      px(x0 - 1, y0 + 1, GREEN);
+      px(x0 + 11, y0 + 3, YEL);
+    }
+  }
+
+  // ── UI WIRING ───────────────────────────────────────
+  function buildSwatches(id, palette, key){
+    const host = document.getElementById(id);
+    host.innerHTML = '';
+    palette.forEach((color, i) => {
+      const sw = document.createElement('div');
+      sw.className = 'av-sw' + (state[key] === i ? ' active' : '');
+      sw.style.background = color;
+      sw.title = color;
+      sw.addEventListener('click', () => {
+        state[key] = i;
+        host.querySelectorAll('.av-sw').forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+        update();
+      });
+      host.appendChild(sw);
+    });
+  }
+
+  function syncOptButtons(){
+    document.querySelectorAll('.av-opts').forEach(group => {
+      const key = group.dataset.avkey;
+      group.querySelectorAll('.av-opt').forEach(b => {
+        b.classList.toggle('active', state[key] === b.dataset.val);
+      });
+    });
+  }
+
+  document.querySelectorAll('.av-opts').forEach(group => {
+    const key = group.dataset.avkey;
+    group.addEventListener('click', e => {
+      const b = e.target.closest('.av-opt');
+      if (!b) return;
+      state[key] = b.dataset.val;
+      syncOptButtons();
+      update();
+    });
+  });
+
+  function update(){
+    drawAvatar();
+    save();
+    // Toggle the chest-logo overlay (only when the real image loaded AND the top has chest space)
+    const hidden = state.top === 'tube' || state.top === 'halter';
+    chestLogo.classList.toggle('show',
+      logoLoaded && state.graphic === 'pathbinder' && !hidden);
+    // Femme has a narrower chest — apply the smaller-width class for body-aware sizing
+    chestLogo.classList.toggle('femme', state.body === 'femme');
+    // (nav chip is only updated when user explicitly hits "Set as Profile Pic")
+    document.getElementById('av-seedLabel').textContent =
+      `${state.body.toUpperCase()} · ${state.hair.toUpperCase()} · ${state.top.toUpperCase()}`;
+    if (window.parent && window.parent !== window){
+      try{ window.parent.postMessage({type:'avatar:change', avatar:{...state}}, '*'); }catch{}
+    }
+  }
+
+  document.getElementById('av-randomize').addEventListener('click', () => {
+    const pick = a => a[Math.floor(Math.random()*a.length)];
+    state = {
+      body: pick(['femme','masc']),
+      skin: Math.floor(Math.random()*SKIN.length),
+      eyeColor: Math.floor(Math.random()*EYE.length),
+      hair: pick(['buzz','fade','frosted','topknot','shag','mullet','curtain','bowl','bob','pigtails','buns','lowpony','bald']),
+      hairColor: Math.floor(Math.random()*HAIR.length),
+      hat: pick(['none','bucket','trucker','beanie','visor']),
+      hatColor: Math.floor(Math.random()*HAT.length),
+      face: pick(['none','none','shades','bigshades','nosering','lipring']),
+      earrings: pick(['none','none','hoops','studs','dangle']),
+      facial: pick(['none','none','mustache','goatee','beard','soul']),
+      top: pick(['babytee','tube','halter','velour','polo','tank','bigtee','hoodie','jersey','bowling','windbreaker','coach']),
+      topColor: Math.floor(Math.random()*CLOTH.length),
+      graphic: pick(['none','heart','star','logo','pathbinder','pathbinder']),
+      bottom: pick(['lowrise','cargo','parachute','mini','capris','dukes','baggy','bball','sweats']),
+      bottomColor: Math.floor(Math.random()*CLOTH.length),
+      shoes: pick(['chunky','platforms','jellies','maryjanes']),
+      shoesColor: Math.floor(Math.random()*SHOE.length),
+    };
+    initSwatches();
+    syncOptButtons();
+    update();
+  });
+
+  const PFP_KEY = 'pathbinder_avatar_pfp_v1';
+  function applyPfpToChip(dataUrl) {
+    const chip = document.getElementById('avatarInitials');
+    if (!chip) return;
+    chip.textContent = '';
+    chip.style.backgroundImage = 'url(' + dataUrl + ')';
+    chip.style.backgroundSize = 'cover';
+    chip.style.backgroundPosition = 'top center';
+    chip.style.backgroundRepeat = 'no-repeat';
+    chip.style.imageRendering = 'pixelated';
+  }
+  // Load saved PFP on init
+  (function loadSavedPfp(){
+    const saved = localStorage.getItem(PFP_KEY);
+    if (saved) applyPfpToChip(saved);
+  })();
+
+  document.getElementById('av-exportBtn').addEventListener('click', () => {
+    const dataUrl = canvas.toDataURL('image/png');
+    localStorage.setItem(PFP_KEY, dataUrl);
+    applyPfpToChip(dataUrl);
+    try { if (typeof checkBadge_rendered === 'function') checkBadge_rendered(); } catch(_) {}
+    // Flash feedback on the button
+    const btn = document.getElementById('av-exportBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ SAVED!';
+    btn.style.color = '#C5FF3D';
+    btn.style.borderColor = '#C5FF3D';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 1600);
+  });
+
+  window.AvatarCreator = {
+    getState: () => ({...state}),
+    setState: s => { state = {...DEFAULT, ...s}; initSwatches(); syncOptButtons(); update(); },
+    getDataURL: () => canvas.toDataURL('image/png'),
+    reset: () => { localStorage.removeItem(STORAGE_KEY); state={...DEFAULT}; initSwatches(); syncOptButtons(); update(); },
+  };
+
+  function initSwatches(){
+    buildSwatches('av-sw-skin', SKIN, 'skin');
+    buildSwatches('av-sw-eye',  EYE,  'eyeColor');
+    buildSwatches('av-sw-hair', HAIR, 'hairColor');
+    buildSwatches('av-sw-hat',  HAT,  'hatColor');
+    buildSwatches('av-sw-top',  CLOTH,'topColor');
+    buildSwatches('av-sw-bottom',CLOTH,'bottomColor');
+    buildSwatches('av-sw-shoes',SHOE, 'shoesColor');
+  }
+
+  initSwatches();
+  syncOptButtons();
+  update();
+})();
+
+  </script>
+
 
 </body>
 </html>
