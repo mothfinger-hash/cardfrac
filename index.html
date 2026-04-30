@@ -1187,7 +1187,7 @@ nav {
 
 .user-avatar { border-color: var(--border); }
 .user-avatar:hover { border-color: var(--accent); box-shadow: 2px 2px 0 var(--accent); }
-.avatar-circle { background: var(--accent) !important; color: #000 !important; border-color: #000 !important; overflow: hidden; }
+.avatar-circle { background-color: var(--accent) !important; color: #000 !important; border-color: #000 !important; overflow: hidden; }
 
 .member-chip {
   background: var(--gold) !important;
@@ -1520,9 +1520,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 /* ─── 22. BADGE SYSTEM ──────────────────────────────────────────── */
 .badges-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 18px; padding: 4px 0 24px;
 }
+@media(max-width:600px){.badges-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
 .badge-tile {
   display: flex; flex-direction: column; align-items: center;
   gap: 10px; cursor: default;
@@ -3636,11 +3637,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     document.getElementById('loginBtn').addEventListener('click', () => openModal('loginModal'));
     document.getElementById('registerBtn').addEventListener('click', () => openModal('registerModal'));
+    function updateAvatarBtnLabel() {
+      const btn = document.getElementById('createAvatarBtn');
+      if (!btn) return;
+      const hasPfp = !!localStorage.getItem('pathbinder_avatar_pfp_v1');
+      btn.textContent = hasPfp ? '🎨 Edit Avatar' : '🎨 Create Avatar';
+    }
     document.getElementById('userChip').addEventListener('click', (e) => {
       e.stopPropagation();
       const dd = document.getElementById('avatarDropdown');
       dd.classList.toggle('open');
-      if (dd.classList.contains('open')) renderDdBadges();
+      if (dd.classList.contains('open')) { renderDdBadges(); updateAvatarBtnLabel(); }
     });
     document.getElementById('myAccountBtn').addEventListener('click', () => {
       document.getElementById('avatarDropdown').classList.remove('open');
@@ -15525,6 +15532,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const dataUrl = canvas.toDataURL('image/png');
     localStorage.setItem(PFP_KEY, dataUrl);
     applyPfpToChip(dataUrl);
+    try { if (typeof updateAvatarBtnLabel === 'function') updateAvatarBtnLabel(); } catch(_) {}
     try { if (typeof checkBadge_rendered === 'function') checkBadge_rendered(); } catch(_) {}
     // Flash feedback on the button
     const btn = document.getElementById('av-exportBtn');

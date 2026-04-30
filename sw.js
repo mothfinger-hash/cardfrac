@@ -1,8 +1,7 @@
-// CardFrac Service Worker
-const CACHE = 'cardfrac-v1';
+// PathBinder Service Worker
+const CACHE = 'pathbinder-v3';
 
 const PRECACHE = [
-  '/',
   '/offline.html',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -64,7 +63,7 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE).then(cache => cache.put(e.request, clone));
         }
         return res;
-      });
+      }).catch(() => new Response('', { status: 408, statusText: 'Network unavailable' }));
     })
   );
 });
