@@ -2767,6 +2767,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </div>
 
   <div id="collectionPage" class="page">
+    <!-- Everything lives inside the centered binder-frame -->
+    <div class="binder-frame">
     <h2>My Binder</h2>
     <p class="subtitle">Your complete card holdings at a glance.</p>
 
@@ -2779,9 +2781,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div id="binderTabsWrap" style="display:none;margin-bottom:14px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch">
       <div id="binderTabs" style="display:inline-flex;gap:6px;align-items:center;padding-bottom:2px"></div>
     </div>
-
-    <!-- Binder frame — constrained on desktop, full-width on mobile -->
-    <div class="binder-frame">
       <!-- Binder View Controls -->
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
         <div class="binder-view-toggle" id="binderViewToggle">
@@ -3628,8 +3627,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (savedPfp) {
           chipEl.textContent = '';
           chipEl.style.backgroundImage = 'url(' + savedPfp + ')';
-          chipEl.style.backgroundSize = 'cover';
-          chipEl.style.backgroundPosition = 'top center';
+          chipEl.style.backgroundSize = 'auto 190%';
+          chipEl.style.backgroundPosition = 'center 4%';
           chipEl.style.backgroundRepeat = 'no-repeat';
           chipEl.style.imageRendering = 'pixelated';
         } else {
@@ -15547,15 +15546,39 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     if (!chip) return;
     chip.textContent = '';
     chip.style.backgroundImage = 'url(' + dataUrl + ')';
-    chip.style.backgroundSize = 'cover';
-    chip.style.backgroundPosition = 'top center';
+    // Zoom in: scale to ~190% of chip height so only top ~53% of image is visible
+    // This frames face + shoulders regardless of whether it's a full-body or pre-cropped save
+    chip.style.backgroundSize = 'auto 190%';
+    chip.style.backgroundPosition = 'center 4%';
     chip.style.backgroundRepeat = 'no-repeat';
     chip.style.imageRendering = 'pixelated';
   }
-  // Load saved PFP on init
+  // Load saved PFP on init — also auto-migrate old full-body saves to cropped version
   (function loadSavedPfp(){
     const saved = localStorage.getItem(PFP_KEY);
-    if (saved) applyPfpToChip(saved);
+    if (!saved) return;
+    // Check if it's an old full-body save (taller than wide) and re-crop it
+    const img = new Image();
+    img.onload = function() {
+      if (img.height > img.width * 1.2) {
+        // Looks full-body — crop to face+shoulders and re-save
+        const cropped = makePfpCrop({ width: img.width, height: img.height,
+          getContext: () => { const c = document.createElement('canvas');
+            c.width = img.width; c.height = img.height;
+            c.getContext('2d').drawImage(img,0,0); return c.getContext('2d'); }
+        });
+        // Simpler: draw to temp canvas then crop
+        const tmp = document.createElement('canvas');
+        tmp.width = img.width; tmp.height = img.height;
+        tmp.getContext('2d').drawImage(img, 0, 0);
+        const fresh = makePfpCrop(tmp);
+        localStorage.setItem(PFP_KEY, fresh);
+        applyPfpToChip(fresh);
+      } else {
+        applyPfpToChip(saved);
+      }
+    };
+    img.src = saved;
   })();
 
   document.getElementById('av-exportBtn').addEventListener('click', () => {
