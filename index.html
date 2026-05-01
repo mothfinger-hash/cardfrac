@@ -923,17 +923,18 @@
     /* ── HIDDEN BINDER SHELF ── */
     #binderShelfWrap{display:none !important}
     /* ── BINDER SIDEBAR ── */
-    #binderSidebar{position:fixed;left:0;top:56px;height:calc(100vh - 56px);width:64px;background:#050505;border-right:2px solid #1a1a1a;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0;z-index:900;overflow-y:auto}
+    #binderSidebar{position:fixed;left:0;top:56px;height:calc(100vh - 56px);width:58px;background:rgba(5,5,5,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:6px 0 28px rgba(0,0,0,.55);display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px 0;z-index:900;overflow-y:auto}
+    body.on-binder #binderSidebar{display:flex}
     #binderSidebar::-webkit-scrollbar{width:2px}
-    .bsb-icon{width:48px;height:48px;clip-path:none;border-radius:3px;overflow:hidden;cursor:pointer;border:2px solid #222;flex-shrink:0;transition:transform 0.15s, border-color 0.15s;position:relative}
+    .bsb-icon{width:42px;height:42px;border-radius:4px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.12);flex-shrink:0;transition:border-color 0.15s,box-shadow 0.15s;position:relative}
     .bsb-icon img{width:100%;height:100%;object-fit:cover}
-    .bsb-icon .bsb-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.55rem;font-family:'Press Start 2P',monospace;text-align:center;padding:4px;line-height:1.2;word-break:break-all}
-    .bsb-icon.active{border-color:#C5FF3D}
-    .bsb-icon.bsb-drag-over{transform:scale(2) !important;border-color:#FF5722 !important;z-index:999}
-    .bsb-add{background:#0a0a0a;border:2px dashed #333;color:#555;font-size:1.2rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .bsb-icon .bsb-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.5rem;font-family:'Press Start 2P',monospace;text-align:center;padding:3px;line-height:1.2;word-break:break-all}
+    .bsb-icon.active{border-color:#C5FF3D;box-shadow:0 0 8px rgba(197,255,61,.35)}
+    .bsb-icon.bsb-drag-over{border-color:#FF5722 !important;box-shadow:0 0 0 3px rgba(255,87,34,.45) !important;outline:2px solid #FF5722}
+    .bsb-add{background:transparent;border:2px dashed rgba(255,255,255,.18);color:rgba(255,255,255,.3);font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .bsb-add:hover{border-color:#C5FF3D;color:#C5FF3D}
-    @media(min-width:601px){#collectionPage{padding-left:76px}}
-    @media(max-width:600px){#binderSidebar{display:none}}
+    @media(min-width:601px){body.on-binder #collectionPage{padding-left:72px}}
+    @media(max-width:600px){#binderSidebar{display:none!important}}
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
     .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
@@ -3800,6 +3801,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(pageId + 'Page').classList.add('active');
       _pushPageState(pageId);
+      // Binder sidebar visibility driven purely by CSS via body class
+      document.body.classList.toggle('on-binder', pageId === 'collection');
       if (pageId === 'leaderboard') renderLeaderboard();
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const navTab = document.querySelector(`[data-page="${pageId}"]`);
@@ -8841,8 +8844,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function renderBinderSidebar() {
       const sb = document.getElementById('binderSidebar');
       if (!sb) return;
-      if (!currentUser) { sb.style.display = 'none'; return; }
-      sb.style.display = 'flex';
+      // Visibility is CSS-controlled via body.on-binder — just render the HTML
 
       let html = '';
       // All Cards icon
@@ -12270,8 +12272,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (existing) existing.remove();
 
       const img = card.images?.large || card.images?.small || '';
-      const price = card.cardmarket?.prices?.averageSellPrice || card.tcgplayer?.prices?.holofoil?.market || card.tcgplayer?.prices?.normal?.market || null;
       const rarityTag = card.rarity ? `<span style="padding:2px 8px;background:var(--surface2);border:1px solid var(--border);font-size:.6rem;color:var(--muted)">${card.rarity}</span>` : '';
+
+      // Build price rows from all available variants
+      const tcgp = card.tcgplayer?.prices || {};
+      const cm   = card.cardmarket?.prices || {};
+      const priceRows = [];
+      const _p = (label, val) => val ? priceRows.push({label, val}) : null;
+      _p('Normal', tcgp.normal?.market);
+      _p('Holofoil', tcgp.holofoil?.market);
+      _p('Reverse Holo', tcgp.reverseHolofoil?.market);
+      _p('1st Edition', tcgp['1stEditionHolofoil']?.market || tcgp['1stEditionNormal']?.market);
+      _p('CardMarket Avg', cm.averageSellPrice);
+      const bestPrice = priceRows[0]?.val || null;
+
+      const priceHtml = priceRows.length ? `
+        <div style="margin-top:10px;border:1px solid #1a1a1a;padding:10px 12px;background:#0a0a0a">
+          <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em;margin-bottom:8px">MARKET PRICES</div>
+          ${priceRows.map(r => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #111">
+              <span style="font-size:.65rem;color:var(--muted)">${r.label}</span>
+              <span style="font-size:.78rem;font-weight:700;color:var(--accent)">$${Number(r.val).toFixed(2)}</span>
+            </div>`).join('')}
+          ${card.tcgplayer?.url ? `<a href="${card.tcgplayer.url}" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:.6rem;color:var(--teal);text-decoration:none;letter-spacing:.04em">↗ VIEW ON TCGPLAYER</a>` : ''}
+        </div>` : `<div style="margin-top:8px;font-size:.65rem;color:var(--muted)">No price data available</div>`;
 
       const binderOptions = (currentUser && binders.length > 0)
         ? binders.map(b => `<option value="${b.id}">${b.name}</option>`).join('')
@@ -12286,18 +12310,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <span style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--accent);letter-spacing:.08em">CARD DETAIL</span>
             <button onclick="document.getElementById('setCardDetailSheet').remove()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer">×</button>
           </div>
-          <div style="display:flex;gap:16px;margin-bottom:16px">
-            ${img ? `<img src="${img}" alt="${card.name}" style="width:100px;height:auto;flex-shrink:0;border:1px solid #222">` : `<div style="width:100px;height:140px;background:var(--surface2);flex-shrink:0;border:1px solid #222"></div>`}
+          <div style="display:flex;gap:16px;margin-bottom:4px">
+            ${img ? `<img src="${img}" alt="${card.name}" style="width:100px;height:auto;flex-shrink:0;border:1px solid #222;cursor:pointer" onclick="this.style.width=this.style.width==='160px'?'100px':'160px'">` : `<div style="width:100px;height:140px;background:var(--surface2);flex-shrink:0;border:1px solid #222"></div>`}
             <div style="flex:1;min-width:0">
               <div style="font-size:.9rem;font-weight:700;margin-bottom:4px">${card.name}</div>
               <div style="font-size:.68rem;color:var(--muted);margin-bottom:6px">${card.set?.name || ''} · #${card.number || '?'}</div>
               ${rarityTag}
-              ${price ? `<div style="font-size:.85rem;font-weight:700;color:var(--accent);margin-top:8px">~$${Number(price).toFixed(2)}</div><div style="font-size:.58rem;color:var(--muted)">market avg</div>` : ''}
+              ${card.artist ? `<div style="font-size:.6rem;color:var(--muted);margin-top:6px">✦ ${card.artist}</div>` : ''}
+              ${bestPrice ? `<div style="font-size:1rem;font-weight:700;color:var(--accent);margin-top:10px">~$${Number(bestPrice).toFixed(2)}</div><div style="font-size:.58rem;color:var(--muted)">best market price</div>` : ''}
             </div>
           </div>
+          ${priceHtml}
           ${currentUser ? `
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div style="font-size:.68rem;color:var(--muted);font-family:'Press Start 2P',monospace;letter-spacing:.08em;margin-bottom:2px">ADD TO BINDER</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+            <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em">ADD TO COLLECTION</div>
             <div style="display:flex;gap:8px">
               <select id="setCardBinderSelect" style="flex:1;padding:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem">
                 <option value="">Unsorted</option>
@@ -12366,7 +12392,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     async function syncUserDataFromCloud() {
       if (!currentUser) return;
       try {
-        const { data } = await sb.from('profiles').select('avatar_state, badges_earned, scan_total').eq('id', currentUser.id).maybeSingle();
+        const { data, error } = await sb.from('profiles').select('avatar_state, badges_earned, scan_total').eq('id', currentUser.id).maybeSingle();
+        // 400 = columns not yet migrated; silently skip
+        if (error) return;
         if (!data) return;
         // Avatar state
         if (data.avatar_state) {
