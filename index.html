@@ -920,6 +920,20 @@
     .binder-page-btn:disabled{opacity:.35;cursor:not-allowed}
     /* ── BINDER SHELF ── */
     .binder-shelf-row{display:flex;gap:18px;padding:18px 0 22px;overflow-x:auto;scrollbar-width:thin;align-items:flex-end;-webkit-overflow-scrolling:touch}
+    /* ── HIDDEN BINDER SHELF ── */
+    #binderShelfWrap{display:none !important}
+    /* ── BINDER SIDEBAR ── */
+    #binderSidebar{position:fixed;left:0;top:56px;height:calc(100vh - 56px);width:64px;background:#050505;border-right:2px solid #1a1a1a;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0;z-index:900;overflow-y:auto}
+    #binderSidebar::-webkit-scrollbar{width:2px}
+    .bsb-icon{width:48px;height:48px;clip-path:none;border-radius:3px;overflow:hidden;cursor:pointer;border:2px solid #222;flex-shrink:0;transition:transform 0.15s, border-color 0.15s;position:relative}
+    .bsb-icon img{width:100%;height:100%;object-fit:cover}
+    .bsb-icon .bsb-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.55rem;font-family:'Press Start 2P',monospace;text-align:center;padding:4px;line-height:1.2;word-break:break-all}
+    .bsb-icon.active{border-color:#C5FF3D}
+    .bsb-icon.bsb-drag-over{transform:scale(2) !important;border-color:#FF5722 !important;z-index:999}
+    .bsb-add{background:#0a0a0a;border:2px dashed #333;color:#555;font-size:1.2rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .bsb-add:hover{border-color:#C5FF3D;color:#C5FF3D}
+    @media(min-width:601px){#collectionPage{padding-left:76px}}
+    @media(max-width:600px){#binderSidebar{display:none}}
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
     .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
@@ -1818,6 +1832,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </script>
 </head>
 <body>
+  <div id="binderSidebar" style="display:none"></div>
   <nav>
     <button class="logo logo-img-btn" data-text="PATHBINDER" onclick="showPage('collection');setMobileNav('collection')"><img src="weblogo.png" alt="PathBinder" class="nav-logo-img"></button>
     <div class="nav-right">
@@ -3045,6 +3060,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <text x="260" y="115" text-anchor="middle" font-size="8" fill="var(--gold)" font-family="monospace">SIDE B</text>
           </svg>
           <div id="ftVerdict" style="font-size:.9rem;font-weight:700;letter-spacing:.06em;margin-top:6px;min-height:22px;transition:color .4s"></div>
+          <!-- ── Coin Flip ── -->
+          <div id="ftCoinFlipWrap" style="text-align:center;margin-top:14px">
+            <button id="ftCoinFlipBtn" onclick="ftFlipCoin()" style="
+              padding:7px 18px;border:1px solid var(--border);background:transparent;
+              color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;
+              font-size:.7rem;cursor:pointer;letter-spacing:.06em;transition:all .15s
+            " onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+              ⊙ COIN FLIP
+            </button>
+            <div id="ftCoinResult" style="margin-top:10px;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"></div>
+          </div>
         </div>
 
         <!-- Breakdown table -->
@@ -3374,7 +3401,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     let browseGameTypeFilter = 'all';
     let browseSortFilter = 'newest';
     const POKEMON_ONLY = true; // flip to false when ready for other TCGs
-    let binderView = '3x3';
+    let binderView = 'list';
     let binderPage = 0;
     let browseTabFilter = 'all';
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
@@ -3614,6 +3641,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function updateAuthUI() {
+      renderBinderSidebar();
       const authSection = document.getElementById('authSection');
       const userSection = document.getElementById('userSection');
       const adminTab = document.querySelector('[data-page="admin"]');
@@ -3636,6 +3664,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           chipEl.style.backgroundImage = '';
         }
         document.getElementById('userName').textContent = currentUser.username || currentUser.email?.split('@')[0] || 'User';
+        syncUserDataFromCloud();
         // Show admin tab only if user is admin
         if (currentUser.is_admin) {
           adminTab.classList.add('admin-visible');
@@ -3805,7 +3834,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (pageId === 'admin') renderAdmin();
       if (pageId === 'collection') {
         renderBinder();
-        if (currentUser) Promise.all([loadCollection(), loadBinders()]).then(() => renderBinder()).catch(() => {});
+        if (currentUser) Promise.all([loadCollection(), loadBinders()]).then(() => { renderBinder(); renderBinderSidebar(); }).catch(() => {});
       }
       if (pageId === 'publicBinder')  { /* content managed by loadPublicBinder */ }
       if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
@@ -4420,6 +4449,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       badges.push(id);
       localStorage.setItem(_BADGE_KEY, JSON.stringify(badges));
       _showBadgeUnlock(id);
+      try { syncUserDataToCloud(); } catch(_) {}
       // Refresh badge grid if open
       const grid = document.getElementById('badgesGrid');
       if (grid && grid.innerHTML !== '') renderBadges();
@@ -4477,7 +4507,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function unlockDiscordBadge(e) {
       e.preventDefault();
       checkBadge_signal_discord();
-      setTimeout(() => { window.open('https://discord.gg/pathbinder', '_blank', 'noopener'); }, 600);
+      setTimeout(() => { window.open('https://discord.gg/JEwDTxWs4', '_blank', 'noopener'); }, 600);
     }
     function checkBadge_signal_discord() { if (!_hasBadge('signal')) _awardBadge('signal'); }
 
@@ -8767,6 +8797,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function renderBinderTabs() {
+      renderBinderSidebar();
       const wrap = document.getElementById('binderTabsWrap');
       const tabs  = document.getElementById('binderTabs');
       if (!wrap || !tabs) return;
@@ -8798,9 +8829,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         tabs.innerHTML = html;
       }
-
-      // Always re-render the shelf
-      renderBinderShelf();
     }
 
     function selectBinder(id) {
@@ -8808,6 +8836,70 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       binderPage = 0;
       renderBinderTabs();
       renderBinder();
+    }
+
+    function renderBinderSidebar() {
+      const sb = document.getElementById('binderSidebar');
+      if (!sb) return;
+      if (!currentUser) { sb.style.display = 'none'; return; }
+      sb.style.display = 'flex';
+
+      let html = '';
+      // All Cards icon
+      const allActive = currentBinderId === null;
+      html += `<div class="bsb-icon${allActive?' active':''}" title="All Cards"
+        onclick="selectBinder(null)"
+        ondragover="bsbDragOver(event,null)"
+        ondragleave="bsbDragLeave(event)"
+        ondrop="bsbDrop(event,null)"
+      ><img src="https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.png"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+        alt="All">
+      <div class="bsb-fallback" style="display:none;background:#111;color:#888">ALL</div>
+      </div>`;
+
+      for (const b of binders) {
+        const active = currentBinderId === b.id;
+        const bg = b.color || '#444';
+        const imgHtml = b.cover_image_url
+          ? `<img src="${b.cover_image_url}" alt="${b.name}" loading="lazy"><div class="bsb-fallback" style="display:none;background:${bg}28;color:${bg}">${b.name.slice(0,4)}</div>`
+          : `<div class="bsb-fallback" style="background:${bg}28;color:${bg}">${b.name.slice(0,6)}</div>`;
+        html += `<div class="bsb-icon${active?' active':''}" id="bsbIcon_${b.id}" title="${b.name}"
+          onclick="selectBinder('${b.id}')"
+          ondragover="bsbDragOver(event,'${b.id}')"
+          ondragleave="bsbDragLeave(event)"
+          ondrop="bsbDrop(event,'${b.id}')"
+        >${imgHtml}</div>`;
+      }
+
+      // Add new binder button
+      if (binders.length < getMaxBinders()) {
+        html += `<div class="bsb-icon bsb-add" title="New Binder" onclick="openNewBinder()">+</div>`;
+      }
+
+      sb.innerHTML = html;
+    }
+
+    function bsbDragOver(e, binderId) {
+      e.preventDefault();
+      document.querySelectorAll('.bsb-icon').forEach(el => el.classList.remove('bsb-drag-over'));
+      const icon = binderId === null
+        ? document.querySelector('#binderSidebar .bsb-icon')
+        : document.getElementById('bsbIcon_' + binderId);
+      if (icon) icon.classList.add('bsb-drag-over');
+    }
+
+    function bsbDragLeave(e) {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove('bsb-drag-over');
+      }
+    }
+
+    function bsbDrop(e, binderId) {
+      e.preventDefault();
+      document.querySelectorAll('.bsb-icon').forEach(el => el.classList.remove('bsb-drag-over'));
+      // Re-use existing shelfDrop logic
+      shelfDrop(e, binderId);
     }
 
     function openNewBinder() {
@@ -11925,6 +12017,88 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+
+    // ── Coin Flip ─────────────────────────────────────────────────────────
+    function ftFlipCoin() {
+      var res = document.getElementById('ftCoinResult');
+      var btn = document.getElementById('ftCoinFlipBtn');
+      if (!res || !btn) return;
+      btn.disabled = true;
+      btn.style.opacity = '0.4';
+      res.innerHTML = `
+        <svg id="ftCoinSvg" viewBox="0 0 80 80" width="80" height="80" style="overflow:visible">
+          <defs>
+            <radialGradient id="cgH" cx="40%" cy="35%"><stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#B8860B"/></radialGradient>
+            <radialGradient id="cgT" cx="40%" cy="35%"><stop offset="0%" stop-color="#C0C0C0"/><stop offset="100%" stop-color="#707070"/></radialGradient>
+          </defs>
+          <!-- Coin body -->
+          <ellipse id="ftCoinBody" cx="40" cy="40" rx="36" ry="36" fill="url(#cgH)" stroke="#8B6914" stroke-width="2"/>
+          <!-- Heads face -->
+          <g id="ftCoinHeads">
+            <circle cx="40" cy="36" r="10" fill="#B8860B" opacity=".5"/>
+            <text x="40" y="40" text-anchor="middle" dominant-baseline="middle" font-size="18" fill="#8B6914">♛</text>
+            <text x="40" y="60" text-anchor="middle" font-size="6" fill="#8B6914" font-family="monospace" font-weight="700" letter-spacing="1">HEADS</text>
+          </g>
+          <!-- Tails face (hidden initially) -->
+          <g id="ftCoinTails" style="display:none">
+            <circle cx="40" cy="36" r="10" fill="#707070" opacity=".5"/>
+            <text x="40" y="40" text-anchor="middle" dominant-baseline="middle" font-size="18" fill="#555">⬡</text>
+            <text x="40" y="60" text-anchor="middle" font-size="6" fill="#555" font-family="monospace" font-weight="700" letter-spacing="1">TAILS</text>
+          </g>
+        </svg>
+        <div id="ftCoinLabel" style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em">FLIPPING...</div>
+      `;
+
+      var result = Math.random() < 0.5 ? 'heads' : 'tails';
+      var coinEl = document.getElementById('ftCoinBody');
+      var headsEl = document.getElementById('ftCoinHeads');
+      var tailsEl = document.getElementById('ftCoinTails');
+      var labelEl = document.getElementById('ftCoinLabel');
+      var svg = document.getElementById('ftCoinSvg');
+
+      // Animate: squish the ry to simulate flipping, alternate heads/tails faces
+      var frame = 0;
+      var totalFrames = 28;
+      var showing = 'heads';
+      var interval = setInterval(function() {
+        frame++;
+        // ry oscillates between 0 and 36 — simulates coin edge rotation
+        var progress = frame / totalFrames;
+        var ry = Math.abs(Math.sin(progress * Math.PI * 5)) * 36;
+        if (coinEl) coinEl.setAttribute('ry', String(Math.max(2, Math.round(ry))));
+        // Flip which face shows when ry is near 0
+        if (ry < 6) {
+          var nextFace = (showing === 'heads') ? 'tails' : 'heads';
+          // On last few frames, lock to result
+          if (frame > totalFrames - 6) nextFace = result;
+          showing = nextFace;
+          if (headsEl) headsEl.style.display = showing === 'heads' ? '' : 'none';
+          if (tailsEl) tailsEl.style.display = showing === 'tails' ? '' : 'none';
+          // Update gradient fill
+          if (coinEl) coinEl.setAttribute('fill', showing === 'heads' ? 'url(#cgH)' : 'url(#cgT)');
+          if (coinEl) coinEl.setAttribute('stroke', showing === 'heads' ? '#8B6914' : '#555');
+        }
+        if (frame >= totalFrames) {
+          clearInterval(interval);
+          // Final state
+          if (coinEl) coinEl.setAttribute('ry', '36');
+          showing = result;
+          if (headsEl) headsEl.style.display = result === 'heads' ? '' : 'none';
+          if (tailsEl) tailsEl.style.display = result === 'tails' ? '' : 'none';
+          if (coinEl) {
+            coinEl.setAttribute('fill', result === 'heads' ? 'url(#cgH)' : 'url(#cgT)');
+            coinEl.setAttribute('stroke', result === 'heads' ? '#8B6914' : '#555');
+          }
+          if (labelEl) {
+            labelEl.textContent = result.toUpperCase() + '!';
+            labelEl.style.color = result === 'heads' ? 'var(--accent2)' : 'var(--accent)';
+            labelEl.style.fontSize = '10px';
+          }
+          if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        }
+      }, 40);
+    }
+
     // ── End Fair Trade ─────────────────────────────────────────────────────
 
     // ══════════════════════════════════════════════════════════════════════
@@ -12037,15 +12211,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           });
         }
 
+        // Store cards for detail modal
+        window._setsDetailCards = cards;
         let ownedCount = 0;
-        const cardRows = cards.map(card => {
+        const cardRows = cards.map((card, idx) => {
           const ci = ownedMap[card.id];
           const owned = !!ci;
           if (owned) ownedCount++;
           const qty = ci ? (ci.quantity || 1) : 0;
           const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
           const img = card.images && card.images.small ? card.images.small : '';
-          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);opacity:${owned?'1':'.45'}">
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${idx})">
             ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
             <div style="flex:1;min-width:0">
               <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
@@ -12054,6 +12230,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             ${owned
               ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}${price ? ' · $' + Number(price).toFixed(2) : ''}</span>`
               : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
+            <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
           </div>`;
         }).join('');
 
@@ -12084,6 +12261,149 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
     // ── End Sets Completion Tracker ────────────────────────────────────────
+
+    function openSetCardDetail(idx) {
+      const card = window._setsDetailCards && window._setsDetailCards[idx];
+      if (!card) return;
+
+      const existing = document.getElementById('setCardDetailSheet');
+      if (existing) existing.remove();
+
+      const img = card.images?.large || card.images?.small || '';
+      const price = card.cardmarket?.prices?.averageSellPrice || card.tcgplayer?.prices?.holofoil?.market || card.tcgplayer?.prices?.normal?.market || null;
+      const rarityTag = card.rarity ? `<span style="padding:2px 8px;background:var(--surface2);border:1px solid var(--border);font-size:.6rem;color:var(--muted)">${card.rarity}</span>` : '';
+
+      const binderOptions = (currentUser && binders.length > 0)
+        ? binders.map(b => `<option value="${b.id}">${b.name}</option>`).join('')
+        : '<option value="">— no binders yet —</option>';
+
+      const sheet = document.createElement('div');
+      sheet.id = 'setCardDetailSheet';
+      sheet.style.cssText = `position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center`;
+      sheet.innerHTML = `
+        <div style="width:100%;max-width:480px;background:#050505;border:2px solid #1a1a1a;border-bottom:none;padding:20px;max-height:88vh;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <span style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--accent);letter-spacing:.08em">CARD DETAIL</span>
+            <button onclick="document.getElementById('setCardDetailSheet').remove()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer">×</button>
+          </div>
+          <div style="display:flex;gap:16px;margin-bottom:16px">
+            ${img ? `<img src="${img}" alt="${card.name}" style="width:100px;height:auto;flex-shrink:0;border:1px solid #222">` : `<div style="width:100px;height:140px;background:var(--surface2);flex-shrink:0;border:1px solid #222"></div>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.9rem;font-weight:700;margin-bottom:4px">${card.name}</div>
+              <div style="font-size:.68rem;color:var(--muted);margin-bottom:6px">${card.set?.name || ''} · #${card.number || '?'}</div>
+              ${rarityTag}
+              ${price ? `<div style="font-size:.85rem;font-weight:700;color:var(--accent);margin-top:8px">~$${Number(price).toFixed(2)}</div><div style="font-size:.58rem;color:var(--muted)">market avg</div>` : ''}
+            </div>
+          </div>
+          ${currentUser ? `
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:.68rem;color:var(--muted);font-family:'Press Start 2P',monospace;letter-spacing:.08em;margin-bottom:2px">ADD TO BINDER</div>
+            <div style="display:flex;gap:8px">
+              <select id="setCardBinderSelect" style="flex:1;padding:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem">
+                <option value="">Unsorted</option>
+                ${binderOptions}
+              </select>
+              <button onclick="addSetCardToBinder(${idx})" style="padding:8px 14px;border:1px solid var(--accent);background:rgba(197,255,61,.08);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;white-space:nowrap">+ Add</button>
+            </div>
+            <button onclick="addSetCardToWishlist(${idx})" style="padding:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;width:100%;text-align:center">♡ Add to Wishlist</button>
+          </div>` : `<div style="text-align:center;padding:16px;color:var(--muted);font-size:.75rem">Sign in to add cards to your binder</div>`}
+        </div>
+      `;
+      sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+      document.body.appendChild(sheet);
+    }
+
+    async function addSetCardToBinder(idx) {
+      const card = window._setsDetailCards && window._setsDetailCards[idx];
+      if (!card || !currentUser) return;
+      const binderId = document.getElementById('setCardBinderSelect')?.value || null;
+      const item = {
+        user_id: currentUser.id,
+        name: card.name,
+        set_name: card.set?.name || '',
+        card_number: card.number || '',
+        api_card_id: card.id,
+        image_url: card.images?.small || '',
+        rarity: card.rarity || '',
+        purchase_price: null,
+        current_value: card.cardmarket?.prices?.averageSellPrice || card.tcgplayer?.prices?.holofoil?.market || null,
+        binder_id: binderId || null,
+        quantity: 1,
+        condition: 'raw',
+      };
+      const { error } = await sb.from('collection_items').insert(item);
+      if (error) { showToast('Error adding card'); return; }
+      await loadCollection();
+      document.getElementById('setCardDetailSheet')?.remove();
+      showToast('✓ Added to binder');
+    }
+
+    async function addSetCardToWishlist(idx) {
+      const card = window._setsDetailCards && window._setsDetailCards[idx];
+      if (!card || !currentUser) return;
+      const item = {
+        user_id: currentUser.id,
+        name: card.name,
+        set_name: card.set?.name || '',
+        card_number: card.number || '',
+        api_card_id: card.id,
+        image_url: card.images?.small || '',
+        rarity: card.rarity || '',
+        is_ghost: true,
+        purchase_price: null,
+        current_value: card.cardmarket?.prices?.averageSellPrice || card.tcgplayer?.prices?.holofoil?.market || null,
+        quantity: 1,
+      };
+      const { error } = await sb.from('collection_items').insert(item);
+      if (error) { showToast('Error adding to wishlist'); return; }
+      await loadCollection();
+      document.getElementById('setCardDetailSheet')?.remove();
+      showToast('♡ Added to wishlist');
+    }
+
+
+    // ── Load avatar+badges from Supabase on sign-in ─────────────────
+    async function syncUserDataFromCloud() {
+      if (!currentUser) return;
+      try {
+        const { data } = await sb.from('profiles').select('avatar_state, badges_earned, scan_total').eq('id', currentUser.id).maybeSingle();
+        if (!data) return;
+        // Avatar state
+        if (data.avatar_state) {
+          try {
+            localStorage.setItem('pathbinder_avatar_sf_v1', JSON.stringify(data.avatar_state));
+            if (window.AvatarCreator && typeof window.AvatarCreator.setState === 'function') {
+              window.AvatarCreator.setState(data.avatar_state);
+            }
+          } catch(_) {}
+        }
+        // Badges
+        if (data.badges_earned) {
+          try {
+            localStorage.setItem('pathbinder_badges_v1', JSON.stringify(data.badges_earned));
+          } catch(_) {}
+        }
+        if (data.scan_total != null) {
+          try { localStorage.setItem('pathbinder_scan_total_v1', String(data.scan_total)); } catch(_) {}
+        }
+      } catch(_) {}
+    }
+    // ── Save avatar+badges to Supabase ──────────────────────────────
+    async function syncUserDataToCloud() {
+      if (!currentUser) return;
+      try {
+        const avatarRaw = localStorage.getItem('pathbinder_avatar_sf_v1');
+        const badgesRaw = localStorage.getItem('pathbinder_badges_v1');
+        const scanTotal = parseInt(localStorage.getItem('pathbinder_scan_total_v1') || '0', 10);
+        const avatarState = avatarRaw ? JSON.parse(avatarRaw) : null;
+        const badgesEarned = badgesRaw ? JSON.parse(badgesRaw) : [];
+        await sb.from('profiles').update({
+          avatar_state: avatarState,
+          badges_earned: badgesEarned,
+          scan_total: scanTotal,
+        }).eq('id', currentUser.id);
+      } catch(_) {}
+    }
 
     async function initApp() {
       const browseGrid = document.getElementById('browseGrid');
@@ -12421,15 +12741,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
   <!-- ═══ SOCIAL FOOTER ════════════════════════════════════════════════════ -->
   <div class="social-footer" id="socialFooter">
-    <a href="https://instagram.com/pathbinderapp" target="_blank" rel="noopener" title="Instagram">
+    <a href="https://instagram.com/pathbinderapp" target="_blank" rel="noopener" title="Instagram" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
       INSTAGRAM
     </a>
-    <a href="https://tiktok.com/@pathbinderapp" target="_blank" rel="noopener" title="TikTok">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.19a8.24 8.24 0 004.83 1.56V6.3a4.85 4.85 0 01-1.06-.39z"/></svg>
-      TIKTOK
+    <a href="https://www.youtube.com/@pathbindertcg" target="_blank" rel="noopener" title="YouTube">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      YOUTUBE
     </a>
-    <a href="https://x.com/pathbinderapp" target="_blank" rel="noopener" title="X / Twitter">
+    <a href="https://x.com/PathBinder" target="_blank" rel="noopener" title="X / Twitter">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.736-8.861L2.25 2.25h6.891l4.259 5.631 4.844-5.631zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
       X
     </a>
@@ -14316,7 +14636,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     if (style === 'bald') return;
     const sh = shade(c, -25);
     const hi = shade(c, 20);
-    const headTop = Y.HEAD_T;
+    const headTop = Y.HEAD_T - 2; // shifted 2px up
 
     if (style === 'pigtails'){
       // ── Crown — covers the top of the (now 16-row) head ──
@@ -15586,6 +15906,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     localStorage.setItem(PFP_KEY, dataUrl);
     applyPfpToChip(dataUrl);
     try { if (typeof updateAvatarBtnLabel === 'function') updateAvatarBtnLabel(); } catch(_) {}
+    try { syncUserDataToCloud(); } catch(_) {}
     try { if (typeof checkBadge_rendered === 'function') checkBadge_rendered(); } catch(_) {}
     // Flash feedback on the button
     const btn = document.getElementById('av-exportBtn');
