@@ -992,10 +992,10 @@
     .binder-book.shelf-drop-available{outline:2px dashed var(--accent);outline-offset:3px}
     .binder-book.shelf-drop-hover{transform:perspective(520px) rotateY(-7deg) translateY(-10px) scale(1.06)!important;filter:drop-shadow(0 0 18px var(--accent))!important;transition:transform .12s ease,filter .12s ease}
     /* All-cards drag list row */
-    .allcards-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:grab;transition:background .1s;user-select:none}
-    .allcards-row:hover{background:var(--surface2)}
-    .allcards-row:active{cursor:grabbing}
-    .allcards-drag-handle{color:var(--border);font-size:.9rem;flex-shrink:0;line-height:1;padding:0 2px;cursor:grab}
+    .allcards-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid var(--border);cursor:grab;transition:background .1s,border-left-color .1s;user-select:none;border-left:3px solid transparent}
+    .allcards-row:hover{background:var(--surface2);border-left-color:var(--border)}
+    .allcards-row:active{cursor:grabbing;opacity:.75}
+    .allcards-row.dragging{opacity:.4;border-left-color:var(--accent)}
     .allcards-binder-tag{font-size:.58rem;padding:2px 6px;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;white-space:nowrap;border-radius:2px;flex-shrink:0}
     /* ── DASHBOARD CHART ── */
     .dash-chart-section{background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
@@ -9229,21 +9229,37 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     // ── Drag-card-to-shelf (All Cards → binder assignment) ───────────────────
     let _shelfDragCardId = null;
+    let _allCardsDragging = false; // prevents click firing after drag
 
     function allCardsDragStart(event, itemId) {
+      _allCardsDragging = true;
       _shelfDragCardId = itemId;
       event.dataTransfer.setData('text/plain', String(itemId));
       event.dataTransfer.effectAllowed = 'move';
-      // Light up all binder books as drop targets
+
+      // Use the card image as the drag ghost so it feels physical
+      const img = event.currentTarget.querySelector('img');
+      if (img && img.complete && img.naturalWidth > 0) {
+        event.dataTransfer.setDragImage(img, img.offsetWidth / 2, img.offsetHeight / 2);
+      }
+
+      event.currentTarget.classList.add('dragging');
+
+      // Light up binder books + sidebar icons as drop targets
       setTimeout(() => {
         document.querySelectorAll('.binder-book').forEach(el => el.classList.add('shelf-drop-available'));
+        document.querySelectorAll('#binderSidebar .bsb-icon').forEach(el => el.style.outlineOffset = '2px');
       }, 0);
     }
 
     function allCardsDragEnd(event) {
       _shelfDragCardId = null;
+      event.currentTarget.classList.remove('dragging');
       document.querySelectorAll('.binder-book').forEach(el =>
         el.classList.remove('shelf-drop-available', 'shelf-drop-hover'));
+      document.querySelectorAll('#binderSidebar .bsb-icon').forEach(el => el.style.outlineOffset = '');
+      // Reset flag after event loop so the click handler that follows dragend can check it
+      setTimeout(() => { _allCardsDragging = false; }, 50);
     }
 
     function shelfDragOver(event, binderId) {
@@ -9382,9 +9398,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (effectiveView === 'list') {
         const dragMode = isAllCards; // drag-to-binder only in "All Cards" view
         content.innerHTML = `
-          ${dragMode ? `<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-            <span>⠿</span><span>Drag a card onto a binder cover above to move it</span>
-          </div>` : ''}
+          ${dragMode ? `<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:10px">Drag any card to a binder to assign it</div>` : ''}
           <div id="binderGrid" style="display:flex;flex-direction:column">
           ${pageItems.map(item => {
             const isGhost  = item.is_ghost;
@@ -9405,9 +9419,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               ${dragMode ? `draggable="true"
                 ondragstart="allCardsDragStart(event,'${item.id}')"
                 ondragend="allCardsDragEnd(event)"` : `style="cursor:pointer"`}
-              onclick="openBinderCardDetail('${item.id}')">
-              ${dragMode ? `<span class="allcards-drag-handle">⠿</span>` : ''}
-              <img src="${item.card_image_url || ''}" alt="" loading="lazy"
+              onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
+              <img src="${item.card_image_url || ''}" alt="" loading="lazy" draggable="false"
                 style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0"
                 onerror="this.style.visibility='hidden'">
               <div style="flex:1;min-width:0">
