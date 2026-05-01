@@ -923,18 +923,53 @@
     /* ── HIDDEN BINDER SHELF ── */
     #binderShelfWrap{display:none !important}
     /* ── BINDER SIDEBAR ── */
-    #binderSidebar{position:fixed;left:0;top:56px;height:calc(100vh - 56px);width:58px;background:rgba(5,5,5,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:6px 0 28px rgba(0,0,0,.55);display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px 0;z-index:900;overflow-y:auto}
+    /* Base (hidden by default, shown only on binder page via body.on-binder) */
+    #binderSidebar{
+      position:fixed;display:none;
+      background:rgba(5,5,5,0.80);
+      backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+      z-index:900;
+    }
     body.on-binder #binderSidebar{display:flex}
-    #binderSidebar::-webkit-scrollbar{width:2px}
+
+    /* ── Desktop: vertical left column ── */
+    @media(min-width:601px){
+      #binderSidebar{
+        left:0;top:56px;
+        width:58px;height:calc(100vh - 56px);
+        flex-direction:column;align-items:center;justify-content:center;
+        gap:8px;padding:12px 0;
+        overflow-y:auto;overflow-x:hidden;
+      }
+      #binderSidebar::-webkit-scrollbar{width:2px}
+      /* Negative-space gap: sidebar is 58px, content starts at 84px = 26px of air */
+      body.on-binder #collectionPage{padding-left:84px}
+    }
+
+    /* ── Mobile: horizontal strip below nav ── */
+    @media(max-width:600px){
+      #binderSidebar{
+        top:56px;left:0;right:0;
+        width:100%;height:54px;
+        flex-direction:row;align-items:center;justify-content:flex-start;
+        gap:8px;padding:0 14px;
+        overflow-x:auto;overflow-y:hidden;
+        scrollbar-width:none;
+      }
+      #binderSidebar::-webkit-scrollbar{display:none}
+      /* Push binder cards below the strip */
+      body.on-binder #collectionPage{padding-top:54px}
+      .bsb-icon{width:36px!important;height:36px!important;flex-shrink:0}
+    }
+
+    /* ── Icons ── */
     .bsb-icon{width:42px;height:42px;border-radius:4px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.12);flex-shrink:0;transition:border-color 0.15s,box-shadow 0.15s;position:relative}
     .bsb-icon img{width:100%;height:100%;object-fit:cover}
     .bsb-icon .bsb-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.5rem;font-family:'Press Start 2P',monospace;text-align:center;padding:3px;line-height:1.2;word-break:break-all}
     .bsb-icon.active{border-color:#C5FF3D;box-shadow:0 0 8px rgba(197,255,61,.35)}
-    .bsb-icon.bsb-drag-over{border-color:#FF5722 !important;box-shadow:0 0 0 3px rgba(255,87,34,.45) !important;outline:2px solid #FF5722}
+    .bsb-icon.bsb-drag-over{border-color:#FF5722!important;box-shadow:0 0 0 3px rgba(255,87,34,.45)!important;outline:2px solid #FF5722}
     .bsb-add{background:transparent;border:2px dashed rgba(255,255,255,.18);color:rgba(255,255,255,.3);font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .bsb-add:hover{border-color:#C5FF3D;color:#C5FF3D}
-    @media(min-width:601px){body.on-binder #collectionPage{padding-left:72px}}
-    @media(max-width:600px){#binderSidebar{display:none!important}}
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
     .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
