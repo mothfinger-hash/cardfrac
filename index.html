@@ -580,15 +580,15 @@
       border-radius:0;padding:12px 16px;
       color:var(--accent);font-size:.65rem;
       z-index:10003;box-shadow:4px 4px 0 var(--shadow);
-      animation:slideInLeft .3s ease;max-width:300px
+      animation:slideInLeft .35s cubic-bezier(0.16,1,0.3,1) both;max-width:300px
     }
     /* Lift toast above mobile nav bar */
     @media(max-width:600px){
       .toast{bottom:72px;left:12px;right:12px;max-width:none;font-size:.7rem}
     }
     @keyframes slideInLeft{
-      from{transform:translateX(-100%);opacity:0}
-      to{transform:translateX(0);opacity:1}
+      from{transform:translateX(-110%) scale(0.96);opacity:0}
+      to  {transform:translateX(0)     scale(1);   opacity:1}
     }
   
     /* ── HERO LANDING ─────────────────────────────── */
@@ -811,11 +811,17 @@
     .ft-stack-front img{width:100%;display:block}
     .ft-card-no-img{width:100%;aspect-ratio:63/88;background:var(--surface);display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:.8rem;color:var(--muted);text-align:center;padding:12px;box-sizing:border-box}
 
-    /* Slide animation */
-    @keyframes ftSlideNext{from{opacity:0;transform:translateX(44px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes ftSlidePrev{from{opacity:0;transform:translateX(-44px)}to{opacity:1;transform:translateX(0)}}
-    .ft-stack-front.slide-next{animation:ftSlideNext .22s ease}
-    .ft-stack-front.slide-prev{animation:ftSlidePrev .22s ease}
+    /* Slide animation — fluid ease-out with subtle scale */
+    @keyframes ftSlideNext{
+      from{opacity:0;transform:translateX(36px) scale(0.97)}
+      to  {opacity:1;transform:translateX(0)    scale(1)}
+    }
+    @keyframes ftSlidePrev{
+      from{opacity:0;transform:translateX(-36px) scale(0.97)}
+      to  {opacity:1;transform:translateX(0)     scale(1)}
+    }
+    .ft-stack-front.slide-next{animation:ftSlideNext .38s cubic-bezier(0.16,1,0.3,1) both}
+    .ft-stack-front.slide-prev{animation:ftSlidePrev .38s cubic-bezier(0.16,1,0.3,1) both}
 
     /* Nav arrows — float just outside the card edges */
     .ft-nav-btn{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s;line-height:1}
@@ -961,13 +967,11 @@
       position:fixed;display:none;
       left:var(--sb-w);right:0;top:0;
       height:52px;
-      flex-direction:row;align-items:center;
-      gap:6px;padding:6px 10px;
-      background:rgba(5,5,5,0.92);
-      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      flex-direction:row;align-items:center;justify-content:center;
+      gap:8px;padding:6px 12px;
+      background:transparent;
       overflow-x:auto;overflow-y:hidden;
       scrollbar-width:none;
-      border-bottom:1.5px solid var(--border);
       z-index:900;
       transition:left .25s;
     }
@@ -1109,7 +1113,7 @@
   --premium-txt:  #000000;
 
   --r404-grid:    rgba(197, 255, 61, 0.05);
-  --r404-marquee-h: 24px;
+  --r404-marquee-h: 0px;
   --r404-snap:  cubic-bezier(.2, .9, .3, 1.4);
   --r404-glide: cubic-bezier(.2, .9, .3, 1);
 }
@@ -1136,7 +1140,7 @@
 html { scroll-behavior: smooth; }
 
 body {
-  padding-top: var(--r404-marquee-h);
+  padding-top: 0;
 }
 
 body::before {
@@ -1161,43 +1165,10 @@ body::after {
 }
 
 
-/* ─── 3. TOP MARQUEE STRIP ───────────────────────────────────────── */
+/* ─── 3. TOP MARQUEE STRIP — disabled ───────────────────────────── */
 
-.r404-marquee {
-  position: fixed; top: 0; left: 0; right: 0;
-  height: var(--r404-marquee-h);
-  background: var(--accent);
-  color: #000;
-  font-family: 'Space Mono', monospace;
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  white-space: nowrap;
-  z-index: 10000;
-  border-bottom: 2px solid #000;
-  cursor: default;
-}
-.r404-marquee-track {
-  display: inline-flex;
-  flex-shrink: 0;
-  white-space: nowrap;
-  animation: r404-marquee 38s linear infinite;
-  will-change: transform;
-}
-.r404-marquee:hover .r404-marquee-track {
-  animation-play-state: paused;
-}
-.r404-marquee-segment {
-  display: inline-block;
-  flex-shrink: 0;
-  padding-right: 36px;
-}
-@keyframes r404-marquee {
-  to { transform: translateX(-50%); }
-}
+.r404-marquee { display: none !important; }
+/* marquee subclasses removed — bar disabled */
 
 /* nav top offset removed - sidebar layout */
 
@@ -1216,7 +1187,7 @@ nav {
 .nav-section { }
 .nav-group-label { color: var(--muted) !important; }
 .nav-foot { border-top: 2px solid var(--accent) !important; }
-#binderSidebar { background: rgba(0,0,0,0.93) !important; border-bottom: 1.5px solid var(--accent) !important; box-shadow: 0 3px 0 rgba(197,255,61,.15) !important; }
+/* #binderSidebar — transparent floating icons, no background override needed */
 
 .nav-tab {
   border-left: 3px solid transparent !important;
@@ -1762,6 +1733,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 /* ── YTD chart wrapper ── */
 .ndash-ytd-wrap .dash-chart-section{margin-bottom:0;border:none;padding:0;background:transparent}
 .ndash-ytd-compact{padding:8px 10px!important}
+/* ── Drag handles ── */
+.ndash-drag-handle{cursor:grab;color:var(--border);font-size:14px;line-height:1;letter-spacing:-.5px;user-select:none;flex-shrink:0;padding:0 3px;transition:color .1s;margin-left:2px}
+.ndash-drag-handle:hover{color:var(--accent)}
+.ndash-drag-handle:active{cursor:grabbing}
+/* Dragging states */
+[data-panel-id].ndash-dragging{opacity:.3;outline:2px dashed var(--border)}
+[data-panel-id].ndash-drag-over{outline:2px solid var(--accent);outline-offset:-1px;box-shadow:0 0 0 1px var(--accent),3px 3px 0 #000}
+.ndash-main.ndash-col-over,.ndash-rail.ndash-col-over{outline:1.5px dashed var(--border);outline-offset:3px}
+/* Scan CTA wrapper (draggable) */
+.ndash-scan-wrap{border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important}
+.ndash-scan-wrap .ndash-panel-h{justify-content:flex-end;padding:0 2px 4px!important;min-height:0!important}
+/* Reset layout button in ribbon */
+.ndash-reset-stat{border-right:none!important;padding:8px 10px!important;justify-content:flex-end;align-items:flex-end}
+.ndash-reset-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:7.5px;letter-spacing:.1em;padding:4px 8px;cursor:pointer;text-transform:uppercase;transition:all .1s;white-space:nowrap}
+.ndash-reset-btn:hover{border-color:var(--accent);color:var(--accent)}
 /* ─── 23. SOCIAL FOOTER ──────────────────────────────────────────── */
 .social-footer {
   display: flex; align-items: center; justify-content: center;
@@ -5053,6 +5039,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`;
       };
 
+      const _dh = `<span class="ndash-drag-handle" title="Drag to move">⠿</span>`;
+
       const content = document.getElementById('dashboardContent');
       if (!content) return;
       content.innerHTML = `<div class="ndash-wrap">
@@ -5080,22 +5068,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <div class="ndash-stat-lbl">Net Gain</div>
             <div class="ndash-stat-val" style="color:${totalGain>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${gainPct !== null ? gainSign+'$'+Math.abs(totalGain).toLocaleString('en-US',{maximumFractionDigits:0}) : '—'}</div>
           </div>
+          <div class="ndash-stat ndash-reset-stat">
+            <button class="ndash-reset-btn" onclick="resetDashOrder()" title="Reset layout to default">↺ RESET LAYOUT</button>
+          </div>
         </div>
 
         <!-- ── Two-column grid ──────────────────────────── -->
         <div class="ndash-grid">
 
           <!-- Main column -->
-          <div class="ndash-main">
+          <div class="ndash-main" id="dashMain">
 
             <!-- My Binder top cards -->
-            <div class="ndash-panel">
+            <div class="ndash-panel" data-panel-id="binder">
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">
                   <div class="ndash-panel-title-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
                   My Binder
                 </div>
-                <div style="display:flex;gap:6px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  ${_dh}
                   <button class="ndash-panel-link" onclick="showPage('addCard');setMobileNav('addCard')">+ ADD</button>
                   <button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">VIEW ALL →</button>
                 </div>
@@ -5121,60 +5113,67 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>
 
-            <!-- Sub-row: Ghost Card Fund + Market Activity -->
-            <div class="ndash-subrow">
-              <!-- Ghost Card Fund -->
-              <div class="ndash-panel">
-                <div class="ndash-panel-h">
-                  <div class="ndash-panel-title">Ghost Card Fund</div>
+            <!-- Ghost Card Fund -->
+            <div class="ndash-panel" data-panel-id="ghost-fund">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Ghost Card Fund</div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  ${_dh}
                   ${ghostCards.length>1?`<button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">${ghostCards.length} CARDS</button>`:''}
                 </div>
-                <div class="ndash-panel-body">
-                  ${topGhost ? `<div class="ndash-fund-body">
-                    <div class="ndash-fund-card">
-                      ${topGhost.card_image_url?`<img src="${topGhost.card_image_url}" alt="">`:' ♡'}
-                    </div>
-                    <div class="ndash-fund-info">
-                      <div class="ndash-fund-name">${_escHtml((topGhost.card_name||'').slice(0,18))}</div>
-                      <div class="ndash-fund-meta">${_escHtml(topGhost.set_name||'Unknown Set')}</div>
-                      ${topGhost.savings_goal>0?`<div class="ndash-fund-target">$${topGhost.savings_goal.toFixed(2)}</div>
-                      <div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}%"></div></div>
-                      <div style="font-size:9px;color:var(--muted);margin-top:3px">${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}% · $${(topGhost.amount_saved||0).toFixed(2)} saved</div>`:'<div style="font-size:9px;color:var(--muted);margin-top:4px">No savings goal set</div>'}
-                    </div>
-                  </div>` : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">No wishlist cards yet</div>`}
-                </div>
               </div>
-              <!-- Market Activity -->
-              <div class="ndash-panel">
-                <div class="ndash-panel-h">
-                  <div class="ndash-panel-title">Price Movers</div>
+              <div class="ndash-panel-body">
+                ${topGhost ? `<div class="ndash-fund-body">
+                  <div class="ndash-fund-card">
+                    ${topGhost.card_image_url?`<img src="${topGhost.card_image_url}" alt="">`:' ♡'}
+                  </div>
+                  <div class="ndash-fund-info">
+                    <div class="ndash-fund-name">${_escHtml((topGhost.card_name||'').slice(0,18))}</div>
+                    <div class="ndash-fund-meta">${_escHtml(topGhost.set_name||'Unknown Set')}</div>
+                    ${topGhost.savings_goal>0?`<div class="ndash-fund-target">$${topGhost.savings_goal.toFixed(2)}</div>
+                    <div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}%"></div></div>
+                    <div style="font-size:9px;color:var(--muted);margin-top:3px">${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}% · $${(topGhost.amount_saved||0).toFixed(2)} saved</div>`:'<div style="font-size:9px;color:var(--muted);margin-top:4px">No savings goal set</div>'}
+                  </div>
+                </div>` : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">No wishlist cards yet</div>`}
+              </div>
+            </div>
+
+            <!-- Price Movers -->
+            <div class="ndash-panel" data-panel-id="price-movers">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Price Movers</div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  ${_dh}
                   <button class="ndash-panel-link" onclick="showPage('browse');setMobileNav('browse')">BROWSE →</button>
                 </div>
-                <div class="ndash-panel-body">
-                  ${movers.length>0 ? movers.map(c => {
-                    const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
-                    const up = Number(d)>=0;
-                    return `<div class="ndash-market-row" onclick="openBinderCardDetail('${c.id}')">
-                      <div class="ndash-market-thumb">${c.card_image_url?`<img src="${c.card_image_url}" alt="">`:''}</div>
-                      <div class="ndash-market-info">
-                        <div class="ndash-market-name">${_escHtml(c.card_name.slice(0,20))}</div>
-                        <div class="ndash-market-sub">$${(c.purchase_price||0).toFixed(2)} → $${(c.current_value||0).toFixed(2)}</div>
-                      </div>
-                      <div class="ndash-market-delta ${up?'up':'dn'}">${up?'+':''}${d}%</div>
-                    </div>`;
-                  }).join('') : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">Price data builds as cards are refreshed</div>`}
-                </div>
+              </div>
+              <div class="ndash-panel-body">
+                ${movers.length>0 ? movers.map(c => {
+                  const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
+                  const up = Number(d)>=0;
+                  return `<div class="ndash-market-row" onclick="openBinderCardDetail('${c.id}')">
+                    <div class="ndash-market-thumb">${c.card_image_url?`<img src="${c.card_image_url}" alt="">`:''}</div>
+                    <div class="ndash-market-info">
+                      <div class="ndash-market-name">${_escHtml(c.card_name.slice(0,20))}</div>
+                      <div class="ndash-market-sub">$${(c.purchase_price||0).toFixed(2)} → $${(c.current_value||0).toFixed(2)}</div>
+                    </div>
+                    <div class="ndash-market-delta ${up?'up':'dn'}">${up?'+':''}${d}%</div>
+                  </div>`;
+                }).join('') : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">Price data builds as cards are refreshed</div>`}
               </div>
             </div>
 
           </div><!-- /ndash-main -->
 
           <!-- Right Rail -->
-          <div class="ndash-rail">
+          <div class="ndash-rail" id="dashRail">
 
             <!-- Condition breakdown -->
-            <div class="ndash-panel">
-              <div class="ndash-panel-h"><div class="ndash-panel-title">Breakdown</div></div>
+            <div class="ndash-panel" data-panel-id="breakdown">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Breakdown</div>
+                ${_dh}
+              </div>
               <div class="ndash-panel-body">
                 ${Object.entries(condMap).length>0 ? Object.entries(condMap).map(([k,cnt]) => {
                   const col = condColors[k] || '#C5FF3D';
@@ -5194,8 +5193,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
 
             <!-- Value Summary -->
-            <div class="ndash-panel">
-              <div class="ndash-panel-h"><div class="ndash-panel-title">Value Summary</div></div>
+            <div class="ndash-panel" data-panel-id="value-summary">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Value Summary</div>
+                ${_dh}
+              </div>
               <div class="ndash-panel-body" style="display:grid;gap:7px">
                 <div class="ndash-sum-row"><div class="ndash-sum-l">Portfolio</div><div class="ndash-sum-r" style="color:var(--accent)">${totalValue>0?'$'+totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</div></div>
                 <div class="ndash-sum-row"><div class="ndash-sum-l">Cost Basis</div><div class="ndash-sum-r">$${totalCost.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
@@ -5206,14 +5208,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
 
             <!-- Scan CTA -->
-            <button class="ndash-scan-cta" onclick="showPage('addCard');setMobileNav('addCard')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
-              SCAN CARD
-            </button>
+            <div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-cta">
+              <div class="ndash-panel-h" style="border-bottom:none;background:transparent;padding:0">
+                ${_dh}
+              </div>
+              <button class="ndash-scan-cta" onclick="showPage('addCard');setMobileNav('addCard')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                SCAN CARD
+              </button>
+            </div>
 
             <!-- Alerts -->
-            <div class="ndash-panel">
-              <div class="ndash-panel-h"><div class="ndash-panel-title">Alerts</div>${dashAlerts.length>0?`<span style="background:var(--accent);color:#000;font-family:'Press Start 2P',monospace;font-size:7px;padding:3px 6px">${Math.min(dashAlerts.length,9)}</span>`:''}</div>
+            <div class="ndash-panel" data-panel-id="alerts">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">
+                  Alerts
+                  ${dashAlerts.length>0?`<span style="background:var(--accent);color:#000;font-family:'Press Start 2P',monospace;font-size:7px;padding:3px 6px;margin-left:6px">${Math.min(dashAlerts.length,9)}</span>`:''}
+                </div>
+                ${_dh}
+              </div>
               <div class="ndash-panel-body">
                 ${dashAlerts.length>0 ? dashAlerts.slice(0,6).map(a=>`
                 <div class="ndash-alert-row">
@@ -5226,10 +5239,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>
 
-            ${tierAtLeast('shop') ? `<div class="ndash-panel">
+            ${tierAtLeast('shop') ? `<div class="ndash-panel" data-panel-id="storefront">
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Storefront</div>
-                <button class="ndash-panel-link" onclick="previewStorefront()">PREVIEW →</button>
+                <div style="display:flex;align-items:center;gap:6px">
+                  ${_dh}
+                  <button class="ndash-panel-link" onclick="previewStorefront()">PREVIEW →</button>
+                </div>
               </div>
               <div class="ndash-panel-body" style="display:grid;gap:7px">
                 <div class="ndash-sum-row"><div class="ndash-sum-l">Listings</div><div class="ndash-sum-r">${activeSales}</div></div>
@@ -5242,17 +5258,125 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>` : ''}
 
-            <!-- Portfolio Value chart — compact, lives beneath storefront -->
-            ${ytdHtml ? `<div class="ndash-panel ndash-ytd-wrap">
-              <div class="ndash-panel-h"><div class="ndash-panel-title">Portfolio Value</div></div>
+            <!-- Portfolio Value chart -->
+            ${ytdHtml ? `<div class="ndash-panel ndash-ytd-wrap" data-panel-id="portfolio">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Portfolio Value</div>
+                ${_dh}
+              </div>
               <div class="ndash-panel-body ndash-ytd-compact">${ytdHtml}</div>
             </div>` : ''}
 
           </div><!-- /ndash-rail -->
         </div><!-- /ndash-grid -->
       </div><!-- /ndash-wrap -->`;
-      // Draw YTD SVG line chart after innerHTML is set
+      // Restore saved layout order, then wire drag-and-drop
+      loadDashOrder();
+      initDashDrag();
+      // Draw YTD SVG line chart after DOM is settled
       drawYtdChart(snapshots, totalValue);
+    }
+
+    // ── Dashboard drag-and-drop ──────────────────────────────────────────────
+    var _dashDragSrc = null;
+
+    function initDashDrag() {
+      var panels = document.querySelectorAll('[data-panel-id]');
+      panels.forEach(function(panel) {
+        panel.setAttribute('draggable', 'false'); // only activated via handle
+        var handle = panel.querySelector('.ndash-drag-handle');
+        if (handle) {
+          handle.addEventListener('mousedown', function() {
+            panel.setAttribute('draggable', 'true');
+          });
+        }
+        panel.addEventListener('dragstart', function(e) {
+          _dashDragSrc = panel;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', panel.dataset.panelId);
+          setTimeout(function() { panel.classList.add('ndash-dragging'); }, 0);
+        });
+        panel.addEventListener('dragend', function() {
+          panel.classList.remove('ndash-dragging');
+          panel.setAttribute('draggable', 'false');
+          document.querySelectorAll('[data-panel-id]').forEach(function(p) { p.classList.remove('ndash-drag-over'); });
+          document.querySelectorAll('.ndash-main,.ndash-rail').forEach(function(c) { c.classList.remove('ndash-col-over'); });
+          _dashDragSrc = null;
+          saveDashOrder();
+        });
+        panel.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          if (!_dashDragSrc || _dashDragSrc === panel) return;
+          document.querySelectorAll('[data-panel-id]').forEach(function(p) { p.classList.remove('ndash-drag-over'); });
+          panel.classList.add('ndash-drag-over');
+        });
+        panel.addEventListener('dragleave', function(e) {
+          if (!panel.contains(e.relatedTarget)) panel.classList.remove('ndash-drag-over');
+        });
+        panel.addEventListener('drop', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          panel.classList.remove('ndash-drag-over');
+          if (!_dashDragSrc || _dashDragSrc === panel) return;
+          var dstParent = panel.parentElement;
+          var rect = panel.getBoundingClientRect();
+          var midY = rect.top + rect.height / 2;
+          if (e.clientY < midY) {
+            dstParent.insertBefore(_dashDragSrc, panel);
+          } else {
+            dstParent.insertBefore(_dashDragSrc, panel.nextSibling);
+          }
+        });
+      });
+
+      // Allow dropping onto the column containers (append to end of column)
+      document.querySelectorAll('.ndash-main, .ndash-rail').forEach(function(col) {
+        col.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          col.classList.add('ndash-col-over');
+        });
+        col.addEventListener('dragleave', function(e) {
+          if (!col.contains(e.relatedTarget)) col.classList.remove('ndash-col-over');
+        });
+        col.addEventListener('drop', function(e) {
+          e.preventDefault();
+          col.classList.remove('ndash-col-over');
+          if (!_dashDragSrc) return;
+          // Only act if dropped directly on column, not a child panel (child panels call stopPropagation)
+          col.appendChild(_dashDragSrc);
+        });
+      });
+    }
+
+    function saveDashOrder() {
+      try {
+        var main = [...document.querySelectorAll('.ndash-main [data-panel-id]')].map(function(p) { return p.dataset.panelId; });
+        var rail = [...document.querySelectorAll('.ndash-rail [data-panel-id]')].map(function(p) { return p.dataset.panelId; });
+        localStorage.setItem('pb_dash_order_v1', JSON.stringify({ main: main, rail: rail }));
+      } catch(_) {}
+    }
+
+    function loadDashOrder() {
+      try {
+        var raw = localStorage.getItem('pb_dash_order_v1');
+        if (!raw) return;
+        var saved = JSON.parse(raw);
+        var mainCol = document.getElementById('dashMain');
+        var railCol = document.getElementById('dashRail');
+        if (!mainCol || !railCol) return;
+        var allIds = (saved.main || []).concat(saved.rail || []);
+        allIds.forEach(function(id) {
+          var panel = document.querySelector('[data-panel-id="' + id + '"]');
+          if (!panel) return;
+          var col = (saved.rail || []).includes(id) ? railCol : mainCol;
+          col.appendChild(panel);
+        });
+      } catch(_) {}
+    }
+
+    function resetDashOrder() {
+      try { localStorage.removeItem('pb_dash_order_v1'); } catch(_) {}
+      renderDashboard();
     }
 
     // ── YTD Portfolio Chart ──────────────────────────────────────────────────
