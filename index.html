@@ -5009,7 +5009,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const movers = ownedCards
         .filter(c => c.current_value && c.purchase_price && Math.abs(c.current_value - c.purchase_price) > 0.01)
         .sort((a,b) => Math.abs((b.current_value-b.purchase_price)/b.purchase_price) - Math.abs((a.current_value-a.purchase_price)/a.purchase_price))
-        .slice(0,4);
+        .slice(0,5);
       // Condition/grade breakdown
       const condMap = {};
       ownedCards.forEach(c => {
@@ -5068,15 +5068,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <div class="ndash-stat-lbl">Net Gain</div>
             <div class="ndash-stat-val" style="color:${totalGain>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${gainPct !== null ? gainSign+'$'+Math.abs(totalGain).toLocaleString('en-US',{maximumFractionDigits:0}) : '—'}</div>
           </div>
-          <div class="ndash-stat ndash-reset-stat">
-            <button class="ndash-reset-btn" onclick="resetDashOrder()" title="Reset layout to default">↺ RESET LAYOUT</button>
-          </div>
         </div>
 
         <!-- ── Two-column grid ──────────────────────────── -->
         <div class="ndash-grid">
 
-          <!-- Main column -->
+          <!-- Main column: binder → price-movers (default layout) -->
           <div class="ndash-main" id="dashMain">
 
             <!-- My Binder top cards -->
@@ -5113,31 +5110,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>
 
-            <!-- Ghost Card Fund -->
-            <div class="ndash-panel" data-panel-id="ghost-fund">
-              <div class="ndash-panel-h">
-                <div class="ndash-panel-title">Ghost Card Fund</div>
-                <div style="display:flex;align-items:center;gap:6px">
-                  ${_dh}
-                  ${ghostCards.length>1?`<button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">${ghostCards.length} CARDS</button>`:''}
-                </div>
-              </div>
-              <div class="ndash-panel-body">
-                ${topGhost ? `<div class="ndash-fund-body">
-                  <div class="ndash-fund-card">
-                    ${topGhost.card_image_url?`<img src="${topGhost.card_image_url}" alt="">`:' ♡'}
-                  </div>
-                  <div class="ndash-fund-info">
-                    <div class="ndash-fund-name">${_escHtml((topGhost.card_name||'').slice(0,18))}</div>
-                    <div class="ndash-fund-meta">${_escHtml(topGhost.set_name||'Unknown Set')}</div>
-                    ${topGhost.savings_goal>0?`<div class="ndash-fund-target">$${topGhost.savings_goal.toFixed(2)}</div>
-                    <div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}%"></div></div>
-                    <div style="font-size:9px;color:var(--muted);margin-top:3px">${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}% · $${(topGhost.amount_saved||0).toFixed(2)} saved</div>`:'<div style="font-size:9px;color:var(--muted);margin-top:4px">No savings goal set</div>'}
-                  </div>
-                </div>` : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">No wishlist cards yet</div>`}
-              </div>
-            </div>
-
             <!-- Price Movers -->
             <div class="ndash-panel" data-panel-id="price-movers">
               <div class="ndash-panel-h">
@@ -5165,47 +5137,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
           </div><!-- /ndash-main -->
 
-          <!-- Right Rail -->
+          <!-- Right Rail: scan-cta → alerts → storefront → portfolio → ghost-fund → breakdown → value-summary -->
           <div class="ndash-rail" id="dashRail">
-
-            <!-- Condition breakdown -->
-            <div class="ndash-panel" data-panel-id="breakdown">
-              <div class="ndash-panel-h">
-                <div class="ndash-panel-title">Breakdown</div>
-                ${_dh}
-              </div>
-              <div class="ndash-panel-body">
-                ${Object.entries(condMap).length>0 ? Object.entries(condMap).map(([k,cnt]) => {
-                  const col = condColors[k] || '#C5FF3D';
-                  return `<div class="ndash-bk-row">
-                    <div class="ndash-bk-l">
-                      <div class="ndash-bk-dot" style="background:${col};box-shadow:0 0 5px ${col}"></div>
-                      <span>${_escHtml(k)}</span>
-                    </div>
-                    <div class="ndash-bk-val">${cnt}</div>
-                  </div>`;
-                }).join('') : '<div style="color:var(--muted);font-size:10px;text-align:center;padding:10px 0">No cards yet</div>'}
-                ${ghostCards.length>0?`<div class="ndash-bk-row">
-                  <div class="ndash-bk-l"><div class="ndash-bk-dot" style="background:#4DD0E1;box-shadow:0 0 5px #4DD0E1"></div><span>Ghost</span></div>
-                  <div class="ndash-bk-val">${ghostCards.length}</div>
-                </div>`:''}
-              </div>
-            </div>
-
-            <!-- Value Summary -->
-            <div class="ndash-panel" data-panel-id="value-summary">
-              <div class="ndash-panel-h">
-                <div class="ndash-panel-title">Value Summary</div>
-                ${_dh}
-              </div>
-              <div class="ndash-panel-body" style="display:grid;gap:7px">
-                <div class="ndash-sum-row"><div class="ndash-sum-l">Portfolio</div><div class="ndash-sum-r" style="color:var(--accent)">${totalValue>0?'$'+totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</div></div>
-                <div class="ndash-sum-row"><div class="ndash-sum-l">Cost Basis</div><div class="ndash-sum-r">$${totalCost.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
-                <div class="ndash-sum-row"><div class="ndash-sum-l">Net Gain</div><div class="ndash-sum-r" style="color:${totalGain>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${gainSign}$${Math.abs(totalGain).toFixed(2)}</div></div>
-                <div class="ndash-sum-row"><div class="ndash-sum-l">Avg Card</div><div class="ndash-sum-r">${avgVal>0?'$'+avgVal.toFixed(2):'—'}</div></div>
-                <div class="ndash-sum-row"><div class="ndash-sum-l">Total Earned</div><div class="ndash-sum-r">${totalEarned>0?'$'+totalEarned.toFixed(2):'—'}</div></div>
-              </div>
-            </div>
 
             <!-- Scan CTA -->
             <div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-cta">
@@ -5267,8 +5200,78 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <div class="ndash-panel-body ndash-ytd-compact">${ytdHtml}</div>
             </div>` : ''}
 
+            <!-- Ghost Card Fund -->
+            <div class="ndash-panel" data-panel-id="ghost-fund">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Ghost Card Fund</div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  ${_dh}
+                  ${ghostCards.length>1?`<button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">${ghostCards.length} CARDS</button>`:''}
+                </div>
+              </div>
+              <div class="ndash-panel-body">
+                ${topGhost ? `<div class="ndash-fund-body">
+                  <div class="ndash-fund-card">
+                    ${topGhost.card_image_url?`<img src="${topGhost.card_image_url}" alt="">`:' ♡'}
+                  </div>
+                  <div class="ndash-fund-info">
+                    <div class="ndash-fund-name">${_escHtml((topGhost.card_name||'').slice(0,18))}</div>
+                    <div class="ndash-fund-meta">${_escHtml(topGhost.set_name||'Unknown Set')}</div>
+                    ${topGhost.savings_goal>0?`<div class="ndash-fund-target">$${topGhost.savings_goal.toFixed(2)}</div>
+                    <div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}%"></div></div>
+                    <div style="font-size:9px;color:var(--muted);margin-top:3px">${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}% · $${(topGhost.amount_saved||0).toFixed(2)} saved</div>`:'<div style="font-size:9px;color:var(--muted);margin-top:4px">No savings goal set</div>'}
+                  </div>
+                </div>` : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">No wishlist cards yet</div>`}
+              </div>
+            </div>
+
+            <!-- Condition Breakdown -->
+            <div class="ndash-panel" data-panel-id="breakdown">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Breakdown</div>
+                ${_dh}
+              </div>
+              <div class="ndash-panel-body">
+                ${Object.entries(condMap).length>0 ? Object.entries(condMap).map(([k,cnt]) => {
+                  const col = condColors[k] || '#C5FF3D';
+                  return `<div class="ndash-bk-row">
+                    <div class="ndash-bk-l">
+                      <div class="ndash-bk-dot" style="background:${col};box-shadow:0 0 5px ${col}"></div>
+                      <span>${_escHtml(k)}</span>
+                    </div>
+                    <div class="ndash-bk-val">${cnt}</div>
+                  </div>`;
+                }).join('') : '<div style="color:var(--muted);font-size:10px;text-align:center;padding:10px 0">No cards yet</div>'}
+                ${ghostCards.length>0?`<div class="ndash-bk-row">
+                  <div class="ndash-bk-l"><div class="ndash-bk-dot" style="background:#4DD0E1;box-shadow:0 0 5px #4DD0E1"></div><span>Ghost</span></div>
+                  <div class="ndash-bk-val">${ghostCards.length}</div>
+                </div>`:''}
+              </div>
+            </div>
+
+            <!-- Value Summary -->
+            <div class="ndash-panel" data-panel-id="value-summary">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Value Summary</div>
+                ${_dh}
+              </div>
+              <div class="ndash-panel-body" style="display:grid;gap:7px">
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Portfolio</div><div class="ndash-sum-r" style="color:var(--accent)">${totalValue>0?'$'+totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Cost Basis</div><div class="ndash-sum-r">$${totalCost.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Net Gain</div><div class="ndash-sum-r" style="color:${totalGain>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${gainSign}$${Math.abs(totalGain).toFixed(2)}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Avg Card</div><div class="ndash-sum-r">${avgVal>0?'$'+avgVal.toFixed(2):'—'}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Total Earned</div><div class="ndash-sum-r">${totalEarned>0?'$'+totalEarned.toFixed(2):'—'}</div></div>
+              </div>
+            </div>
+
           </div><!-- /ndash-rail -->
         </div><!-- /ndash-grid -->
+
+        <!-- Reset layout — bottom right -->
+        <div style="display:flex;justify-content:flex-end;margin-top:16px;padding-bottom:8px">
+          <button class="ndash-reset-btn" onclick="resetDashOrder()">↺ RESET LAYOUT</button>
+        </div>
+
       </div><!-- /ndash-wrap -->`;
       // Restore saved layout order, then wire drag-and-drop
       loadDashOrder();
