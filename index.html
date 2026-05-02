@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="PathBinder" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Space+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
   <script>
     function _loadJsPDF(cb) {
@@ -1630,6 +1630,100 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .badge-unlock-toast .but-label { font-size: 6px; color: #666; letter-spacing: .15em; }
 .badge-unlock-toast .but-name  { font-size: 9px; color: #C5FF3D; }
 
+/* ─── 22b. NEW DASHBOARD ─────────────────────────────────────────── */
+.ndash-wrap{display:flex;flex-direction:column;gap:12px}
+/* Stat ribbon */
+.ndash-ribbon{display:grid;grid-template-columns:repeat(5,1fr);border:1.5px solid var(--border);background:linear-gradient(180deg,var(--surface2),var(--surface));box-shadow:3px 3px 0 #000;overflow:hidden}
+@media(max-width:900px){.ndash-ribbon{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:540px){.ndash-ribbon{grid-template-columns:repeat(2,1fr)}}
+.ndash-stat{padding:10px 14px;border-right:1.5px solid var(--border);display:flex;flex-direction:column;gap:4px}
+.ndash-stat:last-child{border-right:none}
+.ndash-stat-lbl{font-family:'Press Start 2P',monospace;font-size:6.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.ndash-stat-val{font-family:'Orbitron',monospace;font-weight:800;font-size:17px;color:var(--text);letter-spacing:.01em;line-height:1}
+.ndash-stat.primary .ndash-stat-val{color:var(--accent);text-shadow:0 0 18px rgba(197,255,61,.4)}
+.ndash-stat-delta{font-size:9px;letter-spacing:.06em;color:var(--accent)}
+.ndash-stat-delta.neg{color:var(--red,#FF4D3D)}
+/* Two-column grid */
+.ndash-grid{display:grid;grid-template-columns:1fr 272px;gap:12px}
+@media(max-width:1100px){.ndash-grid{grid-template-columns:1fr}}
+.ndash-main,.ndash-rail{display:flex;flex-direction:column;gap:12px}
+/* Panel */
+.ndash-panel{background:var(--surface);border:1.5px solid var(--border);box-shadow:3px 3px 0 #000}
+.ndash-panel-h{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1.5px solid var(--border);background:linear-gradient(180deg,var(--surface2),var(--surface))}
+.ndash-panel-title{font-family:'Orbitron',monospace;font-weight:800;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
+.ndash-panel-title-ico{width:20px;height:20px;background:var(--surface2);color:var(--accent);display:grid;place-items:center;flex-shrink:0}
+.ndash-panel-title-ico svg{width:13px;height:13px}
+.ndash-panel-link{font-size:9px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;border:1px solid transparent;padding:3px 7px;transition:border-color .1s;cursor:pointer;background:none;font-family:inherit}
+.ndash-panel-link:hover{border-color:var(--accent)}
+.ndash-panel-body{padding:10px 12px}
+/* Card grid — top picks */
+.ndash-card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media(max-width:700px){.ndash-card-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:480px){.ndash-card-grid{grid-template-columns:repeat(2,1fr)}}
+.ndash-tcard{background:var(--bg);border:1.5px solid var(--border);aspect-ratio:.72;position:relative;overflow:hidden;cursor:pointer;transition:border-color .14s,transform .14s,box-shadow .14s;display:flex;flex-direction:column}
+.ndash-tcard:hover{border-color:var(--accent);transform:translate(-1px,-2px);box-shadow:0 6px 16px rgba(197,255,61,.2)}
+.ndash-tcard-art{flex:1;position:relative;overflow:hidden}
+.ndash-tcard-art img{width:100%;height:100%;object-fit:cover;display:block}
+.ndash-tcard-art-ph{width:100%;height:100%;background:var(--surface2);display:grid;place-items:center;font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);padding:4px;text-align:center}
+.ndash-tcard-rank{position:absolute;top:5px;left:5px;background:rgba(0,0,0,.85);color:var(--accent);font-family:'Press Start 2P',monospace;font-size:7px;padding:3px 5px;border:1px solid var(--accent)}
+.ndash-tcard-foot{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,.95),transparent);padding:16px 6px 5px;z-index:2}
+.ndash-tcard-name{font-family:'Press Start 2P',monospace;font-size:6px;letter-spacing:.04em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ndash-tcard-val{font-family:'Orbitron',monospace;font-weight:700;font-size:10px;color:var(--accent);letter-spacing:.02em;margin-top:2px}
+/* Sub-row */
+.ndash-subrow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.ndash-subrow{grid-template-columns:1fr}}
+/* Ghost fund widget */
+.ndash-fund-body{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
+.ndash-fund-card{width:52px;aspect-ratio:.72;border:1.5px solid var(--accent);background:var(--surface2);position:relative;overflow:hidden;box-shadow:2px 2px 0 #000;display:grid;place-items:center;font-size:1.2rem;color:var(--accent)}
+.ndash-fund-card img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.ndash-fund-info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ndash-fund-name{font-family:'Orbitron',monospace;font-weight:800;font-size:9.5px;color:var(--text);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ndash-fund-meta{font-size:9px;color:var(--muted);letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ndash-fund-target{font-family:'Orbitron',monospace;font-weight:800;font-size:16px;color:var(--accent)}
+.ndash-fund-bar{height:10px;background:var(--surface2);border:1.5px solid var(--border);position:relative;overflow:hidden;margin-top:2px}
+.ndash-fund-bar-fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--accent),#9BFF00);box-shadow:0 0 8px var(--accent)}
+/* Market movers */
+.ndash-market-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--border);cursor:pointer}
+.ndash-market-row:last-child{border-bottom:none;padding-bottom:0}
+.ndash-market-row:first-child{padding-top:0}
+.ndash-market-thumb{width:28px;height:38px;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);overflow:hidden}
+.ndash-market-thumb img{width:100%;height:100%;object-fit:cover}
+.ndash-market-info{flex:1;min-width:0}
+.ndash-market-name{font-size:10px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ndash-market-sub{font-size:9px;color:var(--muted)}
+.ndash-market-delta{font-family:'Orbitron',monospace;font-weight:700;font-size:11px;flex-shrink:0}
+.ndash-market-delta.up{color:var(--accent)}
+.ndash-market-delta.dn{color:var(--red,#FF4D3D)}
+/* Rail: breakdown rows */
+.ndash-bk-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--border)}
+.ndash-bk-row:last-child{border-bottom:none;padding-bottom:0}
+.ndash-bk-row:first-child{padding-top:0}
+.ndash-bk-l{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text)}
+.ndash-bk-dot{width:8px;height:8px;flex-shrink:0}
+.ndash-bk-val{font-family:'Orbitron',monospace;font-weight:700;font-size:13px;color:var(--text)}
+/* Rail: summary rows */
+.ndash-sum-row{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:5px;border-bottom:1px dashed var(--border)}
+.ndash-sum-row:last-child{border-bottom:none;padding-bottom:0}
+.ndash-sum-l{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.ndash-sum-r{font-family:'Orbitron',monospace;font-weight:700;font-size:13px;color:var(--text)}
+/* Scan CTA */
+.ndash-scan-cta{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:13px;background:var(--accent);color:#000;font-family:'Orbitron',monospace;font-weight:800;font-size:12px;letter-spacing:.18em;text-transform:uppercase;box-shadow:4px 4px 0 #000,0 0 20px rgba(197,255,61,.3);border:none;cursor:pointer;position:relative;overflow:hidden;transition:transform .12s,box-shadow .12s}
+.ndash-scan-cta::before{content:'';position:absolute;inset:-1px;border:2px dashed rgba(0,0,0,.4);pointer-events:none}
+.ndash-scan-cta:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000,0 0 30px rgba(197,255,61,.5)}
+.ndash-scan-cta svg{width:18px;height:18px;flex-shrink:0}
+/* Alert rows */
+.ndash-alert-row{display:flex;gap:9px;padding:6px 0;border-bottom:1px dashed var(--border);align-items:flex-start}
+.ndash-alert-row:last-child{border-bottom:none;padding-bottom:0}
+.ndash-alert-row:first-child{padding-top:0}
+.ndash-alert-ico{width:22px;height:22px;flex-shrink:0;background:var(--surface2);display:grid;place-items:center;color:var(--accent);margin-top:1px}
+.ndash-alert-ico svg{width:12px;height:12px}
+.ndash-alert-ico.warn{color:var(--warn,#FFB020)}
+.ndash-alert-ico.info{color:var(--teal,#4DD0E1)}
+.ndash-alert-body{flex:1;min-width:0}
+.ndash-alert-title{font-size:11px;color:var(--text);letter-spacing:.03em;line-height:1.4}
+.ndash-alert-sub{font-size:9.5px;color:var(--muted);margin-top:1px;letter-spacing:.03em}
+/* YTD chart wrapper in new panel */
+.ndash-ytd-wrap .dash-chart-section{margin-bottom:0;border:none;padding:0;background:transparent}
 /* ─── 23. SOCIAL FOOTER ──────────────────────────────────────────── */
 .social-footer {
   display: flex; align-items: center; justify-content: center;
@@ -4820,143 +4914,242 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Price alerts for ghost cards
       const alertsHtml = buildPriceAlerts(ghostCards);
 
+      // ── New dashboard data prep ──────────────────────────────────────────
+      const top8 = [...ownedCards]
+        .sort((a,b) => ((b.current_value||b.purchase_price||0)*(b.quantity||1)) - ((a.current_value||a.purchase_price||0)*(a.quantity||1)))
+        .slice(0,8);
+      const topGhost = [...ghostCards].sort((a,b) => (b.savings_goal||0)-(a.savings_goal||0))[0] || null;
+      const movers = ownedCards
+        .filter(c => c.current_value && c.purchase_price && Math.abs(c.current_value - c.purchase_price) > 0.01)
+        .sort((a,b) => Math.abs((b.current_value-b.purchase_price)/b.purchase_price) - Math.abs((a.current_value-a.purchase_price)/a.purchase_price))
+        .slice(0,4);
+      // Condition/grade breakdown
+      const condMap = {};
+      ownedCards.forEach(c => {
+        const k = (c.condition && c.condition !== 'raw') ? c.condition.toUpperCase() : 'Raw';
+        if (!condMap[k]) condMap[k] = 0;
+        condMap[k] += (c.quantity||1);
+      });
+      const condColors = {Raw:'#C5FF3D',NM:'#4DD0E1','NEAR MINT':'#4DD0E1',LP:'#B388FF',MP:'#FFB020',HP:'var(--red,#FF4D3D)',PSA:'#FFD23F',BGS:'#B388FF',CGC:'#4DD0E1'};
+      const avgVal = ownedCards.length > 0 ? totalValue / ownedCards.length : 0;
+      const totalCards = ownedCards.reduce((s,c)=>s+(c.quantity||1),0);
+      // Build alert items
+      const dashAlerts = [];
+      if (pendingPayouts > 0) dashAlerts.push({ico:'warn',title:`${pendingPayouts} pending payout${pendingPayouts>1?'s':''}`,sub:'Platform payouts awaiting processing'});
+      movers.slice(0,2).forEach(c => {
+        const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
+        const up = Number(d) >= 0;
+        dashAlerts.push({ico:up?'accent':'warn',title:c.card_name,sub:`Price ${up?'↑':'↓'} ${Math.abs(d)}% vs purchase`,delta:(up?'+':'')+d+'%',up});
+      });
+      ghostCards.slice(0,3).forEach(c => {
+        const pct = c.savings_goal > 0 ? ((c.amount_saved||0)/c.savings_goal*100).toFixed(0) : null;
+        dashAlerts.push({ico:'info',title:c.card_name,sub:pct ? `${pct}% saved toward goal` : 'Wishlist card'});
+      });
+
+      const _ico = (type) => {
+        if (type==='warn')   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+        if (type==='info')   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>`;
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`;
+      };
+
       const content = document.getElementById('dashboardContent');
       if (!content) return;
-      content.innerHTML = `
-        ${alertsHtml}
+      content.innerHTML = `<div class="ndash-wrap">
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;margin-bottom:24px">
-          <div class="coll-stat-box" style="border-color:var(--accent)"><div class="coll-stat-label" style="color:var(--accent)">Binder Value</div><div class="coll-stat-value">${totalValue > 0 ? '$' + totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Net Gain/Loss</div><div class="coll-stat-value ${totalGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}">${gainPct !== null ? gainSign + '$' + Math.abs(totalGain).toFixed(2) : '—'}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Active Listings</div><div class="coll-stat-value">${activeSales}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Total Earned</div><div class="coll-stat-value">${totalEarned > 0 ? '$'+totalEarned.toFixed(2) : '—'}</div></div>
-          ${pendingPayouts > 0 ? `<div class="coll-stat-box" style="border-color:var(--red)"><div class="coll-stat-label" style="color:var(--red)">Pending Payouts</div><div class="coll-stat-value">${pendingPayouts}</div></div>` : ''}
+        <!-- ── Stat Ribbon ───────────────────────────────── -->
+        <div class="ndash-ribbon">
+          <div class="ndash-stat primary">
+            <div class="ndash-stat-lbl">Collection Value</div>
+            <div class="ndash-stat-val">${totalValue > 0 ? '$'+totalValue.toLocaleString('en-US',{maximumFractionDigits:0}) : '$0'}</div>
+            ${gainPct !== null ? `<div class="ndash-stat-delta ${totalGain<0?'neg':''}">${gainSign}${gainPct}% all time</div>` : ''}
+          </div>
+          <div class="ndash-stat">
+            <div class="ndash-stat-lbl">Total Cards</div>
+            <div class="ndash-stat-val">${totalCards.toLocaleString()}</div>
+          </div>
+          <div class="ndash-stat">
+            <div class="ndash-stat-lbl">Ghost Cards</div>
+            <div class="ndash-stat-val">${ghostCards.length}</div>
+          </div>
+          <div class="ndash-stat">
+            <div class="ndash-stat-lbl">Listings</div>
+            <div class="ndash-stat-val">${activeSales}</div>
+          </div>
+          <div class="ndash-stat">
+            <div class="ndash-stat-lbl">Net Gain</div>
+            <div class="ndash-stat-val" style="color:${totalGain>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${gainPct !== null ? gainSign+'$'+Math.abs(totalGain).toLocaleString('en-US',{maximumFractionDigits:0}) : '—'}</div>
+          </div>
         </div>
 
-        ${ytdHtml}
+        <!-- ── Two-column grid ──────────────────────────── -->
+        <div class="ndash-grid">
 
-        ${top5.length > 0 ? `
-        <div style="margin:24px 0 16px">
-          <div style="font-size:.75rem;color:var(--accent);margin-bottom:12px;letter-spacing:.08em">Top 5 Most Valuable</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">
-            ${top5.map((item, i) => {
-              const v = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
-              const isGraded = item.condition && item.condition !== 'raw';
-              const condLabel = isGraded
-                ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
-                : 'Raw';
-              const rankColors = ['var(--gold)','#c0c0c0','#cd7f32','var(--muted)','var(--muted)'];
-              const medals = ['#1','#2','#3','#4','#5'];
-              return `<div class="binder-card" onclick="openBinderCardDetail('${item.id}')" style="cursor:pointer">
-                <div class="binder-card-img-wrap">
-                  ${item.card_image_url ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy">` : `<div class="binder-card-placeholder">${medals[i]}</div>`}
-                  <span style="position:absolute;top:4px;left:4px;background:${rankColors[i]};color:var(--surface);font-size:.6rem;font-weight:700;padding:2px 5px">${medals[i]}</span>
-                  <span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="position:absolute;bottom:4px;right:4px;font-size:.5rem;padding:1px 4px">${condLabel}</span>
+          <!-- Main column -->
+          <div class="ndash-main">
+
+            <!-- My Binder top cards -->
+            <div class="ndash-panel">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">
+                  <div class="ndash-panel-title-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+                  My Binder
                 </div>
-                <div class="binder-card-info">
-                  <div class="binder-card-name">${item.card_name.length > 16 ? item.card_name.slice(0,15)+'…' : item.card_name}</div>
-                  <div class="binder-card-value">${v > 0 ? '$' + v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</div>
+                <div style="display:flex;gap:6px">
+                  <button class="ndash-panel-link" onclick="showPage('addCard');setMobileNav('addCard')">+ ADD</button>
+                  <button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">VIEW ALL →</button>
                 </div>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>` : ''}
-
-        ${moversHtml}
-
-        ${ghostCards.length > 0 ? `
-        <div class="dash-chart-section" style="border-color:rgba(0,204,255,.25);margin-top:8px">
-          <div style="font-size:.75rem;color:var(--teal);margin-bottom:14px;letter-spacing:.08em">Wishlist Goals (${ghostCards.length})</div>
-          ${ghostCards.map(c => {
-            const goal   = c.savings_goal || 0;
-            const saved  = c.amount_saved || 0;
-            const pct    = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
-            const name   = c.card_name.length > 22 ? c.card_name.slice(0, 21) + '…' : c.card_name;
-            return `<div style="margin-bottom:14px;cursor:pointer" onclick="openBinderCardDetail('${c.id}')">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <span style="font-size:.72rem;color:var(--text)">${name}</span>
-                <span style="font-size:.68rem;color:var(--teal)">${goal > 0 ? '$' + saved.toFixed(0) + ' / $' + goal.toFixed(0) : 'No goal set'}</span>
               </div>
-              <div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${goal > 0 ? pct : 0}%"></div></div>
-              ${goal > 0 ? `<div style="font-size:.62rem;color:var(--muted);margin-top:2px">${pct}% saved${Number(pct) >= 100 ? ' — Ready to buy! ✓' : ''}</div>` : ''}
-            </div>`;
-          }).join('')}
-        </div>` : ''}
+              <div class="ndash-panel-body">
+                ${top8.length > 0 ? `<div class="ndash-card-grid">
+                  ${top8.map((item,i) => {
+                    const v = (item.current_value||item.purchase_price||0)*(item.quantity||1);
+                    return `<div class="ndash-tcard" onclick="openBinderCardDetail('${item.id}')">
+                      <div class="ndash-tcard-art">
+                        ${item.card_image_url
+                          ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy">`
+                          : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
+                        ${i<3?`<div class="ndash-tcard-rank">#${i+1}</div>`:''}
+                      </div>
+                      <div class="ndash-tcard-foot">
+                        <div class="ndash-tcard-name">${_escHtml(item.card_name.slice(0,16))}</div>
+                        ${v>0?`<div class="ndash-tcard-val">$${v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
+                      </div>
+                    </div>`;
+                  }).join('')}
+                </div>` : `<div style="text-align:center;padding:32px;color:var(--muted);font-size:.8rem">No cards yet — add your first card to get started</div>`}
+              </div>
+            </div>
 
-        ${soldOffline.length > 0 ? `
-        <div class="dash-chart-section" style="border-color:rgba(57,255,20,.25);margin-bottom:16px">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:.75rem;color:var(--green);letter-spacing:.08em">Sales Summary</div>
-            <button onclick="showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('salesArchive'),80)" style="background:transparent;border:none;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">→ View Archive</button>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:10px">
-            <div class="coll-stat-box"><div class="coll-stat-label">Offline Sales</div><div class="coll-stat-value">${soldOffline.length}</div></div>
-            <div class="coll-stat-box"><div class="coll-stat-label">Revenue</div><div class="coll-stat-value" style="color:var(--green)">$${soldOffline.reduce((s,c)=>s+(c.offline_sale_price||0),0).toFixed(2)}</div></div>
-            <div class="coll-stat-box"><div class="coll-stat-label">Profit</div><div class="coll-stat-value" style="color:var(--green)">$${(soldOffline.reduce((s,c)=>s+(c.offline_sale_price||0),0)-soldOffline.reduce((s,c)=>s+(c.purchase_price||0),0)).toFixed(2)}</div></div>
-          </div>
-        </div>` : ''}
+            <!-- YTD chart panel -->
+            ${ytdHtml ? `<div class="ndash-panel ndash-ytd-wrap">
+              <div class="ndash-panel-h"><div class="ndash-panel-title">Portfolio Value</div></div>
+              <div class="ndash-panel-body">${ytdHtml}</div>
+            </div>` : ''}
 
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-          <button onclick="openListCardModal()" style="padding:10px 24px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">+ List a Card</button>
-          <button onclick="showPage('collection');setMobileNav('collection')" style="padding:10px 24px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">My Binder</button>
-        </div>
+            <!-- Sub-row: Ghost Card Fund + Market Activity -->
+            <div class="ndash-subrow">
+              <!-- Ghost Card Fund -->
+              <div class="ndash-panel">
+                <div class="ndash-panel-h">
+                  <div class="ndash-panel-title">Ghost Card Fund</div>
+                  ${ghostCards.length>1?`<button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">${ghostCards.length} CARDS</button>`:''}
+                </div>
+                <div class="ndash-panel-body">
+                  ${topGhost ? `<div class="ndash-fund-body">
+                    <div class="ndash-fund-card">
+                      ${topGhost.card_image_url?`<img src="${topGhost.card_image_url}" alt="">`:' ♡'}
+                    </div>
+                    <div class="ndash-fund-info">
+                      <div class="ndash-fund-name">${_escHtml((topGhost.card_name||'').slice(0,18))}</div>
+                      <div class="ndash-fund-meta">${_escHtml(topGhost.set_name||'Unknown Set')}</div>
+                      ${topGhost.savings_goal>0?`<div class="ndash-fund-target">$${topGhost.savings_goal.toFixed(2)}</div>
+                      <div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}%"></div></div>
+                      <div style="font-size:9px;color:var(--muted);margin-top:3px">${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}% · $${(topGhost.amount_saved||0).toFixed(2)} saved</div>`:'<div style="font-size:9px;color:var(--muted);margin-top:4px">No savings goal set</div>'}
+                    </div>
+                  </div>` : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">No wishlist cards yet</div>`}
+                </div>
+              </div>
+              <!-- Market Activity -->
+              <div class="ndash-panel">
+                <div class="ndash-panel-h">
+                  <div class="ndash-panel-title">Price Movers</div>
+                  <button class="ndash-panel-link" onclick="showPage('browse');setMobileNav('browse')">BROWSE →</button>
+                </div>
+                <div class="ndash-panel-body">
+                  ${movers.length>0 ? movers.map(c => {
+                    const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
+                    const up = Number(d)>=0;
+                    return `<div class="ndash-market-row" onclick="openBinderCardDetail('${c.id}')">
+                      <div class="ndash-market-thumb">${c.card_image_url?`<img src="${c.card_image_url}" alt="">`:''}</div>
+                      <div class="ndash-market-info">
+                        <div class="ndash-market-name">${_escHtml(c.card_name.slice(0,20))}</div>
+                        <div class="ndash-market-sub">$${(c.purchase_price||0).toFixed(2)} → $${(c.current_value||0).toFixed(2)}</div>
+                      </div>
+                      <div class="ndash-market-delta ${up?'up':'dn'}">${up?'+':''}${d}%</div>
+                    </div>`;
+                  }).join('') : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">Price data builds as cards are refreshed</div>`}
+                </div>
+              </div>
+            </div>
 
-        ${tierAtLeast('shop') ? `
-        <div style="margin-top:28px;padding:18px;background:var(--surface);border:1px solid var(--accent);border-left-width:3px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-            <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em">My Storefront</div>
-            <div style="display:flex;gap:8px">
-              <button onclick="copyStoreLink()" style="padding:5px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">⬡ Copy Store Link</button>
-              <button onclick="previewStorefront()" style="padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">↗ Preview</button>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-            <div>
-              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Shop Name</div>
-              <input id="shopSettingName" type="text" value="${(currentUser.shop_name||'').replace(/"/g,'&quot;')}" placeholder="Your shop name"
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;outline:none"
-                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            </div>
-            <div>
-              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Tagline</div>
-              <input id="shopSettingTagline" type="text" value="${(currentUser.shop_tagline||'').replace(/"/g,'&quot;')}" placeholder="Short description"
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;outline:none"
-                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            </div>
-            <div>
-              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Instagram</div>
-              <input id="shopSettingInstagram" type="text" value="${(currentUser.shop_instagram||'').replace(/"/g,'&quot;')}" placeholder="@handle"
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;outline:none"
-                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            </div>
-            <div>
-              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Website</div>
-              <input id="shopSettingWebsite" type="text" value="${(currentUser.shop_website||'').replace(/"/g,'&quot;')}" placeholder="https://..."
-                style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;outline:none"
-                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            </div>
-          </div>
-          <div style="margin-bottom:12px">
-            <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">About / Description</div>
-            <textarea id="shopSettingDesc" rows="2" placeholder="Tell customers about your shop…"
-              style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;resize:vertical;outline:none"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">${currentUser.shop_description||''}</textarea>
-          </div>
-          <div style="margin-bottom:12px">
-            <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;letter-spacing:.04em">Banner Color</div>
-            <div id="shopBannerPicker" style="display:flex;gap:8px;flex-wrap:wrap">
-              ${['#080500','#1a0a00','#0a0a14','#0a140a','#14080a','#0a1014','#181218','#0d0d0d'].map(c =>
-                `<div onclick="document.querySelectorAll('#shopBannerPicker [data-bc]').forEach(x=>x.style.outline='none');this.style.outline='2px solid var(--accent)'"
-                  data-bc="${c}" style="width:24px;height:24px;background:${c};cursor:pointer;border:1px solid var(--border);
-                  outline:${(currentUser.shop_banner_color||'#080500')===c?'2px solid var(--accent)':'none'};outline-offset:2px"></div>`
-              ).join('')}
-            </div>
-          </div>
-          <button onclick="saveShopSettings()" style="padding:8px 20px;border:none;background:var(--accent);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Save Settings</button>
-          <div id="shopSettingSaved" style="display:inline;margin-left:10px;font-size:.72rem;color:var(--green);display:none">✓ Saved</div>
-        </div>` : ''}
-      `;
+          </div><!-- /ndash-main -->
 
+          <!-- Right Rail -->
+          <div class="ndash-rail">
+
+            <!-- Condition breakdown -->
+            <div class="ndash-panel">
+              <div class="ndash-panel-h"><div class="ndash-panel-title">Breakdown</div></div>
+              <div class="ndash-panel-body">
+                ${Object.entries(condMap).length>0 ? Object.entries(condMap).map(([k,cnt]) => {
+                  const col = condColors[k] || '#C5FF3D';
+                  return `<div class="ndash-bk-row">
+                    <div class="ndash-bk-l">
+                      <div class="ndash-bk-dot" style="background:${col};box-shadow:0 0 5px ${col}"></div>
+                      <span>${_escHtml(k)}</span>
+                    </div>
+                    <div class="ndash-bk-val">${cnt}</div>
+                  </div>`;
+                }).join('') : '<div style="color:var(--muted);font-size:10px;text-align:center;padding:10px 0">No cards yet</div>'}
+                ${ghostCards.length>0?`<div class="ndash-bk-row">
+                  <div class="ndash-bk-l"><div class="ndash-bk-dot" style="background:#4DD0E1;box-shadow:0 0 5px #4DD0E1"></div><span>Ghost</span></div>
+                  <div class="ndash-bk-val">${ghostCards.length}</div>
+                </div>`:''}
+              </div>
+            </div>
+
+            <!-- Value Summary -->
+            <div class="ndash-panel">
+              <div class="ndash-panel-h"><div class="ndash-panel-title">Value Summary</div></div>
+              <div class="ndash-panel-body" style="display:grid;gap:7px">
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Portfolio</div><div class="ndash-sum-r" style="color:var(--accent)">${totalValue>0?'$'+totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Cost Basis</div><div class="ndash-sum-r">$${totalCost.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Net Gain</div><div class="ndash-sum-r" style="color:${totalGain>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${gainSign}$${Math.abs(totalGain).toFixed(2)}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Avg Card</div><div class="ndash-sum-r">${avgVal>0?'$'+avgVal.toFixed(2):'—'}</div></div>
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Total Earned</div><div class="ndash-sum-r">${totalEarned>0?'$'+totalEarned.toFixed(2):'—'}</div></div>
+              </div>
+            </div>
+
+            <!-- Scan CTA -->
+            <button class="ndash-scan-cta" onclick="showPage('addCard');setMobileNav('addCard')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+              SCAN CARD
+            </button>
+
+            <!-- Alerts -->
+            <div class="ndash-panel">
+              <div class="ndash-panel-h"><div class="ndash-panel-title">Alerts</div>${dashAlerts.length>0?`<span style="background:var(--accent);color:#000;font-family:'Press Start 2P',monospace;font-size:7px;padding:3px 6px">${Math.min(dashAlerts.length,9)}</span>`:''}</div>
+              <div class="ndash-panel-body">
+                ${dashAlerts.length>0 ? dashAlerts.slice(0,6).map(a=>`
+                <div class="ndash-alert-row">
+                  <div class="ndash-alert-ico ${a.ico==='warn'?'warn':a.ico==='info'?'info':''}">${_ico(a.ico)}</div>
+                  <div class="ndash-alert-body">
+                    <div class="ndash-alert-title">${_escHtml(a.title)}${a.delta?` <span style="color:${a.up?'var(--accent)':'var(--red,#FF4D3D)'}">${a.delta}</span>`:''}</div>
+                    <div class="ndash-alert-sub">${_escHtml(a.sub)}</div>
+                  </div>
+                </div>`).join('') : '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.75rem">No alerts</div>'}
+              </div>
+            </div>
+
+            ${tierAtLeast('shop') ? `<div class="ndash-panel">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Storefront</div>
+                <button class="ndash-panel-link" onclick="previewStorefront()">PREVIEW →</button>
+              </div>
+              <div class="ndash-panel-body" style="display:grid;gap:7px">
+                <div class="ndash-sum-row"><div class="ndash-sum-l">Listings</div><div class="ndash-sum-r">${activeSales}</div></div>
+                ${totalEarned>0?`<div class="ndash-sum-row"><div class="ndash-sum-l">Earned</div><div class="ndash-sum-r" style="color:var(--accent)">$${totalEarned.toFixed(2)}</div></div>`:''}
+                ${pendingPayouts>0?`<div class="ndash-sum-row"><div class="ndash-sum-l">Payouts</div><div class="ndash-sum-r" style="color:var(--red,#FF4D3D)">${pendingPayouts} pending</div></div>`:''}
+                <div style="display:flex;gap:6px;margin-top:4px">
+                  <button class="ndash-panel-link" style="border-color:var(--border);flex:1;text-align:center" onclick="copyStoreLink()">⬡ COPY LINK</button>
+                  <button class="ndash-panel-link" style="border-color:var(--border);flex:1;text-align:center" onclick="openListCardModal()">+ LIST CARD</button>
+                </div>
+              </div>
+            </div>` : ''}
+
+          </div><!-- /ndash-rail -->
+        </div><!-- /ndash-grid -->
+      </div><!-- /ndash-wrap -->`;
       // Draw YTD SVG line chart after innerHTML is set
       drawYtdChart(snapshots, totalValue);
     }
