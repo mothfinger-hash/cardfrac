@@ -1761,6 +1761,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
 /* ── YTD chart wrapper ── */
 .ndash-ytd-wrap .dash-chart-section{margin-bottom:0;border:none;padding:0;background:transparent}
+.ndash-ytd-compact{padding:8px 10px!important}
 /* ─── 23. SOCIAL FOOTER ──────────────────────────────────────────── */
 .social-footer {
   display: flex; align-items: center; justify-content: center;
@@ -2034,9 +2035,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
           <span class="nav-tab-lbl">Browse</span>
         </button>
-        <button class="nav-tab" data-page="fairTrade" data-label="Fair Trade" onclick="showPage('fairTrade');setMobileNav('fairTrade')">
+        <button class="nav-tab" data-page="fairTrade" data-label="Trade Analyzer" onclick="showPage('fairTrade');setMobileNav('fairTrade')">
           <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
-          <span class="nav-tab-lbl">Fair Trade</span>
+          <span class="nav-tab-lbl">Trade Analyzer <span class="beta-badge" style="font-size:.42rem;padding:1px 5px;margin-left:4px">BETA</span></span>
         </button>
       </div>
       <div class="nav-group-label">Account</div>
@@ -3021,7 +3022,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk Import</button>
           <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share Binder</button>
           <button onclick="showPage('fairTrade');setMobileNav('')"
-            style="padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⇌ Trade Analyst <span class="beta-badge">BETA</span></button>
+            style="padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⇌ Trade Analyzer <span class="beta-badge">BETA</span></button>
           <button onclick="showPage('addCard');setMobileNav('addCard')"
             style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add Card</button>
         </div>
@@ -3077,7 +3078,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <!-- Header (always visible) -->
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
         <div>
-          <h2 style="margin:0">⇌ Trade Analyst <span class="beta-badge">BETA</span></h2>
+          <h2 style="margin:0">⇌ Trade Analyzer <span class="beta-badge">BETA</span></h2>
           <p class="subtitle" style="margin:4px 0 0">Compare proposed trades side-by-side — for in-person evaluation only.</p>
         </div>
         <button onclick="showPage('collection');setMobileNav('collection')"
@@ -4845,7 +4846,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
             <div style="font-size:2rem;margin-bottom:12px">🤝</div>
             <div style="font-size:.9rem;margin-bottom:6px">No trades yet</div>
-            <div style="font-size:.78rem">Use the Fair Trade Analyzer and hit <strong>Accept Trade</strong> to log your trades here.</div>
+            <div style="font-size:.78rem">Use the Trade Analyzer and hit <strong>Accept Trade</strong> to log your trades here.</div>
           </div>`;
           return;
         }
@@ -5120,12 +5121,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>
 
-            <!-- YTD chart panel -->
-            ${ytdHtml ? `<div class="ndash-panel ndash-ytd-wrap">
-              <div class="ndash-panel-h"><div class="ndash-panel-title">Portfolio Value</div></div>
-              <div class="ndash-panel-body">${ytdHtml}</div>
-            </div>` : ''}
-
             <!-- Sub-row: Ghost Card Fund + Market Activity -->
             <div class="ndash-subrow">
               <!-- Ghost Card Fund -->
@@ -5247,6 +5242,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>` : ''}
 
+            <!-- Portfolio Value chart — compact, lives beneath storefront -->
+            ${ytdHtml ? `<div class="ndash-panel ndash-ytd-wrap">
+              <div class="ndash-panel-h"><div class="ndash-panel-title">Portfolio Value</div></div>
+              <div class="ndash-panel-body ndash-ytd-compact">${ytdHtml}</div>
+            </div>` : ''}
+
           </div><!-- /ndash-rail -->
         </div><!-- /ndash-grid -->
       </div><!-- /ndash-wrap -->`;
@@ -5287,9 +5288,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
         </div>`;
       }
-      return `<div class="dash-chart-section" style="margin-bottom:16px">
-        <div style="font-size:.75rem;color:var(--accent);margin-bottom:10px;letter-spacing:.08em">YTD Portfolio Value</div>
-        <svg id="ytdChartSvg" width="100%" height="120" style="display:block;overflow:visible"></svg>
+      return `<div class="dash-chart-section" style="margin-bottom:0">
+        <svg id="ytdChartSvg" width="100%" height="82" style="display:block;overflow:visible"></svg>
       </div>`;
     }
 
@@ -5304,8 +5304,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (pts.length < 2) return;
 
       const W = svg.getBoundingClientRect().width || 500;
-      const H = 110;
-      const PAD_L = 52, PAD_R = 12, PAD_T = 10, PAD_B = 24;
+      const H = parseInt(svg.getAttribute('height') || '82', 10);
+      const PAD_L = 38, PAD_R = 8, PAD_T = 6, PAD_B = 18;
       const vals = pts.map(p => Number(p.total_value) || 0);
       const minV = Math.min(...vals);
       const maxV = Math.max(...vals);
@@ -12018,7 +12018,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!verdict) return;
       var pct = maxSide > 0 ? Math.abs(diff) / maxSide * 100 : 0;
       if (pct <= 10) {
-        verdict.textContent = '✓ Fair Trade  (' + pct.toFixed(1) + '% difference)';
+        verdict.textContent = '✓ Fair — ' + pct.toFixed(1) + '% difference';
         verdict.style.color = '#22c55e';
       } else if (pct <= 25) {
         verdict.textContent = '~ Close — ' + pct.toFixed(1) + '% difference';
