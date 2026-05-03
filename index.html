@@ -129,6 +129,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .dd-badge-pip .dd-bname.earned{color:#00E5FF}
     .dd-badge-pip:hover .dd-hex{transform:scale(1.1)}
     @media(max-width:480px){.avatar-dropdown{left:var(--sb-w-coll);bottom:72px}.dd-badge-grid{grid-template-columns:repeat(4,1fr);gap:4px}.dd-badge-pip .dd-hex{width:30px;height:30px}.dd-badge-pip .dd-hex svg{width:30px;height:30px}.dd-badge-pip .dd-bname{font-size:4px;max-width:38px}}
+    @media(max-width:900px){.avatar-dropdown{left:auto;right:8px;bottom:auto;top:92px}}
     .dropdown-item{padding:10px 16px;color:var(--text);cursor:pointer;font-size:.6rem;transition:background .1s;display:flex;align-items:center;gap:8px}
     .dropdown-item:hover{background:var(--surface2)}
     .dropdown-divider{height:2px;background:var(--border);margin:4px 0}
@@ -549,12 +550,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
 
     /* MOBILE BOTTOM NAV */
-    /* Bottom mobile nav — retained for JS refs but hidden in favour of top nav */
-    .mobile-nav{display:none}
+    /* Bottom mobile nav — sticky, shown on mobile */
+    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch;box-shadow:0 -3px 0 var(--shadow)}
     .mobile-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.5rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;transition:color .15s;padding:0;position:relative;}
     .mobile-nav-btn.active{color:var(--accent)}
     .mobile-nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .mobile-nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700}
+    @media(max-width:900px){.mobile-nav{display:flex}.page{padding-bottom:72px}}
 
     /* ── TOP NAV (mobile only, not sticky) ──────────────────────────────────── */
     .top-nav{display:none;flex-direction:column;background:var(--surface);border-bottom:2px solid var(--border);width:100%;box-sizing:border-box;z-index:100}
@@ -1492,13 +1494,13 @@ nav {
 .lp-pdx-stage { position:relative; width:100%; line-height:0; }
 .lp-pdx-photo { width:100%; height:auto; display:block; pointer-events:none; user-select:none; }
 /* Generic screen overlay — sits directly over a white area in the photo */
-.lp-pdx-screen { position:absolute; overflow:hidden; background:#060810; }
+.lp-pdx-screen { position:absolute; overflow:hidden; background:#060810; transform:rotateY(8deg); transform-origin:center center; }
 /* Left screen: binder 4×4 grid */
-.lp-pdx-left { left:14%; top:7%; width:27%; height:67%; display:flex; flex-direction:column; }
+.lp-pdx-left { left:16%; top:8%; width:26%; height:67%; display:flex; flex-direction:column; }
 /* Right-top screen: price chart */
-.lp-pdx-rt { left:44%; top:7%; width:30%; height:34%; display:flex; flex-direction:column; padding:5px 7px 4px; gap:3px; }
+.lp-pdx-rt { left:45%; top:8%; width:27%; height:33%; display:flex; flex-direction:column; padding:5px 7px 4px; gap:3px; }
 /* Right-bottom screen: trade analyzer */
-.lp-pdx-rb { left:44%; top:43%; width:30%; height:30%; display:flex; flex-direction:column; padding:5px 7px; gap:3px; }
+.lp-pdx-rb { left:45%; top:43%; width:27%; height:29%; display:flex; flex-direction:column; padding:5px 7px; gap:3px; }
 /* Card grid — fills left screen */
 .lp-mock-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:3px; background:#060810; align-content:start; flex:1; overflow:hidden; }
 .lp-mock-slot { aspect-ratio:.72; background:#0d1018; border:1px solid #1a2030; overflow:hidden; position:relative; cursor:pointer; transition:border-color .12s; }
@@ -1533,7 +1535,7 @@ nav {
 .lp-pdx-fair-score { font-family:'Orbitron',monospace; font-weight:900; font-size:8px; color:#00ff99; text-align:right; }
 
 /* Mobile Pokédex fallback — stage shows as dark panel if image doesn't load */
-.lp-pdx-stage { background:#060810; }
+.lp-pdx-stage { background:#060810; perspective:1400px; perspective-origin:82% 46%; }
 .lp-pdx-photo { min-height:0; }
 /* On very small screens collapse the graphic below hero text; cap height */
 @media(max-width:600px){
@@ -2307,7 +2309,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <button class="auth-btn join-btn" onclick="openModal('registerModal')">Join</button>
       </div>
       <div id="topNavUserSection" style="display:none">
-        <div class="top-nav-user-chip" onclick="showPage('account');setTopNavActive('account')">
+        <div class="top-nav-user-chip" onclick="toggleTopNavDropdown(event)">
           <div class="avatar-circle" id="topNavAvatar">?</div>
           <span class="top-nav-username" id="topNavUsername">User</span>
         </div>
@@ -4466,6 +4468,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const hasPfp = !!localStorage.getItem('pathbinder_avatar_pfp_v1');
       btn.textContent = hasPfp ? '🎨 Edit Avatar' : '🎨 Create Avatar';
     }
+    // Top nav chip toggles the same dropdown on mobile
+    window.toggleTopNavDropdown = function(e) {
+      e.stopPropagation();
+      const dd = document.getElementById('avatarDropdown');
+      dd.classList.toggle('open');
+      if (dd.classList.contains('open')) { renderDdBadges(); updateAvatarBtnLabel(); }
+    };
     document.getElementById('userChip').addEventListener('click', (e) => {
       e.stopPropagation();
       const dd = document.getElementById('avatarDropdown');
@@ -10746,7 +10755,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // long-press → lift → drag → drop pattern using touch events.
     (function() {
       let src = null, clone = null, timer = null, active = false;
-      let offsetX = 0, offsetY = 0;
+      let offsetX = 0, offsetY = 0, startX = 0, startY = 0;
 
       function cleanup() {
         clearTimeout(timer); timer = null;
@@ -10765,8 +10774,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const rect = card.getBoundingClientRect();
         offsetX = t.clientX - rect.left;
         offsetY = t.clientY - rect.top;
+        startX = t.clientX;
+        startY = t.clientY;
 
-        // Long-press threshold: 420 ms
+        // Long-press threshold: 180 ms (snappier pick-up)
         timer = setTimeout(() => {
           active = true;
           clone = card.cloneNode(true);
@@ -10782,16 +10793,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           document.body.appendChild(clone);
           card.style.opacity = '0.25';
           if (navigator.vibrate) navigator.vibrate(35);
-        }, 420);
+        }, 180);
       }, { passive: true });
 
       document.addEventListener('touchmove', e => {
         if (!active) {
-          // Finger moved before long-press fired → cancel drag, allow swipe/scroll
-          if (timer) { clearTimeout(timer); timer = null; src = null; }
+          if (!timer) return; // no drag pending, let browser handle normally
+          // Drag countdown still running — decide whether to block scroll
+          const t = e.touches[0];
+          const dx = Math.abs(t.clientX - startX);
+          const dy = Math.abs(t.clientY - startY);
+          if (dx > 8 || dy > 8) {
+            // Clear swipe/scroll gesture — cancel drag, let browser scroll
+            clearTimeout(timer); timer = null; src = null;
+            return;
+          }
+          // Micro-movement during hold — block scroll so page doesn't drift
+          e.preventDefault();
           return;
         }
-        e.preventDefault(); // lock scroll while dragging
+        // Card is lifted — hard-lock scroll for the entire drag
+        e.preventDefault();
         const t = e.touches[0];
         clone.style.left = (t.clientX - offsetX) + 'px';
         clone.style.top  = (t.clientY - offsetY) + 'px';
