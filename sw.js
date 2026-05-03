@@ -1,10 +1,11 @@
 // PathBinder Service Worker
-const CACHE = 'pathbinder-v3';
+const CACHE = 'pathbinder-v4';
 
 const PRECACHE = [
   '/offline.html',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/pokedex.png',
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap'
 ];
 
