@@ -827,15 +827,27 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* Slide animation — fluid ease-out with subtle scale */
     @keyframes ftSlideNext{
-      from{opacity:0;transform:translateX(36px) scale(0.97)}
+      from{opacity:0;transform:translateX(42px) scale(0.95)}
       to  {opacity:1;transform:translateX(0)    scale(1)}
     }
     @keyframes ftSlidePrev{
-      from{opacity:0;transform:translateX(-36px) scale(0.97)}
+      from{opacity:0;transform:translateX(-42px) scale(0.95)}
       to  {opacity:1;transform:translateX(0)     scale(1)}
     }
-    .ft-stack-front.slide-next{animation:ftSlideNext .38s cubic-bezier(0.16,1,0.3,1) both}
-    .ft-stack-front.slide-prev{animation:ftSlidePrev .38s cubic-bezier(0.16,1,0.3,1) both}
+    @keyframes ftSlideOutLeft{
+      from{opacity:1;transform:translateX(0)     scale(1)}
+      to  {opacity:0;transform:translateX(-28px) scale(0.95)}
+    }
+    @keyframes ftSlideOutRight{
+      from{opacity:1;transform:translateX(0)    scale(1)}
+      to  {opacity:0;transform:translateX(28px) scale(0.95)}
+    }
+    .ft-stack-front.slide-next     {animation:ftSlideNext     .3s cubic-bezier(0.16,1,0.3,1) both}
+    .ft-stack-front.slide-prev     {animation:ftSlidePrev     .3s cubic-bezier(0.16,1,0.3,1) both}
+    .ft-stack-front.slide-out-left {animation:ftSlideOutLeft  .13s ease-in both}
+    .ft-stack-front.slide-out-right{animation:ftSlideOutRight .13s ease-in both}
+    /* Smooth back-card rotation transition when stack reshuffles */
+    .ft-stack-back{transition:transform .25s cubic-bezier(0.16,1,0.3,1)}
 
     /* Nav arrows — float just outside the card edges */
     .ft-nav-btn{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s;line-height:1}
@@ -1010,8 +1022,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         flex-direction:column;align-items:center;justify-content:flex-start;
         overflow-x:hidden;overflow-y:auto;
         padding:6px 0;gap:6px;
-        background:var(--surface);
-        border-right:2px solid var(--border);
+        background:transparent;
+        border-right:none;
         border-bottom:none;
       }
       body.on-binder #collectionPage{padding-top:0;padding-left:58px}
@@ -1173,6 +1185,8 @@ html { scroll-behavior: smooth; }
 
 body {
   padding-top: 0;
+  opacity: 0;
+  transition: opacity .18s ease;
 }
 
 body::before {
@@ -2615,11 +2629,87 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <label>Purchase Date</label>
           <input type="date" class="atc-input" id="atcPurchaseDate" style="width:100%" />
         </div>
-        <div class="form-group">
-          <label>Cert # (optional)</label>
-          <input type="text" class="atc-input" id="atcCertNumber" placeholder="Grading cert # (optional)" style="width:100%" />
+        <div class="form-group" style="grid-column:1/-1">
+          <label id="atcCertLabel">Cert #</label>
+          <div style="display:flex;gap:6px;align-items:stretch">
+            <input type="text" class="atc-input" id="atcCertNumber" placeholder="e.g. 12345678" style="flex:1;min-width:0" oninput="atcCertReset();atcUpdateCertBtn()" />
+            <!-- PSA: API lookup button -->
+            <button id="atcCertLookupBtn" onclick="atcLookupPsaCert()"
+              style="display:none;padding:0 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .15s,color .15s"
+              onmouseenter="this.style.background='var(--teal)';this.style.color='var(--surface)'"
+              onmouseleave="this.style.background='transparent';this.style.color='var(--teal)'">
+              ↗ Look Up
+            </button>
+            <!-- BGS/CGC/SGC/ACE: external link -->
+            <a id="atcCertExtLink" href="#" target="_blank" rel="noopener"
+              style="display:none;padding:0 12px;border:1px solid var(--muted);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;flex-shrink:0;text-decoration:none;align-items:center;line-height:1"
+              onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseleave="this.style.borderColor='var(--muted)';this.style.color='var(--muted)'">
+              ↗ View Cert
+            </a>
+          </div>
+          <!-- PSA preview panel -->
+          <div id="atcCertPreview" style="display:none;margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--teal);border-radius:4px">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <img id="atcCertImg" src="" alt="" style="width:72px;flex-shrink:0;border-radius:4px;object-fit:contain;border:1px solid var(--border)" onerror="this.style.display='none'"/>
+              <div style="flex:1;min-width:0">
+                <div id="atcCertCardName" style="font-size:.78rem;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+                <div id="atcCertGradeDesc" style="font-size:.68rem;color:var(--teal);font-weight:700;margin-bottom:4px"></div>
+                <div id="atcCertMeta" style="font-size:.64rem;color:var(--muted);line-height:1.5"></div>
+                <a id="atcCertLink" href="#" target="_blank" rel="noopener"
+                  style="font-size:.62rem;color:var(--muted);text-decoration:underline;margin-top:4px;display:inline-block">View on PSA ↗</a>
+              </div>
+            </div>
+          </div>
+          <div id="atcCertError" style="display:none;font-size:.68rem;color:var(--red,#ef4444);margin-top:6px"></div>
         </div>
       </div>
+
+      <!-- ── Photo Upload ─────────────────────────────────────────────────── -->
+      <div class="form-group" style="margin-bottom:14px">
+        <label style="display:flex;justify-content:space-between;align-items:center">
+          Your Photo
+          <span style="font-size:.62rem;color:var(--muted);font-weight:400;font-family:inherit">Optional · takes priority over API image</span>
+        </label>
+        <div id="atcPhotoDropzone"
+          style="border:2px dashed var(--border);border-radius:4px;padding:14px 10px;text-align:center;cursor:pointer;transition:border-color .15s"
+          onclick="document.getElementById('atcPhotoInput').click()"
+          ondragover="event.preventDefault();document.getElementById('atcPhotoDropzone').style.borderColor='var(--accent)'"
+          ondragleave="document.getElementById('atcPhotoDropzone').style.borderColor='var(--border)'"
+          ondrop="atcHandlePhotoDrop(event)">
+          <div style="font-size:1.4rem;line-height:1">📷</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:5px">Click or drag your card photo here</div>
+          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">JPG · PNG · WEBP</div>
+        </div>
+        <input type="file" id="atcPhotoInput" accept="image/*" style="display:none" onchange="atcHandlePhotoFile(this.files[0])">
+
+        <!-- preview + actions -->
+        <div id="atcPhotoPreview" style="display:none;margin-top:10px">
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <!-- checkerboard so transparency shows -->
+            <div style="width:64px;height:64px;flex-shrink:0;border-radius:4px;border:1px solid var(--border);background:repeating-conic-gradient(rgba(255,255,255,.08) 0% 25%,rgba(0,0,0,.25) 0% 50%) 0 0/10px 10px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+              <img id="atcPhotoThumb" style="max-width:100%;max-height:100%;display:block;object-fit:contain" />
+            </div>
+            <div style="flex:1;min-width:0">
+              <div id="atcPhotoStatusText" style="font-size:.68rem;color:var(--muted);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button id="atcPhotoBgBtn" onclick="atcRemoveBg()"
+                  style="font-size:.63rem;padding:4px 9px;border:1px solid var(--teal);background:transparent;color:var(--teal);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;transition:background .12s,color .12s"
+                  onmouseenter="this.style.background='var(--teal)';this.style.color='#000'"
+                  onmouseleave="this.style.background='transparent';this.style.color='var(--teal)'">
+                  ✦ Remove Background
+                </button>
+                <button onclick="atcClearPhoto()"
+                  style="font-size:.63rem;padding:4px 9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace">
+                  × Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- ─────────────────────────────────────────────────────────────────── -->
+
       <div class="form-group" style="margin-bottom:14px">
         <label>Price Source URL (optional)</label>
         <input type="text" class="atc-input" id="atcPriceUrl" placeholder="PriceCharting or eBay URL for auto-price tracking" style="width:100%" />
@@ -3623,12 +3713,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <!-- ── STATE 2: loading animation (desktop / mobile GIF variants) ── -->
       <div id="ftLoadingState" style="display:none;text-align:center;padding:16px 0 12px">
         <!-- Desktop: landscape video -->
-        <video class="ft-loading-vid ft-loading-desk" autoplay loop muted playsinline>
+        <video id="ftVidDesk" class="ft-loading-vid ft-loading-desk" loop muted playsinline preload="none">
           <source src="trade-desktop.webm" type="video/webm">
           <source src="trade-desktop.mp4"  type="video/mp4">
         </video>
         <!-- Mobile: portrait video -->
-        <video class="ft-loading-vid ft-loading-mob" autoplay loop muted playsinline>
+        <video id="ftVidMob" class="ft-loading-vid ft-loading-mob" loop muted playsinline preload="none">
           <source src="trade-mobile.webm" type="video/webm">
           <source src="trade-mobile.mp4"  type="video/mp4">
         </video>
@@ -11696,6 +11786,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcCertNumber').value = '';
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
+      atcCertReset();
+      atcClearPhoto();
       populateBinderDropdown('atcBinderId', currentBinderId);
       toggleGradeField();
       openModal('addToCollectionModal');
@@ -11779,6 +11871,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcCertNumber').value = '';
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
+      atcClearPhoto();
       populateBinderDropdown('atcBinderId', currentBinderId);
       toggleGradeField();
       openModal('addToCollectionModal');
@@ -11788,6 +11881,53 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const condition = document.getElementById('atcCondition').value;
       const wrap = document.getElementById('gradeFieldWrap');
       if (wrap) wrap.style.visibility = condition === 'raw' ? 'hidden' : 'visible';
+      atcCertReset();
+      atcUpdateCertBtn();
+    }
+
+    // Cert lookup URLs for each grader — CGC supports cert in URL path; others are form-based
+    var _certLookupUrls = {
+      psa: function(n) { return 'https://www.psacard.com/cert/' + n; },
+      bgs: function(n) { return 'https://www.beckett.com/grading/card-lookup'; },
+      cgc: function(n) { return 'https://www.cgccards.com/certlookup/' + n; },
+      sgc: function(n) { return 'https://www.gosgc.com/cert-code-lookup'; },
+      ace: function(n) { return 'https://www.acegrading.com/verify'; },
+    };
+    var _certCompanyNames = { psa:'PSA', bgs:'BGS', cgc:'CGC', sgc:'SGC', ace:'ACE' };
+
+    function atcUpdateCertBtn() {
+      var condition  = (document.getElementById('atcCondition')?.value || 'raw').toLowerCase();
+      var certNum    = (document.getElementById('atcCertNumber')?.value || '').trim().replace(/\D/g, '');
+      var label      = document.getElementById('atcCertLabel');
+      var lookupBtn  = document.getElementById('atcCertLookupBtn');
+      var extLink    = document.getElementById('atcCertExtLink');
+      var compName   = _certCompanyNames[condition] || '';
+
+      // Update label
+      if (label) {
+        if (condition === 'psa') {
+          label.innerHTML = 'Cert # <span style="color:var(--muted);font-weight:400;font-size:.65rem">(PSA — auto-fills image &amp; grade)</span>';
+        } else if (compName) {
+          label.innerHTML = 'Cert # <span style="color:var(--muted);font-weight:400;font-size:.65rem">(' + compName + ')</span>';
+        } else {
+          label.textContent = 'Cert # (optional)';
+        }
+      }
+
+      // PSA gets the API lookup button
+      if (lookupBtn) lookupBtn.style.display = condition === 'psa' ? '' : 'none';
+
+      // Other graders get an external link (only shown when a cert number is entered)
+      if (extLink) {
+        var urlFn = condition !== 'psa' && condition !== 'raw' && _certLookupUrls[condition];
+        if (urlFn && certNum) {
+          extLink.href = urlFn(certNum);
+          extLink.textContent = '↗ View on ' + compName;
+          extLink.style.display = 'flex';
+        } else {
+          extLink.style.display = 'none';
+        }
+      }
     }
 
     async function saveToCollection() {
@@ -11813,6 +11953,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
       if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
 
+      // Upload user photo if provided (blob may be bg-removed PNG)
+      let userPhotoUrl = null;
+      if (_atcPhotoBlob) {
+        try {
+          const ext  = _atcPhotoBlob.type === 'image/png' ? 'png' : 'jpg';
+          const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+          const { error: upErr } = await sb.storage.from('card-photos').upload(path, _atcPhotoBlob, { upsert: false, contentType: _atcPhotoBlob.type });
+          if (!upErr) {
+            const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
+            userPhotoUrl = urlData?.publicUrl || null;
+          } else {
+            console.warn('[ATC] Photo upload failed:', upErr.message);
+          }
+        } catch (photoErr) {
+          console.warn('[ATC] Photo upload error:', photoErr);
+        }
+      }
+
+      // Priority: user's own photo > PSA cert image > TCG API image
+      const imageUrl = userPhotoUrl
+        || pendingCollectionCard._psaImageUrl
+        || pendingCollectionCard.cardImageUrl
+        || null;
+
       const { data: newRow, error } = await sb.from('collection_items').insert({
         user_id:         currentUser.id,
         api_card_id:     pendingCollectionCard.apiCardId  || null,
@@ -11820,7 +11984,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         set_name:        pendingCollectionCard.setName    || null,
         set_code:        pendingCollectionCard.setCode    || null,
         card_number:     pendingCollectionCard.cardNumber || null,
-        card_image_url:  pendingCollectionCard.cardImageUrl || null,
+        card_image_url:  imageUrl,
         game_type:       pendingCollectionCard.gameType   || 'pokemon',
         condition,
         grade_value:     gradeValue,
@@ -11858,6 +12022,183 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (item) refreshBinderCardPrice(newRow.id);
       }
     }
+
+    // ── PSA Cert Lookup ────────────────────────────────────────────────────
+    // Token lives in Supabase Secrets as PSA_TOKEN — never in client JS.
+    // Edge Function: supabase/functions/psa-cert-lookup/index.ts
+
+    var _atcPsaData = null; // holds last successful lookup result
+
+    // ── Photo Upload (Add-to-Collection) ──────────────────────────────────
+    var _atcPhotoBlob = null;  // current blob (may be bg-removed PNG)
+    var _atcBgBusy    = false; // prevents double-click while processing
+
+    function atcHandlePhotoDrop(e) {
+      e.preventDefault();
+      var dz = document.getElementById('atcPhotoDropzone');
+      if (dz) dz.style.borderColor = 'var(--border)';
+      var file = e.dataTransfer && e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) atcHandlePhotoFile(file);
+    }
+
+    function atcHandlePhotoFile(file) {
+      if (!file) return;
+      _atcPhotoBlob = file;
+      var thumb  = document.getElementById('atcPhotoThumb');
+      var status = document.getElementById('atcPhotoStatusText');
+      var panel  = document.getElementById('atcPhotoPreview');
+      var btn    = document.getElementById('atcPhotoBgBtn');
+      if (thumb)  { var url = URL.createObjectURL(file); thumb.src = url; }
+      if (status) status.textContent = file.name + ' · ' + (file.size / 1024).toFixed(0) + ' KB';
+      if (panel)  panel.style.display = '';
+      if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+    }
+
+    async function atcRemoveBg() {
+      if (!_atcPhotoBlob || _atcBgBusy) return;
+      _atcBgBusy = true;
+      var btn    = document.getElementById('atcPhotoBgBtn');
+      var status = document.getElementById('atcPhotoStatusText');
+      var thumb  = document.getElementById('atcPhotoThumb');
+      if (btn)    { btn.disabled = true; btn.textContent = '⏳ Loading model…'; }
+      if (status) status.textContent = 'Downloading AI model (~50 MB, one-time)…';
+      try {
+        // Lazy-load the background removal library from CDN
+        var mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
+        var removeBg = mod.removeBackground;
+        if (btn)    btn.textContent = '⏳ Processing…';
+        var resultBlob = await removeBg(_atcPhotoBlob, {
+          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/',
+          progress: function(key, current, total) {
+            if (total && status) status.textContent = 'Processing… ' + Math.round((current / total) * 100) + '%';
+          }
+        });
+        _atcPhotoBlob = resultBlob;
+        if (thumb)  thumb.src = URL.createObjectURL(resultBlob);
+        if (status) status.textContent = '✓ Background removed · transparent PNG';
+        if (btn)    { btn.textContent = '✓ Done'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
+      } catch (err) {
+        console.error('[BG Remove]', err);
+        if (status) status.textContent = 'Background removal failed — original photo kept';
+        if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+      }
+      _atcBgBusy = false;
+    }
+
+    function atcClearPhoto() {
+      _atcPhotoBlob = null;
+      var input  = document.getElementById('atcPhotoInput');
+      var panel  = document.getElementById('atcPhotoPreview');
+      var thumb  = document.getElementById('atcPhotoThumb');
+      var btn    = document.getElementById('atcPhotoBgBtn');
+      if (input) input.value = '';
+      if (panel) panel.style.display = 'none';
+      if (thumb) thumb.src = '';
+      if (btn)   { btn.textContent = '✦ Remove Background'; btn.disabled = false; btn.style.borderColor = 'var(--teal)'; btn.style.color = 'var(--teal)'; }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
+    function atcCertReset() {
+      _atcPsaData = null;
+      var preview = document.getElementById('atcCertPreview');
+      var errEl   = document.getElementById('atcCertError');
+      if (preview) preview.style.display = 'none';
+      if (errEl)   errEl.style.display   = 'none';
+    }
+
+    async function atcLookupPsaCert() {
+      var certInput = document.getElementById('atcCertNumber');
+      var btn       = document.getElementById('atcCertLookupBtn');
+      var preview   = document.getElementById('atcCertPreview');
+      var errEl     = document.getElementById('atcCertError');
+      var condEl    = document.getElementById('atcCondition');
+      var gradeEl   = document.getElementById('atcGrade');
+
+      var certNum = (certInput?.value || '').trim().replace(/\D/g, '');
+      if (!certNum) { showToast('Enter a PSA cert number first'); return; }
+
+      // Only works for PSA right now
+      if (condEl && condEl.value !== 'psa') {
+        condEl.value = 'psa';
+        toggleGradeField();
+      }
+
+      if (btn) { btn.textContent = '…'; btn.disabled = true; }
+      if (errEl) errEl.style.display = 'none';
+      if (preview) preview.style.display = 'none';
+
+      try {
+        var result = await callEdgeFunction('psa-cert-lookup', { certNumber: certNum });
+        _atcPsaData = result;
+
+        // ── Auto-fill form fields ──────────────────────────────────────────
+        // Grade
+        if (result.grade && gradeEl) {
+          var gradeVal = parseFloat(result.grade);
+          // Find the closest option in the select
+          var opts = Array.from(gradeEl.options).map(o => parseFloat(o.value));
+          var closest = opts.reduce(function(a, b) {
+            return Math.abs(b - gradeVal) < Math.abs(a - gradeVal) ? b : a;
+          });
+          gradeEl.value = String(closest);
+          toggleGradeField();
+        }
+
+        // Card name — only pre-fill if currently blank / manual entry
+        if (result.cardName) {
+          var manualRow   = document.getElementById('atcManualNameRow');
+          var manualInput = document.getElementById('atcManualNameInput');
+          if (manualRow && manualRow.style.display !== 'none' && manualInput && !manualInput.value.trim()) {
+            manualInput.value = result.cardName;
+          }
+        }
+
+        // Stash image URL so saveToCollection can use it if no TCG image exists
+        if (result.imageUrl && pendingCollectionCard) {
+          pendingCollectionCard._psaImageUrl = result.imageUrl;
+        }
+
+        // ── Show preview card ─────────────────────────────────────────────
+        var imgEl      = document.getElementById('atcCertImg');
+        var nameEl     = document.getElementById('atcCertCardName');
+        var gradeDescEl= document.getElementById('atcCertGradeDesc');
+        var metaEl     = document.getElementById('atcCertMeta');
+        var linkEl     = document.getElementById('atcCertLink');
+
+        if (imgEl) {
+          imgEl.src = result.imageUrl || '';
+          imgEl.style.display = result.imageUrl ? '' : 'none';
+        }
+        if (nameEl) nameEl.textContent = result.cardName || 'Unknown Card';
+        if (gradeDescEl) gradeDescEl.textContent = result.gradeDesc || ('PSA ' + (result.grade || '?'));
+        if (metaEl) {
+          var parts = [];
+          if (result.year)   parts.push(result.year);
+          if (result.brand)  parts.push(result.brand);
+          if (result.variety) parts.push(result.variety);
+          metaEl.textContent = parts.join(' · ') || '';
+        }
+        if (linkEl) { linkEl.href = result.specUrl || '#'; }
+        if (preview) preview.style.display = '';
+
+        showToast('✓ PSA cert found — grade & image pre-filled');
+
+      } catch (err) {
+        var msg = err.message || 'Lookup failed';
+        if (msg.includes('not found') || msg.includes('404')) {
+          msg = 'Cert not found — check the number and try again';
+        } else if (msg.includes('secret') || msg.includes('PSA_TOKEN')) {
+          msg = 'PSA_TOKEN secret not set in Supabase — see deployment guide';
+        } else if (msg.includes('Unauthorized') || msg.includes('auth')) {
+          msg = 'Sign in to use cert lookup';
+        }
+        if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
+        console.error('[PSA Cert Lookup]', err);
+      } finally {
+        if (btn) { btn.textContent = '↗ Look Up'; btn.disabled = false; }
+      }
+    }
+    // ── End PSA Cert Lookup ────────────────────────────────────────────────
 
     async function deleteCollectionItem(id) {
       if (!confirm('Remove this card from your collection?')) return;
@@ -11963,6 +12304,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (input)   input.style.display   = state === 'input'   ? '' : 'none';
       if (loading) loading.style.display = state === 'loading' ? '' : 'none';
       if (results) results.style.display = state === 'results' ? '' : 'none';
+
+      // Play only the correct video for the current viewport — never both
+      var vidDesk = document.getElementById('ftVidDesk');
+      var vidMob  = document.getElementById('ftVidMob');
+      if (state === 'loading') {
+        var isMobile = window.innerWidth <= 600;
+        if (vidDesk) { if (!isMobile) { vidDesk.load(); vidDesk.play().catch(function(){}); } else { vidDesk.pause(); } }
+        if (vidMob)  { if (isMobile)  { vidMob.load();  vidMob.play().catch(function(){}); }  else { vidMob.pause(); }  }
+      } else {
+        if (vidDesk) vidDesk.pause();
+        if (vidMob)  vidMob.pause();
+      }
     }
 
     // ── Binder picker ────────────────────────────────────────────────────
@@ -12769,23 +13122,146 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           _tx = null;
         }, { passive: true });
       }
+
+      // Preload neighbours so first nav is instant
+      setTimeout(function() { _ftPreloadAdjacent(side); }, 0);
     }
+
+    // Preload images around the current index so nav feels instant
+    function _ftPreloadAdjacent(side) {
+      var cards = _ftCards[side];
+      var idx = _ftCardIndex[side];
+      if (!cards || cards.length <= 1) return;
+      [-1, 1, -2, 2].forEach(function(offset) {
+        var c = cards[(idx + offset + cards.length) % cards.length];
+        if (c && c.image && !_ftPreloadAdjacent._cache[c.image]) {
+          _ftPreloadAdjacent._cache[c.image] = new Image();
+          _ftPreloadAdjacent._cache[c.image].src = c.image;
+        }
+      });
+    }
+    _ftPreloadAdjacent._cache = {};
 
     function ftNavCard(side, dir) {
       var cards = _ftCards[side];
       if (cards.length <= 1) return;
-      var newIdx = _ftCardIndex[side] + dir;
-      if (newIdx < 0) newIdx = cards.length - 1;
-      if (newIdx >= cards.length) newIdx = 0;
+
+      var newIdx = (_ftCardIndex[side] + dir + cards.length) % cards.length;
       _ftCardIndex[side] = newIdx;
-      _ftRenderCards(side);
-      // Apply slide animation on the new front card
+
+      // ── Try smooth in-place update (no innerHTML wipe) ───────────────────
       var front = document.getElementById('ftCardFront' + side);
-      if (front) {
-        var cls = dir > 0 ? 'slide-next' : 'slide-prev';
-        front.classList.add(cls);
-        setTimeout(function() { if (front) front.classList.remove(cls); }, 230);
+      var stack = document.getElementById('ftStack' + side);
+      var container = document.getElementById('ftCards' + side);
+
+      if (!front || !stack || !container) {
+        // Fallback: full re-render
+        _ftRenderCards(side);
+        return;
       }
+
+      var card = cards[newIdx];
+      var exitCls  = dir > 0 ? 'slide-out-left'  : 'slide-out-right';
+      var enterCls = dir > 0 ? 'slide-next'       : 'slide-prev';
+
+      // ── Step 1: exit animation ────────────────────────────────────────────
+      // Clear any leftover animation classes first
+      front.classList.remove('slide-next','slide-prev','slide-out-left','slide-out-right');
+      front.classList.add(exitCls);
+
+      setTimeout(function() {
+        // ── Step 2: update front card content in-place ─────────────────────
+        var existingImg = front.querySelector('img');
+        var existingNoImg = front.querySelector('.ft-card-no-img');
+
+        if (card.image) {
+          if (existingImg) {
+            existingImg.src = card.image;
+            existingImg.alt = card.name;
+          } else {
+            if (existingNoImg) existingNoImg.remove();
+            var newImg = document.createElement('img');
+            newImg.src = card.image;
+            newImg.alt = card.name;
+            newImg.draggable = false;
+            front.insertBefore(newImg, front.firstChild);
+          }
+        } else {
+          if (existingImg) existingImg.remove();
+          if (existingNoImg) {
+            existingNoImg.textContent = card.name;
+          } else {
+            var newNoImg = document.createElement('div');
+            newNoImg.className = 'ft-card-no-img';
+            newNoImg.textContent = card.name;
+            front.insertBefore(newNoImg, front.firstChild);
+          }
+        }
+
+        // Update remove button target
+        var removeBtn = front.querySelector('.ft-card-remove');
+        if (removeBtn) removeBtn.setAttribute('onclick', "ftRemoveCard('" + side + "','" + card.id + "')");
+
+        // Update qty badge
+        var qtyBadge = front.querySelector('.ft-card-qty-badge');
+        if ((card.qty || 1) > 1) {
+          if (!qtyBadge) {
+            qtyBadge = document.createElement('div');
+            qtyBadge.className = 'ft-card-qty-badge';
+            front.appendChild(qtyBadge);
+          }
+          qtyBadge.textContent = '×' + card.qty;
+        } else if (qtyBadge) {
+          qtyBadge.remove();
+        }
+
+        // ── Step 3: update back-card images in-place ──────────────────────
+        var backs = stack.querySelectorAll('.ft-stack-back');
+        var offsets = [-1, -2, -3];
+        backs.forEach(function(backEl, i) {
+          var bc = cards[(newIdx + offsets[i] + cards.length) % cards.length];
+          if (!bc) return;
+          var bImg = backEl.querySelector('img');
+          if (bc.image) {
+            if (bImg) { bImg.src = bc.image; }
+            else {
+              var nb = document.createElement('img'); nb.src = bc.image;
+              var bNI = backEl.querySelector('.ft-card-no-img');
+              if (bNI) bNI.remove();
+              backEl.appendChild(nb);
+            }
+          } else if (bImg) {
+            bImg.remove();
+          }
+        });
+
+        // ── Step 4: update meta text + counter ────────────────────────────
+        var metaName = container.querySelector('.ft-card-meta-name');
+        var metaSet  = container.querySelector('.ft-card-meta-set');
+        var counter  = container.querySelector('.ft-card-counter');
+        if (metaName) metaName.textContent = card.name;
+        if (metaSet) {
+          var setStr = [card.set, card.number ? '#' + card.number : ''].filter(Boolean).join(' ');
+          metaSet.textContent = setStr;
+        }
+        if (counter) {
+          if (cards.length > 1) {
+            counter.textContent = (newIdx + 1) + ' / ' + cards.length;
+            counter.style.opacity = '';
+          }
+        }
+
+        // ── Step 5: enter animation ────────────────────────────────────────
+        front.classList.remove(exitCls);
+        // Force reflow so removing exitCls and adding enterCls are separate frames
+        void front.offsetWidth;
+        front.classList.add(enterCls);
+        setTimeout(function() { front.classList.remove(enterCls); }, 320);
+
+        // ── Step 6: preload neighbours of the new position ────────────────
+        _ftPreloadAdjacent(side);
+
+      }, 130); // matches exit animation duration
     }
 
     // Show lock-in buttons (session mode) or analyze button (solo mode)
@@ -13347,10 +13823,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // If in a P2P session, broadcast the result
       if (_ftSession) {
         try {
-          await sb.from('fair_trade_sessions').update({
+          var { error: flipErr } = await sb.from('fair_trade_sessions').update({
             coin_flip: { result: result, id: flipId, by: _ftSession.role }
           }).eq('id', _ftSession.id);
-        } catch(_) {}
+          if (flipErr) {
+            console.warn('[FairTrade] Coin flip sync failed:', flipErr.message,
+              '— run: alter table fair_trade_sessions add column if not exists coin_flip jsonb default null;');
+          }
+        } catch(e) {
+          console.warn('[FairTrade] Coin flip sync error:', e);
+        }
       }
 
       _ftAnimateCoin(result, function() {
@@ -14010,7 +14492,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // INITIAL_SESSION: initApp() handles the first render
     });
 
-    initApp().then(() => { updateHeroStats(); if (!currentUser) initLandingCards(); });
+    initApp().then(() => {
+      document.body.style.opacity = '1';
+      updateHeroStats();
+      if (!currentUser) initLandingCards();
+    });
 
     // ── Browser back / forward support ──────────────────────────────────────
     // Fires when the user presses the browser Back or Forward button.
