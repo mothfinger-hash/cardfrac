@@ -891,8 +891,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       #ftBreakdownContent table{font-size:.68rem}
       #ftBreakdownContent td,#ftBreakdownContent th{padding:4px 5px}
 
-      /* Loading Pikachu: a bit smaller */
-      #ftLoadingState svg{width:110px}
+      /* Loading video: desktop=landscape, mobile=portrait */
+      .ft-loading-vid{display:block;margin:0 auto;border-radius:6px;max-width:100%}
+      .ft-loading-desk{max-height:220px}
+      .ft-loading-mob{display:none;max-height:320px}
+      @media(max-width:600px){
+        .ft-loading-desk{display:none}
+        .ft-loading-mob{display:block}
+      }
 
       /* Balance scale labels: larger hit targets */
       #ftVerdict{font-size:.8rem;padding:0 8px;text-align:center}
@@ -1478,19 +1484,12 @@ nav {
 .lp-pdx-photo { width:100%; height:auto; display:block; pointer-events:none; user-select:none; }
 /* Generic screen overlay — sits directly over a white area in the photo */
 .lp-pdx-screen { position:absolute; overflow:hidden; background:#060810; }
-/* Left screen: binder 4×4 grid
-   x: 540–1230  →  left:20.8%  width:26.5%
-   y: 210–1380  →  top:12.4%   height:69%
-   Rotation matches device tilt in photo — adjust --pdx-tilt if needed */
-.lp-pdx-left { left:20.8%; top:12.4%; width:26.5%; height:69%; display:flex; flex-direction:column; transform:rotate(-8deg); transform-origin:center center; }
-/* Right-top screen: price chart
-   x: 1275–2150 → left:49.0%  width:33.7%
-   y: 210–900   → top:12.4%   height:40.7%  */
-.lp-pdx-rt { left:49.0%; top:12.4%; width:33.7%; height:40.7%; display:flex; flex-direction:column; padding:6px 8px 4px; gap:4px; transform:rotate(-8deg); transform-origin:center center; }
-/* Right-bottom screen: trade analyzer
-   x: 1275–2150 → left:49.0%  width:33.7%
-   y: 930–1380  → top:54.9%   height:26.6%  */
-.lp-pdx-rb { left:49.0%; top:54.9%; width:33.7%; height:26.6%; display:flex; flex-direction:column; padding:6px 8px; gap:4px; transform:rotate(-8deg); transform-origin:center center; }
+/* Left screen: binder 4×4 grid — tweak % to match your photo */
+.lp-pdx-left { left:16%; top:8%; width:29%; height:68%; display:flex; flex-direction:column; }
+/* Right-top screen: price chart */
+.lp-pdx-rt { left:47%; top:8%; width:32%; height:40%; display:flex; flex-direction:column; padding:6px 8px 4px; gap:4px; }
+/* Right-bottom screen: trade analyzer */
+.lp-pdx-rb { left:47%; top:50%; width:32%; height:26%; display:flex; flex-direction:column; padding:6px 8px; gap:4px; }
 /* Card grid — fills left screen */
 .lp-mock-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:3px; background:#060810; align-content:start; flex:1; overflow:hidden; }
 .lp-mock-slot { aspect-ratio:.72; background:#0d1018; border:1px solid #1a2030; overflow:hidden; position:relative; cursor:pointer; transition:border-color .12s; }
@@ -3672,56 +3671,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </div>
       </div>
 
-      <!-- ── STATE 2: Pikachu thinking (loading) ────────────────────────── -->
-      <div id="ftLoadingState" style="display:none;text-align:center;padding:30px 0 20px">
-        <svg viewBox="0 0 160 180" xmlns="http://www.w3.org/2000/svg" style="width:140px;margin:0 auto;display:block">
-          <!-- Ears -->
-          <polygon points="38,55 20,8 55,42"  fill="#FFD93D"/>
-          <polygon points="122,55 140,8 105,42" fill="#FFD93D"/>
-          <polygon points="38,55 26,20 50,42"  fill="#333"/>
-          <polygon points="122,55 134,20 110,42" fill="#333"/>
-          <!-- Head -->
-          <ellipse cx="80" cy="82" rx="52" ry="48" fill="#FFD93D"/>
-          <!-- Cheeks -->
-          <ellipse cx="40" cy="96" rx="14" ry="10" fill="#FF6B6B" opacity=".85"/>
-          <ellipse cx="120" cy="96" rx="14" ry="10" fill="#FF6B6B" opacity=".85"/>
-          <!-- Eyes — looking up/thinking -->
-          <ellipse cx="62" cy="72" rx="8" ry="9" fill="#1a1a1a"/>
-          <ellipse cx="98" cy="72" rx="8" ry="9" fill="#1a1a1a"/>
-          <circle  cx="65" cy="69" r="2.5" fill="white"/>
-          <circle  cx="101" cy="69" r="2.5" fill="white"/>
-          <!-- Eyebrows raised — thinking -->
-          <path d="M55,60 Q62,55 70,59" stroke="#1a1a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-          <path d="M90,59 Q98,55 105,60" stroke="#1a1a1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-          <!-- Mouth — small hmm smile -->
-          <path d="M68,100 Q80,110 92,100" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
-          <!-- Body -->
-          <ellipse cx="80" cy="148" rx="36" ry="26" fill="#FFD93D"/>
-          <!-- Belly patch -->
-          <ellipse cx="80" cy="152" rx="20" ry="14" fill="#F0B429" opacity=".6"/>
-          <!-- Tail stub -->
-          <path d="M116,140 Q138,128 130,110 Q122,92 138,82" stroke="#FFD93D" stroke-width="8" fill="none" stroke-linecap="round"/>
-          <!-- Lightning bolt on tail -->
-          <polyline points="130,110 138,98 126,96 134,82" stroke="#FFD93D" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <!-- Thinking bubbles -->
-          <circle id="ftBubble1" cx="128" cy="70" r="5" fill="var(--muted)" opacity="0.5"/>
-          <circle id="ftBubble2" cx="140" cy="55" r="7" fill="var(--muted)" opacity="0.5"/>
-          <circle id="ftBubble3" cx="150" cy="38" r="10" fill="var(--muted)" opacity="0.5"/>
-          <!-- "..." in thought bubble -->
-          <text x="150" y="42" text-anchor="middle" font-size="9" fill="var(--surface)" font-weight="700">…</text>
-        </svg>
-        <div id="ftLoadingMsg" style="font-size:.82rem;color:var(--muted);margin-top:14px;letter-spacing:.04em">Checking prices…</div>
+      <!-- ── STATE 2: loading animation (desktop / mobile GIF variants) ── -->
+      <div id="ftLoadingState" style="display:none;text-align:center;padding:16px 0 12px">
+        <!-- Desktop: landscape video -->
+        <video class="ft-loading-vid ft-loading-desk" autoplay loop muted playsinline>
+          <source src="trade-desktop.webm" type="video/webm">
+          <source src="trade-desktop.mp4"  type="video/mp4">
+        </video>
+        <!-- Mobile: portrait video -->
+        <video class="ft-loading-vid ft-loading-mob" autoplay loop muted playsinline>
+          <source src="trade-mobile.webm" type="video/webm">
+          <source src="trade-mobile.mp4"  type="video/mp4">
+        </video>
+        <div id="ftLoadingMsg" style="font-size:.82rem;color:var(--muted);margin-top:12px;letter-spacing:.04em">Checking prices…</div>
         <div id="ftLoadingProgress" style="font-size:.72rem;color:var(--muted);margin-top:4px"></div>
-        <!-- Animated dots -->
-        <style>
-          @keyframes ftBubblePulse {
-            0%,100% { opacity:.25; transform:scale(.85); }
-            50%      { opacity:.8;  transform:scale(1.1); }
-          }
-          #ftBubble1 { animation: ftBubblePulse 1.4s ease-in-out 0s   infinite; }
-          #ftBubble2 { animation: ftBubblePulse 1.4s ease-in-out .3s  infinite; }
-          #ftBubble3 { animation: ftBubblePulse 1.4s ease-in-out .6s  infinite; }
-        </style>
       </div>
 
       <!-- ── STATE 3: Results (scale + breakdown) ───────────────────────── -->
