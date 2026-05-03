@@ -3641,23 +3641,83 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         <!-- Balance Scale -->
         <div style="text-align:center;margin:10px 0 14px;user-select:none">
-          <svg id="ftScaleSvg" viewBox="0 0 320 130" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible">
-            <rect x="156" y="60" width="8" height="65" rx="2" fill="var(--border)"/>
-            <rect x="128" y="120" width="64" height="8" rx="3" fill="var(--border)"/>
+          <svg id="ftScaleSvg" viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible">
+            <defs>
+              <radialGradient id="scPillarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%"   stop-color="var(--border)"/>
+                <stop offset="45%"  stop-color="var(--surface2)"/>
+                <stop offset="100%" stop-color="var(--border)"/>
+              </radialGradient>
+              <radialGradient id="scGemGrad" cx="35%" cy="35%">
+                <stop offset="0%"   stop-color="var(--accent2)"/>
+                <stop offset="100%" stop-color="var(--accent)"/>
+              </radialGradient>
+              <radialGradient id="scPanGrad" cx="40%" cy="30%">
+                <stop offset="0%"   stop-color="var(--surface2)"/>
+                <stop offset="100%" stop-color="var(--border)"/>
+              </radialGradient>
+            </defs>
+
+            <!-- ── Decorative base (static) ── -->
+            <!-- Bottom foot - wide slab -->
+            <rect x="118" y="155" width="84" height="7"  rx="2" fill="url(#scPillarGrad)"/>
+            <!-- Middle step -->
+            <rect x="128" y="148" width="64" height="8"  rx="2" fill="url(#scPillarGrad)"/>
+            <!-- Narrow step -->
+            <rect x="138" y="141" width="44" height="8"  rx="2" fill="url(#scPillarGrad)"/>
+
+            <!-- Pillar shaft with decorative ring bands -->
+            <rect x="155" y="62" width="10" height="80" rx="0" fill="url(#scPillarGrad)"/>
+            <!-- Ring band 1 -->
+            <rect x="152" y="118" width="16" height="5" rx="2" fill="var(--border)"/>
+            <!-- Ring band 2 -->
+            <rect x="152" y="105" width="16" height="4" rx="2" fill="var(--border)"/>
+            <!-- Ring band 3 -->
+            <rect x="152" y="92"  width="16" height="4" rx="2" fill="var(--border)"/>
+            <!-- Pillar capital (top) — tapered trapezoid -->
+            <polygon points="148,62 172,62 168,54 152,54" fill="url(#scPillarGrad)"/>
+            <!-- Capital finial spike -->
+            <polygon points="158,54 162,54 160,48" fill="var(--accent)"/>
+
+            <!-- ── Beam group (rotates) ── -->
             <g id="ftScaleBeam" style="transform:rotate(0deg);transition:transform .9s cubic-bezier(.34,1.56,.64,1)">
-              <line x1="40" y1="62" x2="280" y2="62" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
-              <line x1="60"  y1="62" x2="42"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-              <line x1="60"  y1="62" x2="78"  y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-              <line x1="260" y1="62" x2="242" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-              <line x1="260" y1="62" x2="278" y2="92" stroke="var(--muted)" stroke-width="1.5"/>
-              <rect id="ftPanLeft"  x="30"  y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
-              <rect id="ftPanRight" x="230" y="92" width="60" height="12" rx="6" fill="var(--surface2)" stroke="var(--border)" stroke-width="1.5"/>
-              <text id="ftLabelLeft"  x="60"  y="101" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
-              <text id="ftLabelRight" x="260" y="101" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
+              <!-- Main beam bar with arrow-tip end caps -->
+              <polygon points="20,59 36,62 20,65" fill="var(--muted)"/>
+              <polygon points="300,59 284,62 300,65" fill="var(--muted)"/>
+              <rect x="36" y="60" width="248" height="4" rx="1" fill="var(--text)"/>
+
+              <!-- Left chain — 4 oval links -->
+              <ellipse cx="60" cy="71" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+              <ellipse cx="60" cy="78" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+              <ellipse cx="60" cy="85" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+              <ellipse cx="60" cy="92" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+
+              <!-- Right chain — 4 oval links -->
+              <ellipse cx="260" cy="71" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+              <ellipse cx="260" cy="78" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+              <ellipse cx="260" cy="85" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+              <ellipse cx="260" cy="92" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+
+              <!-- Left pan — bowl shape (path arc) -->
+              <path id="ftPanLeft" d="M26,97 Q60,112 94,97" stroke="var(--border)" stroke-width="2" fill="url(#scPanGrad)" stroke-linecap="round"/>
+              <line x1="26" y1="97" x2="94" y2="97" stroke="var(--border)" stroke-width="1.5"/>
+
+              <!-- Right pan — bowl shape -->
+              <path id="ftPanRight" d="M226,97 Q260,112 294,97" stroke="var(--border)" stroke-width="2" fill="url(#scPanGrad)" stroke-linecap="round"/>
+              <line x1="226" y1="97" x2="294" y2="97" stroke="var(--border)" stroke-width="1.5"/>
+
+              <!-- Price labels inside pans -->
+              <text id="ftLabelLeft"  x="60"  y="108" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
+              <text id="ftLabelRight" x="260" y="108" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
             </g>
-            <circle cx="160" cy="62" r="5" fill="var(--accent)"/>
-            <text x="60"  y="115" text-anchor="middle" font-size="8" fill="var(--teal)" font-family="monospace">SIDE A</text>
-            <text x="260" y="115" text-anchor="middle" font-size="8" fill="var(--gold)" font-family="monospace">SIDE B</text>
+
+            <!-- ── Pivot gem (static, drawn on top) ── -->
+            <polygon points="160,55 165,62 160,69 155,62" fill="url(#scGemGrad)" stroke="var(--accent2)" stroke-width="1"/>
+            <polygon points="160,58 163,62 160,66 157,62" fill="var(--accent2)" opacity=".4"/>
+
+            <!-- ── SIDE labels (static, well below pans' max displacement) ── -->
+            <text x="60"  y="158" text-anchor="middle" font-size="7.5" fill="var(--teal)" font-family="monospace" font-weight="700" letter-spacing="1">SIDE A</text>
+            <text x="260" y="158" text-anchor="middle" font-size="7.5" fill="var(--gold)" font-family="monospace" font-weight="700" letter-spacing="1">SIDE B</text>
           </svg>
           <div id="ftVerdict" style="font-size:.9rem;font-weight:700;letter-spacing:.06em;margin-top:6px;min-height:22px;transition:color .4s"></div>
           <!-- ── Coin Flip ── -->
@@ -10338,6 +10398,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ── Binder drag-and-drop state ─────────────────────────────────────────
     let dragSrcId = null;      // ID of the card being dragged (string)
     let dragSrcIndex = null;   // legacy alias kept so touch handler still compiles
+    let _dragCrossPage = false; // true if a page flip happened during this drag
     let binderSaveTimer = null;
     let _dragPageFlipTimer = null; // cross-page flip debounce
 
@@ -10694,6 +10755,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         clone = null;
         if (src) src.style.opacity = '';
         src = null; active = false;
+        dragSrcId = null; dragSrcIndex = null; _dragCrossPage = false;
         document.body.style.overflow = ''; // restore scroll
         document.querySelectorAll('#binderGrid .binder-card').forEach(c => c.classList.remove('drag-over'));
       }
@@ -10765,6 +10827,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           if (!_dragPageFlipTimer) {
             _dragPageFlipTimer = setTimeout(() => {
               _dragPageFlipTimer = null;
+              _dragCrossPage = true;
               binderChangePage(parseInt(pageBtn.dataset.dir));
             }, 700);
           }
@@ -10799,6 +10862,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function binderDragStart(e, itemId) {
       dragSrcId = String(itemId);
       dragSrcIndex = dragSrcId; // keep alias in sync
+      _dragCrossPage = false;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', dragSrcId);
       e.currentTarget.style.opacity = '0.4';
@@ -10821,6 +10885,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         _dragPageFlipTimer = null;
         const content = document.getElementById('collectionContent');
         if (!content) return;
+        _dragCrossPage = true; // page flipped — next drop is cross-page
         binderChangePage(dir);
       }, 700);
     }
@@ -10833,13 +10898,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       e.preventDefault();
       clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
       const srcId = dragSrcId;
+      const crossPage = _dragCrossPage;
+      _dragCrossPage = false;
       if (!srcId || String(srcId) === String(targetId)) return;
-      // Find both items in collectionItems by ID (not by page-offset index)
+      // Find both items in collectionItems by ID
       const srcIdx = collectionItems.findIndex(c => String(c.id) === String(srcId));
       const tgtIdx = collectionItems.findIndex(c => String(c.id) === String(targetId));
       if (srcIdx === -1 || tgtIdx === -1) return;
-      const [moved] = collectionItems.splice(srcIdx, 1);
-      collectionItems.splice(tgtIdx, 0, moved);
+
+      if (crossPage) {
+        // Cross-page: insert src before/after target (preserves page layout intent)
+        const [moved] = collectionItems.splice(srcIdx, 1);
+        const newTgt  = collectionItems.findIndex(c => String(c.id) === String(targetId));
+        collectionItems.splice(newTgt, 0, moved);
+      } else {
+        // Same page: simple swap — both cards stay in their positions, just switched
+        const tmp = collectionItems[srcIdx];
+        collectionItems[srcIdx] = collectionItems[tgtIdx];
+        collectionItems[tgtIdx] = tmp;
+      }
+
       dragSrcId = null; dragSrcIndex = null;
       renderBinder();
       clearTimeout(binderSaveTimer);
@@ -10847,7 +10925,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function binderDragEnd(e) {
-      dragSrcId = null; dragSrcIndex = null;
+      dragSrcId = null; dragSrcIndex = null; _dragCrossPage = false;
       clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
       document.querySelectorAll('#binderGrid .binder-card').forEach(el => {
         el.style.opacity = '';
@@ -12002,10 +12080,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     //     side_b    jsonb       not null default '[]'::jsonb,
     //     cash_a    numeric     not null default 0,
     //     cash_b    numeric     not null default 0,
+    //     coin_flip jsonb       default null,
     //     created_at timestamptz not null default now(),
     //     expires_at timestamptz not null default (now() + interval '5 minutes')
     //   );
     //   alter table fair_trade_sessions disable row level security;
+    //
+    // If upgrading an existing table, add the coin_flip column:
+    //   alter table fair_trade_sessions add column if not exists coin_flip jsonb default null;
     //
     // expires_at is refreshed to now()+10min on every sync write, so the session
     // stays alive as long as either device is active. Goes quiet for 10 minutes
@@ -12220,6 +12302,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             setTimeout(function() { banner.classList.remove('ft-session-joined'); }, 2800);
           }
           _ftRenderSessionBanner();
+        }
+
+        // ── Coin flip sync ───────────────────────────────────────────────
+        if (data.coin_flip && data.coin_flip.id && data.coin_flip.by !== role) {
+          _ftHandleRemoteCoinFlip(data.coin_flip);
         }
 
         // ── Lock-in sync ─────────────────────────────────────────────────
@@ -13175,12 +13262,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
 
     // ── Coin Flip ─────────────────────────────────────────────────────────
-    function ftFlipCoin() {
+    var _ftLastCoinFlipId = null; // tracks synced flip IDs so we don't replay our own
+
+    function _ftAnimateCoin(result, onDone) {
       var res = document.getElementById('ftCoinResult');
-      var btn = document.getElementById('ftCoinFlipBtn');
-      if (!res || !btn) return;
-      btn.disabled = true;
-      btn.style.opacity = '0.4';
+      if (!res) return;
       res.innerHTML = `
         <svg id="ftCoinSvg" viewBox="0 0 80 80" width="80" height="80" style="overflow:visible">
           <defs>
@@ -13205,38 +13291,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div id="ftCoinLabel" style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em">FLIPPING...</div>
       `;
 
-      var result = Math.random() < 0.5 ? 'heads' : 'tails';
       var coinEl = document.getElementById('ftCoinBody');
       var headsEl = document.getElementById('ftCoinHeads');
       var tailsEl = document.getElementById('ftCoinTails');
       var labelEl = document.getElementById('ftCoinLabel');
-      var svg = document.getElementById('ftCoinSvg');
 
-      // Animate: squish the ry to simulate flipping, alternate heads/tails faces
       var frame = 0;
       var totalFrames = 28;
       var showing = 'heads';
       var interval = setInterval(function() {
         frame++;
-        // ry oscillates between 0 and 36 — simulates coin edge rotation
         var progress = frame / totalFrames;
         var ry = Math.abs(Math.sin(progress * Math.PI * 5)) * 36;
         if (coinEl) coinEl.setAttribute('ry', String(Math.max(2, Math.round(ry))));
-        // Flip which face shows when ry is near 0
         if (ry < 6) {
           var nextFace = (showing === 'heads') ? 'tails' : 'heads';
-          // On last few frames, lock to result
           if (frame > totalFrames - 6) nextFace = result;
           showing = nextFace;
           if (headsEl) headsEl.style.display = showing === 'heads' ? '' : 'none';
           if (tailsEl) tailsEl.style.display = showing === 'tails' ? '' : 'none';
-          // Update gradient fill
           if (coinEl) coinEl.setAttribute('fill', showing === 'heads' ? 'url(#cgH)' : 'url(#cgT)');
           if (coinEl) coinEl.setAttribute('stroke', showing === 'heads' ? '#8B6914' : '#555');
         }
         if (frame >= totalFrames) {
           clearInterval(interval);
-          // Final state
           if (coinEl) coinEl.setAttribute('ry', '36');
           showing = result;
           if (headsEl) headsEl.style.display = result === 'heads' ? '' : 'none';
@@ -13250,9 +13328,52 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             labelEl.style.color = result === 'heads' ? 'var(--accent2)' : 'var(--accent)';
             labelEl.style.fontSize = '10px';
           }
-          if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+          if (typeof onDone === 'function') onDone();
         }
       }, 40);
+    }
+
+    async function ftFlipCoin() {
+      var btn = document.getElementById('ftCoinFlipBtn');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.style.opacity = '0.4';
+
+      var result = Math.random() < 0.5 ? 'heads' : 'tails';
+      // Generate a unique flip ID so peer can detect new flips
+      var flipId = Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      _ftLastCoinFlipId = flipId;
+
+      // If in a P2P session, broadcast the result
+      if (_ftSession) {
+        try {
+          await sb.from('fair_trade_sessions').update({
+            coin_flip: { result: result, id: flipId, by: _ftSession.role }
+          }).eq('id', _ftSession.id);
+        } catch(_) {}
+      }
+
+      _ftAnimateCoin(result, function() {
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+      });
+    }
+
+    // Called by poll when other side flips the coin
+    function _ftHandleRemoteCoinFlip(coinFlip) {
+      if (!coinFlip || !coinFlip.id || coinFlip.id === _ftLastCoinFlipId) return;
+      _ftLastCoinFlipId = coinFlip.id;
+      var btn = document.getElementById('ftCoinFlipBtn');
+      if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; }
+      var res = document.getElementById('ftCoinResult');
+      var whoLabel = coinFlip.by === 'a' ? 'Side A' : 'Side B';
+      if (res) {
+        res.innerHTML = `<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:6px">${whoLabel} flipped…</div>`;
+      }
+      setTimeout(function() {
+        _ftAnimateCoin(coinFlip.result, function() {
+          if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        });
+      }, 300);
     }
 
     // ── End Fair Trade ─────────────────────────────────────────────────────
