@@ -15080,6 +15080,158 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       await runMatch(dataURL);
     }
 
+    // ── Slab fast-path: cert number found → skip card matching ───────────────
+    const _slabCompanyLabels = { psa:'PSA', bgs:'BGS / Beckett', cgc:'CGC', sgc:'SGC', ace:'ACE' };
+
+    async function handleSlabScan(slab) {
+      const label = _slabCompanyLabels[slab.company] || slab.company.toUpperCase();
+
+      if (slab.company === 'psa') {
+        // ── PSA: hit our edge function directly ──────────────────────────
+        setScanStatus('PSA slab · cert #' + slab.certNumber + ' · looking up…');
+        try {
+          const result = await callEdgeFunction('psa-cert-lookup', { certNumber: slab.certNumber });
+          if (result && !result.error) {
+            setScanStatus('PSA cert found — opening card details…');
+            setTimeout(function() { _openModalFromSlabCert(slab, result); }, 250);
+            return;
+          }
+          // Cert not found — fall through to manual panel
+          setScanStatus('PSA cert #' + slab.certNumber + ' not found — add manually');
+        } catch(e) {
+          console.warn('[Slab]', e);
+          setScanStatus('Cert lookup failed — add manually below');
+        }
+      } else {
+        setScanStatus(label + ' slab detected · cert #' + slab.certNumber);
+      }
+
+      // ── Non-PSA or PSA lookup failed: show a cert panel with a verify link ─
+      const certUrl = (typeof _certLookupUrls !== 'undefined' && _certLookupUrls[slab.company])
+        ? _certLookupUrls[slab.company](slab.certNumber)
+        : null;
+
+      const wrap = document.getElementById('scannerResults');
+      if (wrap) wrap.innerHTML = `
+        <div style="background:rgba(0,204,255,.08);border:1px solid var(--teal);padding:14px 16px;font-family:'Space Mono','Share Tech Mono',monospace;margin-bottom:10px">
+          <div style="font-size:.56rem;color:var(--teal);letter-spacing:.1em;margin-bottom:8px">◈ GRADED SLAB DETECTED</div>
+          <div style="font-size:.9rem;color:var(--text);font-weight:700;margin-bottom:3px">${label}</div>
+          ${slab.grade    ? `<div style="font-size:.72rem;color:var(--accent);margin-bottom:3px">Grade: ${slab.grade}</div>` : ''}
+          <div style="font-size:.68rem;color:var(--muted);margin-bottom:12px">Cert # ${slab.certNumber}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${certUrl ? `<a href="${certUrl}" target="_blank" rel="noopener"
+              style="padding:7px 14px;border:1px solid var(--teal);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;text-decoration:none;cursor:pointer">
+              ↗ Verify on ${label}
+            </a>` : ''}
+            <button onclick="openManualSlabAdd('${slab.company}','${slab.certNumber}','${slab.grade||''}')"
+              style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer">
+              + Add to Collection
+            </button>
+          </div>
+        </div>`;
+    }
+
+    // Opens the add-to-collection modal pre-filled from a PSA cert API result
+    function _openModalFromSlabCert(slab, cert) {
+      _returnToScanner = true;
+      document.getElementById('scannerModal').style.display = 'none';
+
+      pendingCollectionCard = {
+        apiCardId:    null,
+        cardName:     cert.cardName  || '',
+        setName:      [cert.brand, cert.year].filter(Boolean).join(' ') || '',
+        setCode:      '',
+        cardNumber:   cert.cardNumber || '',
+        cardImageUrl: '',
+        gameType:     'pokemon',
+        _psaImageUrl: cert.imageUrl  || null
+      };
+
+      // Card name header
+      var nameEl = document.getElementById('atcCardName');
+      if (nameEl) nameEl.textContent = (cert.cardName || 'Unknown Card');
+      // Show manual name row so they can correct if needed
+      var manualRow = document.getElementById('atcManualNameRow');
+      if (manualRow) manualRow.style.display = '';
+      var manualInput = document.getElementById('atcManualNameInput');
+      if (manualInput) manualInput.value = cert.cardName || '';
+
+      // Condition / grade
+      var condEl = document.getElementById('atcCondition');
+      if (condEl) condEl.value = slab.company;
+      var validGrades = ['10','9.5','9','8.5','8','7.5','7','6.5','6','5.5','5','4.5','4','3','2','1'];
+      var grade = cert.grade || slab.grade || '10';
+      var gradeEl = document.getElementById('atcGrade');
+      if (gradeEl) gradeEl.value = validGrades.includes(grade) ? grade : '10';
+
+      // Cert number
+      var certEl = document.getElementById('atcCertNumber');
+      if (certEl) certEl.value = cert.certNumber || slab.certNumber || '';
+
+      // Reset other fields
+      document.getElementById('atcQuantity').value = '1';
+      document.getElementById('atcPurchasePrice').value = '';
+      document.getElementById('atcPurchaseDate').value = '';
+      document.getElementById('atcPriceUrl').value = '';
+      document.getElementById('atcNotes').value = '';
+      atcClearPhoto();
+      toggleGradeField();
+
+      // Show PSA cert preview panel (same as after manual lookup)
+      _atcPsaData = cert;
+      var preview = document.getElementById('atcCertPreview');
+      var imgEl   = document.getElementById('atcCertImg');
+      var cName   = document.getElementById('atcCertCardName');
+      var cGrade  = document.getElementById('atcCertGradeDesc');
+      var cMeta   = document.getElementById('atcCertMeta');
+      var cLink   = document.getElementById('atcCertLink');
+      if (imgEl)  { imgEl.src = cert.imageUrl || ''; imgEl.style.display = cert.imageUrl ? '' : 'none'; }
+      if (cName)  cName.textContent  = cert.cardName || '';
+      if (cGrade) cGrade.textContent = cert.gradeDesc || ('PSA ' + (cert.grade || '?'));
+      var meta = [cert.year, cert.brand, cert.variety, cert.cardNumber ? '#'+cert.cardNumber : ''].filter(Boolean).join(' · ');
+      if (cMeta)  cMeta.textContent = meta;
+      if (cLink)  { cLink.href = cert.specUrl || '#'; cLink.style.display = ''; }
+      if (preview) preview.style.display = '';
+      atcUpdateCertBtn();
+
+      populateBinderDropdown('atcBinderId', currentBinderId);
+      openModal('addToCollectionModal');
+    }
+
+    // Opens the add-to-collection modal in manual-entry mode pre-filled from slab data
+    function openManualSlabAdd(company, certNumber, grade) {
+      pendingCollectionCard = { apiCardId:null, cardName:'', setName:'', setCode:'', cardNumber:'', cardImageUrl:'', gameType:'pokemon' };
+      var nameEl = document.getElementById('atcCardName');
+      if (nameEl) nameEl.textContent = 'Manual Entry';
+      var manualRow = document.getElementById('atcManualNameRow');
+      if (manualRow) manualRow.style.display = '';
+      var manualInput = document.getElementById('atcManualNameInput');
+      if (manualInput) manualInput.value = '';
+
+      var condEl = document.getElementById('atcCondition');
+      if (condEl && ['psa','bgs','cgc','sgc','ace'].includes(company)) condEl.value = company;
+      var gradeEl = document.getElementById('atcGrade');
+      var validGrades = ['10','9.5','9','8.5','8','7.5','7','6.5','6','5.5','5','4.5','4','3','2','1'];
+      if (gradeEl) gradeEl.value = validGrades.includes(grade) ? grade : '10';
+      var certEl = document.getElementById('atcCertNumber');
+      if (certEl) certEl.value = certNumber || '';
+
+      document.getElementById('atcQuantity').value = '1';
+      document.getElementById('atcPurchasePrice').value = '';
+      document.getElementById('atcPurchaseDate').value = '';
+      document.getElementById('atcPriceUrl').value = '';
+      document.getElementById('atcNotes').value = '';
+      atcClearPhoto();
+      toggleGradeField();
+      atcUpdateCertBtn();
+      populateBinderDropdown('atcBinderId', currentBinderId);
+
+      _returnToScanner = true;
+      document.getElementById('scannerModal').style.display = 'none';
+      openModal('addToCollectionModal');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     function showScanResults(matches) {
       const wrap = document.getElementById('scannerResults');
       const slab = window._detectedSlab;
@@ -15515,8 +15667,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         // ── Graded slab detection ────────────────────────────────────────────
         window._detectedSlab = parseGradedSlab(fullText);
-        if (window._detectedSlab && !silent) {
+        if (window._detectedSlab) {
           console.log('[Scanner] Slab detected:', window._detectedSlab);
+          // If we have a cert number, skip card matching entirely and go straight
+          // to the cert lookup / manual-add flow.
+          if (!silent && window._detectedSlab.certNumber) {
+            await handleSlabScan(window._detectedSlab);
+            return [];
+          }
         }
 
         // parseCardNumber now returns { full, num, numRaw, total }
