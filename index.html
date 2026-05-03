@@ -549,27 +549,34 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
 
     /* MOBILE BOTTOM NAV */
-    .mobile-nav{
-      display:none;
-      position:fixed;bottom:0;left:0;right:0;
-      height:60px;
-      background:var(--surface);
-      border-top:2px solid var(--border);
-      z-index:9999;
-      align-items:stretch;
-      box-shadow:0 -3px 0 var(--shadow);
-    }
-    .mobile-nav-btn{
-      flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;
-      font-size:.5rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
-      transition:color .15s;padding:0;position:relative;
-    }
+    /* Bottom mobile nav — retained for JS refs but hidden in favour of top nav */
+    .mobile-nav{display:none}
+    .mobile-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.5rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;transition:color .15s;padding:0;position:relative;}
     .mobile-nav-btn.active{color:var(--accent)}
     .mobile-nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .mobile-nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700}
-    @media(max-width:600px){
-      .mobile-nav{display:flex}
+
+    /* ── TOP NAV (mobile only, not sticky) ──────────────────────────────────── */
+    .top-nav{display:none;flex-direction:column;background:var(--surface);border-bottom:2px solid var(--border);width:100%;box-sizing:border-box;z-index:100}
+    .top-nav-row1{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;gap:10px;height:48px;box-sizing:border-box}
+    .top-nav-logo{height:26px;width:auto;display:block;object-fit:contain;cursor:pointer}
+    .top-nav-auth-btns{display:flex;gap:6px;align-items:center}
+    .top-nav-auth-btns .auth-btn{width:auto;padding:4px 10px;font-size:.56rem}
+    .top-nav-user-chip{display:flex;align-items:center;gap:7px;cursor:pointer;padding:3px 8px;border:1px solid var(--border)}
+    .top-nav-user-chip .avatar-circle{width:26px;height:26px;border-radius:0;font-size:.6rem;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .top-nav-username{font-family:'Space Mono',monospace;font-size:.58rem;color:var(--text)}
+    .top-nav-tabs{display:flex;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--border);padding:0 4px}
+    .top-nav-tabs::-webkit-scrollbar{display:none}
+    .top-nav-tab{display:flex;align-items:center;gap:5px;padding:8px 12px;border:none;background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .12s;flex-shrink:0}
+    .top-nav-tab svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+    .top-nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .top-nav-tab:hover{color:var(--text)}
+    .top-nav-premium{font-family:'Orbitron',monospace;font-weight:800;font-size:.5rem;padding:3px 7px;background:var(--premium);color:var(--premium-txt);border:none;cursor:pointer;letter-spacing:.06em}
+    @media(max-width:900px){
+      .top-nav{display:flex}
+      nav{display:none!important}
+      body{padding-left:0!important}
+      body.nav-collapsed{padding-left:0!important}
     }
 
 
@@ -1193,6 +1200,8 @@ nav {
   box-shadow: 3px 0 0 var(--accent) !important;
 }
 .nav-header { border-bottom: 2px solid var(--accent) !important; }
+.top-nav { border-bottom: 2px solid var(--accent) !important; background: #000 !important; }
+.top-nav-tabs { border-top: 1px solid rgba(0,229,255,.2) !important; }
 .nav-collapse-btn { border-color: var(--border) !important; }
 .nav-collapse-btn:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 .nav-section { }
@@ -1484,12 +1493,12 @@ nav {
 .lp-pdx-photo { width:100%; height:auto; display:block; pointer-events:none; user-select:none; }
 /* Generic screen overlay — sits directly over a white area in the photo */
 .lp-pdx-screen { position:absolute; overflow:hidden; background:#060810; }
-/* Left screen: binder 4×4 grid — tweak % to match your photo */
-.lp-pdx-left { left:16%; top:8%; width:29%; height:68%; display:flex; flex-direction:column; }
+/* Left screen: binder 4×4 grid */
+.lp-pdx-left { left:14%; top:7%; width:27%; height:67%; display:flex; flex-direction:column; }
 /* Right-top screen: price chart */
-.lp-pdx-rt { left:47%; top:8%; width:32%; height:40%; display:flex; flex-direction:column; padding:6px 8px 4px; gap:4px; }
+.lp-pdx-rt { left:44%; top:7%; width:30%; height:34%; display:flex; flex-direction:column; padding:5px 7px 4px; gap:3px; }
 /* Right-bottom screen: trade analyzer */
-.lp-pdx-rb { left:47%; top:50%; width:32%; height:26%; display:flex; flex-direction:column; padding:6px 8px; gap:4px; }
+.lp-pdx-rb { left:44%; top:43%; width:30%; height:30%; display:flex; flex-direction:column; padding:5px 7px; gap:3px; }
 /* Card grid — fills left screen */
 .lp-mock-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:3px; background:#060810; align-content:start; flex:1; overflow:hidden; }
 .lp-mock-slot { aspect-ratio:.72; background:#0d1018; border:1px solid #1a2030; overflow:hidden; position:relative; cursor:pointer; transition:border-color .12s; }
@@ -1505,6 +1514,12 @@ nav {
 .lp-pdx-lbl { font-family:'Press Start 2P',monospace; font-size:4px; color:rgba(0,229,255,.45); letter-spacing:.1em; text-transform:uppercase; flex-shrink:0; }
 /* Price chart */
 .lp-pdx-chart { flex:1; width:100%; overflow:visible; min-height:0; }
+/* Chart stats row */
+.lp-pdx-stats-row { display:flex; gap:0; flex-shrink:0; border-top:1px solid rgba(0,229,255,.1); margin-top:2px; }
+.lp-pdx-stat { flex:1; display:flex; flex-direction:column; align-items:center; padding:3px 1px; border-right:1px solid rgba(0,229,255,.08); }
+.lp-pdx-stat:last-child { border-right:none; }
+.lp-pdx-stat-val { font-family:'Orbitron',monospace; font-weight:900; font-size:6px; color:var(--accent); line-height:1.2; }
+.lp-pdx-stat-lbl { font-family:'Space Mono',monospace; font-size:3px; color:#334; letter-spacing:.06em; text-transform:uppercase; }
 /* Trade analyzer */
 .lp-pdx-trade-row { display:flex; align-items:center; justify-content:space-between; gap:4px; flex:1; }
 .lp-pdx-trade-side { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; min-width:0; }
@@ -2281,6 +2296,44 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>
     </div>
   </nav>
+
+  <!-- ── TOP NAV (mobile, non-sticky) ──────────────────────────────────────── -->
+  <header class="top-nav" id="topNav">
+    <div class="top-nav-row1">
+      <img src="pathbinder-logo.png" class="top-nav-logo" alt="PathBinder"
+           onclick="if(!currentUser){showPage('landing')}else{showPage('collection');setTopNavActive('collection')}">
+      <div id="topNavAuthSection" class="top-nav-auth-btns">
+        <button class="auth-btn" onclick="openModal('loginModal')">Login</button>
+        <button class="auth-btn join-btn" onclick="openModal('registerModal')">Join</button>
+      </div>
+      <div id="topNavUserSection" style="display:none">
+        <div class="top-nav-user-chip" onclick="showPage('account');setTopNavActive('account')">
+          <div class="avatar-circle" id="topNavAvatar">?</div>
+          <span class="top-nav-username" id="topNavUsername">User</span>
+        </div>
+      </div>
+    </div>
+    <div class="top-nav-tabs" id="topNavTabs">
+      <button class="top-nav-tab" id="topNavTabCollection" onclick="showPage('collection');setTopNavActive('collection')">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>My Binder
+      </button>
+      <button class="top-nav-tab" id="topNavTabAddCard" onclick="showPage('addCard');setTopNavActive('addCard')">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Card
+      </button>
+      <button class="top-nav-tab" id="topNavTabSets" onclick="showPage('sets');setTopNavActive('sets')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l5 3"/></svg>Sets
+      </button>
+      <button class="top-nav-tab" id="topNavTabBrowse" onclick="showPage('browse');setTopNavActive('browse')">
+        <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>Market
+      </button>
+      <button class="top-nav-tab" id="topNavTabFairTrade" onclick="showPage('fairTrade');setTopNavActive('fairTrade')">
+        <svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>Trades
+      </button>
+      <button class="top-nav-tab" id="topNavTabAccount" onclick="showPage('account');setTopNavActive('account')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Dashboard
+      </button>
+    </div>
+  </header>
 
   <div id="avatarPage" class="page">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
@@ -3136,17 +3189,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <!-- RIGHT-TOP SCREEN: price tracking chart -->
           <div class="lp-pdx-screen lp-pdx-rt">
             <div class="lp-pdx-lbl">Price Index — 30d</div>
-            <svg class="lp-pdx-chart" viewBox="0 0 160 90" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="0" y1="22" x2="160" y2="22" stroke="#1a2538" stroke-width="0.8"/>
-              <line x1="0" y1="45" x2="160" y2="45" stroke="#1a2538" stroke-width="0.8"/>
-              <line x1="0" y1="68" x2="160" y2="68" stroke="#1a2538" stroke-width="0.8"/>
-              <path d="M0 76 L18 64 L34 57 L50 61 L66 45 L82 34 L98 24 L114 18 L130 27 L160 10 L160 90 L0 90 Z" fill="rgba(0,229,255,0.08)"/>
-              <path d="M0 76 L18 64 L34 57 L50 61 L66 45 L82 34 L98 24 L114 18 L130 27 L160 10" stroke="#00E5FF" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="160" cy="10" r="2.5" fill="#00E5FF"/>
-              <text x="2" y="88" font-family="monospace" font-size="6" fill="#334455">30d</text>
-              <text x="2" y="20" font-family="monospace" font-size="6" fill="#334455">$400</text>
-              <text x="126" y="88" font-family="monospace" font-size="7" fill="#00E5FF" font-weight="bold">+18%</text>
+            <svg class="lp-pdx-chart" viewBox="0 0 160 72" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="0" y1="18" x2="160" y2="18" stroke="#1a2538" stroke-width="0.8"/>
+              <line x1="0" y1="36" x2="160" y2="36" stroke="#1a2538" stroke-width="0.8"/>
+              <line x1="0" y1="54" x2="160" y2="54" stroke="#1a2538" stroke-width="0.8"/>
+              <path d="M0 60 L18 51 L34 46 L50 49 L66 36 L82 27 L98 19 L114 15 L130 22 L160 8 L160 72 L0 72 Z" fill="rgba(0,229,255,0.08)"/>
+              <path d="M0 60 L18 51 L34 46 L50 49 L66 36 L82 27 L98 19 L114 15 L130 22 L160 8" stroke="#00E5FF" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="160" cy="8" r="2.5" fill="#00E5FF"/>
+              <text x="2" y="70" font-family="monospace" font-size="5.5" fill="#334455">30d</text>
+              <text x="2" y="16" font-family="monospace" font-size="5.5" fill="#334455">$400</text>
+              <text x="120" y="70" font-family="monospace" font-size="6.5" fill="#00E5FF" font-weight="bold">+18%</text>
             </svg>
+            <div class="lp-pdx-stats-row">
+              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val">$312</div><div class="lp-pdx-stat-lbl">AVG</div></div>
+              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val" style="color:#00ff99">$418</div><div class="lp-pdx-stat-lbl">HIGH</div></div>
+              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val" style="color:#ff4d6d">$271</div><div class="lp-pdx-stat-lbl">LOW</div></div>
+              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val">1.2K</div><div class="lp-pdx-stat-lbl">VOL</div></div>
+            </div>
           </div>
 
           <!-- RIGHT-BOTTOM SCREEN: live trade indicator -->
@@ -4211,14 +4270,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     // Convenience wrapper for landing page CTA buttons
     function openAuthModal(tab) {
-      openModal('authModal');
       if (tab === 'signup') {
-        const regTab = document.getElementById('authModalTab-register');
-        if (regTab) regTab.click();
+        openModal('registerModal');
       } else {
-        const loginTab = document.getElementById('authModalTab-login');
-        if (loginTab) loginTab.click();
+        openModal('loginModal');
       }
+    }
+
+    function setTopNavActive(pageId) {
+      document.querySelectorAll('.top-nav-tab').forEach(t => t.classList.remove('active'));
+      const tab = document.getElementById('topNavTab' + pageId.charAt(0).toUpperCase() + pageId.slice(1));
+      if (tab) tab.classList.add('active');
     }
     function closeModal(modalId) {
       document.getElementById(modalId).classList.remove('open');
@@ -4366,6 +4428,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         authSection.style.display = 'flex';
         userSection.style.display = 'none';
         adminTab.classList.remove('admin-visible');
+      }
+      // Sync top nav auth state
+      const tnAuth = document.getElementById('topNavAuthSection');
+      const tnUser = document.getElementById('topNavUserSection');
+      if (tnAuth && tnUser) {
+        tnAuth.style.display = currentUser ? 'none' : 'flex';
+        tnUser.style.display = currentUser ? 'block' : 'none';
+        if (currentUser) {
+          const displayName = currentUser.name || currentUser.user_metadata?.name || currentUser.email || 'User';
+          const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+          const tnAvatar = document.getElementById('topNavAvatar');
+          const tnName = document.getElementById('topNavUsername');
+          const savedPfp = localStorage.getItem('pathbinder_avatar_pfp_v1');
+          if (tnAvatar) {
+            if (savedPfp) {
+              tnAvatar.textContent = '';
+              tnAvatar.style.backgroundImage = 'url(' + savedPfp + ')';
+              tnAvatar.style.backgroundSize = 'auto 190%';
+              tnAvatar.style.backgroundPosition = 'center 4%';
+              tnAvatar.style.backgroundRepeat = 'no-repeat';
+            } else {
+              tnAvatar.textContent = initials;
+              tnAvatar.style.backgroundImage = '';
+            }
+          }
+          if (tnName) tnName.textContent = currentUser.username || currentUser.email?.split('@')[0] || 'User';
+        }
       }
     }
 
@@ -4617,6 +4706,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const navTab = document.querySelector(`[data-page="${pageId}"]`);
       if (navTab) navTab.classList.add('active');
+      // Sync top nav: hide tabs on landing, show+activate on other pages
+      const tnTabs = document.getElementById('topNavTabs');
+      if (tnTabs) tnTabs.style.display = pageId === 'landing' ? 'none' : '';
+      setTopNavActive(pageId);
       if (pageId === 'account') {
         renderAccount();
         // If there are pending trade offers, land directly on the Trade Offers tab
