@@ -11277,6 +11277,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
         </div>
         <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
+          <button onclick="openCardPhotoModal('${item.id}')"
+            style="padding:8px 18px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
+            onmouseover="this.style.background='rgba(0,204,255,.1)'"
+            onmouseout="this.style.background='transparent'">📷 Update Photo</button>
           <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
             style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List for Sale</button>
           <button onclick="openSoldOfflineModal('${item.id}')"
@@ -12097,6 +12101,179 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (btn)   { btn.textContent = '✦ Remove Background'; btn.disabled = false; btn.style.borderColor = 'var(--teal)'; btn.style.color = 'var(--teal)'; }
     }
     // ─────────────────────────────────────────────────────────────────────
+
+    // ── Card Photo Update Modal (crop + optional bg removal) ──────────────
+    var _cpItemId   = null;
+    var _cpCropper  = null;
+    var _cpBgBusy   = false;
+    var _cpOrigBlob = null;
+
+    async function _cpLoadCropperJs() {
+      if (window.Cropper) return;
+      if (!document.getElementById('cropperCss')) {
+        var link  = document.createElement('link');
+        link.id   = 'cropperCss';
+        link.rel  = 'stylesheet';
+        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css';
+        document.head.appendChild(link);
+      }
+      await new Promise(function(resolve, reject) {
+        var s  = document.createElement('script');
+        s.src  = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js';
+        s.onload  = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    function openCardPhotoModal(itemId) {
+      _cpItemId = itemId;
+      cpResetFile();
+      openModal('cardPhotoModal');
+    }
+
+    function closeCardPhotoModal() {
+      if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
+      closeModal('cardPhotoModal');
+    }
+
+    function cpHandleDrop(e) {
+      e.preventDefault();
+      var dz = document.getElementById('cpUploadZone');
+      if (dz) dz.style.borderColor = 'var(--border)';
+      var file = e.dataTransfer && e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) cpLoadFile(file);
+    }
+
+    async function cpLoadFile(file) {
+      if (!file) return;
+      _cpOrigBlob = file;
+      await _cpLoadCropperJs();
+
+      document.getElementById('cpUploadZone').style.display = 'none';
+      document.getElementById('cpCropZone').style.display   = '';
+      document.getElementById('cpSaveBtn').style.display    = '';
+
+      var btn = document.getElementById('cpBgBtn');
+      if (btn) { btn.textContent = '✦ Remove Background'; btn.disabled = false; btn.dataset.done = ''; btn.style.borderColor = 'var(--teal)'; btn.style.color = 'var(--teal)'; }
+      document.getElementById('cpStatus').textContent = '';
+
+      if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
+
+      var img = document.getElementById('cpCropImg');
+      img.src = URL.createObjectURL(file);
+      img.onload = function() {
+        _cpCropper = new Cropper(img, {
+          viewMode:     1,
+          aspectRatio:  NaN,
+          autoCropArea: 0.92,
+          background:   true,
+          movable:      true,
+          zoomable:     true,
+          rotatable:    false,
+          guides:       true,
+        });
+      };
+    }
+
+    function cpResetFile() {
+      if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
+      var fi = document.getElementById('cpFileInput');
+      if (fi) fi.value = '';
+      var uz = document.getElementById('cpUploadZone');
+      if (uz) uz.style.display = '';
+      var cz = document.getElementById('cpCropZone');
+      if (cz) cz.style.display = 'none';
+      var sb2 = document.getElementById('cpSaveBtn');
+      if (sb2) sb2.style.display = 'none';
+      var st = document.getElementById('cpStatus');
+      if (st) st.textContent = '';
+      _cpOrigBlob = null;
+    }
+
+    async function cpRemoveBg() {
+      if (_cpBgBusy) return;
+      _cpBgBusy = true;
+      var btn    = document.getElementById('cpBgBtn');
+      var status = document.getElementById('cpStatus');
+      var img    = document.getElementById('cpCropImg');
+
+      // Grab the current crop so bg-removal sees the same framing
+      var sourceBlob = _cpOrigBlob;
+      if (_cpCropper) {
+        var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
+        sourceBlob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
+      }
+
+      if (btn)    { btn.disabled = true; btn.textContent = '⏳ Loading model…'; }
+      if (status) status.textContent = 'Downloading AI model (~50 MB, one-time)…';
+
+      try {
+        var mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
+        if (btn) btn.textContent = '⏳ Processing…';
+        var result = await mod.removeBackground(sourceBlob, {
+          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/',
+          progress: function(k, cur, tot) {
+            if (tot && status) status.textContent = 'Processing… ' + Math.round(cur / tot * 100) + '%';
+          }
+        });
+
+        // Replace cropper source with bg-removed PNG
+        _cpOrigBlob = result;
+        if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
+        img.src = URL.createObjectURL(result);
+        img.onload = function() {
+          _cpCropper = new Cropper(img, { viewMode: 1, aspectRatio: NaN, autoCropArea: 0.92, background: true });
+        };
+        if (btn)    { btn.textContent = '✓ Background Removed'; btn.dataset.done = '1'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
+        if (status) status.textContent = '✓ Adjust crop if needed, then save';
+      } catch (err) {
+        console.error('[BG Remove]', err);
+        if (status) status.textContent = 'Background removal failed — original photo kept';
+        if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+      }
+      _cpBgBusy = false;
+    }
+
+    async function cpSavePhoto() {
+      if (!_cpItemId || !_cpCropper) return;
+      var btn    = document.getElementById('cpSaveBtn');
+      var status = document.getElementById('cpStatus');
+      if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+      // Export the cropped region
+      var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
+      var blob   = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
+      if (status) status.textContent = 'Uploading…';
+
+      var path = 'collection/' + currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.png';
+      var upResult = await sb.storage.from('card-photos').upload(path, blob, { upsert: false, contentType: 'image/png' });
+      if (upResult.error) {
+        if (status) status.textContent = 'Upload failed: ' + upResult.error.message;
+        if (btn) { btn.textContent = 'Save Photo'; btn.disabled = false; }
+        return;
+      }
+
+      var urlData = sb.storage.from('card-photos').getPublicUrl(path);
+      var publicUrl = urlData.data && urlData.data.publicUrl;
+
+      var dbResult = await sb.from('collection_items').update({ card_image_url: publicUrl }).eq('id', _cpItemId);
+      if (dbResult.error) {
+        if (status) status.textContent = 'Save failed: ' + dbResult.error.message;
+        if (btn) { btn.textContent = 'Save Photo'; btn.disabled = false; }
+        return;
+      }
+
+      // Update local cache so the binder view reflects it immediately
+      var local = collectionItems.find(function(c) { return String(c.id) === String(_cpItemId); });
+      if (local) local.card_image_url = publicUrl;
+      renderCollection();
+
+      showToast('Photo updated!');
+      closeCardPhotoModal();
+      openBinderCardDetail(_cpItemId);
+    }
+    // ── End Card Photo Update Modal ───────────────────────────────────────
 
     function atcCertReset() {
       _atcPsaData = null;
@@ -14524,6 +14701,61 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     </div>
   </div>
 
+  <!-- CARD PHOTO UPDATE MODAL -->
+  <div class="modal-overlay" id="cardPhotoModal">
+    <div class="modal" style="max-width:480px">
+      <button class="modal-close" onclick="closeCardPhotoModal()">×</button>
+      <h3 style="margin-bottom:4px">Update Card Photo</h3>
+      <p style="font-size:.72rem;color:var(--muted);margin-bottom:14px">Upload a new photo · drag to reposition · scroll to zoom · crop then save</p>
+
+      <!-- Upload dropzone (visible before file chosen) -->
+      <div id="cpUploadZone"
+        style="border:2px dashed var(--border);border-radius:4px;padding:24px 10px;text-align:center;cursor:pointer;transition:border-color .15s;margin-bottom:14px"
+        onclick="document.getElementById('cpFileInput').click()"
+        ondragover="event.preventDefault();document.getElementById('cpUploadZone').style.borderColor='var(--accent)'"
+        ondragleave="document.getElementById('cpUploadZone').style.borderColor='var(--border)'"
+        ondrop="cpHandleDrop(event)">
+        <div style="font-size:2rem;line-height:1">📷</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:8px">Click or drag your card photo here</div>
+        <div style="font-size:.65rem;color:var(--muted);margin-top:3px">JPG · PNG · WEBP</div>
+      </div>
+      <input type="file" id="cpFileInput" accept="image/*" style="display:none" onchange="cpLoadFile(this.files[0])">
+
+      <!-- Crop zone (visible after file chosen) -->
+      <div id="cpCropZone" style="display:none;margin-bottom:14px">
+        <div style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-bottom:6px">◈ DRAG TO REPOSITION · SCROLL TO ZOOM · DRAG HANDLES TO CROP</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);max-height:340px;overflow:hidden">
+          <img id="cpCropImg" style="max-width:100%;display:block">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+          <button id="cpBgBtn" onclick="cpRemoveBg()"
+            style="font-size:.65rem;padding:5px 11px;border:1px solid var(--teal);background:transparent;color:var(--teal);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;transition:all .12s"
+            onmouseenter="this.style.background='var(--teal)';this.style.color='#000'"
+            onmouseleave="this.style.background='transparent';this.style.color=document.getElementById('cpBgBtn').dataset.done?'var(--accent)':'var(--teal)'">
+            ✦ Remove Background
+          </button>
+          <button onclick="cpResetFile()"
+            style="font-size:.65rem;padding:5px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace">
+            ↺ Choose Different
+          </button>
+        </div>
+        <div id="cpStatus" style="font-size:.68rem;color:var(--muted);margin-top:6px;min-height:1em"></div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:10px">
+        <button id="cpSaveBtn" onclick="cpSavePhoto()"
+          style="display:none;flex:1;padding:10px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+          Save Photo
+        </button>
+        <button onclick="closeCardPhotoModal()"
+          style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── CARD SCANNER RESULTS SHEET ────────────────────────────────────── -->
   <!-- Slides up from bottom after a photo is taken. No full-screen modal. -->
   <div id="scannerModal" style="position:fixed;inset:0;z-index:99999;display:none;align-items:flex-end;justify-content:center">
@@ -14698,6 +14930,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function closeCardScanner() {
       const modal = document.getElementById('scannerModal');
       modal.style.display = 'none';
+      window._detectedSlab = null;
     }
 
     // ── Auto-scan — frame stability detection ────────────────────────────────
@@ -14849,8 +15082,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     function showScanResults(matches) {
       const wrap = document.getElementById('scannerResults');
-      wrap.innerHTML = `
-        <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:var(--accent2);letter-spacing:.06em;margin-bottom:10px">${matches.length} POSSIBLE MATCHES — tap to add</div>` +
+      const slab = window._detectedSlab;
+
+      // ── Slab banner ──────────────────────────────────────────────────────
+      const companyLabels = { psa:'PSA', bgs:'BGS / Beckett', cgc:'CGC', sgc:'SGC', ace:'ACE' };
+      const slabBanner = slab ? `
+        <div style="background:rgba(0,204,255,.08);border:1px solid rgba(0,204,255,.4);padding:10px 12px;margin-bottom:12px;font-family:'Space Mono','Share Tech Mono',monospace">
+          <div style="font-size:.58rem;color:var(--teal);letter-spacing:.1em;margin-bottom:5px">◈ GRADED SLAB DETECTED</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:.7rem">
+            <span style="color:var(--text);font-weight:700">${companyLabels[slab.company] || slab.company.toUpperCase()}</span>
+            ${slab.grade    ? `<span style="color:var(--accent)">Grade: <strong>${slab.grade}</strong></span>` : ''}
+            ${slab.certNumber ? `<span style="color:var(--muted)">Cert #${slab.certNumber}</span>` : ''}
+          </div>
+          <div style="font-size:.62rem;color:var(--muted);margin-top:6px">Cert info will auto-fill when you select a match below.</div>
+        </div>` : '';
+
+      wrap.innerHTML = slabBanner +
+        `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:var(--accent2);letter-spacing:.06em;margin-bottom:10px">${matches.length} POSSIBLE MATCHES — tap to add</div>` +
         matches.map((m) => {
           const pct = Math.round(m.similarity * 100);
           const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
@@ -14899,16 +15147,47 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (nameEl) nameEl.textContent = card.name + (card.set_name ? ' — ' + card.set_name : '');
       const manualRow = document.getElementById('atcManualNameRow');
       if (manualRow) manualRow.style.display = 'none';
-      document.getElementById('atcCondition').value = 'raw';
-      document.getElementById('atcGrade').value = '10';
       document.getElementById('atcQuantity').value = '1';
       document.getElementById('atcPurchasePrice').value = '';
       document.getElementById('atcPurchaseDate').value = '';
-      document.getElementById('atcCertNumber').value = '';
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
+      atcClearPhoto();
+
+      // ── Auto-fill slab data if scanner detected a graded card ──────────
+      const slab = window._detectedSlab;
+      if (slab) {
+        // Set condition dropdown to the grading company
+        const condEl = document.getElementById('atcCondition');
+        const validConds = ['psa', 'bgs', 'cgc', 'sgc', 'ace'];
+        if (condEl && validConds.includes(slab.company)) condEl.value = slab.company;
+        else if (condEl) condEl.value = 'raw';
+
+        // Set grade
+        const gradeEl = document.getElementById('atcGrade');
+        const validGrades = ['10','9.5','9','8.5','8','7.5','7','6.5','6','5.5','5','4.5','4','3','2','1'];
+        if (gradeEl && slab.grade && validGrades.includes(slab.grade)) gradeEl.value = slab.grade;
+        else if (gradeEl) gradeEl.value = '10';
+
+        // Set cert number
+        const certEl = document.getElementById('atcCertNumber');
+        if (certEl) certEl.value = slab.certNumber || '';
+
+        toggleGradeField(); // show grade field + update cert button state
+        atcUpdateCertBtn();
+
+        // Auto-trigger PSA lookup if we have a cert number
+        if (slab.company === 'psa' && slab.certNumber) {
+          setTimeout(atcLookupPsaCert, 300); // slight delay so modal renders first
+        }
+      } else {
+        document.getElementById('atcCondition').value = 'raw';
+        document.getElementById('atcGrade').value = '10';
+        document.getElementById('atcCertNumber').value = '';
+        toggleGradeField();
+      }
+
       populateBinderDropdown('atcBinderId', currentBinderId);
-      toggleGradeField();
       openModal('addToCollectionModal');
     }
 
@@ -15080,6 +15359,38 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return { expandedName, pokemonBase };
     }
 
+    // ── Graded slab parser ───────────────────────────────────────────────────
+    // Reads OCR text from a slab photo and returns { company, certNumber, grade }
+    // or null if no grading company is detected.
+    function parseGradedSlab(text) {
+      if (!text) return null;
+      var t = text.toUpperCase();
+
+      // Detect grading company
+      var company = null;
+      if      (/\bPSA\b/.test(t))           company = 'psa';
+      else if (/\b(BGS|BECKETT)\b/.test(t)) company = 'bgs';
+      else if (/\bCGC\b/.test(t))           company = 'cgc';
+      else if (/\bSGC\b/.test(t))           company = 'sgc';
+      else if (/\bACE\b/.test(t))           company = 'ace';
+      if (!company) return null;
+
+      // Detect grade — standalone grade value (10, 9.5 … 1)
+      var grade = null;
+      var gm = text.match(/\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3|2|1)\b/);
+      if (gm) grade = gm[1];
+      if (!grade && /GEM[\s\-]?MT|PRISTINE|PERFECT/i.test(t)) grade = '10';
+      if (!grade && /NEAR[\s\-]?MINT/i.test(t))               grade = '9';
+
+      // Detect cert number — standalone 7–10 digit number, NOT a card fraction (X/Y)
+      var stripped = text.replace(/\b\d{1,4}[\/\\]\d{1,4}\b/g, ' ');
+      var cm = stripped.match(/\b(\d{7,10})\b/);
+      var certNumber = cm ? cm[1] : null;
+
+      return { company: company, certNumber: certNumber, grade: grade };
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     // Extract card number like "4/102", "SV001/SV122", "TG01/TG30"
     // Returns { full, num, total } e.g. { full:"094/165", num:"94", total:"165" }
     function parseCardNumber(text) {
@@ -15201,6 +15512,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         // Normalise smart quotes / dashes from GCV before any parsing
         const fullText = normalizeOcr(rawFullText);
+
+        // ── Graded slab detection ────────────────────────────────────────────
+        window._detectedSlab = parseGradedSlab(fullText);
+        if (window._detectedSlab && !silent) {
+          console.log('[Scanner] Slab detected:', window._detectedSlab);
+        }
 
         // parseCardNumber now returns { full, num, numRaw, total }
         const parsed     = parseCardNumber(fullText);
