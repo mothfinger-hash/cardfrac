@@ -1498,65 +1498,11 @@ nav {
 
 /* ── LP Mockup (HTML binder) ── */
 .lp-hero-graphic { position:relative; align-self:stretch; }
-/* ── Photo Pokédex: image asset + screen overlays ──────────────────────────
-   Save the Pokédex photo as  /cardfrac/pokedex.png
-   The three .lp-pdx-screen overlays are positioned over the white screen
-   areas in the photo. Tweak the % values if your image crops differently.
-   ─────────────────────────────────────────────────────────────────────────── */
-.lp-pdx-stage { position:relative; width:100%; line-height:0; }
+/* ── Device hero image ── */
 .lp-pdx-photo { width:100%; height:auto; display:block; pointer-events:none; user-select:none; }
-/* Generic screen overlay — sits directly over a white area in the photo.
-   skewX matches the parallelogram angle of the device screen as photographed. */
-.lp-pdx-screen { position:absolute; overflow:hidden; background:#060810; transform:skewX(-5deg); transform-origin:top left; }
-/* Left screen: binder 4×4 grid */
-.lp-pdx-left { left:20%; top:8%; width:26%; height:67%; display:flex; flex-direction:column; }
-/* Right-top screen: price chart */
-.lp-pdx-rt { left:51%; top:8%; width:27%; height:33%; display:flex; flex-direction:column; padding:5px 7px 4px; gap:3px; }
-/* Right-bottom screen: trade analyzer */
-.lp-pdx-rb { left:51%; top:43%; width:27%; height:29%; display:flex; flex-direction:column; padding:5px 7px; gap:3px; }
-/* Card grid — fills left screen */
-.lp-mock-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:3px; background:#060810; align-content:start; flex:1; overflow:hidden; }
-.lp-mock-slot { aspect-ratio:.72; background:#0d1018; border:1px solid #1a2030; overflow:hidden; position:relative; cursor:pointer; transition:border-color .12s; }
-.lp-mock-slot:hover { border-color:var(--accent); }
-.lp-mock-slot img { width:100%; height:100%; object-fit:cover; display:block; }
-.lp-mock-slot-ph { width:100%; height:100%; background:repeating-linear-gradient(135deg,rgba(0,229,255,.06) 0 4px,transparent 4px 8px),#0d1018; }
-.lp-mock-slot-price { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(to top,rgba(0,0,0,.95),transparent); padding:6px 2px 2px; font-family:'Orbitron',monospace; font-size:5px; font-weight:800; color:var(--accent); text-align:center; }
-/* Status bar at bottom of left screen */
-.lp-pdx-status { height:22px; background:#040608; border-top:1px solid rgba(0,229,255,.15); display:flex; align-items:center; padding:0 6px; gap:6px; flex-shrink:0; }
-.lp-pdx-status-lbl { font-family:'Press Start 2P',monospace; font-size:4px; color:#334; letter-spacing:.06em; }
-.lp-pdx-status-val { font-family:'Orbitron',monospace; font-weight:900; font-size:7px; color:var(--accent); flex:1; }
-/* Section label used in right screens */
-.lp-pdx-lbl { font-family:'Press Start 2P',monospace; font-size:4px; color:rgba(0,229,255,.45); letter-spacing:.1em; text-transform:uppercase; flex-shrink:0; }
-/* Price chart */
-.lp-pdx-chart { flex:1; width:100%; overflow:visible; min-height:0; }
-/* Chart stats row */
-.lp-pdx-stats-row { display:flex; gap:0; flex-shrink:0; border-top:1px solid rgba(0,229,255,.1); margin-top:2px; }
-.lp-pdx-stat { flex:1; display:flex; flex-direction:column; align-items:center; padding:3px 1px; border-right:1px solid rgba(0,229,255,.08); }
-.lp-pdx-stat:last-child { border-right:none; }
-.lp-pdx-stat-val { font-family:'Orbitron',monospace; font-weight:900; font-size:6px; color:var(--accent); line-height:1.2; }
-.lp-pdx-stat-lbl { font-family:'Space Mono',monospace; font-size:3px; color:#334; letter-spacing:.06em; text-transform:uppercase; }
-/* Trade analyzer */
-.lp-pdx-trade-row { display:flex; align-items:center; justify-content:space-between; gap:4px; flex:1; }
-.lp-pdx-trade-side { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; min-width:0; }
-.lp-pdx-trade-side-lbl { font-family:'Space Mono',monospace; font-size:4px; color:#445; letter-spacing:.04em; }
-.lp-pdx-trade-card-wrap { flex:1; display:flex; align-items:center; justify-content:center; max-height:42px; overflow:hidden; }
-.lp-pdx-trade-card-img { max-height:42px; width:auto; max-width:30px; display:block; object-fit:contain; }
-.lp-pdx-trade-val { font-family:'Orbitron',monospace; font-weight:900; font-size:8px; color:var(--accent); }
-.lp-pdx-trade-vs { font-family:'Press Start 2P',monospace; font-size:5px; color:#2a3848; flex-shrink:0; }
-.lp-pdx-fair-bar { height:3px; background:#0c1824; border-radius:1px; overflow:hidden; flex-shrink:0; }
-.lp-pdx-fair-fill { height:100%; background:linear-gradient(90deg,var(--accent),#00ff99); }
-.lp-pdx-fair-score { font-family:'Orbitron',monospace; font-weight:900; font-size:8px; color:#00ff99; text-align:right; }
-
-/* Mobile Pokédex fallback — stage shows as dark panel if image doesn't load */
-.lp-pdx-stage { background:#060810; }
-.lp-pdx-photo { min-height:0; }
 /* On very small screens collapse the graphic below hero text; cap height */
 @media(max-width:600px){
   .lp-hero-graphic { max-height:55vw; overflow:hidden; }
-  .lp-pdx-stage { width:100%; }
-  .lp-pdx-lbl { font-size:3px; }
-  .lp-pdx-trade-card-img { max-height:28px; }
-  .lp-pdx-chart { max-height:40px; }
 }
 
 /* ── Feature strip ── */
@@ -3170,83 +3116,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </div>
       </div>
 
-      <!-- Pokédex photo + screen overlays
-           ─ Save the Pokédex image as cardfrac/pokedex.png ─ -->
+      <!-- Device hero image -->
       <div class="lp-hero-graphic">
-        <div class="lp-pdx-stage">
-
-          <!-- The actual device photo -->
-          <img class="lp-pdx-photo" src="pokedex.png" alt="PathBinder device" id="lpPdxPhoto">
-
-          <!-- LEFT SCREEN: 4×4 binder card grid -->
-          <div class="lp-pdx-screen lp-pdx-left">
-            <div class="lp-mock-grid" id="lpMockGrid">
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
-            </div>
-            <div class="lp-pdx-status">
-              <span class="lp-pdx-status-lbl">STATUS</span>
-              <span class="lp-pdx-status-val">VERY RARE</span>
-            </div>
-          </div>
-
-          <!-- RIGHT-TOP SCREEN: price tracking chart -->
-          <div class="lp-pdx-screen lp-pdx-rt">
-            <div class="lp-pdx-lbl">Price Index — 30d</div>
-            <svg class="lp-pdx-chart" viewBox="0 0 160 72" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="0" y1="18" x2="160" y2="18" stroke="#1a2538" stroke-width="0.8"/>
-              <line x1="0" y1="36" x2="160" y2="36" stroke="#1a2538" stroke-width="0.8"/>
-              <line x1="0" y1="54" x2="160" y2="54" stroke="#1a2538" stroke-width="0.8"/>
-              <path d="M0 60 L18 51 L34 46 L50 49 L66 36 L82 27 L98 19 L114 15 L130 22 L160 8 L160 72 L0 72 Z" fill="rgba(0,229,255,0.08)"/>
-              <path d="M0 60 L18 51 L34 46 L50 49 L66 36 L82 27 L98 19 L114 15 L130 22 L160 8" stroke="#00E5FF" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="160" cy="8" r="2.5" fill="#00E5FF"/>
-              <text x="2" y="70" font-family="monospace" font-size="5.5" fill="#334455">30d</text>
-              <text x="2" y="16" font-family="monospace" font-size="5.5" fill="#334455">$400</text>
-              <text x="120" y="70" font-family="monospace" font-size="6.5" fill="#00E5FF" font-weight="bold">+18%</text>
-            </svg>
-            <div class="lp-pdx-stats-row">
-              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val">$312</div><div class="lp-pdx-stat-lbl">AVG</div></div>
-              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val" style="color:#00ff99">$418</div><div class="lp-pdx-stat-lbl">HIGH</div></div>
-              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val" style="color:#ff4d6d">$271</div><div class="lp-pdx-stat-lbl">LOW</div></div>
-              <div class="lp-pdx-stat"><div class="lp-pdx-stat-val">1.2K</div><div class="lp-pdx-stat-lbl">VOL</div></div>
-            </div>
-          </div>
-
-          <!-- RIGHT-BOTTOM SCREEN: live trade indicator -->
-          <div class="lp-pdx-screen lp-pdx-rb">
-            <div class="lp-pdx-lbl">Trade Analyzer</div>
-            <div class="lp-pdx-trade-row">
-              <div class="lp-pdx-trade-side">
-                <div class="lp-pdx-trade-side-lbl">SIDE A</div>
-                <div class="lp-pdx-trade-card-wrap"><img id="lpTradeCardA" class="lp-pdx-trade-card-img" src="" alt="" loading="lazy"></div>
-                <div class="lp-pdx-trade-val" id="lpTradeValA">—</div>
-              </div>
-              <div class="lp-pdx-trade-vs">VS</div>
-              <div class="lp-pdx-trade-side">
-                <div class="lp-pdx-trade-side-lbl">SIDE B</div>
-                <div class="lp-pdx-trade-card-wrap"><img id="lpTradeCardB" class="lp-pdx-trade-card-img" src="" alt="" loading="lazy"></div>
-                <div class="lp-pdx-trade-val" style="color:#ffd700" id="lpTradeValB">—</div>
-              </div>
-            </div>
-            <div class="lp-pdx-fair-bar"><div class="lp-pdx-fair-fill" style="width:88%"></div></div>
-            <div class="lp-pdx-fair-score">FAIR ✓</div>
-          </div>
-
-        </div><!-- /.lp-pdx-stage -->
+        <img class="lp-pdx-photo" src="pokedex.png" alt="PathBinder device">
       </div>
     </section>
 
@@ -4152,7 +4024,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     let browseGameTypeFilter = 'all';
     let browseSortFilter = 'newest';
     const POKEMON_ONLY = true; // flip to false when ready for other TCGs
-    let binderView = 'list';
+    let binderView = '3x3';
     let binderPage = 0;
     let browseTabFilter = 'all';
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
@@ -4544,7 +4416,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
 
-    // ── LANDING PAGE: populate binder mockup + marketplace highlights ─────────
+    // ── LANDING PAGE: populate marketplace highlights ─────────────────────────
     var _landingCardsLoaded = false;
     async function initLandingCards() {
       if (_landingCardsLoaded) return;
@@ -4559,26 +4431,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const data = await res.json();
         const cards = (data.data || []).filter(c => c.images?.small);
         if (cards.length === 0) return;
-
-        // ── Binder mockup grid (16 cards — 4×4) ──────────────────────
-        const grid = document.getElementById('lpMockGrid');
-        if (grid) {
-          grid.innerHTML = '';
-          cards.slice(0, 16).forEach(card => {
-            const price =
-              card.tcgplayer?.prices?.holofoil?.market ||
-              card.tcgplayer?.prices?.reverseHolofoil?.market ||
-              card.tcgplayer?.prices?.normal?.market || 0;
-            const slot = document.createElement('div');
-            slot.className = 'lp-mock-slot';
-            slot.innerHTML =
-              '<img src="' + card.images.small + '" alt="' + (card.name || '') + '" loading="lazy">' +
-              (price ? '<div class="lp-mock-slot-price">$' + price.toFixed(0) + '</div>' : '');
-            grid.appendChild(slot);
-          });
-          const cntEl = document.getElementById('lpMockCount');
-          if (cntEl) cntEl.textContent = '1,247';
-        }
 
         // ── Marketplace highlights (5 cards) ──────────────────────────
         const mGrid = document.getElementById('lpMarketGrid');
@@ -4606,37 +4458,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             mGrid.appendChild(el);
           });
           if (cta) mGrid.appendChild(cta);
-        }
-
-        // ── Trade analyzer cards (2 high-value cards side by side) ────────
-        const tradeA = document.getElementById('lpTradeCardA');
-        const tradeB = document.getElementById('lpTradeCardB');
-        const tradeValA = document.getElementById('lpTradeValA');
-        const tradeValB = document.getElementById('lpTradeValB');
-        if (tradeA && cards.length >= 2) {
-          // Pick two cards — prefer ones not already in the 4×4 grid
-          const cardA = cards[cards.length - 2] || cards[0];
-          const cardB = cards[cards.length - 1] || cards[1];
-          const priceA = cardA.tcgplayer?.prices?.holofoil?.market
-            || cardA.tcgplayer?.prices?.reverseHolofoil?.market
-            || cardA.tcgplayer?.prices?.normal?.market || 0;
-          const priceB = cardB.tcgplayer?.prices?.holofoil?.market
-            || cardB.tcgplayer?.prices?.reverseHolofoil?.market
-            || cardB.tcgplayer?.prices?.normal?.market || 0;
-          tradeA.src = cardA.images.small;
-          tradeA.alt = cardA.name || '';
-          tradeB.src = cardB.images.small;
-          tradeB.alt = cardB.name || '';
-          if (tradeValA) tradeValA.textContent = priceA ? '$' + priceA.toFixed(0) : '—';
-          if (tradeValB) tradeValB.textContent = priceB ? '$' + priceB.toFixed(0) : '—';
-          // Animate the fair-score fill based on relative prices
-          if (priceA && priceB) {
-            const ratio = Math.min(priceA, priceB) / Math.max(priceA, priceB);
-            const fill = document.querySelector('.lp-pdx-fair-fill');
-            if (fill) fill.style.width = Math.round(ratio * 100) + '%';
-            const score = document.querySelector('.lp-pdx-fair-score');
-            if (score) score.textContent = ratio > 0.85 ? 'FAIR ✓' : ratio > 0.65 ? 'CLOSE ~' : 'UNEVEN ✗';
-          }
         }
       } catch(e) {
         // API unavailable — skeleton placeholders stay, no error shown
@@ -10515,8 +10336,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     // ── Binder drag-and-drop state ─────────────────────────────────────────
-    let dragSrcIndex = null;   // global index in collectionItems of the card being dragged
+    let dragSrcId = null;      // ID of the card being dragged (string)
+    let dragSrcIndex = null;   // legacy alias kept so touch handler still compiles
     let binderSaveTimer = null;
+    let _dragPageFlipTimer = null; // cross-page flip debounce
 
     function renderBinder() {
       const content = document.getElementById('collectionContent');
@@ -10675,9 +10498,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             data-idx="${globalIdx}"
             data-id="${item.id}"
             onclick="openBinderCardDetail('${item.id}')"
-            ondragstart="binderDragStart(event,${globalIdx})"
+            ondragstart="binderDragStart(event,'${item.id}')"
             ondragover="binderDragOver(event)"
-            ondrop="binderDrop(event,${globalIdx})"
+            ondrop="binderDrop(event,'${item.id}')"
             ondragend="binderDragEnd(event)"
             style="cursor:grab">
             <div class="binder-card-img-wrap">
@@ -10718,9 +10541,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (totalPages > 1) {
           pagination.style.display = 'flex';
           pagination.innerHTML = `
-            <button class="binder-page-btn" onclick="flipBinderPage(-1)" ${binderPage === 0 ? 'disabled' : ''}>← Prev</button>
+            <button class="binder-page-btn" data-dir="-1" onclick="flipBinderPage(-1)"
+              ondragover="binderDragOverPage(event,-1)" ondragleave="binderDragLeavePage()"
+              ${binderPage === 0 ? 'disabled' : ''}>← Prev</button>
             <span style="color:var(--muted);font-size:.78rem;align-self:center">${binderPage + 1} / ${totalPages}</span>
-            <button class="binder-page-btn" onclick="flipBinderPage(1)" ${binderPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+            <button class="binder-page-btn" data-dir="1" onclick="flipBinderPage(1)"
+              ondragover="binderDragOverPage(event,1)" ondragleave="binderDragLeavePage()"
+              ${binderPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
           `;
         } else {
           pagination.style.display = 'none';
@@ -10929,8 +10756,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const el = document.elementFromPoint(t.clientX, t.clientY);
         clone.style.visibility = '';
         document.querySelectorAll('#binderGrid .binder-card').forEach(c => c.classList.remove('drag-over'));
-        const over = el?.closest('#binderGrid .binder-card[data-idx]');
+        const over = el?.closest('#binderGrid .binder-card[data-id]');
         if (over && over !== src) over.classList.add('drag-over');
+
+        // Cross-page flip: hold over a pagination button for 700ms to flip page
+        const pageBtn = el?.closest('.binder-page-btn[data-dir]');
+        if (pageBtn) {
+          if (!_dragPageFlipTimer) {
+            _dragPageFlipTimer = setTimeout(() => {
+              _dragPageFlipTimer = null;
+              binderChangePage(parseInt(pageBtn.dataset.dir));
+            }, 700);
+          }
+        } else {
+          clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
+        }
       }, { passive: false });
 
       document.addEventListener('touchend', e => {
@@ -10938,10 +10778,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const t = e.changedTouches[0];
         clone.style.visibility = 'hidden';
         const el = document.elementFromPoint(t.clientX, t.clientY);
-        const over = el?.closest('#binderGrid .binder-card[data-idx]');
+        const over = el?.closest('#binderGrid .binder-card[data-id]');
         if (over && over !== src) {
-          dragSrcIndex = parseInt(src.dataset.idx);
-          binderDrop({ preventDefault: () => {} }, parseInt(over.dataset.idx));
+          dragSrcId = src.dataset.id;
+          binderDrop({ preventDefault: () => {} }, over.dataset.id);
+        }
+        // Cross-page flip: finger released on a pagination button
+        const pageBtn = el?.closest('.binder-page-btn[data-dir]');
+        if (pageBtn && !over) {
+          const dir = parseInt(pageBtn.dataset.dir);
+          binderChangePage(dir);
         }
         cleanup();
       }, { passive: true });
@@ -10950,35 +10796,59 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     })();
 
     // ── Drag-and-drop handlers (desktop / mouse) ──────────────────────────────
-    function binderDragStart(e, idx) {
-      dragSrcIndex = idx;
+    function binderDragStart(e, itemId) {
+      dragSrcId = String(itemId);
+      dragSrcIndex = dragSrcId; // keep alias in sync
       e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragSrcId);
       e.currentTarget.style.opacity = '0.4';
     }
 
     function binderDragOver(e) {
+      if (!dragSrcId) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      // Highlight drop target
       document.querySelectorAll('#binderGrid .binder-card').forEach(el => el.classList.remove('drag-over'));
       e.currentTarget.classList.add('drag-over');
     }
 
-    function binderDrop(e, targetIdx) {
+    // Cross-page: hover over prev/next pagination button flips the page after 700ms
+    function binderDragOverPage(e, dir) {
+      if (!dragSrcId) return;
       e.preventDefault();
-      if (dragSrcIndex === null || dragSrcIndex === targetIdx) return;
-      // Reorder local array
-      const [moved] = collectionItems.splice(dragSrcIndex, 1);
-      collectionItems.splice(targetIdx, 0, moved);
-      dragSrcIndex = null;
+      if (_dragPageFlipTimer) return;
+      _dragPageFlipTimer = setTimeout(() => {
+        _dragPageFlipTimer = null;
+        const content = document.getElementById('collectionContent');
+        if (!content) return;
+        binderChangePage(dir);
+      }, 700);
+    }
+    function binderDragLeavePage() {
+      clearTimeout(_dragPageFlipTimer);
+      _dragPageFlipTimer = null;
+    }
+
+    function binderDrop(e, targetId) {
+      e.preventDefault();
+      clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
+      const srcId = dragSrcId;
+      if (!srcId || String(srcId) === String(targetId)) return;
+      // Find both items in collectionItems by ID (not by page-offset index)
+      const srcIdx = collectionItems.findIndex(c => String(c.id) === String(srcId));
+      const tgtIdx = collectionItems.findIndex(c => String(c.id) === String(targetId));
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      const [moved] = collectionItems.splice(srcIdx, 1);
+      collectionItems.splice(tgtIdx, 0, moved);
+      dragSrcId = null; dragSrcIndex = null;
       renderBinder();
-      // Debounce save so rapid drags don't spam Supabase
       clearTimeout(binderSaveTimer);
       binderSaveTimer = setTimeout(saveBinderOrder, 600);
     }
 
     function binderDragEnd(e) {
-      dragSrcIndex = null;
+      dragSrcId = null; dragSrcIndex = null;
+      clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
       document.querySelectorAll('#binderGrid .binder-card').forEach(el => {
         el.style.opacity = '';
         el.classList.remove('drag-over');
