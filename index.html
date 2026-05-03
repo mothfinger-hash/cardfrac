@@ -45,6 +45,8 @@
     }
     body{font-family:'Space Mono','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-left:var(--sb-w);transition:background .2s,color .2s,padding-left .25s}
     body.nav-collapsed{padding-left:var(--sb-w-coll)}
+    /* Landing page: keep sidebar, hide binder top bar only */
+    body.on-landing #binderSidebar{display:none!important}
 
     /* ── PIXEL GRID BACKGROUND ── */
     body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
@@ -1446,22 +1448,158 @@ nav {
 .form-group input:focus, .form-group select:focus { border-color: var(--accent) !important; box-shadow: 3px 3px 0 var(--accent) !important; outline: none; }
 
 
-/* ─── 13. HERO + STATS ───────────────────────────────────────────── */
+/* ─── 13. LANDING PAGE (LOGGED-OUT) ─────────────────────────────── */
+#landingPage { background: var(--bg); }
 
+/* ── LP Hero ── */
+.lp-hero { display:grid; grid-template-columns:1fr 1fr; gap:32px; align-items:center; padding:32px 32px 36px; }
+@media(max-width:900px) { .lp-hero { grid-template-columns:1fr; gap:32px; padding:36px 24px 32px; } }
+.lp-eyebrow { font-family:'Press Start 2P',monospace; font-size:7px; letter-spacing:.2em; color:var(--accent); margin-bottom:18px; }
+.lp-headline { font-family:'Orbitron',monospace; font-weight:900; font-size:clamp(28px,4vw,52px); line-height:1.08; letter-spacing:.04em; text-transform:uppercase; color:var(--text); margin:0 0 20px; }
+.lp-headline span { color:var(--accent); }
+.lp-hero-sub { font-family:'Space Mono','Share Tech Mono',monospace; font-size:.72rem; color:var(--muted); line-height:1.7; margin-bottom:28px; max-width:420px; }
+.lp-cta-row { display:flex; gap:12px; flex-wrap:wrap; }
+.lp-cta-primary { font-family:'Orbitron',monospace; font-weight:800; font-size:.8rem; letter-spacing:.12em; padding:13px 28px; background:var(--accent); color:#000; border:1.5px solid #000; box-shadow:4px 4px 0 #000; cursor:pointer; transition:all .12s; text-transform:uppercase; }
+.lp-cta-primary:hover { transform:translate(-2px,-2px); box-shadow:6px 6px 0 #000; }
+.lp-cta-secondary { font-family:'Space Mono',monospace; font-size:.75rem; letter-spacing:.08em; padding:13px 24px; background:transparent; color:var(--text); border:1.5px solid var(--border); box-shadow:4px 4px 0 #000; cursor:pointer; transition:all .12s; }
+.lp-cta-secondary:hover { border-color:var(--accent); color:var(--accent); transform:translate(-1px,-1px); box-shadow:5px 5px 0 #000; }
+
+/* ── LP Mockup (HTML binder) ── */
+.lp-hero-graphic { position:relative; align-self:stretch; }
+.lp-mockup { width:100%; height:100%; border:2px solid var(--border); box-shadow:8px 8px 0 #000; background:#0a0e0a; overflow:hidden; display:flex; flex-direction:column; min-height:340px; }
+.lp-mock-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 10px; background:#0f150f; border-bottom:1px solid #1e2e1e; flex-shrink:0; flex-wrap:wrap; }
+.lp-mock-bar-title { font-family:'Orbitron',monospace; font-weight:900; font-size:9px; letter-spacing:.1em; color:var(--accent); }
+.lp-mock-bar-count { font-family:'Space Mono',monospace; font-size:7px; color:var(--muted); }
+.lp-mock-bar-count span { color:var(--accent); }
+.lp-mock-filters { display:flex; gap:5px; }
+.lp-mock-sel { font-family:'Space Mono',monospace; font-size:6px; background:#111; border:1px solid #222; color:#555; padding:3px 7px; cursor:default; }
+.lp-mock-body { display:grid; grid-template-columns:1fr 120px; flex:1; overflow:hidden; }
+.lp-mock-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; padding:4px; background:#060a06; align-content:start; overflow:hidden; }
+.lp-mock-slot { aspect-ratio:.72; background:#111814; border:1px solid #1e2e1e; overflow:hidden; position:relative; cursor:pointer; transition:border-color .12s; }
+.lp-mock-slot:hover { border-color:var(--accent); }
+.lp-mock-slot img { width:100%; height:100%; object-fit:cover; display:block; }
+.lp-mock-slot-ph { width:100%; height:100%; background:repeating-linear-gradient(135deg,rgba(0,0,0,.5) 0 8px,rgba(0,0,0,.2) 8px 16px),#111; }
+.lp-mock-slot-price { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(to top,rgba(0,0,0,.95),transparent); padding:8px 4px 3px; font-family:'Orbitron',monospace; font-size:7px; font-weight:800; color:var(--accent); text-align:center; }
+.lp-mock-rail { background:#0d120d; border-left:1px solid #1e2e1e; padding:8px 7px; display:flex; flex-direction:column; gap:7px; overflow:hidden; }
+.lp-mock-rail-lbl { font-family:'Space Mono',monospace; font-size:5px; color:#444; letter-spacing:.1em; text-transform:uppercase; margin-bottom:1px; }
+.lp-mock-rail-val { font-family:'Orbitron',monospace; font-weight:900; font-size:11px; color:var(--accent); line-height:1; }
+.lp-mock-rail-delta { font-family:'Space Mono',monospace; font-size:6px; color:var(--accent); }
+.lp-mock-alert { font-family:'Space Mono',monospace; font-size:6px; padding:2px 4px; border-left:2px solid var(--accent); color:#888; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lp-mock-scan { background:var(--accent); color:#000; font-family:'Orbitron',monospace; font-weight:900; font-size:6px; letter-spacing:.1em; text-align:center; padding:6px 2px; margin-top:auto; cursor:pointer; }
+
+/* ── Feature strip ── */
+.lp-features { display:grid; grid-template-columns:repeat(3,1fr); border-top:1.5px solid var(--border); border-bottom:1.5px solid var(--border); background:var(--surface2); }
+@media(max-width:700px) { .lp-features { grid-template-columns:1fr; } }
+.lp-feat-card { padding:24px 28px; border-right:1.5px solid var(--border); cursor:pointer; transition:background .12s; }
+.lp-feat-card:last-child { border-right:none; }
+.lp-feat-card:hover { background:rgba(0,229,255,.04); }
+.lp-feat-ico { width:28px; height:28px; border:1.5px solid var(--accent); display:grid; place-items:center; font-family:'Orbitron',monospace; font-weight:900; font-size:10px; color:var(--accent); margin-bottom:12px; }
+.lp-feat-title { font-family:'Orbitron',monospace; font-weight:800; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:6px; }
+.lp-feat-desc { font-family:'Space Mono',monospace; font-size:.64rem; color:var(--muted); line-height:1.6; }
+.lp-feat-arrow { font-size:12px; color:var(--accent); margin-top:12px; display:block; }
+
+/* ── Mid panels ── */
+.lp-mid { display:grid; grid-template-columns:1fr 1fr; gap:0; border-bottom:1.5px solid var(--border); }
+@media(max-width:800px) { .lp-mid { grid-template-columns:1fr; } }
+.lp-mid-panel { padding:32px; border-right:1.5px solid var(--border); }
+.lp-mid-panel:last-child { border-right:none; }
+.lp-mid-label { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.2em; color:var(--accent); text-transform:uppercase; margin-bottom:14px; display:flex; align-items:center; gap:6px; }
+.lp-mid-label::before { content:'★'; }
+.lp-mid-title { font-family:'Orbitron',monospace; font-weight:900; font-size:clamp(18px,2.5vw,26px); line-height:1.1; color:var(--text); margin-bottom:10px; }
+.lp-mid-sub { font-family:'Space Mono',monospace; font-size:.64rem; color:var(--muted); line-height:1.6; margin-bottom:20px; }
+
+/* Ghost fund mock */
+.lp-ghost-card { width:64px; aspect-ratio:.72; border:2px solid var(--gold,#FFD700); background:repeating-linear-gradient(135deg,rgba(0,0,0,.5) 0 8px,rgba(0,0,0,.2) 8px 16px),linear-gradient(180deg,#1a1200,#0e0a00); display:grid; place-items:center; font-size:1.8rem; box-shadow:3px 3px 0 #000; flex-shrink:0; }
+.lp-fund-row { display:flex; align-items:flex-start; gap:14px; margin-bottom:16px; }
+.lp-fund-info { flex:1; min-width:0; }
+.lp-fund-name { font-family:'Orbitron',monospace; font-weight:800; font-size:11px; color:var(--text); text-transform:uppercase; letter-spacing:.04em; }
+.lp-fund-target-lbl { font-family:'Press Start 2P',monospace; font-size:6px; color:var(--muted); letter-spacing:.1em; margin-top:6px; }
+.lp-fund-target-val { font-family:'Orbitron',monospace; font-weight:900; font-size:22px; color:var(--accent); margin-top:2px; }
+.lp-progress-wrap { background:var(--surface2); border:1px solid var(--border); height:8px; margin-top:8px; position:relative; overflow:hidden; }
+.lp-progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),#00CCFF); box-shadow:0 0 8px var(--accent); position:absolute; inset:0 auto 0 0; }
+.lp-progress-labels { display:flex; justify-content:space-between; margin-top:4px; font-family:'Space Mono',monospace; font-size:.6rem; color:var(--muted); }
+.lp-pct-badge { background:var(--accent); color:#000; font-family:'Orbitron',monospace; font-weight:800; font-size:12px; padding:4px 8px; box-shadow:2px 2px 0 #000; }
+
+/* Trade mock */
+.lp-sides { display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:center; margin-bottom:14px; }
+.lp-side { background:var(--surface2); border:1.5px solid var(--border); padding:10px; }
+.lp-side-lbl { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.12em; margin-bottom:8px; }
+.lp-side-lbl.a { color:var(--teal,#00E5FF); }
+.lp-side-lbl.b { color:var(--gold,#FFD700); }
+.lp-side-val { font-family:'Orbitron',monospace; font-weight:800; font-size:16px; color:var(--text); margin-top:6px; }
+.lp-vs { font-family:'Orbitron',monospace; font-weight:900; font-size:16px; color:var(--border); }
+.lp-fairness-bar-wrap { margin-bottom:8px; }
+.lp-fairness-lbl { font-family:'Press Start 2P',monospace; font-size:5.5px; letter-spacing:.1em; color:var(--muted); margin-bottom:4px; }
+.lp-fairness-bar { height:7px; background:var(--surface2); border:1px solid var(--border); position:relative; overflow:hidden; margin-bottom:4px; }
+.lp-fairness-fill { height:100%; background:linear-gradient(90deg,#00E5FF,#00CCFF); position:absolute; inset:0 auto 0 0; }
+.lp-score-badge { display:inline-flex; align-items:baseline; gap:2px; }
+.lp-score-num { font-family:'Orbitron',monospace; font-weight:900; font-size:28px; color:var(--accent); }
+.lp-score-denom { font-family:'Space Mono',monospace; font-size:.65rem; color:var(--muted); }
+
+/* ── Marketplace strip ── */
+.lp-market-section { padding:32px 40px; max-width:1200px; margin:0 auto; }
+@media(max-width:700px) { .lp-market-section { padding:24px 20px; } }
+.lp-market-grid { display:grid; grid-template-columns:repeat(5,1fr) auto; gap:10px; align-items:stretch; }
+@media(max-width:1000px) { .lp-market-grid { grid-template-columns:repeat(3,1fr); } }
+@media(max-width:600px) { .lp-market-grid { grid-template-columns:repeat(2,1fr); } }
+.lp-mcard { background:var(--surface); border:1.5px solid var(--border); box-shadow:3px 3px 0 #000; overflow:hidden; }
+.lp-mcard-art { aspect-ratio:.75; background:repeating-linear-gradient(135deg,rgba(0,0,0,.45) 0 10px,rgba(0,0,0,.2) 10px 20px),var(--surface2); position:relative; display:flex; align-items:center; justify-content:center; font-size:2rem; }
+.lp-mcard-foot { padding:8px; }
+.lp-mcard-name { font-family:'Press Start 2P',monospace; font-size:6px; color:var(--text); letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lp-mcard-rarity { font-family:'Space Mono',monospace; font-size:.6rem; color:var(--muted); margin-top:2px; }
+.lp-mcard-price { font-family:'Orbitron',monospace; font-weight:800; font-size:13px; color:var(--accent); margin-top:4px; }
+.lp-mcard-seller { font-family:'Space Mono',monospace; font-size:.55rem; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lp-market-cta { background:var(--surface); border:1.5px solid var(--border); box-shadow:3px 3px 0 #000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:20px; cursor:pointer; transition:all .12s; min-height:160px; }
+.lp-market-cta:hover { border-color:var(--accent); transform:translate(-1px,-1px); box-shadow:5px 5px 0 #000; }
+.lp-market-cta-ico { font-family:'Orbitron',monospace; font-weight:900; font-size:22px; color:var(--accent); }
+.lp-market-cta-lbl { font-family:'Press Start 2P',monospace; font-size:6px; color:var(--accent); text-align:center; letter-spacing:.1em; line-height:1.6; }
+
+/* ── Pricing ── */
+.lp-pricing-section { border-top:1.5px solid var(--border); padding:40px; }
+.lp-pricing-header { text-align:center; margin-bottom:32px; }
+.lp-pricing-eyebrow { font-family:'Press Start 2P',monospace; font-size:7px; letter-spacing:.2em; color:var(--accent); margin-bottom:12px; }
+.lp-pricing-title { font-family:'Orbitron',monospace; font-weight:900; font-size:clamp(18px,3vw,28px); color:var(--text); text-transform:uppercase; letter-spacing:.06em; }
+.lp-tiers { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; max-width:1100px; margin:0 auto; }
+@media(max-width:900px) { .lp-tiers { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:500px) { .lp-tiers { grid-template-columns:1fr; } }
+.lp-tier { background:var(--surface); border:1.5px solid var(--border); box-shadow:3px 3px 0 #000; padding:22px 20px; display:flex; flex-direction:column; gap:6px; }
+.lp-tier.featured { border-color:var(--accent); box-shadow:3px 3px 0 var(--accent); }
+.lp-tier-name { font-family:'Orbitron',monospace; font-weight:800; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--text); }
+.lp-tier.featured .lp-tier-name { color:var(--accent); }
+.lp-tier-tagline { font-family:'Space Mono',monospace; font-size:.6rem; color:var(--muted); margin-bottom:6px; }
+.lp-tier-price { font-family:'Orbitron',monospace; font-weight:900; font-size:28px; color:var(--text); line-height:1; }
+.lp-tier.featured .lp-tier-price { color:var(--accent); }
+.lp-tier-per { font-family:'Space Mono',monospace; font-size:.6rem; color:var(--muted); margin-bottom:12px; }
+.lp-tier-feats { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; flex:1; }
+.lp-tier-feats li { font-family:'Space Mono',monospace; font-size:.62rem; color:var(--muted); padding-left:14px; position:relative; line-height:1.4; }
+.lp-tier-feats li::before { content:'✓'; position:absolute; left:0; color:var(--accent); font-weight:700; }
+.lp-tier-cta { margin-top:16px; width:100%; padding:10px; font-family:'Space Mono',monospace; font-size:.68rem; letter-spacing:.08em; cursor:pointer; transition:all .1s; border:1.5px solid var(--border); background:transparent; color:var(--muted); }
+.lp-tier-cta:hover { border-color:var(--accent); color:var(--accent); }
+.lp-tier.featured .lp-tier-cta { background:var(--accent); color:#000; border-color:#000; font-weight:700; box-shadow:2px 2px 0 #000; }
+.lp-tier.featured .lp-tier-cta:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 #000; }
+
+/* ── LP Footer strip ── */
+.lp-footer-strip { border-top:1.5px solid var(--border); display:grid; grid-template-columns:repeat(4,1fr) auto; background:var(--surface2); }
+@media(max-width:700px) { .lp-footer-strip { grid-template-columns:repeat(2,1fr); } }
+.lp-footer-item { padding:18px 20px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:4px; }
+.lp-footer-item:last-child { border-right:none; }
+.lp-footer-ico { font-family:'Orbitron',monospace; font-weight:900; font-size:11px; color:var(--accent); letter-spacing:.08em; margin-bottom:6px; }
+.lp-footer-title { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.1em; color:var(--text); }
+.lp-footer-sub { font-family:'Space Mono',monospace; font-size:.58rem; color:var(--muted); margin-top:2px; line-height:1.4; }
+.lp-footer-help { padding:18px 24px; display:flex; flex-direction:column; justify-content:center; gap:8px; background:var(--surface); }
+.lp-footer-help-title { font-family:'Orbitron',monospace; font-weight:900; font-size:11px; color:var(--text); letter-spacing:.06em; line-height:1.3; text-transform:uppercase; }
+.lp-footer-help-title span { color:var(--accent); }
+.lp-footer-help-btn { font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.1em; padding:6px 14px; border:1.5px solid var(--accent); background:transparent; color:var(--accent); cursor:pointer; transition:all .1s; white-space:nowrap; align-self:flex-start; }
+.lp-footer-help-btn:hover { background:var(--accent); color:#000; }
+
+/* ── Legacy hero (keep fallback) ── */
 #heroSection { background: var(--surface) !important; border-bottom: 2px solid var(--accent) !important; position: relative; overflow: hidden; }
-#heroSection::after {
-  content: '兎';
-  position: absolute; right: -40px; top: -60px;
-  font-size: 320px; color: var(--accent); opacity: 0.05;
-  font-weight: 800; pointer-events: none; line-height: 1;
-}
 .hero-title { color: var(--accent) !important; }
-.hero-title .ht-b { color: var(--accent2) !important; }
 .hero-cursor { background: var(--accent) !important; }
 .hero-stat-box { border-color: var(--accent) !important; box-shadow: 4px 4px 0 var(--accent) !important; background: var(--surface) !important; }
 .hero-stat-value { color: var(--accent) !important; font-family: 'Space Mono', monospace; }
-.hero-cta { background: var(--accent) !important; color: #000 !important; border-color: #000 !important; box-shadow: 4px 4px 0 #000 !important; transition: transform .12s var(--r404-snap), box-shadow .12s; }
-.hero-cta:hover { transform: translate(-2px,-2px) !important; box-shadow: 6px 6px 0 #000 !important; filter: brightness(1.05); }
+.hero-cta { background: var(--accent) !important; color: #000 !important; border-color: #000 !important; box-shadow: 4px 4px 0 #000 !important; transition: transform .12s, box-shadow .12s; }
+.hero-cta:hover { transform: translate(-2px,-2px) !important; box-shadow: 6px 6px 0 #000 !important; }
 
 .countdown-wrap { background: rgba(0,229,255,0.08) !important; border-top: 1px solid var(--accent) !important; }
 .countdown-label { color: var(--accent) !important; }
@@ -2006,7 +2144,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
   </script>
 </head>
-<body>
+<body class="on-landing">
   <div id="binderSidebar"></div>
   <nav id="appNav">
     <!-- Logo header -->
@@ -2880,26 +3018,272 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </div>
 
   <!-- PAGES -->
-  <div id="landingPage" class="page" style="padding-top:0;max-width:100%;padding-left:0;padding-right:0">
-    <div id="heroSection">
-      <h1 class="hero-title">Your card collection,<br>organized and alive<span class="hero-cursor"></span></h1>
-      <p class="hero-tagline">Track · Buy · Sell · Grow your collection</p>
-      <div class="hero-stats">
-        <div class="hero-stat-box">
-          <div class="hero-stat-label">Cards for sale</div>
-          <div class="hero-stat-value" id="heroTotalCards">—</div>
+  <div id="landingPage" class="page active" style="padding:0;max-width:100%">
+
+    <!-- HERO -->
+    <section class="lp-hero" id="lpBinder">
+      <div>
+        <div class="lp-eyebrow">&gt;&gt; POWER TO COLLECTORS &gt;&gt;</div>
+        <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
+        <p class="lp-hero-sub">The ultimate cockpit for card collectors. Track your collection, find missing cards, grow your value, and trade with confidence.</p>
+        <div class="lp-cta-row">
+          <button class="lp-cta-primary" onclick="openAuthModal('signup')">START FREE</button>
+          <button class="lp-cta-secondary" onclick="showPage('browse');setMobileNav('browse')">Browse Market</button>
         </div>
-        <div class="hero-stat-box">
-          <div class="hero-stat-label">Market value</div>
-          <div class="hero-stat-value" id="heroMarketCap">—</div>
+        <div style="margin-top:24px;display:flex;gap:24px;flex-wrap:wrap">
+          <div>
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)" id="heroTotalCards">—</div>
+            <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Cards Tracked</div>
+          </div>
+          <div>
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)" id="heroMarketCap">—</div>
+            <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Market Value</div>
+          </div>
+          <div>
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)">5%</div>
+            <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Platform Fee</div>
+          </div>
         </div>
       </div>
-      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        <button class="hero-cta" onclick="showPage('collection');setMobileNav('collection')" style="background:transparent;border:2px solid var(--accent);color:var(--accent)">My Binder</button>
-        <button class="hero-cta" onclick="showPage('browse');setMobileNav('browse')">Marketplace</button>
+
+      <!-- HTML Binder Mockup (populated by JS) -->
+      <div class="lp-hero-graphic">
+        <div class="lp-mockup">
+          <div class="lp-mock-bar">
+            <span class="lp-mock-bar-title">MY BINDER</span>
+            <div class="lp-mock-filters">
+              <span class="lp-mock-sel">All Sets</span>
+              <span class="lp-mock-sel">All Rarities</span>
+            </div>
+            <span class="lp-mock-bar-count"><span id="lpMockCount">—</span> CARDS</span>
+          </div>
+          <div class="lp-mock-body">
+            <div class="lp-mock-grid" id="lpMockGrid">
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+              <div class="lp-mock-slot"><div class="lp-mock-slot-ph"></div></div>
+            </div>
+            <div class="lp-mock-rail">
+              <div>
+                <div class="lp-mock-rail-lbl">Collection Value</div>
+                <div class="lp-mock-rail-val" id="lpMockValue">—</div>
+                <div class="lp-mock-rail-delta" id="lpMockDelta"></div>
+              </div>
+              <div>
+                <div class="lp-mock-rail-lbl" style="margin-bottom:4px">Alerts</div>
+                <div class="lp-mock-alert" style="border-color:var(--accent)">Price Updates</div>
+                <div class="lp-mock-alert" style="border-color:#cc8800;color:#cc8800">Expiring Listings</div>
+                <div class="lp-mock-alert" style="border-color:#cc4020;color:#cc4020">Trade Offer</div>
+              </div>
+              <div class="lp-mock-scan" onclick="openAuthModal('signup')">SCAN CARDS</div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p class="hero-footer-line">All-in-one collection tracker and peer-to-peer marketplace — 5% platform fee</p>
+    </section>
+
+    <!-- FEATURE STRIP -->
+    <div class="lp-features">
+      <div class="lp-feat-card" onclick="openAuthModal('signup')">
+        <div class="lp-feat-ico">◧</div>
+        <div class="lp-feat-title">Track Your Collection</div>
+        <div class="lp-feat-desc">Powerful organization. Real-time values. Always up to date.</div>
+        <span class="lp-feat-arrow">→</span>
+      </div>
+      <div class="lp-feat-card" onclick="openAuthModal('signup')">
+        <div class="lp-feat-ico">◈</div>
+        <div class="lp-feat-title">Ghost Card Fund</div>
+        <div class="lp-feat-desc">Save for the cards you want. Watch your fund grow as you collect.</div>
+        <span class="lp-feat-arrow">→</span>
+      </div>
+      <div class="lp-feat-card" onclick="showPage('fairTrade');setMobileNav('')" id="lpTrade">
+        <div class="lp-feat-ico">⇌</div>
+        <div class="lp-feat-title">Trade Analyzer <span class="beta-badge">BETA</span></div>
+        <div class="lp-feat-desc">AI-powered analysis for confident, fair trades.</div>
+        <span class="lp-feat-arrow">→</span>
+      </div>
     </div>
+
+    <!-- MID PANELS -->
+    <div class="lp-mid">
+      <!-- Ghost Fund panel -->
+      <div class="lp-mid-panel">
+        <div class="lp-mid-label">Ghost Card Fund</div>
+        <div class="lp-mid-title">Lock in the card.<br>Build the fund.</div>
+        <div class="lp-mid-sub">The Ghost Card is a placeholder for your next big pull. Set your target and PathBinder helps you make it happen.</div>
+        <div class="lp-fund-row">
+          <div class="lp-ghost-card" style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--border)">?</div>
+          <div class="lp-fund-info">
+            <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;color:var(--muted);letter-spacing:.1em">Target Card</div>
+            <div class="lp-fund-name" style="margin-top:4px">Phantom Seraph</div>
+            <div style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">(Hyper Rare)</div>
+            <div class="lp-fund-target-lbl" style="margin-top:8px">Target Value</div>
+            <div class="lp-fund-target-val">$350.00</div>
+          </div>
+        </div>
+        <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">Fund Progress</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="flex:1">
+            <div class="lp-progress-wrap"><div class="lp-progress-fill" style="width:65%"></div></div>
+            <div class="lp-progress-labels"><span>$228.50</span><span>$350.00</span></div>
+          </div>
+          <div class="lp-pct-badge">65%</div>
+        </div>
+      </div>
+
+      <!-- Trade Analyst panel -->
+      <div class="lp-mid-panel">
+        <div class="lp-mid-label">Trade Analyst</div>
+        <div class="lp-mid-title" style="margin-bottom:16px">Know before<br>you trade.</div>
+        <div class="lp-sides">
+          <div class="lp-side">
+            <div class="lp-side-lbl a">SIDE A</div>
+            <div style="display:flex;gap:4px;margin-bottom:4px">
+              <div style="width:28px;height:38px;background:repeating-linear-gradient(135deg,rgba(0,229,255,.15) 0 4px,transparent 4px 8px),var(--surface2);border:1px solid #00E5FF44;flex-shrink:0"></div>
+              <div style="width:28px;height:38px;background:repeating-linear-gradient(135deg,rgba(0,229,255,.1) 0 4px,transparent 4px 8px),var(--surface2);border:1px solid #333;flex-shrink:0"></div>
+            </div>
+            <div class="lp-side-val">$186.40</div>
+          </div>
+          <div class="lp-vs">VS</div>
+          <div class="lp-side">
+            <div class="lp-side-lbl b">SIDE B</div>
+            <div style="display:flex;gap:4px;margin-bottom:4px">
+              <div style="width:28px;height:38px;background:repeating-linear-gradient(135deg,rgba(255,215,0,.15) 0 4px,transparent 4px 8px),var(--surface2);border:1px solid #FFD70044;flex-shrink:0"></div>
+              <div style="width:28px;height:38px;background:repeating-linear-gradient(135deg,rgba(255,215,0,.1) 0 4px,transparent 4px 8px),var(--surface2);border:1px solid #333;flex-shrink:0"></div>
+            </div>
+            <div class="lp-side-val">$178.25</div>
+          </div>
+        </div>
+        <div class="lp-fairness-bar-wrap">
+          <div class="lp-fairness-lbl">Fairness Meter</div>
+          <div class="lp-fairness-bar"><div class="lp-fairness-fill" style="width:88%"></div></div>
+          <div style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--accent);text-align:right">Very Fair Trade</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px">
+          <div style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);line-height:1.8">
+            [x] Value Difference &nbsp;&nbsp;+$8.15<br>
+            [x] Market Volatility &nbsp;&nbsp;Low<br>
+            [x] Liquidity &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Good
+          </div>
+          <div style="text-align:center">
+            <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em;margin-bottom:2px">Trade Score</div>
+            <div class="lp-score-badge">
+              <span class="lp-score-num">92</span>
+              <span class="lp-score-denom">/100</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MARKETPLACE HIGHLIGHTS -->
+    <section id="lpMarket" style="border-top:1.5px solid var(--border);border-bottom:1.5px solid var(--border);background:var(--surface2)">
+      <div class="lp-market-section">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <div style="font-family:'Press Start 2P',monospace;font-size:7px;letter-spacing:.14em;color:var(--accent)">Marketplace Highlights</div>
+          <button class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)" onclick="showPage('browse');setMobileNav('browse')">View All →</button>
+        </div>
+        <div class="lp-market-grid" id="lpMarketGrid">
+          <div class="lp-market-cta" onclick="showPage('browse');setMobileNav('browse')">
+            <div class="lp-market-cta-ico">→</div>
+            <div class="lp-market-cta-lbl">Browse<br>Marketplace</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRICING -->
+    <section class="lp-pricing-section" id="lpPricing">
+      <div class="lp-pricing-header">
+        <div class="lp-pricing-eyebrow">Plans for every collector</div>
+        <div class="lp-pricing-title">Built for collectors.<br>Backed by tech.</div>
+      </div>
+      <div class="lp-tiers">
+        <div class="lp-tier">
+          <div class="lp-tier-name">Free</div>
+          <div class="lp-tier-tagline">Start your journey</div>
+          <div class="lp-tier-price">$0</div>
+          <div class="lp-tier-per">/ mo</div>
+          <ul class="lp-tier-feats">
+            <li>Up to 256 cards</li>
+            <li>Basic price tracking</li>
+            <li>Community access</li>
+          </ul>
+          <button class="lp-tier-cta" onclick="openAuthModal('signup')">Get Started</button>
+        </div>
+        <div class="lp-tier featured">
+          <div class="lp-tier-name">Collector</div>
+          <div class="lp-tier-tagline">For serious collectors</div>
+          <div class="lp-tier-price">$4.99</div>
+          <div class="lp-tier-per">/ mo</div>
+          <ul class="lp-tier-feats">
+            <li>Unlimited cards</li>
+            <li>Advanced analytics</li>
+            <li>Ghost Card Fund</li>
+            <li>Price alerts</li>
+          </ul>
+          <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
+        </div>
+        <div class="lp-tier">
+          <div class="lp-tier-name">Vendor</div>
+          <div class="lp-tier-tagline">For resellers &amp; traders</div>
+          <div class="lp-tier-price">$14.99</div>
+          <div class="lp-tier-per">/ mo</div>
+          <ul class="lp-tier-feats">
+            <li>All Collector features</li>
+            <li>Marketplace listings</li>
+            <li>Trade Analytics Pro</li>
+            <li>Bulk scan &amp; import</li>
+          </ul>
+          <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
+        </div>
+        <div class="lp-tier">
+          <div class="lp-tier-name">Shop</div>
+          <div class="lp-tier-tagline">For stores &amp; teams</div>
+          <div class="lp-tier-price">$39.99</div>
+          <div class="lp-tier-per">/ mo</div>
+          <ul class="lp-tier-feats">
+            <li>All Vendor features</li>
+            <li>Team members</li>
+            <li>Advanced reporting</li>
+            <li>API access</li>
+          </ul>
+          <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER STRIP -->
+    <div class="lp-footer-strip">
+      <div class="lp-footer-item">
+        <div class="lp-footer-ico">GLOBAL</div>
+        <div class="lp-footer-title">Trusted by<br>collectors worldwide</div>
+      </div>
+      <div class="lp-footer-item">
+        <div class="lp-footer-ico">SECURE</div>
+        <div class="lp-footer-title">Secure Scans<br>&amp; Storage</div>
+      </div>
+      <div class="lp-footer-item">
+        <div class="lp-footer-ico">LIVE</div>
+        <div class="lp-footer-title">Real-Time<br>Market Data</div>
+      </div>
+      <div class="lp-footer-item">
+        <div class="lp-footer-ico">FIRST</div>
+        <div class="lp-footer-title">Collector First.<br>Always.</div>
+      </div>
+      <div class="lp-footer-help">
+        <div class="lp-footer-help-title">Questions?<br><span>We've got your back.</span></div>
+        <button class="lp-footer-help-btn" onclick="openAuthModal('signup')">Visit Help Center</button>
+      </div>
+    </div>
+
+  </div>
   </div>
 
   <div id="browsePage" class="page">
@@ -2952,7 +3336,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div id="detailView"></div>
   </div>
 
-  <div id="accountPage" class="page active">
+  <div id="accountPage" class="page">
     <div class="pb-page-hdr">
       <div class="pb-page-hdr-main">
         <div class="pb-page-hdr-title">◈ Account</div>
@@ -3877,6 +4261,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function openModal(modalId) {
       document.getElementById(modalId).classList.add('open');
     }
+    // Convenience wrapper for landing page CTA buttons
+    function openAuthModal(tab) {
+      openModal('authModal');
+      if (tab === 'signup') {
+        const regTab = document.getElementById('authModalTab-register');
+        if (regTab) regTab.click();
+      } else {
+        const loginTab = document.getElementById('authModalTab-login');
+        if (loginTab) loginTab.click();
+      }
+    }
     function closeModal(modalId) {
       document.getElementById(modalId).classList.remove('open');
       // If scanner was hidden to show this modal, bring it back
@@ -4081,6 +4476,84 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
 
+    // ── LANDING PAGE: populate binder mockup + marketplace highlights ─────────
+    var _landingCardsLoaded = false;
+    async function initLandingCards() {
+      if (_landingCardsLoaded) return;
+      _landingCardsLoaded = true;
+      try {
+        // Fetch a mix of high-value holofoil Pokémon cards with prices
+        const res = await fetch(
+          'https://api.pokemontcg.io/v2/cards?pageSize=14&q=supertype:Pokemon+rarity:"Rare+Holo"&orderBy=-tcgplayer.prices.holofoil.market',
+          { headers: { 'Accept': 'application/json' } }
+        );
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
+        const cards = (data.data || []).filter(c => c.images?.small);
+        if (cards.length === 0) return;
+
+        // ── Binder mockup grid (9 cards) ──────────────────────────────
+        const grid = document.getElementById('lpMockGrid');
+        if (grid) {
+          grid.innerHTML = '';
+          cards.slice(0, 9).forEach(card => {
+            const price =
+              card.tcgplayer?.prices?.holofoil?.market ||
+              card.tcgplayer?.prices?.reverseHolofoil?.market ||
+              card.tcgplayer?.prices?.normal?.market || 0;
+            const slot = document.createElement('div');
+            slot.className = 'lp-mock-slot';
+            slot.innerHTML =
+              '<img src="' + card.images.small + '" alt="' + (card.name || '') + '" loading="lazy">' +
+              (price ? '<div class="lp-mock-slot-price">$' + price.toFixed(2) + '</div>' : '');
+            grid.appendChild(slot);
+          });
+          // Update mock count with a plausible number
+          const cntEl = document.getElementById('lpMockCount');
+          if (cntEl) cntEl.textContent = '1,247';
+          const valEl = document.getElementById('lpMockValue');
+          if (valEl) {
+            const total = cards.slice(0,9).reduce((s, c) =>
+              s + (c.tcgplayer?.prices?.holofoil?.market || c.tcgplayer?.prices?.normal?.market || 0), 0);
+            valEl.textContent = total > 0 ? '$' + (total * 14).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '$12,845.60';
+          }
+          const dltEl = document.getElementById('lpMockDelta');
+          if (dltEl) { dltEl.textContent = '+8.21% ↑ 24H'; }
+        }
+
+        // ── Marketplace highlights (5 cards) ──────────────────────────
+        const mGrid = document.getElementById('lpMarketGrid');
+        if (mGrid) {
+          const cta = mGrid.querySelector('.lp-market-cta');
+          mGrid.innerHTML = '';
+          cards.slice(9, 14).forEach(card => {
+            const price =
+              card.tcgplayer?.prices?.holofoil?.market ||
+              card.tcgplayer?.prices?.reverseHolofoil?.market ||
+              card.tcgplayer?.prices?.normal?.market || 0;
+            const el = document.createElement('div');
+            el.className = 'lp-mcard';
+            el.style.cursor = 'pointer';
+            el.innerHTML =
+              '<div class="lp-mcard-art" style="background:var(--surface2);padding:0">' +
+                '<img src="' + card.images.small + '" alt="' + (card.name || '') + '" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">' +
+              '</div>' +
+              '<div class="lp-mcard-foot">' +
+                '<div class="lp-mcard-name">' + (card.name || '—') + '</div>' +
+                '<div class="lp-mcard-rarity">' + (card.rarity || '') + '</div>' +
+                (price ? '<div class="lp-mcard-price">$' + price.toFixed(2) + '</div>' : '') +
+              '</div>';
+            el.onclick = () => { showPage('browse'); setMobileNav('browse'); };
+            mGrid.appendChild(el);
+          });
+          if (cta) mGrid.appendChild(cta);
+        }
+      } catch(e) {
+        // API unavailable — skeleton placeholders stay, no error shown
+        console.warn('Landing card fetch failed:', e.message);
+      }
+    }
+
     // ── RETRO LABELS: replace spaces with _ in all button text nodes ──────────
     function retroLabels() { /* removed — no longer using underscore labels */ }
 
@@ -4113,7 +4586,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // NOTE: when PathBinder ships as a native iOS/Android app (Capacitor etc.)
     // history.pushState is a no-op inside a WebView — that's fine, the popstate
     // listener simply won't fire and the app behaves as it always has.
-    const _historyPages = new Set(['browse','collection','addCard','account','leaderboard','fairTrade','sets','avatar']);
+    const _historyPages = new Set(['browse','collection','addCard','account','leaderboard','fairTrade','sets','avatar','landing']);
     let _suppressHistoryPush = false;  // true during popstate handling to avoid double-push
 
     function _pushPageState(pageId) {
@@ -4159,8 +4632,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(pageId + 'Page').classList.add('active');
       _pushPageState(pageId);
-      // Binder sidebar visibility driven purely by CSS via body class
+      // Body state classes
       document.body.classList.toggle('on-binder', pageId === 'collection');
+      document.body.classList.toggle('on-landing', pageId === 'landing');
+      // Ensure sidebar is restored when navigating away from landing
+      if (pageId !== 'landing') document.body.classList.remove('on-landing');
       if (pageId === 'leaderboard') renderLeaderboard();
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const navTab = document.querySelector(`[data-page="${pageId}"]`);
@@ -4177,6 +4653,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       if (pageId === 'landing') {
         updateHeroStats();
+        initLandingCards();
       }
       if (pageId === 'browse') {
         renderBrowse();
@@ -13178,9 +13655,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       // ── Default page ────────────────────────────────────────────────────
-      // If no URL param routed us somewhere specific, land on Dashboard
+      // Logged-in users go to Dashboard; guests see the landing/marketing page
       if (!binderParam && !storeParam && !tradeParam && !pageParam) {
-        showPage('account'); setMobileNav('account');
+        if (currentUser) {
+          showPage('account'); setMobileNav('account');
+        } else {
+          showPage('landing'); setMobileNav('');
+        }
       }
 
       // ── Post-payment redirect handling ──────────────────────────────────
@@ -13288,7 +13769,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         orders = [];
         updateAuthUI();
         renderAllContent();
-        showPage('collection'); setMobileNav('collection');
+        showPage('landing'); setMobileNav('');
 
         // Re-fetch public listings in background
         sb.from('listings').select('*').order('created_at', { ascending: false })
@@ -13300,7 +13781,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // INITIAL_SESSION: initApp() handles the first render
     });
 
-    initApp().then(() => { updateHeroStats(); });
+    initApp().then(() => { updateHeroStats(); if (!currentUser) initLandingCards(); });
 
     // ── Browser back / forward support ──────────────────────────────────────
     // Fires when the user presses the browser Back or Forward button.
