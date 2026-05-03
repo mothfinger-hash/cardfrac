@@ -1798,15 +1798,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-wrap{display:flex;flex-direction:column;gap:12px}
 
 /* ── Stat ribbon ── */
-.ndash-ribbon-wrap{display:flex;flex-direction:column;border:1.5px solid var(--border);box-shadow:3px 3px 0 #000;overflow:hidden;margin-bottom:14px}
-.ndash-ribbon-photo{position:relative;height:80px;overflow:hidden;flex-shrink:0}
-.ndash-ribbon-photo img{width:100%;height:200%;object-fit:cover;object-position:top center;display:block;filter:brightness(0.68) saturate(1.1)}
-.ndash-ribbon-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,12,6,0) 0%,rgba(8,12,6,.4) 55%,rgba(8,12,6,.95) 100%);pointer-events:none}
-.ndash-ribbon-photo::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.07) 3px,rgba(0,0,0,.07) 4px);pointer-events:none;z-index:1}
-.ndash-ribbon-title{position:absolute;bottom:7px;left:12px;display:flex;align-items:center;gap:8px;z-index:2}
-.ndash-ribbon-title-ico{width:22px;height:22px;background:rgba(197,255,61,.12);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
-.ndash-ribbon-title-text{font-family:'Orbitron','Share Tech Mono',monospace;font-weight:900;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#fff;text-shadow:0 0 14px rgba(197,255,61,.5),0 2px 6px rgba(0,0,0,.9)}
-.ndash-ribbon{display:grid;grid-template-columns:repeat(5,1fr);background:rgba(8,14,6,.97);border-top:1px solid rgba(197,255,61,.15)}
+.ndash-ribbon-wrap{position:relative;border:1.5px solid var(--border);box-shadow:3px 3px 0 #000;overflow:hidden;margin-bottom:14px}
+.ndash-ribbon-photo{position:absolute;inset:0;z-index:0}
+.ndash-ribbon-photo img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block;filter:brightness(0.45) saturate(1.15)}
+.ndash-ribbon-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,12,6,.72) 0%,rgba(8,12,6,.42) 100%);pointer-events:none}
+.ndash-ribbon-photo::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px);pointer-events:none;z-index:1}
+.ndash-ribbon{position:relative;z-index:1;display:grid;grid-template-columns:repeat(5,1fr);background:transparent}
 @media(max-width:900px){.ndash-ribbon{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:540px){.ndash-ribbon{grid-template-columns:repeat(2,1fr)}}
 .ndash-stat{padding:11px 14px;border-right:1.5px solid var(--border);display:flex;flex-direction:column;gap:5px;position:relative}
@@ -2708,9 +2705,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                   onmouseleave="this.style.background='transparent';this.style.color='var(--teal)'">
                   ✦ Remove Background
                 </button>
-                <button onclick="atcClearPhoto()"
+                <button onclick="atcClearPhoto();window._lastScanDataURL=null;"
                   style="font-size:.63rem;padding:4px 9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace">
-                  × Clear
+                  × Discard
                 </button>
               </div>
             </div>
@@ -12119,6 +12116,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (thumb) thumb.src = '';
       if (btn)   { btn.textContent = '✦ Remove Background'; btn.disabled = false; btn.style.borderColor = 'var(--teal)'; btn.style.color = 'var(--teal)'; }
     }
+
+    // Offer the last scanned dataURL as the card photo (called after atcClearPhoto in scan flows)
+    function atcOfferScanPhoto() {
+      var dataURL = window._lastScanDataURL;
+      if (!dataURL) return;
+      // Convert dataURL → Blob → pseudo-File so atcHandlePhotoFile can display it
+      var byteStr = atob(dataURL.split(',')[1]);
+      var mimeMatch = dataURL.match(/data:([^;]+);/);
+      var mime = (mimeMatch && mimeMatch[1]) || 'image/jpeg';
+      var arr  = new Uint8Array(byteStr.length);
+      for (var i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+      var blob = new Blob([arr], { type: mime });
+      // Give it a fake File API shape so atcHandlePhotoFile works
+      blob.name = 'scan-photo.' + (mime === 'image/png' ? 'png' : 'jpg');
+      _atcPhotoBlob = blob;
+      var thumb  = document.getElementById('atcPhotoThumb');
+      var status = document.getElementById('atcPhotoStatusText');
+      var panel  = document.getElementById('atcPhotoPreview');
+      var btn    = document.getElementById('atcPhotoBgBtn');
+      if (thumb)  { thumb.src = dataURL; }
+      if (status) status.textContent = '📷 Scan photo — keep, edit, or discard';
+      if (panel)  panel.style.display = '';
+      if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+    }
     // ─────────────────────────────────────────────────────────────────────
 
     // ── Card Photo Update Modal (crop + optional bg removal) ──────────────
@@ -12193,6 +12214,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           guides:       true,
         });
       };
+    }
+
+    function cpRotate() {
+      if (_cpCropper) _cpCropper.rotate(90);
     }
 
     function cpResetFile() {
@@ -14747,6 +14772,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <img id="cpCropImg" style="max-width:100%;display:block">
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+          <button onclick="cpRotate()"
+            style="font-size:.65rem;padding:5px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace">
+            ↻ Rotate 90°
+          </button>
           <button id="cpBgBtn" onclick="cpRemoveBg()"
             style="font-size:.65rem;padding:5px 11px;border:1px solid var(--teal);background:transparent;color:var(--teal);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;transition:all .12s"
             onmouseenter="this.style.background='var(--teal)';this.style.color='#000'"
@@ -14931,6 +14960,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // Show thumbnail
         const preview = document.getElementById('uploadPreview');
         if (preview) { preview.style.display = 'block'; preview.src = dataURL; }
+        window._lastScanDataURL = dataURL; // offer as card photo on confirm
         setScanStatus('Scanning…');
         document.getElementById('scannerResults').innerHTML = '';
         const nameResults = document.getElementById('scannerNameResults');
@@ -15096,6 +15126,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       document.getElementById('scanBtn').textContent = 'Scanning…';
+      window._lastScanDataURL = dataURL; // stash for "keep/edit/discard" offer
       await runMatch(dataURL);
     }
 
@@ -15194,6 +15225,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
       atcClearPhoto();
+      atcOfferScanPhoto(); // offer scan photo to keep/edit/discard
       toggleGradeField();   // must come BEFORE setting _atcPsaData (it calls atcCertReset internally)
 
       // Show PSA cert preview panel (same as after manual lookup)
@@ -15241,6 +15273,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
       atcClearPhoto();
+      atcOfferScanPhoto(); // offer scan photo to keep/edit/discard
       toggleGradeField();
       atcUpdateCertBtn();
       populateBinderDropdown('atcBinderId', currentBinderId);
@@ -15324,6 +15357,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
       atcClearPhoto();
+      atcOfferScanPhoto(); // offer scan photo to keep/edit/discard
 
       // ── Auto-fill slab data if scanner detected a graded card ──────────
       const slab = window._detectedSlab;
@@ -15543,8 +15577,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       else if (/\b(BGS|BECKETT)\b/.test(t)) company = 'bgs';
       else if (/\bCGC\b/.test(t))           company = 'cgc';
       else if (/\bSGC\b/.test(t))           company = 'sgc';
-      else if (/\bACE\b/.test(t))           company = 'ace';
-      else if (/\bTAG\b/.test(t))           company = 'tag';
+      // ACE and TAG are common English words/Pokemon mechanics — require grading context
+      else if (/\bACE\b/.test(t) && /GRAD(ED?|ING)|GEM|MINT|PRISTINE/i.test(t)) company = 'ace';
+      else if (/\bTAG\b/.test(t) && /GRAD(ED?|ING)|GEM|MINT|PRISTINE/i.test(t)) company = 'tag';
       if (!company) return null;
 
       // Detect grade — standalone grade value (10, 9.5 … 1)
@@ -15684,6 +15719,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         // Normalise smart quotes / dashes from GCV before any parsing
         const fullText = normalizeOcr(rawFullText);
+
+        // Warn the user if OCR returned nothing — usually means API key issue
+        if (!silent && !rawFullText) {
+          setScanStatus('⚠ No text detected — check lighting or try a clearer photo');
+          console.warn('[Scanner] GCV returned empty — API key may be rate-limited or expired');
+        }
 
         // ── Graded slab detection ────────────────────────────────────────────
         window._detectedSlab = parseGradedSlab(fullText);
