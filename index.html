@@ -1748,7 +1748,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-reset-stat{border-right:none!important;padding:8px 10px!important;justify-content:flex-end;align-items:flex-end}
 .ndash-reset-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:7.5px;letter-spacing:.1em;padding:4px 8px;cursor:pointer;text-transform:uppercase;transition:all .1s;white-space:nowrap}
 .ndash-reset-btn:hover{border-color:var(--accent);color:var(--accent)}
-/* ─── 23. SOCIAL FOOTER ──────────────────────────────────────────── */
+/* ─── 23. SITE-WIDE PANEL LANGUAGE ──────────────────────────────── */
+/* Same DNA as the dashboard panels, usable on any page */
+.pb-panel{background:var(--surface);border:1.5px solid var(--border);box-shadow:3px 3px 0 #000;overflow:hidden;margin-bottom:12px}
+.pb-panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 12px;border-bottom:1.5px solid var(--border);background:linear-gradient(180deg,var(--surface3,var(--surface2)),var(--surface));flex-shrink:0}
+.pb-panel-title{font-family:'Orbitron',monospace;font-weight:800;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
+.pb-panel-title-ico{width:22px;height:22px;background:var(--surface3,var(--surface2));color:var(--accent);display:grid;place-items:center;font-size:13px;flex-shrink:0;border:1px solid var(--border)}
+.pb-panel-body{padding:12px 14px}
+.pb-panel-link{font-size:9.5px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;border:1px solid transparent;padding:3px 8px;transition:border-color .1s;cursor:pointer;background:none;font-family:'Space Mono','Share Tech Mono',monospace}
+.pb-panel-link:hover{border-color:var(--accent)}
+.pb-panel-actions{display:flex;align-items:center;gap:6px}
+
+/* Page-level title strip */
+.pb-page-hdr{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px;padding-bottom:14px;border-bottom:1.5px solid var(--border)}
+.pb-page-hdr-main{}
+.pb-page-hdr-title{font-family:'Orbitron',monospace;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--text);line-height:1.2;display:flex;align-items:center;gap:8px}
+.pb-page-hdr-sub{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;color:var(--muted);margin-top:5px;letter-spacing:.03em;line-height:1.5}
+
+/* Inline accent label (replaces bare h3 labels inside panels) */
+.pb-section-lbl{font-family:'Press Start 2P',monospace;font-size:6.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pb-section-lbl::before{content:'';display:inline-block;width:6px;height:6px;background:var(--accent);flex-shrink:0}
+
+/* ─── 24. SOCIAL FOOTER ──────────────────────────────────────────── */
 .social-footer {
   display: flex; align-items: center; justify-content: center;
   gap: 18px; padding: 14px 16px 10px;
@@ -2882,37 +2903,48 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </div>
 
   <div id="browsePage" class="page">
-    <h2>Marketplace</h2>
-    <p class="subtitle">Buy and sell trading cards — secured escrow, buyer protection, seller ratings. Check back often — new listings added by the community daily.</p>
-
-    <!-- Browse controls -->
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-      <button onclick="showPage('collection');setMobileNav('collection')"
-        style="padding:7px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s;letter-spacing:.04em"
-        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 My Binder</button>
-      <button onclick="openListCardModal()"
-        style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">List a Card</button>
+    <div class="pb-page-hdr">
+      <div class="pb-page-hdr-main">
+        <div class="pb-page-hdr-title">⬡ Marketplace</div>
+        <div class="pb-page-hdr-sub">Buy and sell trading cards — secured escrow, buyer protection, seller ratings.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+        <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted)" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 Binder</button>
+        <button onclick="openListCardModal()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ List a Card</button>
+      </div>
     </div>
 
-    <div class="section-tabs">
-      <button class="section-tab active" onclick="filterListings('all')">All</button>
-      <button class="section-tab" onclick="filterListings('available')">Available</button>
-      <button class="section-tab" onclick="filterListings('sold')">Sold</button>
+    <div class="pb-panel">
+      <div class="pb-panel-h">
+        <div class="pb-panel-title">
+          <span class="pb-panel-title-ico">⊟</span>
+          Filter &amp; Search
+        </div>
+        <div class="pb-panel-actions">
+          <div class="section-tabs" style="margin:0">
+            <button class="section-tab active" onclick="filterListings('all')">All</button>
+            <button class="section-tab" onclick="filterListings('available')">Available</button>
+            <button class="section-tab" onclick="filterListings('sold')">Sold</button>
+          </div>
+        </div>
+      </div>
+      <div class="pb-panel-body">
+        <div class="search-and-filters" style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center">
+          <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;width:100%;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" />
+          <select id="gameTypeFilter" onchange="applyBrowseFilters()" style="display:none">
+            <option value="all">All Types</option>
+          </select>
+          <select id="sortByFilter" onchange="applyBrowseFilters()" style="padding:7px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;outline:none;cursor:pointer">
+            <option value="newest">Newest</option>
+            <option value="price-high">Price: High → Low</option>
+            <option value="price-low">Price: Low → High</option>
+          </select>
+          <button id="clearFiltersBtn" onclick="clearBrowseFilters()" class="pb-panel-link" style="border-color:var(--border);color:var(--muted);display:none">Clear</button>
+        </div>
+        <div id="gameTypePills" style="display:none;margin-top:10px"></div>
+      </div>
     </div>
-    <div class="search-and-filters" style="margin:20px 0;display:grid;grid-template-columns:1fr auto auto auto auto;gap:12px;align-items:center">
-      <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem;width:100%" />
-      <select id="gameTypeFilter" onchange="applyBrowseFilters()" style="display:none">
-        <option value="all">All Types</option>
-      </select>
-      <select id="sortByFilter" onchange="applyBrowseFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:.9rem">
-        <option value="newest">Newest</option>
-        <option value="price-high">Price: High to Low</option>
-        <option value="price-low">Price: Low to High</option>
-      </select>
-      <button id="clearFiltersBtn" onclick="clearBrowseFilters()" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--accent);font-size:.9rem;cursor:pointer;display:none">Clear All</button>
-    </div>
-    <div id="gameTypePills" style="display:none"></div>
+
     <div class="card-grid" id="browseGrid"></div>
   </div>
 
@@ -2921,7 +2953,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </div>
 
   <div id="accountPage" class="page active">
-    <h2>Dashboard</h2>
+    <div class="pb-page-hdr">
+      <div class="pb-page-hdr-main">
+        <div class="pb-page-hdr-title">◈ Account</div>
+      </div>
+    </div>
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
       <button class="account-tab" onclick="switchAccountTab('myListings')">My Listings</button>
@@ -2938,54 +2974,121 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     </div>
 
     <div id="myListings" class="account-content">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h3 style="font-size:1rem">Your Listings</h3>
-        <button onclick="openListCardModal()" style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">List a Card</button>
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">⊟</span>
+            Your Listings
+          </div>
+          <button onclick="openListCardModal()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ List a Card</button>
+        </div>
+        <div class="pb-panel-body">
+          <div id="myListingsContent"></div>
+        </div>
       </div>
-      <div id="myListingsContent"></div>
     </div>
 
     <div id="myOrders" class="account-content">
-      <div class="account-tabs" style="margin-bottom:16px;border-bottom:none">
-        <button class="account-tab active" id="ordersTabBuying" onclick="switchOrdersTab('buying')">Buying</button>
-        <button class="account-tab" id="ordersTabSelling" onclick="switchOrdersTab('selling')">Selling</button>
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">⊛</span>
+            Orders
+          </div>
+          <div class="pb-panel-actions">
+            <button class="account-tab active" id="ordersTabBuying" onclick="switchOrdersTab('buying')" style="margin:0">Buying</button>
+            <button class="account-tab" id="ordersTabSelling" onclick="switchOrdersTab('selling')" style="margin:0">Selling</button>
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="ordersContent"></div>
+        </div>
       </div>
-      <div id="ordersContent"></div>
     </div>
 
     <div id="salesArchive" class="account-content">
-      <div id="salesArchiveContent"></div>
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">▣</span>
+            Sales Archive
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="salesArchiveContent"></div>
+        </div>
+      </div>
     </div>
 
     <div id="watchlist" class="account-content">
-      <h3 style="font-size:1rem;margin-bottom:14px">Watchlist</h3>
-      <div id="watchlistContent"></div>
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">◉</span>
+            Watchlist
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="watchlistContent"></div>
+        </div>
+      </div>
     </div>
 
     <div id="history" class="account-content">
-      <div id="historyContent"></div>
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">◷</span>
+            Activity History
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="historyContent"></div>
+        </div>
+      </div>
     </div>
 
     <div id="tradeHistory" class="account-content">
-      <div id="tradeHistoryContent">
-        <div style="text-align:center;padding:40px;color:var(--muted)">Loading trade history…</div>
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">⇌</span>
+            Trade History
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="tradeHistoryContent">
+            <div style="text-align:center;padding:40px;color:var(--muted)">Loading trade history…</div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div id="badges" class="account-content">
-      <div style="margin-bottom:16px">
-        <h3 style="font-size:.82rem;letter-spacing:.1em;color:var(--accent);font-family:'Press Start 2P',monospace">★ GYM BADGES ★</h3>
-        <p style="font-size:.7rem;color:var(--muted);margin-top:6px">Collect all 8 badges by completing milestones. Some require multiple steps. One is hidden.</p>
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">★</span>
+            Gym Badges
+          </div>
+          <span style="font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.08em">Collect all 8 — one is hidden</span>
+        </div>
+        <div class="pb-panel-body">
+          <div id="badgesGrid" class="badges-grid"></div>
+        </div>
       </div>
-      <div id="badgesGrid" class="badges-grid"></div>
     </div>
   </div>
 
   <div id="collectionPage" class="page">
     <!-- Everything lives inside the centered binder-frame -->
     <div class="binder-frame">
-    <h2>My Binder</h2>
-    <p class="subtitle">Your complete card holdings at a glance.</p>
+    <div class="pb-page-hdr" style="margin-bottom:14px">
+      <div class="pb-page-hdr-main">
+        <div class="pb-page-hdr-title">◧ My Binder</div>
+        <div class="pb-page-hdr-sub">Your complete card holdings at a glance.</div>
+      </div>
+    </div>
 
     <!-- Binder shelf (visual covers) -->
     <div id="binderShelfWrap" style="display:none;margin-bottom:0">
@@ -2993,33 +3096,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     </div>
 
     <!-- Binder tabs (compact quick-switch, shown when a binder is open) -->
-    <div id="binderTabsWrap" style="display:none;margin-bottom:14px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch">
+    <div id="binderTabsWrap" style="display:none;margin-bottom:10px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch">
       <div id="binderTabs" style="display:inline-flex;gap:6px;align-items:center;padding-bottom:2px"></div>
     </div>
-      <!-- Binder View Controls -->
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-        <div class="binder-view-toggle" id="binderViewToggle">
-          <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
-          <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
-          <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
-          <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
+
+    <!-- Binder controls panel -->
+    <div class="pb-panel" style="margin-bottom:12px">
+      <div class="pb-panel-h">
+        <div class="pb-panel-title">
+          <div class="binder-view-toggle" id="binderViewToggle" style="gap:4px">
+            <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
+            <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
+            <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
+            <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" style="display:none;padding:7px 14px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬆ Bulk Import</button>
-          <button onclick="copyShareLink()" id="shareBinderBtn" style="display:none;padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⬡ Share Binder</button>
-          <button onclick="showPage('fairTrade');setMobileNav('')"
-            style="padding:7px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">⇌ Trade Analyzer <span class="beta-badge">BETA</span></button>
-          <button onclick="showPage('addCard');setMobileNav('addCard')"
-            style="padding:7px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">+ Add Card</button>
+        <div class="pb-panel-actions">
+          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" class="pb-panel-link" style="display:none;border-color:var(--gold);color:var(--gold)">⬆ Import</button>
+          <button onclick="copyShareLink()" id="shareBinderBtn" class="pb-panel-link" style="display:none;border-color:var(--teal);color:var(--teal)">⬡ Share</button>
+          <button onclick="showPage('fairTrade');setMobileNav('')" class="pb-panel-link" style="border-color:var(--teal);color:var(--teal)">⇌ Trade Analyzer <span class="beta-badge">BETA</span></button>
+          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ Add Card</button>
         </div>
       </div>
       <!-- List view search — only visible in list mode -->
-      <div id="binderListSearchWrap" style="display:none;margin-bottom:12px">
+      <div id="binderListSearchWrap" style="display:none;border-top:1px solid var(--border)">
         <input id="binderListSearch" type="text" placeholder="Search by name, set, or card #…"
           oninput="renderBinder()"
-          style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;border-radius:0;box-sizing:border-box;outline:none"
-          onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          style="width:100%;padding:9px 14px;background:transparent;border:none;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;box-sizing:border-box;outline:none"
+          onfocus="this.style.background='var(--surface2)'" onblur="this.style.background='transparent'">
       </div>
+    </div>
 
       <!-- Portfolio Summary -->
       <div id="collectionSummary" class="coll-summary"></div>
@@ -3039,21 +3145,35 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </div>
 
   <div id="addCardPage" class="page">
-    <h2>Add Card</h2>
-    <p class="subtitle">Search the Pokémon TCG database or add any card manually.</p>
-    <div class="coll-add-section">
-      <div class="coll-add-title"></div>
-      <input type="text" class="coll-search-bar" id="cardSearchInput"
-        placeholder="Search Pokémon cards by name (e.g. Charizard, Pikachu)..."
-        onkeydown="if(event.key==='Enter')searchPokemonCards()" />
-      <div class="coll-add-btns">
-        <button class="coll-btn-primary" onclick="searchPokemonCards()">Search Cards</button>
-        <button class="coll-btn-secondary" onclick="openManualAddModal()">Add Manually</button>
-        <label class="coll-btn-secondary" style="border-color:var(--accent2);color:var(--accent2);cursor:pointer;display:inline-block;text-align:center">&#9654; Scan a Card<input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none"></label>
-        <button class="coll-btn-secondary" onclick="openMultiScan()" style="border-color:var(--gold);color:var(--gold)">&#9638; Scan Multiple</button>
+    <div class="pb-page-hdr">
+      <div class="pb-page-hdr-main">
+        <div class="pb-page-hdr-title">+ Add Card</div>
+        <div class="pb-page-hdr-sub">Search the Pokémon TCG database or add any card manually.</div>
       </div>
-      <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
-      <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
+    </div>
+    <div class="pb-panel">
+      <div class="pb-panel-h">
+        <div class="pb-panel-title">
+          <span class="pb-panel-title-ico">⊕</span>
+          Card Search
+        </div>
+      </div>
+      <div class="pb-panel-body">
+        <div class="coll-add-section" style="background:none;border:none;padding:0;margin:0">
+          <div class="coll-add-title"></div>
+          <input type="text" class="coll-search-bar" id="cardSearchInput"
+            placeholder="Search Pokémon cards by name (e.g. Charizard, Pikachu)..."
+            onkeydown="if(event.key==='Enter')searchPokemonCards()" />
+          <div class="coll-add-btns">
+            <button class="coll-btn-primary" onclick="searchPokemonCards()">Search Cards</button>
+            <button class="coll-btn-secondary" onclick="openManualAddModal()">Add Manually</button>
+            <label class="coll-btn-secondary" style="border-color:var(--accent2);color:var(--accent2);cursor:pointer;display:inline-block;text-align:center">&#9654; Scan a Card<input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none"></label>
+            <button class="coll-btn-secondary" onclick="openMultiScan()" style="border-color:var(--gold);color:var(--gold)">&#9638; Scan Multiple</button>
+          </div>
+          <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
+          <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -3062,13 +3182,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div style="max-width:860px;margin:0 auto">
 
       <!-- Header (always visible) -->
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
-        <div>
-          <h2 style="margin:0">⇌ Trade Analyzer <span class="beta-badge">BETA</span></h2>
-          <p class="subtitle" style="margin:4px 0 0">Compare proposed trades side-by-side — for in-person evaluation only.</p>
+      <div class="pb-page-hdr">
+        <div class="pb-page-hdr-main">
+          <div class="pb-page-hdr-title">⇌ Trade Analyzer <span class="beta-badge" style="font-size:7px;vertical-align:middle">BETA</span></div>
+          <div class="pb-page-hdr-sub">Compare proposed trades side-by-side — for in-person evaluation only.</div>
         </div>
-        <button onclick="showPage('collection');setMobileNav('collection')"
-          style="padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.75rem;cursor:pointer;letter-spacing:.04em">← Back to Binder</button>
+        <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted);flex-shrink:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">← Binder</button>
       </div>
 
       <!-- ── STATE 1: Card input ─────────────────────────────────────────── -->
@@ -3314,19 +3433,42 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
   <!-- ── SETS COMPLETION TRACKER ────────────────────────────────────────── -->
   <div id="setsPage" class="page">
+    <div class="pb-page-hdr">
+      <div class="pb-page-hdr-main">
+        <div class="pb-page-hdr-title">⊞ Sets</div>
+        <div class="pb-page-hdr-sub">Track your set completion across every expansion.</div>
+      </div>
+    </div>
     <div id="setsPageContent">
       <div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>
     </div>
   </div>
 
   <div id="leaderboardPage" class="page">
-    <h2>Leaderboard</h2>
-    <div class="section-tabs" style="margin-bottom:24px">
-      <button class="section-tab active" onclick="renderLeaderboard('value')">Portfolio Value</button>
-      <button class="section-tab" onclick="renderLeaderboard('slots')">Most Cards</button>
-      <button class="section-tab" onclick="renderLeaderboard('diverse')">Most Diverse</button>
+    <div class="pb-page-hdr">
+      <div class="pb-page-hdr-main">
+        <div class="pb-page-hdr-title">▲ Leaderboard</div>
+        <div class="pb-page-hdr-sub">Top collectors ranked by portfolio, volume, and diversity.</div>
+      </div>
     </div>
-    <div id="leaderboardContent"><div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div></div>
+    <div class="pb-panel">
+      <div class="pb-panel-h">
+        <div class="pb-panel-title">
+          <span class="pb-panel-title-ico">◈</span>
+          Rankings
+        </div>
+        <div class="pb-panel-actions">
+          <div class="section-tabs" style="margin:0">
+            <button class="section-tab active" onclick="renderLeaderboard('value')">Portfolio Value</button>
+            <button class="section-tab" onclick="renderLeaderboard('slots')">Most Cards</button>
+            <button class="section-tab" onclick="renderLeaderboard('diverse')">Most Diverse</button>
+          </div>
+        </div>
+      </div>
+      <div class="pb-panel-body">
+        <div id="leaderboardContent"><div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div></div>
+      </div>
+    </div>
   </div>
 
   <div id="adminPage" class="page">
