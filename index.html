@@ -981,8 +981,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-shelf-row{display:flex;gap:18px;padding:18px 0 22px;overflow-x:auto;scrollbar-width:thin;align-items:flex-end;-webkit-overflow-scrolling:touch}
     /* ── HIDDEN BINDER SHELF ── */
     #binderShelfWrap{display:none !important}
-    /* ── BINDER TOP BAR ── */
-    /* Horizontal scrollable row pinned just below the viewport top edge */
+    /* ── BINDER TOP BAR (desktop) / LEFT STRIP (mobile) ── */
     #binderSidebar{
       position:fixed;display:none;
       left:var(--sb-w);right:0;top:0;
@@ -1003,9 +1002,19 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     @media(max-width:900px){
       #binderSidebar{left:var(--sb-w-coll)}
     }
+    /* Mobile: convert top bar → left vertical strip (binder page only) */
     @media(max-width:600px){
-      #binderSidebar{left:0}
-      body.on-binder #collectionPage{padding-top:56px}
+      body.on-binder #binderSidebar{
+        left:0;right:auto;top:88px;bottom:62px;
+        width:52px;height:auto;
+        flex-direction:column;align-items:center;justify-content:flex-start;
+        overflow-x:hidden;overflow-y:auto;
+        padding:6px 0;gap:6px;
+        background:var(--surface);
+        border-right:2px solid var(--border);
+        border-bottom:none;
+      }
+      body.on-binder #collectionPage{padding-top:0;padding-left:58px}
     }
 
     /* ── Icons ── */
@@ -1016,6 +1025,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .bsb-icon.bsb-drag-over{border-color:#FF5722!important;box-shadow:0 0 0 3px rgba(255,87,34,.45)!important;outline:2px solid #FF5722}
     .bsb-add{background:transparent;border:2px dashed rgba(255,255,255,.18);color:rgba(255,255,255,.3);font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .bsb-add:hover{border-color:#00E5FF;color:#00E5FF}
+    /* Sets autocomplete */
+    .sets-ac-item{padding:8px 14px;cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;color:var(--text);transition:background .1s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sets-ac-item:hover{background:var(--surface2);color:var(--accent)}
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
     .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
@@ -1493,14 +1505,15 @@ nav {
    ─────────────────────────────────────────────────────────────────────────── */
 .lp-pdx-stage { position:relative; width:100%; line-height:0; }
 .lp-pdx-photo { width:100%; height:auto; display:block; pointer-events:none; user-select:none; }
-/* Generic screen overlay — sits directly over a white area in the photo */
-.lp-pdx-screen { position:absolute; overflow:hidden; background:#060810; transform:rotateY(8deg); transform-origin:center center; }
+/* Generic screen overlay — sits directly over a white area in the photo.
+   skewX matches the parallelogram angle of the device screen as photographed. */
+.lp-pdx-screen { position:absolute; overflow:hidden; background:#060810; transform:skewX(-5deg); transform-origin:top left; }
 /* Left screen: binder 4×4 grid */
-.lp-pdx-left { left:16%; top:8%; width:26%; height:67%; display:flex; flex-direction:column; }
+.lp-pdx-left { left:20%; top:8%; width:26%; height:67%; display:flex; flex-direction:column; }
 /* Right-top screen: price chart */
-.lp-pdx-rt { left:45%; top:8%; width:27%; height:33%; display:flex; flex-direction:column; padding:5px 7px 4px; gap:3px; }
+.lp-pdx-rt { left:51%; top:8%; width:27%; height:33%; display:flex; flex-direction:column; padding:5px 7px 4px; gap:3px; }
 /* Right-bottom screen: trade analyzer */
-.lp-pdx-rb { left:45%; top:43%; width:27%; height:29%; display:flex; flex-direction:column; padding:5px 7px; gap:3px; }
+.lp-pdx-rb { left:51%; top:43%; width:27%; height:29%; display:flex; flex-direction:column; padding:5px 7px; gap:3px; }
 /* Card grid — fills left screen */
 .lp-mock-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:3px; background:#060810; align-content:start; flex:1; overflow:hidden; }
 .lp-mock-slot { aspect-ratio:.72; background:#0d1018; border:1px solid #1a2030; overflow:hidden; position:relative; cursor:pointer; transition:border-color .12s; }
@@ -1535,7 +1548,7 @@ nav {
 .lp-pdx-fair-score { font-family:'Orbitron',monospace; font-weight:900; font-size:8px; color:#00ff99; text-align:right; }
 
 /* Mobile Pokédex fallback — stage shows as dark panel if image doesn't load */
-.lp-pdx-stage { background:#060810; perspective:1400px; perspective-origin:82% 46%; }
+.lp-pdx-stage { background:#060810; }
 .lp-pdx-photo { min-height:0; }
 /* On very small screens collapse the graphic below hero text; cap height */
 @media(max-width:600px){
@@ -2280,17 +2293,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="avatar-circle" id="avatarInitials">A</div>
           <span id="userName">User</span>
         </div>
-        <div class="avatar-dropdown" id="avatarDropdown">
-          <div class="dd-badge-section">
-            <div class="dd-badge-label">⬡ Badges</div>
-            <div class="dd-badge-grid" id="ddBadgeGrid"></div>
-          </div>
-          <div class="dropdown-item" id="myAccountBtn">⬡ My Account</div>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-item" id="createAvatarBtn">🎨 Create Avatar</div>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">⏻ Sign Out</div>
-        </div>
       </div>
       <div class="nav-foot-row">
         <button class="member-chip" id="membershipBtn"><span class="mc-lbl">Premium</span></button>
@@ -2298,6 +2300,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>
     </div>
   </nav>
+
+  <!-- Avatar dropdown — position:fixed global element, lives OUTSIDE <nav> so
+       mobile display:none on nav doesn't hide it when open ─────────────────── -->
+  <div class="avatar-dropdown" id="avatarDropdown">
+    <div class="dd-badge-section">
+      <div class="dd-badge-label">⬡ Badges</div>
+      <div class="dd-badge-grid" id="ddBadgeGrid"></div>
+    </div>
+    <div class="dropdown-item" id="myAccountBtn">⬡ My Account</div>
+    <div class="dropdown-divider"></div>
+    <div class="dropdown-item" id="createAvatarBtn">🎨 Create Avatar</div>
+    <div class="dropdown-divider"></div>
+    <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">⏻ Sign Out</div>
+  </div>
 
   <!-- ── TOP NAV (mobile, non-sticky) ──────────────────────────────────────── -->
   <header class="top-nav" id="topNav">
@@ -6046,6 +6062,94 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           col.appendChild(_dashDragSrc);
         });
       });
+
+      // ── Touch drag for mobile (HTML5 drag API doesn't fire on mobile) ────────
+      (function() {
+        var tSrc = null, tClone = null, tTimer = null, tActive = false;
+        var tOffX = 0, tOffY = 0, tStartX = 0, tStartY = 0;
+
+        function tCleanup() {
+          clearTimeout(tTimer); tTimer = null; tActive = false;
+          if (tClone && tClone.parentNode) tClone.parentNode.removeChild(tClone);
+          tClone = null;
+          if (tSrc) { tSrc.style.opacity = ''; tSrc.classList.remove('ndash-dragging'); }
+          tSrc = null;
+          document.querySelectorAll('[data-panel-id]').forEach(function(p) { p.classList.remove('ndash-drag-over'); });
+        }
+
+        document.addEventListener('touchstart', function(e) {
+          var handle = e.target.closest('.ndash-drag-handle');
+          if (!handle) return;
+          var panel = handle.closest('[data-panel-id]');
+          if (!panel) return;
+          tSrc = panel;
+          var t = e.touches[0];
+          var rect = panel.getBoundingClientRect();
+          tOffX = t.clientX - rect.left;
+          tOffY = t.clientY - rect.top;
+          tStartX = t.clientX; tStartY = t.clientY;
+
+          tTimer = setTimeout(function() {
+            tActive = true;
+            tClone = panel.cloneNode(true);
+            Object.assign(tClone.style, {
+              position: 'fixed', zIndex: '9999', pointerEvents: 'none',
+              width: rect.width + 'px', opacity: '0.85',
+              top: rect.top + 'px', left: rect.left + 'px',
+              transform: 'scale(1.03) rotate(0.5deg)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.55)',
+              transition: 'none'
+            });
+            document.body.appendChild(tClone);
+            panel.style.opacity = '0.25';
+            panel.classList.add('ndash-dragging');
+            if (navigator.vibrate) navigator.vibrate(30);
+          }, 200);
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function(e) {
+          if (!tActive) {
+            if (!tTimer) return;
+            var t0 = e.touches[0];
+            var dx = Math.abs(t0.clientX - tStartX), dy = Math.abs(t0.clientY - tStartY);
+            if (dx > 8 || dy > 8) { clearTimeout(tTimer); tTimer = null; tSrc = null; return; }
+            e.preventDefault();
+            return;
+          }
+          e.preventDefault();
+          var t = e.touches[0];
+          tClone.style.left = (t.clientX - tOffX) + 'px';
+          tClone.style.top  = (t.clientY - tOffY) + 'px';
+
+          // Highlight panel under finger
+          tClone.style.visibility = 'hidden';
+          var el = document.elementFromPoint(t.clientX, t.clientY);
+          tClone.style.visibility = '';
+          document.querySelectorAll('[data-panel-id]').forEach(function(p) { p.classList.remove('ndash-drag-over'); });
+          var over = el && el.closest('[data-panel-id]');
+          if (over && over !== tSrc) over.classList.add('ndash-drag-over');
+        }, { passive: false });
+
+        document.addEventListener('touchend', function(e) {
+          if (!tActive) { clearTimeout(tTimer); tTimer = null; tSrc = null; return; }
+          var t = e.changedTouches[0];
+          tClone.style.visibility = 'hidden';
+          var el = document.elementFromPoint(t.clientX, t.clientY);
+          tClone.style.visibility = '';
+          var over = el && el.closest('[data-panel-id]');
+          if (over && over !== tSrc) {
+            var rect = over.getBoundingClientRect();
+            var midY = rect.top + rect.height / 2;
+            var dstParent = over.parentElement;
+            if (t.clientY < midY) dstParent.insertBefore(tSrc, over);
+            else dstParent.insertBefore(tSrc, over.nextSibling);
+            saveDashOrder();
+          }
+          tCleanup();
+        }, { passive: true });
+
+        document.addEventListener('touchcancel', tCleanup, { passive: true });
+      })();
     }
 
     function saveDashOrder() {
@@ -10763,6 +10867,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         clone = null;
         if (src) src.style.opacity = '';
         src = null; active = false;
+        document.body.style.overflow = ''; // restore scroll
         document.querySelectorAll('#binderGrid .binder-card').forEach(c => c.classList.remove('drag-over'));
       }
 
@@ -10792,6 +10897,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           });
           document.body.appendChild(clone);
           card.style.opacity = '0.25';
+          document.body.style.overflow = 'hidden'; // lock scroll while dragging
           if (navigator.vibrate) navigator.vibrate(35);
         }, 180);
       }, { passive: true });
@@ -13287,6 +13393,55 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     var _setsCache = null;  // { timestamp, sets }
     var _setsDetailCache = {};  // setId → { timestamp, cards }
 
+    // Sets page helpers
+    var _setsOwnedBySet = {};
+
+    function _renderSetRow(s) {
+      const owned    = _setsOwnedBySet[s.name] || 0;
+      const total    = s.total || s.printedTotal || 1;
+      const pct      = Math.min(100, Math.round((owned / total) * 100));
+      const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+      const logoHtml = s.images && s.images.logo
+        ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
+        : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
+      return `<div onclick="loadSetDetail('${s.id}','${s.name.replace(/'/g,"&#39;")}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        ${logoHtml}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.name)}</div>
+          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.series || ''} · ${s.releaseDate || ''} · ${total} cards</div>
+          <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
+          </div>
+        </div>
+        <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${owned}/${total}</div>
+      </div>`;
+    }
+
+    function filterSetsPage(q) {
+      if (!_setsCache) return;
+      const term   = q.trim().toLowerCase();
+      const sets   = _setsCache.sets;
+      const ac     = document.getElementById('setsAcList');
+      const wrap   = document.getElementById('setsListInner');
+      if (!wrap) return;
+
+      const matches = term ? sets.filter(s => s.name.toLowerCase().includes(term)) : sets;
+      wrap.innerHTML = matches.map(s => _renderSetRow(s)).join('') ||
+        '<div style="padding:32px;text-align:center;color:var(--muted)">No sets found</div>';
+
+      if (ac) {
+        if (term && matches.length) {
+          const top = matches.slice(0, 8);
+          ac.innerHTML = top.map(s =>
+            `<div class="sets-ac-item" onclick="document.getElementById('setsSearch').value=${JSON.stringify(s.name)};filterSetsPage(${JSON.stringify(s.name)});document.getElementById('setsAcList').style.display='none'">${_escHtml(s.name)}</div>`
+          ).join('');
+          ac.style.display = 'block';
+        } else {
+          ac.style.display = 'none';
+        }
+      }
+    }
+
     async function loadSetsPage() {
       const el = document.getElementById('setsPageContent');
       if (!el) return;
@@ -13308,44 +13463,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
 
         // Build a lookup: set_name → count of owned cards (non-ghost)
-        const ownedBySet = {};
+        _setsOwnedBySet = {};
         if (currentUser) {
           collectionItems.filter(c => !c.is_ghost && !c.sold_offline).forEach(c => {
             const sn = (c.set_name || '').trim();
-            if (sn) ownedBySet[sn] = (ownedBySet[sn] || 0) + (c.quantity || 1);
+            if (sn) _setsOwnedBySet[sn] = (_setsOwnedBySet[sn] || 0) + (c.quantity || 1);
           });
         }
 
-        const rows = sets.map(s => {
-          const owned  = ownedBySet[s.name] || 0;
-          const total  = s.total || s.printedTotal || 1;
-          const pct    = Math.min(100, Math.round((owned / total) * 100));
-          const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
-          const logoHtml = s.images && s.images.logo
-            ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
-            : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
-          return `<div onclick="loadSetDetail('${s.id}','${_escHtml(s.name)}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-            ${logoHtml}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.name)}</div>
-              <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.series || ''} · ${s.releaseDate || ''} · ${total} cards</div>
-              <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
-              </div>
-            </div>
-            <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${owned}/${total}</div>
-          </div>`;
-        }).join('');
-
-        const totalOwned = Object.values(ownedBySet).reduce((a, b) => a + b, 0);
+        const totalOwned = Object.values(_setsOwnedBySet).reduce((a, b) => a + b, 0);
+        const rows = sets.map(s => _renderSetRow(s)).join('');
 
         el.innerHTML = `
           <div style="padding:16px 0 8px">
-            <h2 style="font-size:1.1rem;margin-bottom:4px">Set Completion</h2>
-            <p style="font-size:.76rem;color:var(--muted);margin-bottom:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <h2 style="font-size:1.1rem;margin:0">Set Completion</h2>
+            </div>
+            <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">
               ${currentUser ? totalOwned + ' cards owned across your binder' : 'Log in to track your collection'}
             </p>
-            <div style="background:var(--surface);border:1px solid var(--border)">
+            <!-- Search + autocomplete -->
+            <div style="position:relative;margin-bottom:14px">
+              <input id="setsSearch" type="text" autocomplete="off" placeholder="Search sets…"
+                oninput="filterSetsPage(this.value)"
+                onfocus="if(this.value)filterSetsPage(this.value)"
+                style="width:100%;box-sizing:border-box;padding:9px 14px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;outline:none"
+                onfocusin="this.style.borderColor='var(--accent)'"
+                onfocusout="this.style.borderColor='var(--border)';setTimeout(()=>document.getElementById('setsAcList')&&(document.getElementById('setsAcList').style.display='none'),160)">
+              <div id="setsAcList" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--surface);border:1px solid var(--border);border-top:none;z-index:200;max-height:220px;overflow-y:auto;box-shadow:4px 4px 0 var(--shadow)"></div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border)" id="setsListInner">
               ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No sets found</div>'}
             </div>
           </div>`;
