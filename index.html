@@ -11973,6 +11973,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
       if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
 
+      // Wrap the rest in try/finally so the button ALWAYS re-enables even on unexpected errors
+      try {
       // Upload user photo if provided (blob may be bg-removed PNG)
       let userPhotoUrl = null;
       if (_atcPhotoBlob) {
@@ -12040,6 +12042,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (newRow?.id && priceSourceUrl) {
         const item = collectionItems.find(c => String(c.id) === String(newRow.id));
         if (item) refreshBinderCardPrice(newRow.id);
+      }
+      } catch(saveErr) {
+        console.error('[Save]', saveErr);
+        showToast('Unexpected error — please try again');
+      } finally {
+        // Always re-enable the save button regardless of outcome
+        const saveBtnF = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
+        if (saveBtnF && saveBtnF.disabled) { saveBtnF.textContent = 'Add to Collection'; saveBtnF.disabled = false; }
       }
     }
 
@@ -12366,16 +12376,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         _atcPsaData = result;
 
         // ── Auto-fill form fields ──────────────────────────────────────────
-        // Grade
+        // Grade — set value directly WITHOUT calling toggleGradeField(), because
+        // toggleGradeField() calls atcCertReset() which wipes _atcPsaData and hides
+        // the cert preview we are about to show — causing a stuck/blank modal state.
         if (result.grade && gradeEl) {
           var gradeVal = parseFloat(result.grade);
-          // Find the closest option in the select
           var opts = Array.from(gradeEl.options).map(o => parseFloat(o.value));
           var closest = opts.reduce(function(a, b) {
             return Math.abs(b - gradeVal) < Math.abs(a - gradeVal) ? b : a;
           });
           gradeEl.value = String(closest);
-          toggleGradeField();
+          // Just make sure grade field is visible (without the atcCertReset side-effect)
+          var gWrap = document.getElementById('gradeFieldWrap');
+          if (gWrap) gWrap.style.visibility = 'visible';
         }
 
         // Card name — only pre-fill if currently blank / manual entry
@@ -15791,9 +15804,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!grade && /GEM[\s\-]?MT|PRISTINE|PERFECT/i.test(t)) grade = '10';
       if (!grade && /NEAR[\s\-]?MINT/i.test(t))               grade = '9';
 
-      // Detect cert number — standalone 7–10 digit number, NOT a card fraction (X/Y)
-      var stripped = text.replace(/\b\d{1,4}[\/\\]\d{1,4}\b/g, ' ');
-      var cm = stripped.match(/\b(\d{7,10})\b/);
+      // Detect cert number — standalone 7–10 digit number OR one-letter-prefix cert (e.g. TAG Y5677220)
+      // Strip card fraction patterns (X/Y) first so they don't pollute the match
+      var stripped = text.replace(/\b[A-Z]{0,3}\d{1,4}[\/\\][A-Z]{0,3}\d{1,4}\b/g, ' ');
+      // Try all-digit cert first (PSA, BGS, CGC, SGC), then letter-prefixed (TAG, ACE)
+      var cm = stripped.match(/\b(\d{7,10})\b/) || stripped.match(/\b([A-Z]\d{6,9})\b/);
       var certNumber = cm ? cm[1] : null;
 
       return { company: company, certNumber: certNumber, grade: grade };
