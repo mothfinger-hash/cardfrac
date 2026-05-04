@@ -15204,99 +15204,138 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var raw = textarea ? textarea.value.trim() : '';
       if (!raw) { if (statusEl) statusEl.textContent = '⚠ Paste some text first'; return; }
 
-      // ── Extract fields from pasted text ──────────────────────────────────
-      var text = raw;
+      // ── Step 1: Try structured label/value format (CGC, BGS, SGC, ACE, TAG) ─
+      // Most cert sites render as "Label\nValue\nLabel\nValue" after copy-paste.
+      // Map every known label to a canonical field name.
+      var LABEL_MAP = {
+        'cert #':               'cert',
+        'cert number':          'cert',
+        'certification':        'cert',
+        'certification number': 'cert',
+        'card name':            'cardName',
+        'subject':              'cardName',
+        'item':                 'cardName',
+        'description':          'cardName',
+        'game':                 'game',
+        'year':                 'year',
+        'language':             'language',
+        'card set':             'set',
+        'set':                  'set',
+        'series':               'set',
+        'edition':              'set',
+        'collection':           'set',
+        'card number':          'cardNumber',
+        'number':               'cardNumber',
+        'variant 1':            'variant1',
+        'variant 2':            'variant2',
+        'variant':              'variant1',
+        'finish':               'variant2',
+        'variety':              'variant1',
+        'grade':                'grade',
+        'final grade':          'grade',
+        'overall grade':        'grade',
+        'grader notes':         'notes',
+        'population':           'pop',
+        'total population':     'pop',
+      };
 
-      // Grade: look for patterns like "10", "9.5", "MINT 10", "NM 8", "GEM-MT 10" etc.
-      var gradeMatch = text.match(/(?:GEM[-\s]?MINT|GEM[-\s]?MT|MINT|NEAR\s*MINT|NM|EXCELLENT|VERY\s*GOOD|POOR|AUTHENTIC|A)[\s\-]*(\d{1,2}(?:\.\d)?)/i)
-                   || text.match(/\bGRADE[:\s]+(\d{1,2}(?:\.\d)?)/i)
-                   || text.match(/\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3|2|1)\b/);
-      var grade = gradeMatch ? gradeMatch[1] || gradeMatch[0] : (detectedGrade || '');
-      // Normalize grade
-      if (grade) grade = grade.replace(/[^\d.]/g, '');
+      var lines = raw.split(/\n/).map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 0; });
+      var kv = {};
 
-      // Year: 4-digit year 1990–2030
-      var yearMatch = text.match(/\b(19[9]\d|20[0-2]\d)\b/);
-      var year = yearMatch ? yearMatch[1] : '';
-
-      // Cert number: standalone 7–10 digit number (already known, but try from text too)
-      var certFromText = certNumber; // use what scanner found
-
-      // Card number: X/Y or just a standalone small number before "/"
-      var cardNumMatch = text.match(/\b(\d{1,4})\s*\/\s*\d{1,4}\b/);
-      var cardNumber = cardNumMatch ? cardNumMatch[1] : '';
-
-      // Language detection: look for language keywords
-      var lang = '';
-      if (/\bJAPAN(ESE)?\b/i.test(text)) lang = 'Japanese';
-      else if (/\bCHINES[E]?\b|\bCHINA\b/i.test(text)) lang = 'Chinese';
-      else if (/\bKOREAN?\b/i.test(text)) lang = 'Korean';
-      else if (/\bFRENCH\b|\bFRANÇAIS\b/i.test(text)) lang = 'French';
-      else if (/\bGERMAN\b|\bDEUTSCH\b/i.test(text)) lang = 'German';
-      else if (/\bSPANISH\b|\bESPAÑOL\b/i.test(text)) lang = 'Spanish';
-      else if (/\bITALIAN\b|\bITALIANO\b/i.test(text)) lang = 'Italian';
-      else if (/\bPORTUGUES[E]?\b/i.test(text)) lang = 'Portuguese';
-
-      // Card name: try a few heuristics
-      // 1. Look for "Card:" or "Subject:" label
-      var nameFromLabel = text.match(/(?:Card|Subject|Name|Pokemon|Item)[:\s]+([A-Za-z0-9'éèêëàâùûüôœæç\s&\-]{3,40}?)(?:\n|Cert|Grade|Year|Set|#)/i);
-      // 2. Try lines that look like card names (short, Title Case, no numbers)
-      var lines = raw.split(/\n/).map(l => l.trim()).filter(l => l.length > 2 && l.length < 60);
-      var nameLine = '';
-      if (nameFromLabel) {
-        nameLine = nameFromLabel[1].trim();
-      } else {
-        // Heuristic: find a line that's mostly letters, title-case-ish, not a label keyword
-        var skipWords = /^(cert|grade|year|set|number|score|population|rarity|series|edition|print|back|front|card|item|pokemon|item|spec|description|label|quality|finish|surface|corners|edges|centering|subgrades|overall)/i;
-        for (var l of lines) {
-          if (!skipWords.test(l) && /[A-Za-z　-鿿一-鿿぀-ゟ゠-ヿ]/.test(l) && !/^\d+$/.test(l)) {
-            nameLine = l; break;
+      // Walk through lines: if a line matches a known label key, the NEXT non-empty line is its value
+      for (var i = 0; i < lines.length; i++) {
+        var key = lines[i].toLowerCase().replace(/[:\s]+$/, '').trim();
+        if (LABEL_MAP[key] && i + 1 < lines.length) {
+          var field = LABEL_MAP[key];
+          var val   = lines[i + 1].trim();
+          // Skip if value looks like another label (next is also a known label)
+          if (!LABEL_MAP[val.toLowerCase().replace(/[:\s]+$/,'')]) {
+            if (!kv[field]) kv[field] = val; // first match wins
           }
         }
       }
 
-      // Set name: look for "Set:", "Series:", "Edition:" or common set keywords
-      var setMatch = text.match(/(?:Set|Series|Edition|Collection)[:\s]+([A-Za-z0-9\s\-&']{3,50}?)(?:\n|Cert|Card|Year|Grade)/i);
-      var setName = setMatch ? setMatch[1].trim() : '';
-      if (!setName && year) setName = year; // fallback: just the year
+      // ── Step 2: Extract grade number from grade string like "GEM MINT 10" ──
+      var gradeRaw = kv.grade || '';
+      var gradeNum = '';
+      var gradeNumMatch = gradeRaw.match(/(\d{1,2}(?:\.\d)?)[\s]*$/);
+      if (gradeNumMatch) {
+        gradeNum = gradeNumMatch[1];
+      } else if (gradeRaw) {
+        // "AUTHENTIC" / "A" grades → treat as special
+        gradeNum = detectedGrade || '';
+      }
+      // If structured parse found nothing, fall back to regex scan of full text
+      if (!gradeNum) {
+        var gm = raw.match(/(?:GEM[-\s]?MINT|GEM[-\s]?MT|MINT|NEAR\s*MINT|EXCELLENT|VERY\s*GOOD)[\s\-]*(\d{1,2}(?:\.\d)?)/i)
+              || raw.match(/\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3|2|1)\b/);
+        gradeNum = gm ? (gm[1] || gm[0]).replace(/[^\d.]/g,'') : (detectedGrade || '');
+      }
 
-      // If language found, prepend to set name
-      if (lang && setName) setName = lang + ' · ' + setName;
-      else if (lang) setName = lang;
+      // ── Step 3: Assemble fields ───────────────────────────────────────────
+      var cardName   = kv.cardName || '';
+      var year       = kv.year || (raw.match(/\b(19[9]\d|20[0-2]\d)\b/) || [])[1] || '';
+      var lang       = kv.language || '';
+      // If language wasn't a labelled field, detect from text keywords
+      if (!lang) {
+        if (/\bJAPAN(ESE)?\b/i.test(raw))           lang = 'Japanese';
+        else if (/\bCHINES[E]?\b|\bCHINA\b/i.test(raw)) lang = 'Chinese';
+        else if (/\bKOREAN?\b/i.test(raw))           lang = 'Korean';
+        else if (/\bFRENCH\b|\bFRANÇAIS\b/i.test(raw))  lang = 'French';
+        else if (/\bGERMAN\b|\bDEUTSCH\b/i.test(raw))   lang = 'German';
+        else if (/\bSPANISH\b|\bESPAÑOL\b/i.test(raw))  lang = 'Spanish';
+        else if (/\bITALIAN\b|\bITALIANO\b/i.test(raw)) lang = 'Italian';
+        else if (/\bPORTUGUES[E]?\b/i.test(raw))     lang = 'Portuguese';
+      }
+      var setName    = kv.set || '';
+      var rawCardNum = kv.cardNumber || '';
+      // Card number: take just the number before the "/" (e.g. "243/184" → "243")
+      var cardNumber = (rawCardNum.match(/^(\d+)/) || [])[1] || '';
+      // Variant info → variety field (e.g. "Character Super Rare · Holo")
+      var variety    = [kv.variant1, kv.variant2].filter(Boolean).join(' · ');
 
-      // ── Show what we found ─────────────────────────────────────────────────
+      // ── Step 4: Build set display string (deduplicated) ───────────────────
+      // Don't include language twice if it also appears in setName
+      var setParts = [];
+      if (year) setParts.push(year);
+      if (lang && (!setName || !setName.toLowerCase().includes(lang.toLowerCase()))) setParts.push(lang);
+      if (setName) setParts.push(setName);
+      var setDisplay = setParts.join(' · ');
+
+      // ── Step 5: Validate ──────────────────────────────────────────────────
       var found = [];
-      if (nameLine) found.push('name');
-      if (grade)    found.push('grade');
-      if (year)     found.push('year');
-      if (setName)  found.push('set');
-      if (cardNumber) found.push('card#');
+      if (cardName)   found.push('name');
+      if (gradeNum)   found.push('grade ' + gradeNum);
+      if (year)       found.push('year');
+      if (setName)    found.push('set');
+      if (cardNumber) found.push('#' + cardNumber);
+      if (lang)       found.push(lang);
+      if (variety)    found.push('variant');
 
-      if (!nameLine && !grade) {
-        if (statusEl) statusEl.textContent = '⚠ Couldn\'t parse — try selecting more of the page';
+      if (!cardName && !gradeNum) {
+        if (statusEl) statusEl.textContent = '⚠ Couldn\'t parse — make sure to copy the full cert page text';
         return;
       }
 
-      // ── Open the manual-add modal with extracted data ─────────────────────
-      // Build a slab-compatible cert object the same shape as PSA cert results
+      // ── Step 6: Open add-to-collection modal pre-filled ───────────────────
       var fakeCert = {
-        cardName:   nameLine  || 'Unknown Card',
-        grade:      grade     || detectedGrade || '10',
-        certNumber: certFromText,
+        cardName:   cardName   || 'Unknown Card',
+        grade:      gradeNum   || detectedGrade || '10',
+        certNumber: certNumber,
         year:       year,
-        brand:      setName,
+        brand:      setDisplay,
         cardNumber: cardNumber,
-        variety:    lang,
+        variety:    variety || lang,
         imageUrl:   null,
-        gradeDesc:  (company.toUpperCase()) + ' ' + (grade || detectedGrade || '?'),
+        gradeDesc:  company.toUpperCase() + ' ' + gradeRaw,
         specUrl:    null
       };
 
       _returnToScanner = true;
       document.getElementById('scannerModal').style.display = 'none';
-      _openModalFromSlabCert({ company: company, certNumber: certFromText, grade: grade || detectedGrade }, fakeCert);
+      _openModalFromSlabCert({ company: company, certNumber: certNumber, grade: gradeNum || detectedGrade }, fakeCert);
 
-      if (statusEl) statusEl.textContent = '✓ Found: ' + found.join(', ');
+      if (statusEl) statusEl.textContent = '✓ Filled: ' + found.join(' · ');
     }
 
     // Opens the add-to-collection modal pre-filled from a PSA cert API result
