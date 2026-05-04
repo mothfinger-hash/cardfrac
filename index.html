@@ -11911,7 +11911,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       cgc: function(n) { return 'https://www.cgccards.com/certlookup/' + n; },
       sgc: function(n) { return 'https://www.gosgc.com/cert-code-lookup'; },
       ace: function(n) { return 'https://www.acegrading.com/verify'; },
-      tag: function(n) { return 'https://www.taggradedcards.com/verify'; },
+      tag: function(n) { return 'https://taggrading.com/pages/cert-search'; },
     };
     var _certCompanyNames = { psa:'PSA', bgs:'BGS', cgc:'CGC', sgc:'SGC', ace:'ACE', tag:'TAG' };
 
@@ -15793,8 +15793,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       else if (/\bSGC\b/.test(t))           company = 'sgc';
       // ACE: require "ACE GRADING" phrase or "ACE" + grading word (not "Ace Trainer" cards)
       else if (/ACE[\s\-]GRADING/i.test(t) || (/\bACE\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t))) company = 'ace';
-      // TAG: require the company phrase "TAG GRADED" or full name — avoids "TAG TEAM" mechanic
-      else if (/TAG[\s\-]GRADED|TAG[\s\-]CARDS?/i.test(t) || (/\bTAG\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t) && !/TAG[\s\-]TEAM/i.test(t))) company = 'tag';
+      // TAG Grading (taggrading.com) — match "TAG GRADING" or "TAG GRADED" phrase, avoid "TAG TEAM"
+      else if (/TAG[\s\-]GRADING|TAG[\s\-]GRADED|TAG[\s\-]CARDS?/i.test(t) || (/\bTAG\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t) && !/TAG[\s\-]TEAM/i.test(t))) company = 'tag';
       if (!company) return null;
 
       // Detect grade — standalone grade value (10, 9.5 … 1)
