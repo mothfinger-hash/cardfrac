@@ -12084,11 +12084,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (status) status.textContent = 'Downloading AI model (~50 MB, one-time)…';
       try {
         // Lazy-load the background removal library from CDN
-        var mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
+        var mod = await import('https://unpkg.com/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
         var removeBg = mod.removeBackground;
         if (btn)    btn.textContent = '⏳ Processing…';
         var resultBlob = await removeBg(_atcPhotoBlob, {
-          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/',
+          publicPath: 'https://unpkg.com/@imgly/background-removal@1.4.5/dist/',
           progress: function(key, current, total) {
             if (total && status) status.textContent = 'Processing… ' + Math.round((current / total) * 100) + '%';
           }
@@ -12253,10 +12253,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (status) status.textContent = 'Downloading AI model (~50 MB, one-time)…';
 
       try {
-        var mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
+        var mod = await import('https://unpkg.com/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
         if (btn) btn.textContent = '⏳ Processing…';
         var result = await mod.removeBackground(sourceBlob, {
-          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/',
+          publicPath: 'https://unpkg.com/@imgly/background-removal@1.4.5/dist/',
           progress: function(k, cur, tot) {
             if (tot && status) status.textContent = 'Processing… ' + Math.round(cur / tot * 100) + '%';
           }
@@ -15166,9 +15166,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div style="background:rgba(0,204,255,.08);border:1px solid var(--teal);padding:14px 16px;font-family:'Space Mono','Share Tech Mono',monospace;margin-bottom:10px">
           <div style="font-size:.56rem;color:var(--teal);letter-spacing:.1em;margin-bottom:8px">◈ GRADED SLAB DETECTED</div>
           <div style="font-size:.9rem;color:var(--text);font-weight:700;margin-bottom:3px">${label}</div>
-          ${slab.grade    ? `<div style="font-size:.72rem;color:var(--accent);margin-bottom:3px">Grade: ${slab.grade}</div>` : ''}
+          ${slab.grade ? `<div style="font-size:.72rem;color:var(--accent);margin-bottom:3px">Grade: ${slab.grade}</div>` : ''}
           <div style="font-size:.68rem;color:var(--muted);margin-bottom:12px">Cert # ${slab.certNumber}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
             ${certUrl ? `<a href="${certUrl}" target="_blank" rel="noopener"
               style="padding:7px 14px;border:1px solid var(--teal);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;text-decoration:none;cursor:pointer">
               ↗ Verify on ${label}
@@ -15178,7 +15178,125 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               + Add to Collection
             </button>
           </div>
+          <div style="border-top:1px solid rgba(0,204,255,.2);padding-top:12px">
+            <div style="font-size:.6rem;color:var(--teal);letter-spacing:.08em;margin-bottom:5px">◈ PASTE CERT PAGE TEXT TO AUTO-FILL</div>
+            <div style="font-size:.61rem;color:var(--muted);margin-bottom:7px;line-height:1.5">Open the verify link above → pass any check → select all (Ctrl+A) → copy (Ctrl+C) → paste below. Works for any language card.</div>
+            <textarea id="slabPasteArea" rows="4"
+              style="width:100%;background:rgba(0,0,0,.35);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.61rem;padding:7px;resize:vertical;box-sizing:border-box"
+              placeholder="Paste cert page text here…"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+              <button onclick="parsePastedCertText('${slab.company}','${slab.certNumber}','${slab.grade||''}')"
+                style="padding:6px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;cursor:pointer">
+                ⟳ Parse &amp; Fill
+              </button>
+              <span id="slabParseStatus" style="font-size:.6rem;color:var(--muted)"></span>
+            </div>
+          </div>
         </div>`;
+    }
+
+    // ── Parse pasted cert page text for non-PSA slabs ────────────────────────
+    // After user passes CAPTCHA on a cert site and copies the page text, this
+    // extracts card name, grade, year, set, language and opens the add modal.
+    function parsePastedCertText(company, certNumber, detectedGrade) {
+      var textarea = document.getElementById('slabPasteArea');
+      var statusEl = document.getElementById('slabParseStatus');
+      var raw = textarea ? textarea.value.trim() : '';
+      if (!raw) { if (statusEl) statusEl.textContent = '⚠ Paste some text first'; return; }
+
+      // ── Extract fields from pasted text ──────────────────────────────────
+      var text = raw;
+
+      // Grade: look for patterns like "10", "9.5", "MINT 10", "NM 8", "GEM-MT 10" etc.
+      var gradeMatch = text.match(/(?:GEM[-\s]?MINT|GEM[-\s]?MT|MINT|NEAR\s*MINT|NM|EXCELLENT|VERY\s*GOOD|POOR|AUTHENTIC|A)[\s\-]*(\d{1,2}(?:\.\d)?)/i)
+                   || text.match(/\bGRADE[:\s]+(\d{1,2}(?:\.\d)?)/i)
+                   || text.match(/\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3|2|1)\b/);
+      var grade = gradeMatch ? gradeMatch[1] || gradeMatch[0] : (detectedGrade || '');
+      // Normalize grade
+      if (grade) grade = grade.replace(/[^\d.]/g, '');
+
+      // Year: 4-digit year 1990–2030
+      var yearMatch = text.match(/\b(19[9]\d|20[0-2]\d)\b/);
+      var year = yearMatch ? yearMatch[1] : '';
+
+      // Cert number: standalone 7–10 digit number (already known, but try from text too)
+      var certFromText = certNumber; // use what scanner found
+
+      // Card number: X/Y or just a standalone small number before "/"
+      var cardNumMatch = text.match(/\b(\d{1,4})\s*\/\s*\d{1,4}\b/);
+      var cardNumber = cardNumMatch ? cardNumMatch[1] : '';
+
+      // Language detection: look for language keywords
+      var lang = '';
+      if (/\bJAPAN(ESE)?\b/i.test(text)) lang = 'Japanese';
+      else if (/\bCHINES[E]?\b|\bCHINA\b/i.test(text)) lang = 'Chinese';
+      else if (/\bKOREAN?\b/i.test(text)) lang = 'Korean';
+      else if (/\bFRENCH\b|\bFRANÇAIS\b/i.test(text)) lang = 'French';
+      else if (/\bGERMAN\b|\bDEUTSCH\b/i.test(text)) lang = 'German';
+      else if (/\bSPANISH\b|\bESPAÑOL\b/i.test(text)) lang = 'Spanish';
+      else if (/\bITALIAN\b|\bITALIANO\b/i.test(text)) lang = 'Italian';
+      else if (/\bPORTUGUES[E]?\b/i.test(text)) lang = 'Portuguese';
+
+      // Card name: try a few heuristics
+      // 1. Look for "Card:" or "Subject:" label
+      var nameFromLabel = text.match(/(?:Card|Subject|Name|Pokemon|Item)[:\s]+([A-Za-z0-9'éèêëàâùûüôœæç\s&\-]{3,40}?)(?:\n|Cert|Grade|Year|Set|#)/i);
+      // 2. Try lines that look like card names (short, Title Case, no numbers)
+      var lines = raw.split(/\n/).map(l => l.trim()).filter(l => l.length > 2 && l.length < 60);
+      var nameLine = '';
+      if (nameFromLabel) {
+        nameLine = nameFromLabel[1].trim();
+      } else {
+        // Heuristic: find a line that's mostly letters, title-case-ish, not a label keyword
+        var skipWords = /^(cert|grade|year|set|number|score|population|rarity|series|edition|print|back|front|card|item|pokemon|item|spec|description|label|quality|finish|surface|corners|edges|centering|subgrades|overall)/i;
+        for (var l of lines) {
+          if (!skipWords.test(l) && /[A-Za-z　-鿿一-鿿぀-ゟ゠-ヿ]/.test(l) && !/^\d+$/.test(l)) {
+            nameLine = l; break;
+          }
+        }
+      }
+
+      // Set name: look for "Set:", "Series:", "Edition:" or common set keywords
+      var setMatch = text.match(/(?:Set|Series|Edition|Collection)[:\s]+([A-Za-z0-9\s\-&']{3,50}?)(?:\n|Cert|Card|Year|Grade)/i);
+      var setName = setMatch ? setMatch[1].trim() : '';
+      if (!setName && year) setName = year; // fallback: just the year
+
+      // If language found, prepend to set name
+      if (lang && setName) setName = lang + ' · ' + setName;
+      else if (lang) setName = lang;
+
+      // ── Show what we found ─────────────────────────────────────────────────
+      var found = [];
+      if (nameLine) found.push('name');
+      if (grade)    found.push('grade');
+      if (year)     found.push('year');
+      if (setName)  found.push('set');
+      if (cardNumber) found.push('card#');
+
+      if (!nameLine && !grade) {
+        if (statusEl) statusEl.textContent = '⚠ Couldn\'t parse — try selecting more of the page';
+        return;
+      }
+
+      // ── Open the manual-add modal with extracted data ─────────────────────
+      // Build a slab-compatible cert object the same shape as PSA cert results
+      var fakeCert = {
+        cardName:   nameLine  || 'Unknown Card',
+        grade:      grade     || detectedGrade || '10',
+        certNumber: certFromText,
+        year:       year,
+        brand:      setName,
+        cardNumber: cardNumber,
+        variety:    lang,
+        imageUrl:   null,
+        gradeDesc:  (company.toUpperCase()) + ' ' + (grade || detectedGrade || '?'),
+        specUrl:    null
+      };
+
+      _returnToScanner = true;
+      document.getElementById('scannerModal').style.display = 'none';
+      _openModalFromSlabCert({ company: company, certNumber: certFromText, grade: grade || detectedGrade }, fakeCert);
+
+      if (statusEl) statusEl.textContent = '✓ Found: ' + found.join(', ');
     }
 
     // Opens the add-to-collection modal pre-filled from a PSA cert API result
