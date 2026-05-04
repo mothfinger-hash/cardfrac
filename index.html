@@ -11913,7 +11913,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       ace: function(n) { return 'https://www.acegrading.com/verify'; },
       tag: function(n) { return 'https://www.taggradedcards.com/verify'; },
     };
-    var _certCompanyNames = { psa:'PSA', bgs:'BGS', cgc:'CGC', sgc:'SGC', ace:'ACE' };
+    var _certCompanyNames = { psa:'PSA', bgs:'BGS', cgc:'CGC', sgc:'SGC', ace:'ACE', tag:'TAG' };
 
     function atcUpdateCertBtn() {
       var condition  = (document.getElementById('atcCondition')?.value || 'raw').toLowerCase();
@@ -12080,17 +12080,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var btn    = document.getElementById('atcPhotoBgBtn');
       var status = document.getElementById('atcPhotoStatusText');
       var thumb  = document.getElementById('atcPhotoThumb');
-      if (btn)    { btn.disabled = true; btn.textContent = '⏳ Loading model…'; }
-      if (status) status.textContent = 'Downloading AI model (~50 MB, one-time)…';
+
+      // Library is pre-loaded as a module at page start (window._imglyRemoveBg)
+      var removeBg = window._imglyRemoveBg;
+      if (!removeBg) {
+        if (status) status.textContent = '⚠ Background removal unavailable — CDN blocked. Try refreshing.';
+        if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+        _atcBgBusy = false;
+        return;
+      }
+
+      if (btn)    { btn.disabled = true; btn.textContent = '⏳ Processing…'; }
+      if (status) status.textContent = 'Loading AI model… (~50 MB, cached after first use)';
       try {
-        // Lazy-load the background removal library from CDN
-        var mod = await import('https://unpkg.com/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
-        var removeBg = mod.removeBackground;
-        if (btn)    btn.textContent = '⏳ Processing…';
         var resultBlob = await removeBg(_atcPhotoBlob, {
-          publicPath: 'https://unpkg.com/@imgly/background-removal@1.4.5/dist/',
+          publicPath: window._imglyPublicPath || 'https://esm.sh/@imgly/background-removal@1.4.5/dist/',
           progress: function(key, current, total) {
-            if (total && status) status.textContent = 'Processing… ' + Math.round((current / total) * 100) + '%';
+            if (total && status) status.textContent = 'Removing background… ' + Math.round((current / total) * 100) + '%';
           }
         });
         _atcPhotoBlob = resultBlob;
@@ -12249,16 +12255,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         sourceBlob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
       }
 
-      if (btn)    { btn.disabled = true; btn.textContent = '⏳ Loading model…'; }
-      if (status) status.textContent = 'Downloading AI model (~50 MB, one-time)…';
+      // Library is pre-loaded as a module at page start (window._imglyRemoveBg)
+      var removeBg2 = window._imglyRemoveBg;
+      if (!removeBg2) {
+        if (status) status.textContent = '⚠ Background removal unavailable — CDN blocked. Try refreshing.';
+        if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+        _cpBgBusy = false;
+        return;
+      }
+
+      if (btn)    { btn.disabled = true; btn.textContent = '⏳ Processing…'; }
+      if (status) status.textContent = 'Loading AI model… (~50 MB, cached after first use)';
 
       try {
-        var mod = await import('https://unpkg.com/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
-        if (btn) btn.textContent = '⏳ Processing…';
-        var result = await mod.removeBackground(sourceBlob, {
-          publicPath: 'https://unpkg.com/@imgly/background-removal@1.4.5/dist/',
+        var result = await removeBg2(sourceBlob, {
+          publicPath: window._imglyPublicPath || 'https://esm.sh/@imgly/background-removal@1.4.5/dist/',
           progress: function(k, cur, tot) {
-            if (tot && status) status.textContent = 'Processing… ' + Math.round(cur / tot * 100) + '%';
+            if (tot && status) status.textContent = 'Removing background… ' + Math.round(cur / tot * 100) + '%';
           }
         });
 
@@ -14938,6 +14951,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     window._preloadClip      = loadClip;
   </script>
 
+  <!-- Background removal — loaded eagerly as a module so CORS works from esm.sh -->
+  <script type="module">
+    try {
+      // esm.sh sets Access-Control-Allow-Origin: * on all responses — reliable for browser ESM
+      const mod = await import('https://esm.sh/@imgly/background-removal@1.4.5');
+      window._imglyRemoveBg    = mod.removeBackground;
+      window._imglyPublicPath  = 'https://esm.sh/@imgly/background-removal@1.4.5/dist/';
+      console.log('[BG Remove] Library ready');
+    } catch(e) {
+      console.warn('[BG Remove] esm.sh failed, trying jsdelivr fallback…', e.message);
+      try {
+        const mod2 = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
+        window._imglyRemoveBg   = mod2.removeBackground;
+        window._imglyPublicPath = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/';
+        console.log('[BG Remove] jsdelivr fallback ready');
+      } catch(e2) {
+        console.warn('[BG Remove] Both CDNs failed — feature disabled', e2.message);
+        window._imglyRemoveBg = null;
+      }
+    }
+  </script>
+
   <script>
     /* ── SCANNER CONTROLLER ── */
 
@@ -15137,21 +15172,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const label = _slabCompanyLabels[slab.company] || slab.company.toUpperCase();
 
       if (slab.company === 'psa') {
-        // ── PSA: hit our edge function directly ──────────────────────────
+        // ── PSA: hit our edge function with one automatic retry ───────────
         setScanStatus('PSA slab · cert #' + slab.certNumber + ' · looking up…');
-        try {
-          const result = await callEdgeFunction('psa-cert-lookup', { certNumber: slab.certNumber });
-          if (result && !result.error) {
-            setScanStatus('PSA cert found — opening card details…');
-            setTimeout(function() { _openModalFromSlabCert(slab, result); }, 250);
-            return;
+        let result = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            result = await callEdgeFunction('psa-cert-lookup', { certNumber: slab.certNumber });
+            if (result && !result.error) break; // success
+            if (attempt === 1) {
+              setScanStatus('PSA · retrying…');
+              await new Promise(r => setTimeout(r, 1200)); // brief pause before retry
+            }
+          } catch(e) {
+            console.warn('[Slab] PSA attempt ' + attempt, e);
+            if (attempt === 2) result = null;
+            else await new Promise(r => setTimeout(r, 1200));
           }
-          // Cert not found — fall through to manual panel
-          setScanStatus('PSA cert #' + slab.certNumber + ' not found — add manually');
-        } catch(e) {
-          console.warn('[Slab]', e);
-          setScanStatus('Cert lookup failed — add manually below');
         }
+        if (result && !result.error) {
+          setScanStatus('PSA cert found — opening card details…');
+          setTimeout(function() { _openModalFromSlabCert(slab, result); }, 250);
+          return;
+        }
+        // Both attempts failed — show cert number so user can verify manually
+        setScanStatus('PSA cert #' + slab.certNumber + ' — lookup failed, add manually or paste cert text below');
       } else {
         setScanStatus(label + ' slab detected · cert #' + slab.certNumber);
       }
@@ -15734,9 +15778,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       else if (/\b(BGS|BECKETT)\b/.test(t)) company = 'bgs';
       else if (/\bCGC\b/.test(t))           company = 'cgc';
       else if (/\bSGC\b/.test(t))           company = 'sgc';
-      // ACE and TAG are common English words/Pokemon mechanics — require grading context
-      else if (/\bACE\b/.test(t) && /GRAD(ED?|ING)|GEM|MINT|PRISTINE/i.test(t)) company = 'ace';
-      else if (/\bTAG\b/.test(t) && /GRAD(ED?|ING)|GEM|MINT|PRISTINE/i.test(t)) company = 'tag';
+      // ACE: require "ACE GRADING" phrase or "ACE" + grading word (not "Ace Trainer" cards)
+      else if (/ACE[\s\-]GRADING/i.test(t) || (/\bACE\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t))) company = 'ace';
+      // TAG: require the company phrase "TAG GRADED" or full name — avoids "TAG TEAM" mechanic
+      else if (/TAG[\s\-]GRADED|TAG[\s\-]CARDS?/i.test(t) || (/\bTAG\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t) && !/TAG[\s\-]TEAM/i.test(t))) company = 'tag';
       if (!company) return null;
 
       // Detect grade — standalone grade value (10, 9.5 … 1)
