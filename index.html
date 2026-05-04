@@ -2663,7 +2663,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <div id="atcCertGradeDesc" style="font-size:.68rem;color:var(--teal);font-weight:700;margin-bottom:4px"></div>
                 <div id="atcCertMeta" style="font-size:.64rem;color:var(--muted);line-height:1.5"></div>
                 <a id="atcCertLink" href="#" target="_blank" rel="noopener"
-                  style="font-size:.62rem;color:var(--muted);text-decoration:underline;margin-top:4px;display:inline-block">View on PSA ↗</a>
+                  style="font-size:.62rem;color:var(--muted);text-decoration:underline;margin-top:4px;display:inline-block">View on Grader ↗</a>
               </div>
             </div>
           </div>
@@ -12425,7 +12425,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           if (result.variety) parts.push(result.variety);
           metaEl.textContent = parts.join(' · ') || '';
         }
-        if (linkEl) { linkEl.href = result.specUrl || '#'; }
+        if (linkEl) {
+          linkEl.href = result.specUrl || (_certLookupUrls && _certLookupUrls.psa ? _certLookupUrls.psa(result.certNumber || '') : '#');
+          linkEl.textContent = 'View on PSA ↗';
+        }
         if (preview) preview.style.display = '';
 
         showToast('✓ PSA cert found — grade & image pre-filled');
@@ -15261,15 +15264,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var raw = textarea ? textarea.value.trim() : '';
       if (!raw) { if (statusEl) statusEl.textContent = '⚠ Paste some text first'; return; }
 
-      // ── Step 1: Try structured label/value format (CGC, BGS, SGC, ACE, TAG) ─
-      // Most cert sites render as "Label\nValue\nLabel\nValue" after copy-paste.
-      // Map every known label to a canonical field name.
+      // ── Step 1: Parse label/value pairs — supports TWO formats: ────────────
+      // Format A (CGC, BGS, SGC): "Label\nValue\nLabel\nValue" (label and value on separate lines)
+      // Format B (TAG Grading):   "LABEL:Value" (label and value on the same line, colon-separated)
+      // We try both and merge results.
+
       var LABEL_MAP = {
+        // Format A keys (case-insensitive, trim trailing colons/spaces)
         'cert #':               'cert',
         'cert number':          'cert',
         'certification':        'cert',
         'certification number': 'cert',
+        'serial number':        'cert',
         'card name':            'cardName',
+        'player name':          'cardName',   // TAG Grading uses "PLAYER NAME"
         'subject':              'cardName',
         'item':                 'cardName',
         'description':          'cardName',
@@ -15277,14 +15285,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         'year':                 'year',
         'language':             'language',
         'card set':             'set',
+        'set name':             'set',        // TAG Grading uses "SET NAME"
         'set':                  'set',
         'series':               'set',
         'edition':              'set',
         'collection':           'set',
+        'subset':               'subset',     // TAG Grading uses "SUBSET"
         'card number':          'cardNumber',
         'number':               'cardNumber',
         'variant 1':            'variant1',
         'variant 2':            'variant2',
+        'variation':            'variant1',   // TAG Grading uses "VARIATION"
         'variant':              'variant1',
         'finish':               'variant2',
         'variety':              'variant1',
@@ -15299,18 +15310,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var lines = raw.split(/\n/).map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 0; });
       var kv = {};
 
-      // Walk through lines: if a line matches a known label key, the NEXT non-empty line is its value
+      // Format A: walk through lines — if a line matches a known label, next non-label line is value
       for (var i = 0; i < lines.length; i++) {
         var key = lines[i].toLowerCase().replace(/[:\s]+$/, '').trim();
         if (LABEL_MAP[key] && i + 1 < lines.length) {
           var field = LABEL_MAP[key];
           var val   = lines[i + 1].trim();
-          // Skip if value looks like another label (next is also a known label)
-          if (!LABEL_MAP[val.toLowerCase().replace(/[:\s]+$/,'')]) {
-            if (!kv[field]) kv[field] = val; // first match wins
+          if (!LABEL_MAP[val.toLowerCase().replace(/[:\s]+$/, '')]) {
+            if (!kv[field]) kv[field] = val;
           }
         }
       }
+
+      // Format B: colon-separated on same line ("PLAYER NAME:Mega Dragonite EX")
+      // This handles TAG Grading and other sites that concatenate label+value
+      lines.forEach(function(line) {
+        var colonIdx = line.indexOf(':');
+        if (colonIdx > 0 && colonIdx < 40) { // label shouldn't be longer than 40 chars
+          var lKey = line.substring(0, colonIdx).trim().toLowerCase();
+          var lVal = line.substring(colonIdx + 1).trim();
+          if (LABEL_MAP[lKey] && lVal && !kv[LABEL_MAP[lKey]]) {
+            kv[LABEL_MAP[lKey]] = lVal;
+          }
+        }
+      });
 
       // ── Step 2: Extract grade number from grade string like "GEM MINT 10" ──
       var gradeRaw = kv.grade || '';
@@ -15352,11 +15375,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var variety    = [kv.variant1, kv.variant2].filter(Boolean).join(' · ');
 
       // ── Step 4: Build set display string (deduplicated) ───────────────────
-      // Don't include language twice if it also appears in setName
+      // TAG's "SET NAME" field includes year ("2026 POKÉMON MEGA EVOLUTION#271/217")
+      // Extract embedded card number from set name if not already found
+      if (!cardNumber && kv.set) {
+        var embeddedNum = kv.set.match(/#(\d+)\/\d+/);
+        if (embeddedNum) cardNumber = embeddedNum[1];
+      }
+      // Also pull in subset as part of set display (TAG uses SUBSET for sub-series name)
+      var subsetName = kv.subset || '';
+      // Clean embedded card number from set name for display
+      var cleanSetName = (kv.set || '').replace(/#\d+\/\d+/, '').trim();
+      // If set name already starts with year, don't prepend year again
+      var setStartsWithYear = year && cleanSetName.startsWith(year);
       var setParts = [];
-      if (year) setParts.push(year);
-      if (lang && (!setName || !setName.toLowerCase().includes(lang.toLowerCase()))) setParts.push(lang);
-      if (setName) setParts.push(setName);
+      if (year && !setStartsWithYear) setParts.push(year);
+      if (lang && (!cleanSetName || !cleanSetName.toLowerCase().includes(lang.toLowerCase()))) setParts.push(lang);
+      if (cleanSetName) setParts.push(cleanSetName);
+      if (subsetName && !cleanSetName.toLowerCase().includes(subsetName.toLowerCase())) setParts.push(subsetName);
       var setDisplay = setParts.join(' · ');
 
       // ── Step 5: Validate ──────────────────────────────────────────────────
@@ -15450,12 +15485,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var cGrade  = document.getElementById('atcCertGradeDesc');
       var cMeta   = document.getElementById('atcCertMeta');
       var cLink   = document.getElementById('atcCertLink');
+      var compLabel = (_certCompanyNames && _certCompanyNames[slab.company]) || (slab.company ? slab.company.toUpperCase() : 'PSA');
       if (imgEl)  { imgEl.src = cert.imageUrl || ''; imgEl.style.display = cert.imageUrl ? '' : 'none'; }
       if (cName)  cName.textContent  = cert.cardName || '';
-      if (cGrade) cGrade.textContent = cert.gradeDesc || ('PSA ' + (cert.grade || '?'));
+      if (cGrade) cGrade.textContent = cert.gradeDesc || (compLabel + ' ' + (cert.grade || '?'));
       var meta = [cert.year, cert.brand, cert.variety, cert.cardNumber ? '#'+cert.cardNumber : ''].filter(Boolean).join(' · ');
       if (cMeta)  cMeta.textContent = meta;
-      if (cLink)  { cLink.href = cert.specUrl || '#'; cLink.style.display = ''; }
+      if (cLink) {
+        var certNum = cert.certNumber || slab.certNumber || '';
+        var urlFn = _certLookupUrls && _certLookupUrls[slab.company];
+        cLink.href = cert.specUrl || (urlFn && certNum ? urlFn(certNum) : '#');
+        cLink.textContent = 'View on ' + compLabel + ' ↗';
+        cLink.style.display = '';
+      }
       if (preview) preview.style.display = '';
       atcUpdateCertBtn();
 
