@@ -798,9 +798,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-scanlines{position:absolute;inset:0;pointer-events:none;z-index:40;background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.045) 3px,rgba(0,0,0,.045) 4px)}
     /* LEDs */
     .ac-led-d{position:absolute;left:89.81%;top:14.7%;width:1.3%;padding-top:1.3%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
-    .ac-led-m{position:absolute;left:13.7%;top:9.1%;width:2.5%;padding-top:2.5%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
+    .ac-led-m{position:absolute;left:13.35%;top:9.5%;width:2.5%;padding-top:2.5%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
     /* CRT */
-    .ac-crt{width:100%;height:100%;display:flex;flex-direction:column;transform-origin:center;transform:scaleY(0.001);filter:brightness(12) blur(4px) saturate(0);will-change:transform,filter}
+    .ac-crt{width:100%;height:100%;display:flex;flex-direction:column;transform-origin:center;will-change:transform,filter}
     .ac-crt.ac-on{animation:ac-crt-on .88s cubic-bezier(.4,0,.2,1) forwards}
     @keyframes ac-crt-on{
       0%  {transform:scaleY(.001);filter:brightness(14) blur(5px) saturate(0)}
@@ -880,10 +880,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-mc-add{text-align:center;padding:2.5% 0;flex-shrink:0;border-top:1px solid rgba(0,229,255,.08);font-size:.5em;letter-spacing:.1em;color:rgba(0,229,255,.42);transition:color .2s}
     .ac-mc:hover .ac-mc-add{color:rgba(0,229,255,.82)}
     /* ── mobile bottom sheet ── */
-    .ac-backdrop{position:absolute;top:9%;left:0;right:0;bottom:0;background:linear-gradient(to bottom,rgba(5,8,14,.88) 0%,rgba(5,8,14,.4) 70%,transparent 100%);opacity:0;pointer-events:none;transition:opacity .3s;z-index:20;display:flex;flex-direction:column;justify-content:flex-start}
-    .ac-backdrop.open{opacity:1;pointer-events:all}
-    .ac-sheet{border-bottom:1px solid rgba(0,229,255,.22);border-left:1px solid rgba(0,229,255,.07);border-right:1px solid rgba(0,229,255,.07);border-radius:0 0 10px 10px;padding:3% 5% 4%;transform:translateY(-110%);transition:transform .38s cubic-bezier(.4,0,.2,1);max-height:85%;overflow-y:auto;background:rgba(4,12,20,.97);backdrop-filter:blur(4px)}
-    .ac-backdrop.open .ac-sheet{transform:translateY(0)}
+    /* mobile search panel — in normal flex flow, slides open below nav */
+    .ac-search-panel{flex-shrink:0;max-height:0;overflow:hidden;transition:max-height .38s cubic-bezier(.4,0,.2,1);background:rgba(4,12,20,.97);border-bottom:1px solid rgba(0,229,255,.18)}
+    .ac-search-panel.open{max-height:70%}
+    .ac-search-inner{padding:3% 5% 4%;overflow-y:auto}
     .ac-drag{width:28%;height:3px;background:rgba(0,229,255,.18);border-radius:2px;margin:.85em auto .55em}
     .ac-sh-title{text-align:center;font-size:.9em;letter-spacing:.2em;color:#00E5FF;padding:.15em 0 .45em;border-bottom:1px solid rgba(0,229,255,.1);margin-bottom:.65em}
     .ac-sf-label{font-size:.5em;letter-spacing:.12em;color:rgba(0,229,255,.55);margin-bottom:.28em;display:block}
@@ -3911,39 +3911,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">ABOVE</div></div>
             </div>
 
-            <!-- bottom sheet -->
-            <div class="ac-backdrop" id="acBackdrop" onclick="acBackdropClose(event)">
-              <div class="ac-sheet" onclick="event.stopPropagation()">
-                <div class="ac-sh-title">ADD CARD</div>
-
+            <!-- search panel — drops down below nav in normal flex flow -->
+            <div class="ac-search-panel" id="acSearchPanel">
+              <div class="ac-search-inner">
                 <label class="ac-sf-label">SEARCH</label>
                 <input class="ac-sf-input" id="acMobInput" type="text"
                   placeholder="Charizard, Pikachu..."
                   onkeydown="if(event.key==='Enter')acMobSearch()">
-
-                <label class="ac-sf-label">GRADE</label>
-                <div class="ac-sf-chips">
-                  <span class="ac-sf-chip on" onclick="acSfChip(this)">Raw</span>
-                  <span class="ac-sf-chip" onclick="acSfChip(this)">PSA</span>
-                  <span class="ac-sf-chip" onclick="acSfChip(this)">BGS</span>
-                  <span class="ac-sf-chip" onclick="acSfChip(this)">CGC</span>
-                  <span class="ac-sf-chip" onclick="acSfChip(this)">SGC</span>
-                </div>
-
-                <label class="ac-sf-label">PASTE CERT #</label>
-                <div class="ac-sf-cotabs">
-                  <span class="ac-sf-cotab on">PSA</span>
-                  <span class="ac-sf-cotab" onclick="acSfCoTab(this)">BGS</span>
-                  <span class="ac-sf-cotab" onclick="acSfCoTab(this)">CGC</span>
-                  <span class="ac-sf-cotab" onclick="acSfCoTab(this)">SGC</span>
-                </div>
-                <input class="ac-sf-input" id="acMobCert" type="text" placeholder="e.g. 12345678">
-
-                <label class="ac-sf-label">CONDITION</label>
-                <input class="ac-sf-input" id="acMobCond" type="text" placeholder="Near Mint  ▾">
-
                 <button class="ac-sf-btn" onclick="acMobSearch()">SEARCH CARDS</button>
-                <button class="ac-sf-ghost" onclick="openManualAddModal()">+ ADD MANUALLY</button>
+                <button class="ac-sf-ghost" style="margin-top:.4em" onclick="openManualAddModal()">+ ADD MANUALLY</button>
               </div>
             </div>
 
@@ -12134,28 +12110,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function acMobSearch() {
-      const mob  = document.getElementById('acMobInput');
-      const desk = document.getElementById('cardSearchInput');
+      const mob   = document.getElementById('acMobInput');
+      const desk  = document.getElementById('cardSearchInput');
+      const panel = document.getElementById('acSearchPanel');
       if (mob && desk) desk.value = mob.value.trim();
       acMobSearchOpen = false;
-      const bd = document.getElementById('acBackdrop');
-      if (bd) bd.classList.remove('open');
-      acCrtFlash('acCrtMob', () => searchPokemonCards());
+      if (panel) panel.classList.remove('open');
+      searchPokemonCards();
     }
 
     function acMobToggleSearch() {
-      const bd   = document.getElementById('acBackdrop');
-      const navS = document.getElementById('acNavSearch');
-      if (!bd) return;
+      const panel = document.getElementById('acSearchPanel');
+      if (!panel) return;
       if (!acMobSearchOpen) {
-        acCrtFlash('acCrtMob', () => {
-          acMobSearchOpen = true;
-          bd.classList.add('open');
-          setTimeout(() => { const inp = document.getElementById('acMobInput'); if (inp) inp.focus(); }, 380);
-        });
+        acMobSearchOpen = true;
+        panel.classList.add('open');
+        setTimeout(() => { const inp = document.getElementById('acMobInput'); if (inp) inp.focus(); }, 40);
       } else {
         acMobSearchOpen = false;
-        bd.classList.remove('open');
+        panel.classList.remove('open');
       }
     }
 
@@ -12163,16 +12136,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.querySelectorAll('.ac-ni').forEach(n => n.classList.remove('on'));
       el.classList.add('on');
       acMobSearchOpen = false;
-      const bd = document.getElementById('acBackdrop');
-      if (bd) bd.classList.remove('open');
+      const panel = document.getElementById('acSearchPanel');
+      if (panel) panel.classList.remove('open');
     }
 
-    function acBackdropClose(e) {
-      if (e.target === document.getElementById('acBackdrop')) {
-        acMobSearchOpen = false;
-        document.getElementById('acBackdrop').classList.remove('open');
-      }
-    }
+    function acBackdropClose(e) { /* no-op — backdrop removed */ }
 
     function acChipToggle(el)  { el.classList.toggle('on'); }
     function acSfChip(el)      { el.classList.toggle('on'); }
