@@ -12447,21 +12447,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!grid) return;
       grid.innerHTML = '<div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING<br>JP DATABASE…</div></div>';
 
-      const SUPABASE_URL      = window._sbUrl       || (typeof supabaseUrl      !== 'undefined' ? supabaseUrl      : null);
-      const SUPABASE_ANON_KEY = window._sbAnon      || (typeof supabaseAnonKey  !== 'undefined' ? supabaseAnonKey  : null);
+      // SUPABASE_URL / SUPABASE_ANON_KEY are const globals in the main <script> block
+      const SB_URL  = (typeof SUPABASE_URL      !== 'undefined' && SUPABASE_URL)      ? SUPABASE_URL      : (window._sbUrl  || 'https://xjamytrhxeaynywcwfun.supabase.co');
+      const SB_ANON = (typeof SUPABASE_ANON_KEY !== 'undefined' && SUPABASE_ANON_KEY) ? SUPABASE_ANON_KEY : (window._sbAnon || '');
 
-      if (!SUPABASE_URL) {
+      if (!SB_URL) {
         grid.innerHTML = '<div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(255,80,80,.6);font-size:.5em">Config error</div></div>';
         return;
       }
 
       try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/search-cards-jp`, {
+        const res = await fetch(`${SB_URL}/functions/v1/search-cards-jp`, {
           method:  'POST',
           headers: {
             'Content-Type':  'application/json',
-            'apikey':        SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey':        SB_ANON,
+            'Authorization': `Bearer ${SB_ANON}`,
           },
           body: JSON.stringify({ query }),
         });
