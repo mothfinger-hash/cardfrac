@@ -776,20 +776,21 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #addCardPage.page{padding:12px 0;background:var(--bg);min-height:calc(100vh - 56px)}
     #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
     .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
-    .ac-mob-wrap{display:none;align-items:center;justify-content:center;width:100%}
+    .ac-mob-wrap{display:none;align-items:flex-start;justify-content:center;width:100%}
     /* Device sizing — DO NOT change these to fix scroll issues.
        Explicit width + height ensures .ac-phone-screen percentage heights resolve correctly.
-       The img is absolutely positioned so it cannot push the device div taller than intended. */
+       The img is absolutely positioned so it cannot push the device div taller than intended.
+       acFitDevice() applies a scale() transform to fill any remaining gap after CSS sizing. */
     .ac-mob-wrap .ac-device{
-      width:  min(calc((100svh - 56px) * 1920 / 3712), calc(100vw - 8px));
-      height: min(calc(100svh - 56px),                 calc((100vw - 8px) * 3712 / 1920));
-      position:relative;flex-shrink:0;overflow:hidden}
+      width:  min(calc((100svh - 60px) * 1920 / 3712), 100vw);
+      height: min(calc(100svh - 60px),                 calc(100vw * 3712 / 1920));
+      position:relative;flex-shrink:0;overflow:hidden;transform-origin:top center}
     .ac-mob-wrap .ac-device-img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:fill;pointer-events:none;user-select:none}
     @media(max-width:900px){
       .ac-pdex-wrap{display:none}
-      /* Lock the page to viewport height so the body never scrolls on mobile */
-      #addCardPage.page{min-height:unset!important;height:100svh!important;overflow:hidden!important;padding:0!important}
-      .ac-mob-wrap{display:flex;height:100svh;overflow:hidden}
+      /* Lock the page and wrap to available viewport height (minus 60px fixed bottom nav) */
+      #addCardPage.page{min-height:unset!important;height:calc(100svh - 60px)!important;overflow:hidden!important;padding:0!important}
+      .ac-mob-wrap{display:flex;height:calc(100svh - 60px);overflow:hidden;align-items:flex-start}
     }
     /* device base */
     .ac-device{position:relative;font-family:'Courier New',Courier,monospace}
@@ -4021,7 +4022,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <!-- ══ MOBILE: phondex device ══════════════════════════════════════════ -->
     <div class="ac-mob-wrap">
       <div class="ac-device">
-        <img class="ac-device-img" src="phondex.png?v=2" alt="PathBinder">
+        <img class="ac-device-img" src="phondex.png?v=3" alt="PathBinder">
         <div class="ac-led-m"></div>
         <div class="ac-phone-screen">
           <div class="ac-scanlines" style="z-index:50"></div>
@@ -5246,6 +5247,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
       if (pageId === 'addCard') {
         setTimeout(() => {
+          acFitDevice();        // scale device to fill viewport with no gap
           ['acCrtLeft','acCrtRight','acCrtMob'].forEach(id => acCrtFlash(id));
           acPositionMobLed();   // re-lock LED after layout settles
           acFitMobGrid();       // pin grid height to actual rendered screen dimensions
@@ -12372,6 +12374,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     /* ══ ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════════ */
 
+    // ── Scale phondex device to fill the mob-wrap with no gap (cover, not contain) ──
+    // CSS min() sizes the device to fit — acFitDevice() then scales it up to fill any
+    // remaining gap caused by device vs phone aspect-ratio mismatch.
+    // transform-origin:top center keeps the header flush to the top.
+    function acFitDevice() {
+      const wrap   = document.querySelector('.ac-mob-wrap');
+      const device = document.querySelector('.ac-mob-wrap .ac-device');
+      if (!wrap || !device) return;
+      device.style.transform = '';          // reset to measure natural size
+      const wH = wrap.clientHeight;
+      const wW = wrap.clientWidth;
+      const dH = device.offsetHeight;
+      const dW = device.offsetWidth;
+      if (!dH || !dW || !wH || !wW) return;
+      const scaleH = wH / dH;
+      const scaleW = wW / dW;
+      const scale  = Math.max(scaleH, scaleW); // cover: fill the container
+      if (scale > 1.001) {
+        device.style.transform = `scale(${scale.toFixed(4)})`;
+      }
+    }
+
     // ── CRT power-on flash (triggers .ac-on animation, callback fires at ~650ms peak)
     function acCrtFlash(id, cb) {
       const el = document.getElementById(id);
@@ -12401,8 +12425,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const h = screen.clientHeight - nav.offsetHeight;
       if (h > 0) { grid.style.height = h + 'px'; grid.style.maxHeight = h + 'px'; }
     }
-    window.addEventListener('load',   () => { acPositionMobLed(); acFitMobGrid(); });
-    window.addEventListener('resize', () => { acPositionMobLed(); acFitMobGrid(); });
+    window.addEventListener('load',   () => { acFitDevice(); acPositionMobLed(); acFitMobGrid(); });
+    window.addEventListener('resize', () => { acFitDevice(); acPositionMobLed(); acFitMobGrid(); });
 
     let acMobSearchOpen  = false;
     let acSearchLanguage = 'EN'; // 'EN' | 'JA'
