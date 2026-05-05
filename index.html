@@ -12426,18 +12426,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       closeModal('acMobSearchModal');
       acCrtFlash('acCrtMob');
 
-      // Auto-detect Japanese/Chinese/Korean characters — route to JP search
-      // regardless of which toggle button is active
-      const hasAsian = /[　-鿿가-힣豈-﫿]/.test(query);
-
-      if (acSearchLanguage === 'JA' || hasAsian) {
-        searchJapaneseCards(query);
-      } else {
-        // Sync to desktop search input and use existing English flow
-        const desk = document.getElementById('cardSearchInput');
-        if (desk) desk.value = query;
-        searchPokemonCards();
+      // Card database only supports English names — detect CJK and show a hint
+      const hasAsian = /[　-鿿가-힯豈-﫿]/.test(query);
+      if (hasAsian) {
+        const grid = document.getElementById('acMobGrid');
+        if (grid) grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.4);font-size:.5em;text-align:center;padding:12px;line-height:1.8">Search by English name<br><span style="opacity:.6">e.g. Pikachu · Charizard · Mewtwo</span><br><span style="opacity:.4;font-size:.9em">Cards can be tagged 🇯🇵 🇰🇷 when added</span></div></div>';
+        return;
       }
+
+      // Sync to desktop search input and use existing English flow
+      const desk = document.getElementById('cardSearchInput');
+      if (desk) desk.value = query;
+      searchPokemonCards();
     }
 
     async function searchJapaneseCards(query) {
