@@ -3982,6 +3982,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <div class="ac-lp-title">ADD CARD</div>
 
               <label class="ac-fl">SEARCH</label>
+              <div style="display:flex;gap:0;margin-bottom:6px;border:1px solid rgba(0,229,255,.22);border-radius:3px;overflow:hidden;font-size:.5em;letter-spacing:.08em;font-family:inherit">
+                <button id="acDeskLangEN" onclick="acDeskSetLang('EN')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:rgba(0,229,255,.12);color:#00E5FF;transition:all .15s;font-family:inherit;letter-spacing:.06em">🌐 EN</button>
+                <button id="acDeskLangJA" onclick="acDeskSetLang('JA')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:transparent;color:rgba(0,229,255,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em">🇯🇵 JP</button>
+              </div>
               <input class="ac-fi" id="cardSearchInput" type="text"
                 placeholder="Charizard..."
                 onkeydown="if(event.key==='Enter')acDeskSearch()">
@@ -12367,6 +12371,39 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     /* ══ ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════════ */
+
+    // ── CRT power-on flash (triggers .ac-on animation, callback fires at ~650ms peak)
+    function acCrtFlash(id, cb) {
+      const el = document.getElementById(id);
+      if (!el) { if (cb) cb(); return; }
+      el.classList.remove('ac-on');
+      void el.offsetWidth; // force reflow to restart animation
+      el.classList.add('ac-on');
+      if (cb) setTimeout(cb, 650);
+      setTimeout(() => el.classList.remove('ac-on'), 900);
+    }
+
+    // ── Position the LED indicator dot on the phone overlay
+    function acPositionMobLed() {
+      const led    = document.querySelector('.ac-mob-wrap .ac-led');
+      const device = document.querySelector('.ac-mob-wrap .ac-device');
+      if (!led || !device) return;
+      // LED is absolutely positioned via CSS — just ensure device is visible
+      device.style.visibility = 'visible';
+    }
+
+    // ── Pin the card grid height to the actual rendered phone-screen area
+    function acFitMobGrid() {
+      const screen = document.querySelector('.ac-mob-wrap .ac-phone-screen');
+      const nav    = document.querySelector('.ac-mob-wrap .ac-nav');
+      const grid   = document.getElementById('acMobGrid');
+      if (!screen || !nav || !grid) return;
+      const h = screen.clientHeight - nav.offsetHeight;
+      if (h > 0) { grid.style.height = h + 'px'; grid.style.maxHeight = h + 'px'; }
+    }
+    window.addEventListener('load',   () => { acPositionMobLed(); acFitMobGrid(); });
+    window.addEventListener('resize', () => { acPositionMobLed(); acFitMobGrid(); });
+
     let acMobSearchOpen  = false;
     let acSearchLanguage = 'EN'; // 'EN' | 'JA'
 
@@ -12395,72 +12432,48 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
-    // ── TCGdex JP search ─────────────────────────────────────────────────────────
-    async function fetchTcgdex(query) {
-      const q = encodeURIComponent(query);
-      // TCGdex v2: filters use [field:like] for partial match, [field] for exact
-      const urls = [
-        `https://api.tcgdex.net/v2/en/cards?filters[name:like]=${q}&pagination[page]=1&pagination[itemsPerPage]=20`,
-        `https://api.tcgdex.net/v2/en/cards?filters[name]=${q}&pagination[page]=1&pagination[itemsPerPage]=20`,
-        `https://api.tcgdex.net/v2/en/cards?name=${q}&itemsPerPage=20`,
-      ];
-      for (const url of urls) {
-        try {
-          console.log('[TCGdex] trying', url);
-          const res = await fetch(url, { headers: { Accept: 'application/json' } });
-          console.log('[TCGdex] status', res.status, url);
-          if (!res.ok) continue;
-          const data = await res.json();
-          console.log('[TCGdex] raw response type:', Array.isArray(data) ? 'array len='+data.length : typeof data, JSON.stringify(data).slice(0,200));
-          const items = Array.isArray(data) ? data : (data.data ?? data.cards ?? data.results ?? []);
-          if (items.length > 0) return items;
-        } catch(e) { console.warn('[TCGdex] error on', url, e); }
-      }
-      return [];
-    }
-
+    // ── JP card search — uses pokemontcg.io (reliable CORS), tags results as JA ──
     async function searchJapaneseCards(query) {
       const grid = document.getElementById('acMobGrid');
       if (!grid) return;
       grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING 🇯🇵 DATABASE…</div></div>';
 
       try {
-        const items = await fetchTcgdex(query);
+        const q   = encodeURIComponent(`name:"${query.trim()}"`);
+        const url = `https://api.pokemontcg.io/v2/cards?q=${q}&pageSize=20&page=1`;
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data  = await res.json();
+        const items = data.data ?? [];
 
         if (!items.length) {
-          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.5em;text-align:center;padding:12px;line-height:1.7">NO JP CARDS FOUND<br><span style="opacity:.5;font-size:.9em">Try a different name</span></div></div>';
+          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.5em;text-align:center;padding:12px;line-height:1.7">NO CARDS FOUND<br><span style="opacity:.5;font-size:.9em">Try a different name</span></div></div>';
           return;
         }
 
-        const html = items.slice(0, 20).map(card => {
-          const imgBase = card.image ?? '';
-          const small   = imgBase ? `${imgBase}/low.png`  : '';
-          const large   = imgBase ? `${imgBase}/high.png` : '';
+        const html = items.map(card => {
           const cd = JSON.stringify({
-            apiCardId:    'tcgdex-' + (card.id ?? ''),
-            cardName:     card.name ?? 'Unknown',
+            apiCardId:    'jp-' + card.id,
+            cardName:     card.name,
             setName:      card.set?.name  ?? '',
             setCode:      card.set?.id    ?? '',
-            cardNumber:   card.localId    ?? '',
-            cardImageUrl: small || large,
+            cardNumber:   card.number     ?? '',
+            cardImageUrl: card.images?.small ?? '',
             gameType:     'pokemon',
             language:     'JA',
           }).replace(/"/g, '&quot;');
 
           return `<div class="ac-mc" onclick='openAddToCollectionModal(JSON.parse(this.dataset.card))' data-card="${cd}">
-            ${small ? `<img class="ac-mc-img" src="${small}" alt="${card.name ?? ''}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
-            <div class="ac-mc-name">${card.name ?? ''} <span style="color:rgba(0,229,255,.5);font-size:.8em">🇯🇵</span></div>
-            <div class="ac-mc-sub">${card.set?.name ?? ''} ${card.localId ? '#' + card.localId : ''}</div>
+            ${card.images?.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
+            <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">🇯🇵</span></div>
+            <div class="ac-mc-sub">${card.set?.name ?? ''} ${card.number ? '#' + card.number : ''}</div>
             <div class="ac-mc-add">+ ADD TO BINDER</div>
           </div>`;
         }).join('');
 
         grid.innerHTML = '';
         window._pendingJpCard = true;
-        acCrtFlash('acCrtMob', () => {
-          grid.innerHTML = html;
-          grid.scrollTop = 0;
-        });
+        acCrtFlash('acCrtMob', () => { grid.innerHTML = html; grid.scrollTop = 0; });
 
       } catch (err) {
         const msg = err?.message || String(err);
@@ -12609,6 +12622,93 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return loc ? `${usd} (${loc}) [${src}]` : `${usd} [${src}]`;
       });
       el.textContent = lines.join(' · ');
+    }
+
+    // ── Desktop language toggle ────────────────────────────────────────────────
+    let acDeskLang = 'EN';
+    function acDeskSetLang(lang) {
+      acDeskLang = lang;
+      const enBtn = document.getElementById('acDeskLangEN');
+      const jaBtn = document.getElementById('acDeskLangJA');
+      const inp   = document.getElementById('cardSearchInput');
+      if (enBtn) { enBtn.style.background = lang === 'EN' ? 'rgba(0,229,255,.12)' : 'transparent'; enBtn.style.color = lang === 'EN' ? '#00E5FF' : 'rgba(0,229,255,.45)'; }
+      if (jaBtn) { jaBtn.style.background = lang === 'JA' ? 'rgba(0,229,255,.12)' : 'transparent'; jaBtn.style.color = lang === 'JA' ? '#00E5FF' : 'rgba(0,229,255,.45)'; }
+      if (inp)   inp.placeholder = lang === 'JA' ? 'Pikachu, Charizard...' : 'Charizard...';
+    }
+
+    function acDeskSearch() {
+      const input = document.getElementById('cardSearchInput');
+      const query = input ? input.value.trim() : '';
+      if (!query) { showToast('Enter a card name to search'); return; }
+      if (acDeskLang === 'JA') {
+        searchJapaneseAllPanels(query);
+      } else {
+        searchPokemonCards();
+      }
+    }
+
+    // ── JP search that populates both desktop grid and mobile grid ─────────────
+    async function searchJapaneseAllPanels(query) {
+      const deskStatus = document.getElementById('acDeskStatus');
+      const deskCount  = document.getElementById('acDeskCount');
+      const deskGrid   = document.getElementById('acDeskGrid');
+      const mobGrid    = document.getElementById('acMobGrid');
+
+      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING 🇯🇵…'; }
+      if (deskCount)  deskCount.textContent = '—';
+      if (deskGrid)   deskGrid.innerHTML = '';
+      if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
+
+      try {
+        const q   = encodeURIComponent(`name:"${query.trim()}"`);
+        const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${q}&pageSize=20&page=1`, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data  = await res.json();
+        const cards = data.data ?? [];
+
+        if (!cards.length) {
+          if (deskStatus) deskStatus.textContent = `// NO RESULTS FOR "${query.toUpperCase()}"`;
+          if (deskCount)  deskCount.textContent = '0 results';
+          if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.5em;text-align:center;padding:12px">NO CARDS FOUND</div></div>';
+          return;
+        }
+
+        if (deskStatus) deskStatus.textContent = '// CLICK A CARD TO ADD IT (JP)';
+        if (deskCount)  deskCount.textContent  = `${cards.length} result${cards.length !== 1 ? 's' : ''}`;
+
+        // Desktop grid HTML
+        const deskHTML = cards.map(card => {
+          const cd = JSON.stringify({ apiCardId: 'jp-'+card.id, cardName: card.name, setName: card.set?.name??'', setCode: card.set?.id??'', cardNumber: card.number??'', cardImageUrl: card.images?.small??'', gameType: 'pokemon', language: 'JA' }).replace(/"/g,'&quot;');
+          return `<div class="card-result" data-card="${cd}">
+            <div onclick='openAddToCollectionModal(JSON.parse(this.parentElement.dataset.card))' style="cursor:pointer">
+              ${card.images?.small ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div style="height:70px;background:rgba(0,229,255,.04);display:flex;align-items:center;justify-content:center;color:rgba(0,229,255,.18);font-size:.5rem">NO IMG</div>'}
+              <div class="card-result-name">${card.name} 🇯🇵</div>
+              <div class="card-result-set">${card.set?.name??''} #${card.number??'?'}</div>
+            </div>
+          </div>`;
+        }).join('');
+
+        // Mobile grid HTML
+        const mobHTML = cards.map(card => {
+          const cd = JSON.stringify({ apiCardId: 'jp-'+card.id, cardName: card.name, setName: card.set?.name??'', setCode: card.set?.id??'', cardNumber: card.number??'', cardImageUrl: card.images?.small??'', gameType: 'pokemon', language: 'JA' }).replace(/"/g,'&quot;');
+          return `<div class="ac-mc" onclick='openAddToCollectionModal(JSON.parse(this.dataset.card))' data-card="${cd}">
+            ${card.images?.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
+            <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">🇯🇵</span></div>
+            <div class="ac-mc-sub">${card.set?.name??''} ${card.number ? '#'+card.number : ''}</div>
+            <div class="ac-mc-add">+ ADD TO BINDER</div>
+          </div>`;
+        }).join('');
+
+        window._pendingJpCard = true;
+        if (deskGrid) deskGrid.innerHTML = deskHTML;
+        if (mobGrid)  { mobGrid.innerHTML = ''; }
+        acCrtFlash('acCrtRight');
+        acCrtFlash('acCrtMob', () => { if (mobGrid) { mobGrid.innerHTML = mobHTML; mobGrid.scrollTop = 0; } });
+
+      } catch(e) {
+        if (deskStatus) deskStatus.textContent = '// SEARCH FAILED — CHECK CONNECTION';
+        console.error('[searchJapaneseAllPanels]', e);
+      }
     }
 
     async function searchPokemonCards() {
