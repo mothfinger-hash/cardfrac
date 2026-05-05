@@ -777,7 +777,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
     .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
     .ac-mob-wrap{display:none;align-items:flex-start;justify-content:center;width:100%;padding-top:4px}
-    .ac-mob-wrap .ac-device{width:min(calc((100svh - 130px) * 1920 / 3712), calc(100vw - 8px));position:relative}
+    .ac-mob-wrap .ac-device{width:min(calc((100svh - 130px) * 1920 / 3712), calc(100vw - 8px));position:relative;aspect-ratio:1920/3712}
     .ac-mob-wrap .ac-device-img{width:100%;height:auto;display:block}
     @media(max-width:900px){.ac-pdex-wrap{display:none}.ac-mob-wrap{display:flex}}
     /* device base */
@@ -4004,7 +4004,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     <!-- ══ MOBILE: phondex device ══════════════════════════════════════════ -->
     <div class="ac-mob-wrap">
-      <div class="ac-device" style="width:min(480px,100vw)">
+      <div class="ac-device">
         <img class="ac-device-img" src="phondex.png?v=2" alt="PathBinder">
         <div class="ac-led-m"></div>
         <div class="ac-phone-screen">
@@ -19682,12 +19682,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     img.onload = function() {
       if (img.height > img.width * 1.2) {
         // Looks full-body — crop to face+shoulders and re-save
-        const cropped = makePfpCrop({ width: img.width, height: img.height,
-          getContext: () => { const c = document.createElement('canvas');
-            c.width = img.width; c.height = img.height;
-            c.getContext('2d').drawImage(img,0,0); return c.getContext('2d'); }
-        });
-        // Simpler: draw to temp canvas then crop
+        // Draw to temp canvas then crop
         const tmp = document.createElement('canvas');
         tmp.width = img.width; tmp.height = img.height;
         tmp.getContext('2d').drawImage(img, 0, 0);
