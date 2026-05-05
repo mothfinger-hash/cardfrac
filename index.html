@@ -48,20 +48,6 @@
     /* Landing page: keep sidebar, hide binder top bar only */
     body.on-landing #binderSidebar{display:none!important}
 
-    /* ── PIXEL GRID BACKGROUND ── */
-    body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
-      background-image:
-        linear-gradient(0deg,transparent 24%,rgba(255,92,0,.04) 25%,rgba(255,92,0,.04) 26%,transparent 27%,transparent 74%,rgba(255,92,0,.04) 75%,rgba(255,92,0,.04) 76%,transparent 77%),
-        linear-gradient(90deg,transparent 24%,rgba(255,92,0,.04) 25%,rgba(255,92,0,.04) 26%,transparent 27%,transparent 74%,rgba(255,92,0,.04) 75%,rgba(255,92,0,.04) 76%,transparent 77%);
-      background-size:40px 40px;pointer-events:none;z-index:1}
-    [data-theme="light"] body::before{background-image:
-        linear-gradient(0deg,transparent 24%,rgba(30,20,8,.06) 25%,rgba(30,20,8,.06) 26%,transparent 27%,transparent 74%,rgba(30,20,8,.06) 75%,rgba(30,20,8,.06) 76%,transparent 77%),
-        linear-gradient(90deg,transparent 24%,rgba(30,20,8,.06) 25%,rgba(30,20,8,.06) 26%,transparent 27%,transparent 74%,rgba(30,20,8,.06) 75%,rgba(30,20,8,.06) 76%,transparent 77%)}
-
-    /* ── PIXEL SCANLINES ── */
-    body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
-      background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.06),rgba(0,0,0,.06) 1px,transparent 1px,transparent 3px);
-      pointer-events:none;z-index:9998}
     @keyframes scanlines{0%{transform:translateY(0)}100%{transform:translateY(10px)}}
 
     /* SIDEBAR NAV */
@@ -800,7 +786,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-led-d{position:absolute;left:89.81%;top:14.7%;width:1.3%;padding-top:1.3%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
     .ac-led-m{position:absolute;left:17%;top:8%;width:2.5%;padding-top:2.5%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
     /* CRT */
-    .ac-crt{width:100%;height:100%;display:flex;flex-direction:column;transform-origin:center;will-change:transform,filter}
+    .ac-crt{width:100%;height:100%;display:flex;flex-direction:column;transform-origin:center;will-change:transform,filter;position:relative}
     .ac-crt.ac-on{animation:ac-crt-on .88s cubic-bezier(.4,0,.2,1) forwards}
     @keyframes ac-crt-on{
       0%  {transform:scaleY(.001);filter:brightness(14) blur(5px) saturate(0)}
@@ -868,22 +854,25 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-ni.on .ac-ni-ico{color:#00E5FF;text-shadow:0 0 10px rgba(0,229,255,.8)}
     .ac-ni-lbl{font-size:.52em;letter-spacing:.11em;color:rgba(0,229,255,.55);font-weight:bold;text-transform:uppercase;transition:color .2s}
     .ac-ni.on .ac-ni-lbl{color:#00E5FF}
-    /* ── mobile 2×2 results grid ── */
-    .ac-mob-grid{flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:.6%;padding:.8% 1%;min-height:0}
-    .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s;min-height:0}
+    /* ── mobile scrollable results grid ── */
+    .ac-mob-grid{flex:1;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;min-height:0;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:rgba(0,229,255,.22) transparent}
+    .ac-mob-grid::-webkit-scrollbar{width:3px}
+    .ac-mob-grid::-webkit-scrollbar-track{background:transparent}
+    .ac-mob-grid::-webkit-scrollbar-thumb{background:rgba(0,229,255,.22);border-radius:2px}
+    .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s}
     .ac-mc:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
     .ac-mc::after{content:'';position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.22) 48%,rgba(0,229,255,.22) 52%,transparent 52%);pointer-events:none;z-index:5}
-    .ac-mc-img{flex:1;width:100%;object-fit:cover;display:block;min-height:0}
-    .ac-mc-ph{flex:1;background:rgba(0,229,255,.03);display:flex;align-items:center;justify-content:center;min-height:0}
+    .ac-mc-img{width:100%;aspect-ratio:240/336;object-fit:cover;display:block}
+    .ac-mc-ph{width:100%;aspect-ratio:240/336;background:rgba(0,229,255,.03);display:flex;align-items:center;justify-content:center}
     .ac-mc-name{font-size:.63em;color:rgba(215,228,240,.9);padding:3% 5% 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .ac-mc-sub{font-size:.5em;color:rgba(65,85,105,.85);padding:0 5% 1%}
     .ac-mc-add{text-align:center;padding:2.5% 0;flex-shrink:0;border-top:1px solid rgba(0,229,255,.08);font-size:.5em;letter-spacing:.1em;color:rgba(0,229,255,.42);transition:color .2s}
     .ac-mc:hover .ac-mc-add{color:rgba(0,229,255,.82)}
-    /* ── mobile bottom sheet ── */
-    /* mobile search panel — in normal flex flow, slides open below nav */
-    .ac-search-panel{flex-shrink:0;max-height:0;overflow:hidden;transition:max-height .38s cubic-bezier(.4,0,.2,1);background:rgba(4,12,20,.97);border-bottom:1px solid rgba(0,229,255,.18)}
-    .ac-search-panel.open{max-height:70%}
-    .ac-search-inner{padding:3% 5% 4%;overflow-y:auto}
+    /* ── mobile hologram search panel — absolute overlay, no layout shift ── */
+    .ac-search-panel{position:absolute;left:3%;right:3%;z-index:80;background:rgba(3,12,20,.96);border:1px solid rgba(0,229,255,.5);border-radius:3px;box-shadow:0 0 0 1px rgba(0,229,255,.08),0 0 16px rgba(0,229,255,.22),0 0 48px rgba(0,229,255,.07);transform-origin:top center;transform:scaleY(0.01);opacity:0;pointer-events:none;transition:transform .32s cubic-bezier(.4,0,.2,1),opacity .25s}
+    .ac-search-panel::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0,transparent 2px,rgba(0,229,255,.025) 2px,rgba(0,229,255,.025) 3px);pointer-events:none;z-index:0}
+    .ac-search-panel.open{transform:scaleY(1);opacity:1;pointer-events:auto}
+    .ac-search-inner{padding:4% 6% 5%;position:relative;z-index:1}
     .ac-drag{width:28%;height:3px;background:rgba(0,229,255,.18);border-radius:2px;margin:.85em auto .55em}
     .ac-sh-title{text-align:center;font-size:.9em;letter-spacing:.2em;color:#00E5FF;padding:.15em 0 .45em;border-bottom:1px solid rgba(0,229,255,.1);margin-bottom:.65em}
     .ac-sf-label{font-size:.5em;letter-spacing:.12em;color:rgba(0,229,255,.55);margin-bottom:.28em;display:block}
@@ -1759,6 +1748,15 @@ nav {
 #addToCollectionModal .modal::-webkit-scrollbar-track { background: transparent; }
 #addToCollectionModal .modal::-webkit-scrollbar-thumb { background: rgba(0,229,255,.22); border-radius: 2px; }
 #addToCollectionModal .modal::-webkit-scrollbar-thumb:hover { background: rgba(0,229,255,.45); }
+/* Mobile: constrain hologram modal so it fits on small screens */
+@media(max-width:900px) {
+  #addToCollectionModal .modal {
+    max-height: 80svh !important;
+    overflow-y: auto !important;
+    width: min(420px, 92vw) !important;
+    margin: auto !important;
+  }
+}
 
 .form-group input, .form-group select { border-radius: 0 !important; border-color: var(--border) !important; font-family: 'Space Mono', monospace !important; }
 .form-group input:focus, .form-group select:focus { border-color: var(--accent) !important; box-shadow: 3px 3px 0 var(--accent) !important; outline: none; }
@@ -3888,45 +3886,44 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="ac-scanlines" style="z-index:50"></div>
           <div class="ac-crt" id="acCrtMob">
 
-            <!-- top nav -->
+            <!-- top nav: search-only functions -->
             <div class="ac-nav">
               <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
                 <span class="ac-ni-ico">◎</span>
                 <span class="ac-ni-lbl">Search</span>
               </div>
+              <div class="ac-ni" onclick="acNavClick(this);openCardScanner()">
+                <span class="ac-ni-ico">⬡</span>
+                <span class="ac-ni-lbl">Scan 1</span>
+              </div>
               <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
                 <span class="ac-ni-ico">▣</span>
-                <span class="ac-ni-lbl">Scan</span>
+                <span class="ac-ni-lbl">Scan Bulk</span>
               </div>
-              <div class="ac-ni" onclick="acNavClick(this);showPage('collection');setMobileNav('collection')">
-                <span class="ac-ni-ico">⊞</span>
-                <span class="ac-ni-lbl">Binder</span>
-              </div>
-              <div class="ac-ni" onclick="acNavClick(this);showPage('account');setMobileNav('account')">
-                <span class="ac-ni-ico">◉</span>
-                <span class="ac-ni-lbl">Account</span>
+              <div class="ac-ni" onclick="acNavClick(this);openManualAddModal()">
+                <span class="ac-ni-ico">＋</span>
+                <span class="ac-ni-lbl">Manual</span>
               </div>
             </div>
 
-            <!-- 2×2 results grid -->
+            <!-- hologram search panel — absolute overlay, projects below nav -->
+            <div class="ac-search-panel" id="acSearchPanel">
+              <div class="ac-search-inner">
+                <label class="ac-sf-label" style="letter-spacing:.18em;color:rgba(0,229,255,.7)">⬡ CARD SEARCH</label>
+                <input class="ac-sf-input" id="acMobInput" type="text"
+                  placeholder="Charizard, Pikachu..."
+                  onkeydown="if(event.key==='Enter')acMobSearch()">
+                <button class="ac-sf-btn" onclick="acMobSearch()">SEARCH CARDS</button>
+              </div>
+            </div>
+
+            <!-- scrollable results grid -->
             <div class="ac-mob-grid" id="acMobGrid">
               <!-- placeholder until first search -->
               <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">SEARCH</div></div>
               <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">YOUR</div></div>
               <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">CARDS</div></div>
               <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">ABOVE</div></div>
-            </div>
-
-            <!-- search panel — drops down below nav in normal flex flow -->
-            <div class="ac-search-panel" id="acSearchPanel">
-              <div class="ac-search-inner">
-                <label class="ac-sf-label">SEARCH</label>
-                <input class="ac-sf-input" id="acMobInput" type="text"
-                  placeholder="Charizard, Pikachu..."
-                  onkeydown="if(event.key==='Enter')acMobSearch()">
-                <button class="ac-sf-btn" onclick="acMobSearch()">SEARCH CARDS</button>
-                <button class="ac-sf-ghost" style="margin-top:.4em" onclick="openManualAddModal()">+ ADD MANUALLY</button>
-              </div>
             </div>
 
           </div>
@@ -12150,16 +12147,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (mob && desk) desk.value = mob.value.trim();
       acMobSearchOpen = false;
       if (panel) panel.classList.remove('open');
+      // CRT flash on the mobile screen before results load
+      acCrtFlash('acCrtMob');
       searchPokemonCards();
     }
 
     function acMobToggleSearch() {
       const panel = document.getElementById('acSearchPanel');
       if (!panel) return;
+      // Dynamically position below the nav bar (pixel-perfect regardless of size)
+      const nav = document.querySelector('.ac-mob-wrap .ac-nav');
+      if (nav) {
+        const crt = document.getElementById('acCrtMob');
+        if (crt) {
+          const crtRect = crt.getBoundingClientRect();
+          const navRect = nav.getBoundingClientRect();
+          panel.style.top = (navRect.bottom - crtRect.top) + 'px';
+        }
+      }
       if (!acMobSearchOpen) {
         acMobSearchOpen = true;
         panel.classList.add('open');
-        setTimeout(() => { const inp = document.getElementById('acMobInput'); if (inp) inp.focus(); }, 40);
+        setTimeout(() => { const inp = document.getElementById('acMobInput'); if (inp) inp.focus(); }, 60);
       } else {
         acMobSearchOpen = false;
         panel.classList.remove('open');
@@ -12199,8 +12208,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function acRenderMobGrid(cards) {
       const mob = document.getElementById('acMobGrid');
       if (!mob || !cards || cards.length === 0) return;
-      const first4 = cards.slice(0, 4);
-      mob.innerHTML = first4.map(card => {
+      const display = cards.slice(0, 20);   // show up to 20, scrollable
+      mob.innerHTML = display.map(card => {
         const cd = JSON.stringify({
           apiCardId:    card.id,
           cardName:     card.name,
@@ -12219,6 +12228,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="ac-mc-add">+ ADD TO BINDER</div>
         </div>`;
       }).join('');
+      mob.scrollTop = 0;   // scroll back to top on new results
     }
     /* ══ END ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════ */
 
