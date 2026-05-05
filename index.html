@@ -743,6 +743,45 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .card-result img{width:100%;height:auto;display:block;margin-bottom:6px;border:1px solid var(--border)}
     .card-result-name{font-size:.72rem;color:var(--text);margin-bottom:2px;line-height:1.3}
     .card-result-set{font-size:.64rem;color:var(--muted)}
+
+    /* ── CRT power-on effect for card result grid ── */
+    .crt-grid-wrap{
+      transform-origin:center center;
+      transform:scaleY(0.001);
+      filter:brightness(14) blur(5px) saturate(0);
+      will-change:transform,filter;
+    }
+    .crt-grid-wrap.crt-powered{
+      animation:crt-grid-on .85s cubic-bezier(.4,0,.2,1) forwards;
+    }
+    @keyframes crt-grid-on{
+      0%  {transform:scaleY(0.001);filter:brightness(14) blur(5px) saturate(0)}
+      5%  {transform:scaleY(0.005);filter:brightness(16) blur(3px) saturate(0)}
+      18% {transform:scaleY(0.04); filter:brightness(8)  blur(1px) saturate(.1)}
+      40% {transform:scaleY(.42);  filter:brightness(3.2)blur(0)   saturate(.4)}
+      62% {transform:scaleY(1.04); filter:brightness(1.4)          saturate(.9)}
+      76% {transform:scaleY(.97);  filter:brightness(1.06)}
+      90% {transform:scaleY(1.01)}
+      100%{transform:scaleY(1);    filter:brightness(1) saturate(1)}
+    }
+    /* scanline overlay inside results */
+    .crt-grid-wrap::after{
+      content:'';pointer-events:none;
+      position:absolute;inset:0;
+      background:repeating-linear-gradient(0deg,rgba(0,0,0,.08) 0px,rgba(0,0,0,.08) 1px,transparent 1px,transparent 3px);
+      z-index:2;opacity:0;transition:opacity .6s .4s;
+    }
+    .crt-grid-wrap.crt-powered::after{opacity:1}
+    /* LED blink on add-card header */
+    .addcard-led{
+      display:inline-block;width:8px;height:8px;
+      border-radius:50%;vertical-align:middle;margin-left:8px;
+      animation:ac-led-blink 1.4s ease-in-out infinite;
+    }
+    @keyframes ac-led-blink{
+      0%,40% {background:rgba(255,60,15,.95);box-shadow:0 0 8px 2px rgba(255,60,15,.7),0 0 3px rgba(255,80,15,1)}
+      55%,100%{background:rgba(55,8,2,.25);  box-shadow:0 0 2px rgba(255,60,15,.05)}
+    }
     .coll-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
     .coll-stat-box{background:var(--surface);border:1px solid var(--border);padding:16px;text-align:center}
     .coll-stat-label{font-size:.7rem;color:var(--muted);margin-bottom:6px;letter-spacing:.08em}
@@ -3561,7 +3600,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   <div id="addCardPage" class="page">
     <div class="pb-page-hdr">
       <div class="pb-page-hdr-main">
-        <div class="pb-page-hdr-title">+ Add Card</div>
+        <div class="pb-page-hdr-title">+ Add Card<span class="addcard-led" title="System ready"></span></div>
         <div class="pb-page-hdr-sub">Search the Pokémon TCG database or add any card manually.</div>
       </div>
     </div>
@@ -3585,7 +3624,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <button class="coll-btn-secondary" onclick="openMultiScan()" style="border-color:var(--gold);color:var(--gold)">&#9638; Scan Multiple</button>
           </div>
           <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
-          <div id="cardResultGrid" class="card-result-grid" style="display:none"></div>
+          <div id="crtGridWrap" class="crt-grid-wrap" style="position:relative;display:none">
+            <div id="cardResultGrid" class="card-result-grid"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -4748,7 +4789,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       if (pageId === 'publicBinder')  { /* content managed by loadPublicBinder */ }
       if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
-      if (pageId === 'addCard') { /* addCardPage ready */ }
+      if (pageId === 'addCard') {
+        // Soft CRT warm-up when navigating to Add Card
+        const wrap = document.getElementById('crtGridWrap');
+        if (wrap && wrap.style.display !== 'none') _crtGridFlash();
+      }
       if (pageId === 'fairTrade') { ftInitPage(); }
       if (pageId === 'sets') { loadSetsPage(); }
       if (pageId === 'avatar') { /* avatar page ready */ }
@@ -11739,16 +11784,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       renderDashboard();
     }
 
+    function _crtGridFlash(cb) {
+      const wrap = document.getElementById('crtGridWrap');
+      if (!wrap) { if (cb) cb(); return; }
+      wrap.classList.remove('crt-powered');
+      wrap.style.cssText = 'position:relative;display:block;transform:scaleY(0.001);filter:brightness(14) blur(5px) saturate(0)';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        wrap.style.cssText = 'position:relative;display:block';
+        void wrap.offsetWidth;
+        wrap.classList.add('crt-powered');
+        if (cb) setTimeout(cb, 620);
+      }));
+    }
+
     async function searchPokemonCards() {
       const input = document.getElementById('cardSearchInput');
       const query = input ? input.value.trim() : '';
       if (!query) { showToast('Enter a card name to search'); return; }
 
       const status = document.getElementById('cardSearchStatus');
+      const wrap   = document.getElementById('crtGridWrap');
       const grid   = document.getElementById('cardResultGrid');
       status.style.display = 'block';
       status.textContent   = '// Searching Pokémon TCG database...';
-      grid.style.display   = 'none';
+      if (wrap) wrap.style.display = 'none';
       grid.innerHTML       = '';
 
       try {
@@ -11764,7 +11823,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         const moreNote = total > cards.length ? ` (showing ${cards.length} of ${total} — refine your search for more)` : '';
         status.textContent = `// Found ${total} result${total !== 1 ? 's' : ''}${moreNote} — click a card to add it`;
-        grid.style.display = 'grid';
         grid.innerHTML = cards.map(card => {
           const cardData = JSON.stringify({
             apiCardId:    card.id,
@@ -11787,6 +11845,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               style="width:100%;margin-top:5px;padding:3px 0;border:1px solid rgba(0,204,255,.35);background:rgba(0,204,255,.06);color:var(--teal);font-family:inherit;font-size:.6rem;cursor:pointer;letter-spacing:.04em">♡ WISHLIST</button>
           </div>`;
         }).join('');
+        // CRT power-on flash when results render
+        _crtGridFlash();
       } catch(e) {
         status.textContent = '// Search failed — check your connection';
         console.error('Pokémon TCG search error:', e);
