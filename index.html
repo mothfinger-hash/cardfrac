@@ -12,6 +12,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="PathBinder" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <!-- Preconnect to external origins for faster first requests -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://xjamytrhxeaynywcwfun.supabase.co">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Space+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
   <script>
@@ -2090,14 +2095,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-main,.ndash-rail{display:flex;flex-direction:column;gap:12px}
 
 /* ── Panel ── */
-.ndash-panel{background:var(--surface);border:1.5px solid var(--border);box-shadow:3px 3px 0 #000;overflow:hidden}
+.ndash-panel{background:var(--surface);border:1.5px solid var(--border);box-shadow:3px 3px 0 #000;overflow:hidden;display:flex;flex-direction:column}
 .ndash-panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 12px;border-bottom:1.5px solid var(--border);background:linear-gradient(180deg,var(--surface3,var(--surface2)),var(--surface));flex-shrink:0}
 .ndash-panel-title{font-family:'Orbitron',monospace;font-weight:800;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
 .ndash-panel-title-ico{width:22px;height:22px;background:var(--surface3,var(--surface2));color:var(--accent);display:grid;place-items:center;flex-shrink:0}
 .ndash-panel-title-ico svg{width:14px;height:14px}
 .ndash-panel-link{font-size:9.5px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;border:1px solid transparent;padding:3px 8px;transition:border-color .1s;cursor:pointer;background:none;font-family:inherit}
 .ndash-panel-link:hover{border-color:var(--accent)}
-.ndash-panel-body{padding:10px 12px}
+.ndash-panel-body{padding:10px 12px;flex:1;overflow:auto}
 
 /* ── Card grid (top picks) ── */
 .ndash-card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -2192,6 +2197,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-reset-stat{border-right:none!important;padding:8px 10px!important;justify-content:flex-end;align-items:flex-end}
 .ndash-reset-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:7.5px;letter-spacing:.1em;padding:4px 8px;cursor:pointer;text-transform:uppercase;transition:all .1s;white-space:nowrap}
 .ndash-reset-btn:hover{border-color:var(--accent);color:var(--accent)}
+/* Resize handle at bottom of each dashboard panel */
+.ndash-resize-handle{height:9px;cursor:ns-resize;background:transparent;border-top:1px solid rgba(0,229,255,.1);display:flex;align-items:center;justify-content:center;transition:background .18s,border-color .18s;flex-shrink:0;user-select:none;-webkit-user-select:none}
+.ndash-resize-handle:hover{background:rgba(0,229,255,.06);border-top-color:rgba(0,229,255,.3)}
+.ndash-resize-handle::after{content:'';width:28px;height:2px;background:rgba(0,229,255,.22);border-radius:1px;transition:background .18s}
+.ndash-resize-handle:hover::after{background:rgba(0,229,255,.55)}
 /* ─── 23. SITE-WIDE PANEL LANGUAGE ──────────────────────────────── */
 /* Same DNA as the dashboard panels, usable on any page */
 /* === ANCIENT CARD SYSTEM (pb-panel) === */
@@ -2437,8 +2447,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   <!-- ═══════════════════════════════════════════════════════════════ -->
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- SheetJS and QRCodeJS loaded lazily on first use to keep initial page load fast -->
+  <script>
+    function _loadXLSX(cb) {
+      if (window.XLSX) { if (cb) cb(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js';
+      s.onload = () => { if (cb) cb(); };
+      document.head.appendChild(s);
+    }
+    function _loadQRCode(cb) {
+      if (window.QRCode) { if (cb) cb(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+      s.onload = () => { if (cb) cb(); };
+      document.head.appendChild(s);
+    }
+    // Pre-load both in the background after page is idle, so they're ready when needed
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(function() { _loadXLSX(); _loadQRCode(); }, { timeout: 4000 });
+    } else {
+      setTimeout(function() { _loadXLSX(); _loadQRCode(); }, 2500);
+    }
+  </script>
   <script>
     const SUPABASE_URL = 'https://xjamytrhxeaynywcwfun.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_HeBrC8k5nKaBmqA9qMn6-Q_YqL8OEBV';
@@ -2467,7 +2498,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <!-- Logo header -->
     <div class="nav-header">
       <button class="logo-img-btn" onclick="showPage('collection');setMobileNav('collection')">
-        <img src="weblogo.png" alt="PathBinder" class="nav-logo-img">
+        <img src="weblogo.png" alt="PathBinder" class="nav-logo-img" fetchpriority="high">
       </button>
       <button class="nav-collapse-btn" id="navCollapseBtn" onclick="toggleNavCollapse()" title="Collapse sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -6335,9 +6366,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </div>
 
       </div><!-- /ndash-wrap -->`;
-      // Restore saved layout order, then wire drag-and-drop
+      // Restore saved layout order, then wire drag-and-drop + resize
       loadDashOrder();
       initDashDrag();
+      initDashResize();
       // Draw YTD SVG line chart after DOM is settled
       drawYtdChart(snapshots, totalValue);
     }
@@ -6530,6 +6562,133 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function resetDashOrder() {
       try { localStorage.removeItem('pb_dash_order_v1'); } catch(_) {}
       renderDashboard();
+    }
+
+    // ── Dashboard Panel Resize ───────────────────────────────────────────────
+    // Adds a drag handle at the bottom of each panel. Heights are stored in
+    // localStorage and restored on next load. The binder panel dynamically
+    // injects more cards as it grows.
+
+    var DASH_HEIGHTS_KEY = 'pb_dash_heights_v1';
+    var _dashResizeObs = null;
+
+    function saveDashHeights() {
+      try {
+        var out = {};
+        document.querySelectorAll('[data-panel-id]').forEach(function(p) {
+          if (p.style.height) out[p.dataset.panelId] = p.style.height;
+        });
+        localStorage.setItem(DASH_HEIGHTS_KEY, JSON.stringify(out));
+      } catch(_) {}
+    }
+
+    function loadDashHeights() {
+      try {
+        var raw = localStorage.getItem(DASH_HEIGHTS_KEY);
+        if (!raw) return;
+        var saved = JSON.parse(raw);
+        Object.keys(saved).forEach(function(id) {
+          var p = document.querySelector('[data-panel-id="' + id + '"]');
+          if (p) p.style.height = saved[id];
+        });
+      } catch(_) {}
+    }
+
+    function initDashResize() {
+      // Remove old handles first (in case of re-render)
+      document.querySelectorAll('.ndash-resize-handle').forEach(function(h) { h.remove(); });
+      if (_dashResizeObs) { _dashResizeObs.disconnect(); _dashResizeObs = null; }
+
+      document.querySelectorAll('[data-panel-id]').forEach(function(panel) {
+        var handle = document.createElement('div');
+        handle.className = 'ndash-resize-handle';
+        handle.title = 'Drag to resize';
+        panel.appendChild(handle);
+
+        var startY, startH;
+        function onMove(clientY) {
+          var newH = Math.max(80, startH + (clientY - startY));
+          panel.style.height = newH + 'px';
+        }
+        function onUp() {
+          saveDashHeights();
+          document.removeEventListener('mousemove', mouseMove);
+          document.removeEventListener('mouseup',   mouseUp);
+          document.removeEventListener('touchmove', touchMove);
+          document.removeEventListener('touchend',  touchEnd);
+        }
+        function mouseMove(e) { onMove(e.clientY); }
+        function mouseUp()    { onUp(); }
+        function touchMove(e) { if (e.touches[0]) onMove(e.touches[0].clientY); }
+        function touchEnd()   { onUp(); }
+
+        handle.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          startY = e.clientY;
+          startH = panel.offsetHeight;
+          document.addEventListener('mousemove', mouseMove);
+          document.addEventListener('mouseup',   mouseUp);
+        });
+        handle.addEventListener('touchstart', function(e) {
+          if (!e.touches[0]) return;
+          startY = e.touches[0].clientY;
+          startH = panel.offsetHeight;
+          document.addEventListener('touchmove', touchMove, { passive: true });
+          document.addEventListener('touchend',  touchEnd,  { passive: true });
+        }, { passive: true });
+      });
+
+      // Binder panel: load more cards as the panel grows
+      var binderPanel = document.querySelector('[data-panel-id="binder"]');
+      if (binderPanel && window.ResizeObserver) {
+        _dashResizeObs = new ResizeObserver(function() {
+          _refreshBinderGrid(binderPanel);
+        });
+        _dashResizeObs.observe(binderPanel);
+      }
+
+      loadDashHeights();
+    }
+
+    // How many cards fit in the current binder panel height
+    function _refreshBinderGrid(panel) {
+      var grid = panel.querySelector('.ndash-card-grid');
+      if (!grid) return;
+      var body = panel.querySelector('.ndash-panel-body');
+      if (!body) return;
+      var bodyH  = body.clientHeight;
+      var cardH  = grid.firstElementChild ? grid.firstElementChild.offsetHeight + 8 : 120;
+      var cols   = 4; // default grid columns
+      if (window.innerWidth <= 480) cols = 2;
+      else if (window.innerWidth <= 860) cols = 3;
+      var rows = Math.max(2, Math.floor(bodyH / (cardH || 120)));
+      var target = rows * cols;
+
+      var ownedCards = typeof collectionItems !== 'undefined'
+        ? collectionItems.filter(function(c) { return !c.is_ghost && !c.sold_offline; })
+        : [];
+      var sorted = [...ownedCards].sort(function(a,b) {
+        return ((b.current_value||b.purchase_price||0)*(b.quantity||1)) -
+               ((a.current_value||a.purchase_price||0)*(a.quantity||1));
+      });
+      var show = sorted.slice(0, Math.min(target, sorted.length, 40));
+      if (show.length === grid.children.length) return; // nothing changed
+
+      grid.innerHTML = show.map(function(item, i) {
+        var v = (item.current_value||item.purchase_price||0)*(item.quantity||1);
+        return '<div class="ndash-tcard" onclick="openBinderCardDetail(\'' + item.id + '\')">' +
+          '<div class="ndash-tcard-art">' +
+            (item.card_image_url
+              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy">'
+              : '<div class="ndash-tcard-art-ph">' + _escHtml(item.card_name.slice(0,12)) + '</div>') +
+            (i<3 ? '<div class="ndash-tcard-rank">#' + (i+1) + '</div>' : '') +
+          '</div>' +
+          '<div class="ndash-tcard-foot">' +
+            '<div class="ndash-tcard-name">' + _escHtml(item.card_name.slice(0,16)) + '</div>' +
+            (v>0 ? '<div class="ndash-tcard-val">$' + v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
     }
 
     // ── YTD Portfolio Chart ──────────────────────────────────────────────────
@@ -8574,7 +8733,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function downloadVendorTemplate() {
-      if (typeof XLSX === 'undefined') { showToast('Spreadsheet library still loading — try again in a moment'); return; }
+      if (typeof XLSX === 'undefined') { _loadXLSX(downloadVendorTemplate); showToast('Loading spreadsheet library…'); return; }
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([
         VENDOR_TEMPLATE_HEADERS,
@@ -8597,7 +8756,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       errEl.style.display = 'none';
 
       if (typeof XLSX === 'undefined') {
-        errEl.textContent = 'Spreadsheet library not loaded yet — refresh and try again.';
+        _loadXLSX(() => handleVendorImportFile(file));
+        errEl.textContent = 'Loading spreadsheet library, please wait…';
         errEl.style.display = 'block'; return;
       }
 
@@ -13576,15 +13736,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Render QR code once (creator only) — check if already rendered
       if (role === 'a') {
         var qrEl = document.getElementById('ftQrContainer');
-        if (qrEl && !qrEl.dataset.rendered && window.QRCode) {
-          try {
-            new window.QRCode(qrEl, {
-              text: url, width: 100, height: 100,
-              colorDark: '#000000', colorLight: '#ffffff',
-              correctLevel: window.QRCode.CorrectLevel.M
-            });
-            qrEl.dataset.rendered = '1';
-          } catch(_) {}
+        if (qrEl && !qrEl.dataset.rendered) {
+          _loadQRCode(function() {
+            var el = document.getElementById('ftQrContainer');
+            if (!el || el.dataset.rendered) return;
+            try {
+              new window.QRCode(el, {
+                text: url, width: 100, height: 100,
+                colorDark: '#000000', colorLight: '#ffffff',
+                correctLevel: window.QRCode.CorrectLevel.M
+              });
+              el.dataset.rendered = '1';
+            } catch(_) {}
+          });
         }
       }
     }
