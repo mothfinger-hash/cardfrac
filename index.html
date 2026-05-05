@@ -2938,6 +2938,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <label>Card Name</label>
         <input type="text" class="atc-input" id="atcManualNameInput" placeholder="e.g. e.g. Charizard Holo 1st Edition" style="width:100%" />
       </div>
+      <!-- Language row — sits above the main grid -->
+      <div class="form-group" style="margin-bottom:14px;display:flex;align-items:center;gap:12px">
+        <label style="white-space:nowrap;flex-shrink:0;margin:0">Print Language</label>
+        <select class="atc-input" id="atcLanguage" style="flex:1">
+          <option value="EN">🇺🇸 English (EN)</option>
+          <option value="JA">🇯🇵 Japanese (JA)</option>
+          <option value="KO">🇰🇷 Korean (KO)</option>
+          <option value="DE">🇩🇪 German (DE)</option>
+          <option value="FR">🇫🇷 French (FR)</option>
+          <option value="ES">🇪🇸 Spanish (ES)</option>
+          <option value="IT">🇮🇹 Italian (IT)</option>
+          <option value="PT">🇵🇹 Portuguese (PT)</option>
+          <option value="ZH">🇨🇳 Chinese (ZH)</option>
+        </select>
+      </div>
+
       <div class="atc-grid" style="margin-bottom:14px">
         <div class="form-group">
           <label>Condition</label>
@@ -12460,6 +12476,75 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     /* ══ END ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════ */
 
+    /* ── Multi-language price fetching ───────────────────────────────────────
+     *  Calls the appropriate Edge Function based on language:
+     *    JA          → fetch-price-jp  (PriceCharting USD + Yuyutei JPY)
+     *    EN + others → fetch-price-eu  (Cardmarket, language-aware)
+     *
+     *  Results are cached server-side in card_prices (24-hour TTL).
+     *  Returns: { prices: [...], cached: boolean } or null on failure.
+     * ─────────────────────────────────────────────────────────────────────── */
+    async function fetchCardPriceForLanguage({ cardName, language = 'EN', setName, cardNumber, apiCardId } = {}) {
+      if (!cardName) return null;
+      const SUPABASE_URL      = window._sbUrl  || (typeof supabaseUrl  !== 'undefined' ? supabaseUrl  : null);
+      const SUPABASE_ANON_KEY = window._sbAnon || (typeof supabaseAnonKey !== 'undefined' ? supabaseAnonKey : null);
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+      const fn = language === 'JA' ? 'fetch-price-jp' : 'fetch-price-eu';
+      const url = `${SUPABASE_URL}/functions/v1/${fn}`;
+
+      try {
+        const res = await fetch(url, {
+          method:  'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'apikey':        SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ cardName, language, setName, cardNumber, apiCardId }),
+        });
+        if (!res.ok) return null;
+        return await res.json();
+      } catch {
+        return null;
+      }
+    }
+
+    /* ── Display price chip for a collection card ────────────────────────────
+     *  Call this inside a card detail view to show JP/EU price alongside USD.
+     *  elId: id of a <span> or <div> to populate with the price string.
+     * ─────────────────────────────────────────────────────────────────────── */
+    async function showCardPrice(elId, cardData) {
+      const el = document.getElementById(elId);
+      if (!el || !cardData) return;
+      const lang = cardData.language || 'EN';
+      if (lang === 'EN') return; // English price handled by existing PriceCharting flow
+
+      el.textContent = 'Fetching price…';
+      const result = await fetchCardPriceForLanguage({
+        cardName:   cardData.card_name,
+        language:   lang,
+        setName:    cardData.set_name,
+        cardNumber: cardData.card_number,
+        apiCardId:  cardData.api_card_id,
+      });
+
+      if (!result || !result.prices?.length) {
+        el.textContent = 'Price unavailable';
+        return;
+      }
+
+      const lines = result.prices.map(p => {
+        const usd = p.price_usd  ? `$${p.price_usd.toFixed(2)}`  : '—';
+        const loc = p.price_local
+          ? `${p.currency === 'JPY' ? '¥' : p.currency === 'EUR' ? '€' : '$'}${p.price_local.toLocaleString()}`
+          : null;
+        const src = { pricecharting: 'PC', yuyutei: 'YY', cardmarket: 'CM' }[p.source] || p.source;
+        return loc ? `${usd} (${loc}) [${src}]` : `${usd} [${src}]`;
+      });
+      el.textContent = lines.join(' · ');
+    }
+
     async function searchPokemonCards() {
       const input = document.getElementById('cardSearchInput');
       const query = input ? input.value.trim() : '';
@@ -12544,6 +12629,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcCondition').value = 'raw';
       document.getElementById('atcGrade').value = '10';
       document.getElementById('atcQuantity').value = '1';
+      if (document.getElementById('atcLanguage')) document.getElementById('atcLanguage').value = 'EN';
       document.getElementById('atcPurchasePrice').value = '';
       document.getElementById('atcPurchaseDate').value = '';
       document.getElementById('atcCertNumber').value = '';
@@ -12629,6 +12715,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcCondition').value = 'raw';
       document.getElementById('atcGrade').value = '10';
       document.getElementById('atcQuantity').value = '1';
+      if (document.getElementById('atcLanguage')) document.getElementById('atcLanguage').value = 'EN';
       document.getElementById('atcPurchasePrice').value = '';
       document.getElementById('atcPurchaseDate').value = '';
       document.getElementById('atcCertNumber').value = '';
@@ -12743,6 +12830,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         || pendingCollectionCard.cardImageUrl
         || null;
 
+      const language = document.getElementById('atcLanguage')?.value || 'EN';
+
       const { data: newRow, error } = await sb.from('collection_items').insert({
         user_id:         currentUser.id,
         api_card_id:     pendingCollectionCard.apiCardId  || null,
@@ -12760,8 +12849,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         purchase_date:   purchaseDate,
         price_source_url: priceSourceUrl,
         notes,
-        binder_id:       binderId || null
+        binder_id:       binderId || null,
+        language,
       }).select('id').single();
+
+      // Background: pre-warm price cache for non-English cards
+      if (language !== 'EN') {
+        fetchCardPriceForLanguage({
+          cardName, language,
+          setName:    pendingCollectionCard.setName    || undefined,
+          cardNumber: pendingCollectionCard.cardNumber || undefined,
+          apiCardId:  pendingCollectionCard.apiCardId  || undefined,
+        }).catch(() => {}); // fire-and-forget, non-blocking
+      }
 
       if (saveBtn) { saveBtn.textContent = 'Add to My Binder'; saveBtn.disabled = false; }
 
