@@ -14816,6 +14816,55 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ══════════════════════════════════════════════════════════════════════
     var _setsCache = null;  // { timestamp, sets }
     var _setsDetailCache = {};  // setId → { timestamp, cards }
+    var _setsDetailSort  = 'number'; // 'number' | 'rarity-asc' | 'rarity-desc' | 'owned'
+    var _setsDetailOwnedMap = {};
+    var _RARITY_RANK = {
+      'Common':1,'Uncommon':2,'Rare':3,'Rare Holo':4,
+      'Double Rare':5,'Rare Holo EX':5,'Rare Holo GX':5,'Rare Holo V':5,
+      'Rare Holo VMAX':6,'Rare Holo VSTAR':6,'Shiny Rare':6,'Trainer Gallery Rare Holo':6,
+      'Illustration Rare':7,'Rare Ultra':7,'Ultra Rare':7,'Amazing Rare':7,'Radiant Rare':7,
+      'ACE SPEC Rare':8,'Rare Rainbow':8,'LEGEND':8,'Hyper Rare':9,
+      'Rare Secret':9,'Shiny Ultra Rare':9,'Special Illustration Rare':10,'Rare Shiny GX':10
+    };
+    function _rarityRank(r) { return _RARITY_RANK[r] || 5; }
+
+    function _buildSetCardRows(cards, ownedMap, sort) {
+      let sorted = [...cards];
+      if (sort === 'rarity-asc')  sorted.sort((a,b) => _rarityRank(a.rarity) - _rarityRank(b.rarity) || (parseInt(a.number)||0) - (parseInt(b.number)||0));
+      if (sort === 'rarity-desc') sorted.sort((a,b) => _rarityRank(b.rarity) - _rarityRank(a.rarity) || (parseInt(a.number)||0) - (parseInt(b.number)||0));
+      if (sort === 'owned') sorted.sort((a,b) => (ownedMap[b.id]?1:0) - (ownedMap[a.id]?1:0) || (parseInt(a.number)||0) - (parseInt(b.number)||0));
+      return sorted.map((card, idx) => {
+        const ci = ownedMap[card.id];
+        const owned = !!ci;
+        const qty = ci ? (ci.quantity || 1) : 0;
+        const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
+        const img = card.images && card.images.small ? card.images.small : '';
+        const origIdx = cards.indexOf(card);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
+          ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
+            <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
+          </div>
+          ${owned
+            ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}${price ? ' · $' + Number(price).toFixed(2) : ''}</span>`
+            : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
+          <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
+        </div>`;
+      }).join('');
+    }
+
+    function sortSetCards(sort) {
+      _setsDetailSort = sort;
+      const grid = document.getElementById('setsCardList');
+      if (!grid || !window._setsDetailCards) return;
+      grid.innerHTML = _buildSetCardRows(window._setsDetailCards, _setsDetailOwnedMap, sort);
+      // Update active pill
+      document.querySelectorAll('.sets-sort-pill').forEach(p => {
+        p.style.borderColor = p.dataset.sort === sort ? 'var(--accent)' : 'var(--border)';
+        p.style.color = p.dataset.sort === sort ? 'var(--accent)' : 'var(--muted)';
+      });
+    }
 
     // Sets page helpers
     var _setsOwnedBySet = {};
@@ -14962,31 +15011,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           });
         }
 
-        // Store cards for detail modal
+        // Store for sort re-renders
         window._setsDetailCards = cards;
-        let ownedCount = 0;
-        const cardRows = cards.map((card, idx) => {
-          const ci = ownedMap[card.id];
-          const owned = !!ci;
-          if (owned) ownedCount++;
-          const qty = ci ? (ci.quantity || 1) : 0;
-          const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
-          const img = card.images && card.images.small ? card.images.small : '';
-          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${idx})">
-            ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
-              <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
-            </div>
-            ${owned
-              ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}${price ? ' · $' + Number(price).toFixed(2) : ''}</span>`
-              : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
-            <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
-          </div>`;
-        }).join('');
+        _setsDetailOwnedMap = ownedMap;
+        _setsDetailSort = 'number';
 
+        const ownedCount = cards.filter(c => ownedMap[c.id]).length;
         const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
         const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+
+        const sortPillStyle = (s) => `class="sets-sort-pill" data-sort="${s}" onclick="sortSetCards('${s}')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort===s?'var(--accent)':'var(--border)'};color:${_setsDetailSort===s?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap"`;
 
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
@@ -15000,8 +15034,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
             <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
           </div>
-          <div style="background:var(--surface);border:1px solid var(--border)">
-            ${cardRows || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
+            <button ${sortPillStyle('number')}>#  NUMBER</button>
+            <button ${sortPillStyle('rarity-asc')}>▲ RARITY</button>
+            <button ${sortPillStyle('rarity-desc')}>▼ RARITY</button>
+            <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
+          </div>
+          <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border)">
+            ${_buildSetCardRows(cards, ownedMap, 'number') || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
           </div>
         </div>`;
       } catch(e) {
