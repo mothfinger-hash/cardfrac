@@ -16731,11 +16731,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             : m._ocr
               ? `<span style="background:var(--teal);color:#000;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">OCR</span>`
               : `<span style="color:var(--muted);font-size:.55rem;margin-left:6px">${pct}%</span>`;
+          const jpBadge = m.id && m.id.startsWith('jp-')
+            ? `<span style="font-size:.85em;margin-left:4px" title="Japanese card">🇯🇵</span>` : '';
           return `
             <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
               <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
               <div class="scan-match-info">
-                <div class="scan-match-name">${m.name || 'Unknown Card'}${sourceBadge}</div>
+                <div class="scan-match-name">${m.name || 'Unknown Card'}${jpBadge}${sourceBadge}</div>
                 ${setInfo ? `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:2px">${setInfo}</div>` : ''}
                 ${!m._ocr && !m._exact ? `<div class="scan-match-sim">${bar}</div>` : ''}
               </div>
@@ -16756,6 +16758,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('scannerModal').style.display = 'none';
 
       // Build a pendingCollectionCard compatible object and open the modal
+      // JP catalog cards have a 'jp-' id prefix — auto-tag them as JA
+      const isJpCard = card.id && card.id.startsWith('jp-');
+      if (isJpCard) window._pendingJpCard = true;
+
       pendingCollectionCard = {
         apiCardId:    card.id,
         cardName:     card.name,
@@ -16763,7 +16769,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         setCode:      card.set_code  || '',
         cardNumber:   card.card_number || '',
         cardImageUrl: card.image_url || '',
-        gameType:     'pokemon'
+        gameType:     'pokemon',
+        language:     isJpCard ? 'JA' : 'EN',
       };
 
       const nameEl = document.getElementById('atcCardName');
