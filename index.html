@@ -15753,6 +15753,24 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     /* Multi-scan modal header / progress bar hologram tint */
     #multiScanModal [style*="border-bottom"] { border-bottom-color: rgba(0,229,255,.2) !important; }
     #multiScanModal [style*="border-top"]    { border-top-color:    rgba(0,229,255,.2) !important; }
+
+    /* ── Mobile: uniform top-anchored position for all phondex nav popups ── */
+    @media(max-width:900px){
+      #acMobSearchModal,
+      #addToCollectionModal,
+      #multiScanModal { align-items:flex-start; padding-top:12svh; }
+      #acMobSearchModal .modal,
+      #addToCollectionModal .modal,
+      #multiScanModal .modal { max-height:76svh; overflow-y:auto; }
+      /* Scanner: convert from bottom-sheet → same top-anchored position */
+      #scannerModal { align-items:flex-start !important; padding-top:12svh; }
+      #scannerModal>div:last-child {
+        width:min(480px,92vw) !important;
+        border-radius:4px !important;
+        max-height:76svh !important;
+        margin:0 auto;
+      }
+    }
   </style>
 
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
