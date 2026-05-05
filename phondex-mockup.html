@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PathBinder Mobile – Add Card</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'Courier New',Courier,monospace}
+
+/* ── Device wrapper ── */
+.device{position:relative;width:min(480px,100vw);flex-shrink:0}
+.device-img{width:100%;display:block;user-select:none;pointer-events:none}
+
+/* ── Screen overlay
+   phondex 1920×3712
+   Original bounds: left=5.73% top=11.06% width=90.10% height=85.40%
+   After -15px fix: top=11.87% height=84.00%
+   After -10px more: top=12.41% height=82.92%
+   Horizontal inset: left=6.5% width=88.6% (neg space)
+─── */
+.screen{
+  position:absolute;
+  left:6.5%; top:12.41%;
+  width:88.6%; height:82.92%;
+  overflow:hidden;
+  display:flex;flex-direction:column;
+  border-radius:8px 8px 10px 10px;  /* match phone screen corners */
+}
+
+/* CRT transform container */
+.crt-wrap{
+  width:100%;height:100%;
+  display:flex;flex-direction:column;
+  transform-origin:center center;
+  transform:scaleY(0.001);
+  filter:brightness(10) blur(4px) saturate(0);
+  will-change:transform,filter;
+}
+.crt-wrap.powered{
+  animation:crt-on .9s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes crt-on{
+  0%  {transform:scaleY(0.001);filter:brightness(14) blur(5px) saturate(0)}
+  5%  {transform:scaleY(0.004);filter:brightness(16) blur(3px) saturate(0)}
+  16% {transform:scaleY(0.03); filter:brightness(8)  blur(1px) saturate(.15)}
+  38% {transform:scaleY(.38);  filter:brightness(3.5)blur(0)   saturate(.5)}
+  60% {transform:scaleY(1.05); filter:brightness(1.5)          saturate(1)}
+  75% {transform:scaleY(.97);  filter:brightness(1.08)}
+  88% {transform:scaleY(1.01)}
+  100%{transform:scaleY(1);    filter:brightness(1) saturate(1)}
+}
+
+/* Scanlines */
+.scanlines{
+  position:absolute;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.05) 3px,rgba(0,0,0,.05) 4px);
+}
+
+/* ── TOP NAV BAR ── */
+.nav{
+  display:flex;flex-shrink:0;
+  background:rgba(7,9,14,.96);
+  border-bottom:1px solid rgba(0,229,255,.10);
+}
+.nav-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:.6em 0 .4em;gap:.2em;
+  cursor:pointer;position:relative;
+  transition:background .2s;
+}
+.nav-item:hover{background:rgba(0,229,255,.05)}
+.nav-item.active{background:rgba(0,229,255,.07)}
+.nav-item.active::after{
+  content:'';position:absolute;bottom:0;left:22%;right:22%;height:2px;
+  background:#00E5FF;box-shadow:0 0 8px #00E5FF;
+}
+.nav-icon{font-size:1.1em;color:rgba(0,229,255,.32);transition:all .2s}
+.nav-item.active .nav-icon{color:#00E5FF;text-shadow:0 0 10px rgba(0,229,255,.8)}
+.nav-label{font-size:.52em;letter-spacing:.11em;color:rgba(0,229,255,.28);font-weight:bold;text-transform:uppercase;transition:color .2s}
+.nav-item.active .nav-label{color:#00E5FF}
+
+/* ── CARD GRID 2×2 ──
+   Rounded corners matching phone UI; tab-notch via ::after diagonal
+─── */
+.card-grid{
+  flex:1;overflow:hidden;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;
+  gap:.6%;
+  padding:.8% 1%;
+}
+.card{
+  position:relative;display:flex;flex-direction:column;
+  /* Rounded corners on 3 sides, sharp on top-right for notch */
+  border-radius:9px 0 9px 9px;
+  box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);
+  overflow:hidden;
+  cursor:pointer;transition:box-shadow .2s;min-height:0;
+}
+.card:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
+/* Tab-notch diagonal line in top-right corner */
+.card::after{
+  content:'';
+  position:absolute;top:0;right:0;
+  width:14px;height:14px;
+  background:linear-gradient(
+    135deg,
+    transparent 48%,
+    rgba(0,229,255,.22) 48%,
+    rgba(0,229,255,.22) 52%,
+    transparent 52%
+  );
+  pointer-events:none;z-index:5;
+}
+.card-art{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;min-height:0;
+}
+.card-glow{
+  position:absolute;inset:0;
+}
+.card-glow::after{
+  content:'';position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  width:55%;padding-top:55%;border-radius:50%;
+  background:var(--glow,radial-gradient(circle,rgba(60,90,200,.3) 0%,transparent 70%));
+}
+.card-grade{
+  position:absolute;top:7px;left:7px;
+  padding:2px 7px;font-size:.56em;font-weight:bold;letter-spacing:.05em;
+  color:#fff;border-radius:3px;
+}
+.card-info{
+  padding:4% 5% 1.5%;flex-shrink:0;
+  display:flex;flex-direction:column;gap:.12em;
+}
+.card-name{font-size:.63em;color:rgba(215,228,240,.9);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-row{display:flex;justify-content:space-between;align-items:baseline}
+.card-set{font-size:.5em;color:rgba(65,85,105,.85)}
+.card-price{font-size:.7em;color:#00E5FF;font-weight:bold}
+.card-add{
+  text-align:center;padding:2.5% 0;flex-shrink:0;
+  border-top:1px solid rgba(0,229,255,.08);
+  font-size:.5em;letter-spacing:.1em;color:rgba(0,229,255,.42);
+  transition:color .2s,border-color .2s;
+}
+.card:hover .card-add{color:rgba(0,229,255,.82);border-color:rgba(0,229,255,.28)}
+
+/* ── SEARCH MODAL (bottom sheet) ── */
+.modal-backdrop{
+  position:absolute;inset:0;
+  background:linear-gradient(to bottom,rgba(5,8,14,0) 0%,rgba(5,8,14,.85) 20%);
+  opacity:0;pointer-events:none;
+  transition:opacity .3s ease;
+  z-index:20;
+  display:flex;flex-direction:column;justify-content:flex-end;
+}
+.modal-backdrop.open{opacity:1;pointer-events:all}
+.modal-sheet{
+  border-top:1px solid rgba(0,229,255,.22);
+  border-left:1px solid rgba(0,229,255,.07);
+  border-right:1px solid rgba(0,229,255,.07);
+  border-radius:10px 10px 0 0;
+  padding:0 5% 4%;
+  transform:translateY(100%);
+  transition:transform .38s cubic-bezier(.4,0,.2,1);
+  max-height:78%;overflow-y:auto;
+}
+.modal-backdrop.open .modal-sheet{transform:translateY(0)}
+
+.drag-handle{width:28%;height:3px;background:rgba(0,229,255,.18);border-radius:2px;margin:.85em auto .55em}
+.modal-title{text-align:center;font-size:.9em;letter-spacing:.2em;color:#00E5FF;padding:.15em 0 .45em;border-bottom:1px solid rgba(0,229,255,.1);margin-bottom:.65em}
+
+.form-label{font-size:.5em;letter-spacing:.12em;color:rgba(0,229,255,.55);margin-bottom:.28em;display:block}
+.form-input{
+  width:100%;background:rgba(255,255,255,.03);
+  border:none;border-bottom:1px solid rgba(0,229,255,.18);
+  color:rgba(225,238,252,.88);font-family:inherit;font-size:.66em;
+  padding:.45em .5em;outline:none;margin-bottom:.75em;letter-spacing:.03em;
+}
+.form-input:focus{border-bottom-color:rgba(0,229,255,.65);background:rgba(255,255,255,.05)}
+.form-input::placeholder{color:rgba(65,85,105,.62)}
+
+.chip-row{display:flex;flex-wrap:wrap;gap:.28em;margin-bottom:.72em}
+.chip{
+  padding:.22em .7em;font-size:.52em;letter-spacing:.07em;
+  border:1px solid rgba(0,229,255,.18);border-radius:20px;
+  color:rgba(65,85,105,.85);cursor:pointer;transition:all .18s;white-space:nowrap;
+}
+.chip:hover,.chip.active{border-color:#00E5FF;color:#00E5FF;background:rgba(0,229,255,.09)}
+
+.co-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:.25em;margin-bottom:.5em}
+.co-tab{
+  text-align:center;padding:.32em 0;font-size:.56em;letter-spacing:.09em;
+  border-bottom:2px solid transparent;color:rgba(65,85,105,.65);cursor:pointer;transition:all .18s;
+}
+.co-tab.active{border-bottom-color:#00E5FF;color:#00E5FF}
+
+.btn-add{
+  display:block;width:100%;padding:.65em;margin-top:.85em;margin-bottom:.38em;
+  background:#00E5FF;color:#060810;font-family:inherit;font-weight:bold;
+  font-size:.74em;letter-spacing:.13em;border:none;cursor:pointer;
+  border-radius:4px;transition:filter .2s;
+}
+.btn-add:hover{filter:brightness(1.1)}
+.btn-ghost{
+  display:block;width:100%;padding:.45em;text-align:center;
+  background:transparent;border:1px solid rgba(0,229,255,.13);border-radius:4px;
+  color:rgba(65,85,105,.72);font-family:inherit;font-size:.57em;letter-spacing:.1em;cursor:pointer;transition:all .18s;
+}
+.btn-ghost:hover{border-color:rgba(0,229,255,.3);color:rgba(100,130,160,.9)}
+
+/* ── POWER LED
+   Pokeball center: x≈260 y≈340 in 1920×3712
+   + "right and up a couple px" from (13.5%, 9.57%)
+   → left=14.0%, top=8.9%
+─── */
+.power-led{
+  position:absolute;
+  left:14.0%; top:8.9%;
+  width:2.5%; padding-top:2.5%;
+  border-radius:50%;
+  animation:led-blink 1.35s ease-in-out infinite;
+  z-index:60;pointer-events:none;
+}
+@keyframes led-blink{
+  0%,40% {background:rgba(255,60,15,.92);box-shadow:0 0 10px 3px rgba(255,60,15,.65),0 0 4px rgba(255,80,15,1)}
+  52%,100%{background:rgba(55,8,2,.28); box-shadow:0 0 2px rgba(255,60,15,.06)}
+}
+</style>
+</head>
+<body>
+<div class="device">
+  <img class="device-img" src="phondex.png" alt="PathBinder device">
+  <div class="power-led"></div>
+
+  <div class="screen">
+    <div class="scanlines"></div>
+    <div class="crt-wrap" id="crtWrap">
+
+      <!-- TOP NAV -->
+      <nav class="nav">
+        <div class="nav-item active" id="navSearch" onclick="toggleSearch()">
+          <span class="nav-icon">◎</span>
+          <span class="nav-label">Search</span>
+        </div>
+        <div class="nav-item" onclick="navClick(this)">
+          <span class="nav-icon">▣</span>
+          <span class="nav-label">Scan</span>
+        </div>
+        <div class="nav-item" onclick="navClick(this)">
+          <span class="nav-icon">⊞</span>
+          <span class="nav-label">Binder</span>
+        </div>
+        <div class="nav-item" onclick="navClick(this)">
+          <span class="nav-icon">◉</span>
+          <span class="nav-label">Account</span>
+        </div>
+      </nav>
+
+      <!-- 2×2 CARD GRID -->
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-art">
+            <div class="card-glow" style="--glow:radial-gradient(circle,rgba(55,90,200,.32) 0%,transparent 70%)"></div>
+            <div class="card-grade" style="background:rgba(28,88,196,.88)">PSA 9</div>
+          </div>
+          <div class="card-info">
+            <div class="card-name">Charizard Holo</div>
+            <div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$480</span></div>
+          </div>
+          <div class="card-add">+ ADD TO BINDER</div>
+        </div>
+
+        <div class="card">
+          <div class="card-art">
+            <div class="card-glow" style="--glow:radial-gradient(circle,rgba(100,80,18,.32) 0%,transparent 70%)"></div>
+            <div class="card-grade" style="background:rgba(45,55,68,.88)">Raw NM</div>
+          </div>
+          <div class="card-info">
+            <div class="card-name">Pikachu Base</div>
+            <div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$24</span></div>
+          </div>
+          <div class="card-add">+ ADD TO BINDER</div>
+        </div>
+
+        <div class="card">
+          <div class="card-art">
+            <div class="card-glow" style="--glow:radial-gradient(circle,rgba(18,65,175,.32) 0%,transparent 70%)"></div>
+            <div class="card-grade" style="background:rgba(28,88,196,.88)">PSA 10</div>
+          </div>
+          <div class="card-info">
+            <div class="card-name">Blastoise Holo</div>
+            <div class="card-row"><span class="card-set">Fossil</span><span class="card-price">$2,100</span></div>
+          </div>
+          <div class="card-add">+ ADD TO BINDER</div>
+        </div>
+
+        <div class="card">
+          <div class="card-art">
+            <div class="card-glow" style="--glow:radial-gradient(circle,rgba(18,115,45,.32) 0%,transparent 70%)"></div>
+            <div class="card-grade" style="background:rgba(195,52,28,.88)">BGS 9.5</div>
+          </div>
+          <div class="card-info">
+            <div class="card-name">Venusaur Holo</div>
+            <div class="card-row"><span class="card-set">Jungle</span><span class="card-price">$340</span></div>
+          </div>
+          <div class="card-add">+ ADD TO BINDER</div>
+        </div>
+      </div>
+
+      <!-- SEARCH BOTTOM SHEET -->
+      <div class="modal-backdrop" id="modalBackdrop" onclick="backdropClose(event)">
+        <div class="modal-sheet" onclick="event.stopPropagation()">
+          <div class="drag-handle"></div>
+          <div class="modal-title">ADD CARD</div>
+
+          <label class="form-label">SEARCH</label>
+          <input class="form-input" type="text" placeholder="Charizard, Pikachu...">
+
+          <label class="form-label">SET</label>
+          <div class="chip-row">
+            <span class="chip active" onclick="chipToggle(this)">Base Set</span>
+            <span class="chip" onclick="chipToggle(this)">Fossil</span>
+            <span class="chip" onclick="chipToggle(this)">Jungle</span>
+            <span class="chip" onclick="chipToggle(this)">Team Rocket</span>
+          </div>
+
+          <label class="form-label">GRADE</label>
+          <div class="chip-row">
+            <span class="chip" onclick="chipToggle(this)">Raw</span>
+            <span class="chip active" onclick="chipToggle(this)">PSA</span>
+            <span class="chip" onclick="chipToggle(this)">BGS</span>
+            <span class="chip" onclick="chipToggle(this)">CGC</span>
+            <span class="chip" onclick="chipToggle(this)">SGC</span>
+          </div>
+
+          <label class="form-label">PASTE CERT #</label>
+          <div class="co-tabs">
+            <span class="co-tab active">PSA</span>
+            <span class="co-tab" onclick="coTabClick(this)">BGS</span>
+            <span class="co-tab" onclick="coTabClick(this)">CGC</span>
+            <span class="co-tab" onclick="coTabClick(this)">SGC</span>
+          </div>
+          <input class="form-input" type="text" placeholder="e.g. 12345678">
+
+          <label class="form-label">CONDITION</label>
+          <input class="form-input" type="text" placeholder="Near Mint  ▾">
+
+          <button class="btn-add">ADD TO MY BINDER</button>
+          <button class="btn-ghost">+ ADD AS GHOST CARD</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+window.addEventListener('load', () => {
+  setTimeout(() => { document.getElementById('crtWrap').classList.add('powered'); }, 320);
+});
+
+let searchOpen = false;
+
+function crtFlash(cb) {
+  const w = document.getElementById('crtWrap');
+  w.classList.remove('powered');
+  w.style.cssText = 'transform:scaleY(0.001);filter:brightness(14) blur(4px) saturate(0)';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    w.style.cssText = '';
+    void w.offsetWidth;
+    w.classList.add('powered');
+    if (cb) setTimeout(cb, 580);
+  }));
+}
+
+function toggleSearch() {
+  if (!searchOpen) {
+    crtFlash(() => {
+      searchOpen = true;
+      document.getElementById('modalBackdrop').classList.add('open');
+    });
+  } else {
+    searchOpen = false;
+    document.getElementById('modalBackdrop').classList.remove('open');
+  }
+}
+
+function navClick(el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  searchOpen = false;
+  document.getElementById('modalBackdrop').classList.remove('open');
+}
+
+function backdropClose(e) {
+  if (e.target === document.getElementById('modalBackdrop')) {
+    searchOpen = false;
+    document.getElementById('modalBackdrop').classList.remove('open');
+  }
+}
+
+function chipToggle(el) { el.classList.toggle('active'); }
+
+function coTabClick(el) {
+  el.closest('.co-tabs').querySelectorAll('.co-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>

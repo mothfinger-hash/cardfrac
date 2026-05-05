@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PathBinder Desktop – Add Card</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'Courier New',Courier,monospace;padding:12px}
+
+/* ── Device wrapper ── */
+.device{position:relative;width:min(1200px,100vw);flex-shrink:0}
+.device-img{width:100%;display:block;user-select:none;pointer-events:none}
+
+/* ── Screen overlays
+   pdex.png 6656×3712
+   Left screen original: left=3.01% top=21.02% width=15.93% height=60.35%
+   Right screen original: left=21.34% top=10.78% width=64.60% height=70.57%
+
+   Adjustments: +0.5% inset from all edges (negative space)
+   + -15px center fix already applied, -10px more:
+     -25px total at 669px display ht = 3.73% → 1.87% top / 1.87% bottom reduction
+─── */
+.left-screen{
+  position:absolute;
+  left:3.6%; top:22.8%;
+  width:14.8%; height:57.5%;
+  overflow:hidden;
+  border-radius:4px;
+}
+.right-screen{
+  position:absolute;
+  left:22.1%; top:12.5%;
+  width:63.0%; height:67.5%;
+  overflow:hidden;
+  border-radius:4px;
+}
+
+/* CRT animation */
+.crt-wrap{
+  width:100%;height:100%;
+  transform-origin:center center;
+  transform:scaleY(0.001);
+  filter:brightness(12) blur(4px) saturate(0);
+  will-change:transform,filter;
+  display:flex;flex-direction:column;
+}
+.crt-wrap.powered{
+  animation:crt-on .88s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes crt-on{
+  0%  {transform:scaleY(0.001);filter:brightness(14) blur(5px) saturate(0)}
+  5%  {transform:scaleY(0.004);filter:brightness(16) blur(3px) saturate(0)}
+  16% {transform:scaleY(0.03); filter:brightness(8)  blur(1px) saturate(.12)}
+  38% {transform:scaleY(.4);   filter:brightness(3.5)blur(0)   saturate(.5)}
+  60% {transform:scaleY(1.05); filter:brightness(1.5)          saturate(1)}
+  76% {transform:scaleY(.97);  filter:brightness(1.07)}
+  88% {transform:scaleY(1.01)}
+  100%{transform:scaleY(1);    filter:brightness(1) saturate(1)}
+}
+
+/* Scanlines overlay */
+.scanlines{
+  position:absolute;inset:0;pointer-events:none;z-index:40;
+  background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 4px);
+}
+
+/* ══════════════════════════════
+   LEFT PANEL
+   Readable text: bigger sizes, high contrast
+══════════════════════════════ */
+.left-panel{
+  width:100%;height:100%;
+  display:flex;flex-direction:column;
+  padding:7% 9%;
+  gap:.4em;
+}
+.left-panel::before{
+  content:'';display:block;
+  height:2px;background:#00E5FF;
+  box-shadow:0 0 8px rgba(0,229,255,.45);
+  margin-bottom:.3em;flex-shrink:0;
+}
+.panel-title{
+  font-size:.82em;letter-spacing:.18em;color:#00E5FF;
+  text-align:center;padding:.2em 0;flex-shrink:0;
+  border-bottom:1px solid rgba(0,229,255,.14);margin-bottom:.25em;
+  text-shadow:0 0 12px rgba(0,229,255,.4);
+}
+.field-label{
+  font-size:.52em;letter-spacing:.1em;
+  color:rgba(0,229,255,.65);
+  margin-bottom:.15em;display:block;flex-shrink:0;
+}
+.field-input{
+  width:100%;
+  background:rgba(255,255,255,.04);
+  border:none;border-bottom:1px solid rgba(0,229,255,.22);
+  color:rgba(228,240,255,.92);font-family:inherit;font-size:.58em;
+  padding:.42em .4em;outline:none;letter-spacing:.03em;
+  flex-shrink:0;margin-bottom:.4em;
+}
+.field-input:focus{
+  border-bottom-color:rgba(0,229,255,.65);
+  background:rgba(0,229,255,.04);
+}
+.field-input::placeholder{color:rgba(65,85,105,.55)}
+
+.chip-row{display:flex;flex-wrap:wrap;gap:.2em;margin-bottom:.38em;flex-shrink:0}
+.chip{
+  padding:.18em .45em;font-size:.44em;letter-spacing:.06em;
+  border:1px solid rgba(0,229,255,.2);border-radius:20px;
+  color:rgba(80,105,130,.9);cursor:pointer;transition:all .18s;white-space:nowrap;
+}
+.chip:hover,.chip.active{border-color:#00E5FF;color:#00E5FF;background:rgba(0,229,255,.08)}
+
+.co-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:.12em;margin-bottom:.3em;flex-shrink:0}
+.co-tab{
+  text-align:center;padding:.28em 0;font-size:.47em;letter-spacing:.07em;
+  border-bottom:2px solid transparent;color:rgba(65,85,105,.6);cursor:pointer;transition:all .18s;
+}
+.co-tab.active{border-bottom-color:#00E5FF;color:#00E5FF}
+
+.spacer{flex:1;min-height:.3em}
+
+.btn-add{
+  display:block;width:100%;padding:.55em;
+  background:#00E5FF;color:#060810;font-family:inherit;font-weight:bold;
+  font-size:.6em;letter-spacing:.12em;border:none;cursor:pointer;
+  border-radius:3px;transition:filter .2s;flex-shrink:0;margin-bottom:.22em;
+}
+.btn-add:hover{filter:brightness(1.1)}
+.btn-ghost{
+  display:block;width:100%;padding:.36em;text-align:center;
+  background:transparent;border:1px solid rgba(0,229,255,.12);border-radius:3px;
+  color:rgba(65,85,105,.68);font-family:inherit;font-size:.42em;letter-spacing:.08em;
+  cursor:pointer;transition:all .18s;flex-shrink:0;
+}
+.btn-ghost:hover{border-color:rgba(0,229,255,.3);color:rgba(100,130,160,.9)}
+
+/* ══════════════════════════════
+   RIGHT PANEL – Card grid
+   No fills; outlines only; rounded+notch cards
+══════════════════════════════ */
+.right-panel{width:100%;height:100%;display:flex;flex-direction:column}
+
+.rp-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:.55% 1.1% .45%;flex-shrink:0;
+  border-bottom:1px solid rgba(0,229,255,.09);
+}
+.rp-title{font-size:.8em;letter-spacing:.16em;color:#00E5FF;text-shadow:0 0 10px rgba(0,229,255,.35)}
+.rp-count{font-size:.45em;letter-spacing:.08em;color:rgba(65,85,105,.75)}
+
+.rp-sort{
+  display:flex;gap:1.4em;
+  padding:.3% 1.1%;flex-shrink:0;
+  border-bottom:1px solid rgba(0,229,255,.06);
+}
+.sort-item{font-size:.42em;letter-spacing:.09em;color:rgba(65,85,105,.65);cursor:pointer;transition:color .18s}
+.sort-item.active{color:#00E5FF}
+.sort-item:hover{color:rgba(0,229,255,.7)}
+
+.card-grid{
+  flex:1;overflow:hidden;
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  grid-template-rows:1fr 1fr;
+  gap:.5%;
+  padding:.8% 1%;
+}
+/* Rounded + tab-notch cards */
+.card{
+  display:flex;flex-direction:column;
+  border-radius:6px 0 6px 6px;
+  box-shadow:inset 0 0 0 1px rgba(0,229,255,.15);
+  overflow:hidden;
+  cursor:pointer;transition:box-shadow .2s;min-height:0;
+  position:relative;
+}
+.card:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.45)}
+.card::after{
+  content:'';
+  position:absolute;top:0;right:0;
+  width:11px;height:11px;
+  background:linear-gradient(
+    135deg,
+    transparent 48%,
+    rgba(0,229,255,.2) 48%,
+    rgba(0,229,255,.2) 52%,
+    transparent 52%
+  );
+  pointer-events:none;z-index:5;
+}
+.card-art{
+  flex:1;position:relative;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;min-height:0;
+}
+.card-glow{position:absolute;inset:0}
+.card-glow::after{
+  content:'';position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  width:52%;padding-top:52%;border-radius:50%;
+  background:var(--glow);
+}
+.card-grade{
+  position:absolute;top:5px;left:5px;
+  padding:2px 5px;font-size:.48em;font-weight:bold;letter-spacing:.04em;
+  color:#fff;border-radius:2px;
+}
+.card-info{padding:5% 6% 2%;flex-shrink:0}
+.card-name{font-size:.52em;color:rgba(215,228,240,.9);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:.18em}
+.card-row{display:flex;justify-content:space-between;align-items:baseline}
+.card-set{font-size:.42em;color:rgba(65,85,105,.78)}
+.card-price{font-size:.6em;color:#00E5FF;font-weight:bold}
+.card-add{
+  text-align:center;padding:4% 0;flex-shrink:0;
+  border-top:1px solid rgba(0,229,255,.07);
+  font-size:.42em;letter-spacing:.1em;color:rgba(0,229,255,.38);
+  transition:color .2s,border-color .2s;
+}
+.card:hover .card-add{color:rgba(0,229,255,.75);border-color:rgba(0,229,255,.25)}
+
+/* ── POWER LED
+   Bright cluster x≈6032 (90.5%) at y≈560 (15.1%)
+   User said shift left a couple px → 90.3%
+─── */
+.power-led{
+  position:absolute;
+  left:90.3%; top:14.7%;
+  width:1.3%; padding-top:1.3%;
+  border-radius:50%;
+  animation:led-blink 1.35s ease-in-out infinite;
+  z-index:60;pointer-events:none;
+}
+@keyframes led-blink{
+  0%,40% {background:rgba(255,55,15,.9);box-shadow:0 0 8px 2px rgba(255,55,15,.6),0 0 3px rgba(255,80,20,1)}
+  52%,100%{background:rgba(50,8,2,.28);box-shadow:0 0 2px rgba(255,55,15,.06)}
+}
+</style>
+</head>
+<body>
+<div class="device">
+  <img class="device-img" src="pdex.png" alt="PathBinder device">
+  <div class="power-led"></div>
+  <div class="scanlines"></div>
+
+  <!-- LEFT SCREEN -->
+  <div class="left-screen">
+    <div class="crt-wrap" id="crtLeft">
+      <div class="left-panel">
+        <div class="panel-title">ADD CARD</div>
+
+        <label class="field-label">SEARCH</label>
+        <input class="field-input" type="text" placeholder="Charizard...">
+
+        <label class="field-label">SET</label>
+        <div class="chip-row">
+          <span class="chip active" onclick="chipToggle(this)">Base Set</span>
+          <span class="chip" onclick="chipToggle(this)">Fossil</span>
+          <span class="chip" onclick="chipToggle(this)">Jungle</span>
+        </div>
+
+        <label class="field-label">GRADE</label>
+        <div class="chip-row">
+          <span class="chip" onclick="chipToggle(this)">Raw</span>
+          <span class="chip active" onclick="chipToggle(this)">PSA</span>
+          <span class="chip" onclick="chipToggle(this)">BGS</span>
+          <span class="chip" onclick="chipToggle(this)">CGC</span>
+        </div>
+
+        <label class="field-label">CERT #</label>
+        <div class="co-tabs">
+          <span class="co-tab active">PSA</span>
+          <span class="co-tab" onclick="coTabClick(this)">BGS</span>
+          <span class="co-tab" onclick="coTabClick(this)">CGC</span>
+          <span class="co-tab" onclick="coTabClick(this)">SGC</span>
+        </div>
+        <input class="field-input" type="text" placeholder="12345678">
+
+        <label class="field-label">CONDITION</label>
+        <input class="field-input" type="text" placeholder="Near Mint  ▾">
+
+        <label class="field-label">PAID $</label>
+        <input class="field-input" type="text" placeholder="0.00">
+
+        <div class="spacer"></div>
+        <button class="btn-add" onclick="searchTrigger()">ADD TO MY BINDER</button>
+        <button class="btn-ghost">+ ADD AS GHOST CARD</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT SCREEN -->
+  <div class="right-screen">
+    <div class="crt-wrap" id="crtRight">
+      <div class="right-panel">
+
+        <div class="rp-header">
+          <span class="rp-title">CARD SEARCH</span>
+          <span class="rp-count">1,247 results</span>
+        </div>
+
+        <div class="rp-sort">
+          <span class="sort-item active">NEWEST ▾</span>
+          <span class="sort-item" onclick="sortClick(this)">PRICE ▾</span>
+          <span class="sort-item" onclick="sortClick(this)">GRADE ▾</span>
+          <span class="sort-item" onclick="sortClick(this)">SET ▾</span>
+        </div>
+
+        <div class="card-grid">
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(55,90,200,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(28,88,196,.88)">PSA 9</div></div><div class="card-info"><div class="card-name">Charizard Holo</div><div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$480</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(100,80,18,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(45,55,68,.88)">Raw NM</div></div><div class="card-info"><div class="card-name">Pikachu Base</div><div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$24</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(18,65,175,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(28,88,196,.88)">PSA 10</div></div><div class="card-info"><div class="card-name">Blastoise Holo</div><div class="card-row"><span class="card-set">Fossil</span><span class="card-price">$2,100</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(18,115,45,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(195,52,28,.88)">BGS 9.5</div></div><div class="card-info"><div class="card-name">Venusaur Holo</div><div class="card-row"><span class="card-set">Jungle</span><span class="card-price">$340</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(115,18,145,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(175,142,0,.88)">CGC 10</div></div><div class="card-info"><div class="card-name">Mewtwo Holo</div><div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$980</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(90,80,12,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(28,88,196,.88)">PSA 8</div></div><div class="card-info"><div class="card-name">Zapdos Holo</div><div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$85</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(100,55,12,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(45,55,68,.88)">Raw EX</div></div><div class="card-info"><div class="card-name">Raichu Holo</div><div class="card-row"><span class="card-set">Jungle</span><span class="card-price">$14</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(80,18,120,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(195,52,28,.88)">BGS 8</div></div><div class="card-info"><div class="card-name">Alakazam Holo</div><div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$42</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(15,55,130,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(28,88,196,.88)">PSA 9</div></div><div class="card-info"><div class="card-name">Gyarados Holo</div><div class="card-row"><span class="card-set">Base Set</span><span class="card-price">$180</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+
+          <div class="card"><div class="card-art"><div class="card-glow" style="--glow:radial-gradient(circle,rgba(12,65,120,.3) 0%,transparent 68%)"></div><div class="card-grade" style="background:rgba(45,55,68,.88)">Raw NM</div></div><div class="card-info"><div class="card-name">Articuno Holo</div><div class="card-row"><span class="card-set">Fossil</span><span class="card-price">$18</span></div></div><div class="card-add">+ ADD TO BINDER</div></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('crtLeft').classList.add('powered');
+    document.getElementById('crtRight').classList.add('powered');
+  }, 280);
+});
+
+function crtFlash(id, cb) {
+  const el = document.getElementById(id);
+  el.classList.remove('powered');
+  el.style.cssText = 'transform:scaleY(0.001);filter:brightness(14) blur(5px) saturate(0)';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.style.cssText = '';
+    void el.offsetWidth;
+    el.classList.add('powered');
+    if (cb) setTimeout(cb, 650);
+  }));
+}
+
+function searchTrigger() {
+  crtFlash('crtRight');
+  crtFlash('crtLeft');
+}
+
+function sortClick(el) {
+  document.querySelectorAll('.sort-item').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function chipToggle(el) { el.classList.toggle('active'); }
+
+function coTabClick(el) {
+  el.closest('.co-tabs').querySelectorAll('.co-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
