@@ -880,9 +880,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-mc-add{text-align:center;padding:2.5% 0;flex-shrink:0;border-top:1px solid rgba(0,229,255,.08);font-size:.5em;letter-spacing:.1em;color:rgba(0,229,255,.42);transition:color .2s}
     .ac-mc:hover .ac-mc-add{color:rgba(0,229,255,.82)}
     /* ── mobile bottom sheet ── */
-    .ac-backdrop{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(5,8,14,0) 0%,rgba(5,8,14,.85) 20%);opacity:0;pointer-events:none;transition:opacity .3s;z-index:20;display:flex;flex-direction:column;justify-content:flex-end}
+    .ac-backdrop{position:absolute;top:9%;left:0;right:0;bottom:0;background:linear-gradient(to bottom,rgba(5,8,14,.88) 0%,rgba(5,8,14,.4) 70%,transparent 100%);opacity:0;pointer-events:none;transition:opacity .3s;z-index:20;display:flex;flex-direction:column;justify-content:flex-start}
     .ac-backdrop.open{opacity:1;pointer-events:all}
-    .ac-sheet{border-top:1px solid rgba(0,229,255,.22);border-left:1px solid rgba(0,229,255,.07);border-right:1px solid rgba(0,229,255,.07);border-radius:10px 10px 0 0;padding:0 5% 4%;transform:translateY(100%);transition:transform .38s cubic-bezier(.4,0,.2,1);max-height:78%;overflow-y:auto}
+    .ac-sheet{border-bottom:1px solid rgba(0,229,255,.22);border-left:1px solid rgba(0,229,255,.07);border-right:1px solid rgba(0,229,255,.07);border-radius:0 0 10px 10px;padding:3% 5% 4%;transform:translateY(-110%);transition:transform .38s cubic-bezier(.4,0,.2,1);max-height:85%;overflow-y:auto;background:rgba(4,12,20,.97);backdrop-filter:blur(4px)}
     .ac-backdrop.open .ac-sheet{transform:translateY(0)}
     .ac-drag{width:28%;height:3px;background:rgba(0,229,255,.18);border-radius:2px;margin:.85em auto .55em}
     .ac-sh-title{text-align:center;font-size:.9em;letter-spacing:.2em;color:#00E5FF;padding:.15em 0 .45em;border-bottom:1px solid rgba(0,229,255,.1);margin-bottom:.65em}
@@ -1648,6 +1648,111 @@ nav {
 .modal h3 { font-family: 'Space Mono', monospace; letter-spacing: 0.05em; color: var(--accent); }
 .modal-close { color: var(--muted); }
 .modal-close:hover { color: var(--accent); }
+
+/* ─── HOLOGRAPHIC ADD TO BINDER MODAL ────────────────────────────── */
+#addToCollectionModal {
+  background: rgba(0,4,10,.7) !important;
+  backdrop-filter: blur(2px);
+}
+#addToCollectionModal .modal {
+  background: rgba(3,12,20,.92) !important;
+  border: 1px solid rgba(0,229,255,.6) !important;
+  border-radius: 3px !important;
+  box-shadow:
+    0 0 0 1px rgba(0,229,255,.1),
+    0 0 22px rgba(0,229,255,.24),
+    0 0 70px rgba(0,229,255,.07),
+    0 50px 90px -15px rgba(0,229,255,.32),
+    inset 0 0 60px rgba(0,229,255,.03) !important;
+  transform-origin: center bottom !important;
+  animation: holo-project .7s cubic-bezier(.4,0,.2,1) forwards,
+             holo-flicker 10s ease-in-out 1.5s infinite !important;
+  position: relative;
+}
+/* scanline overlay */
+#addToCollectionModal .modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg,
+    transparent 0, transparent 3px,
+    rgba(0,229,255,.016) 3px, rgba(0,229,255,.016) 4px);
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+}
+/* projection beam below modal */
+#addToCollectionModal .modal::after {
+  content: '';
+  position: absolute;
+  bottom: -56px;
+  left: 15%;
+  width: 70%;
+  height: 56px;
+  background: linear-gradient(to bottom, rgba(0,229,255,.1) 0%, rgba(0,229,255,.03) 60%, transparent 100%);
+  clip-path: polygon(10% 0%, 90% 0%, 100% 100%, 0% 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+/* keep all modal content above scanlines */
+#addToCollectionModal .modal > * { position: relative; z-index: 1; }
+/* holographic projection entrance */
+@keyframes holo-project {
+  0%  { transform: scaleY(.005); filter: brightness(16) blur(5px) saturate(0); opacity: .25 }
+  7%  { transform: scaleY(.022); filter: brightness(10) blur(2px) saturate(.1) }
+  20% { transform: scaleY(.2);   filter: brightness(3.5) blur(0) saturate(.5) }
+  38% { transform: scaleY(1.05); filter: brightness(1.6) saturate(1) }
+  52% { transform: scaleY(.98);  filter: brightness(1.1) }
+  68% { transform: scaleY(1.01) }
+  100%{ transform: scaleY(1);    filter: brightness(1) saturate(1); opacity: 1 }
+}
+/* subtle periodic flicker */
+@keyframes holo-flicker {
+  0%,86%,100%{ opacity:1;   filter:brightness(1) }
+  87%         { opacity:.92; filter:brightness(1.07) }
+  88%         { opacity:1 }
+  89%         { opacity:.96; filter:brightness(.97) }
+  90%         { opacity:1 }
+}
+/* heading */
+#addToCollectionModal h3 {
+  color: #00E5FF !important;
+  text-shadow: 0 0 16px rgba(0,229,255,.55), 0 0 3px rgba(0,229,255,.9) !important;
+  letter-spacing: .07em !important;
+}
+#addToCollectionModal .modal-sub { color: rgba(0,229,255,.5) !important; }
+/* close button */
+#addToCollectionModal .modal-close { color: rgba(0,229,255,.4) !important; }
+#addToCollectionModal .modal-close:hover { color: #00E5FF !important; }
+/* inputs & selects */
+#addToCollectionModal input:not([type=file]):not([type=checkbox]),
+#addToCollectionModal select,
+#addToCollectionModal textarea {
+  background: rgba(0,229,255,.04) !important;
+  border-color: rgba(0,229,255,.2) !important;
+  color: rgba(210,240,255,.9) !important;
+}
+#addToCollectionModal input:focus,
+#addToCollectionModal select:focus,
+#addToCollectionModal textarea:focus {
+  border-color: rgba(0,229,255,.55) !important;
+  box-shadow: 0 0 0 1px rgba(0,229,255,.12), 0 0 10px rgba(0,229,255,.15) !important;
+  outline: none !important;
+}
+/* labels */
+#addToCollectionModal label:not(.atc-photo-label) { color: rgba(0,229,255,.6) !important; }
+/* save button */
+#addToCollectionModal button[onclick="saveToCollection()"] {
+  background: #00E5FF !important;
+  color: #03080f !important;
+  border: none !important;
+  box-shadow: 0 0 18px rgba(0,229,255,.4), 0 0 4px rgba(0,229,255,.8) !important;
+  letter-spacing: .06em !important;
+}
+#addToCollectionModal button[onclick="saveToCollection()"]:hover {
+  filter: brightness(1.12) !important;
+  box-shadow: 0 0 28px rgba(0,229,255,.6) !important;
+}
 
 .form-group input, .form-group select { border-radius: 0 !important; border-color: var(--border) !important; font-family: 'Space Mono', monospace !important; }
 .form-group input:focus, .form-group select:focus { border-color: var(--accent) !important; box-shadow: 3px 3px 0 var(--accent) !important; outline: none; }
@@ -3809,7 +3914,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <!-- bottom sheet -->
             <div class="ac-backdrop" id="acBackdrop" onclick="acBackdropClose(event)">
               <div class="ac-sheet" onclick="event.stopPropagation()">
-                <div class="ac-drag"></div>
                 <div class="ac-sh-title">ADD CARD</div>
 
                 <label class="ac-sf-label">SEARCH</label>
