@@ -1229,6 +1229,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .allcards-row:active{cursor:grabbing;opacity:.75}
     .allcards-row.dragging{opacity:.4;border-left-color:var(--accent)}
     .allcards-binder-tag{font-size:.58rem;padding:2px 6px;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;white-space:nowrap;border-radius:2px;flex-shrink:0}
+    .allcards-sort-btn{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.56rem;letter-spacing:.06em;padding:4px 9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;border-radius:2px;transition:all .12s;white-space:nowrap}
+    .allcards-sort-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .allcards-sort-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.07)}
     /* ── DASHBOARD CHART ── */
     .dash-chart-section{background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
     .dash-chart-row{display:grid;grid-template-columns:110px 1fr 72px;gap:8px;align-items:center;margin-bottom:8px}
@@ -3944,6 +3947,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           oninput="renderBinder()"
           style="width:100%;padding:9px 14px;background:transparent;border:none;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;box-sizing:border-box;outline:none"
           onfocus="this.style.background='var(--surface2)'" onblur="this.style.background='transparent'">
+      </div>
+      <!-- Sort bar — All Cards only. Never shown inside individual binders. -->
+      <div id="allCardsSortBar" style="display:none;border-top:1px solid var(--border);padding:6px 12px;display:none;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.08em;white-space:nowrap">SORT BY</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="allcards-sort-btn active" id="sortBtn-added"   onclick="setAllCardsSort('added')"  >Date Added</button>
+          <button class="allcards-sort-btn"         id="sortBtn-name"    onclick="setAllCardsSort('name')"   >Name A–Z</button>
+          <button class="allcards-sort-btn"         id="sortBtn-set"     onclick="setAllCardsSort('set')"    >Set</button>
+          <button class="allcards-sort-btn"         id="sortBtn-value"   onclick="setAllCardsSort('value')"  >Value ↓</button>
+          <button class="allcards-sort-btn"         id="sortBtn-lang"    onclick="setAllCardsSort('lang')"   >Language</button>
+        </div>
       </div>
     </div>
 
@@ -10672,6 +10686,54 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       renderBinder();
     }
 
+    // ===== ALL CARDS SORT =====
+    // Sort state only applies to the "All Cards" view — never bleeds into individual binders.
+    let allCardsSort = 'added'; // 'added' | 'name' | 'set' | 'value' | 'lang'
+
+    function setAllCardsSort(key) {
+      allCardsSort = key;
+      document.querySelectorAll('.allcards-sort-btn').forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById('sortBtn-' + key);
+      if (btn) btn.classList.add('active');
+      binderPage = 0;
+      renderBinder();
+    }
+
+    function applyAllCardsSort(items) {
+      const sorted = [...items]; // never mutate the source array
+      switch (allCardsSort) {
+        case 'name':
+          sorted.sort((a, b) => (a.card_name || '').localeCompare(b.card_name || ''));
+          break;
+        case 'set':
+          sorted.sort((a, b) => {
+            const s = (a.set_name || '').localeCompare(b.set_name || '');
+            return s !== 0 ? s : (a.card_name || '').localeCompare(b.card_name || '');
+          });
+          break;
+        case 'value':
+          sorted.sort((a, b) => {
+            const va = (a.current_value || a.purchase_price || 0) * (a.quantity || 1);
+            const vb = (b.current_value || b.purchase_price || 0) * (b.quantity || 1);
+            return vb - va; // high to low
+          });
+          break;
+        case 'lang':
+          sorted.sort((a, b) => {
+            const la = (a.language || 'EN').toUpperCase();
+            const lb = (b.language || 'EN').toUpperCase();
+            return la.localeCompare(lb) || (a.card_name || '').localeCompare(b.card_name || '');
+          });
+          break;
+        case 'added':
+        default:
+          // newest first — collectionItems is already in added order; reverse it
+          sorted.sort((a, b) => (b.id || 0) - (a.id || 0));
+          break;
+      }
+      return sorted;
+    }
+
     // ===== MULTI-BINDER SYSTEM =====
     let binders        = [];          // [{id, name, color, is_default}]
     let currentBinderId = null;       // null = "All Cards" / default view
@@ -11171,6 +11233,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const viewToggle = document.getElementById('binderViewToggle');
       if (viewToggle) viewToggle.style.display = isAllCards ? 'none' : '';
 
+      // Show/hide sort bar — All Cards ONLY, never inside individual binders
+      const sortBar = document.getElementById('allCardsSortBar');
+      if (sortBar) sortBar.style.display = isAllCards ? 'flex' : 'none';
+
       // Show/hide list search bar and vendor bulk import button
       const searchWrap = document.getElementById('binderListSearchWrap');
       if (searchWrap) searchWrap.style.display = effectiveView === 'list' ? 'block' : 'none';
@@ -11189,6 +11255,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (currentBinderId !== null) return String(c.binder_id) === String(currentBinderId);
         return true;
       });
+
+      // All Cards: apply sort (never applies inside individual binders)
+      if (isAllCards) {
+        activeItems = applyAllCardsSort(activeItems);
+      }
 
       // In list view, apply search filter
       if (effectiveView === 'list') {
