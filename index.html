@@ -3548,7 +3548,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div class="modal" style="width:min(420px,92vw);padding:28px 24px">
       <button class="modal-close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
       <div style="font-family:'Space Mono','Share Tech Mono',monospace">
-        <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(0,229,255,.65);margin-bottom:16px">⬡ CARD SEARCH</div>
+        <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(0,229,255,.65);margin-bottom:14px">⬡ CARD SEARCH</div>
+        <!-- Language toggle -->
+        <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid rgba(0,229,255,.22);border-radius:4px;overflow:hidden">
+          <button id="acLangEN" onclick="acSetSearchLang('EN')"
+            style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:rgba(0,229,255,.12);color:#00E5FF;border:none;cursor:pointer;transition:all .18s">
+            🇺🇸 ENGLISH
+          </button>
+          <button id="acLangJA" onclick="acSetSearchLang('JA')"
+            style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:transparent;color:rgba(0,229,255,.45);border:none;border-left:1px solid rgba(0,229,255,.22);cursor:pointer;transition:all .18s">
+            🇯🇵 JAPANESE
+          </button>
+        </div>
         <input
           id="acMobInput"
           type="text"
@@ -12349,7 +12360,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     /* ══ ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════════ */
-    let acMobSearchOpen = false;
+    let acMobSearchOpen  = false;
+    let acSearchLanguage = 'EN'; // 'EN' | 'JA'
+
+    function acSetSearchLang(lang) {
+      acSearchLanguage = lang;
+      const enBtn = document.getElementById('acLangEN');
+      const jaBtn = document.getElementById('acLangJA');
+      if (!enBtn || !jaBtn) return;
+      const activeStyle   = 'background:rgba(0,229,255,.12);color:#00E5FF;';
+      const inactiveStyle = 'background:transparent;color:rgba(0,229,255,.45);';
+      enBtn.style.cssText += lang === 'EN' ? activeStyle : inactiveStyle;
+      jaBtn.style.cssText += lang === 'JA' ? activeStyle : inactiveStyle;
+      const inp = document.getElementById('acMobInput');
+      if (inp) inp.placeholder = lang === 'JA' ? 'リザードン、ピカチュウ...' : 'Charizard, Pikachu...';
+    }
 
     /* Position the mobile LED in pixels after the image renders,
        so it's pixel-perfect on every real device regardless of svh quirks. */
@@ -12399,14 +12424,86 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function acMobSearch() {
-      const mob  = document.getElementById('acMobInput');
-      const desk = document.getElementById('cardSearchInput');
-      if (mob && desk) desk.value = mob.value.trim();
+      const mob   = document.getElementById('acMobInput');
+      const query = mob ? mob.value.trim() : '';
+      if (!query) return;
+
       acMobSearchOpen = false;
       closeModal('acMobSearchModal');
-      // CRT flash on the mobile screen before results load
       acCrtFlash('acCrtMob');
-      searchPokemonCards();
+
+      if (acSearchLanguage === 'JA') {
+        searchJapaneseCards(query);
+      } else {
+        // Sync to desktop search input and use existing English flow
+        const desk = document.getElementById('cardSearchInput');
+        if (desk) desk.value = query;
+        searchPokemonCards();
+      }
+    }
+
+    async function searchJapaneseCards(query) {
+      const grid = document.getElementById('acMobGrid');
+      if (!grid) return;
+      grid.innerHTML = '<div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING<br>JP DATABASE…</div></div>';
+
+      const SUPABASE_URL      = window._sbUrl       || (typeof supabaseUrl      !== 'undefined' ? supabaseUrl      : null);
+      const SUPABASE_ANON_KEY = window._sbAnon      || (typeof supabaseAnonKey  !== 'undefined' ? supabaseAnonKey  : null);
+
+      if (!SUPABASE_URL) {
+        grid.innerHTML = '<div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(255,80,80,.6);font-size:.5em">Config error</div></div>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/search-cards-jp`, {
+          method:  'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'apikey':        SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ query }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const cards = (data.cards ?? []).slice(0, 20);
+
+        if (!cards.length) {
+          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.55em;letter-spacing:.08em;text-align:center">NO JP CARDS FOUND</div></div>';
+          return;
+        }
+
+        grid.innerHTML = cards.map(card => {
+          const cd = JSON.stringify({
+            apiCardId:    card.id,
+            cardName:     card.name,
+            setName:      card.set?.name  || '',
+            setCode:      card.set?.id    || '',
+            cardNumber:   card.number     || '',
+            cardImageUrl: card.images?.small || card.images?.large || '',
+            gameType:     'pokemon',
+            language:     'JA',
+          }).replace(/"/g, '&quot;');
+
+          return `<div class="ac-mc" onclick='openAddToCollectionModal(JSON.parse(this.dataset.card))' data-card="${cd}">
+            ${card.images?.small
+              ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">`
+              : '<div class="ac-mc-ph"></div>'}
+            <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">🇯🇵</span></div>
+            <div class="ac-mc-sub">${card.set?.name || ''} ${card.number ? '#' + card.number : ''}</div>
+            <div class="ac-mc-add">+ ADD TO BINDER</div>
+          </div>`;
+        }).join('');
+
+        // Auto-set language in the Add to Collection modal when opened from JP search
+        window._pendingJpCard = true;
+
+      } catch (err) {
+        grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(255,80,80,.5);font-size:.5em;text-align:center">Search error — check edge function deployment</div></div>';
+        console.error('[searchJapaneseCards]', err);
+      }
     }
 
     function acMobToggleSearch() {
@@ -12629,7 +12726,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('atcCondition').value = 'raw';
       document.getElementById('atcGrade').value = '10';
       document.getElementById('atcQuantity').value = '1';
-      if (document.getElementById('atcLanguage')) document.getElementById('atcLanguage').value = 'EN';
+      // Auto-set language from card data or from active JP search session
+      const detectedLang = cardData.language || (window._pendingJpCard ? 'JA' : 'EN');
+      window._pendingJpCard = false;
+      if (document.getElementById('atcLanguage')) document.getElementById('atcLanguage').value = detectedLang;
       document.getElementById('atcPurchasePrice').value = '';
       document.getElementById('atcPurchaseDate').value = '';
       document.getElementById('atcCertNumber').value = '';
