@@ -776,13 +776,16 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #addCardPage.page{padding:12px 0;background:var(--bg);min-height:calc(100vh - 56px)}
     #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
     .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
-    .ac-mob-wrap{display:none;align-items:center;justify-content:center;width:100%;padding-top:0}
-    .ac-mob-wrap .ac-device{width:min(calc((100svh - 60px) * 1920 / 3712), calc(100vw - 8px));position:relative;aspect-ratio:1920/3712;flex-shrink:0}
+    .ac-mob-wrap{display:none;align-items:center;justify-content:center;width:100%}
+    /* Device width is calculated so the full frame fits within the viewport height.
+       DO NOT change this formula to fix scroll issues — only touch CSS inside .ac-phone-screen. */
+    .ac-mob-wrap .ac-device{width:min(calc((100svh - 56px) * 1920 / 3712), calc(100vw - 8px));position:relative;aspect-ratio:1920/3712;flex-shrink:0}
     .ac-mob-wrap .ac-device-img{width:100%;height:auto;display:block}
     @media(max-width:900px){
       .ac-pdex-wrap{display:none}
-      .ac-mob-wrap{display:flex;height:100svh;overflow:hidden}
+      /* Lock the page to viewport height so the body never scrolls on mobile */
       #addCardPage.page{min-height:unset!important;height:100svh!important;overflow:hidden!important;padding:0!important}
+      .ac-mob-wrap{display:flex;height:100svh;overflow:hidden}
     }
     /* device base */
     .ac-device{position:relative;font-family:'Courier New',Courier,monospace}
@@ -4027,13 +4030,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
 
             <!-- scrollable results grid -->
-            <div class="ac-mob-grid" id="acMobGrid">
-              <!-- placeholder until first search -->
-              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">SEARCH</div></div>
-              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">YOUR</div></div>
-              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">CARDS</div></div>
-              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">ABOVE</div></div>
-            </div>
+            <div class="ac-mob-grid" id="acMobGrid"></div>
 
           </div>
         </div>
@@ -12424,7 +12421,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       acMobSearchOpen = false;
       closeModal('acMobSearchModal');
-      acCrtFlash('acCrtMob');
 
       // Card database only supports English names — detect CJK and show a hint
       const hasAsian = /[　-鿿가-힯豈-﫿]/.test(query);
@@ -12460,7 +12456,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           return;
         }
 
-        grid.innerHTML = cards.map(card => {
+        const html = cards.map(card => {
           const cd = JSON.stringify({
             apiCardId:    card.id,
             cardName:     card.name,
@@ -12482,8 +12478,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>`;
         }).join('');
 
-        // Pre-set language to JA when Add to Binder modal opens
+        // CRT power-on, then populate — same pattern as English search
+        grid.innerHTML = '';
         window._pendingJpCard = true;
+        acCrtFlash('acCrtMob', () => {
+          grid.innerHTML = html;
+          grid.scrollTop = 0;
+        });
 
       } catch (err) {
         const msg = err?.message || String(err);
@@ -12536,7 +12537,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const mob = document.getElementById('acMobGrid');
       if (!mob || !cards || cards.length === 0) return;
       const display = cards.slice(0, 20);   // show up to 20, scrollable
-      mob.innerHTML = display.map(card => {
+      const html = display.map(card => {
         const cd = JSON.stringify({
           apiCardId:    card.id,
           cardName:     card.name,
@@ -12555,7 +12556,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="ac-mc-add">+ ADD TO BINDER</div>
         </div>`;
       }).join('');
-      mob.scrollTop = 0;   // scroll back to top on new results
+      // CRT power-on animation fires first, results populate when it peaks
+      mob.innerHTML = '';
+      acCrtFlash('acCrtMob', () => {
+        mob.innerHTML = html;
+        mob.scrollTop = 0;
+      });
     }
     /* ══ END ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════ */
 
