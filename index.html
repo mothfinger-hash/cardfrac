@@ -545,7 +545,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .mobile-nav-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .mobile-nav-btn.active{color:var(--accent)}
     .mobile-nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700}
-    @media(max-width:900px){.mobile-nav{display:flex}.page{padding-bottom:72px}}
+    @media(max-width:900px){.mobile-nav{display:flex}.page{padding-bottom:72px}#mobileUserChip{display:flex!important}}
 
     /* ── TOP NAV (mobile only, not sticky) ──────────────────────────────────── */
     .top-nav{display:none;flex-direction:column;background:var(--surface);border-bottom:2px solid var(--border);width:100%;box-sizing:border-box;z-index:100}
@@ -3714,6 +3714,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <div class="pb-page-hdr-main">
         <div class="pb-page-hdr-title">◈ Account</div>
       </div>
+      <!-- Mobile-only user chip — mirrors sidebar chip, opens same avatar dropdown -->
+      <div id="mobileUserChip" onclick="toggleTopNavDropdown(event)" style="display:none;align-items:center;gap:8px;cursor:pointer;padding:5px 10px;border:1px solid var(--border);position:relative;flex-shrink:0">
+        <div class="avatar-circle" id="mobileAvatar" style="width:28px;height:28px;font-size:.65rem">?</div>
+        <span id="mobileUsername" style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--text);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">User</span>
+        <span style="font-size:.55rem;color:var(--muted)">▾</span>
+      </div>
     </div>
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
@@ -4922,6 +4928,31 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             }
           }
           if (tnName) tnName.textContent = currentUser.username || currentUser.email?.split('@')[0] || 'User';
+        }
+      }
+      // Sync mobile account page chip
+      const mobChip   = document.getElementById('mobileUserChip');
+      const mobAvatar = document.getElementById('mobileAvatar');
+      const mobName   = document.getElementById('mobileUsername');
+      if (mobChip) {
+        if (currentUser) {
+          const displayName = currentUser.name || currentUser.user_metadata?.name || currentUser.email || 'User';
+          const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+          const savedPfp = localStorage.getItem('pathbinder_avatar_pfp_v1');
+          if (mobAvatar) {
+            if (savedPfp) {
+              mobAvatar.textContent = '';
+              mobAvatar.style.backgroundImage = 'url(' + savedPfp + ')';
+              mobAvatar.style.backgroundSize = 'auto 190%';
+              mobAvatar.style.backgroundPosition = 'center 4%';
+              mobAvatar.style.backgroundRepeat = 'no-repeat';
+              mobAvatar.style.imageRendering = 'pixelated';
+            } else {
+              mobAvatar.textContent = initials;
+              mobAvatar.style.backgroundImage = '';
+            }
+          }
+          if (mobName) mobName.textContent = currentUser.username || currentUser.email?.split('@')[0] || 'User';
         }
       }
     }
