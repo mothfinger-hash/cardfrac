@@ -855,8 +855,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-ni.on .ac-ni-lbl{color:#00E5FF}
     /* ── mobile scrollable results grid ── */
     /* mobile CRT must be a bounded flex child, not height:100% which lets it expand infinitely */
-    .ac-mob-wrap .ac-crt{flex:1;min-height:0;height:auto}
-    .ac-mob-grid{flex:1;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;min-height:0;scroll-behavior:smooth}
+    .ac-mob-wrap .ac-crt{flex:1;min-height:0;height:auto;overflow:hidden}
+    .ac-mob-grid{flex:1;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;min-height:0;max-height:calc(100svh - 180px);scroll-behavior:smooth}
     .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s}
     .ac-mc:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
     .ac-mc::after{content:'';position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.22) 48%,rgba(0,229,255,.22) 52%,transparent 52%);pointer-events:none;z-index:5}
@@ -3527,6 +3527,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     </div>
   </div>
 
+  <!-- PHONDEX MOBILE SEARCH MODAL -->
+  <div class="modal-overlay" id="acMobSearchModal">
+    <div class="modal" style="width:min(420px,92vw);padding:28px 24px">
+      <button class="modal-close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
+      <div style="font-family:'Space Mono','Share Tech Mono',monospace">
+        <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(0,229,255,.65);margin-bottom:16px">⬡ CARD SEARCH</div>
+        <input
+          id="acMobInput"
+          type="text"
+          placeholder="Charizard, Pikachu..."
+          onkeydown="if(event.key==='Enter')acMobSearch()"
+          style="width:100%;background:rgba(255,255,255,.04);border:none;border-bottom:1px solid rgba(0,229,255,.25);color:rgba(225,238,252,.9);font-family:inherit;font-size:.88rem;padding:10px 6px;outline:none;margin-bottom:22px;letter-spacing:.03em;box-sizing:border-box;display:block">
+        <button onclick="acMobSearch()" style="display:block;width:100%;padding:13px;background:#00E5FF;color:#060810;font-family:inherit;font-weight:bold;font-size:.82rem;letter-spacing:.14em;border:none;cursor:pointer;border-radius:4px;transition:filter .2s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">SEARCH CARDS</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PAGES -->
   <div id="landingPage" class="page active" style="padding:0;max-width:1440px">
 
@@ -3987,16 +4004,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>
 
-            <!-- hologram search panel — absolute overlay, projects below nav -->
-            <div class="ac-search-panel" id="acSearchPanel">
-              <div class="ac-search-inner">
-                <label class="ac-sf-label" style="letter-spacing:.18em;color:rgba(0,229,255,.7)">⬡ CARD SEARCH</label>
-                <input class="ac-sf-input" id="acMobInput" type="text"
-                  placeholder="Charizard, Pikachu..."
-                  onkeydown="if(event.key==='Enter')acMobSearch()">
-                <button class="ac-sf-btn" onclick="acMobSearch()">SEARCH CARDS</button>
-              </div>
-            </div>
 
             <!-- scrollable results grid -->
             <div class="ac-mob-grid" id="acMobGrid">
@@ -12376,37 +12383,24 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function acMobSearch() {
-      const mob   = document.getElementById('acMobInput');
-      const desk  = document.getElementById('cardSearchInput');
-      const panel = document.getElementById('acSearchPanel');
+      const mob  = document.getElementById('acMobInput');
+      const desk = document.getElementById('cardSearchInput');
       if (mob && desk) desk.value = mob.value.trim();
       acMobSearchOpen = false;
-      if (panel) panel.classList.remove('open');
+      closeModal('acMobSearchModal');
       // CRT flash on the mobile screen before results load
       acCrtFlash('acCrtMob');
       searchPokemonCards();
     }
 
     function acMobToggleSearch() {
-      const panel = document.getElementById('acSearchPanel');
-      if (!panel) return;
-      // Dynamically position below the nav bar (pixel-perfect regardless of size)
-      const nav = document.querySelector('.ac-mob-wrap .ac-nav');
-      if (nav) {
-        const crt = document.getElementById('acCrtMob');
-        if (crt) {
-          const crtRect = crt.getBoundingClientRect();
-          const navRect = nav.getBoundingClientRect();
-          panel.style.top = (navRect.bottom - crtRect.top) + 'px';
-        }
-      }
       if (!acMobSearchOpen) {
         acMobSearchOpen = true;
-        panel.classList.add('open');
-        setTimeout(() => { const inp = document.getElementById('acMobInput'); if (inp) inp.focus(); }, 60);
+        openModal('acMobSearchModal');
+        setTimeout(() => { const inp = document.getElementById('acMobInput'); if (inp) inp.focus(); }, 80);
       } else {
         acMobSearchOpen = false;
-        panel.classList.remove('open');
+        closeModal('acMobSearchModal');
       }
     }
 
@@ -12414,8 +12408,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.querySelectorAll('.ac-ni').forEach(n => n.classList.remove('on'));
       el.classList.add('on');
       acMobSearchOpen = false;
-      const panel = document.getElementById('acSearchPanel');
-      if (panel) panel.classList.remove('open');
+      closeModal('acMobSearchModal');
     }
 
     function acBackdropClose(e) { /* no-op — backdrop removed */ }
