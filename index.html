@@ -798,7 +798,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-scanlines{position:absolute;inset:0;pointer-events:none;z-index:40;background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.045) 3px,rgba(0,0,0,.045) 4px)}
     /* LEDs */
     .ac-led-d{position:absolute;left:89.81%;top:14.7%;width:1.3%;padding-top:1.3%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
-    .ac-led-m{position:absolute;left:13.35%;top:9.5%;width:2.5%;padding-top:2.5%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
+    .ac-led-m{position:absolute;left:17%;top:8%;width:2.5%;padding-top:2.5%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
     /* CRT */
     .ac-crt{width:100%;height:100%;display:flex;flex-direction:column;transform-origin:center;will-change:transform,filter}
     .ac-crt.ac-on{animation:ac-crt-on .88s cubic-bezier(.4,0,.2,1) forwards}
@@ -3889,7 +3889,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="ac-crt" id="acCrtMob">
 
             <!-- top nav -->
-            <nav class="ac-nav">
+            <div class="ac-nav">
               <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
                 <span class="ac-ni-ico">◎</span>
                 <span class="ac-ni-lbl">Search</span>
@@ -3906,7 +3906,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <span class="ac-ni-ico">◉</span>
                 <span class="ac-ni-lbl">Account</span>
               </div>
-            </nav>
+            </div>
 
             <!-- 2×2 results grid -->
             <div class="ac-mob-grid" id="acMobGrid">
@@ -5100,6 +5100,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (pageId === 'addCard') {
         setTimeout(() => {
           ['acCrtLeft','acCrtRight','acCrtMob'].forEach(id => acCrtFlash(id));
+          acPositionMobLed();   // re-lock LED after layout settles
         }, 220);
       }
       if (pageId === 'fairTrade') { ftInitPage(); }
@@ -12095,6 +12096,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     /* ══ ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════════ */
     let acMobSearchOpen = false;
 
+    /* Position the mobile LED in pixels after the image renders,
+       so it's pixel-perfect on every real device regardless of svh quirks. */
+    function acPositionMobLed() {
+      const img = document.querySelector('.ac-mob-wrap .ac-device-img');
+      const led = document.querySelector('.ac-led-m');
+      if (!img || !led) return;
+      const iw = img.clientWidth;
+      const ih = img.clientHeight;
+      if (!iw || !ih) return;
+      // LED sits at 17% across, 8% down the phondex image
+      const lx   = iw * 0.17;
+      const ly   = ih * 0.08;
+      const lsz  = iw * 0.025;
+      led.style.left      = lx + 'px';
+      led.style.top       = ly + 'px';
+      led.style.width     = lsz + 'px';
+      led.style.height    = lsz + 'px';
+      led.style.paddingTop = '0';  // override the % padding-top square trick
+    }
+
+    // Run on load + resize so it stays locked regardless of orientation changes
+    window.addEventListener('load',   acPositionMobLed);
+    window.addEventListener('resize', acPositionMobLed);
+    document.querySelector('.ac-mob-wrap .ac-device-img') &&
+      document.querySelector('.ac-mob-wrap .ac-device-img')
+        .addEventListener('load', acPositionMobLed);
+
     function acCrtFlash(id, cb) {
       const el = document.getElementById(id);
       if (!el) { if (cb) cb(); return; }
@@ -13156,23 +13184,32 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Requires this table in Supabase (run once in the SQL editor):
     //
     //   create table if not exists fair_trade_sessions (
-    //     id        text        primary key,
-    //     side_a    jsonb       not null default '[]'::jsonb,
-    //     side_b    jsonb       not null default '[]'::jsonb,
-    //     cash_a    numeric     not null default 0,
-    //     cash_b    numeric     not null default 0,
-    //     coin_flip jsonb       default null,
+    //     id         text        primary key,
+    //     side_a     jsonb       not null default '[]'::jsonb,
+    //     side_b     jsonb       not null default '[]'::jsonb,
+    //     cash_a     numeric     not null default 0,
+    //     cash_b     numeric     not null default 0,
+    //     name_a     text        not null default '',
+    //     name_b     text        not null default 'Guest',
+    //     joined_b   boolean     not null default false,
+    //     locked_a   boolean     not null default false,
+    //     locked_b   boolean     not null default false,
+    //     coin_flip  jsonb       default null,
     //     created_at timestamptz not null default now(),
     //     expires_at timestamptz not null default (now() + interval '5 minutes')
     //   );
     //   alter table fair_trade_sessions disable row level security;
     //
-    // If upgrading an existing table, add the coin_flip column:
+    // ── Upgrading an existing table? Run ALL of these (safe to re-run): ──
+    //   alter table fair_trade_sessions add column if not exists name_a   text    not null default '';
+    //   alter table fair_trade_sessions add column if not exists name_b   text    not null default 'Guest';
+    //   alter table fair_trade_sessions add column if not exists joined_b boolean not null default false;
+    //   alter table fair_trade_sessions add column if not exists locked_a boolean not null default false;
+    //   alter table fair_trade_sessions add column if not exists locked_b boolean not null default false;
     //   alter table fair_trade_sessions add column if not exists coin_flip jsonb default null;
     //
-    // expires_at is refreshed to now()+10min on every sync write, so the session
-    // stays alive as long as either device is active. Goes quiet for 10 minutes
-    // and it expires naturally. Clean up with:
+    // expires_at is refreshed on every sync write, so the session stays alive
+    // as long as either device is active. Clean up with:
     //   delete from fair_trade_sessions where expires_at < now();
     // ─────────────────────────────────────────────────────────────────────
 
@@ -13236,7 +13273,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           name_a: myName, name_b: 'Guest',
           expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
         });
-        if (error) throw error;
+        if (error) {
+          console.error('[FairTrade] Insert error:', error.code, error.message, error.details);
+          throw error;
+        }
 
         _ftSession = { id: id, role: 'a', lastSeenA: JSON.stringify(sideA), lastSeenB: '[]',
                        lastCashA: cashA, lastCashB: 0, pollInterval: null, bJoined: false,
@@ -13250,7 +13290,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         showToast('Trade session created — share the QR or code');
       } catch(e) {
         console.error('[FairTrade] Create session error:', e);
-        showToast('Could not create session — check connection');
+        var msg = e && e.message ? e.message : '';
+        if (msg.includes('column') && (msg.includes('name_a') || msg.includes('name_b') || msg.includes('joined_b') || msg.includes('locked_'))) {
+          showToast('DB schema outdated — see console for migration SQL');
+          console.warn('[FairTrade] Missing columns! Run this SQL in Supabase SQL editor:\n' +
+            'alter table fair_trade_sessions add column if not exists name_a text default \'\';\n' +
+            'alter table fair_trade_sessions add column if not exists name_b text default \'Guest\';\n' +
+            'alter table fair_trade_sessions add column if not exists joined_b boolean not null default false;\n' +
+            'alter table fair_trade_sessions add column if not exists locked_a boolean not null default false;\n' +
+            'alter table fair_trade_sessions add column if not exists locked_b boolean not null default false;\n' +
+            'alter table fair_trade_sessions add column if not exists coin_flip jsonb default null;');
+        } else {
+          showToast('Could not create session — check connection');
+        }
       }
       if (btn) { btn.disabled = false; btn.textContent = '🔗 Create Trade Link'; }
     }
@@ -13261,7 +13313,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       try {
         var { data, error } = await sb.from('fair_trade_sessions').select('*').eq('id', id).maybeSingle();
-        if (error || !data) { showToast('Trade session not found or expired'); return; }
+        if (error) {
+          console.error('[FairTrade] Join select error:', error.code, error.message);
+          showToast('Could not reach trade server — check connection');
+          return;
+        }
+        if (!data) { showToast('Trade session not found or expired'); return; }
         if (data.expires_at && new Date(data.expires_at) < new Date()) {
           showToast('This trade session has expired'); return;
         }
@@ -13447,7 +13504,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       var id    = _ftSession.id;
       var role  = _ftSession.role;
-      var url   = window.location.origin + window.location.pathname + '?trade=' + id;
+      // When running from file://, window.location.origin is "null" — use href base instead
+      var _origin = (window.location.origin && window.location.origin !== 'null')
+        ? window.location.origin
+        : window.location.href.replace(/\?.*$/, '').replace(/#.*$/, '');
+      var url = (window.location.origin && window.location.origin !== 'null')
+        ? window.location.origin + window.location.pathname + '?trade=' + id
+        : _origin + '?trade=' + id;
       var theirs  = role === 'a' ? 'B' : 'A';
       var mine    = role === 'a' ? 'A' : 'B';
       var nameA   = _ftSession.nameA || 'Player A';
