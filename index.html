@@ -3553,23 +3553,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <button class="modal-close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
       <div style="font-family:'Space Mono','Share Tech Mono',monospace">
         <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(0,229,255,.65);margin-bottom:14px">⬡ CARD SEARCH</div>
-        <!-- Language toggle -->
-        <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid rgba(0,229,255,.22);border-radius:4px;overflow:hidden">
-          <button id="acLangEN" onclick="acSetSearchLang('EN')"
-            style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:rgba(0,229,255,.12);color:#00E5FF;border:none;cursor:pointer;transition:all .18s">
-            🇺🇸 ENGLISH
-          </button>
-          <button id="acLangJA" onclick="acSetSearchLang('JA')"
-            style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:transparent;color:rgba(0,229,255,.45);border:none;border-left:1px solid rgba(0,229,255,.22);cursor:pointer;transition:all .18s">
-            🇯🇵 JAPANESE
-          </button>
-        </div>
+        <div style="font-size:.55rem;color:rgba(0,229,255,.4);margin-bottom:12px;letter-spacing:.08em">EN · JA · KO · ZH supported</div>
         <input
           id="acMobInput"
           type="text"
-          placeholder="Charizard, Pikachu..."
+          placeholder="Charizard · リザードン · 리자몽"
           onkeydown="if(event.key==='Enter')acMobSearch()"
-          style="width:100%;background:rgba(255,255,255,.04);border:none;border-bottom:1px solid rgba(0,229,255,.25);color:rgba(225,238,252,.9);font-family:inherit;font-size:.88rem;padding:10px 6px;outline:none;margin-bottom:22px;letter-spacing:.03em;box-sizing:border-box;display:block">
+          style="width:100%;background:rgba(255,255,255,.04);border:none;border-bottom:1px solid rgba(0,229,255,.25);color:rgba(225,238,252,.9);font-family:inherit;font-size:16px;padding:10px 6px;outline:none;margin-bottom:22px;letter-spacing:.03em;box-sizing:border-box;display:block;touch-action:manipulation">
         <button onclick="acMobSearch()" style="display:block;width:100%;padding:13px;background:#00E5FF;color:#060810;font-family:inherit;font-weight:bold;font-size:.82rem;letter-spacing:.14em;border:none;cursor:pointer;border-radius:4px;transition:filter .2s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">SEARCH CARDS</button>
       </div>
     </div>
@@ -12436,7 +12426,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       closeModal('acMobSearchModal');
       acCrtFlash('acCrtMob');
 
-      if (acSearchLanguage === 'JA') {
+      // Auto-detect Japanese/Chinese/Korean characters — route to JP search
+      // regardless of which toggle button is active
+      const hasAsian = /[　-鿿가-힣豈-﫿]/.test(query);
+
+      if (acSearchLanguage === 'JA' || hasAsian) {
         searchJapaneseCards(query);
       } else {
         // Sync to desktop search input and use existing English flow
@@ -12449,34 +12443,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     async function searchJapaneseCards(query) {
       const grid = document.getElementById('acMobGrid');
       if (!grid) return;
-      grid.innerHTML = '<div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING<br>JP DATABASE…</div></div>';
-
-      // SUPABASE_URL / SUPABASE_ANON_KEY are const globals in the main <script> block
-      const SB_URL  = (typeof SUPABASE_URL      !== 'undefined' && SUPABASE_URL)      ? SUPABASE_URL      : (window._sbUrl  || 'https://xjamytrhxeaynywcwfun.supabase.co');
-      const SB_ANON = (typeof SUPABASE_ANON_KEY !== 'undefined' && SUPABASE_ANON_KEY) ? SUPABASE_ANON_KEY : (window._sbAnon || '');
-
-      if (!SB_URL) {
-        grid.innerHTML = '<div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(255,80,80,.6);font-size:.5em">Config error</div></div>';
-        return;
-      }
+      grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING…</div></div>';
 
       try {
-        const res = await fetch(`${SB_URL}/functions/v1/search-cards-jp`, {
-          method:  'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'apikey':        SB_ANON,
-            'Authorization': `Bearer ${SB_ANON}`,
-          },
-          body: JSON.stringify({ query }),
-        });
-
+        // Call pokemontcg.io directly — same API as English search, results tagged JA
+        const res = await fetch(
+          `https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=20&orderBy=name`,
+          { headers: { Accept: 'application/json' } }
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const cards = (data.cards ?? []).slice(0, 20);
+        const data  = await res.json();
+        const cards = (data.data ?? []).slice(0, 20);
 
         if (!cards.length) {
-          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.55em;letter-spacing:.08em;text-align:center">NO JP CARDS FOUND</div></div>';
+          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.55em;letter-spacing:.08em;text-align:center">NO CARDS FOUND</div></div>';
           return;
         }
 
@@ -12502,7 +12482,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>`;
         }).join('');
 
-        // Auto-set language in the Add to Collection modal when opened from JP search
+        // Pre-set language to JA when Add to Binder modal opens
         window._pendingJpCard = true;
 
       } catch (err) {
