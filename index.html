@@ -12395,21 +12395,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
-    // ── TCGdex JP search — tries multiple URL patterns for compatibility ────────
+    // ── TCGdex JP search ─────────────────────────────────────────────────────────
     async function fetchTcgdex(query) {
       const q = encodeURIComponent(query);
+      // TCGdex v2: filters use [field:like] for partial match, [field] for exact
       const urls = [
+        `https://api.tcgdex.net/v2/en/cards?filters[name:like]=${q}&pagination[page]=1&pagination[itemsPerPage]=20`,
         `https://api.tcgdex.net/v2/en/cards?filters[name]=${q}&pagination[page]=1&pagination[itemsPerPage]=20`,
         `https://api.tcgdex.net/v2/en/cards?name=${q}&itemsPerPage=20`,
       ];
       for (const url of urls) {
         try {
+          console.log('[TCGdex] trying', url);
           const res = await fetch(url, { headers: { Accept: 'application/json' } });
+          console.log('[TCGdex] status', res.status, url);
           if (!res.ok) continue;
           const data = await res.json();
+          console.log('[TCGdex] raw response type:', Array.isArray(data) ? 'array len='+data.length : typeof data, JSON.stringify(data).slice(0,200));
           const items = Array.isArray(data) ? data : (data.data ?? data.cards ?? data.results ?? []);
           if (items.length > 0) return items;
-        } catch { /* try next pattern */ }
+        } catch(e) { console.warn('[TCGdex] error on', url, e); }
       }
       return [];
     }
