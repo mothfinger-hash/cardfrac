@@ -865,9 +865,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-ni-lbl{font-size:.52em;letter-spacing:.11em;color:rgba(0,229,255,.55);font-weight:bold;text-transform:uppercase;transition:color .2s}
     .ac-ni.on .ac-ni-lbl{color:#00E5FF}
     /* ── mobile scrollable results grid ── */
-    /* mobile CRT must be a bounded flex child, not height:100% which lets it expand infinitely */
     .ac-mob-wrap .ac-crt{width:100%;height:100%;overflow:hidden;display:flex;flex-direction:column}
-    .ac-mob-grid{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;scroll-behavior:smooth}
+    /* Grid height is set by acFitMobGrid() in JS — CSS alone can't reliably resolve
+       the nested percentage chain on all mobile browsers */
+    .ac-mob-grid{overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:.6%;padding:.8% 1%;scroll-behavior:smooth}
     .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s}
     .ac-mc:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
     .ac-mc::after{content:'';position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.22) 48%,rgba(0,229,255,.22) 52%,transparent 52%);pointer-events:none;z-index:5}
@@ -5233,6 +5234,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         setTimeout(() => {
           ['acCrtLeft','acCrtRight','acCrtMob'].forEach(id => acCrtFlash(id));
           acPositionMobLed();   // re-lock LED after layout settles
+          acFitMobGrid();       // pin grid height to actual rendered screen dimensions
         }, 220);
       }
       if (pageId === 'fairTrade') { ftInitPage(); }
@@ -12391,12 +12393,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       led.style.paddingTop = '0';  // override the % padding-top square trick
     }
 
+    // Measure the actual rendered phone screen and pin the grid height in pixels.
+    // CSS percentage chains across position:absolute + flex don't resolve reliably
+    // on all mobile browsers, so we do it in JS like a native layout pass.
+    function acFitMobGrid() {
+      const screen = document.querySelector('.ac-mob-wrap .ac-phone-screen');
+      const nav    = document.querySelector('.ac-mob-wrap .ac-nav');
+      const grid   = document.getElementById('acMobGrid');
+      if (!screen || !nav || !grid) return;
+      const h = screen.clientHeight - nav.offsetHeight;
+      if (h > 0) {
+        grid.style.height    = h + 'px';
+        grid.style.maxHeight = h + 'px';
+      }
+    }
+
     // Run on load + resize so it stays locked regardless of orientation changes
-    window.addEventListener('load',   acPositionMobLed);
-    window.addEventListener('resize', acPositionMobLed);
+    window.addEventListener('load',   () => { acPositionMobLed(); acFitMobGrid(); });
+    window.addEventListener('resize', () => { acPositionMobLed(); acFitMobGrid(); });
     document.querySelector('.ac-mob-wrap .ac-device-img') &&
       document.querySelector('.ac-mob-wrap .ac-device-img')
-        .addEventListener('load', acPositionMobLed);
+        .addEventListener('load', () => { acPositionMobLed(); acFitMobGrid(); });
 
     function acCrtFlash(id, cb) {
       const el = document.getElementById(id);
