@@ -777,10 +777,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
     .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
     .ac-mob-wrap{display:none;align-items:center;justify-content:center;width:100%}
-    /* Device width is calculated so the full frame fits within the viewport height.
-       DO NOT change this formula to fix scroll issues — only touch CSS inside .ac-phone-screen. */
-    .ac-mob-wrap .ac-device{width:min(calc((100svh - 56px) * 1920 / 3712), calc(100vw - 8px));position:relative;aspect-ratio:1920/3712;flex-shrink:0}
-    .ac-mob-wrap .ac-device-img{width:100%;height:auto;display:block}
+    /* Device sizing — DO NOT change these to fix scroll issues.
+       Explicit width + height ensures .ac-phone-screen percentage heights resolve correctly.
+       The img is absolutely positioned so it cannot push the device div taller than intended. */
+    .ac-mob-wrap .ac-device{
+      width:  min(calc((100svh - 56px) * 1920 / 3712), calc(100vw - 8px));
+      height: min(calc(100svh - 56px),                 calc((100vw - 8px) * 3712 / 1920));
+      position:relative;flex-shrink:0;overflow:hidden}
+    .ac-mob-wrap .ac-device-img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:fill;pointer-events:none;user-select:none}
     @media(max-width:900px){
       .ac-pdex-wrap{display:none}
       /* Lock the page to viewport height so the body never scrolls on mobile */
@@ -15954,12 +15958,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       #acMobSearchModal .modal,
       #addToCollectionModal .modal,
       #multiScanModal .modal { max-height:76svh; overflow-y:auto; }
-      /* Scanner: convert from bottom-sheet → same top-anchored position */
-      #scannerModal { align-items:flex-start !important; padding-top:12svh; }
+      /* Scanner: center on mobile */
+      #scannerModal { align-items:center !important; padding-top:0 !important; }
       #scannerModal>div:last-child {
         width:min(480px,92vw) !important;
-        border-radius:4px !important;
-        max-height:76svh !important;
+        border-radius:8px !important;
+        max-height:80svh !important;
         margin:0 auto;
       }
     }
