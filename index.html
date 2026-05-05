@@ -776,10 +776,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #addCardPage.page{padding:12px 0;background:var(--bg);min-height:calc(100vh - 56px)}
     #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
     .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
-    .ac-mob-wrap{display:none;align-items:flex-start;justify-content:center;width:100%;padding-top:4px}
-    .ac-mob-wrap .ac-device{width:min(calc((100svh - 130px) * 1920 / 3712), calc(100vw - 8px));position:relative;aspect-ratio:1920/3712}
+    .ac-mob-wrap{display:none;align-items:center;justify-content:center;width:100%;padding-top:0}
+    .ac-mob-wrap .ac-device{width:min(calc((100svh - 60px) * 1920 / 3712), calc(100vw - 8px));position:relative;aspect-ratio:1920/3712;flex-shrink:0}
     .ac-mob-wrap .ac-device-img{width:100%;height:auto;display:block}
-    @media(max-width:900px){.ac-pdex-wrap{display:none}.ac-mob-wrap{display:flex}}
+    @media(max-width:900px){
+      .ac-pdex-wrap{display:none}
+      .ac-mob-wrap{display:flex;height:100svh;overflow:hidden}
+      #addCardPage.page{min-height:unset!important;height:100svh!important;overflow:hidden!important;padding:0!important}
+    }
     /* device base */
     .ac-device{position:relative;font-family:'Courier New',Courier,monospace}
     .ac-device-img{width:100%;display:block;user-select:none;pointer-events:none}
@@ -855,8 +859,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-ni.on .ac-ni-lbl{color:#00E5FF}
     /* ── mobile scrollable results grid ── */
     /* mobile CRT must be a bounded flex child, not height:100% which lets it expand infinitely */
-    .ac-mob-wrap .ac-crt{flex:1;min-height:0;height:auto;overflow:hidden}
-    .ac-mob-grid{flex:1;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;min-height:0;max-height:calc(100svh - 180px);scroll-behavior:smooth}
+    .ac-mob-wrap .ac-crt{width:100%;height:100%;overflow:hidden;display:flex;flex-direction:column}
+    .ac-mob-grid{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;scroll-behavior:smooth}
     .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s}
     .ac-mc:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
     .ac-mc::after{content:'';position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.22) 48%,rgba(0,229,255,.22) 52%,transparent 52%);pointer-events:none;z-index:5}
