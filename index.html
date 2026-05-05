@@ -67,9 +67,7 @@
     .nav-collapse-btn:hover{border-color:var(--accent);color:var(--accent)}
     .nav-collapse-btn svg{width:12px;height:12px;transition:transform .25s}
     nav.sb-collapsed .nav-collapse-btn svg{transform:rotate(180deg)}
-    .nav-section{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 0 4px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-    .nav-section::-webkit-scrollbar{width:3px}
-    .nav-section::-webkit-scrollbar-thumb{background:var(--border)}
+    .nav-section{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 0 4px}
     .nav-group-label{font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.18em;padding:10px 12px 3px;white-space:nowrap;overflow:hidden;text-transform:uppercase}
     nav.sb-collapsed .nav-group-label{color:transparent;padding-top:12px;padding-bottom:2px}
     .nav-right{display:contents}
@@ -835,10 +833,6 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-rp-status{font-size:.52em;letter-spacing:.05em;color:rgba(0,229,255,.55);padding:.35em 1.1%;flex-shrink:0;display:none}
     /* card results inside device - override default .card-result styles */
     #acDeskGrid{flex:1;overflow-y:scroll;overflow-x:hidden;display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:min-content;gap:.5%;padding:.6% .8%;min-height:0;scroll-behavior:smooth}
-    #acDeskGrid::-webkit-scrollbar{width:4px}
-    #acDeskGrid::-webkit-scrollbar-track{background:rgba(0,229,255,.04)}
-    #acDeskGrid::-webkit-scrollbar-thumb{background:rgba(0,229,255,.28);border-radius:2px}
-    #acDeskGrid::-webkit-scrollbar-thumb:hover{background:rgba(0,229,255,.55)}
     /* d-pad hit areas */
     .ac-dpad-up,.ac-dpad-dn{position:absolute;width:5%;padding-top:5%;border-radius:50%;cursor:pointer;z-index:70;background:transparent;transition:background .15s}
     .ac-dpad-up:hover,.ac-dpad-dn:hover{background:rgba(0,229,255,.12)}
@@ -862,10 +856,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* ── mobile scrollable results grid ── */
     /* mobile CRT must be a bounded flex child, not height:100% which lets it expand infinitely */
     .ac-mob-wrap .ac-crt{flex:1;min-height:0;height:auto}
-    .ac-mob-grid{flex:1;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;min-height:0;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:rgba(0,229,255,.22) transparent}
-    .ac-mob-grid::-webkit-scrollbar{width:3px}
-    .ac-mob-grid::-webkit-scrollbar-track{background:transparent}
-    .ac-mob-grid::-webkit-scrollbar-thumb{background:rgba(0,229,255,.22);border-radius:2px}
+    .ac-mob-grid{flex:1;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:.6%;padding:.8% 1%;min-height:0;scroll-behavior:smooth}
     .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s}
     .ac-mc:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
     .ac-mc::after{content:'';position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.22) 48%,rgba(0,229,255,.22) 52%,transparent 52%);pointer-events:none;z-index:5}
@@ -1338,6 +1329,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
 html { scroll-behavior: smooth; }
 
+/* ── Hologram scrollbars — site-wide ─────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: rgba(0,229,255,.2) transparent; }
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(0,229,255,.25); border-radius: 2px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(0,229,255,.5); box-shadow: 0 0 6px rgba(0,229,255,.4); }
+
 body {
   padding-top: 0;
   opacity: 0;
@@ -1749,12 +1747,6 @@ nav {
   filter: brightness(1.12) !important;
   box-shadow: 0 0 28px rgba(0,229,255,.6) !important;
 }
-/* holographic scrollbar */
-#addToCollectionModal .modal { scrollbar-width: thin; scrollbar-color: rgba(0,229,255,.25) transparent; }
-#addToCollectionModal .modal::-webkit-scrollbar { width: 3px; }
-#addToCollectionModal .modal::-webkit-scrollbar-track { background: transparent; }
-#addToCollectionModal .modal::-webkit-scrollbar-thumb { background: rgba(0,229,255,.22); border-radius: 2px; }
-#addToCollectionModal .modal::-webkit-scrollbar-thumb:hover { background: rgba(0,229,255,.45); }
 /* Mobile: constrain hologram modal so it fits on small screens */
 @media(max-width:900px) {
   #addToCollectionModal .modal {
