@@ -867,9 +867,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-mc-add{text-align:center;padding:2.5% 0;flex-shrink:0;border-top:1px solid rgba(0,229,255,.08);font-size:.5em;letter-spacing:.1em;color:rgba(0,229,255,.42);transition:color .2s}
     .ac-mc:hover .ac-mc-add{color:rgba(0,229,255,.82)}
     /* ── mobile hologram search panel — absolute overlay, no layout shift ── */
-    .ac-search-panel{position:absolute;left:3%;right:3%;z-index:80;background:rgba(3,12,20,.96);border:1px solid rgba(0,229,255,.5);border-radius:3px;box-shadow:0 0 0 1px rgba(0,229,255,.08),0 0 16px rgba(0,229,255,.22),0 0 48px rgba(0,229,255,.07);transform-origin:top center;transform:scaleY(0.01);opacity:0;pointer-events:none;transition:transform .32s cubic-bezier(.4,0,.2,1),opacity .25s}
-    .ac-search-panel::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0,transparent 2px,rgba(0,229,255,.025) 2px,rgba(0,229,255,.025) 3px);pointer-events:none;z-index:0}
-    .ac-search-panel.open{transform:scaleY(1);opacity:1;pointer-events:auto}
+    .ac-search-panel{position:absolute;left:3%;right:3%;z-index:80;background:rgba(3,12,20,.96);border:1px solid rgba(0,229,255,.52);border-radius:3px;box-shadow:0 0 0 1px rgba(0,229,255,.08),0 0 18px rgba(0,229,255,.22),0 0 50px rgba(0,229,255,.07),inset 0 0 40px rgba(0,229,255,.03);transform-origin:top center;transform:scaleY(0.01);opacity:0;pointer-events:none;transition:transform .18s ease-in,opacity .14s ease-in;overflow:hidden}
+    .ac-search-panel::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0,transparent 2px,rgba(0,229,255,.022) 2px,rgba(0,229,255,.022) 3px);pointer-events:none;z-index:0}
+    /* projection beam below panel */
+    .ac-search-panel::after{content:'';position:absolute;bottom:-40px;left:15%;width:70%;height:40px;background:linear-gradient(to bottom,rgba(0,229,255,.08) 0%,transparent 100%);clip-path:polygon(10% 0%,90% 0%,100% 100%,0% 100%);pointer-events:none;z-index:-1}
+    .ac-search-panel.open{pointer-events:auto;animation:holo-project .52s cubic-bezier(.4,0,.2,1) forwards,holo-flicker 10s ease-in-out 1.2s infinite}
+    .ac-search-inner{position:relative;z-index:1}
     .ac-search-inner{padding:4% 6% 5%;position:relative;z-index:1}
     .ac-drag{width:28%;height:3px;background:rgba(0,229,255,.18);border-radius:2px;margin:.85em auto .55em}
     .ac-sh-title{text-align:center;font-size:.9em;letter-spacing:.2em;color:#00E5FF;padding:.15em 0 .45em;border-bottom:1px solid rgba(0,229,255,.1);margin-bottom:.65em}
@@ -1597,7 +1600,62 @@ nav {
 .cart-slot-tag { background: var(--accent) !important; color: #000 !important; border: 1.5px solid #000 !important; border-radius: 0 !important; font-family: 'Space Mono', monospace !important; font-weight: 700 !important; letter-spacing: 0.08em !important; }
 
 
-/* ─── 10. MOBILE BOTTOM NAV ──────────────────────────────────────── */
+/* ─── 10. TRADE ANALYZER — HOLOGRAM ──────────────────────────────── */
+#fairTradePage { background: var(--bg); }
+
+.ft-side-panel {
+  background: rgba(3,12,20,.95) !important;
+  border: 1px solid rgba(0,229,255,.35) !important;
+  box-shadow: 0 0 0 1px rgba(0,229,255,.06), 0 0 18px rgba(0,229,255,.1), inset 0 0 40px rgba(0,229,255,.02) !important;
+  position: relative;
+  overflow: hidden;
+}
+/* scanlines on each side panel */
+.ft-side-panel::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0, transparent 3px, rgba(0,229,255,.012) 3px, rgba(0,229,255,.012) 4px);
+  pointer-events: none; z-index: 0;
+}
+.ft-side-panel > * { position: relative; z-index: 1; }
+
+.ft-side-label { text-shadow: 0 0 12px currentColor !important; letter-spacing: .14em !important; }
+.ft-side-a .ft-side-label { color: rgba(0,229,255,.9) !important; }
+.ft-side-b .ft-side-label { color: rgba(210,120,40,.9) !important; }
+
+.ft-card-empty { border-color: rgba(0,229,255,.18) !important; color: rgba(0,229,255,.35) !important; }
+
+.ft-search-input {
+  background: rgba(0,229,255,.04) !important;
+  border-color: rgba(0,229,255,.2) !important;
+  color: rgba(210,240,255,.9) !important;
+}
+.ft-search-input:focus {
+  border-color: rgba(0,229,255,.55) !important;
+  box-shadow: 0 0 0 1px rgba(0,229,255,.12), 0 0 10px rgba(0,229,255,.15) !important;
+  outline: none !important;
+}
+
+/* Session banner */
+#ftSessionBanner {
+  background: rgba(3,12,20,.96) !important;
+  border: 1px solid rgba(0,229,255,.45) !important;
+  box-shadow: 0 0 14px rgba(0,229,255,.15) !important;
+}
+
+/* Verdict / summary block */
+.ft-verdict, [id^="ftVerdict"], [id^="ftSummary"] {
+  background: rgba(3,12,20,.96) !important;
+  border-color: rgba(0,229,255,.3) !important;
+}
+
+/* Dropdown results */
+.ft-dropdown-results {
+  background: rgba(3,12,20,.98) !important;
+  border-color: rgba(0,229,255,.3) !important;
+}
+
+/* ─── 10b. MOBILE BOTTOM NAV ──────────────────────────────────────── */
 
 .mobile-nav { background: #000 !important; border-top: 2px solid var(--accent) !important; box-shadow: 0 -3px 0 var(--accent) !important; }
 .mobile-nav-btn { font-family: 'Space Mono', monospace !important; letter-spacing: 0.1em !important; transition: color .15s; position: relative; }
@@ -14816,7 +14874,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ══════════════════════════════════════════════════════════════════════
     var _setsCache = null;  // { timestamp, sets }
     var _setsDetailCache = {};  // setId → { timestamp, cards }
-    var _setsDetailSort  = 'number'; // 'number' | 'rarity-asc' | 'rarity-desc' | 'owned'
+    var _setsDetailSort    = 'number'; // 'number' | 'rarity-asc' | 'rarity-desc'
+    var _setsOwnedFirst    = false;    // independent toggle layered on top of sort
     var _setsDetailOwnedMap = {};
     var _RARITY_RANK = {
       'Common':1,'Uncommon':2,'Rare':3,'Rare Holo':4,
@@ -14828,11 +14887,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     };
     function _rarityRank(r) { return _RARITY_RANK[r] || 5; }
 
-    function _buildSetCardRows(cards, ownedMap, sort) {
+    function _buildSetCardRows(cards, ownedMap, sort, ownedFirst) {
+      const numCmp = (a,b) => (parseInt(a.number)||0) - (parseInt(b.number)||0);
       let sorted = [...cards];
-      if (sort === 'rarity-asc')  sorted.sort((a,b) => _rarityRank(a.rarity) - _rarityRank(b.rarity) || (parseInt(a.number)||0) - (parseInt(b.number)||0));
-      if (sort === 'rarity-desc') sorted.sort((a,b) => _rarityRank(b.rarity) - _rarityRank(a.rarity) || (parseInt(a.number)||0) - (parseInt(b.number)||0));
-      if (sort === 'owned') sorted.sort((a,b) => (ownedMap[b.id]?1:0) - (ownedMap[a.id]?1:0) || (parseInt(a.number)||0) - (parseInt(b.number)||0));
+      // Primary sort
+      if (sort === 'rarity-asc')  sorted.sort((a,b) => _rarityRank(a.rarity) - _rarityRank(b.rarity) || numCmp(a,b));
+      else if (sort === 'rarity-desc') sorted.sort((a,b) => _rarityRank(b.rarity) - _rarityRank(a.rarity) || numCmp(a,b));
+      else sorted.sort(numCmp);
+      // Secondary: owned first (stable, preserves primary sort within each group)
+      if (ownedFirst) sorted.sort((a,b) => (ownedMap[b.id]?1:0) - (ownedMap[a.id]?1:0));
       return sorted.map((card, idx) => {
         const ci = ownedMap[card.id];
         const owned = !!ci;
@@ -14855,14 +14918,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function sortSetCards(sort) {
-      _setsDetailSort = sort;
+      if (sort === 'owned') {
+        // toggle owned-first independently
+        _setsOwnedFirst = !_setsOwnedFirst;
+      } else {
+        _setsDetailSort = sort;
+      }
       const grid = document.getElementById('setsCardList');
       if (!grid || !window._setsDetailCards) return;
-      grid.innerHTML = _buildSetCardRows(window._setsDetailCards, _setsDetailOwnedMap, sort);
-      // Update active pill
+      grid.innerHTML = _buildSetCardRows(window._setsDetailCards, _setsDetailOwnedMap, _setsDetailSort, _setsOwnedFirst);
+      // Update active pills
       document.querySelectorAll('.sets-sort-pill').forEach(p => {
-        p.style.borderColor = p.dataset.sort === sort ? 'var(--accent)' : 'var(--border)';
-        p.style.color = p.dataset.sort === sort ? 'var(--accent)' : 'var(--muted)';
+        const s = p.dataset.sort;
+        const active = s === 'owned' ? _setsOwnedFirst : s === _setsDetailSort;
+        p.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+        p.style.color       = active ? 'var(--accent)' : 'var(--muted)';
       });
     }
 
@@ -15014,7 +15084,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // Store for sort re-renders
         window._setsDetailCards = cards;
         _setsDetailOwnedMap = ownedMap;
-        _setsDetailSort = 'number';
+        _setsDetailSort  = 'number';
+        _setsOwnedFirst  = false;
 
         const ownedCount = cards.filter(c => ownedMap[c.id]).length;
         const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
@@ -15042,7 +15113,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
           </div>
           <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border)">
-            ${_buildSetCardRows(cards, ownedMap, 'number') || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
+            ${_buildSetCardRows(cards, ownedMap, 'number', false) || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
           </div>
         </div>`;
       } catch(e) {
