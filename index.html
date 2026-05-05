@@ -543,9 +543,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* MOBILE BOTTOM NAV */
     /* Bottom mobile nav — sticky, shown on mobile */
     .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch;box-shadow:0 -3px 0 var(--shadow)}
-    .mobile-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.5rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;transition:color .15s;padding:0;position:relative;}
+    .mobile-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.42rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;transition:color .15s;padding:0 1px;position:relative;}
+    .mobile-nav-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .mobile-nav-btn.active{color:var(--accent)}
-    .mobile-nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .mobile-nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700}
     @media(max-width:900px){.mobile-nav{display:flex}.page{padding-bottom:72px}}
 
@@ -566,7 +566,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .top-nav-tab:hover{color:var(--text)}
     .top-nav-premium{font-family:'Orbitron',monospace;font-weight:800;font-size:.5rem;padding:3px 7px;background:var(--premium);color:var(--premium-txt);border:none;cursor:pointer;letter-spacing:.06em}
     @media(max-width:900px){
-      .top-nav{display:flex}
+      .top-nav{display:none}
       nav{display:none!important}
       body{padding-left:0!important}
       body.nav-collapsed{padding-left:0!important}
@@ -15676,20 +15676,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
   <div class="mobile-nav" id="mobileNav">
     <button class="mobile-nav-btn active" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
-      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>
-      My Binder
+      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Binder
     </button>
     <button class="mobile-nav-btn" id="mobileNavAddCard" onclick="showPage('addCard'); setMobileNav('addCard')">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Add Card
     </button>
     <button class="mobile-nav-btn" id="mobileNavSets" onclick="showPage('sets'); setMobileNav('sets')">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l5 3"/></svg>
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       Sets
+    </button>
+    <button class="mobile-nav-btn" id="mobileNavBrowse" onclick="showPage('browse'); setMobileNav('browse')">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Market
+    </button>
+    <button class="mobile-nav-btn" id="mobileNavFairTrade" onclick="showPage('fairTrade'); setMobileNav('fairTrade')">
+      <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      Trade
     </button>
     <button class="mobile-nav-btn" id="mobileNavAccount" onclick="showPage('account'); setMobileNav('account')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      Dashboard
+      Account
       <span class="mobile-nav-badge" id="mobileTradeNotification" style="display:none">0</span>
     </button>
   </div>
