@@ -784,9 +784,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
 
     /* ══ ADD CARD DEVICE PAGE ═══════════════════════════════════════════════ */
-    #addCardPage.page{padding:12px 0;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;min-height:calc(100vh - 56px)}
+    #addCardPage.page{padding:12px 0;background:var(--bg);min-height:calc(100vh - 56px)}
+    #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
     .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
-    .ac-mob-wrap{display:none;align-items:center;justify-content:center;width:100%}
+    .ac-mob-wrap{display:none;align-items:flex-start;justify-content:center;width:100%;padding-top:4px}
+    .ac-mob-wrap .ac-device{height:calc(100svh - 130px);width:auto}
+    .ac-mob-wrap .ac-device-img{height:100%;width:auto;display:block}
     @media(max-width:900px){.ac-pdex-wrap{display:none}.ac-mob-wrap{display:flex}}
     /* device base */
     .ac-device{position:relative;font-family:'Courier New',Courier,monospace}
@@ -840,7 +843,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-rp-count{font-size:.45em;letter-spacing:.08em;color:rgba(65,85,105,.75)}
     .ac-rp-status{font-size:.52em;letter-spacing:.05em;color:rgba(0,229,255,.55);padding:.35em 1.1%;flex-shrink:0;display:none}
     /* card results inside device - override default .card-result styles */
-    #acDeskGrid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:auto;gap:.5%;padding:.6% .8%;min-height:0}
+    #acDeskGrid{flex:1;overflow-y:scroll;overflow-x:hidden;display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:min-content;gap:.5%;padding:.6% .8%;min-height:0;scroll-behavior:smooth}
+    #acDeskGrid::-webkit-scrollbar{width:4px}
+    #acDeskGrid::-webkit-scrollbar-track{background:rgba(0,229,255,.04)}
+    #acDeskGrid::-webkit-scrollbar-thumb{background:rgba(0,229,255,.28);border-radius:2px}
+    #acDeskGrid::-webkit-scrollbar-thumb:hover{background:rgba(0,229,255,.55)}
+    /* d-pad hit areas */
+    .ac-dpad-up,.ac-dpad-dn{position:absolute;width:5%;padding-top:5%;border-radius:50%;cursor:pointer;z-index:70;background:transparent;transition:background .15s}
+    .ac-dpad-up:hover,.ac-dpad-dn:hover{background:rgba(0,229,255,.12)}
     #acDeskGrid .card-result{background:transparent;border:none;box-shadow:inset 0 0 0 1px rgba(0,229,255,.15);border-radius:6px 0 6px 6px;overflow:hidden;padding:0;display:flex;flex-direction:column;cursor:pointer;position:relative;transition:box-shadow .2s;transform:none}
     #acDeskGrid .card-result::after{content:'';position:absolute;top:0;right:0;width:9px;height:9px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.2) 48%,rgba(0,229,255,.2) 52%,transparent 52%);pointer-events:none;z-index:5}
     #acDeskGrid .card-result:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.45);transform:none}
@@ -3715,8 +3725,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <img class="ac-device-img" src="pdex.png" alt="PathBinder">
         <div class="ac-led-d"></div>
         <div class="ac-scanlines"></div>
+        <!-- D-pad hit areas: up ~x=90.5% y=63%, down ~x=90.5% y=76% -->
+        <div class="ac-dpad-up" style="left:88%;top:61%" title="Scroll up" onclick="acGridScroll(-1)"></div>
+        <div class="ac-dpad-dn" style="left:88%;top:74%" title="Scroll down" onclick="acGridScroll(1)"></div>
 
-        <!-- LEFT SCREEN: search form -->
+        <!-- LEFT SCREEN: search form (lean: search + actions only) -->
         <div class="ac-left-screen">
           <div class="ac-crt" id="acCrtLeft">
             <div class="ac-lp">
@@ -3727,36 +3740,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 placeholder="Charizard..."
                 onkeydown="if(event.key==='Enter')acDeskSearch()">
 
-              <label class="ac-fl">GRADE</label>
-              <div class="ac-chips">
-                <span class="ac-chip on" onclick="acChipToggle(this)">Raw</span>
-                <span class="ac-chip" onclick="acChipToggle(this)">PSA</span>
-                <span class="ac-chip" onclick="acChipToggle(this)">BGS</span>
-                <span class="ac-chip" onclick="acChipToggle(this)">CGC</span>
-              </div>
-
-              <label class="ac-fl">CERT #</label>
-              <div class="ac-ctabs">
-                <span class="ac-ctab on">PSA</span>
-                <span class="ac-ctab" onclick="acCtabClick(this)">BGS</span>
-                <span class="ac-ctab" onclick="acCtabClick(this)">CGC</span>
-                <span class="ac-ctab" onclick="acCtabClick(this)">SGC</span>
-              </div>
-              <input class="ac-fi" id="acDeskCert" type="text" placeholder="12345678">
-
-              <label class="ac-fl">CONDITION</label>
-              <input class="ac-fi" id="acDeskCond" type="text" placeholder="Near Mint  ▾">
-
-              <label class="ac-fl">PAID $</label>
-              <input class="ac-fi" id="acDeskPaid" type="number" step="0.01" placeholder="0.00">
-
               <div class="ac-sp"></div>
               <button class="ac-btn" onclick="acDeskSearch()">SEARCH CARDS</button>
-              <button class="ac-ghost" onclick="openManualAddModal()">+ ADD MANUALLY</button>
               <label class="ac-ghost" style="cursor:pointer;text-align:center">&#9654; SCAN A CARD
                 <input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none">
               </label>
               <button class="ac-ghost" onclick="openMultiScan()">&#9638; SCAN MULTIPLE</button>
+              <button class="ac-ghost" onclick="openManualAddModal()">+ ADD MANUALLY</button>
             </div>
           </div>
         </div>
@@ -12084,6 +12074,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function acSfChip(el)      { el.classList.toggle('on'); }
     function acCtabClick(el)   { el.closest('.ac-ctabs').querySelectorAll('.ac-ctab').forEach(t => t.classList.remove('on')); el.classList.add('on'); }
     function acSfCoTab(el)     { el.closest('.ac-sf-cotabs').querySelectorAll('.ac-sf-cotab').forEach(t => t.classList.remove('on')); el.classList.add('on'); }
+
+    function acGridScroll(dir) {
+      const g = document.getElementById('acDeskGrid');
+      if (!g) return;
+      const step = g.clientHeight * 0.8;
+      g.scrollBy({ top: dir * step, behavior: 'smooth' });
+    }
+
+    // Arrow key scroll when Add Card page is active
+    document.addEventListener('keydown', e => {
+      const page = document.getElementById('addCardPage');
+      if (!page || !page.classList.contains('active')) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); acGridScroll(1); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); acGridScroll(-1); }
+    });
 
     function acRenderMobGrid(cards) {
       const mob = document.getElementById('acMobGrid');
