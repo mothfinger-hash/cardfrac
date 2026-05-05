@@ -782,6 +782,116 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       0%,40% {background:rgba(255,60,15,.95);box-shadow:0 0 8px 2px rgba(255,60,15,.7),0 0 3px rgba(255,80,15,1)}
       55%,100%{background:rgba(55,8,2,.25);  box-shadow:0 0 2px rgba(255,60,15,.05)}
     }
+
+    /* ══ ADD CARD DEVICE PAGE ═══════════════════════════════════════════════ */
+    #addCardPage.page{padding:12px 0;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;min-height:calc(100vh - 56px)}
+    .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
+    .ac-mob-wrap{display:none;align-items:center;justify-content:center;width:100%}
+    @media(max-width:900px){.ac-pdex-wrap{display:none}.ac-mob-wrap{display:flex}}
+    /* device base */
+    .ac-device{position:relative;font-family:'Courier New',Courier,monospace}
+    .ac-device-img{width:100%;display:block;user-select:none;pointer-events:none}
+    /* scanlines */
+    .ac-scanlines{position:absolute;inset:0;pointer-events:none;z-index:40;background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.045) 3px,rgba(0,0,0,.045) 4px)}
+    /* LEDs */
+    .ac-led-d{position:absolute;left:90.3%;top:14.7%;width:1.3%;padding-top:1.3%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
+    .ac-led-m{position:absolute;left:14.0%;top:8.9%;width:2.5%;padding-top:2.5%;border-radius:50%;z-index:60;pointer-events:none;animation:ac-led-blink 1.35s ease-in-out infinite}
+    /* CRT */
+    .ac-crt{width:100%;height:100%;display:flex;flex-direction:column;transform-origin:center;transform:scaleY(0.001);filter:brightness(12) blur(4px) saturate(0);will-change:transform,filter}
+    .ac-crt.ac-on{animation:ac-crt-on .88s cubic-bezier(.4,0,.2,1) forwards}
+    @keyframes ac-crt-on{
+      0%  {transform:scaleY(.001);filter:brightness(14) blur(5px) saturate(0)}
+      5%  {transform:scaleY(.005);filter:brightness(16) blur(3px) saturate(0)}
+      16% {transform:scaleY(.04); filter:brightness(8)  blur(1px) saturate(.12)}
+      40% {transform:scaleY(.42); filter:brightness(3.2)blur(0)   saturate(.4)}
+      62% {transform:scaleY(1.04);filter:brightness(1.4)          saturate(.9)}
+      76% {transform:scaleY(.97); filter:brightness(1.06)}
+      90% {transform:scaleY(1.01)}
+      100%{transform:scaleY(1);   filter:brightness(1) saturate(1)}
+    }
+    /* pdex screens */
+    .ac-left-screen{position:absolute;left:3.6%;top:22.8%;width:14.8%;height:57.5%;overflow:hidden;border-radius:4px}
+    .ac-right-screen{position:absolute;left:22.1%;top:12.5%;width:63.0%;height:67.5%;overflow:hidden;border-radius:4px}
+    /* phondex screen */
+    .ac-phone-screen{position:absolute;left:6.5%;top:12.41%;width:88.6%;height:82.92%;overflow:hidden;display:flex;flex-direction:column;border-radius:8px 8px 10px 10px}
+    /* ── left panel ── */
+    .ac-lp{width:100%;height:100%;display:flex;flex-direction:column;padding:7% 9%;gap:.4em}
+    .ac-lp::before{content:'';display:block;height:2px;background:#00E5FF;box-shadow:0 0 8px rgba(0,229,255,.45);margin-bottom:.3em;flex-shrink:0}
+    .ac-lp-title{font-size:.82em;letter-spacing:.18em;color:#00E5FF;text-align:center;padding:.2em 0;flex-shrink:0;border-bottom:1px solid rgba(0,229,255,.14);margin-bottom:.25em;text-shadow:0 0 12px rgba(0,229,255,.4)}
+    .ac-fl{font-size:.52em;letter-spacing:.1em;color:rgba(0,229,255,.65);margin-bottom:.15em;display:block;flex-shrink:0}
+    .ac-fi{width:100%;background:rgba(255,255,255,.04);border:none;border-bottom:1px solid rgba(0,229,255,.22);color:rgba(228,240,255,.92);font-family:inherit;font-size:.58em;padding:.42em .4em;outline:none;letter-spacing:.03em;flex-shrink:0;margin-bottom:.4em}
+    .ac-fi:focus{border-bottom-color:rgba(0,229,255,.65);background:rgba(0,229,255,.04)}
+    .ac-fi::placeholder{color:rgba(65,85,105,.55)}
+    .ac-chips{display:flex;flex-wrap:wrap;gap:.2em;margin-bottom:.38em;flex-shrink:0}
+    .ac-chip{padding:.18em .45em;font-size:.44em;letter-spacing:.06em;border:1px solid rgba(0,229,255,.2);border-radius:20px;color:rgba(80,105,130,.9);cursor:pointer;transition:all .18s;white-space:nowrap}
+    .ac-chip:hover,.ac-chip.on{border-color:#00E5FF;color:#00E5FF;background:rgba(0,229,255,.08)}
+    .ac-ctabs{display:grid;grid-template-columns:repeat(4,1fr);gap:.12em;margin-bottom:.3em;flex-shrink:0}
+    .ac-ctab{text-align:center;padding:.28em 0;font-size:.47em;letter-spacing:.07em;border-bottom:2px solid transparent;color:rgba(65,85,105,.6);cursor:pointer;transition:all .18s}
+    .ac-ctab.on{border-bottom-color:#00E5FF;color:#00E5FF}
+    .ac-sp{flex:1;min-height:.2em}
+    .ac-btn{display:block;width:100%;padding:.55em;background:#00E5FF;color:#060810;font-family:inherit;font-weight:bold;font-size:.6em;letter-spacing:.12em;border:none;cursor:pointer;border-radius:3px;transition:filter .2s;flex-shrink:0;margin-bottom:.22em}
+    .ac-btn:hover{filter:brightness(1.1)}
+    .ac-ghost{display:block;width:100%;padding:.36em;text-align:center;background:transparent;border:1px solid rgba(0,229,255,.12);border-radius:3px;color:rgba(65,85,105,.68);font-family:inherit;font-size:.42em;letter-spacing:.08em;cursor:pointer;transition:all .18s;flex-shrink:0;margin-bottom:.15em}
+    .ac-ghost:hover{border-color:rgba(0,229,255,.3);color:rgba(100,130,160,.9)}
+    /* ── right panel ── */
+    .ac-rp{width:100%;height:100%;display:flex;flex-direction:column}
+    .ac-rp-hdr{display:flex;justify-content:space-between;align-items:center;padding:.55% 1.1% .45%;flex-shrink:0;border-bottom:1px solid rgba(0,229,255,.09)}
+    .ac-rp-title{font-size:.8em;letter-spacing:.16em;color:#00E5FF;text-shadow:0 0 10px rgba(0,229,255,.35)}
+    .ac-rp-count{font-size:.45em;letter-spacing:.08em;color:rgba(65,85,105,.75)}
+    .ac-rp-status{font-size:.52em;letter-spacing:.05em;color:rgba(0,229,255,.55);padding:.35em 1.1%;flex-shrink:0;display:none}
+    /* card results inside device - override default .card-result styles */
+    #acDeskGrid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:auto;gap:.5%;padding:.6% .8%;min-height:0}
+    #acDeskGrid .card-result{background:transparent;border:none;box-shadow:inset 0 0 0 1px rgba(0,229,255,.15);border-radius:6px 0 6px 6px;overflow:hidden;padding:0;display:flex;flex-direction:column;cursor:pointer;position:relative;transition:box-shadow .2s;transform:none}
+    #acDeskGrid .card-result::after{content:'';position:absolute;top:0;right:0;width:9px;height:9px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.2) 48%,rgba(0,229,255,.2) 52%,transparent 52%);pointer-events:none;z-index:5}
+    #acDeskGrid .card-result:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.45);transform:none}
+    #acDeskGrid .card-result img{width:100%;height:auto;flex-shrink:0;display:block;border:none;margin:0}
+    #acDeskGrid .card-result-name{font-size:.48em;color:rgba(215,228,240,.9);padding:4% 6% 1%;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #acDeskGrid .card-result-set{font-size:.38em;color:rgba(65,85,105,.78);padding:0 6% 2%}
+    #acDeskGrid button[title="Add to Wishlist"]{display:none}
+    /* ── mobile nav ── */
+    .ac-nav{display:flex;flex-shrink:0;background:rgba(7,9,14,.96);border-bottom:1px solid rgba(0,229,255,.10)}
+    .ac-ni{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.6em 0 .4em;gap:.2em;cursor:pointer;position:relative;transition:background .2s}
+    .ac-ni:hover{background:rgba(0,229,255,.05)}
+    .ac-ni.on{background:rgba(0,229,255,.07)}
+    .ac-ni.on::after{content:'';position:absolute;bottom:0;left:22%;right:22%;height:2px;background:#00E5FF;box-shadow:0 0 8px #00E5FF}
+    .ac-ni-ico{font-size:1.1em;color:rgba(0,229,255,.32);transition:all .2s}
+    .ac-ni.on .ac-ni-ico{color:#00E5FF;text-shadow:0 0 10px rgba(0,229,255,.8)}
+    .ac-ni-lbl{font-size:.52em;letter-spacing:.11em;color:rgba(0,229,255,.28);font-weight:bold;text-transform:uppercase;transition:color .2s}
+    .ac-ni.on .ac-ni-lbl{color:#00E5FF}
+    /* ── mobile 2×2 results grid ── */
+    .ac-mob-grid{flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:.6%;padding:.8% 1%;min-height:0}
+    .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s;min-height:0}
+    .ac-mc:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
+    .ac-mc::after{content:'';position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.22) 48%,rgba(0,229,255,.22) 52%,transparent 52%);pointer-events:none;z-index:5}
+    .ac-mc-img{flex:1;width:100%;object-fit:cover;display:block;min-height:0}
+    .ac-mc-ph{flex:1;background:rgba(0,229,255,.03);display:flex;align-items:center;justify-content:center;min-height:0}
+    .ac-mc-name{font-size:.63em;color:rgba(215,228,240,.9);padding:3% 5% 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ac-mc-sub{font-size:.5em;color:rgba(65,85,105,.85);padding:0 5% 1%}
+    .ac-mc-add{text-align:center;padding:2.5% 0;flex-shrink:0;border-top:1px solid rgba(0,229,255,.08);font-size:.5em;letter-spacing:.1em;color:rgba(0,229,255,.42);transition:color .2s}
+    .ac-mc:hover .ac-mc-add{color:rgba(0,229,255,.82)}
+    /* ── mobile bottom sheet ── */
+    .ac-backdrop{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(5,8,14,0) 0%,rgba(5,8,14,.85) 20%);opacity:0;pointer-events:none;transition:opacity .3s;z-index:20;display:flex;flex-direction:column;justify-content:flex-end}
+    .ac-backdrop.open{opacity:1;pointer-events:all}
+    .ac-sheet{border-top:1px solid rgba(0,229,255,.22);border-left:1px solid rgba(0,229,255,.07);border-right:1px solid rgba(0,229,255,.07);border-radius:10px 10px 0 0;padding:0 5% 4%;transform:translateY(100%);transition:transform .38s cubic-bezier(.4,0,.2,1);max-height:78%;overflow-y:auto}
+    .ac-backdrop.open .ac-sheet{transform:translateY(0)}
+    .ac-drag{width:28%;height:3px;background:rgba(0,229,255,.18);border-radius:2px;margin:.85em auto .55em}
+    .ac-sh-title{text-align:center;font-size:.9em;letter-spacing:.2em;color:#00E5FF;padding:.15em 0 .45em;border-bottom:1px solid rgba(0,229,255,.1);margin-bottom:.65em}
+    .ac-sf-label{font-size:.5em;letter-spacing:.12em;color:rgba(0,229,255,.55);margin-bottom:.28em;display:block}
+    .ac-sf-input{width:100%;background:rgba(255,255,255,.03);border:none;border-bottom:1px solid rgba(0,229,255,.18);color:rgba(225,238,252,.88);font-family:inherit;font-size:.66em;padding:.45em .5em;outline:none;margin-bottom:.75em;letter-spacing:.03em}
+    .ac-sf-input:focus{border-bottom-color:rgba(0,229,255,.65);background:rgba(255,255,255,.05)}
+    .ac-sf-input::placeholder{color:rgba(65,85,105,.62)}
+    .ac-sf-chips{display:flex;flex-wrap:wrap;gap:.28em;margin-bottom:.72em}
+    .ac-sf-chip{padding:.22em .7em;font-size:.52em;letter-spacing:.07em;border:1px solid rgba(0,229,255,.18);border-radius:20px;color:rgba(65,85,105,.85);cursor:pointer;transition:all .18s;white-space:nowrap}
+    .ac-sf-chip:hover,.ac-sf-chip.on{border-color:#00E5FF;color:#00E5FF;background:rgba(0,229,255,.09)}
+    .ac-sf-cotabs{display:grid;grid-template-columns:repeat(4,1fr);gap:.25em;margin-bottom:.5em}
+    .ac-sf-cotab{text-align:center;padding:.32em 0;font-size:.56em;letter-spacing:.09em;border-bottom:2px solid transparent;color:rgba(65,85,105,.65);cursor:pointer;transition:all .18s}
+    .ac-sf-cotab.on{border-bottom-color:#00E5FF;color:#00E5FF}
+    .ac-sf-btn{display:block;width:100%;padding:.65em;margin-top:.85em;margin-bottom:.38em;background:#00E5FF;color:#060810;font-family:inherit;font-weight:bold;font-size:.74em;letter-spacing:.13em;border:none;cursor:pointer;border-radius:4px;transition:filter .2s}
+    .ac-sf-btn:hover{filter:brightness(1.1)}
+    .ac-sf-ghost{display:block;width:100%;padding:.45em;text-align:center;background:transparent;border:1px solid rgba(0,229,255,.13);border-radius:4px;color:rgba(65,85,105,.72);font-family:inherit;font-size:.57em;letter-spacing:.1em;cursor:pointer;transition:all .18s}
+    .ac-sf-ghost:hover{border-color:rgba(0,229,255,.3);color:rgba(100,130,160,.9)}
+    /* ══ END ADD CARD DEVICE PAGE ══════════════════════════════════════════ */
+
     .coll-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
     .coll-stat-box{background:var(--surface);border:1px solid var(--border);padding:16px;text-align:center}
     .coll-stat-label{font-size:.7rem;color:var(--muted);margin-bottom:6px;letter-spacing:.08em}
@@ -3598,38 +3708,160 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   </div>
 
   <div id="addCardPage" class="page">
-    <div class="pb-page-hdr">
-      <div class="pb-page-hdr-main">
-        <div class="pb-page-hdr-title">+ Add Card<span class="addcard-led" title="System ready"></span></div>
-        <div class="pb-page-hdr-sub">Search the Pokémon TCG database or add any card manually.</div>
+
+    <!-- ══ DESKTOP: pdex device ═══════════════════════════════════════════ -->
+    <div class="ac-pdex-wrap">
+      <div class="ac-device" style="width:min(1200px,97vw)">
+        <img class="ac-device-img" src="pdex.png" alt="PathBinder">
+        <div class="ac-led-d"></div>
+        <div class="ac-scanlines"></div>
+
+        <!-- LEFT SCREEN: search form -->
+        <div class="ac-left-screen">
+          <div class="ac-crt" id="acCrtLeft">
+            <div class="ac-lp">
+              <div class="ac-lp-title">ADD CARD</div>
+
+              <label class="ac-fl">SEARCH</label>
+              <input class="ac-fi" id="cardSearchInput" type="text"
+                placeholder="Charizard..."
+                onkeydown="if(event.key==='Enter')acDeskSearch()">
+
+              <label class="ac-fl">GRADE</label>
+              <div class="ac-chips">
+                <span class="ac-chip on" onclick="acChipToggle(this)">Raw</span>
+                <span class="ac-chip" onclick="acChipToggle(this)">PSA</span>
+                <span class="ac-chip" onclick="acChipToggle(this)">BGS</span>
+                <span class="ac-chip" onclick="acChipToggle(this)">CGC</span>
+              </div>
+
+              <label class="ac-fl">CERT #</label>
+              <div class="ac-ctabs">
+                <span class="ac-ctab on">PSA</span>
+                <span class="ac-ctab" onclick="acCtabClick(this)">BGS</span>
+                <span class="ac-ctab" onclick="acCtabClick(this)">CGC</span>
+                <span class="ac-ctab" onclick="acCtabClick(this)">SGC</span>
+              </div>
+              <input class="ac-fi" id="acDeskCert" type="text" placeholder="12345678">
+
+              <label class="ac-fl">CONDITION</label>
+              <input class="ac-fi" id="acDeskCond" type="text" placeholder="Near Mint  ▾">
+
+              <label class="ac-fl">PAID $</label>
+              <input class="ac-fi" id="acDeskPaid" type="number" step="0.01" placeholder="0.00">
+
+              <div class="ac-sp"></div>
+              <button class="ac-btn" onclick="acDeskSearch()">SEARCH CARDS</button>
+              <button class="ac-ghost" onclick="openManualAddModal()">+ ADD MANUALLY</button>
+              <label class="ac-ghost" style="cursor:pointer;text-align:center">&#9654; SCAN A CARD
+                <input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none">
+              </label>
+              <button class="ac-ghost" onclick="openMultiScan()">&#9638; SCAN MULTIPLE</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT SCREEN: results -->
+        <div class="ac-right-screen">
+          <div class="ac-crt" id="acCrtRight">
+            <div class="ac-rp">
+              <div class="ac-rp-hdr">
+                <span class="ac-rp-title">CARD SEARCH</span>
+                <span class="ac-rp-count" id="acDeskCount">—</span>
+              </div>
+              <div class="ac-rp-status" id="acDeskStatus"></div>
+              <div id="acDeskGrid"></div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
-    <div class="pb-panel">
-      <div class="pb-panel-h">
-        <div class="pb-panel-title">
-          <span class="pb-panel-title-ico">⊕</span>
-          Card Search
-        </div>
-      </div>
-      <div class="pb-panel-body">
-        <div class="coll-add-section" style="background:none;border:none;padding:0;margin:0">
-          <div class="coll-add-title"></div>
-          <input type="text" class="coll-search-bar" id="cardSearchInput"
-            placeholder="Search Pokémon cards by name (e.g. Charizard, Pikachu)..."
-            onkeydown="if(event.key==='Enter')searchPokemonCards()" />
-          <div class="coll-add-btns">
-            <button class="coll-btn-primary" onclick="searchPokemonCards()">Search Cards</button>
-            <button class="coll-btn-secondary" onclick="openManualAddModal()">Add Manually</button>
-            <label class="coll-btn-secondary" style="border-color:var(--accent2);color:var(--accent2);cursor:pointer;display:inline-block;text-align:center">&#9654; Scan a Card<input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none"></label>
-            <button class="coll-btn-secondary" onclick="openMultiScan()" style="border-color:var(--gold);color:var(--gold)">&#9638; Scan Multiple</button>
-          </div>
-          <div id="cardSearchStatus" style="font-size:.78rem;color:var(--muted);margin-top:10px;display:none"></div>
-          <div id="crtGridWrap" class="crt-grid-wrap" style="position:relative;display:none">
-            <div id="cardResultGrid" class="card-result-grid"></div>
+
+    <!-- ══ MOBILE: phondex device ══════════════════════════════════════════ -->
+    <div class="ac-mob-wrap">
+      <div class="ac-device" style="width:min(480px,100vw)">
+        <img class="ac-device-img" src="phondex.png" alt="PathBinder">
+        <div class="ac-led-m"></div>
+        <div class="ac-phone-screen">
+          <div class="ac-scanlines" style="z-index:50"></div>
+          <div class="ac-crt" id="acCrtMob">
+
+            <!-- top nav -->
+            <nav class="ac-nav">
+              <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
+                <span class="ac-ni-ico">◎</span>
+                <span class="ac-ni-lbl">Search</span>
+              </div>
+              <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
+                <span class="ac-ni-ico">▣</span>
+                <span class="ac-ni-lbl">Scan</span>
+              </div>
+              <div class="ac-ni" onclick="acNavClick(this);showPage('collection');setMobileNav('collection')">
+                <span class="ac-ni-ico">⊞</span>
+                <span class="ac-ni-lbl">Binder</span>
+              </div>
+              <div class="ac-ni" onclick="acNavClick(this);showPage('account');setMobileNav('account')">
+                <span class="ac-ni-ico">◉</span>
+                <span class="ac-ni-lbl">Account</span>
+              </div>
+            </nav>
+
+            <!-- 2×2 results grid -->
+            <div class="ac-mob-grid" id="acMobGrid">
+              <!-- placeholder until first search -->
+              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">SEARCH</div></div>
+              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">YOUR</div></div>
+              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">CARDS</div></div>
+              <div class="ac-mc"><div class="ac-mc-ph" style="color:rgba(0,229,255,.12);font-size:.6em;letter-spacing:.12em">ABOVE</div></div>
+            </div>
+
+            <!-- bottom sheet -->
+            <div class="ac-backdrop" id="acBackdrop" onclick="acBackdropClose(event)">
+              <div class="ac-sheet" onclick="event.stopPropagation()">
+                <div class="ac-drag"></div>
+                <div class="ac-sh-title">ADD CARD</div>
+
+                <label class="ac-sf-label">SEARCH</label>
+                <input class="ac-sf-input" id="acMobInput" type="text"
+                  placeholder="Charizard, Pikachu..."
+                  onkeydown="if(event.key==='Enter')acMobSearch()">
+
+                <label class="ac-sf-label">GRADE</label>
+                <div class="ac-sf-chips">
+                  <span class="ac-sf-chip on" onclick="acSfChip(this)">Raw</span>
+                  <span class="ac-sf-chip" onclick="acSfChip(this)">PSA</span>
+                  <span class="ac-sf-chip" onclick="acSfChip(this)">BGS</span>
+                  <span class="ac-sf-chip" onclick="acSfChip(this)">CGC</span>
+                  <span class="ac-sf-chip" onclick="acSfChip(this)">SGC</span>
+                </div>
+
+                <label class="ac-sf-label">PASTE CERT #</label>
+                <div class="ac-sf-cotabs">
+                  <span class="ac-sf-cotab on">PSA</span>
+                  <span class="ac-sf-cotab" onclick="acSfCoTab(this)">BGS</span>
+                  <span class="ac-sf-cotab" onclick="acSfCoTab(this)">CGC</span>
+                  <span class="ac-sf-cotab" onclick="acSfCoTab(this)">SGC</span>
+                </div>
+                <input class="ac-sf-input" id="acMobCert" type="text" placeholder="e.g. 12345678">
+
+                <label class="ac-sf-label">CONDITION</label>
+                <input class="ac-sf-input" id="acMobCond" type="text" placeholder="Near Mint  ▾">
+
+                <button class="ac-sf-btn" onclick="acMobSearch()">SEARCH CARDS</button>
+                <button class="ac-sf-ghost" onclick="openManualAddModal()">+ ADD MANUALLY</button>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
     </div>
+
+    <!-- legacy IDs for compatibility -->
+    <div id="cardSearchStatus" style="display:none"></div>
+    <div id="cardResultGrid" style="display:none"></div>
+
   </div>
 
   <!-- ── FAIR TRADE CHECK ──────────────────────────────────────────────── -->
@@ -4790,9 +5022,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (pageId === 'publicBinder')  { /* content managed by loadPublicBinder */ }
       if (pageId === 'storefront')    { /* content managed by loadStorefront */ }
       if (pageId === 'addCard') {
-        // Soft CRT warm-up when navigating to Add Card
-        const wrap = document.getElementById('crtGridWrap');
-        if (wrap && wrap.style.display !== 'none') _crtGridFlash();
+        setTimeout(() => {
+          ['acCrtLeft','acCrtRight','acCrtMob'].forEach(id => acCrtFlash(id));
+        }, 220);
       }
       if (pageId === 'fairTrade') { ftInitPage(); }
       if (pageId === 'sets') { loadSetsPage(); }
@@ -11784,31 +12016,113 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       renderDashboard();
     }
 
-    function _crtGridFlash(cb) {
-      const wrap = document.getElementById('crtGridWrap');
-      if (!wrap) { if (cb) cb(); return; }
-      wrap.classList.remove('crt-powered');
-      wrap.style.cssText = 'position:relative;display:block;transform:scaleY(0.001);filter:brightness(14) blur(5px) saturate(0)';
+    /* ══ ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════════ */
+    let acMobSearchOpen = false;
+
+    function acCrtFlash(id, cb) {
+      const el = document.getElementById(id);
+      if (!el) { if (cb) cb(); return; }
+      el.classList.remove('ac-on');
+      el.style.transform = 'scaleY(0.001)';
+      el.style.filter    = 'brightness(14) blur(5px) saturate(0)';
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        wrap.style.cssText = 'position:relative;display:block';
-        void wrap.offsetWidth;
-        wrap.classList.add('crt-powered');
-        if (cb) setTimeout(cb, 620);
+        el.style.transform = '';
+        el.style.filter    = '';
+        void el.offsetWidth;
+        el.classList.add('ac-on');
+        if (cb) setTimeout(cb, 650);
       }));
     }
+
+    function acDeskSearch() {
+      // Sync desk search → searchPokemonCards
+      searchPokemonCards();
+    }
+
+    function acMobSearch() {
+      const mob  = document.getElementById('acMobInput');
+      const desk = document.getElementById('cardSearchInput');
+      if (mob && desk) desk.value = mob.value.trim();
+      acMobSearchOpen = false;
+      const bd = document.getElementById('acBackdrop');
+      if (bd) bd.classList.remove('open');
+      acCrtFlash('acCrtMob', () => searchPokemonCards());
+    }
+
+    function acMobToggleSearch() {
+      const bd   = document.getElementById('acBackdrop');
+      const navS = document.getElementById('acNavSearch');
+      if (!bd) return;
+      if (!acMobSearchOpen) {
+        acCrtFlash('acCrtMob', () => {
+          acMobSearchOpen = true;
+          bd.classList.add('open');
+          setTimeout(() => { const inp = document.getElementById('acMobInput'); if (inp) inp.focus(); }, 380);
+        });
+      } else {
+        acMobSearchOpen = false;
+        bd.classList.remove('open');
+      }
+    }
+
+    function acNavClick(el) {
+      document.querySelectorAll('.ac-ni').forEach(n => n.classList.remove('on'));
+      el.classList.add('on');
+      acMobSearchOpen = false;
+      const bd = document.getElementById('acBackdrop');
+      if (bd) bd.classList.remove('open');
+    }
+
+    function acBackdropClose(e) {
+      if (e.target === document.getElementById('acBackdrop')) {
+        acMobSearchOpen = false;
+        document.getElementById('acBackdrop').classList.remove('open');
+      }
+    }
+
+    function acChipToggle(el)  { el.classList.toggle('on'); }
+    function acSfChip(el)      { el.classList.toggle('on'); }
+    function acCtabClick(el)   { el.closest('.ac-ctabs').querySelectorAll('.ac-ctab').forEach(t => t.classList.remove('on')); el.classList.add('on'); }
+    function acSfCoTab(el)     { el.closest('.ac-sf-cotabs').querySelectorAll('.ac-sf-cotab').forEach(t => t.classList.remove('on')); el.classList.add('on'); }
+
+    function acRenderMobGrid(cards) {
+      const mob = document.getElementById('acMobGrid');
+      if (!mob || !cards || cards.length === 0) return;
+      const first4 = cards.slice(0, 4);
+      mob.innerHTML = first4.map(card => {
+        const cd = JSON.stringify({
+          apiCardId:    card.id,
+          cardName:     card.name,
+          setName:      (card.set && card.set.name)  || '',
+          setCode:      (card.set && card.set.id)    || '',
+          cardNumber:   card.number || '',
+          cardImageUrl: (card.images && card.images.small) || '',
+          gameType:     'pokemon'
+        }).replace(/"/g,'&quot;');
+        return `<div class="ac-mc" onclick='openAddToCollectionModal(JSON.parse(this.dataset.card))' data-card="${cd}">
+          ${card.images && card.images.small
+            ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">`
+            : '<div class="ac-mc-ph"></div>'}
+          <div class="ac-mc-name">${card.name}</div>
+          <div class="ac-mc-sub">${(card.set && card.set.name) || ''} #${card.number || '?'}</div>
+          <div class="ac-mc-add">+ ADD TO BINDER</div>
+        </div>`;
+      }).join('');
+    }
+    /* ══ END ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════ */
 
     async function searchPokemonCards() {
       const input = document.getElementById('cardSearchInput');
       const query = input ? input.value.trim() : '';
       if (!query) { showToast('Enter a card name to search'); return; }
 
-      const status = document.getElementById('cardSearchStatus');
-      const wrap   = document.getElementById('crtGridWrap');
-      const grid   = document.getElementById('cardResultGrid');
-      status.style.display = 'block';
-      status.textContent   = '// Searching Pokémon TCG database...';
-      if (wrap) wrap.style.display = 'none';
-      grid.innerHTML       = '';
+      const deskStatus = document.getElementById('acDeskStatus');
+      const deskCount  = document.getElementById('acDeskCount');
+      const deskGrid   = document.getElementById('acDeskGrid');
+
+      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING…'; }
+      if (deskCount)  deskCount.textContent = '—';
+      if (deskGrid)   deskGrid.innerHTML = '';
 
       try {
         const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=250&orderBy=name`);
@@ -11818,12 +12132,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const total = json.totalCount || cards.length;
 
         if (cards.length === 0) {
-          status.textContent = `// No results for "${query}" — try a different spelling`;
+          if (deskStatus) deskStatus.textContent = `// NO RESULTS FOR "${query.toUpperCase()}"`;
+          if (deskCount)  deskCount.textContent = '0 results';
+          acRenderMobGrid([]);
           return;
         }
-        const moreNote = total > cards.length ? ` (showing ${cards.length} of ${total} — refine your search for more)` : '';
-        status.textContent = `// Found ${total} result${total !== 1 ? 's' : ''}${moreNote} — click a card to add it`;
-        grid.innerHTML = cards.map(card => {
+        const moreNote = total > cards.length ? ` (${cards.length} of ${total})` : `${total} result${total !== 1 ? 's' : ''}`;
+        if (deskStatus) { deskStatus.textContent = `// CLICK A CARD TO ADD IT`; }
+        if (deskCount)  deskCount.textContent = moreNote;
+
+        const cardHTML = cards.map(card => {
           const cardData = JSON.stringify({
             apiCardId:    card.id,
             cardName:     card.name,
@@ -11833,22 +12151,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             cardImageUrl: (card.images && card.images.small) || '',
             gameType:     'pokemon'
           }).replace(/"/g, '&quot;');
-          return `<div class="card-result" style="position:relative" data-card="${cardData}">
+          return `<div class="card-result" data-card="${cardData}">
             <div onclick='openAddToCollectionModal(JSON.parse(this.parentElement.dataset.card))' style="cursor:pointer">
               ${card.images && card.images.small
                 ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">`
-                : '<div style="height:90px;background:var(--surface2);margin-bottom:6px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">No Image</div>'}
+                : '<div style="height:70px;background:rgba(0,229,255,.04);display:flex;align-items:center;justify-content:center;color:rgba(0,229,255,.18);font-size:.5rem;letter-spacing:.1em">NO IMG</div>'}
               <div class="card-result-name">${card.name}</div>
               <div class="card-result-set">${(card.set && card.set.name) || ''} #${card.number || '?'}</div>
             </div>
-            <button onclick='openAddToWishlistModal(JSON.parse(this.parentElement.dataset.card))' title="Add to Wishlist"
-              style="width:100%;margin-top:5px;padding:3px 0;border:1px solid rgba(0,204,255,.35);background:rgba(0,204,255,.06);color:var(--teal);font-family:inherit;font-size:.6rem;cursor:pointer;letter-spacing:.04em">♡ WISHLIST</button>
           </div>`;
         }).join('');
-        // CRT power-on flash when results render
-        _crtGridFlash();
+
+        if (deskGrid) deskGrid.innerHTML = cardHTML;
+
+        // Mobile 2×2 grid (first 4)
+        acRenderMobGrid(cards);
+
+        // CRT flash on desktop right panel
+        acCrtFlash('acCrtRight');
+
       } catch(e) {
-        status.textContent = '// Search failed — check your connection';
+        if (deskStatus) deskStatus.textContent = '// SEARCH FAILED — CHECK CONNECTION';
         console.error('Pokémon TCG search error:', e);
       }
     }
