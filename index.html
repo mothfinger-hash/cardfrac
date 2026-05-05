@@ -12502,7 +12502,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         window._pendingJpCard = true;
 
       } catch (err) {
-        grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(255,80,80,.5);font-size:.5em;text-align:center">Search error — check edge function deployment</div></div>';
+        const msg = err?.message || String(err);
+        grid.innerHTML = `<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(255,80,80,.5);font-size:.45em;text-align:center;padding:8px">Search error:<br>${msg}</div></div>`;
         console.error('[searchJapaneseCards]', err);
       }
     }
