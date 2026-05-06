@@ -17932,8 +17932,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             ? q().ilike('name', '%' + trainerPokemon + '%').limit(12)
             : Promise.resolve({ data: [] }),
           // K — JP-specific: search jp- catalog cards by card number when JP OCR detected
+          //     Try multiple formats: '69', '069', '69/80', '069/080' (TCGdex varies by set)
           (isJpOcr && numStripped)
-            ? q().like('id', 'jp-%').eq('card_number', numStripped).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }))
+            ? (() => {
+                const numFmts = [numStripped];
+                if (numRaw && numRaw !== numStripped) numFmts.push(numRaw);
+                if (numTotal) { numFmts.push(numStripped + '/' + numTotal); if (numRaw) numFmts.push(numRaw + '/' + numTotal); }
+                const orFilter = numFmts.filter((v,i,a) => a.indexOf(v) === i).map(n => 'card_number.eq.' + n).join(',');
+                return q().like('id', 'jp-%').or(orFilter).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }));
+              })()
             : Promise.resolve({ data: [] })
         ]);
 
@@ -17961,37 +17968,43 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         console.log('[Scanner] name+num hits:', nameNumHits.map(function(m){return m.name+'/'+m.set_code;}).join(', '));
         console.log('[Scanner] num-only hits:', numHits.length, '| name-only hits:', nameHits.length);
         console.log('[Scanner] expanded/trainer hits:', expandedHits.map(function(m){return m.name+'/'+m.set_code;}).join(', ') || 'none');
+        console.log('[Scanner] JP num hits:', jpNumHits.map(function(m){return m.name+'/'+m.set_code+'/cn:'+m.card_number;}).join(', ') || 'none');
         console.log('[Scanner] confirmed sets (contain card #'+numTotal+'):', [...confirmedSets].join(', ') || 'none');
         console.log('[Scanner] CLIP top3:', clipMatches.slice(0,3).map(function(m){return m.name+'('+(m.similarity*100).toFixed(0)+'%)';}).join(' '));
 
         // Scoring tiers (higher = more confident match):
+        //   1.30  JP num + set confirmed (jp- id, correct number, set has right total) [JP OCR mode]
         //   1.22  nameNum + set confirmed by size fingerprint  (sv3pt5 Gengar vs hgss4 Gengar)
         //   1.15  setTotal RPC                                 (number + RPC set fingerprint)
-        //   1.10  JP num + set confirmed (jp- id, correct number, set has right total)
+        //   1.10  JP num (jp- id, correct number, no set confirm) [JP OCR mode]
         //   1.05  expanded trainer name match                  (N's Zekrom)
         //   1.00  name + number match
-        //   0.92  JP num (jp- id, correct number, no set confirm)
         //   0.88  number only
         //   0.80  Pokémon name from trainer card               (broadest — Zekrom)
         //   0.78  name only / base name
         //
+        // When JP OCR is detected, all non-jp- cards are penalised by −0.35 so
+        // any jp- number match wins over English-only hits.
         // CLIP similarity is added as a ×0.12 tiebreaker within each tier.
-        // JP CLIP matches get an extra ×0.15 boost when JP OCR was detected.
+        // JP CLIP matches get ×0.27 boost when JP OCR was detected.
         function scoreOcr(m, source) {
+          var isJpCard = m.id && m.id.startsWith('jp-');
           var base = source === 'setTotal'   ? 1.15
                    : source === 'nameNum'    ? 1.0
                    : source === 'expanded'   ? 1.05
                    : source === 'trainerPok' ? 0.80
-                   : source === 'jpNum'      ? (numTotal && confirmedSets.has(m.set_code) ? 1.10 : 0.92)
+                   : source === 'jpNum'      ? (numTotal && confirmedSets.has(m.set_code) ? 1.30 : 1.10)
                    : source === 'num'        ? 0.88
                    :                          0.78;
           // +0.22 when name+number match AND the card's set contains card #numTotal
           var setConfirmedBoost = (source === 'nameNum' && numTotal && confirmedSets.has(m.set_code)) ? 0.22 : 0;
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
           // JP OCR: boost CLIP similarity for jp- prefixed cards
-          var clipMult = (isJpOcr && m.id && m.id.startsWith('jp-')) ? 0.27 : 0.12;
+          var clipMult = (isJpOcr && isJpCard) ? 0.27 : 0.12;
           var clipBoost = clipEntry ? clipEntry.similarity * clipMult : 0;
-          return base + setConfirmedBoost + clipBoost;
+          // When JP OCR detected, penalise English cards so jp- hits always win
+          var jpPenalty = (isJpOcr && !isJpCard) ? 0.35 : 0;
+          return base + setConfirmedBoost + clipBoost - jpPenalty;
         }
 
         const merged = [];
