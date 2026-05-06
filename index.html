@@ -17928,12 +17928,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             : Promise.resolve({ data: [] }),
           // J — Pokémon-only name from trainer card: "Zekrom" from "N's Zekrom"
           //     Broadest fallback — catches any version of this Pokémon across sets
-          trainerPokemon,
+          trainerPokemon
+            ? q().ilike('name', '%' + trainerPokemon + '%').limit(12)
+            : Promise.resolve({ data: [] }),
           // K — JP-specific: search jp- catalog cards by card number when JP OCR detected
           (isJpOcr && numStripped)
             ? q().like('id', 'jp-%').eq('card_number', numStripped).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }))
-            : Promise.resolve({ data: [] })
-            ? q().ilike('name', '%' + trainerPokemon + '%').limit(12)
             : Promise.resolve({ data: [] })
         ]);
 
