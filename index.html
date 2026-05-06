@@ -12891,13 +12891,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
 
         // Normalise catalog rows into the shape openSearchCardDetail expects
+        // TCGdex stores English image URLs (/en/) — swap to /jp/ for actual JP card art
+        const _jpImg = (url) => url ? url.replace('/en/', '/jp/') : '';
         const normalised = items.map(c => ({
           id:       c.id,
           name:     c.name,
           number:   c.card_number || '',
           rarity:   c.rarity      || '',
           set:      { name: c.set_name || '', id: c.set_code || '' },
-          images:   { small: c.image_url || '', large: c.image_url || '' },
+          images:   { small: _jpImg(c.image_url), large: _jpImg(c.image_url) },
           _fromCatalog: true,
         }));
 
@@ -13101,13 +13103,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         if (error) throw new Error(error.message);
 
+        // TCGdex stores English image URLs (/en/) — swap to /jp/ for actual JP card art
+        const _jpImg = (url) => url ? url.replace('/en/', '/jp/') : '';
         const cards = (rows || []).map(c => ({
           id:     c.id,
           name:   c.name,
           number: c.card_number || '',
           rarity: c.rarity      || '',
           set:    { name: c.set_name || '', id: c.set_code || '' },
-          images: { small: c.image_url || '', large: c.image_url || '' },
+          images: { small: _jpImg(c.image_url), large: _jpImg(c.image_url) },
           _fromCatalog: true,
         }));
 
