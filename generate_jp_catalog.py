@@ -2,7 +2,7 @@
 """
 PathBinder — JP Card Catalog Builder
 =====================================
-Fetches card data from TCGdex (https://api.tcgdex.net/v2/en/) set-by-set,
+Fetches card data from TCGdex (https://api.tcgdex.net/v2/ja/) set-by-set,
 generates CLIP embeddings using the same model as the browser scanner, and
 upserts into the Supabase catalog table.
 
@@ -48,7 +48,7 @@ except ImportError:
 # ══════════════════════════════════════════════════════════════════════════════
 SUPABASE_URL     = "https://xjamytrhxeaynywcwfun.supabase.co"
 SUPABASE_KEY     = os.environ.get("SUPABASE_SERVICE_KEY") or input("Service role key (Settings → API → service_role): ").strip()
-TCGDEX_BASE      = "https://api.tcgdex.net/v2/en"
+TCGDEX_BASE      = "https://api.tcgdex.net/v2/ja"
 CHECKPOINT_FILE  = "jp_catalog_checkpoint.txt"
 BATCH_SIZE       = 16      # cards per CLIP forward pass (reduce if OOM)
 UPSERT_BATCH     = 50      # rows per Supabase upsert call
@@ -282,12 +282,12 @@ for set_idx, set_stub in enumerate(all_sets, 1):
         card_name  = str(card_stub.get("name",    "")).strip()
         image_base = str(card_stub.get("image",   "")).strip()
 
-        if not local_id or not image_base:
+        if not local_id:
             total_skipped += 1
             continue
 
-        catalog_id  = f"jp-{set_id}-{local_id}"
-        image_url   = f"{image_base}/{IMAGE_QUALITY}.png"
+        catalog_id = f"jp-{set_id}-{local_id}"
+        image_url  = f"{image_base}/{IMAGE_QUALITY}.png" if image_base else None
 
         if catalog_id in already_embedded:
             total_skipped += 1
@@ -301,7 +301,7 @@ for set_idx, set_stub in enumerate(all_sets, 1):
             "card_number": local_id,
             "rarity":      card_stub.get("rarity", ""),
             "supertype":   card_stub.get("category", card_stub.get("supertype", "")),
-            "image_url":   image_url,
+            "image_url":   image_url,   # None if TCGdex has no image — pokedata will fill it in
         })
 
     if not cards_to_embed:
@@ -321,9 +321,14 @@ for set_idx, set_stub in enumerate(all_sets, 1):
     for i in range(0, len(cards_to_embed), BATCH_SIZE):
         batch = cards_to_embed[i : i + BATCH_SIZE]
 
-        # Download images
+        # Download images (skip cards with no image URL — metadata-only rows)
         loaded = []
         for card in batch:
+            if not card["image_url"]:
+                # No image from TCGdex — upsert metadata only, no embedding
+                buf.append({k: v for k, v in card.items()})
+                set_embedded += 1
+                continue
             img = fetch_image(card["image_url"])
             if img:
                 loaded.append((card, img))

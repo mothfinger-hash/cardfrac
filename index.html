@@ -13227,15 +13227,39 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     window._acLastSearchCards = [];
     window._acLastJpCards     = [];
 
-    function openSearchCardDetail(idx, isJp) {
+    async function openSearchCardDetail(idx, isJp) {
       const cards = isJp ? window._acLastJpCards : window._acLastSearchCards;
       const card  = cards[idx];
       if (!card) return;
 
       document.getElementById('setCardDetailSheet')?.remove();
 
-      const imgSmall = card.images?.small || '';
-      const imgLarge = card.images?.large || imgSmall;
+      let imgSmall = card.images?.small || '';
+      let imgLarge = card.images?.large || imgSmall;
+
+      // ── Catalog image lookup: swap in our hosted image if available ──────
+      // Only runs for EN numeric card numbers (e.g. 1, 52, 191)
+      if (!isJp && card.set?.id && /^\d+$/.test(card.number || '')) {
+        try {
+          const { data: mapRow } = await sb.from('set_map')
+            .select('pd_code').eq('ptcg_code', card.set.id).maybeSingle();
+          if (mapRow?.pd_code) {
+            const numPadded = String(parseInt(card.number)).padStart(3, '0');
+            const { data: catRow } = await sb.from('catalog')
+              .select('image_url')
+              .eq('set_code', mapRow.pd_code)
+              .eq('card_number', numPadded)
+              .like('id', 'en-%')
+              .maybeSingle();
+            if (catRow?.image_url) {
+              imgSmall = catRow.image_url;
+              imgLarge = catRow.image_url;
+              console.log(`[catalog] using hosted image for ${card.set.id}/${card.number}`);
+            }
+          }
+        } catch (_) {}
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       const tcgp = card.tcgplayer?.prices || {};
       const cm   = card.cardmarket?.prices || {};
@@ -17706,8 +17730,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const line = lines[i];
         if (isFurigana(line)) continue;
         if (JP_SKIP.test(line)) continue;
+        // Skip evolution stage labels: "1進化", "2進化", "たね", "LEGEND" etc.
+        if (/^\d+進化$/.test(line)) continue;
+        // Skip "XからXX進化" (evolves-from text): "ゴーストから進化"
+        if (/から進化/.test(line)) continue;
         // Accept lines that contain kanji/kana and are reasonably sized
-        if (/[　-鿿぀-ヿ]/.test(line) && line.length >= 3 && line.length <= 30) {
+        if (/[　-鿿぀-ヿ]/.test(line) && line.length >= 3 && line.length <= 35) {
+          // Strip trailing ASCII noise that OCR appends (e.g. "メガゲンガー CX3500" → "メガゲンガー")
+          // Preserve known name suffixes: "ex", "GX", "V", "VMAX", "VSTAR" handled by keeping whole line if short
+          const cjkPrefix = line.match(/^([　-鿿一-鿿぀-ヿ豈-﫿ｦ-ﾟ・ー～「」。、]+)/);
+          if (cjkPrefix && cjkPrefix[1].length >= 2) return cjkPrefix[1].trim();
           return line;
         }
       }
