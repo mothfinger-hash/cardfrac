@@ -2239,8 +2239,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-ytd-compact{padding:8px 10px!important}
 /* ── Drag handles ── */
 .ndash-drag-handle{cursor:grab;color:#b87333;font-size:14px;line-height:1;letter-spacing:-.5px;user-select:none;flex-shrink:0;padding:0 3px;transition:color .1s;margin-left:2px}
-.ndash-drag-handle:hover{color:#d4944a}
-.ndash-drag-handle:active{cursor:grabbing;color:#c8803a}
+.ndash-drag-handle:hover{color:#d4944a!important}
+.ndash-drag-handle:active{cursor:grabbing;color:#c8803a!important}
 /* Dragging states */
 [data-panel-id].ndash-dragging{opacity:.3;outline:2px dashed var(--border)}
 [data-panel-id].ndash-drag-over{outline:2px solid var(--accent);outline-offset:-1px;box-shadow:0 0 0 1px var(--accent),3px 3px 0 #000}
@@ -2259,7 +2259,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-resize-handle:hover::after{background:rgba(0,229,255,.55)}
 /* Collapse toggle button in panel headers */
 .ndash-collapse-btn{background:transparent;border:none;cursor:pointer;color:#b87333;font-size:11px;line-height:1;padding:0 2px;flex-shrink:0;transition:color .1s;margin-left:1px;font-family:inherit}
-.ndash-collapse-btn:hover{color:#d4944a}
+.ndash-collapse-btn:hover{color:#d4944a!important}
 /* Collapsed panel — hide body and resize strip, lock height to header */
 .ndash-panel.ndash-collapsed{height:auto!important}
 .ndash-panel.ndash-collapsed>.ndash-panel-body,.ndash-panel.ndash-collapsed>.ndash-resize-handle{display:none!important}
@@ -3951,7 +3951,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <!-- Sort bar — All Cards only. Never shown inside individual binders. -->
       <div id="allCardsSortBar" style="display:none;border-top:1px solid var(--border);padding:6px 12px;display:none;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.08em;white-space:nowrap">SORT BY</span>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">
           <button class="allcards-sort-btn active" id="sortBtn-name"    onclick="setAllCardsSort('name')"   >Name A→Z</button>
           <button class="allcards-sort-btn"         id="sortBtn-rarity"  onclick="setAllCardsSort('rarity')" >Rarity ↓</button>
           <button class="allcards-sort-btn"         id="sortBtn-set"     onclick="setAllCardsSort('set')"    >Set</button>
@@ -4040,32 +4040,31 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div class="ac-led-m"></div>
         <div class="ac-phone-screen">
           <div class="ac-scanlines" style="z-index:50"></div>
-          <div class="ac-crt" id="acCrtMob">
 
-            <!-- top nav: search-only functions -->
-            <div class="ac-nav">
-              <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
-                <span class="ac-ni-ico">◎</span>
-                <span class="ac-ni-lbl">Search</span>
-              </div>
-              <div class="ac-ni" onclick="acNavClick(this);openCardScanner()">
-                <span class="ac-ni-ico">⬡</span>
-                <span class="ac-ni-lbl">Scan 1</span>
-              </div>
-              <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
-                <span class="ac-ni-ico">▣</span>
-                <span class="ac-ni-lbl">Scan Bulk</span>
-              </div>
-              <div class="ac-ni" onclick="acNavClick(this);openManualAddModal()">
-                <span class="ac-ni-ico">＋</span>
-                <span class="ac-ni-lbl">Manual</span>
-              </div>
+          <!-- top nav: static — sits above the CRT div so it's unaffected by the tube-on animation -->
+          <div class="ac-nav">
+            <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
+              <span class="ac-ni-ico">◎</span>
+              <span class="ac-ni-lbl">Search</span>
             </div>
+            <div class="ac-ni" onclick="acNavClick(this);openCardScanner()">
+              <span class="ac-ni-ico">⬡</span>
+              <span class="ac-ni-lbl">Scan 1</span>
+            </div>
+            <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
+              <span class="ac-ni-ico">▣</span>
+              <span class="ac-ni-lbl">Scan Bulk</span>
+            </div>
+            <div class="ac-ni" onclick="acNavClick(this);openManualAddModal()">
+              <span class="ac-ni-ico">＋</span>
+              <span class="ac-ni-lbl">Manual</span>
+            </div>
+          </div>
 
-
+          <!-- CRT div: only wraps the results grid so the tube-on flash doesn't shake the nav -->
+          <div class="ac-crt" id="acCrtMob">
             <!-- scrollable results grid -->
             <div class="ac-mob-grid" id="acMobGrid"></div>
-
           </div>
         </div>
       </div>
@@ -4533,6 +4532,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </thead>
         <tbody id="listingsTable"></tbody>
       </table>
+    </div>
+
+    <!-- Danger Zone -->
+    <div style="margin-top:24px;border:1px solid rgba(255,60,60,.35);background:rgba(255,60,60,.04);padding:16px 18px">
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:rgba(255,100,100,.85);margin-bottom:14px;text-transform:uppercase">⚠ Danger Zone</div>
+      <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Permanently delete all collection cards for a user. Binders are kept. This cannot be undone.
+      </div>
+      <div id="adminClearCollectionUsers" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.6rem;color:rgba(0,229,255,.4);letter-spacing:.08em">Loading users…</div>
+      </div>
     </div>
   </div>
 
@@ -9598,6 +9608,53 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       renderAdminTable();
       updateRevenuePanel();
       loadVendorApplications().then(renderAdminVendorApplications);
+      loadAdminClearCollectionUsers();
+    }
+
+    async function loadAdminClearCollectionUsers() {
+      const container = document.getElementById('adminClearCollectionUsers');
+      if (!container || !currentUser?.is_admin) return;
+
+      // Load profiles with card counts
+      const { data: profiles } = await sb.from('profiles').select('id, email, username').order('email');
+      if (!profiles || !profiles.length) {
+        container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">No users found.</div>';
+        return;
+      }
+
+      // Get card counts per user
+      const { data: counts } = await sb.from('collection_items').select('user_id');
+      const countMap = {};
+      (counts || []).forEach(r => { countMap[r.user_id] = (countMap[r.user_id] || 0) + 1; });
+
+      container.innerHTML = profiles.map(p => {
+        const n = countMap[p.id] || 0;
+        const label = p.username || p.email || p.id.slice(0, 8);
+        return `<div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid rgba(255,60,60,.2);background:rgba(0,0,0,.2)">
+          <div style="flex:1;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;color:var(--text)">${label}</div>
+          <div style="font-size:.6rem;color:var(--muted);white-space:nowrap">${n} card${n !== 1 ? 's' : ''}</div>
+          <button onclick="adminClearUserCollection('${p.id}','${label.replace(/'/g,"\\'")}',${n})"
+            ${n === 0 ? 'disabled' : ''}
+            style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid rgba(255,60,60,.5);background:transparent;color:rgba(255,100,100,.85);cursor:${n===0?'not-allowed':'pointer'};opacity:${n===0?'.4':'1'};white-space:nowrap;transition:all .15s"
+            onmouseover="if(${n}>0){this.style.background='rgba(255,60,60,.12)'}" onmouseout="this.style.background='transparent'">
+            Delete ${n > 0 ? n + ' cards' : 'cards'}
+          </button>
+        </div>`;
+      }).join('');
+    }
+
+    async function adminClearUserCollection(userId, label, count) {
+      if (!currentUser?.is_admin) return;
+      if (!confirm(`Delete all ${count} cards from ${label}'s collection?\n\nThis cannot be undone.`)) return;
+
+      const { error } = await sb
+        .from('collection_items')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) { showToast('Error: ' + error.message); return; }
+      showToast(`Deleted ${count} cards from ${label}'s collection`);
+      loadAdminClearCollectionUsers(); // refresh counts
     }
 
     function renderAdminTable() {
@@ -10897,6 +10954,70 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       renderBinder();
     }
 
+    async function syncMissingRarities() {
+      if (!currentUser) { showToast('Sign in first'); return; }
+      const btn = document.getElementById('syncRarityBtn');
+      if (btn) { btn.textContent = '⟳ Syncing…'; btn.disabled = true; }
+
+      try {
+        // 1. Fetch all collection items for this user where rarity is null and api_card_id is set
+        const { data: missing, error: fetchErr } = await sb
+          .from('collection_items')
+          .select('id, api_card_id, card_name')
+          .eq('user_id', currentUser.id)
+          .is('rarity', null)
+          .not('api_card_id', 'is', null);
+
+        if (fetchErr) throw fetchErr;
+        if (!missing || missing.length === 0) {
+          showToast('All cards already have rarity data ✓');
+          if (btn) { btn.textContent = '✓ All synced'; btn.disabled = false; }
+          return;
+        }
+
+        // 2. Deduplicate api_card_ids and fetch from Pokémon TCG API
+        const uniqueIds = [...new Set(missing.map(r => r.api_card_id).filter(Boolean))];
+        const rarityMap = {};
+
+        // Fetch in batches of 50 (API max per query)
+        const BATCH = 50;
+        for (let i = 0; i < uniqueIds.length; i += BATCH) {
+          const batch = uniqueIds.slice(i, i + BATCH);
+          const qIds  = batch.map(id => `id:${id}`).join(' OR ');
+          try {
+            const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(qIds)}&select=id,rarity&pageSize=250`);
+            const json = await res.json();
+            (json.data || []).forEach(c => { if (c.rarity) rarityMap[c.id] = c.rarity; });
+          } catch (_) { /* skip failed batches */ }
+          if (btn) btn.textContent = `⟳ ${Math.min(i + BATCH, uniqueIds.length)}/${uniqueIds.length}…`;
+        }
+
+        // 3. Update each collection_item row with the fetched rarity
+        let updated = 0;
+        for (const row of missing) {
+          const rarity = rarityMap[row.api_card_id];
+          if (!rarity) continue;
+          const { error: upErr } = await sb
+            .from('collection_items')
+            .update({ rarity })
+            .eq('id', row.id);
+          if (!upErr) updated++;
+        }
+
+        showToast(`Synced ${updated} of ${missing.length} cards`);
+        if (btn) { btn.textContent = `✓ ${updated} synced`; btn.disabled = false; setTimeout(() => { if (btn) btn.textContent = '⟳ Sync Rarities'; }, 4000); }
+
+        // 4. Reload collection so sort sees the new data
+        await loadCollection();
+        renderBinder();
+
+      } catch (e) {
+        console.error('syncMissingRarities:', e);
+        showToast('Sync failed — see console');
+        if (btn) { btn.textContent = '⟳ Sync Rarities'; btn.disabled = false; }
+      }
+    }
+
     function applyAllCardsSort(items) {
       const sorted = [...items]; // never mutate the source array
       const dir = allCardsSortDir[allCardsSort] || 1;
@@ -11438,6 +11559,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Show/hide sort bar — All Cards ONLY, never inside individual binders
       const sortBar = document.getElementById('allCardsSortBar');
       if (sortBar) sortBar.style.display = isAllCards ? 'flex' : 'none';
+
+      // Bounding box + scroll in All Cards view
+      if (isAllCards) {
+        content.style.maxHeight = 'calc(100svh - 320px)';
+        content.style.overflowY = 'auto';
+        content.style.overflowX = 'hidden';
+        content.style.border    = '1px solid var(--border)';
+        content.style.padding   = '8px';
+      } else {
+        content.style.maxHeight = '';
+        content.style.overflowY = '';
+        content.style.overflowX = '';
+        content.style.border    = '';
+        content.style.padding   = '';
+      }
 
       // Show/hide list search bar and vendor bulk import button
       const searchWrap = document.getElementById('binderListSearchWrap');
@@ -13107,6 +13243,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         currentValue: bestPrice,
         rarity:       card.rarity     || '',
       };
+      // Store for the "+" button handler — avoids JSON-in-HTML-attribute quoting issues
+      window._searchCardDetailData = cardData;
 
       const binderOptions = (currentUser && binders.length > 0)
         ? binders.map(b => `<option value="${b.id}">${_escHtml(b.name)}</option>`).join('')
@@ -13152,7 +13290,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <option value="" style="background:#030c14;color:rgba(210,240,255,.88)">Unsorted</option>
                 ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : '<option value="" style="background:#030c14;color:rgba(0,229,255,.4)">— no binders yet —</option>'}
               </select>
-              <button onclick="(function(){var b=document.getElementById('searchCardBinderSelect')?.value||null;document.getElementById('setCardDetailSheet').remove();openAddToCollectionModal(Object.assign({},${JSON.stringify(cardData).replace(/'/g,'&#39;').replace(/</g,'&lt;')},{binder_id:b||undefined}));})();"
+              <button onclick="addSearchCardFromDetail()"
                 style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(0,229,255,.55);background:rgba(0,229,255,.08);color:#00E5FF;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
                 onmouseover="this.style.background='rgba(0,229,255,.18)'" onmouseout="this.style.background='rgba(0,229,255,.08)'">+</button>
             </div>
@@ -13162,6 +13300,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
       document.body.appendChild(overlay);
+    }
+
+    function addSearchCardFromDetail() {
+      const cardData = window._searchCardDetailData;
+      if (!cardData) return;
+      const b = document.getElementById('searchCardBinderSelect')?.value || null;
+      document.getElementById('setCardDetailSheet')?.remove();
+      openAddToCollectionModal(Object.assign({}, cardData, { binder_id: b || undefined }));
     }
 
     function openAddToCollectionModal(cardData) {
