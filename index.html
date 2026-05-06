@@ -15708,6 +15708,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!str) return '';
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+    function _escAttr(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
 
     // ── Supabase image transform: serve smaller thumbnails for grid views ──
     // Converts storage URLs to the render/image endpoint with width + quality.
@@ -15849,7 +15853,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ══════════════════════════════════════════════════════════════════════
     // SETS COMPLETION TRACKER
     // ══════════════════════════════════════════════════════════════════════
-    var _setsCache = null;  // { timestamp, sets }
+    var _setsLang        = 'EN'; // 'EN' | 'JP'
+    var _setsCache       = null;  // { timestamp, sets }
+    var _jpSetsCache     = null;  // { timestamp, sets: [{set_name, set_code, total}] }
     var _setsDetailCache = {};  // setId → { timestamp, cards }
     var _setsDetailSort    = 'number'; // 'number' | 'rarity-asc' | 'rarity-desc'
     var _setsOwnedFirst    = false;    // independent toggle layered on top of sort
@@ -16026,9 +16032,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
+    // Shared tab header HTML
+    function _setsTabsHtml() {
+      const enActive = _setsLang === 'EN';
+      const tabBase = 'padding:6px 18px;font-family:inherit;font-size:.68rem;letter-spacing:.08em;cursor:pointer;border:1px solid;transition:all .15s;background:transparent';
+      return `<div style="display:flex;gap:6px;margin-bottom:14px">
+        <button onclick="setSetsLang('EN')" style="${tabBase};border-color:${enActive?'var(--copper)':'var(--border)'};color:${enActive?'var(--copper)':'var(--muted)'};background:${enActive?'var(--copper-glow)':'transparent'}">🇺🇸 ENGLISH</button>
+        <button onclick="setSetsLang('JP')" style="${tabBase};border-color:${!enActive?'var(--copper)':'var(--border)'};color:${!enActive?'var(--copper)':'var(--muted)'};background:${!enActive?'var(--copper-glow)':'transparent'}">🇯🇵 JAPANESE</button>
+      </div>`;
+    }
+
+    function setSetsLang(lang) {
+      _setsLang = lang;
+      loadSetsPage();
+    }
+
     async function loadSetsPage() {
       const el = document.getElementById('setsPageContent');
       if (!el) return;
+
+      if (_setsLang === 'JP') { await loadJpSetsPage(el); return; }
 
       el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>';
 
@@ -16060,9 +16083,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         el.innerHTML = `
           <div style="padding:16px 0 8px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <h2 style="font-size:1.1rem;margin:0">Set Completion</h2>
-            </div>
+            ${_setsTabsHtml()}
             <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">
               ${currentUser ? totalOwned + ' cards owned across your binder' : 'Log in to track your collection'}
             </p>
@@ -16076,13 +16097,279 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 onfocusout="this.style.borderColor='var(--border)';setTimeout(()=>document.getElementById('setsAcList')&&(document.getElementById('setsAcList').style.display='none'),160)">
               <div id="setsAcList" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--surface);border:1px solid var(--border);border-top:none;z-index:200;max-height:220px;overflow-y:auto;box-shadow:4px 4px 0 var(--shadow)"></div>
             </div>
-            <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 260px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
+            <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
               ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No sets found</div>'}
             </div>
           </div>`;
       } catch(e) {
         el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">Failed to load sets.<br><button onclick="loadSetsPage()" style="margin-top:12px;padding:6px 16px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;cursor:pointer;font-size:.8rem">Retry</button></div>`;
       }
+    }
+
+    // ── JP Sets ───────────────────────────────────────────────────────────
+    var _jpSetsDetailCache = {}; // setCode → { timestamp, cards }
+
+    async function loadJpSetsPage(el) {
+      el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading JP sets…</div>';
+      try {
+        const now = Date.now();
+        if (!_jpSetsCache || (now - _jpSetsCache.timestamp > 600000)) {
+          // Paginate through catalog to collect JP set info
+          let allRows = [];
+          let offset = 0;
+          while (true) {
+            const { data } = await sb.from('catalog')
+              .select('set_name, set_code')
+              .or('id.like.jp-%,id.like.pd-%')
+              .range(offset, offset + 999);
+            if (!data || data.length === 0) break;
+            allRows = allRows.concat(data);
+            if (data.length < 1000) break;
+            offset += 1000;
+          }
+          // Group by set_code, count cards
+          const byCode = {};
+          allRows.forEach(r => {
+            const key = r.set_code || r.set_name || '?';
+            if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0 };
+            byCode[key].total++;
+          });
+          const sets = Object.values(byCode).sort((a, b) => (a.set_name || '').localeCompare(b.set_name || ''));
+          _jpSetsCache = { timestamp: now, sets };
+        }
+
+        // Build owned map: set_code → owned count (from collection items with jp-/pd- ids)
+        const jpOwned = {};
+        if (currentUser) {
+          collectionItems.filter(c => !c.is_ghost && !c.sold_offline && c.api_card_id &&
+            (c.api_card_id.startsWith('jp-') || c.api_card_id.startsWith('pd-'))
+          ).forEach(c => {
+            // api_card_id = jp-{setCode}-{num} — extract set_code
+            const id = c.api_card_id;
+            const pfx = id.startsWith('jp-') ? 'jp-' : 'pd-';
+            const rest = id.slice(pfx.length);             // "{setCode}-{num}"
+            const lastDash = rest.lastIndexOf('-');
+            const setCode = lastDash > 0 ? rest.slice(0, lastDash) : rest;
+            jpOwned[setCode] = (jpOwned[setCode] || 0) + (c.quantity || 1);
+          });
+        }
+
+        const sets = _jpSetsCache.sets;
+        const totalOwned = Object.values(jpOwned).reduce((a, b) => a + b, 0);
+
+        const rows = sets.map(s => {
+          const owned = jpOwned[s.set_code] || 0;
+          const pct   = s.total > 0 ? Math.min(100, Math.round(owned / s.total * 100)) : 0;
+          const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+          return `<div onclick="loadJpSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}')"
+            style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+            onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
+              <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.set_code} · ${s.total} cards</div>
+              <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
+              </div>
+            </div>
+            <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${owned}/${s.total}</div>
+          </div>`;
+        }).join('');
+
+        el.innerHTML = `<div style="padding:16px 0 8px">
+          ${_setsTabsHtml()}
+          <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">
+            ${currentUser ? totalOwned + ' JP cards owned' : 'Log in to track your collection'} · ${sets.length} sets
+          </p>
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden">
+            ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No JP sets found — run fetch_jp_pokedata.py to build the catalog</div>'}
+          </div>
+        </div>`;
+      } catch(e) {
+        el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">Failed to load JP sets.<br><small>${e.message}</small></div>`;
+      }
+    }
+
+    async function loadJpSetDetail(setCode, setName) {
+      const el = document.getElementById('setsPageContent');
+      if (!el) return;
+      el.innerHTML = `<div style="padding:12px 0 8px">
+        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+        <div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>
+      </div>`;
+      try {
+        const now = Date.now();
+        let cards;
+        if (_jpSetsDetailCache[setCode] && (now - _jpSetsDetailCache[setCode].timestamp < 300000)) {
+          cards = _jpSetsDetailCache[setCode].cards;
+        } else {
+          let allCards = [];
+          let offset = 0;
+          while (true) {
+            const { data } = await sb.from('catalog')
+              .select('id, name, set_name, set_code, card_number, rarity, image_url')
+              .eq('set_code', setCode)
+              .or('id.like.jp-%,id.like.pd-%')
+              .range(offset, offset + 999);
+            if (!data || data.length === 0) break;
+            allCards = allCards.concat(data);
+            if (data.length < 1000) break;
+            offset += 1000;
+          }
+          allCards.sort((a, b) => (parseInt(a.card_number) || 0) - (parseInt(b.card_number) || 0));
+          cards = allCards;
+          _jpSetsDetailCache[setCode] = { timestamp: now, cards };
+        }
+
+        // Build owned map from collection items
+        const ownedMap = {};
+        if (currentUser) {
+          collectionItems.filter(c => !c.is_ghost && !c.sold_offline && c.api_card_id &&
+            (c.api_card_id.startsWith('jp-') || c.api_card_id.startsWith('pd-'))
+          ).forEach(c => { ownedMap[c.api_card_id] = c; });
+        }
+
+        const ownedCount = cards.filter(c => ownedMap[c.id]).length;
+        const pct = cards.length > 0 ? Math.round(ownedCount / cards.length * 100) : 0;
+        const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+
+        // Store for card detail use
+        window._jpSetDetailCards = cards;
+        window._jpSetOwnedMap    = ownedMap;
+
+        const rows = cards.map((card, idx) => {
+          const ci    = ownedMap[card.id];
+          const owned = !!ci;
+          const qty   = ci ? (ci.quantity || 1) : 0;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}"
+            onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
+            onclick="openJpSetCardDetail(${idx})">
+            ${card.image_url
+              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">`
+              : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
+              <div style="font-size:.62rem;color:var(--muted)">#${card.card_number||'?'}${card.rarity ? ' · '+card.rarity : ''}</div>
+            </div>
+            ${owned
+              ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}</span>`
+              : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
+            <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
+          </div>`;
+        }).join('');
+
+        el.innerHTML = `<div style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <h2 style="font-size:1.05rem;margin-bottom:8px">
+            <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">JP</span>${_escHtml(setName)}
+          </h2>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+            <div style="flex:1">
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
+              <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .5s"></div>
+              </div>
+            </div>
+            <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 340px);overflow-y:auto;overflow-x:hidden">
+            ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
+          </div>
+        </div>`;
+      } catch(e) {
+        el.innerHTML = `<div style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load. ${e.message}</div>
+        </div>`;
+      }
+    }
+
+    function openJpSetCardDetail(idx) {
+      const cards    = window._jpSetDetailCards || [];
+      const ownedMap = window._jpSetOwnedMap    || {};
+      const card = cards[idx];
+      if (!card) return;
+      document.getElementById('setCardDetailSheet')?.remove();
+
+      const ci      = ownedMap[card.id];
+      const owned   = !!ci;
+      const qty     = ci ? (ci.quantity || 1) : 0;
+      const overlay = document.createElement('div');
+      overlay.id    = 'setCardDetailSheet';
+      overlay.className = 'modal-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10010;display:flex;align-items:center;justify-content:center;padding:16px';
+
+      overlay.innerHTML = `
+        <div class="modal" style="width:100%;max-width:360px;padding:22px 20px;max-height:92vh;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+            <div>
+              <span style="font-size:.52rem;letter-spacing:.12em;color:var(--copper)">JP CARD DETAIL</span>
+            </div>
+            <button class="modal-close" onclick="document.getElementById('setCardDetailSheet').remove()"
+              style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 2px">×</button>
+          </div>
+          ${card.image_url ? `<div style="display:flex;justify-content:center;margin-bottom:16px">
+            <img src="${card.image_url}" alt="${_escHtml(card.name||'')}"
+              style="max-width:200px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 24px var(--copper-glow);cursor:zoom-in"
+              onclick="openImageLightbox('${card.image_url}')">
+          </div>` : ''}
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:5px">${_escHtml(card.name || '—')}</div>
+            <div style="font-size:.63rem;color:var(--muted)">${_escHtml(card.set_name||'')} · #${card.card_number||'?'}</div>
+            ${card.rarity ? `<span style="padding:2px 10px;border:1px solid var(--copper-dim);font-size:.57rem;color:var(--copper);letter-spacing:.08em;margin-top:6px;display:inline-block">${_escHtml(card.rarity)}</span>` : ''}
+          </div>
+          ${currentUser ? `
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;border-top:1px solid rgba(184,115,51,.2);padding-top:14px">
+            <div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);text-align:center;margin-bottom:2px">ADD CARD</div>
+            <div style="display:flex;gap:0;width:100%">
+              <select id="jpSetCardBinderSelect"
+                style="flex:1;min-width:0;padding:7px 8px;background:#0a0804;border:1px solid var(--copper-dim);border-right:none;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
+                <option value="">Unsorted</option>
+                ${binders.map(b => `<option value="${b.id}">${_escHtml(b.name)}</option>`).join('')}
+              </select>
+              <button onclick="addJpSetCardToCollection(${idx})"
+                style="flex:0 0 auto;padding:7px 16px;border:1px solid var(--copper);background:var(--copper-glow);color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
+                onmouseover="this.style.background='rgba(184,115,51,.32)'" onmouseout="this.style.background='var(--copper-glow)'">ADD CARD</button>
+            </div>
+            <button onclick="document.getElementById('setCardDetailSheet').remove();openAddToWishlistModal({cardName:'${(card.name||'').replace(/'/g,"\\'").replace(/"/g,'\\"')}',setName:'${(card.set_name||'').replace(/'/g,"\\'").replace(/"/g,'\\"')}',cardNumber:'${card.card_number||''}',cardImageUrl:'${card.image_url||''}',rarity:'${card.rarity||''}'})"
+              style="width:100%;padding:7px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
+              onmouseover="this.style.borderColor='var(--copper)';this.style.background='var(--copper-glow)'" onmouseout="this.style.borderColor='var(--copper-dim)';this.style.background='transparent'">♡ ADD TO WISHLIST</button>
+          </div>` : `<div style="text-align:center;padding:16px;color:var(--muted);font-size:.68rem;letter-spacing:.08em">SIGN IN TO ADD CARDS</div>`}
+        </div>`;
+
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+    }
+
+    async function addJpSetCardToCollection(idx) {
+      const card = (window._jpSetDetailCards || [])[idx];
+      if (!card || !currentUser) { showToast('Sign in to add cards'); return; }
+      document.getElementById('setCardDetailSheet')?.remove();
+      const binderId = document.getElementById('jpSetCardBinderSelect')?.value || null;
+      const isJpCard = card.id.startsWith('jp-') || card.id.startsWith('pd-');
+      if (isJpCard) window._pendingJpCard = true;
+      pendingCollectionCard = {
+        apiCardId:    card.id,
+        cardName:     card.name     || '',
+        setName:      card.set_name || '',
+        setCode:      card.set_code || '',
+        cardNumber:   card.card_number || '',
+        cardImageUrl: card.image_url   || '',
+        gameType:     'pokemon',
+        language:     'JA',
+      };
+      const nameEl = document.getElementById('atcCardName');
+      if (nameEl) nameEl.textContent = (card.name || '?') + (card.set_name ? ' — ' + card.set_name : '');
+      const manualRow = document.getElementById('atcManualNameRow');
+      if (manualRow) manualRow.style.display = 'none';
+      document.getElementById('atcQuantity').value     = '1';
+      document.getElementById('atcPurchasePrice').value = '';
+      document.getElementById('atcPurchaseDate').value  = '';
+      document.getElementById('atcPriceUrl').value      = '';
+      document.getElementById('atcNotes').value         = '';
+      atcClearPhoto();
+      if (binderId) document.getElementById('atcBinderId').value = binderId;
+      document.getElementById('addToCollectionModal').style.display = 'flex';
     }
 
     async function loadSetDetail(setId, setName) {
