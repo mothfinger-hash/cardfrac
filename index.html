@@ -826,8 +826,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-fi{-webkit-appearance:none;appearance:none;width:100%;background:#060d14;border:1px solid rgba(0,229,255,.22);border-radius:3px;color:rgba(228,240,255,.92);font-family:inherit;font-size:.58em;padding:.42em .5em;outline:none;letter-spacing:.03em;flex-shrink:0;margin-bottom:.4em;box-sizing:border-box;transition:border-color .18s,box-shadow .18s}
     .ac-fi:focus{border-color:rgba(0,229,255,.6);box-shadow:0 0 0 1px rgba(0,229,255,.1),0 0 8px rgba(0,229,255,.15)}
     .ac-fi::placeholder{color:rgba(65,85,105,.55)}
-    /* Kill browser autofill white flash */
-    .ac-fi:-webkit-autofill,.ac-fi:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 100px #060d14 inset!important;-webkit-text-fill-color:rgba(228,240,255,.92)!important;caret-color:rgba(228,240,255,.92)}
+    /* Kill browser autofill white flash + black text on autocomplete select */
+    .ac-fi:-webkit-autofill,
+    .ac-fi:-webkit-autofill:hover,
+    .ac-fi:-webkit-autofill:focus,
+    .ac-fi:-webkit-autofill:active{
+      -webkit-box-shadow:0 0 0 100px #060d14 inset!important;
+      -webkit-text-fill-color:rgba(228,240,255,.92)!important;
+      caret-color:rgba(228,240,255,.92);
+      /* delay background transition so the autofill color never flashes through */
+      transition:background-color 9999s ease-in-out 0s!important;
+    }
     .ac-chips{display:flex;flex-wrap:wrap;gap:.2em;margin-bottom:.38em;flex-shrink:0}
     .ac-chip{padding:.18em .45em;font-size:.44em;letter-spacing:.06em;border:1px solid rgba(0,229,255,.2);border-radius:20px;color:rgba(80,105,130,.9);cursor:pointer;transition:all .18s;white-space:nowrap}
     .ac-chip:hover,.ac-chip.on{border-color:#00E5FF;color:#00E5FF;background:rgba(0,229,255,.08)}
@@ -837,7 +846,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-sp{flex:1;min-height:.2em}
     .ac-btn{display:block;width:100%;padding:.55em;background:#00E5FF;color:#060810;font-family:inherit;font-weight:bold;font-size:.6em;letter-spacing:.12em;border:none;cursor:pointer;border-radius:3px;transition:filter .2s;flex-shrink:0;margin-bottom:.22em}
     .ac-btn:hover{filter:brightness(1.1)}
-    .ac-ghost{display:block;width:100%;padding:.36em;text-align:center;background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.28);border-radius:3px;color:rgba(0,229,255,.75);font-family:inherit;font-size:.42em;letter-spacing:.08em;cursor:pointer;transition:all .18s;flex-shrink:0;margin-bottom:.15em}
+    .ac-ghost{display:block;width:100%;padding:.36em;text-align:center;background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.28);border-radius:3px;color:rgba(0,229,255,.75);font-family:inherit;font-size:.52em;letter-spacing:.08em;cursor:pointer;transition:all .18s;flex-shrink:0;margin-bottom:.15em}
     .ac-ghost:hover{border-color:rgba(0,229,255,.6);color:#00E5FF;background:rgba(0,229,255,.09)}
     /* ── right panel ── */
     .ac-rp{width:100%;height:100%;display:flex;flex-direction:column}
@@ -895,7 +904,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-sf-input{-webkit-appearance:none;appearance:none;width:100%;background:#060d14;border:1px solid rgba(0,229,255,.22);border-radius:3px;color:rgba(225,238,252,.88);font-family:inherit;font-size:.66em;padding:.45em .5em;outline:none;margin-bottom:.75em;letter-spacing:.03em;box-sizing:border-box;transition:border-color .18s,box-shadow .18s}
     .ac-sf-input:focus{border-color:rgba(0,229,255,.6);box-shadow:0 0 0 1px rgba(0,229,255,.1),0 0 8px rgba(0,229,255,.15)}
     .ac-sf-input::placeholder{color:rgba(65,85,105,.62)}
-    .ac-sf-input:-webkit-autofill,.ac-sf-input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 100px #060d14 inset!important;-webkit-text-fill-color:rgba(225,238,252,.88)!important}
+    .ac-sf-input:-webkit-autofill,
+    .ac-sf-input:-webkit-autofill:hover,
+    .ac-sf-input:-webkit-autofill:focus,
+    .ac-sf-input:-webkit-autofill:active{
+      -webkit-box-shadow:0 0 0 100px #060d14 inset!important;
+      -webkit-text-fill-color:rgba(225,238,252,.88)!important;
+      transition:background-color 9999s ease-in-out 0s!important;
+    }
     .ac-sf-chips{display:flex;flex-wrap:wrap;gap:.28em;margin-bottom:.72em}
     .ac-sf-chip{padding:.22em .7em;font-size:.52em;letter-spacing:.07em;border:1px solid rgba(0,229,255,.18);border-radius:20px;color:rgba(65,85,105,.85);cursor:pointer;transition:all .18s;white-space:nowrap}
     .ac-sf-chip:hover,.ac-sf-chip.on{border-color:#00E5FF;color:#00E5FF;background:rgba(0,229,255,.09)}
@@ -6432,8 +6448,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
             </div>` : ''}
 
-            <!-- P&L Overview — vendor+ only -->
-            ${tierAtLeast('vendor') ? (() => {
+            <!-- P&L Overview — collector+ -->
+            ${tierAtLeast('collector') ? (() => {
               // Build last-6-months P&L from offline sales + marketplace orders
               const now = new Date();
               const months = Array.from({length:6}, (_,i) => {
@@ -10793,7 +10809,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ===== ALL CARDS SORT =====
     // Sort state only applies to the "All Cards" view — never bleeds into individual binders.
     let allCardsSort = 'name'; // 'name' | 'rarity' | 'set' | 'value' | 'lang'
-    let allCardsSortDir = { name: 1, rarity: -1, set: 1, value: -1, lang: 1 }; // 1=asc, -1=desc
+    let allCardsSortDir = { name: 1, rarity: 1, set: 1, value: -1, lang: 1 }; // 1=asc, -1=desc; rarity 1=highest first
 
     const _RARITY_SCORE = (r) => {
       if (!r) return -1;
@@ -10819,7 +10835,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         allCardsSort = key;
       }
       // Update button labels to show current direction
-      const dirSymbols = { name: ['Name A→Z','Name Z→A'], rarity: ['Rarity ↑','Rarity ↓'], set: ['Set A→Z','Set Z→A'], value: ['Value ↓','Value ↑'], lang: ['Language','Language'] };
+      const dirSymbols = { name: ['Name A→Z','Name Z→A'], rarity: ['Rarity ↓','Rarity ↑'], set: ['Set A→Z','Set Z→A'], value: ['Value ↓','Value ↑'], lang: ['Language','Language'] };
       document.querySelectorAll('.allcards-sort-btn').forEach(b => b.classList.remove('active'));
       const btn = document.getElementById('sortBtn-' + key);
       if (btn) {
@@ -13232,7 +13248,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       const language = document.getElementById('atcLanguage')?.value || 'EN';
 
-      const { data: newRow, error } = await sb.from('collection_items').insert({
+      const _insertBase = {
         user_id:         currentUser.id,
         api_card_id:     pendingCollectionCard.apiCardId  || null,
         card_name:       cardName,
@@ -13251,10 +13267,24 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         notes,
         binder_id:       binderId || null,
         language,
-      }).select('id').single();
+      };
+
+      let { data: newRow, error } = await sb.from('collection_items').insert(_insertBase).select('id').single();
+
+      // Graceful fallback: if 'language' column doesn't exist yet, retry without it
+      if (error && error.message && error.message.toLowerCase().includes('language')) {
+        const { language: _lang, ..._insertNoLang } = _insertBase;
+        const res2 = await sb.from('collection_items').insert(_insertNoLang).select('id').single();
+        newRow  = res2.data;
+        error   = res2.error;
+        if (!error) {
+          console.log('%c[PathBinder] Run this in Supabase SQL editor to enable language tracking:\nalter table collection_items add column if not exists language text default \'EN\';', 'color:#FF9800;font-weight:bold');
+          showToast('Card added! Add language column in Supabase to track language (see console)');
+        }
+      }
 
       // Background: pre-warm price cache for non-English cards
-      if (language !== 'EN') {
+      if (!error && language !== 'EN') {
         fetchCardPriceForLanguage({
           cardName, language,
           setName:    pendingCollectionCard.setName    || undefined,
@@ -15454,7 +15484,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Update active pills
       document.querySelectorAll('.sets-sort-pill').forEach(p => {
         const s = p.dataset.sort;
-        const active = s === 'owned' ? _setsOwnedFirst : s === _setsDetailSort;
+        const active = s === 'owned' ? _setsOwnedFirst
+                     : s === 'rarity' ? _setsDetailSort.startsWith('rarity')
+                     : s === _setsDetailSort;
         p.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
         p.style.color       = active ? 'var(--accent)' : 'var(--muted)';
       });
@@ -15639,7 +15671,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
             <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
             <button ${sortPillStyle('number')}>#  NUMBER</button>
-            <button ${sortPillStyle('rarity-desc')} id="setsRarityPill" onclick="toggleSetsRarity(this)">RARITY ↓</button>
+            <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
             <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
           </div>
           <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border)">
@@ -15659,75 +15691,99 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const card = window._setsDetailCards && window._setsDetailCards[idx];
       if (!card) return;
 
-      const existing = document.getElementById('setCardDetailSheet');
-      if (existing) existing.remove();
+      document.getElementById('setCardDetailSheet')?.remove();
 
       const img = card.images?.large || card.images?.small || '';
-      const rarityTag = card.rarity ? `<span style="padding:2px 8px;background:var(--surface2);border:1px solid var(--border);font-size:.6rem;color:var(--muted)">${card.rarity}</span>` : '';
 
       // Build price rows from all available variants
       const tcgp = card.tcgplayer?.prices || {};
       const cm   = card.cardmarket?.prices || {};
       const priceRows = [];
       const _p = (label, val) => val ? priceRows.push({label, val}) : null;
-      _p('Normal', tcgp.normal?.market);
-      _p('Holofoil', tcgp.holofoil?.market);
-      _p('Reverse Holo', tcgp.reverseHolofoil?.market);
-      _p('1st Edition', tcgp['1stEditionHolofoil']?.market || tcgp['1stEditionNormal']?.market);
-      _p('CardMarket Avg', cm.averageSellPrice);
+      _p('Normal',        tcgp.normal?.market);
+      _p('Holofoil',      tcgp.holofoil?.market);
+      _p('Reverse Holo',  tcgp.reverseHolofoil?.market);
+      _p('1st Edition',   tcgp['1stEditionHolofoil']?.market || tcgp['1stEditionNormal']?.market);
+      _p('CardMarket Avg',cm.averageSellPrice);
       const bestPrice = priceRows[0]?.val || null;
 
-      const priceHtml = priceRows.length ? `
-        <div style="margin-top:10px;border:1px solid #1a1a1a;padding:10px 12px;background:#0a0a0a">
-          <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em;margin-bottom:8px">MARKET PRICES</div>
-          ${priceRows.map(r => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #111">
-              <span style="font-size:.65rem;color:var(--muted)">${r.label}</span>
-              <span style="font-size:.78rem;font-weight:700;color:var(--accent)">$${Number(r.val).toFixed(2)}</span>
-            </div>`).join('')}
-          ${card.tcgplayer?.url ? `<a href="${card.tcgplayer.url}" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:.6rem;color:var(--teal);text-decoration:none;letter-spacing:.04em">↗ VIEW ON TCGPLAYER</a>` : ''}
-        </div>` : `<div style="margin-top:8px;font-size:.65rem;color:var(--muted)">No price data available</div>`;
+      const priceHtml = priceRows.length
+        ? `<div style="margin-top:12px;border:1px solid rgba(0,229,255,.15);padding:10px 12px;background:rgba(0,229,255,.03)">
+            <div style="font-size:.54rem;letter-spacing:.12em;color:rgba(0,229,255,.4);margin-bottom:8px">MARKET PRICES</div>
+            ${priceRows.map(r => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(0,229,255,.07)">
+                <span style="font-size:.63rem;color:rgba(0,229,255,.5)">${r.label}</span>
+                <span style="font-size:.76rem;font-weight:700;color:#00E5FF">$${Number(r.val).toFixed(2)}</span>
+              </div>`).join('')}
+           </div>`
+        : `<div style="margin-top:8px;font-size:.63rem;color:rgba(0,229,255,.35);text-align:center">No price data available</div>`;
 
       const binderOptions = (currentUser && binders.length > 0)
-        ? binders.map(b => `<option value="${b.id}">${b.name}</option>`).join('')
+        ? binders.map(b => `<option value="${b.id}">${_escHtml(b.name)}</option>`).join('')
         : '<option value="">— no binders yet —</option>';
 
-      const sheet = document.createElement('div');
-      sheet.id = 'setCardDetailSheet';
-      sheet.style.cssText = `position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center`;
-      sheet.innerHTML = `
-        <div style="width:100%;max-width:480px;background:#050505;border:2px solid #1a1a1a;border-bottom:none;padding:20px;max-height:88vh;overflow-y:auto">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-            <span style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--accent);letter-spacing:.08em">CARD DETAIL</span>
-            <button onclick="document.getElementById('setCardDetailSheet').remove()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer">×</button>
+      const overlay = document.createElement('div');
+      overlay.id    = 'setCardDetailSheet';
+      overlay.className = 'modal-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10010;display:flex;align-items:center;justify-content:center;padding:16px';
+
+      overlay.innerHTML = `
+        <div class="modal" style="width:100%;max-width:360px;padding:22px 20px;max-height:92vh;overflow-y:auto;overflow-x:hidden">
+          <!-- Header -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+            <h3 style="font-size:.6rem;letter-spacing:.14em;margin:0">CARD DETAIL</h3>
+            <button class="modal-close" onclick="document.getElementById('setCardDetailSheet').remove()"
+              style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 2px">×</button>
           </div>
-          <div style="display:flex;gap:16px;margin-bottom:4px">
-            ${img ? `<img src="${img}" alt="${card.name}" style="width:100px;height:auto;flex-shrink:0;border:1px solid #222;cursor:pointer" onclick="this.style.width=this.style.width==='160px'?'100px':'160px'">` : `<div style="width:100px;height:140px;background:var(--surface2);flex-shrink:0;border:1px solid #222"></div>`}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.9rem;font-weight:700;margin-bottom:4px">${card.name}</div>
-              <div style="font-size:.68rem;color:var(--muted);margin-bottom:6px">${card.set?.name || ''} · #${card.number || '?'}</div>
-              ${rarityTag}
-              ${card.artist ? `<div style="font-size:.6rem;color:var(--muted);margin-top:6px">✦ ${card.artist}</div>` : ''}
-              ${bestPrice ? `<div style="font-size:1rem;font-weight:700;color:var(--accent);margin-top:10px">~$${Number(bestPrice).toFixed(2)}</div><div style="font-size:.58rem;color:var(--muted)">best market price</div>` : ''}
-            </div>
+
+          <!-- Card image — centered -->
+          ${img ? `<div style="display:flex;justify-content:center;margin-bottom:16px">
+            <img src="${img}" alt="${_escHtml(card.name)}"
+              style="max-width:200px;width:100%;height:auto;border:1px solid rgba(0,229,255,.35);border-radius:4px;box-shadow:0 0 24px rgba(0,229,255,.22),0 0 60px rgba(0,229,255,.08)">
+          </div>` : ''}
+
+          <!-- Card info — centered -->
+          <div style="text-align:center;margin-bottom:12px">
+            <div style="font-size:.9rem;font-weight:700;color:rgba(210,240,255,.95);margin-bottom:5px">${_escHtml(card.name)}</div>
+            <div style="font-size:.63rem;color:rgba(0,229,255,.5);margin-bottom:6px">${_escHtml(card.set?.name || '')} &middot; #${card.number || '?'}</div>
+            ${card.rarity ? `<span style="padding:2px 10px;border:1px solid rgba(0,229,255,.28);font-size:.57rem;color:rgba(0,229,255,.55);letter-spacing:.08em">${_escHtml(card.rarity)}</span>` : ''}
+            ${card.artist ? `<div style="font-size:.57rem;color:rgba(0,229,255,.32);margin-top:6px">&#10022; ${_escHtml(card.artist)}</div>` : ''}
+            ${bestPrice ? `<div style="font-size:1.05rem;font-weight:700;color:#00E5FF;margin-top:10px;text-shadow:0 0 12px rgba(0,229,255,.5)">~$${Number(bestPrice).toFixed(2)}</div>
+              <div style="font-size:.56rem;color:rgba(0,229,255,.38);letter-spacing:.06em">best market price</div>` : ''}
           </div>
+
           ${priceHtml}
+
+          <!-- TCGPlayer link -->
+          ${card.tcgplayer?.url ? `<a href="${card.tcgplayer.url}" target="_blank" rel="noopener"
+            style="display:block;text-align:center;margin-top:10px;font-size:.58rem;color:rgba(0,229,255,.38);text-decoration:none;letter-spacing:.08em;transition:color .15s"
+            onmouseover="this.style.color='rgba(0,229,255,.85)'" onmouseout="this.style.color='rgba(0,229,255,.38)'">&#8599; VIEW ON TCGPLAYER</a>` : ''}
+
+          <!-- Actions -->
           ${currentUser ? `
-          <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
-            <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em">ADD TO MY BINDER</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(0,229,255,.1);padding-top:16px">
+            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(0,229,255,.38);text-align:center;margin-bottom:2px">ADD TO MY BINDER</div>
             <div style="display:flex;gap:8px">
-              <select id="setCardBinderSelect" style="flex:1;padding:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem">
+              <select id="setCardBinderSelect"
+                style="flex:1;padding:7px 8px;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.18);color:rgba(210,240,255,.85);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;-webkit-appearance:none;appearance:none">
                 <option value="">Unsorted</option>
                 ${binderOptions}
               </select>
-              <button onclick="openAddToCollectionFromSet(${idx})" style="padding:8px 14px;border:1px solid var(--accent);background:rgba(0,229,255,.08);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer;white-space:nowrap">+ Add to Binder</button>
+              <button onclick="openAddToCollectionFromSet(${idx})"
+                style="padding:7px 14px;border:1px solid rgba(0,229,255,.55);background:rgba(0,229,255,.08);color:#00E5FF;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.06em;transition:all .15s"
+                onmouseover="this.style.background='rgba(0,229,255,.16)'" onmouseout="this.style.background='rgba(0,229,255,.08)'">+ ADD</button>
             </div>
-            <button onclick="addSetCardToWishlist(${idx})" style="padding:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;width:100%;text-align:center">♡ Add to Wishlist</button>
-          </div>` : `<div style="text-align:center;padding:16px;color:var(--muted);font-size:.75rem">Sign in to add cards to your binder</div>`}
+            <button onclick="addSetCardToWishlist(${idx})"
+              style="padding:8px;border:1px solid rgba(0,229,255,.16);background:transparent;color:rgba(0,229,255,.42);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.67rem;cursor:pointer;width:100%;text-align:center;letter-spacing:.08em;transition:all .15s"
+              onmouseover="this.style.borderColor='rgba(0,229,255,.45)';this.style.color='rgba(0,229,255,.8)'"
+              onmouseout="this.style.borderColor='rgba(0,229,255,.16)';this.style.color='rgba(0,229,255,.42)'"
+            >&#9825; WISHLIST</button>
+          </div>` : `<div style="text-align:center;padding:16px;color:rgba(0,229,255,.38);font-size:.68rem;letter-spacing:.08em;margin-top:12px">SIGN IN TO ADD CARDS</div>`}
         </div>
       `;
-      sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
-      document.body.appendChild(sheet);
+
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
     }
 
     function openAddToCollectionFromSet(idx) {
