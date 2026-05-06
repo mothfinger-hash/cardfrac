@@ -2015,6 +2015,10 @@ input, select, textarea, .coll-search-bar, .atc-input, .ft-search-input {
   color: var(--text) !important;
   transition: border-color .12s, box-shadow .12s;
 }
+select option {
+  background: #060d14 !important;
+  color: rgba(228,240,255,.92) !important;
+}
 input:focus, select:focus, textarea:focus,
 .coll-search-bar:focus, .atc-input:focus, .ft-search-input:focus {
   border-color: var(--accent) !important;
@@ -12865,31 +12869,44 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
-    // ── JP card search — uses pokemontcg.io (reliable CORS), tags results as JA ──
+    // ── JP card search — queries the Supabase catalog table (jp- prefixed rows) ──
     async function searchJapaneseCards(query) {
       const grid = document.getElementById('acMobGrid');
       if (!grid) return;
       grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING JP DATABASE…</div></div>';
 
       try {
-        const q   = encodeURIComponent(`name:"${query.trim()}"`);
-        const url = `https://api.pokemontcg.io/v2/cards?q=${q}&pageSize=20&page=1`;
-        const res = await fetch(url, { headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data  = await res.json();
-        const items = data.data ?? [];
+        const { data: items, error } = await sb
+          .from('catalog')
+          .select('id, name, set_name, set_code, card_number, rarity, image_url')
+          .ilike('name', `%${query.trim()}%`)
+          .like('id', 'jp-%')
+          .limit(20);
 
-        if (!items.length) {
-          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.5em;text-align:center;padding:12px;line-height:1.7">NO CARDS FOUND<br><span style="opacity:.5;font-size:.9em">Try a different name</span></div></div>';
+        if (error) throw new Error(error.message);
+
+        if (!items || !items.length) {
+          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.5em;text-align:center;padding:12px;line-height:1.7">NO JP CARDS FOUND<br><span style="opacity:.5;font-size:.9em">Try a different name</span></div></div>';
           return;
         }
 
-        window._acLastJpCards = items; // store full objects for detail popup
-        const html = items.map((card, idx) => {
+        // Normalise catalog rows into the shape openSearchCardDetail expects
+        const normalised = items.map(c => ({
+          id:       c.id,
+          name:     c.name,
+          number:   c.card_number || '',
+          rarity:   c.rarity      || '',
+          set:      { name: c.set_name || '', id: c.set_code || '' },
+          images:   { small: c.image_url || '', large: c.image_url || '' },
+          _fromCatalog: true,
+        }));
+
+        window._acLastJpCards = normalised;
+        const html = normalised.map((card, idx) => {
           return `<div class="ac-mc" onclick="openSearchCardDetail(${idx}, true)">
-            ${card.images?.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
+            ${card.images.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
             <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">[JP]</span></div>
-            <div class="ac-mc-sub">${card.set?.name ?? ''} ${card.number ? '#' + card.number : ''}</div>
+            <div class="ac-mc-sub">${card.set.name} ${card.number ? '#' + card.number : ''}</div>
             <div class="ac-mc-add">VIEW DETAILS</div>
           </div>`;
         }).join('');
@@ -13062,59 +13079,70 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
-    // ── JP search that populates both desktop grid and mobile grid ─────────────
+    // ── JP search — queries Supabase catalog table (jp- prefixed rows) ──────────
     async function searchJapaneseAllPanels(query) {
       const deskStatus = document.getElementById('acDeskStatus');
       const deskCount  = document.getElementById('acDeskCount');
       const deskGrid   = document.getElementById('acDeskGrid');
       const mobGrid    = document.getElementById('acMobGrid');
 
-      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING JP…'; }
+      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING JP DATABASE…'; }
       if (deskCount)  deskCount.textContent = '—';
       if (deskGrid)   deskGrid.innerHTML = '';
       if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
 
       try {
-        const q   = encodeURIComponent(`name:"${query.trim()}"`);
-        const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${q}&pageSize=20&page=1`, { headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data  = await res.json();
-        const cards = data.data ?? [];
+        const { data: rows, error } = await sb
+          .from('catalog')
+          .select('id, name, set_name, set_code, card_number, rarity, image_url')
+          .ilike('name', `%${query.trim()}%`)
+          .like('id', 'jp-%')
+          .limit(20);
+
+        if (error) throw new Error(error.message);
+
+        const cards = (rows || []).map(c => ({
+          id:     c.id,
+          name:   c.name,
+          number: c.card_number || '',
+          rarity: c.rarity      || '',
+          set:    { name: c.set_name || '', id: c.set_code || '' },
+          images: { small: c.image_url || '', large: c.image_url || '' },
+          _fromCatalog: true,
+        }));
 
         if (!cards.length) {
-          if (deskStatus) deskStatus.textContent = `// NO RESULTS FOR "${query.toUpperCase()}"`;
+          if (deskStatus) deskStatus.textContent = `// NO JP RESULTS FOR "${query.toUpperCase()}"`;
           if (deskCount)  deskCount.textContent = '0 results';
-          if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.5em;text-align:center;padding:12px">NO CARDS FOUND</div></div>';
+          if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.3);font-size:.5em;text-align:center;padding:12px">NO JP CARDS FOUND</div></div>';
           return;
         }
 
         if (deskStatus) deskStatus.textContent = '// CLICK A CARD TO ADD IT (JP)';
         if (deskCount)  deskCount.textContent  = `${cards.length} result${cards.length !== 1 ? 's' : ''}`;
 
-        window._acLastJpCards = cards; // store full objects for detail popup
+        window._acLastJpCards = cards;
         window._pendingJpCard = true;
 
-        // Desktop grid HTML
-        const deskHTML = cards.map((card, idx) => {
-          return `<div class="card-result" onclick="openSearchCardDetail(${idx}, true)" style="cursor:pointer">
-              ${card.images?.small ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div style="height:70px;background:rgba(0,229,255,.04);display:flex;align-items:center;justify-content:center;color:rgba(0,229,255,.18);font-size:.5rem">NO IMG</div>'}
-              <div class="card-result-name">${card.name} [JP]</div>
-              <div class="card-result-set">${card.set?.name??''} #${card.number??'?'}</div>
-          </div>`;
-        }).join('');
+        // Desktop grid
+        const deskHTML = cards.map((card, idx) => `
+          <div class="card-result" onclick="openSearchCardDetail(${idx}, true)" style="cursor:pointer">
+            ${card.images.small ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div style="height:70px;background:rgba(0,229,255,.04);display:flex;align-items:center;justify-content:center;color:rgba(0,229,255,.18);font-size:.5rem">NO IMG</div>'}
+            <div class="card-result-name">${card.name} [JP]</div>
+            <div class="card-result-set">${card.set.name} ${card.number ? '#' + card.number : ''}</div>
+          </div>`).join('');
 
-        // Mobile grid HTML
-        const mobHTML = cards.map((card, idx) => {
-          return `<div class="ac-mc" onclick="openSearchCardDetail(${idx}, true)">
-            ${card.images?.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
+        // Mobile grid
+        const mobHTML = cards.map((card, idx) => `
+          <div class="ac-mc" onclick="openSearchCardDetail(${idx}, true)">
+            ${card.images.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
             <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">[JP]</span></div>
-            <div class="ac-mc-sub">${card.set?.name??''} ${card.number ? '#'+card.number : ''}</div>
+            <div class="ac-mc-sub">${card.set.name} ${card.number ? '#' + card.number : ''}</div>
             <div class="ac-mc-add">VIEW DETAILS</div>
-          </div>`;
-        }).join('');
+          </div>`).join('');
 
         if (deskGrid) deskGrid.innerHTML = deskHTML;
-        if (mobGrid)  { mobGrid.innerHTML = ''; }
+        if (mobGrid)  mobGrid.innerHTML = '';
         acCrtFlash('acCrtRight');
         acCrtFlash('acCrtMob', () => { if (mobGrid) { mobGrid.innerHTML = mobHTML; mobGrid.scrollTop = 0; } });
 
@@ -13559,15 +13587,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       let { data: newRow, error } = await sb.from('collection_items').insert(_insertBase).select('id').single();
 
-      // Graceful fallback: if 'language' column doesn't exist yet, retry without it
-      if (error && error.message && error.message.toLowerCase().includes('language')) {
-        const { language: _lang, ..._insertNoLang } = _insertBase;
-        const res2 = await sb.from('collection_items').insert(_insertNoLang).select('id').single();
-        newRow  = res2.data;
-        error   = res2.error;
-        if (!error) {
-          console.log('%c[PathBinder] Run this in Supabase SQL editor to enable language tracking:\nalter table collection_items add column if not exists language text default \'EN\';', 'color:#FF9800;font-weight:bold');
-          showToast('Card added! Add language column in Supabase to track language (see console)');
+      // Graceful fallback: if schema is missing 'language' or 'rarity' columns, retry without them
+      const _isSchemaErr = (e) => {
+        if (!e) return false;
+        const str = (e.message || '') + (e.details || '') + (e.hint || '') + (e.code || '');
+        return str.toLowerCase().includes('language') || str.toLowerCase().includes('schema cache') || str.toLowerCase().includes('column');
+      };
+      if (_isSchemaErr(error)) {
+        // Try without language first
+        const { language: _l, ..._noLang } = _insertBase;
+        const r2 = await sb.from('collection_items').insert(_noLang).select('id').single();
+        if (!r2.error) {
+          newRow = r2.data; error = null;
+          console.log('%c[PathBinder] Add this column in Supabase SQL editor:\nalter table collection_items add column if not exists language text default \'EN\';', 'color:#FF9800;font-weight:bold');
+          showToast('Card added! (Run SQL migration to enable language tracking — see console)');
+        } else if (_isSchemaErr(r2.error)) {
+          // Try also without rarity
+          const { language: _l2, rarity: _r2, ..._bare } = _insertBase;
+          const r3 = await sb.from('collection_items').insert(_bare).select('id').single();
+          newRow = r3.data; error = r3.error;
+          if (!error) showToast('Card added! (Run SQL migrations for language + rarity columns — see console)');
+        } else {
+          newRow = r2.data; error = r2.error;
         }
       }
 
