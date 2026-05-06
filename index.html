@@ -17931,7 +17931,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           trainerPokemon,
           // K — JP-specific: search jp- catalog cards by card number when JP OCR detected
           (isJpOcr && numStripped)
-            ? q().like('id', 'jp-%').eq('card_number', numStripped).limit(30)
+            ? q().like('id', 'jp-%').eq('card_number', numStripped).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }))
             : Promise.resolve({ data: [] })
             ? q().ilike('name', '%' + trainerPokemon + '%').limit(12)
             : Promise.resolve({ data: [] })
@@ -17951,7 +17951,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const nameHits       = [...(nameRes.data || []), ...(baseNameRes.data || [])];
         const expandedHits   = expandedRes.data     || [];  // trainer name expanded (N's Zekrom)
         const trainerPokHits = trainerPokemonRes.data || []; // Pokémon name only (Zekrom)
-        const jpNumHits      = jpNumRes.data        || [];  // JP catalog by card number
+        const jpNumHits      = (jpNumRes && jpNumRes.data) || [];  // JP catalog by card number
 
         // H — set_codes that contain a card numbered exactly numTotal (e.g. '165')
         // These are confirmed to be the right-sized set for this card's numbering system.
