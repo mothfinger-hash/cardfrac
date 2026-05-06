@@ -12891,15 +12891,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
 
         // Normalise catalog rows into the shape openSearchCardDetail expects
-        // TCGdex stores English image URLs (/en/) — swap to /jp/ for actual JP card art
-        const _jpImg = (url) => url ? url.replace('/en/', '/jp/') : '';
         const normalised = items.map(c => ({
           id:       c.id,
           name:     c.name,
           number:   c.card_number || '',
           rarity:   c.rarity      || '',
           set:      { name: c.set_name || '', id: c.set_code || '' },
-          images:   { small: _jpImg(c.image_url), large: _jpImg(c.image_url) },
+          images:   { small: c.image_url || '', large: c.image_url || '' },
           _fromCatalog: true,
         }));
 
@@ -13103,15 +13101,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         if (error) throw new Error(error.message);
 
-        // TCGdex stores English image URLs (/en/) — swap to /jp/ for actual JP card art
-        const _jpImg = (url) => url ? url.replace('/en/', '/jp/') : '';
         const cards = (rows || []).map(c => ({
           id:     c.id,
           name:   c.name,
           number: c.card_number || '',
           rarity: c.rarity      || '',
           set:    { name: c.set_name || '', id: c.set_code || '' },
-          images: { small: _jpImg(c.image_url), large: _jpImg(c.image_url) },
+          images: { small: c.image_url || '', large: c.image_url || '' },
           _fromCatalog: true,
         }));
 
@@ -17692,10 +17688,41 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     // Extract card name — handles all Pokemon card name formats
+    // ── Detect Japanese OCR text ─────────────────────────────────────────────
+    function isJapaneseOcr(text) {
+      // True if the text contains CJK / kana characters
+      return /[　-鿿豈-﫿＀-￯]/.test(text);
+    }
+
+    // ── Extract card name from Japanese OCR text ──────────────────────────────
+    // JP layout: card type (グッズ), furigana fragments (1-3 kana), then the actual name
+    function parseJapaneseCardName(lines) {
+      // Known JP card-type keywords to skip
+      const JP_SKIP = /^(グッズ|トレーナーズ|サポート|スタジアム|ポケモン|エネルギー|どうぐ|HP\d+|\d+|エイチピー|むしょく|ひこう|ほのお|みず|くさ|かみなり|エスパー|ファイト|あく|はがね|ドラゴン|フェアリー|アマルスへ進化|進化|特性|とくせい|弱点|抵抗力|にげる|Illus|©|www\.)$/;
+      // Skip short pure-kana lines (≤4 chars) — these are furigana
+      const isFurigana = (s) => s.length <= 4 && /^[぀-ヿ]+$/.test(s);
+
+      for (let i = 0; i < Math.min(15, lines.length); i++) {
+        const line = lines[i];
+        if (isFurigana(line)) continue;
+        if (JP_SKIP.test(line)) continue;
+        // Accept lines that contain kanji/kana and are reasonably sized
+        if (/[　-鿿぀-ヿ]/.test(line) && line.length >= 3 && line.length <= 30) {
+          return line;
+        }
+      }
+      return null;
+    }
+
     function parseCardName(text) {
       if (!text) return null;
       text = normalizeOcr(text);  // normalise smart quotes/dashes before parsing
       const lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+
+      // ── Japanese card — use CJK-aware name extractor ─────────────────────
+      if (isJapaneseOcr(text)) {
+        return parseJapaneseCardName(lines);
+      }
 
       const SUFFIX    = /^(VSTAR|VMAX|GX|EX|V|VUNION|TAG\s*TEAM)$/i;
       const STAGE_PRE = /^(Basic|Stage\s*[12])\s+/i;  // stage as prefix on same line
@@ -17823,6 +17850,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const numRaw      = parsed ? parsed.numRaw : null;  // "094"
         const numTotal    = parsed ? parsed.total  : null;  // "165" — set base size fingerprint
         const cardName    = parseCardName(fullText);
+        const isJpOcr     = isJapaneseOcr(fullText);
 
         // Derive extra name variants for trainer-card mismatches:
         //   "N'Zekrom" → expandedName="N's Zekrom", pokemonBase="Zekrom"
@@ -17859,7 +17887,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // I: expanded trainer name   J: Pokémon-only name from trainer card
         //    I+J handle trainer cards where OCR drops the 's (N'Zekrom → N's Zekrom → Zekrom)
         //    H is the set-size fingerprint: sv3pt5 has card #165, hgss4 doesn't
-        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes] = await Promise.all([
+        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes] = await Promise.all([
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
           // A
           (numStripped && cardName)
@@ -17900,7 +17928,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             : Promise.resolve({ data: [] }),
           // J — Pokémon-only name from trainer card: "Zekrom" from "N's Zekrom"
           //     Broadest fallback — catches any version of this Pokémon across sets
-          trainerPokemon
+          trainerPokemon,
+          // K — JP-specific: search jp- catalog cards by card number when JP OCR detected
+          (isJpOcr && numStripped)
+            ? q().like('id', 'jp-%').eq('card_number', numStripped).limit(30)
+            : Promise.resolve({ data: [] })
             ? q().ilike('name', '%' + trainerPokemon + '%').limit(12)
             : Promise.resolve({ data: [] })
         ]);
@@ -17919,6 +17951,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const nameHits       = [...(nameRes.data || []), ...(baseNameRes.data || [])];
         const expandedHits   = expandedRes.data     || [];  // trainer name expanded (N's Zekrom)
         const trainerPokHits = trainerPokemonRes.data || []; // Pokémon name only (Zekrom)
+        const jpNumHits      = jpNumRes.data        || [];  // JP catalog by card number
 
         // H — set_codes that contain a card numbered exactly numTotal (e.g. '165')
         // These are confirmed to be the right-sized set for this card's numbering system.
@@ -17934,25 +17967,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // Scoring tiers (higher = more confident match):
         //   1.22  nameNum + set confirmed by size fingerprint  (sv3pt5 Gengar vs hgss4 Gengar)
         //   1.15  setTotal RPC                                 (number + RPC set fingerprint)
+        //   1.10  JP num + set confirmed (jp- id, correct number, set has right total)
         //   1.05  expanded trainer name match                  (N's Zekrom)
         //   1.00  name + number match
+        //   0.92  JP num (jp- id, correct number, no set confirm)
         //   0.88  number only
         //   0.80  Pokémon name from trainer card               (broadest — Zekrom)
         //   0.78  name only / base name
         //
         // CLIP similarity is added as a ×0.12 tiebreaker within each tier.
+        // JP CLIP matches get an extra ×0.15 boost when JP OCR was detected.
         function scoreOcr(m, source) {
           var base = source === 'setTotal'   ? 1.15
                    : source === 'nameNum'    ? 1.0
                    : source === 'expanded'   ? 1.05
                    : source === 'trainerPok' ? 0.80
+                   : source === 'jpNum'      ? (numTotal && confirmedSets.has(m.set_code) ? 1.10 : 0.92)
                    : source === 'num'        ? 0.88
                    :                          0.78;
           // +0.22 when name+number match AND the card's set contains card #numTotal
-          // (sv3pt5 has card #165 in its set; hgss4 tops out at ~102)
           var setConfirmedBoost = (source === 'nameNum' && numTotal && confirmedSets.has(m.set_code)) ? 0.22 : 0;
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
-          var clipBoost = clipEntry ? clipEntry.similarity * 0.12 : 0;
+          // JP OCR: boost CLIP similarity for jp- prefixed cards
+          var clipMult = (isJpOcr && m.id && m.id.startsWith('jp-')) ? 0.27 : 0.12;
+          var clipBoost = clipEntry ? clipEntry.similarity * clipMult : 0;
           return base + setConfirmedBoost + clipBoost;
         }
 
@@ -17968,6 +18006,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         addHits(setTotalHits,   'setTotal');    // number + RPC set fingerprint
         addHits(nameNumHits,    'nameNum');      // name + number (+ set-confirm boost)
+        addHits(jpNumHits,      'jpNum');        // JP catalog: jp- cards by card number
         addHits(expandedHits,   'expanded');     // trainer name expansion (N's Zekrom)
         addHits(numHits,        'num');          // number only
         addHits(nameHits,       'name');         // full name / base name
