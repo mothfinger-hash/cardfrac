@@ -17,6 +17,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://xjamytrhxeaynywcwfun.supabase.co">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://pokemoncardimages.pokedata.io">
+  <link rel="preconnect" href="https://images.pokemontcg.io">
+  <!-- Preload above-the-fold assets -->
+  <link rel="preload" href="weblogo.webp" as="image">
+  <link rel="preload" href="phondex.webp" as="image">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Space+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
   <script>
@@ -2563,7 +2568,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <!-- Logo header -->
     <div class="nav-header">
       <button class="logo-img-btn" onclick="showPage('collection');setMobileNav('collection')">
-        <img src="weblogo.png" alt="PathBinder" class="nav-logo-img" fetchpriority="high">
+        <img src="weblogo.webp" alt="PathBinder" class="nav-logo-img" fetchpriority="high" decoding="async">
       </button>
       <button class="nav-collapse-btn" id="navCollapseBtn" onclick="toggleNavCollapse()" title="Collapse sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2647,7 +2652,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   <!-- ── TOP NAV (mobile, non-sticky) ──────────────────────────────────────── -->
   <header class="top-nav" id="topNav">
     <div class="top-nav-row1">
-      <img src="pathbinder-logo.png" class="top-nav-logo" alt="PathBinder"
+      <img src="pathbinder-logo.webp" class="top-nav-logo" alt="PathBinder"
            onclick="if(!currentUser){showPage('landing')}else{showPage('collection');setTopNavActive('collection')}">
       <div id="topNavAuthSection" class="top-nav-auth-btns">
         <button class="auth-btn" onclick="openModal('loginModal')">Login</button>
@@ -3622,7 +3627,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       <!-- Device hero image -->
       <div class="lp-hero-graphic">
-        <img class="lp-pdx-photo" src="pokedex.png?v=3" alt="PathBinder device">
+        <img class="lp-pdx-photo" src="pokedex.webp" alt="PathBinder device" loading="lazy" decoding="async">
       </div>
     </section>
 
@@ -3987,7 +3992,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <!-- ══ DESKTOP: pdex device ═══════════════════════════════════════════ -->
     <div class="ac-pdex-wrap">
       <div class="ac-device" style="width:min(1200px,97vw)">
-        <img class="ac-device-img" src="pdex.png" alt="PathBinder">
+        <img class="ac-device-img" src="pdex.webp" alt="PathBinder" decoding="async">
         <div class="ac-led-d"></div>
         <div class="ac-scanlines"></div>
         <!-- D-pad hit areas: up ~x=90.5% y=63%, down ~x=90.5% y=76% -->
@@ -4040,7 +4045,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <!-- ══ MOBILE: phondex device ══════════════════════════════════════════ -->
     <div class="ac-mob-wrap">
       <div class="ac-device">
-        <img class="ac-device-img" src="phondex.png?v=3" alt="PathBinder">
+        <img class="ac-device-img" src="phondex.webp" alt="PathBinder" decoding="async">
         <div class="ac-led-m"></div>
         <div class="ac-phone-screen">
           <div class="ac-scanlines" style="z-index:50"></div>
@@ -6319,7 +6324,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                     return `<div class="ndash-tcard" onclick="openBinderCardDetail('${item.id}')">
                       <div class="ndash-tcard-art">
                         ${item.card_image_url
-                          ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy">`
+                          ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async">`
                           : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
                         ${i<3?`<div class="ndash-tcard-rank">#${i+1}</div>`:''}
                       </div>
@@ -6901,7 +6906,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return '<div class="ndash-tcard" onclick="openBinderCardDetail(\'' + item.id + '\')">' +
           '<div class="ndash-tcard-art">' +
             (item.card_image_url
-              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy">'
+              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async">'
               : '<div class="ndash-tcard-art-ph">' + _escHtml(item.card_name.slice(0,12)) + '</div>') +
             (i<3 ? '<div class="ndash-tcard-rank">#' + (i+1) + '</div>' : '') +
           '</div>' +
@@ -11688,7 +11693,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 ondragstart="allCardsDragStart(event,'${item.id}')"
                 ondragend="allCardsDragEnd(event)"` : `style="cursor:pointer"`}
               onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
-              <img src="${item.card_image_url || ''}" alt="" loading="lazy" draggable="false"
+              <img src="${_thumbUrl(item.card_image_url, 80) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
                 style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0"
                 onerror="this.style.visibility='hidden'">
               <div style="flex:1;min-width:0">
@@ -11729,7 +11734,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             style="cursor:grab">
             <div class="binder-card-img-wrap">
               ${item.card_image_url
-                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
+                ? `<img src="${_thumbUrl(item.card_image_url, 220)}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
@@ -12880,8 +12885,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           .from('catalog')
           .select('id, name, set_name, set_code, card_number, rarity, image_url')
           .ilike('name', `%${query.trim()}%`)
-          .like('id', 'jp-%')
-          .limit(20);
+          .or('id.like.jp-%,id.like.pd-%')
+          .limit(100);
 
         if (error) throw new Error(error.message);
 
@@ -13092,12 +13097,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
 
       try {
+        const q = query.trim();
         const { data: rows, error } = await sb
           .from('catalog')
           .select('id, name, set_name, set_code, card_number, rarity, image_url')
-          .ilike('name', `%${query.trim()}%`)
-          .like('id', 'jp-%')
-          .limit(20);
+          .ilike('name', `%${q}%`)
+          .or('id.like.jp-%,id.like.pd-%')
+          .limit(100);
 
         if (error) throw new Error(error.message);
 
@@ -13335,7 +13341,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             onmouseover="this.style.color='rgba(0,229,255,.85)'" onmouseout="this.style.color='rgba(0,229,255,.38)'">&#8599; VIEW ON TCGPLAYER</a>` : ''}
           ${currentUser ? `
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(0,229,255,.1);padding-top:16px">
-            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(0,229,255,.38);text-align:center;margin-bottom:2px">ADD TO MY BINDER</div>
+            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(0,229,255,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
             <div style="display:flex;gap:0;width:100%">
               <select id="searchCardBinderSelect"
                 style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(0,229,255,.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
@@ -13344,8 +13350,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </select>
               <button onclick="addSearchCardFromDetail()"
                 style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(0,229,255,.55);background:rgba(0,229,255,.08);color:#00E5FF;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
-                onmouseover="this.style.background='rgba(0,229,255,.18)'" onmouseout="this.style.background='rgba(0,229,255,.08)'">+</button>
+                onmouseover="this.style.background='rgba(0,229,255,.18)'" onmouseout="this.style.background='rgba(0,229,255,.08)'">ADD CARD</button>
             </div>
+            <button onclick="wishlistFromDetail()"
+              style="width:100%;padding:7px;border:1px solid rgba(0,229,255,.22);background:transparent;color:rgba(0,229,255,.55);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
+              onmouseover="this.style.borderColor='rgba(0,229,255,.55)';this.style.color='rgba(0,229,255,.9)'"
+              onmouseout="this.style.borderColor='rgba(0,229,255,.22)';this.style.color='rgba(0,229,255,.55)'">&#9825; ADD TO WISHLIST</button>
           </div>` : `<div style="text-align:center;padding:16px;color:rgba(0,229,255,.38);font-size:.68rem;letter-spacing:.08em;margin-top:12px">SIGN IN TO ADD CARDS</div>`}
         </div>
       `;
@@ -13360,6 +13370,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const b = document.getElementById('searchCardBinderSelect')?.value || null;
       document.getElementById('setCardDetailSheet')?.remove();
       openAddToCollectionModal(Object.assign({}, cardData, { binder_id: b || undefined }));
+    }
+
+    function wishlistFromDetail() {
+      const cardData = window._searchCardDetailData;
+      if (!cardData) return;
+      document.getElementById('setCardDetailSheet')?.remove();
+      openAddToWishlistModal(cardData);
     }
 
     function openAddToCollectionModal(cardData) {
@@ -15652,6 +15669,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // ── Supabase image transform: serve smaller thumbnails for grid views ──
+    // Converts storage URLs to the render/image endpoint with width + quality.
+    // Non-Supabase URLs (pokemontcg.io etc.) are returned unchanged.
+    function _thumbUrl(url, width = 200, quality = 80) {
+      if (!url) return url;
+      const STORAGE = '/storage/v1/object/public/';
+      const RENDER  = '/storage/v1/render/image/public/';
+      if (url.includes(STORAGE)) {
+        return url.replace(STORAGE, RENDER) + `?width=${width}&quality=${quality}`;
+      }
+      return url;
+    }
+
 
     // ── Coin Flip ─────────────────────────────────────────────────────────
     var _ftLastCoinFlipId = null; // tracks synced flip IDs so we don't replay our own
@@ -16118,7 +16148,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <!-- Actions -->
           ${currentUser ? `
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(0,229,255,.1);padding-top:16px">
-            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(0,229,255,.38);text-align:center;margin-bottom:2px">ADD TO MY BINDER</div>
+            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(0,229,255,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
             <div style="display:flex;gap:0;width:100%">
               <select id="setCardBinderSelect"
                 style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(0,229,255,.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
@@ -16127,13 +16157,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </select>
               <button onclick="openAddToCollectionFromSet(${idx})"
                 style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(0,229,255,.55);background:rgba(0,229,255,.08);color:#00E5FF;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
-                onmouseover="this.style.background='rgba(0,229,255,.18)'" onmouseout="this.style.background='rgba(0,229,255,.08)'">+</button>
+                onmouseover="this.style.background='rgba(0,229,255,.18)'" onmouseout="this.style.background='rgba(0,229,255,.08)'">ADD CARD</button>
             </div>
             <button onclick="addSetCardToWishlist(${idx})"
-              style="padding:8px;border:1px solid rgba(0,229,255,.16);background:transparent;color:rgba(0,229,255,.42);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.67rem;cursor:pointer;width:100%;text-align:center;letter-spacing:.08em;transition:all .15s"
-              onmouseover="this.style.borderColor='rgba(0,229,255,.45)';this.style.color='rgba(0,229,255,.8)'"
-              onmouseout="this.style.borderColor='rgba(0,229,255,.16)';this.style.color='rgba(0,229,255,.42)'"
-            >&#9825; WISHLIST</button>
+              style="width:100%;padding:7px;border:1px solid rgba(0,229,255,.22);background:transparent;color:rgba(0,229,255,.55);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
+              onmouseover="this.style.borderColor='rgba(0,229,255,.55)';this.style.color='rgba(0,229,255,.9)'"
+              onmouseout="this.style.borderColor='rgba(0,229,255,.22)';this.style.color='rgba(0,229,255,.55)'">&#9825; ADD TO WISHLIST</button>
           </div>` : `<div style="text-align:center;padding:16px;color:rgba(0,229,255,.38);font-size:.68rem;letter-spacing:.08em;margin-top:12px">SIGN IN TO ADD CARDS</div>`}
         </div>
       `;
@@ -16190,25 +16219,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     async function addSetCardToWishlist(idx) {
       const card = window._setsDetailCards && window._setsDetailCards[idx];
-      if (!card || !currentUser) return;
-      const item = {
-        user_id: currentUser.id,
-        name: card.name,
-        set_name: card.set?.name || '',
-        card_number: card.number || '',
-        api_card_id: card.id,
-        image_url: card.images?.small || '',
-        rarity: card.rarity || '',
-        is_ghost: true,
-        purchase_price: null,
-        current_value: card.cardmarket?.prices?.averageSellPrice || card.tcgplayer?.prices?.holofoil?.market || null,
-        quantity: 1,
-      };
-      const { error } = await sb.from('collection_items').insert(item);
-      if (error) { showToast('Error adding to wishlist'); return; }
-      await loadCollection();
+      if (!card || !currentUser) { showToast('Sign in to add to wishlist'); return; }
       document.getElementById('setCardDetailSheet')?.remove();
-      showToast('♡ Added to wishlist');
+      const bestPrice = card.tcgplayer?.prices?.holofoil?.market
+        || card.tcgplayer?.prices?.normal?.market
+        || card.cardmarket?.prices?.averageSellPrice
+        || null;
+      openAddToWishlistModal({
+        cardName:   card.name,
+        setName:    card.set?.name  || '',
+        setCode:    card.set?.id    || '',
+        cardNumber: card.number     || '',
+        apiCardId:  card.id,
+        cardImageUrl: card.images?.small || '',
+        rarity:     card.rarity     || '',
+        currentValue: bestPrice,
+      });
     }
 
 
@@ -17920,7 +17946,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         //    I+J handle trainer cards where OCR drops the 's (N'Zekrom → N's Zekrom → Zekrom)
         //    H is the set-size fingerprint: sv3pt5 has card #165, hgss4 doesn't
         const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes] = await Promise.all([
-          sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 10 }),
+          sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 15 }),
           // A
           (numStripped && cardName)
             ? q().ilike('name', '%' + cardName + '%').eq('card_number', numStripped).limit(5)
@@ -17971,7 +17997,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 if (numRaw && numRaw !== numStripped) numFmts.push(numRaw);
                 if (numTotal) { numFmts.push(numStripped + '/' + numTotal); if (numRaw) numFmts.push(numRaw + '/' + numTotal); }
                 const orFilter = numFmts.filter((v,i,a) => a.indexOf(v) === i).map(n => 'card_number.eq.' + n).join(',');
-                return q().like('id', 'jp-%').or(orFilter).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }));
+                return q().or(`id.like.jp-%,id.like.pd-%`).or(orFilter).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }));
               })()
             : Promise.resolve({ data: [] })
         ]);
@@ -18015,12 +18041,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         //   0.80  Pokémon name from trainer card               (broadest — Zekrom)
         //   0.78  name only / base name
         //
-        // When JP OCR is detected, all non-jp- cards are penalised by −0.35 so
-        // any jp- number match wins over English-only hits.
+        // When JP OCR is detected, all non-jp-/pd- cards are penalised by −0.35 so
+        // any jp-/pd- number match wins over English-only hits.
         // CLIP similarity is added as a ×0.12 tiebreaker within each tier.
         // JP CLIP matches get ×0.27 boost when JP OCR was detected.
         function scoreOcr(m, source) {
-          var isJpCard = m.id && m.id.startsWith('jp-');
+          var isJpCard = m.id && (m.id.startsWith('jp-') || m.id.startsWith('pd-'));
           var base = source === 'setTotal'   ? 1.15
                    : source === 'nameNum'    ? 1.0
                    : source === 'expanded'   ? 1.05
@@ -18876,7 +18902,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                  '" — using pixel-art fallback. Make sure the file exists at the same path as this widget.');
   };
   // Cache-bust so the browser doesn't keep serving a stale 404 from a previous load.
-  chestLogo.src = 'pathbinder-logo.png?v=' + Date.now();
+  chestLogo.src = 'pathbinder-logo.webp?v=' + Date.now();
   // Handle the case where the browser cached the image and onload never fires.
   if (chestLogo.complete && chestLogo.naturalWidth > 0) logoLoaded = true;
   // Backwards-compat handle (kept so the canvas fallback can still detect load state)
