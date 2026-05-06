@@ -44,6 +44,7 @@
       --bg:#0F0D0A;--surface:#1C1810;--surface2:#241C10;--surface3:#2C2218;--border:#3D3020;
       --accent:#FF5C00;--accent2:#FFD23F;--green:#D2783A;--red:#C8002A;
       --yellow:#FFD23F;--gold:#FFD23F;--orange:#FF5C00;--teal:#FFD23F;
+      --copper:#B87333;--copper-dim:rgba(184,115,51,.55);--copper-glow:rgba(184,115,51,.18);
       --text:#F2ECD8;--muted:#8B7A60;
       --shadow:#1E1408;--premium:#C8002A;--premium-txt:#F2ECD8;
       --sb-w:198px;--sb-w-coll:54px;
@@ -68,15 +69,15 @@
     .nav-collapse-btn svg{width:12px;height:12px;transition:transform .25s}
     nav.sb-collapsed .nav-collapse-btn svg{transform:rotate(180deg)}
     .nav-section{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 0 4px}
-    .nav-group-label{font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.18em;padding:10px 12px 3px;white-space:nowrap;overflow:hidden;text-transform:uppercase}
+    .nav-group-label{font-family:'Press Start 2P',monospace;font-size:6px;color:var(--copper-dim);letter-spacing:.18em;padding:10px 12px 3px;white-space:nowrap;overflow:hidden;text-transform:uppercase}
     nav.sb-collapsed .nav-group-label{color:transparent;padding-top:12px;padding-bottom:2px}
     .nav-right{display:contents}
     .nav-tabs{display:flex;flex-direction:column;gap:1px}
     button{font-family:'Space Mono','Share Tech Mono',monospace}
     .nav-tab{display:flex;align-items:center;gap:9px;padding:7px 12px;border:none;border-left:3px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:10px;letter-spacing:.08em;text-transform:uppercase;width:100%;transition:all .1s;position:relative;white-space:nowrap;text-align:left;margin-bottom:1px}
     .nav-tab:hover{color:var(--text);background:var(--surface2);border-left-color:var(--border)}
-    .nav-tab.active{color:var(--accent);background:rgba(0,229,255,.07);border-left-color:var(--accent)}
-    .nav-tab.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+    .nav-tab.active{color:var(--copper);background:var(--copper-glow);border-left-color:var(--copper)}
+    .nav-tab.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--copper);box-shadow:0 0 10px var(--copper)}
     .nav-tab .badge-count{background:var(--red);color:#fff;border-radius:0;width:15px;height:15px;display:flex;align-items:center;justify-content:center;font-size:.48rem;font-weight:700;border:1px solid var(--border);flex-shrink:0;margin-left:auto}
     .nav-tab[data-page="admin"]{display:none}
     .nav-tab[data-page="admin"].admin-visible{display:flex;align-items:center}
@@ -133,7 +134,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* PAGES */
     .page{display:none;padding:32px 24px;max-width:1160px;margin:0 auto}
     .page.active{display:block}
-    h2{font-size:1rem;font-weight:700;margin-bottom:6px;color:var(--accent);letter-spacing:.06em}
+    h2{font-size:1rem;font-weight:700;margin-bottom:6px;color:var(--copper);letter-spacing:.06em}
     .subtitle{color:var(--muted);margin-bottom:20px;font-size:.95rem}
 
     /* ACCOUNT PAGE */
@@ -155,7 +156,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .offer-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
     .offer-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:10px}
     .offer-from{font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
-    .offer-badge{display:inline-block;background:rgba(210,120,40,.15);border:1px solid rgba(210,120,40,.3);color:var(--green);padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:700}
+    .offer-badge{display:inline-block;background:var(--copper-glow);border:1px solid var(--copper-dim);color:var(--copper);padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:700}
     .offer-details{font-size:.82rem;color:var(--muted);margin-bottom:10px;line-height:1.5}
     .offer-actions{display:flex;gap:8px;flex-wrap:wrap}
     .offer-actions .mini-btn{flex:1;min-width:100px}
@@ -181,8 +182,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .mb-perk{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)}
     .mb-perk span{color:var(--gold)}
     .mb-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
-    .price-pill{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 14px;text-align:center}
-    .price-pill .pp-price{font-size:1.1rem;font-weight:800;color:var(--gold)}
+    .price-pill{background:var(--surface);border:1px solid var(--copper-dim);border-radius:10px;padding:8px 14px;text-align:center;box-shadow:0 0 8px var(--copper-glow)}
+    .price-pill .pp-price{font-size:1.1rem;font-weight:800;color:var(--copper)}
     .price-pill .pp-label{font-size:.7rem;color:var(--muted);margin-top:1px}
 
     /* SECTION TABS */
@@ -1089,13 +1090,21 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       #ftBreakdownContent table{font-size:.68rem}
       #ftBreakdownContent td,#ftBreakdownContent th{padding:4px 5px}
 
-      /* Loading video: desktop=landscape, mobile=portrait */
-      .ft-loading-vid{display:block;margin:0 auto;border-radius:6px;max-width:100%}
-      .ft-loading-desk{max-height:220px}
-      .ft-loading-mob{display:none;max-height:320px}
-      @media(max-width:600px){
-        .ft-loading-desk{display:none}
-        .ft-loading-mob{display:block}
+      /* Loading animation */
+      .ft-loading-anim{display:block;margin:0 auto}
+      @keyframes ftMagSweep{
+        0%  {transform:translate(0,0)   rotate(-12deg)}
+        30% {transform:translate(44px,-10px) rotate(8deg)}
+        60% {transform:translate(22px,18px)  rotate(-6deg)}
+        100%{transform:translate(0,0)   rotate(-12deg)}
+      }
+      @keyframes ftGlint{
+        0%,80%,100%{opacity:0}
+        40%{opacity:.7}
+      }
+      @keyframes ftFilePop{
+        0%,100%{transform:scaleY(1)}
+        50%{transform:scaleY(1.04) translateY(-2px)}
       }
 
       /* Balance scale labels: larger hit targets */
@@ -1300,7 +1309,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
 
     /* ── BETA BADGE ── */
-    .beta-badge{display:inline-block;padding:1px 7px;font-size:.52rem;font-weight:700;letter-spacing:.1em;background:var(--accent2);color:var(--surface);border-radius:2px;vertical-align:middle;margin-left:8px;text-transform:uppercase;position:relative;top:-1px}
+    .beta-badge{display:inline-block;padding:1px 7px;font-size:.52rem;font-weight:700;letter-spacing:.1em;background:var(--copper);color:#1a0a00;border-radius:2px;vertical-align:middle;margin-left:8px;text-transform:uppercase;position:relative;top:-1px}
 </style>
 
   <!-- ══════════════════════════════════════════════════════════════════
@@ -1405,7 +1414,7 @@ nav {
 .nav-collapse-btn { border-color: var(--border) !important; }
 .nav-collapse-btn:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 .nav-section { }
-.nav-group-label { color: var(--muted) !important; }
+.nav-group-label { color: var(--copper-dim) !important; }
 .nav-foot { border-top: 2px solid var(--accent) !important; }
 /* #binderSidebar — transparent floating icons, no background override needed */
 
@@ -2297,7 +2306,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 /* Page-level title strip */
 .pb-page-hdr{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px;padding-bottom:14px;border-bottom:1.5px solid var(--border)}
 .pb-page-hdr-main{}
-.pb-page-hdr-title{font-family:'Orbitron',monospace;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--text);line-height:1.2;display:flex;align-items:center;gap:8px}
+.pb-page-hdr-title{font-family:'Orbitron',monospace;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--text);line-height:1.2;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--copper-dim);padding-bottom:6px}
 .pb-page-hdr-sub{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;color:var(--muted);margin-top:5px;letter-spacing:.03em;line-height:1.5}
 
 /* Inline accent label (replaces bare h3 labels inside panels) */
@@ -4056,10 +4065,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <span class="ac-ni-ico">◎</span>
               <span class="ac-ni-lbl">Search</span>
             </div>
-            <div class="ac-ni" onclick="acNavClick(this);openCardScanner()">
+            <div class="ac-ni" onclick="acNavClick(this);document.getElementById('acMobScanInput').click()">
               <span class="ac-ni-ico">⬡</span>
               <span class="ac-ni-lbl">Scan</span>
             </div>
+            <input id="acMobScanInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFromAddCard(this)">
             <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
               <span class="ac-ni-ico">▣</span>
               <span class="ac-ni-lbl">Scan Bulk</span>
@@ -4213,16 +4223,56 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       <!-- ── STATE 2: loading animation (desktop / mobile GIF variants) ── -->
       <div id="ftLoadingState" style="display:none;text-align:center;padding:16px 0 12px">
-        <!-- Desktop: landscape video -->
-        <video id="ftVidDesk" class="ft-loading-vid ft-loading-desk" loop muted playsinline preload="none">
-          <source src="trade-desktop.webm" type="video/webm">
-          <source src="trade-desktop.mp4"  type="video/mp4">
-        </video>
-        <!-- Mobile: portrait video -->
-        <video id="ftVidMob" class="ft-loading-vid ft-loading-mob" loop muted playsinline preload="none">
-          <source src="trade-mobile.webm" type="video/webm">
-          <source src="trade-mobile.mp4"  type="video/mp4">
-        </video>
+        <!-- Magnifying glass over files animation -->
+        <svg class="ft-loading-anim" width="240" height="180" viewBox="0 0 240 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- File stack — back -->
+          <g style="animation:ftFilePop 2.8s ease-in-out 0.3s infinite">
+            <rect x="38" y="72" width="74" height="94" rx="3" fill="#091820" stroke="rgba(0,229,255,.18)" stroke-width="1"/>
+            <rect x="38" y="72" width="74" height="10" rx="3" fill="rgba(0,229,255,.06)"/>
+            <line x1="50" y1="96" x2="100" y2="96" stroke="rgba(0,229,255,.15)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="50" y1="106" x2="100" y2="106" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="50" y1="116" x2="88" y2="116" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="50" y1="126" x2="96" y2="126" stroke="rgba(0,229,255,.08)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="50" y1="136" x2="80" y2="136" stroke="rgba(0,229,255,.08)" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+          <!-- File stack — middle -->
+          <g style="animation:ftFilePop 2.8s ease-in-out 0.15s infinite">
+            <rect x="48" y="64" width="74" height="94" rx="3" fill="#091e2a" stroke="rgba(0,229,255,.24)" stroke-width="1"/>
+            <rect x="48" y="64" width="74" height="10" rx="3" fill="rgba(0,229,255,.08)"/>
+            <line x1="60" y1="88" x2="110" y2="88" stroke="rgba(0,229,255,.18)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="60" y1="98" x2="110" y2="98" stroke="rgba(0,229,255,.13)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="60" y1="108" x2="98" y2="108" stroke="rgba(0,229,255,.13)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="60" y1="118" x2="106" y2="118" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="60" y1="128" x2="90" y2="128" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+          <!-- File stack — front -->
+          <g style="animation:ftFilePop 2.8s ease-in-out infinite">
+            <rect x="58" y="56" width="74" height="94" rx="3" fill="#0a2030" stroke="rgba(0,229,255,.35)" stroke-width="1.2"/>
+            <!-- Folded corner -->
+            <path d="M118 56 L132 70 L118 70 Z" fill="#091820" stroke="rgba(0,229,255,.22)" stroke-width="1"/>
+            <rect x="58" y="56" width="60" height="10" rx="3" fill="rgba(0,229,255,.1)"/>
+            <line x1="70" y1="80" x2="120" y2="80" stroke="rgba(0,229,255,.28)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="70" y1="90" x2="120" y2="90" stroke="rgba(0,229,255,.2)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="70" y1="100" x2="108" y2="100" stroke="rgba(0,229,255,.2)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="70" y1="110" x2="116" y2="110" stroke="rgba(0,229,255,.15)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="70" y1="120" x2="98" y2="120" stroke="rgba(0,229,255,.15)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="70" y1="130" x2="112" y2="130" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+          <!-- Magnifying glass — sweeps across -->
+          <g style="animation:ftMagSweep 2.8s ease-in-out infinite;transform-origin:95px 100px">
+            <!-- lens glow -->
+            <circle cx="88" cy="88" r="34" fill="rgba(0,229,255,.04)" stroke="none"/>
+            <!-- lens rim -->
+            <circle cx="88" cy="88" r="28" fill="rgba(5,20,34,.72)" stroke="#00E5FF" stroke-width="2.5"/>
+            <!-- inner lens sheen -->
+            <circle cx="88" cy="88" r="24" fill="none" stroke="rgba(0,229,255,.12)" stroke-width="8"/>
+            <!-- glint -->
+            <ellipse cx="79" cy="80" rx="5" ry="3" fill="white" style="animation:ftGlint 2.8s ease-in-out infinite" transform="rotate(-30 79 80)" opacity="0"/>
+            <!-- handle -->
+            <line x1="110" y1="110" x2="130" y2="132" stroke="#00E5FF" stroke-width="5" stroke-linecap="round"/>
+            <line x1="110" y1="110" x2="130" y2="132" stroke="rgba(0,229,255,.35)" stroke-width="9" stroke-linecap="round"/>
+          </g>
+        </svg>
         <div id="ftLoadingMsg" style="font-size:.82rem;color:var(--muted);margin-top:12px;letter-spacing:.04em">Checking prices…</div>
         <div id="ftLoadingProgress" style="font-size:.72rem;color:var(--muted);margin-top:4px"></div>
       </div>
@@ -14199,17 +14249,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (loading) loading.style.display = state === 'loading' ? '' : 'none';
       if (results) results.style.display = state === 'results' ? '' : 'none';
 
-      // Play only the correct video for the current viewport — never both
-      var vidDesk = document.getElementById('ftVidDesk');
-      var vidMob  = document.getElementById('ftVidMob');
-      if (state === 'loading') {
-        var isMobile = window.innerWidth <= 600;
-        if (vidDesk) { if (!isMobile) { vidDesk.load(); vidDesk.play().catch(function(){}); } else { vidDesk.pause(); } }
-        if (vidMob)  { if (isMobile)  { vidMob.load();  vidMob.play().catch(function(){}); }  else { vidMob.pause(); }  }
-      } else {
-        if (vidDesk) vidDesk.pause();
-        if (vidMob)  vidMob.pause();
-      }
+      // Animation is CSS-driven — no JS needed
     }
 
     // ── Binder picker ────────────────────────────────────────────────────
@@ -15824,34 +15864,88 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     };
     function _rarityRank(r) { return _RARITY_RANK[r] || 5; }
 
+    // Sorted array cache for lazy loading
+    var _setsSorted    = [];
+    var _setsRenderOff = 0;
+    var _setsObserver  = null;
+    var _SETS_PAGE     = () => window.innerWidth < 768 ? 10 : 20;
+
+    function _rowHtml(card, origIdx, ownedMap) {
+      const ci = ownedMap[card.id];
+      const owned = !!ci;
+      const qty = ci ? (ci.quantity || 1) : 0;
+      const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
+      const img = card.images && card.images.small ? card.images.small : '';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
+        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
+          <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
+        </div>
+        ${owned
+          ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}${price ? ' · $' + Number(price).toFixed(2) : ''}</span>`
+          : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
+        <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
+      </div>`;
+    }
+
     function _buildSetCardRows(cards, ownedMap, sort, ownedFirst) {
       const numCmp = (a,b) => (parseInt(a.number)||0) - (parseInt(b.number)||0);
       let sorted = [...cards];
-      // Primary sort
       if (sort === 'rarity-asc')  sorted.sort((a,b) => _rarityRank(a.rarity) - _rarityRank(b.rarity) || numCmp(a,b));
       else if (sort === 'rarity-desc') sorted.sort((a,b) => _rarityRank(b.rarity) - _rarityRank(a.rarity) || numCmp(a,b));
       else sorted.sort(numCmp);
-      // Secondary: owned first (stable, preserves primary sort within each group)
       if (ownedFirst) sorted.sort((a,b) => (ownedMap[b.id]?1:0) - (ownedMap[a.id]?1:0));
-      return sorted.map((card, idx) => {
-        const ci = ownedMap[card.id];
-        const owned = !!ci;
-        const qty = ci ? (ci.quantity || 1) : 0;
-        const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
-        const img = card.images && card.images.small ? card.images.small : '';
-        const origIdx = cards.indexOf(card);
-        return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-          ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
-          <div style="flex:1;min-width:0">
-            <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
-            <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
-          </div>
-          ${owned
-            ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}${price ? ' · $' + Number(price).toFixed(2) : ''}</span>`
-            : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
-          <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
-        </div>`;
+      // Store globally for lazy loading
+      _setsSorted    = sorted;
+      _setsRenderOff = 0;
+      if (_setsObserver) { _setsObserver.disconnect(); _setsObserver = null; }
+      return _renderNextSetBatch(cards);
+    }
+
+    function _renderNextSetBatch(origCards) {
+      const page = _SETS_PAGE();
+      const batch = _setsSorted.slice(_setsRenderOff, _setsRenderOff + page);
+      _setsRenderOff += batch.length;
+      const rows = batch.map(card => {
+        const origIdx = (origCards || window._setsDetailCards).indexOf(card);
+        return _rowHtml(card, origIdx, _setsDetailOwnedMap);
       }).join('');
+      const hasMore = _setsRenderOff < _setsSorted.length;
+      return rows + (hasMore ? '<div id="setsListSentinel" style="height:1px"></div>' : '');
+    }
+
+    function _attachSetsObserver() {
+      const grid = document.getElementById('setsCardList');
+      if (!grid) return;
+      const sentinel = document.getElementById('setsListSentinel');
+      if (!sentinel) return;
+      if (_setsObserver) _setsObserver.disconnect();
+      _setsObserver = new IntersectionObserver((entries) => {
+        if (!entries[0].isIntersecting) return;
+        if (_setsRenderOff >= _setsSorted.length) { _setsObserver.disconnect(); return; }
+        sentinel.remove();
+        const page = _SETS_PAGE();
+        // Load half a page early: trigger when user is halfway through remaining cards
+        const batch = _setsSorted.slice(_setsRenderOff, _setsRenderOff + page);
+        _setsRenderOff += batch.length;
+        const fragment = document.createDocumentFragment();
+        batch.forEach(card => {
+          const origIdx = window._setsDetailCards.indexOf(card);
+          const tmp = document.createElement('div');
+          tmp.innerHTML = _rowHtml(card, origIdx, _setsDetailOwnedMap);
+          fragment.appendChild(tmp.firstChild);
+        });
+        if (_setsRenderOff < _setsSorted.length) {
+          const newSentinel = document.createElement('div');
+          newSentinel.id = 'setsListSentinel';
+          newSentinel.style.height = '1px';
+          fragment.appendChild(newSentinel);
+        }
+        grid.appendChild(fragment);
+        _attachSetsObserver(); // re-observe new sentinel
+      }, { root: grid, threshold: 0, rootMargin: '0px 0px 100px 0px' });
+      _setsObserver.observe(sentinel);
     }
 
     function sortSetCards(sort) {
@@ -15864,6 +15958,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const grid = document.getElementById('setsCardList');
       if (!grid || !window._setsDetailCards) return;
       grid.innerHTML = _buildSetCardRows(window._setsDetailCards, _setsDetailOwnedMap, _setsDetailSort, _setsOwnedFirst);
+      _attachSetsObserver();
       // Update active pills
       document.querySelectorAll('.sets-sort-pill').forEach(p => {
         const s = p.dataset.sort;
@@ -16061,6 +16156,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             ${_buildSetCardRows(cards, ownedMap, 'number', false) || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
           </div>
         </div>`;
+        // Attach lazy-load observer after DOM is updated
+        requestAnimationFrame(_attachSetsObserver);
       } catch(e) {
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
@@ -16662,8 +16759,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <div style="overflow-y:auto;flex:1;padding:12px 16px 20px">
         <!-- Match results list -->
         <div id="scannerResults"></div>
-        <!-- Name search fallback -->
-        <div style="margin-top:12px">
+        <!-- Name search fallback — hidden until a scan has been run -->
+        <div id="scannerSearchFallback" style="margin-top:12px;display:none">
           <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.55rem;color:var(--muted);margin-bottom:6px;letter-spacing:.04em">NOT THE RIGHT CARD? SEARCH BY NAME:</div>
           <input id="scannerNameInput" type="text" placeholder="e.g. Charizard, Haunter..."
             oninput="scannerNameSearch(this.value)"
@@ -16890,6 +16987,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const modal = document.getElementById('scannerModal');
       modal.style.display = 'none';
       window._detectedSlab = null;
+      // Reset pre-scan state
+      const fallback = document.getElementById('scannerSearchFallback');
+      if (fallback) { fallback.style.display = 'none'; fallback.querySelector('input') && (fallback.querySelector('input').value = ''); }
+      const nameResults = document.getElementById('scannerNameResults');
+      if (nameResults) nameResults.innerHTML = '';
     }
 
     // ── Auto-scan — frame stability detection ────────────────────────────────
@@ -17399,7 +17501,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Store for detail preview
+    window._scanMatches = [];
+
     function showScanResults(matches) {
+      window._scanMatches = matches;
       const wrap = document.getElementById('scannerResults');
       const slab = window._detectedSlab;
 
@@ -17417,32 +17523,84 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </div>` : '';
 
       wrap.innerHTML = slabBanner +
-        `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:var(--accent2);letter-spacing:.06em;margin-bottom:10px">${matches.length} POSSIBLE MATCHES — tap to add</div>` +
-        matches.map((m) => {
+        `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:var(--accent2);letter-spacing:.06em;margin-bottom:10px">${matches.length} POSSIBLE MATCHES — tap to inspect</div>` +
+        matches.map((m, idx) => {
           const pct = Math.round(m.similarity * 100);
           const bar = `<div style="height:3px;background:var(--border);margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct > 80 ? 'var(--accent)' : pct > 65 ? 'var(--accent2)' : 'var(--muted)'}"></div></div>`;
           const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
           const sourceBadge = m._exact
             ? `<span style="background:var(--accent);color:#fff;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">EXACT</span>`
             : m._ocr
-              ? `<span style="background:var(--teal);color:#000;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">OCR</span>`
+              ? `<span style="background:var(--copper);color:#1a0a00;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">OCR</span>`
               : `<span style="color:var(--muted);font-size:.55rem;margin-left:6px">${pct}%</span>`;
           const jpBadge = m.id && m.id.startsWith('jp-')
             ? `<span style="font-size:.85em;margin-left:4px" title="Japanese card">[JP]</span>` : '';
           return `
-            <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
+            <div class="scan-match-card" onclick="previewScanMatch(${idx})">
               <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
               <div class="scan-match-info">
                 <div class="scan-match-name">${m.name || 'Unknown Card'}${jpBadge}${sourceBadge}</div>
                 ${setInfo ? `<div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:2px">${setInfo}</div>` : ''}
                 ${!m._ocr && !m._exact ? `<div class="scan-match-sim">${bar}</div>` : ''}
               </div>
-              <button class="scan-match-add">+ Add</button>
+              <button class="scan-match-add" onclick="event.stopPropagation();previewScanMatch(${idx})">VIEW ›</button>
             </div>`;
         }).join('');
     }
 
     let _returnToScanner = false;
+
+    // Show a card detail sheet so the user can inspect before confirming
+    function previewScanMatch(idx) {
+      const m = (window._scanMatches || [])[idx];
+      if (!m) return;
+      document.getElementById('scanPreviewSheet')?.remove();
+
+      const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
+      const jpBadge = m.id && (m.id.startsWith('jp-') || m.id.startsWith('pd-'))
+        ? `<span style="font-size:.75rem;color:var(--copper);margin-left:6px">[JP]</span>` : '';
+
+      const sheet = document.createElement('div');
+      sheet.id = 'scanPreviewSheet';
+      sheet.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:flex-end;justify-content:center';
+      sheet.innerHTML = `
+        <div onclick="document.getElementById('scanPreviewSheet').remove()" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>
+        <div style="position:relative;width:100%;max-width:480px;background:var(--surface);border-top:2px solid var(--copper-dim);border-left:2px solid var(--copper-dim);border-right:2px solid var(--copper-dim);border-radius:6px 6px 0 0;padding:20px 18px 28px;max-height:85svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">
+          <!-- close -->
+          <button onclick="document.getElementById('scanPreviewSheet').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>
+          <!-- label -->
+          <div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);margin-bottom:14px">◈ CARD DETAIL</div>
+          <!-- image -->
+          ${m.image_url ? `<div style="display:flex;justify-content:center;margin-bottom:14px">
+            <img src="${m.image_url}" alt="${m.name || ''}"
+              style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 20px var(--copper-glow)"
+              onclick="openImageLightbox('${m.image_url}')">
+          </div>` : ''}
+          <!-- info -->
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:4px">${m.name || 'Unknown Card'}${jpBadge}</div>
+            ${setInfo ? `<div style="font-size:.63rem;color:var(--muted)">${setInfo}</div>` : ''}
+          </div>
+          <!-- actions -->
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button onclick="document.getElementById('scanPreviewSheet').remove();confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')"
+              style="width:100%;padding:11px;background:var(--accent);color:#fff;border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.06em;transition:opacity .12s"
+              onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+              + ADD TO COLLECTION
+            </button>
+            <button onclick="document.getElementById('scanPreviewSheet').remove();openAddToWishlistModal({cardName:'${(m.name||'').replace(/'/g,"\\'")}',setName:'${(m.set_name||'').replace(/'/g,"\\'")}',cardNumber:'${m.card_number||''}',cardImageUrl:'${m.image_url||''}',rarity:'${m.rarity||''}'})"
+              style="width:100%;padding:9px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.06em;transition:all .15s"
+              onmouseover="this.style.borderColor='var(--copper)';this.style.background='var(--copper-glow)'" onmouseout="this.style.borderColor='var(--copper-dim)';this.style.background='transparent'">
+              ♡ ADD TO WISHLIST
+            </button>
+            <button onclick="document.getElementById('scanPreviewSheet').remove()"
+              style="width:100%;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;cursor:pointer">
+              ← BACK TO RESULTS
+            </button>
+          </div>
+        </div>`;
+      document.body.appendChild(sheet);
+    }
 
     async function confirmScanMatch(cardId, cardName) {
       // Fetch full card data from catalog then open the standard add-to-collection modal
@@ -18087,6 +18245,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const final = merged.slice(0, 10);
 
         if (!silent) {
+          // Reveal name search fallback now that scan is complete
+          const _fallback = document.getElementById('scannerSearchFallback');
+          if (_fallback) _fallback.style.display = '';
           if (final.length === 0) {
             const countRes = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
             const embeddedCount = countRes.count || 0;
@@ -18104,7 +18265,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           } else {
             const top = final[0];
             const src = top._exact ? 'EXACT' : (top._ocr ? 'OCR' : (Math.round(top.similarity * 100) + '% visual'));
-            setScanStatus('Best match: ' + top.name + ' (' + src + ') — tap to add');
+            setScanStatus('Best match: ' + top.name + ' (' + src + ') — tap card to preview');
             showScanResults(final);
           }
         }
