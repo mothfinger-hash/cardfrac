@@ -866,10 +866,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-ni-lbl{font-size:.52em;letter-spacing:.11em;color:rgba(0,229,255,.55);font-weight:bold;text-transform:uppercase;transition:color .2s}
     .ac-ni.on .ac-ni-lbl{color:#00E5FF}
     /* ── mobile scrollable results grid ── */
-    .ac-mob-wrap .ac-crt{width:100%;height:100%;overflow:hidden;display:flex;flex-direction:column}
-    /* Grid height is set by acFitMobGrid() in JS — CSS alone can't reliably resolve
-       the nested percentage chain on all mobile browsers */
-    .ac-mob-grid{overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:.6%;padding:.8% 1%;scroll-behavior:smooth}
+    /* flex:1 + min-height:0 lets .ac-crt fill .ac-phone-screen without JS measurement */
+    .ac-mob-wrap .ac-crt{width:100%;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+    /* Grid fills whatever height remains after the nav tab bar */
+    .ac-mob-grid{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:.6%;padding:.8% 1%;scroll-behavior:smooth}
     .ac-mc{position:relative;display:flex;flex-direction:column;border-radius:9px 0 9px 9px;box-shadow:inset 0 0 0 1px rgba(0,229,255,.18);overflow:hidden;cursor:pointer;transition:box-shadow .2s}
     .ac-mc:hover{box-shadow:inset 0 0 0 1px rgba(0,229,255,.48)}
     .ac-mc::after{content:'';position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(135deg,transparent 48%,rgba(0,229,255,.22) 48%,rgba(0,229,255,.22) 52%,transparent 52%);pointer-events:none;z-index:5}
@@ -2635,7 +2635,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     </div>
     <div class="dropdown-item" id="myAccountBtn">⬡ My Account</div>
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" id="createAvatarBtn">🎨 Create Avatar</div>
+    <div class="dropdown-item" id="createAvatarBtn">Create Avatar</div>
     <div class="dropdown-divider"></div>
     <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">⏻ Sign Out</div>
   </div>
@@ -2694,8 +2694,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
             <div class="av-label av-seed" id="av-seedLabel">—</div>
             <div class="av-actions">
-              <button id="av-randomize">🎲 RANDOM</button>
-              <button id="av-exportBtn" class="av-primary">💾 SET AS PFP</button>
+              <button id="av-randomize">RANDOM</button>
+              <button id="av-exportBtn" class="av-primary">SET AS PFP</button>
             </div>
           </div>
           <div class="av-controls-col" id="av-controls">
@@ -2958,15 +2958,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <div class="form-group" style="margin-bottom:14px;display:flex;align-items:center;gap:12px">
         <label style="white-space:nowrap;flex-shrink:0;margin:0">Print Language</label>
         <select class="atc-input" id="atcLanguage" style="flex:1">
-          <option value="EN">🇺🇸 English (EN)</option>
-          <option value="JA">🇯🇵 Japanese (JA)</option>
-          <option value="KO">🇰🇷 Korean (KO)</option>
-          <option value="DE">🇩🇪 German (DE)</option>
-          <option value="FR">🇫🇷 French (FR)</option>
-          <option value="ES">🇪🇸 Spanish (ES)</option>
-          <option value="IT">🇮🇹 Italian (IT)</option>
-          <option value="PT">🇵🇹 Portuguese (PT)</option>
-          <option value="ZH">🇨🇳 Chinese (ZH)</option>
+          <option value="EN">English (EN)</option>
+          <option value="JA">Japanese (JA)</option>
+          <option value="KO">Korean (KO)</option>
+          <option value="DE">German (DE)</option>
+          <option value="FR">French (FR)</option>
+          <option value="ES">Spanish (ES)</option>
+          <option value="IT">Italian (IT)</option>
+          <option value="PT">Portuguese (PT)</option>
+          <option value="ZH">Chinese (ZH)</option>
         </select>
       </div>
 
@@ -3059,7 +3059,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           ondragover="event.preventDefault();document.getElementById('atcPhotoDropzone').style.borderColor='var(--accent)'"
           ondragleave="document.getElementById('atcPhotoDropzone').style.borderColor='var(--border)'"
           ondrop="atcHandlePhotoDrop(event)">
-          <div style="font-size:1.4rem;line-height:1">📷</div>
+          <div style="font-size:1.4rem;line-height:1">[ PHOTO ]</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:5px">Click or drag your card photo here</div>
           <div style="font-size:.62rem;color:var(--muted);margin-top:2px">JPG · PNG · WEBP</div>
         </div>
@@ -3318,13 +3318,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <p style="font-size:.75rem;color:var(--muted);margin:0 0 18px">Scan up to 20 cards at once, or photograph a spread and let PathBinder split it into individual cards.</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px">
           <label style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 12px;border:2px solid var(--accent2);border-radius:6px;cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;font-weight:700;color:var(--accent2);text-align:center;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-            <span style="font-size:1.6rem">📸</span>
+            <span style="font-size:1.1rem;letter-spacing:.05em">SCAN</span>
             Multiple Photos
             <span style="font-size:.62rem;color:var(--muted);font-weight:400;font-family:inherit">One photo per card — up to 20</span>
             <input type="file" id="msMultiInput" accept="image/*" multiple style="display:none" onchange="handleMultiScanFiles(this.files)">
           </label>
           <label style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 12px;border:2px solid var(--gold);border-radius:6px;cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;font-weight:700;color:var(--gold);text-align:center;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-            <span style="font-size:1.6rem">🗂️</span>
+            <span style="font-size:1.1rem;letter-spacing:.05em">FILES</span>
             Spread Photo
             <span style="font-size:.62rem;color:var(--muted);font-weight:400;font-family:inherit">Cards laid out — pick grid size</span>
             <input type="file" id="msSpreadInput" accept="image/*" style="display:none" onchange="handleSpreadScanFile(this.files[0])">
@@ -3569,11 +3569,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid rgba(0,229,255,.22);border-radius:4px;overflow:hidden">
           <button id="acLangEN" onclick="acSetSearchLang('EN')"
             style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:rgba(0,229,255,.12);color:#00E5FF;border:none;cursor:pointer;transition:all .18s">
-            🌐 ENGLISH
+            ENGLISH
           </button>
           <button id="acLangJA" onclick="acSetSearchLang('JA')"
             style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:transparent;color:rgba(0,229,255,.45);border:none;border-left:1px solid rgba(0,229,255,.22);cursor:pointer;transition:all .18s">
-            🇯🇵 JAPANESE
+            JAPANESE
           </button>
         </div>
         <input
@@ -3726,7 +3726,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div class="pb-page-hdr-sub">Buy and sell trading cards — secured escrow, buyer protection, seller ratings.</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
-        <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted)" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📂 Binder</button>
+        <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted)" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Binder</button>
         <button onclick="openListCardModal()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ List a Card</button>
       </div>
     </div>
@@ -3998,8 +3998,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
               <label class="ac-fl">SEARCH</label>
               <div style="display:flex;gap:0;margin-bottom:6px;border:1px solid rgba(0,229,255,.22);border-radius:3px;overflow:hidden;font-size:.5em;letter-spacing:.08em;font-family:inherit">
-                <button id="acDeskLangEN" onclick="acDeskSetLang('EN')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:rgba(0,229,255,.12);color:#00E5FF;transition:all .15s;font-family:inherit;letter-spacing:.06em">🌐 EN</button>
-                <button id="acDeskLangJA" onclick="acDeskSetLang('JA')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:transparent;color:rgba(0,229,255,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em">🇯🇵 JP</button>
+                <button id="acDeskLangEN" onclick="acDeskSetLang('EN')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:rgba(0,229,255,.12);color:#00E5FF;transition:all .15s;font-family:inherit;letter-spacing:.06em">EN</button>
+                <button id="acDeskLangJA" onclick="acDeskSetLang('JA')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:transparent;color:rgba(0,229,255,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em">JP</button>
               </div>
               <input class="ac-fi" id="cardSearchInput" type="text"
                 placeholder="Charizard..."
@@ -4115,7 +4115,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <button onclick="ftSearch('A')" class="ft-search-btn ft-btn-accent">Search</button>
               </div>
               <div class="ft-search-row">
-                <button onclick="ftScanTrigger('A')" class="ft-scan-btn ft-btn-teal">📷 Scan Card</button>
+                <button onclick="ftScanTrigger('A')" class="ft-scan-btn ft-btn-teal">Scan Card</button>
                 <input id="ftScanInputA" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('A',this)"/>
               </div>
               <div id="ftScanStatusA" class="ft-scan-status"></div>
@@ -4147,7 +4147,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <button onclick="ftSearch('B')" class="ft-search-btn ft-btn-gold">Search</button>
               </div>
               <div class="ft-search-row">
-                <button onclick="ftScanTrigger('B')" class="ft-scan-btn ft-btn-gold">📷 Scan Card</button>
+                <button onclick="ftScanTrigger('B')" class="ft-scan-btn ft-btn-gold">Scan Card</button>
                 <input id="ftScanInputB" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('B',this)"/>
               </div>
               <div id="ftScanStatusB" class="ft-scan-status"></div>
@@ -4174,15 +4174,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <!-- Session mode: per-side lock-in buttons (shown instead of analyze) -->
           <button id="ftLockBtnA" onclick="ftLockIn('A')"
             style="display:none;padding:11px 22px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-            🔒 Lock In Side A
+            Lock In Side A
           </button>
           <button id="ftLockBtnB" onclick="ftLockIn('B')"
             style="display:none;padding:11px 22px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-            🔒 Lock In Side B
+            Lock In Side B
           </button>
           <button id="ftCreateSessionBtn" onclick="ftCreateSession()"
             style="padding:11px 20px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-            🔗 Create Trade Link
+            Create Trade Link
           </button>
           <button onclick="ftReset()"
             style="padding:11px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
@@ -4473,7 +4473,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <div class="form-group">
         <label>Card Photos</label>
         <div id="photoUploadArea" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('photoFileInput').click()">
-          <div style="font-size:2rem">📷</div>
+          <div style="font-size:2rem">[ ]</div>
           <div style="color:var(--muted);font-size:.85rem;margin-top:6px">Click to upload photos</div>
           <div style="color:var(--muted);font-size:.75rem">JPG, PNG, WEBP supported</div>
         </div>
@@ -4561,9 +4561,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>
     </div>
     <div class="batch-actions">
-      <button class="mini-btn" onclick="openBatchCashoutModal()">💰 Cash Out</button>
-      <button class="mini-btn" onclick="openBatchListModal()">🏷️ List for Sale</button>
-      <button class="mini-btn" onclick="openBatchTradeModal()">🔁 Propose Trade</button>
+      <button class="mini-btn" onclick="openBatchCashoutModal()">Cash Out</button>
+      <button class="mini-btn" onclick="openBatchListModal()">List for Sale</button>
+      <button class="mini-btn" onclick="openBatchTradeModal()">Propose Trade</button>
     </div>
   </div>
 
@@ -5022,7 +5022,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const btn = document.getElementById('createAvatarBtn');
       if (!btn) return;
       const hasPfp = !!localStorage.getItem('pathbinder_avatar_pfp_v1');
-      btn.textContent = hasPfp ? '🎨 Edit Avatar' : '🎨 Create Avatar';
+      btn.textContent = hasPfp ? 'Edit Avatar' : 'Create Avatar';
     }
     // Top nav chip toggles the same dropdown on mobile
     window.toggleTopNavDropdown = function(e) {
@@ -5214,6 +5214,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Body state classes
       document.body.classList.toggle('on-binder', pageId === 'collection');
       document.body.classList.toggle('on-landing', pageId === 'landing');
+      // Lock page scroll on Add Card (phondex has its own internal scroll)
+      document.body.style.overflow = (pageId === 'addCard') ? 'hidden' : '';
       // Ensure sidebar is restored when navigating away from landing
       if (pageId !== 'landing') document.body.classList.remove('on-landing');
       if (pageId === 'leaderboard') renderLeaderboard();
@@ -5264,7 +5266,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           acFitDevice();        // scale device to fill viewport with no gap
           ['acCrtLeft','acCrtRight','acCrtMob'].forEach(id => acCrtFlash(id));
           acPositionMobLed();   // re-lock LED after layout settles
-          acFitMobGrid();       // pin grid height to actual rendered screen dimensions
+          // acFitMobGrid no longer needed — grid uses flex:1 + min-height:0
         }, 220);
       }
       if (pageId === 'fairTrade') { ftInitPage(); }
@@ -5320,7 +5322,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       if (filtered.length === 0) {
         grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted)">
-          <div style="font-size:2rem;margin-bottom:12px">🃏</div>
+          <div style="font-size:2rem;margin-bottom:12px">[ CARD ]</div>
           <div style="font-size:.95rem;margin-bottom:8px">No listings found</div>
           <div style="font-size:.82rem">Try adjusting filters, or <button onclick="openListCardModal()" style="background:transparent;border:none;color:var(--accent);font-family:inherit;cursor:pointer;font-size:.82rem;text-decoration:underline">list your own card</button></div>
         </div>`;
@@ -5362,7 +5364,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         return `<div class="listing-card ${isSold ? 'locked-card' : ''}" style="position:relative">
           ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
-          <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event,'${listing.id}')">🔔</button>
+          <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event,'${listing.id}')"></button>
           <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" onerror="this.src='${PLACEHOLDER_IMG}'" />
             ${photoCount > 1 ? `<div class="photo-count">${photoCount} photos</div>` : ''}
@@ -5632,7 +5634,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Referral fee-free callout (cart footer)
       const cartFooter = document.getElementById('cartBreakdownFooter');
       if (cartFooter && currentUser?.referred_by && currentUser.referral_discount_used === false) {
-        cartFooter.innerHTML = '<span style="font-size:.72rem;color:var(--green)">🎁 Referral reward: your first purchase is fee-free!</span>';
+        cartFooter.innerHTML = '<span style="font-size:.72rem;color:var(--green)">Referral reward: your first purchase is fee-free!</span>';
         cartFooter.style.display = 'block';
       } else if (cartFooter) {
         cartFooter.style.display = 'none';
@@ -6050,7 +6052,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         if (!rows || !rows.length) {
           el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
-            <div style="font-size:2rem;margin-bottom:12px">🤝</div>
+            <div style="font-size:2rem;margin-bottom:12px">[ TRADE ]</div>
             <div style="font-size:.9rem;margin-bottom:6px">No trades yet</div>
             <div style="font-size:.78rem">Use the Trade Analyzer and hit <strong>Accept Trade</strong> to log your trades here.</div>
           </div>`;
@@ -7011,7 +7013,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             return `<div style="background:rgba(210,120,40,.07);border:1px solid rgba(210,120,40,.35);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
               onclick="openBinderCardDetail('${a.card.id}')">
               <div>
-                <div style="font-size:.75rem;color:var(--green);font-weight:700">🎯 PRICE TARGET HIT — ${a.card.card_name}</div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">PRICE TARGET HIT — ${a.card.card_name}</div>
                 <div style="font-size:.68rem;color:var(--muted);margin-top:2px">Market price $${a.marketVal.toFixed(0)} is at or below your $${a.goal.toFixed(0)} target</div>
               </div>
               <span style="font-size:.7rem;color:var(--green)">→</span>
@@ -7020,7 +7022,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             return `<div style="background:rgba(210,120,40,.07);border:1px solid rgba(210,120,40,.35);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
               onclick="showPage('browse');setMobileNav('browse')">
               <div>
-                <div style="font-size:.75rem;color:var(--green);font-weight:700">🛒 LISTED AT TARGET — ${a.card.card_name}</div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">LISTED AT TARGET — ${a.card.card_name}</div>
                 <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${a.listing.name} is on the marketplace for $${(a.listing.value||0).toFixed(0)} (target: $${a.goal.toFixed(0)})</div>
               </div>
               <span style="font-size:.7rem;color:var(--green)">→ Marketplace</span>
@@ -7118,7 +7120,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const content = document.getElementById('watchlistContent');
       if (!content) return;
       if (!currentUser || !currentUser.watchlist || currentUser.watchlist.length === 0) {
-        content.innerHTML = '<div class="coll-empty">No items in your watchlist yet.<br>Click the 🔔 on any listing to watch it.</div>';
+        content.innerHTML = '<div class="coll-empty">No items in your watchlist yet.<br>Click the bell on any listing to watch it.</div>';
         return;
       }
       const watched = listings.filter(l => currentUser.watchlist.includes(String(l.id)));
@@ -7160,7 +7162,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       console.log('[Share] currentBinderId:', currentBinderId, '| slug:', slug);
       const url = getShareUrl(slug, currentBinderId);
       navigator.clipboard.writeText(url).then(() => {
-        showToast('🔗 Share link copied! Send it to anyone.');
+        showToast('Share link copied! Send it to anyone.');
       }).catch(() => {
         // Fallback for older browsers
         const ta = document.createElement('textarea');
@@ -7169,7 +7171,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         document.body.appendChild(ta);
         ta.select(); document.execCommand('copy');
         document.body.removeChild(ta);
-        showToast('🔗 Share link copied!');
+        showToast('Share link copied!');
       });
     }
 
@@ -7406,7 +7408,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!slug) { showToast('Sign in to access your store link'); return; }
       const url = `${window.location.origin}${window.location.pathname}?store=${encodeURIComponent(slug)}`;
       navigator.clipboard.writeText(url).then(() => {
-        showToast('🔗 Store link copied! Share it with customers.');
+        showToast('Store link copied! Share it with customers.');
       }).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = url;
@@ -7414,7 +7416,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         document.body.appendChild(ta);
         ta.select(); document.execCommand('copy');
         document.body.removeChild(ta);
-        showToast('🔗 Store link copied!');
+        showToast('Store link copied!');
       });
     }
 
@@ -9892,7 +9894,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               `).join('')}
             </div>
             <div id="editPhotoUploadArea" style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer" onclick="document.getElementById('editPhotoFileInput').click()">
-              <div style="color:var(--muted);font-size:.85rem">📷 Upload additional photos</div>
+              <div style="color:var(--muted);font-size:.85rem">Upload additional photos</div>
             </div>
             <input type="file" id="editPhotoFileInput" accept="image/*" multiple style="display:none" onchange="handleEditPhotoUpload(event)"/>
             <div id="editPhotoStatus" style="font-size:.8rem;color:var(--muted);margin-top:6px"></div>
@@ -10303,7 +10305,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // ── Promo banner (shown when user hit a usage limit) ─────────────
         const isPromoTarget = (_limitPromoTier === t.id) && !isCurrent;
         const promoBanner = isPromoTarget
-          ? `<div style="background:var(--accent2);color:var(--surface);font-size:.6rem;font-weight:700;letter-spacing:.08em;text-align:center;padding:4px 8px;margin-bottom:8px">🎟 25% OFF YOUR FIRST MONTH — upgrade now</div>`
+          ? `<div style="background:var(--accent2);color:var(--surface);font-size:.6rem;font-weight:700;letter-spacing:.08em;text-align:center;padding:4px 8px;margin-bottom:8px">25% OFF YOUR FIRST MONTH — upgrade now</div>`
           : '';
 
         // ── CTA button ──────────────────────────────────────────────────
@@ -10431,7 +10433,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       let newList = isWatching ? existing.filter(id => id !== listingId) : [...existing, listingId];
       await sb.from('profiles').update({ watchlist: newList }).eq('id', currentUser.id);
       currentUser.watchlist = newList;
-      showToast(isWatching ? 'Alert removed' : '🔔 You\'ll be notified when this listing changes');
+      showToast(isWatching ? 'Alert removed' : 'You\'ll be notified when this listing changes');
       // Re-render current detail if open
       const detailEl = document.getElementById('detailView');
       if (detailEl && detailEl.dataset.listingId === String(listingId)) {
@@ -10495,7 +10497,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         : Promise.resolve();
 
       fetchProfiles.then(() => {
-        const medals = ['🥇', '🥈', '🥉'];
+        const medals = ['1ST', '2ND', '3RD'];
         const rows = ranked.map((r, i) => {
           const profile = profilesMap[r.userId] || {};
           const displayName = profile.username || profile.name || 'Anonymous';
@@ -12011,7 +12013,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <button onclick="openCardPhotoModal('${item.id}')"
             style="padding:8px 18px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.background='rgba(0,204,255,.1)'"
-            onmouseout="this.style.background='transparent'">📷 Update Photo</button>
+            onmouseout="this.style.background='transparent'">Update Photo</button>
           <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
             style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List for Sale</button>
           <button onclick="openSoldOfflineModal('${item.id}')"
@@ -12496,8 +12498,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const h = screen.clientHeight - nav.offsetHeight;
       if (h > 0) { grid.style.height = h + 'px'; grid.style.maxHeight = h + 'px'; }
     }
-    window.addEventListener('load',   () => { acFitDevice(); acPositionMobLed(); acFitMobGrid(); });
-    window.addEventListener('resize', () => { acFitDevice(); acPositionMobLed(); acFitMobGrid(); });
+    window.addEventListener('load',   () => { acFitDevice(); acPositionMobLed(); });
+    window.addEventListener('resize', () => { acFitDevice(); acPositionMobLed(); });
 
     let acMobSearchOpen  = false;
     let acSearchLanguage = 'EN'; // 'EN' | 'JA'
@@ -12531,7 +12533,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     async function searchJapaneseCards(query) {
       const grid = document.getElementById('acMobGrid');
       if (!grid) return;
-      grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING 🇯🇵 DATABASE…</div></div>';
+      grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING JP DATABASE…</div></div>';
 
       try {
         const q   = encodeURIComponent(`name:"${query.trim()}"`);
@@ -12560,7 +12562,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
           return `<div class="ac-mc" onclick='openAddToCollectionModal(JSON.parse(this.dataset.card))' data-card="${cd}">
             ${card.images?.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
-            <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">🇯🇵</span></div>
+            <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">[JP]</span></div>
             <div class="ac-mc-sub">${card.set?.name ?? ''} ${card.number ? '#' + card.number : ''}</div>
             <div class="ac-mc-add">+ ADD TO BINDER</div>
           </div>`;
@@ -12749,7 +12751,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const deskGrid   = document.getElementById('acDeskGrid');
       const mobGrid    = document.getElementById('acMobGrid');
 
-      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING 🇯🇵…'; }
+      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING JP…'; }
       if (deskCount)  deskCount.textContent = '—';
       if (deskGrid)   deskGrid.innerHTML = '';
       if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
@@ -12777,7 +12779,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           return `<div class="card-result" data-card="${cd}">
             <div onclick='openAddToCollectionModal(JSON.parse(this.parentElement.dataset.card))' style="cursor:pointer">
               ${card.images?.small ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div style="height:70px;background:rgba(0,229,255,.04);display:flex;align-items:center;justify-content:center;color:rgba(0,229,255,.18);font-size:.5rem">NO IMG</div>'}
-              <div class="card-result-name">${card.name} 🇯🇵</div>
+              <div class="card-result-name">${card.name} [JP]</div>
               <div class="card-result-set">${card.set?.name??''} #${card.number??'?'}</div>
             </div>
           </div>`;
@@ -12788,7 +12790,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const cd = JSON.stringify({ apiCardId: 'jp-'+card.id, cardName: card.name, setName: card.set?.name??'', setCode: card.set?.id??'', cardNumber: card.number??'', cardImageUrl: card.images?.small??'', gameType: 'pokemon', language: 'JA' }).replace(/"/g,'&quot;');
           return `<div class="ac-mc" onclick='openAddToCollectionModal(JSON.parse(this.dataset.card))' data-card="${cd}">
             ${card.images?.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
-            <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">🇯🇵</span></div>
+            <div class="ac-mc-name">${card.name} <span style="color:rgba(0,229,255,.5);font-size:.8em">[JP]</span></div>
             <div class="ac-mc-sub">${card.set?.name??''} ${card.number ? '#'+card.number : ''}</div>
             <div class="ac-mc-add">+ ADD TO BINDER</div>
           </div>`;
@@ -13260,7 +13262,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var panel  = document.getElementById('atcPhotoPreview');
       var btn    = document.getElementById('atcPhotoBgBtn');
       if (thumb)  { thumb.src = dataURL; }
-      if (status) status.textContent = '📷 Scan photo — keep, edit, or discard';
+      if (status) status.textContent = 'Scan photo — keep, edit, or discard';
       if (panel)  panel.style.display = '';
       if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
     }
@@ -13906,7 +13908,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           showToast('Could not create session — check connection');
         }
       }
-      if (btn) { btn.disabled = false; btn.textContent = '🔗 Create Trade Link'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Create Trade Link'; }
     }
 
     async function ftJoinSession(sessionId) {
@@ -14032,7 +14034,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (role === 'a' && !_ftSession.bJoined && data.joined_b) {
           _ftSession.bJoined = true;
           _ftSession.nameB = data.name_b || 'Guest';
-          showToast('🟢 ' + _ftSession.nameB + ' has joined the trade!');
+          showToast(_ftSession.nameB + ' has joined the trade!');
           try { checkBadge_linked(); } catch(_) {}
           var banner = document.getElementById('ftSessionBanner');
           if (banner) {
@@ -14126,13 +14128,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         : `<div style="width:26px;height:26px;border:1.5px solid var(--accent);background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;flex-shrink:0;color:var(--surface)">${myName[0]||'?'}</div>`;
       var bHasJoined = !!(role === 'a' ? _ftSession.bJoined : true);
       var statusMsg = (_ftLocked.A && _ftLocked.B)
-        ? '🔐 Both sides locked — analyzing…'
+        ? 'Both sides locked — analyzing…'
         : (_ftLocked[mine]
             ? '✓ Your offer locked — waiting for ' + theirName + ' to lock in'
           : (_ftLocked[theirs]
             ? '⚡ ' + theirName + ' is locked — lock in your offer!'
           : (bHasJoined
-            ? (role === 'a' ? '🟢 ' + nameB + ' has joined — add your cards' : '🟢 Joined as ' + nameB + ' — add your cards below')
+            ? (role === 'a' ? nameB + ' has joined — add your cards' : 'Joined as ' + nameB + ' — add your cards below')
             : '⏳ Waiting for partner to join…')));
 
       banner.style.display = 'block';
@@ -14154,7 +14156,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               '<div style="display:flex;flex-direction:column;gap:6px;padding-top:2px">' +
                 '<div style="font-size:.62rem;color:var(--muted)">Scan to join on another device</div>' +
                 '<button onclick="ftCopyTradeLink(\'' + url.replace(/'/g, '&#39;') + '\')" ' +
-                  'style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.04em;white-space:nowrap">📋 Copy Link</button>' +
+                  'style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Copy Link</button>' +
                 '<button onclick="ftEndSession()" ' +
                   'style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;white-space:nowrap">End Session</button>' +
               '</div>' +
@@ -14691,7 +14693,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           btn.style.opacity   = '0.4';
           btn.style.cursor    = 'default';
         } else {
-          btn.textContent = '🔒 Lock In Side ' + side;
+          btn.textContent = 'Lock In Side ' + side;
           btn.disabled    = false;
           btn.style.opacity   = '';
           btn.style.cursor    = 'pointer';
@@ -15838,7 +15840,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const successTier = urlParams.get('tier');
           if (successType === 'subscription' || successType === 'membership') {
             const tierLabel = successTier ? successTier.charAt(0).toUpperCase() + successTier.slice(1) : 'Premium';
-            showToast(`🎉 ${tierLabel} plan activated! Welcome to PathBinder.`);
+            showToast(`${tierLabel} plan activated! Welcome to PathBinder.`);
             // Refresh profile to pick up subscription_tier
             if (currentUser) {
               sb.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
@@ -15847,7 +15849,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 });
             }
           } else {
-            showToast('🎉 Payment successful! Your order is being processed...');
+            showToast('Payment successful! Your order is being processed...');
             // Give the webhook ~3s to process, then re-fetch orders
             setTimeout(() => {
               loadOrders().then(() => {
@@ -15989,7 +15991,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         ondragover="event.preventDefault();document.getElementById('cpUploadZone').style.borderColor='var(--accent)'"
         ondragleave="document.getElementById('cpUploadZone').style.borderColor='var(--border)'"
         ondrop="cpHandleDrop(event)">
-        <div style="font-size:2rem;line-height:1">📷</div>
+        <div style="font-size:2rem;line-height:1">[ SCAN ]</div>
         <div style="font-size:.78rem;color:var(--muted);margin-top:8px">Click or drag your card photo here</div>
         <div style="font-size:.65rem;color:var(--muted);margin-top:3px">JPG · PNG · WEBP</div>
       </div>
@@ -16052,7 +16054,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <label style="padding:6px 12px;background:transparent;color:var(--accent2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;font-weight:700;cursor:pointer;letter-spacing:.05em">
-            📷 RETAKE<input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
+            RETAKE<input type="file" accept="image/*" onchange="matchFromFile(this)" style="display:none">
           </label>
           <button onclick="closeCardScanner()" style="background:transparent;border:2px solid var(--border);color:var(--muted);padding:5px 10px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;cursor:pointer">✕</button>
         </div>
@@ -16827,7 +16829,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               ? `<span style="background:var(--teal);color:#000;font-size:.5rem;padding:1px 5px;border-radius:2px;font-weight:700;margin-left:6px;vertical-align:middle">OCR</span>`
               : `<span style="color:var(--muted);font-size:.55rem;margin-left:6px">${pct}%</span>`;
           const jpBadge = m.id && m.id.startsWith('jp-')
-            ? `<span style="font-size:.85em;margin-left:4px" title="Japanese card">🇯🇵</span>` : '';
+            ? `<span style="font-size:.85em;margin-left:4px" title="Japanese card">[JP]</span>` : '';
           return `
             <div class="scan-match-card" onclick="confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')">
               <img class="scan-match-thumb" src="${m.image_url || ''}" alt="${m.name}" onerror="this.style.display='none'">
