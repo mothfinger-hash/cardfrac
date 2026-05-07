@@ -6374,7 +6374,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                     return `<div class="ndash-tcard" onclick="openBinderCardDetail('${item.id}')">
                       <div class="ndash-tcard-art">
                         ${item.card_image_url
-                          ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async">`
+                          ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${item.id}')">`
                           : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
                         ${i<3?`<div class="ndash-tcard-rank">#${i+1}</div>`:''}
                       </div>
@@ -6402,7 +6402,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                   const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
                   const up = Number(d)>=0;
                   return `<div class="ndash-market-row" onclick="openBinderCardDetail('${c.id}')">
-                    <div class="ndash-market-thumb">${c.card_image_url?`<img src="${c.card_image_url}" alt="">`:''}</div>
+                    <div class="ndash-market-thumb">${c.card_image_url?`<img src="${c.card_image_url}" alt="" onerror="_binderImgFail(this,'${c.id}')">`:''}</div>
                     <div class="ndash-market-info">
                       <div class="ndash-market-name">${_escHtml(c.card_name.slice(0,20))}</div>
                       <div class="ndash-market-sub">$${(c.purchase_price||0).toFixed(2)} → $${(c.current_value||0).toFixed(2)}</div>
@@ -6956,7 +6956,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return '<div class="ndash-tcard" onclick="openBinderCardDetail(\'' + item.id + '\')">' +
           '<div class="ndash-tcard-art">' +
             (item.card_image_url
-              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async">'
+              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="_binderImgFail(this,\'' + item.id + '\')">'
               : '<div class="ndash-tcard-art-ph">' + _escHtml(item.card_name.slice(0,12)) + '</div>') +
             (i<3 ? '<div class="ndash-tcard-rank">#' + (i+1) + '</div>' : '') +
           '</div>' +
@@ -7782,7 +7782,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             : (c.condition || '').toUpperCase();
           const img = c.card_image_url
             ? `<img src="${c.card_image_url}" alt="${c.card_name}" loading="lazy"
-                 style="width:100%;height:160px;object-fit:contain;background:var(--surface2);border-radius:4px 4px 0 0;display:block">`
+                 style="width:100%;height:160px;object-fit:contain;background:var(--surface2);border-radius:4px 4px 0 0;display:block"
+                 onerror="_binderImgFail(this,'${c.id}')">`
             : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.68rem">NO IMAGE</div>`;
           const qtyBadge = (c.quantity || 1) > 1
             ? `<span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.75);color:var(--text);font-size:.6rem;padding:1px 5px;border-radius:2px">×${c.quantity}</span>`
@@ -12279,7 +12280,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
             <div style="flex-shrink:0;text-align:center;opacity:.7">
               ${item.card_image_url
-                ? `<img src="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px dashed var(--teal);display:block;margin:0 auto;filter:grayscale(30%)">`
+                ? `<img src="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px dashed var(--teal);display:block;margin:0 auto;filter:grayscale(30%)"
+                     onerror="_binderImgFail(this,'${item.id}')">`
                 : `<div style="width:120px;height:168px;background:var(--surface2);border:1px dashed var(--teal);display:flex;align-items:center;justify-content:center;color:var(--teal);font-size:2.5rem">♡</div>`}
               <div style="margin-top:8px;font-size:.7rem;color:var(--teal);letter-spacing:.06em">WISHLIST</div>
             </div>
@@ -12361,7 +12363,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
           <div style="flex-shrink:0;text-align:center">
             ${item.card_image_url
-              ? `<img src="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px solid var(--border);display:block;margin:0 auto">`
+              ? `<img src="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px solid var(--border);display:block;margin:0 auto"
+                   onerror="_binderImgFail(this,'${item.id}')">`
               : `<div style="width:120px;height:168px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem">?</div>`}
             <div style="margin-top:8px"><span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span></div>
           </div>
@@ -15719,6 +15722,32 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function _escAttr(str) {
       if (!str) return '';
       return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+    // ── Self-healing binder image fallback ──────────────────────────────────
+    // Called when a stored card_image_url fails to load (onerror).
+    // Looks up the current image from the catalog via api_card_id,
+    // patches the <img> src, and silently updates the DB record so the
+    // stale URL is fixed for next time.
+    window._binderImgFail = async function(el, itemId) {
+      el.onerror = null; // prevent infinite loop
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      const apiCardId = item?.api_card_id || '';
+      if (!apiCardId) { el.style.display = 'none'; return; }
+      try {
+        const { data: catRow } = await sb.from('catalog')
+          .select('image_url').eq('id', apiCardId).maybeSingle();
+        if (catRow?.image_url) {
+          el.src = catRow.image_url;
+          // Patch the DB so next load works without the fallback
+          sb.from('collection_items')
+            .update({ card_image_url: catRow.image_url })
+            .eq('id', itemId)
+            .then(() => { if (item) item.card_image_url = catRow.image_url; });
+        } else {
+          el.style.display = 'none';
+        }
+      } catch (_) { el.style.display = 'none'; }
+    };
     }
 
     // ── Supabase image transform: serve smaller thumbnails for grid views ──
