@@ -333,7 +333,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .modal{background:var(--surface);border:2px solid var(--border);border-radius:0;padding:26px;width:100%;max-width:460px;position:relative;max-height:92vh;overflow-y:auto;box-shadow:5px 5px 0 var(--shadow)}
     .modal h3{font-size:1.1rem;font-weight:700;margin-bottom:4px}
     .modal .modal-sub{color:var(--muted);font-size:.82rem;margin-bottom:18px}
-    .modal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1}
+    .modal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;z-index:2}
     .modal-close:hover{color:var(--text)}
     .form-group{margin-bottom:13px}
     .form-group label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:5px}
@@ -1060,7 +1060,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* Scale SVG — force it to render at full size, fix iOS transform-origin */
     #ftScaleSvg{width:min(320px,90vw);overflow:visible;display:block;margin:0 auto}
-    #ftScaleBeam{transform-box:fill-box;transform-origin:50% 0% !important} /* fixes Safari/iOS: percentages + fill-box resolve correctly; absolute px do not */
+    #ftNeedleGroup{transform-box:fill-box;transform-origin:160px 170px !important}
 
     /* ── FAIR TRADE — mobile layout ─────────────────────── */
     /* Two-column sides stack to single column on small screens */
@@ -1085,6 +1085,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
       /* Results state scale: a bit smaller */
       #ftScaleSvg{width:min(280px,88vw)}
+      #ftNeedleGroup{transform-origin:160px 170px !important}
 
       /* Breakdown tables: allow horizontal scroll */
       #ftBreakdownContent table{font-size:.68rem}
@@ -1124,7 +1125,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-session-joined{animation:ftJoinPulse .9s ease 3;border-color:var(--teal)!important}
 
     /* ── BINDER FRAME — constrained width on desktop, full-width on mobile ── */
-    .binder-frame{width:100%;position:relative;max-width:620px;margin-left:auto;margin-right:auto}
+    .binder-frame{width:100%;position:relative;max-width:860px;margin-left:auto;margin-right:auto}
     /* ── BINDER SIDE NAV ARROWS (desktop only) ── */
     .binder-nav-arrow{
       display:none;position:absolute;top:50%;transform:translateY(-50%);
@@ -2175,7 +2176,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-panel-title-ico svg{width:14px;height:14px}
 .ndash-panel-link{font-size:9.5px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;border:1px solid transparent;padding:3px 8px;transition:border-color .1s;cursor:pointer;background:none;font-family:inherit}
 .ndash-panel-link:hover{border-color:var(--accent)}
-.ndash-panel-body{padding:10px 12px;flex:1;overflow:auto}
+.ndash-panel-body{padding:10px 12px;flex:1;overflow:hidden;transition:max-height .3s ease,opacity .25s ease}
 
 /* ── Card grid (top picks) ── */
 .ndash-card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -2280,7 +2281,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-collapse-btn:hover{color:#d4944a!important}
 /* Collapsed panel — hide body and resize strip, lock height to header */
 .ndash-panel.ndash-collapsed{height:auto!important}
-.ndash-panel.ndash-collapsed>.ndash-panel-body,.ndash-panel.ndash-collapsed>.ndash-resize-handle{display:none!important}
+.ndash-panel.ndash-collapsed>.ndash-panel-body{max-height:0!important;opacity:0;padding-top:0!important;padding-bottom:0!important}
+.ndash-panel.ndash-collapsed>.ndash-resize-handle{display:none!important}
+.ndash-collapse-btn{transition:color .1s,transform .22s ease}
+.ndash-panel.ndash-collapsed .ndash-collapse-btn{transform:rotate(-90deg)}
 /* ─── 23. SITE-WIDE PANEL LANGUAGE ──────────────────────────────── */
 /* Same DNA as the dashboard panels, usable on any page */
 /* === ANCIENT CARD SYSTEM (pb-panel) === */
@@ -3953,7 +3957,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
         </div>
         <div class="pb-panel-actions">
-          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" class="pb-panel-link" style="display:none;border-color:var(--gold);color:var(--gold)">⬆ Import</button>
+          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" class="pb-panel-link" style="display:none;border-color:var(--gold);color:var(--gold)">Import</button>
           <button onclick="copyShareLink()" id="shareBinderBtn" class="pb-panel-link" style="display:none;border-color:var(--teal);color:var(--teal)">⬡ Share</button>
           <button onclick="showPage('fairTrade');setMobileNav('')" class="pb-panel-link" style="border-color:var(--teal);color:var(--teal)">⇌ Trade Analyzer <span class="beta-badge">BETA</span></button>
           <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ Add Card</button>
@@ -4280,85 +4284,122 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <!-- ── STATE 3: Results (scale + breakdown) ───────────────────────── -->
       <div id="ftResultsState" style="display:none">
 
-        <!-- Balance Scale -->
+        <!-- Vintage Voltmeter -->
         <div style="text-align:center;margin:10px 0 14px;user-select:none">
-          <svg id="ftScaleSvg" viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible">
+          <svg id="ftScaleSvg" viewBox="0 0 320 205" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible;display:block;margin:0 auto">
             <defs>
-              <radialGradient id="scPillarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%"   stop-color="var(--border)"/>
-                <stop offset="45%"  stop-color="var(--surface2)"/>
-                <stop offset="100%" stop-color="var(--border)"/>
-              </radialGradient>
-              <radialGradient id="scGemGrad" cx="35%" cy="35%">
-                <stop offset="0%"   stop-color="var(--accent2)"/>
-                <stop offset="100%" stop-color="var(--accent)"/>
-              </radialGradient>
-              <radialGradient id="scPanGrad" cx="40%" cy="30%">
+              <radialGradient id="vmFaceGrad" cx="50%" cy="35%">
                 <stop offset="0%"   stop-color="var(--surface2)"/>
-                <stop offset="100%" stop-color="var(--border)"/>
+                <stop offset="100%" stop-color="var(--surface)"/>
               </radialGradient>
+              <linearGradient id="vmCaseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stop-color="var(--border)"/>
+                <stop offset="40%"  stop-color="var(--surface2)"/>
+                <stop offset="100%" stop-color="var(--border)"/>
+              </linearGradient>
+              <linearGradient id="vmNeedleGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                <stop offset="0%"   stop-color="var(--muted)"/>
+                <stop offset="75%"  stop-color="var(--text)"/>
+                <stop offset="75%"  stop-color="#ef4444"/>
+                <stop offset="100%" stop-color="#ef4444"/>
+              </linearGradient>
             </defs>
 
-            <!-- ── Decorative base (static) ── -->
-            <!-- Bottom foot - wide slab -->
-            <rect x="118" y="155" width="84" height="7"  rx="2" fill="url(#scPillarGrad)"/>
-            <!-- Middle step -->
-            <rect x="128" y="148" width="64" height="8"  rx="2" fill="url(#scPillarGrad)"/>
-            <!-- Narrow step -->
-            <rect x="138" y="141" width="44" height="8"  rx="2" fill="url(#scPillarGrad)"/>
+            <!-- Outer case (bezel) -->
+            <rect x="8" y="8" width="304" height="190" rx="14" fill="url(#vmCaseGrad)" stroke="var(--border)" stroke-width="2.5"/>
+            <!-- Face plate -->
+            <rect x="18" y="16" width="284" height="175" rx="10" fill="url(#vmFaceGrad)" stroke="var(--border)" stroke-width="1"/>
+            <!-- Corner screws -->
+            <circle cx="28" cy="26" r="4.5" fill="var(--border)" opacity=".8"/>
+            <line x1="26" y1="26" x2="30" y2="26" stroke="var(--surface)" stroke-width="1"/>
+            <line x1="28" y1="24" x2="28" y2="28" stroke="var(--surface)" stroke-width="1"/>
+            <circle cx="292" cy="26" r="4.5" fill="var(--border)" opacity=".8"/>
+            <line x1="290" y1="26" x2="294" y2="26" stroke="var(--surface)" stroke-width="1"/>
+            <line x1="292" y1="24" x2="292" y2="28" stroke="var(--surface)" stroke-width="1"/>
+            <circle cx="28" cy="182" r="4.5" fill="var(--border)" opacity=".8"/>
+            <line x1="26" y1="182" x2="30" y2="182" stroke="var(--surface)" stroke-width="1"/>
+            <line x1="28" y1="180" x2="28" y2="184" stroke="var(--surface)" stroke-width="1"/>
+            <circle cx="292" cy="182" r="4.5" fill="var(--border)" opacity=".8"/>
+            <line x1="290" y1="182" x2="294" y2="182" stroke="var(--surface)" stroke-width="1"/>
+            <line x1="292" y1="180" x2="292" y2="184" stroke="var(--surface)" stroke-width="1"/>
 
-            <!-- Pillar shaft with decorative ring bands -->
-            <rect x="155" y="62" width="10" height="80" rx="0" fill="url(#scPillarGrad)"/>
-            <!-- Ring band 1 -->
-            <rect x="152" y="118" width="16" height="5" rx="2" fill="var(--border)"/>
-            <!-- Ring band 2 -->
-            <rect x="152" y="105" width="16" height="4" rx="2" fill="var(--border)"/>
-            <!-- Ring band 3 -->
-            <rect x="152" y="92"  width="16" height="4" rx="2" fill="var(--border)"/>
-            <!-- Pillar capital (top) — tapered trapezoid -->
-            <polygon points="148,62 172,62 168,54 152,54" fill="url(#scPillarGrad)"/>
-            <!-- Capital finial spike -->
-            <polygon points="158,54 162,54 160,48" fill="var(--accent)"/>
+            <!-- ── COLORED ZONE ARCS (center 160,170, R_out=105, R_in=95) ── -->
+            <!-- Red left:  -70° to -40° -->
+            <path d="M 61.3,134.1 A 105,105 0 0,1 92.5,89.6 L 98.9,97.2 A 95,95 0 0,0 70.7,137.5 Z"
+                  fill="#ef4444" opacity=".72"/>
+            <!-- Yellow left: -40° to -20° -->
+            <path d="M 92.5,89.6 A 105,105 0 0,1 124.1,71.3 L 127.5,80.7 A 95,95 0 0,0 98.9,97.2 Z"
+                  fill="#f59e0b" opacity=".72"/>
+            <!-- Green center: -20° to +20° -->
+            <path d="M 124.1,71.3 A 105,105 0 0,1 195.9,71.3 L 192.5,80.7 A 95,95 0 0,0 127.5,80.7 Z"
+                  fill="#10b981" opacity=".72"/>
+            <!-- Yellow right: +20° to +40° -->
+            <path d="M 195.9,71.3 A 105,105 0 0,1 227.5,89.6 L 221.1,97.2 A 95,95 0 0,0 192.5,80.7 Z"
+                  fill="#f59e0b" opacity=".72"/>
+            <!-- Red right: +40° to +70° -->
+            <path d="M 227.5,89.6 A 105,105 0 0,1 258.7,134.1 L 249.3,137.5 A 95,95 0 0,0 221.1,97.2 Z"
+                  fill="#ef4444" opacity=".72"/>
 
-            <!-- ── Beam group (rotates) ── -->
-            <g id="ftScaleBeam" style="transform:rotate(0deg);transition:transform .9s cubic-bezier(.34,1.56,.64,1)">
-              <!-- Main beam bar with arrow-tip end caps -->
-              <polygon points="20,59 36,62 20,65" fill="var(--muted)"/>
-              <polygon points="300,59 284,62 300,65" fill="var(--muted)"/>
-              <rect x="36" y="60" width="248" height="4" rx="1" fill="var(--text)"/>
+            <!-- Arc border lines -->
+            <path d="M 61.3,134.1 A 105,105 0 0,1 258.7,134.1" fill="none" stroke="var(--border)" stroke-width="1"/>
+            <path d="M 70.7,137.5 A 95,95 0 0,1 249.3,137.5" fill="none" stroke="var(--border)" stroke-width="1"/>
 
-              <!-- Left chain — 4 oval links -->
-              <ellipse cx="60" cy="71" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
-              <ellipse cx="60" cy="78" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
-              <ellipse cx="60" cy="85" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
-              <ellipse cx="60" cy="92" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+            <!-- ── TICK MARKS ── -->
+            <line x1="61.3"  y1="134.1" x2="74.2"  y2="138.3" stroke="var(--muted)" stroke-width="1.5"/>
+            <line x1="68.9"  y1="117.5" x2="83.0"  y2="125.2" stroke="var(--muted)" stroke-width="2"/>
+            <line x1="79.6"  y1="102.5" x2="90.4"  y2="111.7" stroke="var(--muted)" stroke-width="1"/>
+            <line x1="92.5"  y1="89.6"  x2="98.3"  y2="101.2" stroke="var(--muted)" stroke-width="1.5"/>
+            <line x1="107.5" y1="79.1"  x2="116.3" y2="92.6"  stroke="var(--muted)" stroke-width="2"/>
+            <line x1="124.1" y1="71.3"  x2="128.0" y2="83.6"  stroke="var(--muted)" stroke-width="1"/>
+            <line x1="141.8" y1="66.6"  x2="143.8" y2="79.3"  stroke="var(--muted)" stroke-width="1"/>
+            <line x1="160"   y1="65"    x2="160"   y2="80"    stroke="var(--muted)" stroke-width="2.5"/>
+            <line x1="178.2" y1="66.6"  x2="176.2" y2="79.3"  stroke="var(--muted)" stroke-width="1"/>
+            <line x1="195.9" y1="71.3"  x2="192.0" y2="83.6"  stroke="var(--muted)" stroke-width="1"/>
+            <line x1="212.5" y1="79.1"  x2="203.7" y2="92.6"  stroke="var(--muted)" stroke-width="2"/>
+            <line x1="227.5" y1="89.6"  x2="221.7" y2="101.2" stroke="var(--muted)" stroke-width="1.5"/>
+            <line x1="240.4" y1="102.5" x2="229.6" y2="111.7" stroke="var(--muted)" stroke-width="1"/>
+            <line x1="251.1" y1="117.5" x2="237.0" y2="125.2" stroke="var(--muted)" stroke-width="2"/>
+            <line x1="258.7" y1="134.1" x2="245.8" y2="138.3" stroke="var(--muted)" stroke-width="1.5"/>
 
-              <!-- Right chain — 4 oval links -->
-              <ellipse cx="260" cy="71" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
-              <ellipse cx="260" cy="78" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
-              <ellipse cx="260" cy="85" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
-              <ellipse cx="260" cy="92" rx="4" ry="2.5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+            <!-- Zone hint labels -->
+            <text x="80"  y="130" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">A+</text>
+            <text x="116" y="101" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">~A</text>
+            <text x="160" y="92"  text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">FAIR</text>
+            <text x="204" y="101" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">~B</text>
+            <text x="240" y="130" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">B+</text>
 
-              <!-- Left pan — bowl shape (path arc) -->
-              <path id="ftPanLeft" d="M26,97 Q60,112 94,97" stroke="var(--border)" stroke-width="2" fill="url(#scPanGrad)" stroke-linecap="round"/>
-              <line x1="26" y1="97" x2="94" y2="97" stroke="var(--border)" stroke-width="1.5"/>
+            <!-- Brand text -->
+            <text x="160" y="143" text-anchor="middle" font-size="7.5" fill="var(--muted)" font-family="monospace" letter-spacing="2.5" opacity=".45">PathBinder™</text>
+            <text x="160" y="153" text-anchor="middle" font-size="5.5" fill="var(--muted)" font-family="monospace" letter-spacing="1.5" opacity=".35">TRADE ANALYZER</text>
 
-              <!-- Right pan — bowl shape -->
-              <path id="ftPanRight" d="M226,97 Q260,112 294,97" stroke="var(--border)" stroke-width="2" fill="url(#scPanGrad)" stroke-linecap="round"/>
-              <line x1="226" y1="97" x2="294" y2="97" stroke="var(--border)" stroke-width="1.5"/>
-
-              <!-- Price labels inside pans -->
-              <text id="ftLabelLeft"  x="60"  y="108" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
-              <text id="ftLabelRight" x="260" y="108" text-anchor="middle" font-size="8" fill="var(--text)" font-family="monospace" font-weight="700"></text>
+            <!-- ── NEEDLE GROUP (rotates around 160,170) ── -->
+            <g id="ftNeedleGroup" style="transform:rotate(0deg)">
+              <!-- Counterweight tail -->
+              <rect x="157.5" y="170" width="5" height="10" rx="2.5" fill="var(--muted)" opacity=".6"/>
+              <!-- Needle shaft -->
+              <polygon points="158.5,170 161.5,170 161,75 159,75" fill="url(#vmNeedleGrad)"/>
+              <!-- Red tip accent -->
+              <rect x="159" y="67" width="2" height="8" rx="1" fill="#ef4444"/>
             </g>
 
-            <!-- ── Pivot gem (static, drawn on top) ── -->
-            <polygon points="160,55 165,62 160,69 155,62" fill="url(#scGemGrad)" stroke="var(--accent2)" stroke-width="1"/>
-            <polygon points="160,58 163,62 160,66 157,62" fill="var(--accent2)" opacity=".4"/>
+            <!-- Pivot cap (on top of everything) -->
+            <circle cx="160" cy="170" r="7" fill="var(--border)" stroke="var(--surface)" stroke-width="1.5"/>
+            <circle cx="160" cy="170" r="3.5" fill="var(--muted)"/>
+            <circle cx="160" cy="170" r="1.5" fill="var(--surface2)"/>
 
-            <!-- ── SIDE labels (static, well below pans' max displacement) ── -->
-            <text x="60"  y="158" text-anchor="middle" font-size="7.5" fill="var(--teal)" font-family="monospace" font-weight="700" letter-spacing="1">SIDE A</text>
-            <text x="260" y="158" text-anchor="middle" font-size="7.5" fill="var(--gold)" font-family="monospace" font-weight="700" letter-spacing="1">SIDE B</text>
+            <!-- ── USERNAME LABELS ── -->
+            <text id="ftMeterNameA" x="46" y="163" text-anchor="middle" font-size="8" fill="var(--teal)" font-family="monospace" font-weight="700" letter-spacing=".5">SIDE A</text>
+            <text id="ftMeterNameB" x="274" y="163" text-anchor="middle" font-size="8" fill="var(--gold)" font-family="monospace" font-weight="700" letter-spacing=".5">SIDE B</text>
+
+            <!-- ── PRICE LABELS ── -->
+            <text id="ftLabelLeft"  x="46"  y="174" text-anchor="middle" font-size="7" fill="var(--muted)" font-family="monospace"></text>
+            <text id="ftLabelRight" x="274" y="174" text-anchor="middle" font-size="7" fill="var(--muted)" font-family="monospace"></text>
+
+            <!-- Terminal studs (decorative) -->
+            <rect x="133" y="192" width="14" height="9" rx="2.5" fill="var(--teal)" opacity=".7"/>
+            <rect x="173" y="192" width="14" height="9" rx="2.5" fill="var(--gold)" opacity=".7"/>
+            <text x="140" y="199" text-anchor="middle" font-size="6" fill="#000" font-family="monospace" font-weight="700">A</text>
+            <text x="180" y="199" text-anchor="middle" font-size="6" fill="#000" font-family="monospace" font-weight="700">B</text>
           </svg>
           <div id="ftVerdict" style="font-size:.9rem;font-weight:700;letter-spacing:.06em;margin-top:6px;min-height:22px;transition:color .4s"></div>
           <!-- ── Coin Flip ── -->
@@ -4742,6 +4783,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
     let collectionItems = []; // Phase 2: user's personal card collection
     let pendingCollectionCard = null; // card data staged for Add-to-Collection modal
+    let _atcEditMode   = false;       // true when modal is editing an existing item
+    let _atcEditItemId = null;        // collection_items.id being edited
     let orders = []; // marketplace orders
     let lcPhotos = []; // photo blobs staged for listing upload
     let selectedRating = 0; // current star rating selection
@@ -4886,6 +4929,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     function closeModal(modalId) {
       document.getElementById(modalId).classList.remove('open');
+      // Reset edit mode whenever the add/edit modal is dismissed
+      if (modalId === 'addToCollectionModal') {
+        _atcEditMode = false; _atcEditItemId = null;
+        const h3e = document.querySelector('#addToCollectionModal h3');
+        if (h3e) h3e.textContent = 'Add to My Binder';
+        const sBtnE = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
+        if (sBtnE && !sBtnE.disabled) { sBtnE.textContent = 'Add to My Binder'; }
+      }
       // If scanner was hidden to show this modal, bring it back
       if (_returnToScanner && (modalId === 'addToCollectionModal' || modalId === 'addToWishlistModal')) {
         _returnToScanner = false;
@@ -6362,9 +6413,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                   My Binder
                 </div>
                 <div style="display:flex;align-items:center;gap:6px">
-                  ${_dh}
                   <button class="ndash-panel-link" onclick="showPage('addCard');setMobileNav('addCard')">+ ADD</button>
                   <button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">VIEW ALL →</button>
+                  ${_dh}
                 </div>
               </div>
               <div class="ndash-panel-body">
@@ -6393,8 +6444,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Price Movers</div>
                 <div style="display:flex;align-items:center;gap:6px">
-                  ${_dh}
                   <button class="ndash-panel-link" onclick="showPage('browse');setMobileNav('browse')">BROWSE →</button>
+                  ${_dh}
                 </div>
               </div>
               <div class="ndash-panel-body">
@@ -6419,14 +6470,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="ndash-rail" id="dashRail">
 
             <!-- Scan CTA -->
-            <div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-cta">
-              <div class="ndash-panel-h" style="border-bottom:none;background:transparent;padding:0">
-                <span class="ndash-drag-handle" title="Drag to move">⠿</span>
+            <div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-cta" style="position:relative">
+              <div style="position:absolute;top:7px;right:8px;z-index:3;display:flex;align-items:center;gap:3px">
+                <span class="ndash-drag-handle" title="Drag to move" style="color:rgba(0,0,0,0.45);font-size:13px">⠿</span>
+                <button class="ndash-collapse-btn" title="Collapse panel" style="color:rgba(0,0,0,0.45)" onclick="dashToggleCollapse(this)">▾</button>
               </div>
-              <button class="ndash-scan-cta" onclick="showPage('addCard');setMobileNav('addCard')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
-                SCAN CARD
-              </button>
+              <div class="ndash-panel-body" style="padding:0">
+                <button class="ndash-scan-cta" onclick="showPage('addCard');setMobileNav('addCard')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                  SCAN CARD
+                </button>
+              </div>
             </div>
 
             <!-- Alerts -->
@@ -6454,8 +6508,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Storefront</div>
                 <div style="display:flex;align-items:center;gap:6px">
-                  ${_dh}
                   <button class="ndash-panel-link" onclick="previewStorefront()">PREVIEW →</button>
+                  ${_dh}
                 </div>
               </div>
               <div class="ndash-panel-body" style="display:grid;gap:7px">
@@ -6538,8 +6592,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Ghost Card Fund</div>
                 <div style="display:flex;align-items:center;gap:6px">
-                  ${_dh}
                   ${ghostCards.length>1?`<button class="ndash-panel-link" onclick="showPage('collection');setMobileNav('collection')">${ghostCards.length} CARDS</button>`:''}
+                  ${_dh}
                 </div>
               </div>
               <div class="ndash-panel-body">
@@ -6840,8 +6894,38 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function dashToggleCollapse(btn) {
       var panel = btn.closest('[data-panel-id]');
       if (!panel) return;
-      var collapsed = panel.classList.toggle('ndash-collapsed');
-      btn.textContent = collapsed ? '▸' : '▾';
+      var body = panel.querySelector('.ndash-panel-body');
+      var isCollapsed = panel.classList.contains('ndash-collapsed');
+
+      if (!isCollapsed) {
+        // ── Collapsing ──
+        if (body) {
+          body.style.maxHeight = body.scrollHeight + 'px';
+          body.style.opacity   = '1';
+          void body.offsetHeight; // force reflow so transition fires
+          body.style.maxHeight = '0';
+          body.style.opacity   = '0';
+        }
+        panel.classList.add('ndash-collapsed');
+        btn.textContent = '▸';
+      } else {
+        // ── Expanding ──
+        panel.classList.remove('ndash-collapsed');
+        btn.textContent = '▾';
+        if (body) {
+          body.style.maxHeight = '0';
+          body.style.opacity   = '0';
+          void body.offsetHeight; // force reflow
+          var targetH = body.scrollHeight;
+          body.style.maxHeight = targetH + 'px';
+          body.style.opacity   = '1';
+          body.addEventListener('transitionend', function onDone(e) {
+            if (e.propertyName !== 'max-height') return;
+            body.style.maxHeight = '';
+            body.removeEventListener('transitionend', onDone);
+          });
+        }
+      }
       saveDashCollapse();
     }
 
@@ -6863,6 +6947,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           p.classList.add('ndash-collapsed');
           var btn = p.querySelector('.ndash-collapse-btn');
           if (btn) btn.textContent = '▸';
+          // Apply collapsed state instantly (no transition on page load)
+          var body = p.querySelector('.ndash-panel-body');
+          if (body) {
+            body.style.transition = 'none';
+            body.style.maxHeight  = '0';
+            body.style.opacity    = '0';
+            requestAnimationFrame(function() { body.style.transition = ''; });
+          }
         });
       } catch(_) {}
     }
@@ -7780,8 +7872,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const condLabel = c.condition === 'graded' && c.grade_value
             ? `${c.grade_label || 'PSA'} ${c.grade_value}`
             : (c.condition || '').toUpperCase();
-          const img = c.card_image_url
-            ? `<img src="${c.card_image_url}" alt="${c.card_name}" loading="lazy"
+          // Use 'data:,' as a deliberate invalid-image src so onerror fires and
+          // _binderImgFail can look the image up from the catalog (self-heal).
+          const _imgSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+          const img = _imgSrc
+            ? `<img src="${_imgSrc}" alt="${c.card_name}" loading="lazy"
                  style="width:100%;height:160px;object-fit:contain;background:var(--surface2);border-radius:4px 4px 0 0;display:block"
                  onerror="_binderImgFail(this,'${c.id}')">`
             : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.68rem">NO IMAGE</div>`;
@@ -11740,13 +11835,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               ? `<span class="allcards-binder-tag" style="${binderName !== 'Unsorted' ? 'border-color:var(--teal);color:var(--teal)' : ''}">${binderName}</span>`
               : '';
             return `<div
-              class="allcards-row"
+              class="allcards-row${isGhost ? ' ghost-card' : ''}"
               ${dragMode ? `draggable="true"
                 ondragstart="allCardsDragStart(event,'${item.id}')"
-                ondragend="allCardsDragEnd(event)"` : `style="cursor:pointer"`}
+                ondragend="allCardsDragEnd(event)"` : `style="cursor:pointer${isGhost ? ';opacity:.52' : ''}"`}
+              ${dragMode && isGhost ? `style="opacity:.52"` : ''}
               onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
               <img src="${_thumbUrl(item.card_image_url, 80) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-                style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0"
+                style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
                 onerror="this.style.visibility='hidden'">
               <div style="flex:1;min-width:0">
                 <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
@@ -12362,8 +12458,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('binderDetailContent').innerHTML = `
         <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
           <div style="flex-shrink:0;text-align:center">
-            ${item.card_image_url
-              ? `<img src="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px solid var(--border);display:block;margin:0 auto"
+            ${(item.card_image_url || item.api_card_id)
+              ? `<img src="${item.card_image_url || 'data:,'}" style="max-height:220px;max-width:160px;border:1px solid var(--border);display:block;margin:0 auto;cursor:zoom-in"
+                   onclick="if(this.src&&!this.src.startsWith('data:'))openImageLightbox(this.src)"
                    onerror="_binderImgFail(this,'${item.id}')">`
               : `<div style="width:120px;height:168px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem">?</div>`}
             <div style="margin-top:8px"><span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span></div>
@@ -12413,6 +12510,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             style="padding:8px 18px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
             onmouseover="this.style.background='rgba(0,204,255,.1)'"
             onmouseout="this.style.background='transparent'">Update Photo</button>
+          <button onclick="closeModal('binderDetailModal');openEditCardModal('${item.id}')"
+            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
+            onmouseover="this.style.background='rgba(0,229,255,.08)'"
+            onmouseout="this.style.background='transparent'">✏ Edit Details</button>
           <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
             style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List for Sale</button>
           <button onclick="openSoldOfflineModal('${item.id}')"
@@ -13297,9 +13398,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       let imgSmall = card.images?.small || '';
       let imgLarge = card.images?.large || imgSmall;
 
-      // ── Catalog image lookup: swap in our hosted image if available ──────
-      // Only runs for EN numeric card numbers (e.g. 1, 52, 191)
-      if (!isJp && card.set?.id && /^\d+$/.test(card.number || '')) {
+      // ── Catalog image lookup: fills in hosted image when API has none ────
+      // Only runs when PTCG API provided no image — the API is authoritative
+      // for EN cards and catalog data can have corrupt image_urls (wrong card)
+      if (!isJp && !imgSmall && card.set?.id && /^\d+$/.test(card.number || '')) {
         try {
           const { data: mapRow } = await sb.from('set_map')
             .select('pd_code').eq('ptcg_code', card.set.id).maybeSingle();
@@ -13425,12 +13527,62 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.body.appendChild(overlay);
     }
 
-    function addSearchCardFromDetail() {
+    async function addSearchCardFromDetail() {
       const cardData = window._searchCardDetailData;
       if (!cardData) return;
+      if (!currentUser) { showToast('Sign in to add cards'); return; }
+      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('collector'); return; }
+
       const b = document.getElementById('searchCardBinderSelect')?.value || null;
+      const lang = cardData.language || (window._pendingJpCard ? 'JA' : 'EN');
+      window._pendingJpCard = false;
       document.getElementById('setCardDetailSheet')?.remove();
-      openAddToCollectionModal(Object.assign({}, cardData, { binder_id: b || undefined }));
+
+      // Build insert — defaults: raw, qty 1, no price/cert/notes
+      const row = {
+        user_id:        currentUser.id,
+        api_card_id:    cardData.apiCardId   || null,
+        card_name:      cardData.cardName,
+        set_name:       cardData.setName     || null,
+        set_code:       cardData.setCode     || null,
+        card_number:    cardData.cardNumber  || null,
+        card_image_url: cardData.cardImageUrl|| null,
+        game_type:      cardData.gameType    || 'pokemon',
+        condition:      'raw',
+        quantity:       1,
+        language:       lang,
+        binder_id:      b ? b : null,
+        is_ghost:       false,
+        rarity:         cardData.rarity || null,
+      };
+
+      // Auto-look up price URL
+      if (cardData.apiCardId) {
+        try {
+          const { data: pu } = await sb.from('card_price_urls').select('price_source_url').eq('api_card_id', cardData.apiCardId).maybeSingle();
+          if (pu?.price_source_url) row.price_source_url = pu.price_source_url;
+        } catch(_) {}
+      }
+
+      let { data: newRow, error } = await sb.from('collection_items').insert(row).select('id').single();
+      // Schema fallback (missing language/rarity columns)
+      if (error) {
+        const badCol = (e) => ((e.message||'')+(e.details||'')+(e.hint||'')+(e.code||'')).toLowerCase();
+        if (badCol(error).includes('language') || badCol(error).includes('schema')) {
+          const { language: _l, rarity: _r, ...bare } = row;
+          const r2 = await sb.from('collection_items').insert(bare).select('id').single();
+          newRow = r2.data; error = r2.error;
+        }
+      }
+      if (error) { showToast('Error: ' + error.message); return; }
+
+      // Update local cache
+      const fresh = { id: newRow.id, ...row, current_value: null, purchase_price: null, price_history_log: [] };
+      collectionItems.unshift(fresh);
+      renderCollection();
+
+      const binderLabel = b ? (binders.find(bb => String(bb.id) === String(b))?.name || 'binder') : 'your binder';
+      showToast('✓ ' + cardData.cardName + ' added — tap the card to add details');
     }
 
     function wishlistFromDetail() {
@@ -13483,6 +13635,98 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             urlField.placeholder = 'PriceCharting or eBay URL for auto-price tracking';
           })
           .catch(() => { urlField.placeholder = 'PriceCharting or eBay URL for auto-price tracking'; });
+      }
+    }
+
+    // ── Edit an existing collection item via the Add modal ────────────────────
+    async function openEditCardModal(itemId) {
+      const item = collectionItems.find(c => String(c.id) === String(itemId));
+      if (!item) return;
+      _atcEditMode   = true;
+      _atcEditItemId = itemId;
+
+      const nameEl = document.getElementById('atcCardName');
+      if (nameEl) nameEl.textContent = item.card_name + (item.set_name ? ' — ' + item.set_name : '');
+      const h3 = document.querySelector('#addToCollectionModal h3');
+      if (h3) h3.textContent = 'Edit Card Details';
+      const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
+      if (saveBtn) saveBtn.textContent = 'Save Changes';
+
+      const manualRow = document.getElementById('atcManualNameRow');
+      if (manualRow) manualRow.style.display = 'none';
+
+      document.getElementById('atcCondition').value = item.condition || 'raw';
+      toggleGradeField();
+      if (item.condition && item.condition !== 'raw' && item.grade_value != null) {
+        document.getElementById('atcGrade').value = item.grade_value;
+      }
+      document.getElementById('atcQuantity').value      = item.quantity || 1;
+      document.getElementById('atcPurchasePrice').value = item.purchase_price != null ? item.purchase_price : '';
+      document.getElementById('atcPurchaseDate').value  = item.purchase_date || '';
+      document.getElementById('atcCertNumber').value    = item.cert_number || '';
+      document.getElementById('atcPriceUrl').value      = item.price_source_url || '';
+      document.getElementById('atcNotes').value         = item.notes || '';
+      if (document.getElementById('atcLanguage')) {
+        document.getElementById('atcLanguage').value = item.language || 'EN';
+      }
+      atcUpdateCertBtn();
+      populateBinderDropdown('atcBinderId', item.binder_id);
+      atcClearPhoto();
+      openModal('addToCollectionModal');
+    }
+
+    // ── Apply edits to an existing collection item ─────────────────────────
+    async function updateCollectionItem(itemId) {
+      if (!currentUser) return;
+      const condition      = document.getElementById('atcCondition').value;
+      const gradeValue     = condition !== 'raw' ? parseFloat(document.getElementById('atcGrade').value) : null;
+      const quantity       = parseInt(document.getElementById('atcQuantity').value) || 1;
+      const purchasePrice  = parseFloat(document.getElementById('atcPurchasePrice').value) || null;
+      const purchaseDate   = document.getElementById('atcPurchaseDate').value || null;
+      const certNumber     = document.getElementById('atcCertNumber').value.trim() || null;
+      const priceSourceUrl = document.getElementById('atcPriceUrl').value.trim() || null;
+      const notes          = document.getElementById('atcNotes').value.trim() || null;
+      const binderId       = document.getElementById('atcBinderId')?.value || null;
+      const language       = document.getElementById('atcLanguage')?.value || 'EN';
+
+      const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
+      if (saveBtn) { saveBtn.textContent = 'Saving…'; saveBtn.disabled = true; }
+
+      try {
+        let userPhotoUrl = null;
+        if (_atcPhotoBlob) {
+          try {
+            const ext  = _atcPhotoBlob.type === 'image/png' ? 'png' : 'jpg';
+            const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+            const { error: upErr } = await sb.storage.from('card-photos').upload(path, _atcPhotoBlob, { upsert: false, contentType: _atcPhotoBlob.type });
+            if (!upErr) {
+              const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
+              userPhotoUrl = urlData?.publicUrl || null;
+            }
+          } catch(_) {}
+        }
+
+        const updates = {
+          condition, grade_value: gradeValue, quantity,
+          purchase_price: purchasePrice, purchase_date: purchaseDate,
+          cert_number: certNumber, price_source_url: priceSourceUrl,
+          notes, language, binder_id: binderId || null,
+        };
+        if (userPhotoUrl) updates.card_image_url = userPhotoUrl;
+
+        const { error } = await sb.from('collection_items').update(updates).eq('id', itemId);
+        if (error) throw error;
+
+        const local = collectionItems.find(c => String(c.id) === String(itemId));
+        if (local) Object.assign(local, updates);
+
+        closeModal('addToCollectionModal');
+        showToast('✓ Card details updated');
+        renderCollection();
+        setTimeout(() => openBinderCardDetail(itemId), 100);
+      } catch(e) {
+        showToast('Error: ' + e.message);
+        if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
       }
     }
 
@@ -13615,6 +13859,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     async function saveToCollection() {
+      // Edit mode: route to updateCollectionItem instead of insert
+      if (_atcEditMode && _atcEditItemId) {
+        return updateCollectionItem(_atcEditItemId);
+      }
+
       if (!currentUser || !pendingCollectionCard) return;
 
       const condition     = document.getElementById('atcCondition').value;
@@ -14260,6 +14509,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (loading) loading.style.display = state === 'loading' ? '' : 'none';
       if (results) results.style.display = state === 'results' ? '' : 'none';
 
+      // If results just became visible, apply any buffered remote coin flip
+      if (state === 'results' && _ftPendingCoinFlip) {
+        var _pf = _ftPendingCoinFlip;
+        _ftPendingCoinFlip = null;
+        setTimeout(function() { _ftShowRemoteCoinFlip(_pf); }, 400);
+      }
+
       // Animation is CSS-driven — no JS needed
     }
 
@@ -14407,6 +14663,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     var _ftLocked = { A: false, B: false };   // lock-in state for each side
     var _ftAnalyzingFromLock = false;          // prevents double-trigger when both lock
+    var _ftPendingCoinFlip  = null;            // buffered remote flip awaiting results panel
 
     // Returns the display name for the current user (username, email prefix, or 'Guest')
     function _ftDisplayName() {
@@ -15349,50 +15606,107 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return cards + cash;
     }
 
+    // ── Voltmeter needle state ──────────────────────────────────────────
+    var _ftNeedleAnimId = null;
+    var _ftWobbleOnNext = false;
+
+    function _ftSetNeedleAngle(el, deg) {
+      el.style.transform = 'rotate(' + deg + 'deg)';
+    }
+
+    function _ftAnimateNeedleWobble(el, targetDeg, onDone) {
+      if (_ftNeedleAnimId) { cancelAnimationFrame(_ftNeedleAnimId); _ftNeedleAnimId = null; }
+      el.style.transition = 'none';
+      var duration = 2800;
+      var startTs = null;
+      function frame(ts) {
+        if (!startTs) startTs = ts;
+        var t = Math.min((ts - startTs) / duration, 1);
+        var base   = targetDeg * (1 - Math.exp(-5 * t));
+        var wobble = Math.exp(-4 * t) * 35 * Math.sin(t * 18);
+        _ftSetNeedleAngle(el, base + wobble);
+        if (t < 1) {
+          _ftNeedleAnimId = requestAnimationFrame(frame);
+        } else {
+          _ftNeedleAnimId = null;
+          el.style.transition = 'transform 0.6s cubic-bezier(.34,1.56,.64,1)';
+          _ftSetNeedleAngle(el, targetDeg);
+          if (onDone) onDone();
+        }
+      }
+      _ftNeedleAnimId = requestAnimationFrame(frame);
+    }
+
     function _ftUpdateScale(totalA, totalB) {
-      var beam = document.getElementById('ftScaleBeam');
-      var verdict = document.getElementById('ftVerdict');
-      var labelL = document.getElementById('ftLabelLeft');
-      var labelR = document.getElementById('ftLabelRight');
-      if (!beam) return;
+      var needleEl = document.getElementById('ftNeedleGroup');
+      var verdict  = document.getElementById('ftVerdict');
+      var labelL   = document.getElementById('ftLabelLeft');
+      var labelR   = document.getElementById('ftLabelRight');
+      var nameA    = document.getElementById('ftMeterNameA');
+      var nameB    = document.getElementById('ftMeterNameB');
+
+      // Update username labels from session
+      if (nameA) nameA.textContent = (_ftSession && _ftSession.nameA) ? _ftSession.nameA.substring(0,12).toUpperCase() : 'SIDE A';
+      if (nameB) nameB.textContent = (_ftSession && _ftSession.nameB) ? _ftSession.nameB.substring(0,12).toUpperCase() : 'SIDE B';
+
+      if (!needleEl) return;
 
       var hasValues = (totalA > 0 || totalB > 0);
       if (!hasValues) {
-        beam.style.transform = 'rotate(0deg)';
+        needleEl.style.transition = 'transform 0.4s ease';
+        _ftSetNeedleAngle(needleEl, 0);
         if (verdict) { verdict.textContent = ''; verdict.style.color = 'var(--muted)'; }
         if (labelL) labelL.textContent = '';
         if (labelR) labelR.textContent = '';
         return;
       }
 
-      // Angle: max ±18deg, proportional to difference vs larger side
-      var diff = totalA - totalB;
+      var diff    = totalA - totalB;
       var maxSide = Math.max(totalA, totalB, 0.01);
-      var ratio = Math.max(-1, Math.min(1, diff / maxSide));
-      var angle = ratio * 18;  // Side A heavier → tilts left (negative = A side down)
-      beam.style.transform = 'rotate(' + (-angle) + 'deg)';
+      var ratio   = Math.max(-1, Math.min(1, diff / maxSide));
+      // A > B → ratio > 0 → needle left (negative angle toward A side)
+      var targetAngle = -ratio * 70;
 
       if (labelL) labelL.textContent = totalA > 0 ? '$' + totalA.toFixed(2) : '';
       if (labelR) labelR.textContent = totalB > 0 ? '$' + totalB.toFixed(2) : '';
 
-      if (!verdict) return;
-      var pct = maxSide > 0 ? Math.abs(diff) / maxSide * 100 : 0;
+      // Build verdict text
+      var pct = Math.abs(diff) / maxSide * 100;
+      var verdictText, verdictColor;
       if (pct <= 10) {
-        verdict.textContent = '✓ Fair — ' + pct.toFixed(1) + '% difference';
-        verdict.style.color = '#D2783A';
+        verdictText  = '✓ Fair — ' + pct.toFixed(1) + '% difference';
+        verdictColor = '#D2783A';
       } else if (pct <= 25) {
-        verdict.textContent = '~ Close — ' + pct.toFixed(1) + '% difference';
-        verdict.style.color = '#f59e0b';
+        verdictText  = '~ Close — ' + pct.toFixed(1) + '% difference';
+        verdictColor = '#f59e0b';
       } else {
-        var whoWins = totalA > totalB ? 'Side A' : 'Side B';
-        verdict.textContent = '⚠ Uneven — ' + whoWins + ' gives ' + pct.toFixed(1) + '% more value';
-        verdict.style.color = '#ef4444';
+        var nameWinner = totalA > totalB
+          ? ((_ftSession && _ftSession.nameA) || 'Side A')
+          : ((_ftSession && _ftSession.nameB) || 'Side B');
+        verdictText  = '⚠ Uneven — ' + nameWinner + ' gives ' + pct.toFixed(1) + '% more value';
+        verdictColor = '#ef4444';
+      }
+
+      if (_ftWobbleOnNext) {
+        _ftWobbleOnNext = false;
+        if (verdict) { verdict.textContent = ''; }
+        _ftAnimateNeedleWobble(needleEl, targetAngle, function() {
+          if (verdict) { verdict.textContent = verdictText; verdict.style.color = verdictColor; }
+        });
+      } else {
+        needleEl.style.transition = 'transform 0.6s cubic-bezier(.34,1.56,.64,1)';
+        _ftSetNeedleAngle(needleEl, targetAngle);
+        if (verdict) { verdict.textContent = verdictText; verdict.style.color = verdictColor; }
       }
     }
 
     function _ftResetScale() {
-      var beam = document.getElementById('ftScaleBeam');
-      if (beam) beam.style.transform = 'rotate(0deg)';
+      if (_ftNeedleAnimId) { cancelAnimationFrame(_ftNeedleAnimId); _ftNeedleAnimId = null; }
+      var needleEl = document.getElementById('ftNeedleGroup');
+      if (needleEl) {
+        needleEl.style.transition = 'transform 0.4s ease';
+        _ftSetNeedleAngle(needleEl, 0);
+      }
       var verdict = document.getElementById('ftVerdict');
       if (verdict) { verdict.textContent = ''; verdict.style.color = 'var(--muted)'; }
       var labelL = document.getElementById('ftLabelLeft');
@@ -15524,7 +15838,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (progEl) progEl.textContent = 'Weighing the trade…';
       await new Promise(function(r) { setTimeout(r, 600); });
 
-      // Switch to results state
+      // Switch to results state — trigger wobble animation
+      _ftWobbleOnNext = true;
       _ftShowState('results');
       ftRecalc();
       _ftRenderBreakdown(fetched);
@@ -15867,22 +16182,37 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       });
     }
 
-    // Called by poll when other side flips the coin
-    function _ftHandleRemoteCoinFlip(coinFlip) {
-      if (!coinFlip || !coinFlip.id || coinFlip.id === _ftLastCoinFlipId) return;
-      _ftLastCoinFlipId = coinFlip.id;
+    // Show a remote coin flip (factored out so it can run immediately or deferred)
+    function _ftShowRemoteCoinFlip(coinFlip) {
       var btn = document.getElementById('ftCoinFlipBtn');
       if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; }
       var res = document.getElementById('ftCoinResult');
       var whoLabel = coinFlip.by === 'a' ? 'Side A' : 'Side B';
       if (res) {
-        res.innerHTML = `<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:6px">${whoLabel} flipped…</div>`;
+        res.innerHTML = '<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:6px">' + whoLabel + ' flipped…</div>';
+        // Scroll the coin section into view so B doesn't miss it
+        setTimeout(function() { res.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
       }
       setTimeout(function() {
         _ftAnimateCoin(coinFlip.result, function() {
           if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
         });
       }, 300);
+    }
+
+    // Called by poll when other side flips the coin
+    function _ftHandleRemoteCoinFlip(coinFlip) {
+      if (!coinFlip || !coinFlip.id || coinFlip.id === _ftLastCoinFlipId) return;
+      _ftLastCoinFlipId = coinFlip.id;
+
+      // If results section isn't visible yet (race: both-locked + coin flip in same poll
+      // cycle, analysis still loading), buffer and apply once results are shown
+      var results = document.getElementById('ftResultsState');
+      if (!results || results.style.display === 'none') {
+        _ftPendingCoinFlip = coinFlip;
+        return;
+      }
+      _ftShowRemoteCoinFlip(coinFlip);
     }
 
     // ── End Fair Trade ─────────────────────────────────────────────────────
@@ -15919,8 +16249,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const qty = ci ? (ci.quantity || 1) : 0;
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
+        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;transition:filter .15s;${owned?'':'filter:brightness(0.45) saturate(0.4)'}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -16605,12 +16935,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return tcgp.holofoil?.market || tcgp.normal?.market || cm.averageSellPrice || null;
       })();
       openAddToCollectionModal({
-        cardName:   card.name,
-        setName:    card.set?.name || '',
-        cardNumber: card.number   || '',
-        apiCardId:  card.id,
-        imageUrl:   card.images?.small || '',
-        rarity:     card.rarity  || '',
+        cardName:     card.name,
+        setName:      card.set?.name || '',
+        cardNumber:   card.number   || '',
+        apiCardId:    card.id,
+        cardImageUrl: card.images?.small || '',   // must match key saveToCollection reads
+        rarity:       card.rarity  || '',
         currentValue: bestPrice,
       });
     }
