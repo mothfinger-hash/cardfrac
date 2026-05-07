@@ -497,6 +497,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       h1{font-size:.82rem}
       .modal{margin:10px;padding:16px;font-size:.62rem}
       .modal h3{font-size:.75rem}
+      /* Binder card detail: stack vertically on small screens */
+      .bcd-top{flex-direction:column!important;align-items:center!important}
+      .bcd-img-col{width:auto!important;max-width:160px;align-items:center}
+      .bcd-stats-col{min-width:0!important;width:100%}
       .cart-bar,.batch-action-bar{padding:10px 14px}
       .revenue-grid{grid-template-columns:1fr 1fr}
       .page{padding-bottom:80px;padding-left:12px;padding-right:12px}
@@ -1126,6 +1130,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* ── BINDER FRAME — constrained width on desktop, full-width on mobile ── */
     .binder-frame{width:100%;position:relative;max-width:860px;margin-left:auto;margin-right:auto}
+    .binder-frame.all-cards-wide{max-width:1160px}
     /* ── BINDER SIDE NAV ARROWS (desktop only) ── */
     .binder-nav-arrow{
       display:none;position:absolute;top:50%;transform:translateY(-50%);
@@ -1257,6 +1262,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .allcards-sort-btn{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.56rem;letter-spacing:.06em;padding:4px 9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;border-radius:2px;transition:all .12s;white-space:nowrap}
     .allcards-sort-btn:hover{border-color:var(--accent);color:var(--accent)}
     .allcards-sort-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.07)}
+    /* All-cards 4-col grid view */
+    .acg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px}
+    .acg-card{position:relative;cursor:pointer;border:1px solid var(--border);background:var(--surface);overflow:hidden;border-radius:2px;transition:border-color .12s,transform .1s}
+    .acg-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+    .acg-card img{width:100%;height:auto;display:block}
+    .acg-card.ghost-card img{filter:grayscale(30%)}
+    .acg-name{font-size:.54rem;color:var(--muted);padding:3px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--surface);line-height:1.3}
+    @media(max-width:480px){.acg-grid{gap:4px;padding:5px}}
     /* ── DASHBOARD CHART ── */
     .dash-chart-section{background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
     .dash-chart-row{display:grid;grid-template-columns:110px 1fr 72px;gap:8px;align-items:center;margin-bottom:8px}
@@ -3979,6 +3992,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <button class="allcards-sort-btn"         id="sortBtn-set"     onclick="setAllCardsSort('set')"    >Set</button>
           <button class="allcards-sort-btn"         id="sortBtn-value"   onclick="setAllCardsSort('value')"  >Value ↓</button>
           <button class="allcards-sort-btn"         id="sortBtn-lang"    onclick="setAllCardsSort('lang')"   >Language</button>
+        </div>
+        <div style="display:flex;gap:3px;flex-shrink:0;margin-left:auto">
+          <button id="acViewBtnList" class="allcards-sort-btn active" onclick="setAllCardsView('list')"   title="List view"  style="padding:4px 8px;font-size:.7rem">☰</button>
+          <button id="acViewBtnGrid" class="allcards-sort-btn"        onclick="setAllCardsView('acgrid')" title="Grid view"  style="padding:4px 8px;font-size:.7rem">⊞</button>
         </div>
       </div>
     </div>
@@ -11074,6 +11091,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Sort state only applies to the "All Cards" view — never bleeds into individual binders.
     let allCardsSort = 'name'; // 'name' | 'rarity' | 'set' | 'value' | 'lang'
     let allCardsSortDir = { name: 1, rarity: 1, set: 1, value: -1, lang: 1 }; // 1=asc, -1=desc; rarity 1=highest first
+    let _allCardsView = localStorage.getItem('pb_acView') || 'list'; // 'list' | 'acgrid'
+    let _acOffset = 0, _acObserver = null, _acItems = [];
+    const _AC_BATCH = 40;
 
     const _RARITY_SCORE = (r) => {
       if (!r) return -1;
@@ -11109,6 +11129,84 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       binderPage = 0;
       renderBinder();
+    }
+
+    function setAllCardsView(v) {
+      _allCardsView = v;
+      localStorage.setItem('pb_acView', v);
+      document.getElementById('acViewBtnList')?.classList.toggle('active', v === 'list');
+      document.getElementById('acViewBtnGrid')?.classList.toggle('active', v === 'acgrid');
+      renderBinder();
+    }
+
+    // ── All Cards lazy-load helpers ───────────────────────────────────────────
+    function _acRenderListRow(item) {
+      const isGhost  = item.is_ghost;
+      const isGraded = !isGhost && item.condition && item.condition !== 'raw';
+      const condLabel = isGraded
+        ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+        : 'Raw';
+      const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+      const binderName = binders.find(b => String(b.id) === String(item.binder_id))?.name || 'Unsorted';
+      const tagStyle = binderName !== 'Unsorted' ? 'border-color:var(--teal);color:var(--teal)' : '';
+      return `<div
+        class="allcards-row${isGhost ? ' ghost-card' : ''}"
+        draggable="true"
+        ondragstart="allCardsDragStart(event,'${item.id}')"
+        ondragend="allCardsDragEnd(event)"
+        ${isGhost ? 'style="opacity:.52"' : ''}
+        onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
+        <img src="${_thumbUrl(item.card_image_url, 80) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+          style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
+          onerror="this.style.visibility='hidden'">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
+          <div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
+        </div>
+        <span class="allcards-binder-tag" style="${tagStyle}">${binderName}</span>
+        <div style="flex-shrink:0;text-align:right">
+          <div style="margin-bottom:2px">${isGhost ? `<span style="color:var(--teal);font-size:.62rem">Wishlist</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.58rem;padding:1px 4px">${condLabel}</span>`}</div>
+          <div style="font-size:.8rem;color:${isGhost ? 'var(--teal)' : 'var(--accent)'};font-weight:700">${isGhost ? '—' : (val > 0 ? '$' + val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—')}</div>
+        </div>
+      </div>`;
+    }
+
+    function _acRenderGridCard(item) {
+      const isGhost  = item.is_ghost;
+      const isGraded = !isGhost && item.condition && item.condition !== 'raw';
+      const condLabel = isGraded
+        ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
+        : 'Raw';
+      return `<div class="acg-card${isGhost ? ' ghost-card' : ''}" onclick="openBinderCardDetail('${item.id}')">
+        ${item.card_image_url
+          ? `<img src="${_thumbUrl(item.card_image_url, 220)}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async">`
+          : `<div style="width:100%;aspect-ratio:5/7;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">${isGhost ? '♡' : '?'}</div>`}
+        ${isGhost
+          ? `<span class="want-badge" style="position:absolute;top:3px;right:3px;font-size:.44rem;padding:1px 4px">WANT</span>`
+          : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="position:absolute;top:3px;left:3px;font-size:.48rem;padding:1px 3px">${condLabel}</span>`}
+        <div class="acg-name">${_escHtml(item.card_name)}</div>
+      </div>`;
+    }
+
+    function _acAttachObserver(isGrid) {
+      const content  = document.getElementById('collectionContent');
+      const sentinel = document.getElementById('acSentinel');
+      if (!content || !sentinel) return;
+      _acObserver = new IntersectionObserver(entries => {
+        if (!entries[0].isIntersecting) return;
+        _acObserver.disconnect(); _acObserver = null;
+        const batch = _acItems.slice(_acOffset, _acOffset + _AC_BATCH);
+        if (!batch.length) return;
+        _acOffset += batch.length;
+        const hasMore = _acOffset < _acItems.length;
+        const newHtml = batch.map(isGrid ? _acRenderGridCard : _acRenderListRow).join('');
+        const sentTag = hasMore ? `<div id="acSentinel" style="height:1px${isGrid ? ';grid-column:1/-1' : ''}"></div>` : '';
+        sentinel.insertAdjacentHTML('beforebegin', newHtml);
+        sentinel.remove();
+        const parent = isGrid ? document.getElementById('acGridEl') : document.getElementById('binderGrid');
+        if (hasMore && parent) { parent.insertAdjacentHTML('beforeend', sentTag); _acAttachObserver(isGrid); }
+      }, { root: content, rootMargin: '200px' });
+      _acObserver.observe(sentinel);
     }
 
     async function syncMissingRarities() {
@@ -11707,11 +11805,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return;
       }
 
-      // "All Cards" view: always list + drag-to-binder mode
+      // "All Cards" view: lazy-load list or 4-col grid, drag-to-binder mode
       const isAllCards = (currentBinderId === null) && binders.length > 0;
-      const effectiveView = isAllCards ? 'list' : binderView;
+      const effectiveView = isAllCards ? _allCardsView : binderView;
+      // Widen frame to match sets UI only in All Cards; restore for individual binders
+      document.querySelector('.binder-frame')?.classList.toggle('all-cards-wide', isAllCards);
       const viewToggle = document.getElementById('binderViewToggle');
       if (viewToggle) viewToggle.style.display = isAllCards ? 'none' : '';
+      // Sync view toggle button state
+      if (isAllCards) {
+        document.getElementById('acViewBtnList')?.classList.toggle('active', _allCardsView === 'list');
+        document.getElementById('acViewBtnGrid')?.classList.toggle('active', _allCardsView === 'acgrid');
+      }
+      // Reset lazy-load state on every full re-render
+      if (_acObserver) { _acObserver.disconnect(); _acObserver = null; }
+      _acOffset = 0; _acItems = [];
 
       // Show/hide sort bar — All Cards ONLY, never inside individual binders
       const sortBar = document.getElementById('allCardsSortBar');
@@ -11734,7 +11842,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       // Show/hide list search bar and vendor bulk import button
       const searchWrap = document.getElementById('binderListSearchWrap');
-      if (searchWrap) searchWrap.style.display = effectiveView === 'list' ? 'block' : 'none';
+      if (searchWrap) searchWrap.style.display = (effectiveView === 'list' || isAllCards) ? 'block' : 'none';
       const bulkBtn = document.getElementById('vendorBulkImportBtn');
       if (bulkBtn) bulkBtn.style.display = hasBulkImport() ? 'block' : 'none';
       const shareBtn = document.getElementById('shareBinderBtn');
@@ -11756,8 +11864,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         activeItems = applyAllCardsSort(activeItems);
       }
 
-      // In list view, apply search filter
-      if (effectiveView === 'list') {
+      // Apply search filter (All Cards views always; list view inside binders too)
+      if (effectiveView === 'list' || isAllCards) {
         const q = (document.getElementById('binderListSearch')?.value || '').toLowerCase().trim();
         if (q) {
           activeItems = activeItems.filter(c =>
@@ -11767,6 +11875,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           );
         }
       }
+
+      // Cache sorted+filtered items for lazy rendering
+      if (isAllCards) { _acItems = [...activeItems]; }
 
       if (activeItems.length === 0) {
         if (summary) summary.innerHTML = '';
@@ -11816,10 +11927,32 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const pageStart = binderPage * perPage;
       const pageItems = activeItems.slice(pageStart, pageStart + perPage);
 
-      if (effectiveView === 'list') {
-        const dragMode = isAllCards; // drag-to-binder only in "All Cards" view
+      if (isAllCards && effectiveView === 'acgrid') {
+        // ── All Cards: 4-col grid with lazy loading ──────────────────────────
+        const firstBatch = _acItems.slice(0, _AC_BATCH);
+        _acOffset = firstBatch.length;
+        const hasMore = _acOffset < _acItems.length;
+        content.innerHTML = `<div class="acg-grid" id="acGridEl">
+          ${firstBatch.map(_acRenderGridCard).join('')}
+          ${hasMore ? '<div id="acSentinel" style="height:1px;grid-column:1/-1"></div>' : ''}
+        </div>`;
+        if (hasMore) _acAttachObserver(true);
+      } else if (effectiveView === 'list') {
+        if (isAllCards) {
+          // ── All Cards: lazy-load list with drag-to-binder ───────────────────
+          const firstBatch = _acItems.slice(0, _AC_BATCH);
+          _acOffset = firstBatch.length;
+          const hasMore = _acOffset < _acItems.length;
+          content.innerHTML = `
+            <div style="font-size:.63rem;color:var(--muted);letter-spacing:.06em;padding:7px 10px 4px;border-bottom:1px solid var(--border)">Drag any card to a binder to assign it</div>
+            <div id="binderGrid" style="display:flex;flex-direction:column">
+              ${firstBatch.map(_acRenderListRow).join('')}
+              ${hasMore ? '<div id="acSentinel" style="height:1px"></div>' : ''}
+            </div>`;
+          if (hasMore) _acAttachObserver(false);
+        } else {
+        // ── Binder list view (paginated) ──────────────────────────────────────
         content.innerHTML = `
-          ${dragMode ? `<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:10px">Drag any card to a binder to assign it</div>` : ''}
           <div id="binderGrid" style="display:flex;flex-direction:column">
           ${pageItems.map(item => {
             const isGhost  = item.is_ghost;
@@ -11828,20 +11961,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
               : 'Raw';
             const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
-            // Binder tag for All Cards mode
-            const binderName = dragMode
-              ? (binders.find(b => String(b.id) === String(item.binder_id))?.name || 'Unsorted')
-              : null;
-            const binderTagHtml = binderName
-              ? `<span class="allcards-binder-tag" style="${binderName !== 'Unsorted' ? 'border-color:var(--teal);color:var(--teal)' : ''}">${binderName}</span>`
-              : '';
             return `<div
               class="allcards-row${isGhost ? ' ghost-card' : ''}"
-              ${dragMode ? `draggable="true"
-                ondragstart="allCardsDragStart(event,'${item.id}')"
-                ondragend="allCardsDragEnd(event)"` : `style="cursor:pointer${isGhost ? ';opacity:.52' : ''}"`}
-              ${dragMode && isGhost ? `style="opacity:.52"` : ''}
-              onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
+              style="cursor:pointer${isGhost ? ';opacity:.52' : ''}"
+              onclick="openBinderCardDetail('${item.id}')">
               <img src="${_thumbUrl(item.card_image_url, 80) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
                 style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
                 onerror="this.style.visibility='hidden'">
@@ -11849,7 +11972,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
                 <div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
               </div>
-              ${binderTagHtml}
               <div style="flex-shrink:0;text-align:right">
                 <div style="margin-bottom:2px">${isGhost ? `<span style="color:var(--teal);font-size:.62rem">Wishlist</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.58rem;padding:1px 4px">${condLabel}</span>`}</div>
                 <div style="font-size:.8rem;color:${isGhost ? 'var(--teal)' : 'var(--accent)'};font-weight:700">${isGhost ? '—' : (val > 0 ? '$' + val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—')}</div>
@@ -11857,6 +11979,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>`;
           }).join('')}
         </div>`;
+        }
       } else {
         const gridClass = effectiveView === '3x3' ? 'binder-grid-3x3' : effectiveView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
         content.innerHTML = `<div class="${gridClass}" id="binderGrid">${pageItems.map((item, pageIdx) => {
@@ -11916,7 +12039,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       if (pagination) {
-        if (totalPages > 1) {
+        if (!isAllCards && totalPages > 1) {
           pagination.style.display = 'flex';
           pagination.innerHTML = `
             <button class="binder-page-btn" data-dir="-1" onclick="flipBinderPage(-1)"
@@ -12458,10 +12581,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       document.getElementById('binderDetailContent').innerHTML = `
         <!-- Top: image col + stats col -->
-        <div style="display:flex;gap:18px;align-items:flex-start;margin-bottom:16px">
+        <div class="bcd-top" style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
 
           <!-- Left: image + badge + notes -->
-          <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:8px;width:140px">
+          <div class="bcd-img-col" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:8px;width:130px">
             ${(item.card_image_url || item.api_card_id)
               ? `<img src="${item.card_image_url || 'data:,'}" style="max-height:200px;width:100%;object-fit:contain;border:1px solid var(--border);cursor:zoom-in;border-radius:2px"
                    onclick="if(this.src&&!this.src.startsWith('data:'))openImageLightbox(this.src)"
@@ -12472,7 +12595,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
 
           <!-- Right: name + meta + stats + trend + price URL -->
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+          <div class="bcd-stats-col" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
             <div>
               <div style="font-size:1rem;color:var(--text);font-weight:600;line-height:1.3;padding-right:28px">${_escHtml(item.card_name)}</div>
               ${item.set_name ? `<div style="font-size:.75rem;color:var(--muted);margin-top:3px">${_escHtml(item.set_name)}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
@@ -12505,7 +12628,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <!-- Price source URL -->
             <div>
               <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Price_Source_URL</div>
-              <div style="display:flex;gap:6px;align-items:center">
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
                   placeholder="PriceCharting or TCGPlayer URL"
                   style="flex:1;padding:5px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;min-width:0" />
@@ -16878,6 +17001,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         is_ghost:       false,
         rarity:         card.rarity || null,
       };
+
+      // Auto-look up price URL from pre-mapped table
+      if (card.id) {
+        try {
+          const { data: pu } = await sb.from('card_price_urls').select('price_source_url').eq('api_card_id', card.id).maybeSingle();
+          if (pu?.price_source_url) row.price_source_url = pu.price_source_url;
+        } catch(_) {}
+      }
 
       let { data: newRow, error } = await sb.from('collection_items').insert(row).select('id').single();
       // Schema fallback (missing language/rarity columns)
