@@ -1060,7 +1060,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* Scale SVG — force it to render at full size, fix iOS transform-origin */
     #ftScaleSvg{width:min(320px,90vw);overflow:visible;display:block;margin:0 auto}
-    #ftNeedleGroup{transform-box:fill-box;transform-origin:160px 170px !important}
+    #ftNeedleGroup{transform-box:view-box;transform-origin:160px 170px}
 
     /* ── FAIR TRADE — mobile layout ─────────────────────── */
     /* Two-column sides stack to single column on small screens */
@@ -1085,7 +1085,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
       /* Results state scale: a bit smaller */
       #ftScaleSvg{width:min(280px,88vw)}
-      #ftNeedleGroup{transform-origin:160px 170px !important}
+      #ftNeedleGroup{transform-box:view-box;transform-origin:160px 170px}
 
       /* Breakdown tables: allow horizontal scroll */
       #ftBreakdownContent table{font-size:.68rem}
@@ -3956,11 +3956,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
           </div>
         </div>
-        <div class="pb-panel-actions">
+        <div class="pb-panel-actions" style="align-items:stretch">
           <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" class="pb-panel-link" style="display:none;border-color:var(--gold);color:var(--gold)">Import</button>
-          <button onclick="copyShareLink()" id="shareBinderBtn" class="pb-panel-link" style="display:none;border-color:var(--teal);color:var(--teal)">⬡ Share</button>
-          <button onclick="showPage('fairTrade');setMobileNav('')" class="pb-panel-link" style="border-color:var(--teal);color:var(--teal)">⇌ Trade Analyzer <span class="beta-badge">BETA</span></button>
-          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ Add Card</button>
+          <button onclick="copyShareLink()" id="shareBinderBtn" class="pb-panel-link" style="display:none;border-color:var(--teal);color:var(--teal)">Share</button>
+          <button onclick="showPage('fairTrade');setMobileNav('')" class="pb-panel-link" style="border-color:var(--teal);color:var(--teal)">Trade Analyzer <span class="beta-badge">BETA</span></button>
+          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
         </div>
       </div>
       <!-- List view search — only visible in list mode -->
@@ -4404,12 +4404,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div id="ftVerdict" style="font-size:.9rem;font-weight:700;letter-spacing:.06em;margin-top:6px;min-height:22px;transition:color .4s"></div>
           <!-- ── Coin Flip ── -->
           <div id="ftCoinFlipWrap" style="text-align:center;margin-top:14px">
-            <button id="ftCoinFlipBtn" onclick="ftFlipCoin()" style="
+            <div id="ftCoinFlipStatus" style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;min-height:18px;margin-bottom:6px;transition:color .2s"></div>
+            <button id="ftCoinFlipBtn" onclick="ftReadyToFlip()" style="
               padding:7px 18px;border:1px solid var(--border);background:transparent;
               color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;
               font-size:.7rem;cursor:pointer;letter-spacing:.06em;transition:all .15s
-            " onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-              onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+            " onmouseenter="if(!this.disabled){this.style.borderColor='var(--accent)';this.style.color='var(--accent)'}"
+              onmouseleave="if(!this.disabled){this.style.borderColor='var(--border)';this.style.color='var(--muted)'}">
               ⊙ COIN FLIP
             </button>
             <div id="ftCoinResult" style="margin-top:10px;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"></div>
@@ -6359,7 +6360,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`;
       };
 
-      const _dh = `<span class="ndash-drag-handle" title="Drag to move">⠿</span><button class="ndash-collapse-btn" title="Collapse panel" onclick="dashToggleCollapse(this)">▾</button>`;
+      const _dh = `<div style="display:flex;align-items:center;gap:3px;flex-shrink:0;margin-left:auto"><span class="ndash-drag-handle" title="Drag to move">⠿</span><button class="ndash-collapse-btn" title="Collapse panel" onclick="dashToggleCollapse(this)">▾</button></div>`;
 
       const content = document.getElementById('dashboardContent');
       if (!content) return;
@@ -6471,9 +6472,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
             <!-- Scan CTA -->
             <div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-cta" style="position:relative">
-              <div style="position:absolute;top:7px;right:8px;z-index:3;display:flex;align-items:center;gap:3px">
+              <div style="position:absolute;top:7px;right:8px;z-index:3;display:flex;align-items:center">
                 <span class="ndash-drag-handle" title="Drag to move" style="color:rgba(0,0,0,0.45);font-size:13px">⠿</span>
-                <button class="ndash-collapse-btn" title="Collapse panel" style="color:rgba(0,0,0,0.45)" onclick="dashToggleCollapse(this)">▾</button>
               </div>
               <div class="ndash-panel-body" style="padding:0">
                 <button class="ndash-scan-cta" onclick="showPage('addCard');setMobileNav('addCard')">
@@ -6942,6 +6942,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         var raw = localStorage.getItem(DASH_COLLAPSE_KEY);
         if (!raw) return;
         JSON.parse(raw).forEach(function(id) {
+          if (id === 'scan-cta') return; // SCAN CARD is never collapsible — skip stored state
           var p = document.querySelector('[data-panel-id="' + id + '"]');
           if (!p) return;
           p.classList.add('ndash-collapsed');
@@ -14510,10 +14511,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (results) results.style.display = state === 'results' ? '' : 'none';
 
       // If results just became visible, apply any buffered remote coin flip
-      if (state === 'results' && _ftPendingCoinFlip) {
-        var _pf = _ftPendingCoinFlip;
-        _ftPendingCoinFlip = null;
-        setTimeout(function() { _ftShowRemoteCoinFlip(_pf); }, 400);
+      if (state === 'results') {
+        _ftUpdateCoinFlipUI(); // set button label based on session state
+        if (_ftPendingCoinFlip) {
+          var _pf = _ftPendingCoinFlip;
+          _ftPendingCoinFlip = null;
+          setTimeout(function() { _ftShowRemoteCoinFlip(_pf); }, 400);
+        }
       }
 
       // Animation is CSS-driven — no JS needed
@@ -14889,8 +14893,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
 
         // ── Coin flip sync ───────────────────────────────────────────────
-        if (data.coin_flip && data.coin_flip.id && data.coin_flip.by !== role) {
-          _ftHandleRemoteCoinFlip(data.coin_flip);
+        if (data.coin_flip && data.coin_flip.id) {
+          var _cf = data.coin_flip;
+          if (_cf.phase === 'ready') {
+            _ftHandleFlipReady(_cf);
+          } else if (_cf.phase === 'flip' && _cf.by !== role) {
+            _ftHandleRemoteCoinFlip(_cf);
+          } else if (!_cf.phase && _cf.by && _cf.by !== role) {
+            _ftHandleRemoteCoinFlip(_cf); // legacy format
+          }
         }
 
         // ── Lock-in sync ─────────────────────────────────────────────────
@@ -15713,6 +15724,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var labelR = document.getElementById('ftLabelRight');
       if (labelL) labelL.textContent = '';
       if (labelR) labelR.textContent = '';
+      // Reset coin flip ready state
+      _ftFlipReadyA = false; _ftFlipReadyB = false; _ftFlipSessionId = null;
+      if (_ftFlipCountdownTimer) { clearInterval(_ftFlipCountdownTimer); _ftFlipCountdownTimer = null; }
+      _ftUpdateCoinFlipUI();
     }
 
     // ── Analyze: fetch prices from TCGPlayer + PriceCharting ─────────────
@@ -16151,34 +16166,152 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }, 40);
     }
 
-    async function ftFlipCoin() {
-      var btn = document.getElementById('ftCoinFlipBtn');
+    // ── Mutual-agree coin flip ───────────────────────────────────────────────
+    var _ftFlipReadyA       = false;
+    var _ftFlipReadyB       = false;
+    var _ftFlipCountdownTimer = null;
+    var _ftFlipSessionId    = null;
+
+    function _ftUpdateCoinFlipUI() {
+      var btn      = document.getElementById('ftCoinFlipBtn');
+      var statusEl = document.getElementById('ftCoinFlipStatus');
       if (!btn) return;
-      btn.disabled = true;
-      btn.style.opacity = '0.4';
 
-      var result = Math.random() < 0.5 ? 'heads' : 'tails';
-      // Generate a unique flip ID so peer can detect new flips
-      var flipId = Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-      _ftLastCoinFlipId = flipId;
-
-      // If in a P2P session, broadcast the result
-      if (_ftSession) {
-        try {
-          var { error: flipErr } = await sb.from('fair_trade_sessions').update({
-            coin_flip: { result: result, id: flipId, by: _ftSession.role }
-          }).eq('id', _ftSession.id);
-          if (flipErr) {
-            console.warn('[FairTrade] Coin flip sync failed:', flipErr.message,
-              '— run: alter table fair_trade_sessions add column if not exists coin_flip jsonb default null;');
-          }
-        } catch(e) {
-          console.warn('[FairTrade] Coin flip sync error:', e);
-        }
+      if (!_ftSession) {
+        // Solo mode: plain flip button
+        btn.textContent = '⊙ COIN FLIP';
+        btn.disabled    = false;
+        btn.style.opacity = '1';
+        btn.style.borderColor = 'var(--border)';
+        btn.style.color = 'var(--muted)';
+        if (statusEl) { statusEl.textContent = ''; statusEl.style.color = 'var(--muted)'; }
+        return;
       }
 
+      var iAmA      = _ftSession.role === 'a';
+      var myReady   = iAmA ? _ftFlipReadyA : _ftFlipReadyB;
+      var theirReady= iAmA ? _ftFlipReadyB : _ftFlipReadyA;
+      var theirName = (iAmA ? (_ftSession.nameB || 'Side B') : (_ftSession.nameA || 'Side A'));
+
+      if (_ftFlipReadyA && _ftFlipReadyB) {
+        btn.textContent = 'FLIPPING…';
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        if (statusEl) { statusEl.textContent = 'Both agreed — here we go!'; statusEl.style.color = 'var(--accent)'; }
+      } else if (myReady) {
+        btn.textContent = '⏳ WAITING FOR ' + theirName.toUpperCase().substring(0,14) + '…';
+        btn.disabled = true;
+        btn.style.opacity = '0.45';
+        btn.style.color = 'var(--muted)';
+        if (statusEl) { statusEl.textContent = 'Waiting for them to confirm…'; statusEl.style.color = 'var(--muted)'; }
+      } else if (theirReady) {
+        btn.textContent = '✓ CONFIRM FLIP';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.borderColor = 'var(--accent)';
+        btn.style.color = 'var(--accent)';
+        if (statusEl) { statusEl.textContent = theirName + ' is ready to flip!'; statusEl.style.color = 'var(--teal)'; }
+      } else {
+        btn.textContent = '⊙ READY TO FLIP';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.borderColor = 'var(--border)';
+        btn.style.color = 'var(--muted)';
+        if (statusEl) { statusEl.textContent = 'Both sides must agree before flipping.'; statusEl.style.color = 'var(--muted)'; }
+      }
+    }
+
+    async function ftReadyToFlip() {
+      if (!_ftSession) {
+        // Solo: flip immediately
+        var btn = document.getElementById('ftCoinFlipBtn');
+        if (!btn || btn.disabled) return;
+        btn.disabled = true; btn.style.opacity = '0.4';
+        var r = Math.random() < 0.5 ? 'heads' : 'tails';
+        _ftAnimateCoin(r, function() {
+          if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        });
+        return;
+      }
+
+      var iAmA = _ftSession.role === 'a';
+      if (iAmA) _ftFlipReadyA = true; else _ftFlipReadyB = true;
+      _ftUpdateCoinFlipUI();
+
+      // If both are now ready, kick off countdown
+      if (_ftFlipReadyA && _ftFlipReadyB) {
+        _ftTriggerCountdownFlip();
+        return;
+      }
+
+      // Broadcast my readiness (no result yet, just phase='ready')
+      var readyId = _ftFlipSessionId || ('ready_' + Date.now() + '_' + Math.random().toString(36).slice(2,6));
+      _ftFlipSessionId = readyId;
+      var payload = { phase: 'ready', ready_a: _ftFlipReadyA, ready_b: _ftFlipReadyB, id: readyId };
+      try {
+        await sb.from('fair_trade_sessions').update({ coin_flip: payload }).eq('id', _ftSession.id);
+      } catch(e) { console.warn('[FairTrade] flip-ready sync failed:', e); }
+    }
+
+    // Legacy alias kept for any old onclick references
+    function ftFlipCoin() { ftReadyToFlip(); }
+
+    function _ftHandleFlipReady(cf) {
+      if (!cf) return;
+      var prevBoth = _ftFlipReadyA && _ftFlipReadyB;
+      _ftFlipReadyA = !!cf.ready_a;
+      _ftFlipReadyB = !!cf.ready_b;
+      _ftFlipSessionId = cf.id;
+      _ftUpdateCoinFlipUI();
+      // Both newly ready — if we are role='a' we trigger the countdown
+      if (_ftFlipReadyA && _ftFlipReadyB && !prevBoth && !_ftFlipCountdownTimer) {
+        _ftTriggerCountdownFlip();
+      }
+    }
+
+    function _ftTriggerCountdownFlip() {
+      if (_ftFlipCountdownTimer) return;
+      var btn      = document.getElementById('ftCoinFlipBtn');
+      var statusEl = document.getElementById('ftCoinFlipStatus');
+      var n = 3;
+      function tick() {
+        if (btn) { btn.textContent = 'FLIPPING IN ' + n + '…'; btn.disabled = true; btn.style.opacity = '0.6'; }
+        if (statusEl) { statusEl.textContent = n > 0 ? 'Get ready!' : ''; statusEl.style.color = 'var(--accent)'; }
+        if (n <= 0) {
+          clearInterval(_ftFlipCountdownTimer);
+          _ftFlipCountdownTimer = null;
+          // Only role='a' pushes the result — single source of truth
+          if (_ftSession && _ftSession.role === 'a') _ftDoActualFlip();
+          // role='b' waits for next poll to receive the flip result
+          return;
+        }
+        n--;
+      }
+      tick();
+      _ftFlipCountdownTimer = setInterval(tick, 1000);
+    }
+
+    async function _ftDoActualFlip() {
+      var result = Math.random() < 0.5 ? 'heads' : 'tails';
+      var flipId  = 'flip_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      _ftLastCoinFlipId = flipId;
+      try {
+        await sb.from('fair_trade_sessions').update({
+          coin_flip: { phase: 'flip', result: result, id: flipId, by: _ftSession.role }
+        }).eq('id', _ftSession.id);
+      } catch(e) { console.warn('[FairTrade] flip sync failed:', e); }
+      _ftRunFlipAnimation(result, true);
+    }
+
+    function _ftRunFlipAnimation(result, resetReady) {
+      var btn = document.getElementById('ftCoinFlipBtn');
+      var statusEl = document.getElementById('ftCoinFlipStatus');
+      if (statusEl) statusEl.textContent = '';
       _ftAnimateCoin(result, function() {
-        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        if (resetReady) {
+          _ftFlipReadyA = false; _ftFlipReadyB = false; _ftFlipSessionId = null;
+        }
+        _ftUpdateCoinFlipUI();
       });
     }
 
@@ -16187,16 +16320,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var btn = document.getElementById('ftCoinFlipBtn');
       if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; }
       var res = document.getElementById('ftCoinResult');
-      var whoLabel = coinFlip.by === 'a' ? 'Side A' : 'Side B';
+      var whoLabel = coinFlip.by === 'a' ? (_ftSession && _ftSession.nameA ? _ftSession.nameA : 'Side A') : (_ftSession && _ftSession.nameB ? _ftSession.nameB : 'Side B');
       if (res) {
-        res.innerHTML = '<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:6px">' + whoLabel + ' flipped…</div>';
-        // Scroll the coin section into view so B doesn't miss it
+        res.innerHTML = '<div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;margin-bottom:6px">' + _escHtml(whoLabel) + ' flipped…</div>';
         setTimeout(function() { res.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
       }
       setTimeout(function() {
-        _ftAnimateCoin(coinFlip.result, function() {
-          if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
-        });
+        _ftRunFlipAnimation(coinFlip.result, true);
       }, 300);
     }
 
@@ -16204,9 +16334,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function _ftHandleRemoteCoinFlip(coinFlip) {
       if (!coinFlip || !coinFlip.id || coinFlip.id === _ftLastCoinFlipId) return;
       _ftLastCoinFlipId = coinFlip.id;
-
-      // If results section isn't visible yet (race: both-locked + coin flip in same poll
-      // cycle, analysis still loading), buffer and apply once results are shown
       var results = document.getElementById('ftResultsState');
       if (!results || results.style.display === 'none') {
         _ftPendingCoinFlip = coinFlip;
@@ -16250,7 +16377,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;transition:filter .15s;${owned?'':'filter:brightness(0.45) saturate(0.4)'}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -16608,11 +16735,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const ci    = ownedMap[card.id];
           const owned = !!ci;
           const qty   = ci ? (ci.quantity || 1) : 0;
-          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${owned?'1':'.45'}"
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
             onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
             onclick="openJpSetCardDetail(${idx})">
             ${card.image_url
-              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px">`
+              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper);':''}">`
               : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
             <div style="flex:1;min-width:0">
               <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
@@ -16712,32 +16839,44 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     async function addJpSetCardToCollection(idx) {
       const card = (window._jpSetDetailCards || [])[idx];
       if (!card || !currentUser) { showToast('Sign in to add cards'); return; }
-      document.getElementById('setCardDetailSheet')?.remove();
+      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('collector'); return; }
+
       const binderId = document.getElementById('jpSetCardBinderSelect')?.value || null;
-      const isJpCard = card.id.startsWith('jp-') || card.id.startsWith('pd-');
-      if (isJpCard) window._pendingJpCard = true;
-      pendingCollectionCard = {
-        apiCardId:    card.id,
-        cardName:     card.name     || '',
-        setName:      card.set_name || '',
-        setCode:      card.set_code || '',
-        cardNumber:   card.card_number || '',
-        cardImageUrl: card.image_url   || '',
-        gameType:     'pokemon',
-        language:     'JA',
+      document.getElementById('setCardDetailSheet')?.remove();
+
+      const row = {
+        user_id:        currentUser.id,
+        api_card_id:    card.id,
+        card_name:      card.name        || '',
+        set_name:       card.set_name    || '',
+        set_code:       card.set_code    || null,
+        card_number:    card.card_number || null,
+        card_image_url: card.image_url   || null,
+        game_type:      'pokemon',
+        condition:      'raw',
+        quantity:       1,
+        language:       'JA',
+        binder_id:      binderId ? binderId : null,
+        is_ghost:       false,
+        rarity:         card.rarity || null,
       };
-      const nameEl = document.getElementById('atcCardName');
-      if (nameEl) nameEl.textContent = (card.name || '?') + (card.set_name ? ' — ' + card.set_name : '');
-      const manualRow = document.getElementById('atcManualNameRow');
-      if (manualRow) manualRow.style.display = 'none';
-      document.getElementById('atcQuantity').value     = '1';
-      document.getElementById('atcPurchasePrice').value = '';
-      document.getElementById('atcPurchaseDate').value  = '';
-      document.getElementById('atcPriceUrl').value      = '';
-      document.getElementById('atcNotes').value         = '';
-      atcClearPhoto();
-      if (binderId) document.getElementById('atcBinderId').value = binderId;
-      document.getElementById('addToCollectionModal').style.display = 'flex';
+
+      let { data: newRow, error } = await sb.from('collection_items').insert(row).select('id').single();
+      // Schema fallback (missing language/rarity columns)
+      if (error) {
+        const badCol = (e) => ((e.message||'')+(e.details||'')+(e.hint||'')+(e.code||'')).toLowerCase();
+        if (badCol(error).includes('language') || badCol(error).includes('rarity') || badCol(error).includes('schema')) {
+          const { language: _l, rarity: _r, ...bare } = row;
+          const r2 = await sb.from('collection_items').insert(bare).select('id').single();
+          newRow = r2.data; error = r2.error;
+        }
+      }
+      if (error) { showToast('Error: ' + error.message); return; }
+
+      const fresh = { id: newRow.id, ...row };
+      collectionItems.unshift(fresh);
+      renderCollection();
+      showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
     }
 
     async function loadSetDetail(setId, setName) {
@@ -16908,7 +17047,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <option value="" style="background:#030c14;color:rgba(210,240,255,.88)">Unsorted</option>
                 ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : '<option value="" style="background:#030c14;color:rgba(0,229,255,.4)">— no binders yet —</option>'}
               </select>
-              <button onclick="openAddToCollectionFromSet(${idx})"
+              <button onclick="addSetCardDirectly(${idx})"
                 style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(0,229,255,.55);background:rgba(0,229,255,.08);color:#00E5FF;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
                 onmouseover="this.style.background='rgba(0,229,255,.18)'" onmouseout="this.style.background='rgba(0,229,255,.08)'">ADD CARD</button>
             </div>
@@ -16943,6 +17082,65 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         rarity:       card.rarity  || '',
         currentValue: bestPrice,
       });
+    }
+
+    async function addSetCardDirectly(idx) {
+      const card = window._setsDetailCards && window._setsDetailCards[idx];
+      if (!card) return;
+      if (!currentUser) { showToast('Sign in to add cards'); return; }
+      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('collector'); return; }
+
+      const b = document.getElementById('setCardBinderSelect')?.value || null;
+      document.getElementById('setCardDetailSheet')?.remove();
+
+      const bestPrice = (() => {
+        const tcgp = card.tcgplayer?.prices || {};
+        const cm   = card.cardmarket?.prices || {};
+        return tcgp.holofoil?.market || tcgp.normal?.market || cm.averageSellPrice || null;
+      })();
+
+      const row = {
+        user_id:        currentUser.id,
+        api_card_id:    card.id,
+        card_name:      card.name       || '',
+        set_name:       card.set?.name  || '',
+        set_code:       card.set?.id    || null,
+        card_number:    card.number     || null,
+        card_image_url: card.images?.small || null,
+        game_type:      'pokemon',
+        condition:      'raw',
+        quantity:       1,
+        language:       'EN',
+        binder_id:      b ? b : null,
+        is_ghost:       false,
+        rarity:         card.rarity || null,
+        current_value:  bestPrice || null,
+      };
+
+      // Auto-look up price URL
+      if (card.id) {
+        try {
+          const { data: pu } = await sb.from('card_price_urls').select('price_source_url').eq('api_card_id', card.id).maybeSingle();
+          if (pu?.price_source_url) row.price_source_url = pu.price_source_url;
+        } catch(_) {}
+      }
+
+      let { data: newRow, error } = await sb.from('collection_items').insert(row).select('id').single();
+      // Schema fallback (missing language/rarity columns)
+      if (error) {
+        const badCol = (e) => ((e.message||'')+(e.details||'')+(e.hint||'')+(e.code||'')).toLowerCase();
+        if (badCol(error).includes('language') || badCol(error).includes('rarity') || badCol(error).includes('schema')) {
+          const { language: _l, rarity: _r, ...bare } = row;
+          const r2 = await sb.from('collection_items').insert(bare).select('id').single();
+          newRow = r2.data; error = r2.error;
+        }
+      }
+      if (error) { showToast('Error: ' + error.message); return; }
+
+      const fresh = { id: newRow.id, ...row };
+      collectionItems.unshift(fresh);
+      renderCollection();
+      showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
     }
 
     async function addSetCardToBinder(idx) {
@@ -18555,8 +18753,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Extract card name — handles all Pokemon card name formats
     // ── Detect Japanese OCR text ─────────────────────────────────────────────
     function isJapaneseOcr(text) {
-      // True if the text contains CJK / kana characters
-      return /[　-鿿豈-﫿＀-￯]/.test(text);
+      // Require at least 4 CJK/kana chars to confidently declare JP mode.
+      // A single stray glyph on an English card shouldn't trigger the -0.35 penalty.
+      var cjkRe = /[　-鿿豈-﫿＀-￯]/g;
+      var matches = text.match(cjkRe);
+      return matches !== null && matches.length >= 4;
     }
 
     // ── Extract card name from Japanese OCR text ──────────────────────────────
