@@ -333,7 +333,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .modal{background:var(--surface);border:2px solid var(--border);border-radius:0;padding:26px;width:100%;max-width:460px;position:relative;max-height:92vh;overflow-y:auto;box-shadow:5px 5px 0 var(--shadow)}
     .modal h3{font-size:1.1rem;font-weight:700;margin-bottom:4px}
     .modal .modal-sub{color:var(--muted);font-size:.82rem;margin-bottom:18px}
-    .modal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;z-index:2}
+    .modal-close{position:absolute!important;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;z-index:10}
     .modal-close:hover{color:var(--text)}
     .form-group{margin-bottom:13px}
     .form-group label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:5px}
@@ -1765,7 +1765,7 @@ nav {
   z-index: -1;
 }
 /* keep modal content above scanlines */
-.modal > * { position: relative; z-index: 1; }
+.modal > *:not(.modal-close) { position: relative; z-index: 1; }
 .modal h3 { font-family: 'Space Mono', monospace; letter-spacing: 0.05em; color: var(--accent); }
 .modal-close { color: rgba(0,229,255,.4); }
 .modal-close:hover { color: #00E5FF; }
@@ -2265,7 +2265,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 [data-panel-id].ndash-drag-over{outline:2px solid var(--accent);outline-offset:-1px;box-shadow:0 0 0 1px var(--accent),3px 3px 0 #000}
 .ndash-main.ndash-col-over,.ndash-rail.ndash-col-over{outline:1.5px dashed var(--border);outline-offset:3px}
 /* Scan CTA wrapper (draggable) */
-.ndash-scan-wrap{border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important}
+.ndash-scan-wrap{border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important;margin-bottom:-6px}
 .ndash-scan-wrap .ndash-panel-h{justify-content:flex-end;padding:0 2px 4px!important;min-height:0!important}
 /* Reset layout button in ribbon */
 .ndash-reset-stat{border-right:none!important;padding:8px 10px!important;justify-content:flex-end;align-items:flex-end}
@@ -12457,81 +12457,99 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         : 'Raw';
 
       document.getElementById('binderDetailContent').innerHTML = `
-        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-          <div style="flex-shrink:0;text-align:center">
+        <!-- Top: image col + stats col -->
+        <div style="display:flex;gap:18px;align-items:flex-start;margin-bottom:16px">
+
+          <!-- Left: image + badge + notes -->
+          <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:8px;width:140px">
             ${(item.card_image_url || item.api_card_id)
-              ? `<img src="${item.card_image_url || 'data:,'}" style="max-height:220px;max-width:160px;border:1px solid var(--border);display:block;margin:0 auto;cursor:zoom-in"
+              ? `<img src="${item.card_image_url || 'data:,'}" style="max-height:200px;width:100%;object-fit:contain;border:1px solid var(--border);cursor:zoom-in;border-radius:2px"
                    onclick="if(this.src&&!this.src.startsWith('data:'))openImageLightbox(this.src)"
                    onerror="_binderImgFail(this,'${item.id}')">`
-              : `<div style="width:120px;height:168px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem">?</div>`}
-            <div style="margin-top:8px"><span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span></div>
+              : `<div style="width:100%;height:168px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem;border-radius:2px">?</div>`}
+            <span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>
+            ${item.notes ? `<div style="width:100%;padding:7px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;font-size:.65rem;color:var(--muted);line-height:1.5;word-break:break-word">${_escHtml(item.notes)}</div>` : ''}
           </div>
-          <div style="flex:1;min-width:200px">
-            <div style="font-size:1.05rem;color:var(--text);margin-bottom:4px">${item.card_name}</div>
-            ${item.set_name ? `<div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">${item.set_name}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-              <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" style="font-size:1rem">${val > 0 ? '$' + val.toFixed(2) : '—'}</div></div>
-              <div class="coll-stat-box"><div class="coll-stat-label">Cost Basis</div><div class="coll-stat-value" style="font-size:1rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
-              <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}" style="font-size:1rem">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
-              <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:1rem">${qty}</div></div>
-            </div>
-            ${item.cert_number ? `<div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Cert #: ${item.cert_number}</div>` : ''}
 
-            <!-- ── Price trend chart ── -->
+          <!-- Right: name + meta + stats + trend + price URL -->
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+            <div>
+              <div style="font-size:1rem;color:var(--text);font-weight:600;line-height:1.3;padding-right:28px">${_escHtml(item.card_name)}</div>
+              ${item.set_name ? `<div style="font-size:.75rem;color:var(--muted);margin-top:3px">${_escHtml(item.set_name)}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
+              ${item.cert_number ? `<div style="font-size:.68rem;color:var(--muted);margin-top:2px">Cert #${item.cert_number}</div>` : ''}
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" style="font-size:.95rem">${val > 0 ? '$' + val.toFixed(2) : '—'}</div></div>
+              <div class="coll-stat-box"><div class="coll-stat-label">Cost Basis</div><div class="coll-stat-value" style="font-size:.95rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
+              <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}" style="font-size:.95rem">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
+              <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:.95rem">${qty}</div></div>
+            </div>
+
+            <!-- Price trend -->
             ${hasPriceTracking()
-              ? `<div id="cardTrendSection_${item.id}" style="margin-bottom:14px">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <div style="font-size:.68rem;color:var(--accent);letter-spacing:.08em">// PRICE_TREND</div>
+              ? `<div id="cardTrendSection_${item.id}">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                    <div style="font-size:.65rem;color:var(--accent);letter-spacing:.08em">// PRICE_TREND</div>
                     <span id="cardTrendRange_${item.id}" style="font-size:.6rem;color:var(--muted)">Loading…</span>
                   </div>
-                  <svg id="cardTrendSvg_${item.id}" width="100%" height="80" style="display:block;overflow:visible;background:var(--surface2);border:1px solid var(--border)">
+                  <svg id="cardTrendSvg_${item.id}" width="100%" height="70" style="display:block;overflow:visible;background:var(--surface2);border:1px solid var(--border)">
                     <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="var(--muted)" font-family="Share Tech Mono,monospace">Fetching history…</text>
                   </svg>
                 </div>`
-              : `<div style="margin-bottom:14px;padding:10px;background:var(--surface2);border:1px dashed var(--border);text-align:center">
-                  <div style="font-size:.65rem;color:var(--muted)">// PRICE_TREND — <span style="color:var(--teal)">Collector+</span> feature</div>
-                  <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:6px;padding:4px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;cursor:pointer">Upgrade to unlock →</button>
+              : `<div style="padding:8px 10px;background:var(--surface2);border:1px dashed var(--border);text-align:center">
+                  <div style="font-size:.62rem;color:var(--muted)">// PRICE_TREND — <span style="color:var(--teal)">Collector+</span></div>
+                  <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:5px;padding:3px 10px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;cursor:pointer">Upgrade →</button>
                 </div>`}
 
-            <div style="margin-top:10px">
-              <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px;letter-spacing:.04em">Price_Source_URL</div>
-              <div style="display:flex;gap:8px;align-items:center">
+            <!-- Price source URL -->
+            <div>
+              <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Price_Source_URL</div>
+              <div style="display:flex;gap:6px;align-items:center">
                 <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
                   placeholder="PriceCharting or TCGPlayer URL"
-                  style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
+                  style="flex:1;padding:5px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;min-width:0" />
                 <button onclick="savePriceSourceUrl('${item.id}')"
-                  style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
-                ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.8rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
+                  style="padding:5px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;white-space:nowrap">Save</button>
+                ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.78rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
               </div>
             </div>
           </div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
-          <button onclick="openCardPhotoModal('${item.id}')"
-            style="padding:8px 18px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
-            onmouseover="this.style.background='rgba(0,204,255,.1)'"
-            onmouseout="this.style.background='transparent'">Update Photo</button>
-          <button onclick="closeModal('binderDetailModal');openEditCardModal('${item.id}')"
-            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
-            onmouseover="this.style.background='rgba(0,229,255,.08)'"
-            onmouseout="this.style.background='transparent'">✏ Edit Details</button>
-          <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
-            style="padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">+ List for Sale</button>
-          <button onclick="openSoldOfflineModal('${item.id}')"
-            style="padding:8px 18px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">$ Sold Offline</button>
-          ${tierAtLeast('vendor') && binders.length > 0 ? `<select onchange="moveCardToBinder('${item.id}',this.value);closeModal('binderDetailModal')"
-            style="padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">
+
+        <!-- Actions -->
+        <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="openCardPhotoModal('${item.id}')"
+              style="flex:1;min-width:120px;padding:7px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s;white-space:nowrap"
+              onmouseover="this.style.background='rgba(0,204,255,.1)'"
+              onmouseout="this.style.background='transparent'">Update Photo</button>
+            <button onclick="closeModal('binderDetailModal');openEditCardModal('${item.id}')"
+              style="flex:1;min-width:120px;padding:7px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s;white-space:nowrap"
+              onmouseover="this.style.background='rgba(0,229,255,.08)'"
+              onmouseout="this.style.background='transparent'">✏ Edit Details</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
+              style="flex:1;min-width:120px;padding:7px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>
+            <button onclick="openSoldOfflineModal('${item.id}')"
+              style="flex:1;min-width:120px;padding:7px 12px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">$ Sold Offline</button>
+          </div>
+          ${binders.length > 0 ? `<select onchange="moveCardToBinder('${item.id}',this.value);closeModal('binderDetailModal')"
+            style="width:100%;padding:7px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">
             <option value="">Move to binder…</option>
             <option value="">— All Cards —</option>
-            ${binders.map(b=>`<option value="${b.id}" ${String(item.binder_id)===String(b.id)?'selected':''}>${b.name}</option>`).join('')}
+            ${binders.map(b=>`<option value="${b.id}" ${String(item.binder_id)===String(b.id)?'selected':''}>${_escHtml(b.name)}</option>`).join('')}
           </select>` : ''}
-          <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
-            style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .15s"
-            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
-          <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
-            style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove Card</button>
-          <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
+          <div style="display:flex;gap:8px">
+            <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
+              style="flex:1;padding:7px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s;white-space:nowrap"
+              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
+            <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
+              style="flex:1;padding:7px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
+          </div>
+          <div id="binderRefreshStatus_${item.id}" style="font-size:.72rem;color:var(--muted);display:none"></div>
         </div>
       `;
       const titleEl2 = document.getElementById('binderDetailTitle');
@@ -16377,7 +16395,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -16739,7 +16757,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
             onclick="openJpSetCardDetail(${idx})">
             ${card.image_url
-              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper);':''}">`
+              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
               : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
             <div style="flex:1;min-width:0">
               <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
