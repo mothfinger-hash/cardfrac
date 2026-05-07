@@ -500,6 +500,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       /* Binder card detail: stack vertically on small screens */
       .bcd-top{flex-direction:column!important;align-items:center!important}
       .bcd-img-col{width:auto!important;max-width:160px;align-items:center}
+      .bcd-img-col>div[style*="aspect-ratio"]{width:140px!important}
       .bcd-stats-col{min-width:0!important;width:100%}
       .cart-bar,.batch-action-bar{padding:10px 14px}
       .revenue-grid{grid-template-columns:1fr 1fr}
@@ -3636,6 +3637,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <button class="lp-cta-primary" onclick="openAuthModal('signup')">START FREE</button>
           <button class="lp-cta-secondary" onclick="showPage('browse');setMobileNav('browse')">Browse Market</button>
         </div>
+        <div style="margin-top:10px;font-size:.7rem;color:var(--muted)">Already have an account? <a href="#" onclick="openModal('loginModal');return false" style="color:var(--accent);text-decoration:none">Sign In</a></div>
         <div style="margin-top:24px;display:flex;gap:24px;flex-wrap:wrap">
           <div>
             <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)" id="heroTotalCards">—</div>
@@ -4651,6 +4653,24 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </thead>
         <tbody id="listingsTable"></tbody>
       </table>
+    </div>
+
+    <!-- Image Backfill Tool -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">◈ Image Backfill</div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Repair missing card images for any user. Finds cards with <code>api_card_id</code> but no <code>card_image_url</code> and fills them from the catalog.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="adminBackfillUsername" placeholder="username or display name…"
+          style="flex:1;min-width:180px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--text);outline:none"
+          onkeydown="if(event.key==='Enter')adminBackfillUserImages()">
+        <button onclick="adminBackfillUserImages()"
+          style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:6px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">
+          Run Backfill
+        </button>
+      </div>
+      <div id="adminBackfillStatus" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);min-height:16px;line-height:1.6"></div>
     </div>
 
     <!-- Danger Zone -->
@@ -6238,7 +6258,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div style="text-align:center;padding:60px 20px">
             <div style="font-size:.8rem;color:var(--accent);letter-spacing:.1em;margin-bottom:12px">// DASHBOARD</div>
             <div style="color:var(--muted);font-size:.9rem;margin-bottom:24px">Sign in to view your dashboard, orders, and collection stats.</div>
-            <button onclick="openModal('authModal')"
+            <button onclick="openModal('loginModal')"
               style="padding:11px 28px;border:none;background:var(--accent);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
               Sign In →
             </button>
@@ -7501,9 +7521,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const condLabel = c.condition === 'graded' && c.grade_value
             ? `PSA ${c.grade_value}`
             : (c.condition||'').toUpperCase();
-          const img = c.card_image_url
-            ? `<img src="${c.card_image_url}" alt="${c.card_name}" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`+
-              `<div style="display:none;width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`
+          // Use 'data:,' to trigger onerror catalog fallback when url is missing but api_card_id exists
+          const _pbSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+          const img = _pbSrc
+            ? `<img src="${_pbSrc}" alt="${_escHtml(c.card_name)}" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`+
+              `<div class="pub-no-img" style="display:none;width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`
             : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`;
           const qtyBadge = c.quantity > 1
             ? `<span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.7);color:var(--text);font-size:.6rem;padding:1px 5px;border-radius:2px">×${c.quantity}</span>`
@@ -7524,7 +7546,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div style="margin-top:32px;padding:20px;background:var(--surface);border:1px solid var(--border);text-align:center">
             <div style="color:var(--accent);font-size:.9rem;margin-bottom:8px;letter-spacing:.08em">// BUILD YOUR OWN BINDER</div>
             <div style="color:var(--muted);font-size:.8rem;margin-bottom:16px">PathBinder is the card collector's portfolio tracker. Free to start.</div>
-            <button onclick="openModal('authModal');document.getElementById('authModalTab-register').click()"
+            <button onclick="openModal('registerModal')"
               style="padding:10px 28px;border:none;background:var(--accent);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
               Create Free Account →
             </button>
@@ -7548,7 +7570,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
             <div style="display:flex;gap:10px">
               <button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
-              ${currentUser ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>` : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`}
+              ${currentUser ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>` : `<button onclick="openModal('loginModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`}
             </div>
           </div>
 
@@ -7934,7 +7956,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div style="margin:32px 20px;padding:22px;background:var(--surface);border:1px solid var(--border);text-align:center;max-width:480px;margin-left:auto;margin-right:auto">
             <div style="color:var(--accent);font-size:.88rem;margin-bottom:8px;letter-spacing:.08em">// BUILD YOUR OWN COLLECTION</div>
             <div style="color:var(--muted);font-size:.8rem;margin-bottom:16px">Track your cards, monitor prices, and launch your own storefront with PathBinder.</div>
-            <button onclick="openModal('authModal');document.getElementById('authModalTab-register')?.click()"
+            <button onclick="openModal('registerModal')"
               style="padding:10px 28px;border:none;background:var(--accent);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
               Start Free →
             </button>
@@ -7944,7 +7966,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const backBtn = `<button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>`;
         const myBtn   = currentUser
           ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>`
-          : `<button onclick="openModal('authModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`;
+          : `<button onclick="openModal('loginModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`;
 
         el.innerHTML = `
           <!-- Banner -->
@@ -9830,6 +9852,66 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (error) { showToast('Error: ' + error.message); return; }
       showToast(`Deleted ${count} cards from ${label}'s collection`);
       loadAdminClearCollectionUsers(); // refresh counts
+    }
+
+    async function adminBackfillUserImages() {
+      if (!currentUser?.is_admin) return;
+      const val = (document.getElementById('adminBackfillUsername')?.value || '').trim();
+      const statusEl = document.getElementById('adminBackfillStatus');
+      if (!val || !statusEl) return;
+      statusEl.textContent = '// Looking up user…';
+
+      // Match by username or display name (case-insensitive)
+      const { data: profiles } = await sb.from('profiles')
+        .select('id, name, username')
+        .or(`username.ilike.%${val}%,name.ilike.%${val}%`)
+        .limit(5);
+
+      if (!profiles?.length) { statusEl.textContent = '// No matching user found.'; return; }
+
+      // If multiple matches, show the list so admin can be more specific
+      if (profiles.length > 1) {
+        statusEl.innerHTML = `// Multiple matches — be more specific:<br>` +
+          profiles.map(p => `&nbsp;• ${p.name || '—'} (@${p.username || '—'})`).join('<br>');
+        return;
+      }
+
+      const profile = profiles[0];
+      const label = profile.name || profile.username || profile.id;
+      statusEl.textContent = `// Found: ${label}. Fetching cards with missing images…`;
+
+      // Cards that have api_card_id but no card_image_url
+      const { data: items, error: fetchErr } = await sb.from('collection_items')
+        .select('id, card_name, api_card_id')
+        .eq('user_id', profile.id)
+        .not('api_card_id', 'is', null)
+        .is('card_image_url', null);
+
+      if (fetchErr) { statusEl.textContent = `// DB error: ${fetchErr.message}`; return; }
+      if (!items?.length) {
+        statusEl.textContent = `// ${label}: no cards need backfill (all have images or no api_card_id).`;
+        return;
+      }
+
+      statusEl.textContent = `// ${items.length} card(s) to backfill for ${label}. Running…`;
+      let fixed = 0, notFound = 0;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        statusEl.textContent = `// Backfilling ${i + 1}/${items.length}: ${item.card_name}…`;
+        try {
+          const { data: catRow } = await sb.from('catalog')
+            .select('image_url').eq('id', item.api_card_id).maybeSingle();
+          if (catRow?.image_url) {
+            await sb.from('collection_items')
+              .update({ card_image_url: catRow.image_url })
+              .eq('id', item.id);
+            fixed++;
+          } else { notFound++; }
+        } catch(_) { notFound++; }
+      }
+
+      statusEl.innerHTML = `// Done for <strong>${label}</strong>: ✓ ${fixed} backfilled${notFound ? `, ${notFound} not in catalog (may need manual entry)` : ''}.`;
     }
 
     function renderAdminTable() {
@@ -12588,11 +12670,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
           <!-- Left: image + badge + notes -->
           <div class="bcd-img-col" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:8px;width:130px">
-            ${(item.card_image_url || item.api_card_id)
-              ? `<img src="${_thumbUrl(item.card_image_url, 320) || 'data:,'}" style="max-height:200px;width:100%;object-fit:contain;border:1px solid var(--border);cursor:zoom-in;border-radius:2px"
-                   onclick="if(this.src&&!this.src.startsWith('data:'))openImageLightbox('${item.card_image_url}')"
+            <div style="width:130px;aspect-ratio:245/342;background:var(--surface2);border:1px solid var(--border);border-radius:2px;overflow:hidden;flex-shrink:0;cursor:${item.card_image_url ? 'zoom-in' : 'default'}"
+                 onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
+              ${(item.card_image_url || item.api_card_id)
+              ? `<img src="${_thumbUrl(item.card_image_url, 320) || 'data:,'}" style="width:100%;height:100%;object-fit:contain;display:block"
                    onerror="_binderImgFail(this,'${item.id}')">`
-              : `<div style="width:100%;height:168px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem;border-radius:2px">?</div>`}
+              : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem">?</div>`}
+            </div>
             <span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>
             ${item.notes ? `<div style="width:100%;padding:7px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;font-size:.65rem;color:var(--muted);line-height:1.5;word-break:break-word">${_escHtml(item.notes)}</div>` : ''}
           </div>
@@ -16202,6 +16286,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Looks up the current image from the catalog via api_card_id,
     // patches the <img> src, and silently updates the DB record so the
     // stale URL is fixed for next time.
+    // Catalog fallback for PUBLIC binder views — no collectionItems needed
+    window._publicImgFail = async function(el, apiCardId) {
+      el.onerror = null;
+      const noImg = el.nextElementSibling;
+      if (!apiCardId) {
+        el.style.display = 'none';
+        if (noImg?.classList.contains('pub-no-img')) noImg.style.display = 'flex';
+        return;
+      }
+      try {
+        const { data: catRow } = await sb.from('catalog').select('image_url').eq('id', apiCardId).maybeSingle();
+        if (catRow?.image_url) {
+          el.src = catRow.image_url;
+        } else {
+          el.style.display = 'none';
+          if (noImg?.classList.contains('pub-no-img')) noImg.style.display = 'flex';
+        }
+      } catch(_) {
+        el.style.display = 'none';
+        if (noImg?.classList.contains('pub-no-img')) noImg.style.display = 'flex';
+      }
+    };
+
     window._binderImgFail = async function(el, itemId) {
       el.onerror = null; // prevent infinite loop
       const item = collectionItems.find(c => String(c.id) === String(itemId));
