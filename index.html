@@ -7538,7 +7538,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <img src="${img}" alt="${_escHtml(c.card_name)}"
               title="Click to enlarge" style="max-width:200px;width:100%;height:auto;border:1px solid rgba(0,229,255,.35);border-radius:4px;box-shadow:0 0 24px rgba(0,229,255,.22),0 0 60px rgba(0,229,255,.08);cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
-              onclick="openImageLightbox('${img}')">
+              onclick="openImageLightbox('${img}')"
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(0,229,255,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
@@ -13302,15 +13303,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           if (mapRow?.pd_code) {
             const numPadded = String(parseInt(card.number)).padStart(3, '0');
             const { data: catRow } = await sb.from('catalog')
-              .select('image_url')
+              .select('image_url, name')
               .eq('set_code', mapRow.pd_code)
               .eq('card_number', numPadded)
               .like('id', 'en-%')
               .maybeSingle();
-            if (catRow?.image_url) {
+            // Guard: only use catalog image if the name matches — prevents wrong-card swaps
+            // (e.g. catalog mis-numbered so card #044 is Magikarp instead of Bulbasaur)
+            const nameMatch = catRow?.name && card.name &&
+              catRow.name.toLowerCase() === card.name.toLowerCase();
+            if (catRow?.image_url && nameMatch) {
               imgSmall = catRow.image_url;
               imgLarge = catRow.image_url;
               console.log(`[catalog] using hosted image for ${card.set.id}/${card.number}`);
+            } else if (catRow?.image_url && !nameMatch) {
+              console.warn(`[catalog] name mismatch for ${card.set.id}/${card.number}: API="${card.name}" catalog="${catRow.name}" — keeping API image`);
             }
           }
         } catch (_) {}
@@ -13375,7 +13382,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               title="Click to enlarge"
               style="max-width:200px;width:100%;height:auto;border:1px solid rgba(0,229,255,.35);border-radius:4px;box-shadow:0 0 24px rgba(0,229,255,.22),0 0 60px rgba(0,229,255,.08);cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
-              onclick="openImageLightbox('${imgLarge}')">
+              onclick="openImageLightbox('${imgLarge}')"
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(0,229,255,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <div style="text-align:center;margin-bottom:12px">
             <div style="font-size:.9rem;font-weight:700;color:rgba(210,240,255,.95);margin-bottom:5px">${_escHtml(card.name)}</div>
@@ -16311,7 +16319,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           ${card.image_url ? `<div style="display:flex;justify-content:center;margin-bottom:16px">
             <img src="${card.image_url}" alt="${_escHtml(card.name||'')}"
               style="max-width:200px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 24px var(--copper-glow);cursor:zoom-in"
-              onclick="openImageLightbox('${card.image_url}')">
+              onclick="openImageLightbox('${card.image_url}')"
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(184,115,51,.04);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <div style="text-align:center;margin-bottom:16px">
             <div style="font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:5px">${_escHtml(card.name || '—')}</div>
@@ -16509,7 +16518,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               title="Click to enlarge"
               style="max-width:200px;width:100%;height:auto;border:1px solid rgba(0,229,255,.35);border-radius:4px;box-shadow:0 0 24px rgba(0,229,255,.22),0 0 60px rgba(0,229,255,.08);cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
-              onclick="openImageLightbox('${card.images?.large || img}')">
+              onclick="openImageLightbox('${card.images?.large || img}')"
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(0,229,255,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
@@ -17861,7 +17871,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           ${m.image_url ? `<div style="display:flex;justify-content:center;margin-bottom:14px">
             <img src="${m.image_url}" alt="${m.name || ''}"
               style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 20px var(--copper-glow)"
-              onclick="openImageLightbox('${m.image_url}')">
+              onclick="openImageLightbox('${m.image_url}')"
+              onerror="this.parentElement.innerHTML='<div style=\\'width:180px;height:252px;background:rgba(184,115,51,.06);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.25\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <!-- info -->
           <div style="text-align:center;margin-bottom:16px">
