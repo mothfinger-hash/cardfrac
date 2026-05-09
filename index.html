@@ -1004,19 +1004,47 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-stack-front img{width:100%;display:block}
     .ft-card-no-img{width:100%;aspect-ratio:63/88;background:var(--surface);display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:.8rem;color:var(--muted);text-align:center;padding:12px;box-sizing:border-box}
 
-    /* Pure opacity crossfade — no translate, no scale. The card stays
-       in place and dissolves to/from the back stack underneath, which
-       is the calmest possible transition. */
-    @keyframes ftSlideNext     {from{opacity:0}to{opacity:1}}
-    @keyframes ftSlidePrev     {from{opacity:0}to{opacity:1}}
-    @keyframes ftSlideOutLeft  {from{opacity:1}to{opacity:0}}
-    @keyframes ftSlideOutRight {from{opacity:1}to{opacity:0}}
-    .ft-stack-front.slide-next     {animation:ftSlideNext     .26s ease-out both}
-    .ft-stack-front.slide-prev     {animation:ftSlidePrev     .26s ease-out both}
-    .ft-stack-front.slide-out-left {animation:ftSlideOutLeft  .18s ease-in  both}
-    .ft-stack-front.slide-out-right{animation:ftSlideOutRight .18s ease-in  both}
-    /* Back-card fan rotation matches so any reshuffle feels coherent. */
-    .ft-stack-back{transition:transform .32s ease-out}
+    /* True card-shuffle animation. The front card translates fully off
+       the screen with a slight rotation. The back cards smoothly rotate
+       forward by one position (back-1 → 0deg, back-2 → 5deg, back-3 →
+       9deg) so what was "second from top" becomes the new visible top
+       — no fade-in needed because that card was already there. After
+       the swipe, content updates and positions reset; the swiped card
+       reappears subtly at back-1 so the visible deck stays full.
+
+       Phase 1 (0% → 100%): the front card flies off-screen entirely.
+       The "slide-next" class triggers exit-left (card goes left, ie.
+       advancing to the next card visually slides current off to the
+       left); "slide-prev" goes right. */
+    @keyframes ftSwipeOffLeft {
+      0%   { transform: translateX(0)     rotate(0deg); }
+      100% { transform: translateX(-180%) rotate(-12deg); }
+    }
+    @keyframes ftSwipeOffRight {
+      0%   { transform: translateX(0)    rotate(0deg); }
+      100% { transform: translateX(180%) rotate(12deg); }
+    }
+    .ft-stack-front.swipe-out-left  { animation: ftSwipeOffLeft  .36s cubic-bezier(0.45,0,0.55,1) forwards; }
+    .ft-stack-front.swipe-out-right { animation: ftSwipeOffRight .36s cubic-bezier(0.45,0,0.55,1) forwards; }
+
+    /* While the front is swiping, the back cards smoothly rotate
+       forward by one slot, so the user sees the second-from-top card
+       straighten up into the front position. No fade — pure transform. */
+    .ft-stack-wrap.is-shuffling .ft-stack-back-1 { transform: rotate(0deg);  z-index: 2; }
+    .ft-stack-wrap.is-shuffling .ft-stack-back-2 { transform: rotate(5deg);  z-index: 1; }
+    .ft-stack-wrap.is-shuffling .ft-stack-back-3 { transform: rotate(9deg);  z-index: 0; }
+    /* Back-card transitions match the front's swipe duration so they
+       arrive together. */
+    .ft-stack-back { transition: transform .36s cubic-bezier(0.45,0,0.55,1); }
+
+    /* After the swipe + content swap, the front element re-appears
+       at back-1 position with a brief fade so it slots in cleanly
+       behind the new top. */
+    @keyframes ftAppearAtBack {
+      0%   { transform: translateX(0) rotate(5deg); opacity: 0; }
+      100% { transform: translateX(0) rotate(5deg); opacity: 1; }
+    }
+    .ft-stack-front.appear-at-back { animation: ftAppearAtBack .22s ease-out forwards; }
 
     /* Nav arrows — float just outside the card edges */
     .ft-nav-btn{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s;line-height:1}
@@ -1209,11 +1237,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
 
     /* ── Icons ── */
-    .bsb-icon{width:38px;height:38px;border-radius:4px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.12);flex-shrink:0;transition:border-color 0.15s,box-shadow 0.15s;position:relative}
+    .bsb-icon{width:38px;height:38px;border-radius:4px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.12);flex-shrink:0;transition:border-color 0.15s,box-shadow 0.15s,transform 0.18s cubic-bezier(0.34,1.56,0.64,1);position:relative;transform-origin:center center}
     .bsb-icon img{width:100%;height:100%;object-fit:cover}
     .bsb-icon .bsb-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.5rem;font-family:'Press Start 2P',monospace;text-align:center;padding:3px;line-height:1.2;word-break:break-all}
     .bsb-icon.active{border-color:#00E5FF;box-shadow:0 0 8px rgba(0,229,255,.35)}
-    .bsb-icon.bsb-drag-over{border-color:#FF5722!important;box-shadow:0 0 0 3px rgba(255,87,34,.45)!important;outline:2px solid #FF5722}
+    /* Drag-over: enlarge the hovered binder 1.5x with a snappy spring
+       so the user clearly sees which binder is the drop target. */
+    .bsb-icon.bsb-drag-over{transform:scale(1.5);border-color:#FF5722!important;box-shadow:0 0 0 3px rgba(255,87,34,.45),0 4px 12px rgba(0,0,0,.4)!important;outline:2px solid #FF5722;z-index:50}
     .bsb-add{background:transparent;border:2px dashed rgba(255,255,255,.18);color:rgba(255,255,255,.3);font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .bsb-add:hover{border-color:#00E5FF;color:#00E5FF}
     /* Sets autocomplete */
@@ -11246,10 +11276,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const condLabel = isGraded
         ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
         : 'Raw';
-      return `<div class="acg-card${isGhost ? ' ghost-card' : ''}" onclick="openBinderCardDetail('${item.id}')">
+      return `<div class="acg-card${isGhost ? ' ghost-card' : ''}"
+        draggable="true"
+        ondragstart="allCardsDragStart(event,'${item.id}')"
+        ondragend="allCardsDragEnd(event)"
+        onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
         <div class="acg-card-art">
           ${item.card_image_url
-            ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async">`
+            ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" draggable="false">`
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">${isGhost ? '♡' : '?'}</div>`}
           ${isGhost
             ? `<span class="want-badge" style="position:absolute;top:3px;right:3px;font-size:.44rem;padding:1px 4px">WANT</span>`
@@ -11800,10 +11834,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       event.dataTransfer.setData('text/plain', String(itemId));
       event.dataTransfer.effectAllowed = 'move';
 
-      // Use the card image as the drag ghost so it feels physical
+      // Render a small card-shaped drag ghost so the dragged image
+      // doesn't obscure the drop targets in grid view. The browser
+      // snapshots whatever element we pass to setDragImage at this
+      // moment; we then remove the element from the DOM.
       const img = event.currentTarget.querySelector('img');
       if (img && img.complete && img.naturalWidth > 0) {
-        event.dataTransfer.setDragImage(img, img.offsetWidth / 2, img.offsetHeight / 2);
+        const GHOST_W = 90;                              // card-aspect 63:88
+        const GHOST_H = Math.round(GHOST_W * 88 / 63);   // ≈ 126
+        const ghost = document.createElement('div');
+        ghost.style.cssText =
+          'position:absolute;top:-9999px;left:-9999px;' +
+          'width:' + GHOST_W + 'px;height:' + GHOST_H + 'px;' +
+          'background:#1a1a1a center/cover no-repeat url("' + img.src + '");' +
+          'border:2px solid #00E5FF;border-radius:4px;' +
+          'box-shadow:0 6px 16px rgba(0,0,0,.6);' +
+          'transform:rotate(-3deg);';
+        document.body.appendChild(ghost);
+        event.dataTransfer.setDragImage(ghost, GHOST_W / 2, GHOST_H / 2);
+        // Browser has already snapshotted; safe to remove on next tick
+        setTimeout(function() { ghost.remove(); }, 0);
       }
 
       event.currentTarget.classList.add('dragging');
@@ -12282,7 +12332,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         startX = t.clientX;
         startY = t.clientY;
 
-        // Long-press threshold: 180 ms (snappier pick-up)
+        // Long-press threshold: 90 ms (halved from 180ms for snappier pick-up)
         timer = setTimeout(() => {
           active = true;
           clone = card.cloneNode(true);
@@ -12299,7 +12349,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           card.style.opacity = '0.25';
           document.body.style.overflow = 'hidden'; // lock scroll while dragging
           if (navigator.vibrate) navigator.vibrate(35);
-        }, 180);
+        }, 90);
       }, { passive: true });
 
       document.addEventListener('touchmove', e => {
@@ -15526,16 +15576,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return '<div class="ft-stack-back ' + cls + '">' + face + '</div>';
       }
 
+      // Back cards show the NEXT cards in the deck (idx+1, idx+2, idx+3)
+      // so when the front swipes off, the card already visible underneath
+      // IS the next card — no fade-in or content swap needed at the front
+      // position to feel seamless.
       var backs = '';
       if (cards.length >= 2) {
-        var _b1 = cards[(idx - 1 + cards.length) % cards.length];
+        var _b1 = cards[(idx + 1) % cards.length];
         backs = _backLayer(_b1, 'ft-stack-back-1');
         if (cards.length >= 3) {
-          var _b2 = cards[(idx - 2 + cards.length) % cards.length];
+          var _b2 = cards[(idx + 2) % cards.length];
           backs = _backLayer(_b2, 'ft-stack-back-2') + backs;
         }
         if (cards.length >= 4) {
-          var _b3 = cards[(idx - 3 + cards.length) % cards.length];
+          var _b3 = cards[(idx + 3) % cards.length];
           backs = _backLayer(_b3, 'ft-stack-back-3') + backs;
         }
       }
@@ -15628,12 +15682,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       var card = cards[newIdx];
-      var exitCls  = dir > 0 ? 'slide-out-left'  : 'slide-out-right';
-      var enterCls = dir > 0 ? 'slide-next'       : 'slide-prev';
+      // Direction: NEXT (dir > 0) swipes the front card off to the LEFT,
+      // PREV swipes off to the RIGHT.
+      var exitCls = dir > 0 ? 'swipe-out-left' : 'swipe-out-right';
 
-      // ── Step 1: exit animation ────────────────────────────────────────────
-      // Clear any leftover animation classes first
-      front.classList.remove('slide-next','slide-prev','slide-out-left','slide-out-right');
+      // ── Step 1: front swipes fully off-screen + back stack rotates
+      //   forward by one slot. Back-1 transitions from rotate(5deg) to
+      //   rotate(0deg) (becomes new visible top), back-2 to rotate(5),
+      //   back-3 to rotate(9). Triggered by .is-shuffling on the wrap.
+      front.classList.remove('swipe-out-left','swipe-out-right','appear-at-back');
+      stack.classList.add('is-shuffling');
       front.classList.add(exitCls);
 
       setTimeout(function() {
@@ -15682,9 +15740,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           qtyBadge.remove();
         }
 
-        // ── Step 3: update back-card images in-place ──────────────────────
+        // ── Step 3: update back-card images in-place. Back cards show
+        //   the NEXT cards (offsets +1, +2, +3) so the visible card
+        //   underneath the front IS the one we're swiping toward. ──
         var backs = stack.querySelectorAll('.ft-stack-back');
-        var offsets = [-1, -2, -3];
+        var offsets = [1, 2, 3];
         backs.forEach(function(backEl, i) {
           var bc = cards[(newIdx + offsets[i] + cards.length) % cards.length];
           if (!bc) return;
@@ -15718,17 +15778,24 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           }
         }
 
-        // ── Step 5: enter animation ────────────────────────────────────────
+        // ── Step 5: snap back-card transitions off, reset the wrap, and
+        //   re-flow so back cards return to their default rotations
+        //   (5°/9°/13°) instantly. The new front element (which now
+        //   has the SAME content that was visible at back-1's
+        //   rotate(0) position mid-animation) covers this snap, so
+        //   the user sees a seamless continuation, not a fade-in. ──
+        var backs2 = stack.querySelectorAll('.ft-stack-back');
+        backs2.forEach(function(b) { b.style.transition = 'none'; });
+        stack.classList.remove('is-shuffling');
         front.classList.remove(exitCls);
-        // Force reflow so removing exitCls and adding enterCls are separate frames
-        void front.offsetWidth;
-        front.classList.add(enterCls);
-        setTimeout(function() { front.classList.remove(enterCls); }, 280);
+        // Force reflow so transitions restart cleanly on next interaction.
+        void stack.offsetWidth;
+        backs2.forEach(function(b) { b.style.transition = ''; });
 
         // ── Step 6: preload neighbours of the new position ────────────────
         _ftPreloadAdjacent(side);
 
-      }, 180); // matches exit animation duration (.18s)
+      }, 360); // matches swipe-off animation duration (.36s)
     }
 
     // Show lock-in buttons (session mode) or analyze button (solo mode)
