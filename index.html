@@ -1110,22 +1110,39 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       #ftBreakdownContent table{font-size:.68rem}
       #ftBreakdownContent td,#ftBreakdownContent th{padding:4px 5px}
 
-      /* Loading animation */
-      .ft-loading-anim{display:block;margin:0 auto}
-      @keyframes ftMagSweep{
-        0%  {transform:translate(0,0)   rotate(-12deg)}
-        30% {transform:translate(44px,-10px) rotate(8deg)}
-        60% {transform:translate(22px,18px)  rotate(-6deg)}
-        100%{transform:translate(0,0)   rotate(-12deg)}
-      }
-      @keyframes ftGlint{
-        0%,80%,100%{opacity:0}
-        40%{opacity:.7}
-      }
-      @keyframes ftFilePop{
-        0%,100%{transform:scaleY(1)}
-        50%{transform:scaleY(1.04) translateY(-2px)}
-      }
+      /* Balance scale labels: larger hit targets */
+      #ftVerdict{font-size:.8rem;padding:0 8px;text-align:center}
+    }
+    @media(max-width:380px){
+      .ft-sides-grid{gap:8px}
+      #ftSessionBanner{padding:10px 12px}
+    }
+
+    /* Loading animation — PathBinder magnifying glass over both cards.
+       Layout primitives only — JS (_ftStartMagAnim) drives the motion
+       and computes the layout vars to sync the lens with the magglass
+       image, so the price-fetch end-of-cycle can be timed to it. */
+    .ft-mag-scene{
+      position:relative;
+      width:100%;
+      max-width:560px;
+      aspect-ratio:1061/714;
+      background:#0a0d1a;
+      border:1px solid #1e293b;
+      border-radius:8px;
+      overflow:hidden;
+      margin:0 auto;
+      font-family:'Space Mono','Share Tech Mono',ui-monospace,monospace;
+    }
+    @media(max-width:600px){.ft-mag-scene{max-width:480px}}
+    .ft-mag-base{position:absolute;inset:0;background-image:url('trade_cards.webp');background-size:60% auto;background-position:center;background-repeat:no-repeat}
+    .ft-mag-lens{position:absolute;left:0;top:0;width:var(--ftmg-w);height:var(--ftmg-h);pointer-events:none;will-change:transform;transform:translate(-9999px,-9999px)}
+    .ft-mag-lens-zoom{position:absolute;left:var(--ftmg-lens-l);top:var(--ftmg-lens-t);width:var(--ftmg-lens-d);height:var(--ftmg-lens-d);border-radius:50%;overflow:hidden;background:#0a0d1a}
+    .ft-mag-lens-zoom::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.18), transparent 50%),radial-gradient(circle at 50% 50%, transparent 55%, rgba(34,211,238,.18) 78%, rgba(0,0,0,.45) 100%);mix-blend-mode:screen}
+    .ft-mag-lens-img{position:absolute;width:calc(var(--ftmg-scene-w) * 2);height:calc(var(--ftmg-scene-h) * 2);transform-origin:0 0;background-image:url('trade_cards.webp');background-size:60% auto;background-position:center;background-repeat:no-repeat;will-change:transform;filter:saturate(1.15) contrast(1.05)}
+    .ft-mag-lens-frame{position:absolute;left:0;top:0;width:var(--ftmg-w);height:var(--ftmg-h);background-image:url('mag_glass.webp');background-size:100% 100%;pointer-events:none}
+    .ft-mag-label-top{position:absolute;top:12px;left:16px;font-size:10px;letter-spacing:.18em;font-weight:700;color:#06b6d4;text-shadow:1px 1px 0 #000}
+    .ft-mag-label-bot{position:absolute;bottom:12px;left:16px;font-size:11px;letter-spacing:.1em;color:#94a3b8}
 
       /* Balance scale labels: larger hit targets */
       #ftVerdict{font-size:.8rem;padding:0 8px;text-align:center}
@@ -4281,58 +4298,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </div>
       </div>
 
-      <!-- ── STATE 2: loading animation (desktop / mobile GIF variants) ── -->
+      <!-- ── STATE 2: PathBinder magnifying-glass over both cards ── -->
       <div id="ftLoadingState" style="display:none;text-align:center;padding:16px 0 12px">
-        <!-- Magnifying glass over files animation -->
-        <svg class="ft-loading-anim" width="240" height="180" viewBox="0 0 240 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <!-- File stack — back -->
-          <g style="animation:ftFilePop 2.8s ease-in-out 0.3s infinite">
-            <rect x="38" y="72" width="74" height="94" rx="3" fill="#091820" stroke="rgba(0,229,255,.18)" stroke-width="1"/>
-            <rect x="38" y="72" width="74" height="10" rx="3" fill="rgba(0,229,255,.06)"/>
-            <line x1="50" y1="96" x2="100" y2="96" stroke="rgba(0,229,255,.15)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="50" y1="106" x2="100" y2="106" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="50" y1="116" x2="88" y2="116" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="50" y1="126" x2="96" y2="126" stroke="rgba(0,229,255,.08)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="50" y1="136" x2="80" y2="136" stroke="rgba(0,229,255,.08)" stroke-width="1.5" stroke-linecap="round"/>
-          </g>
-          <!-- File stack — middle -->
-          <g style="animation:ftFilePop 2.8s ease-in-out 0.15s infinite">
-            <rect x="48" y="64" width="74" height="94" rx="3" fill="#091e2a" stroke="rgba(0,229,255,.24)" stroke-width="1"/>
-            <rect x="48" y="64" width="74" height="10" rx="3" fill="rgba(0,229,255,.08)"/>
-            <line x1="60" y1="88" x2="110" y2="88" stroke="rgba(0,229,255,.18)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="60" y1="98" x2="110" y2="98" stroke="rgba(0,229,255,.13)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="60" y1="108" x2="98" y2="108" stroke="rgba(0,229,255,.13)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="60" y1="118" x2="106" y2="118" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="60" y1="128" x2="90" y2="128" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
-          </g>
-          <!-- File stack — front -->
-          <g style="animation:ftFilePop 2.8s ease-in-out infinite">
-            <rect x="58" y="56" width="74" height="94" rx="3" fill="#0a2030" stroke="rgba(0,229,255,.35)" stroke-width="1.2"/>
-            <!-- Folded corner -->
-            <path d="M118 56 L132 70 L118 70 Z" fill="#091820" stroke="rgba(0,229,255,.22)" stroke-width="1"/>
-            <rect x="58" y="56" width="60" height="10" rx="3" fill="rgba(0,229,255,.1)"/>
-            <line x1="70" y1="80" x2="120" y2="80" stroke="rgba(0,229,255,.28)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="70" y1="90" x2="120" y2="90" stroke="rgba(0,229,255,.2)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="70" y1="100" x2="108" y2="100" stroke="rgba(0,229,255,.2)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="70" y1="110" x2="116" y2="110" stroke="rgba(0,229,255,.15)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="70" y1="120" x2="98" y2="120" stroke="rgba(0,229,255,.15)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="70" y1="130" x2="112" y2="130" stroke="rgba(0,229,255,.1)" stroke-width="1.5" stroke-linecap="round"/>
-          </g>
-          <!-- Magnifying glass — sweeps across -->
-          <g style="animation:ftMagSweep 2.8s ease-in-out infinite;transform-origin:95px 100px">
-            <!-- lens glow -->
-            <circle cx="88" cy="88" r="34" fill="rgba(0,229,255,.04)" stroke="none"/>
-            <!-- lens rim -->
-            <circle cx="88" cy="88" r="28" fill="rgba(5,20,34,.72)" stroke="#00E5FF" stroke-width="2.5"/>
-            <!-- inner lens sheen -->
-            <circle cx="88" cy="88" r="24" fill="none" stroke="rgba(0,229,255,.12)" stroke-width="8"/>
-            <!-- glint -->
-            <ellipse cx="79" cy="80" rx="5" ry="3" fill="white" style="animation:ftGlint 2.8s ease-in-out infinite" transform="rotate(-30 79 80)" opacity="0"/>
-            <!-- handle -->
-            <line x1="110" y1="110" x2="130" y2="132" stroke="#00E5FF" stroke-width="5" stroke-linecap="round"/>
-            <line x1="110" y1="110" x2="130" y2="132" stroke="rgba(0,229,255,.35)" stroke-width="9" stroke-linecap="round"/>
-          </g>
-        </svg>
+        <div class="ft-mag-scene" id="ftMagScene">
+          <div class="ft-mag-base"></div>
+          <div class="ft-mag-lens" id="ftMagLens">
+            <div class="ft-mag-lens-zoom">
+              <div class="ft-mag-lens-img" id="ftMagLensImg"></div>
+            </div>
+            <div class="ft-mag-lens-frame"></div>
+          </div>
+          <div class="ft-mag-label-top">⌬ TRADE LOCKED · INSPECTING</div>
+          <div class="ft-mag-label-bot" id="ftMagStatus">&gt; INITIALIZING</div>
+        </div>
         <div id="ftLoadingMsg" style="font-size:.82rem;color:var(--muted);margin-top:12px;letter-spacing:.04em">Checking prices…</div>
         <div id="ftLoadingProgress" style="font-size:.72rem;color:var(--muted);margin-top:4px"></div>
       </div>
@@ -14997,7 +14975,121 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
       }
 
-      // Animation is CSS-driven — no JS needed
+      // Start the mag-glass animation when entering loading state
+      if (state === 'loading') _ftStartMagAnim();
+      else                     _ftStopMagAnim();
+    }
+
+    // ── PathBinder magnifying-glass animation ──────────────────────
+    // Sweeps the magglass image down→up over each of the two cards in
+    // trade_cards.webp, with a 2× lens-zoom view tracking the position.
+    // Returns a Promise that resolves when one full cycle completes —
+    // the analyze flow awaits this before transitioning to results so
+    // the animation always plays through, even if prices fetch faster.
+    var _ftMagAnimRaf = null;
+    var _ftMagAnimResolve = null;
+    var _ftMagAnimPromise = null;
+
+    function _ftStartMagAnim() {
+      var scene = document.getElementById('ftMagScene');
+      if (!scene) { _ftMagAnimPromise = Promise.resolve(); return _ftMagAnimPromise; }
+
+      var lens    = document.getElementById('ftMagLens');
+      var lensImg = document.getElementById('ftMagLensImg');
+      var status  = document.getElementById('ftMagStatus');
+
+      // Tunables (matched to trade-anim-preview.html)
+      var LENS_CX = 0.285, LENS_CY = 0.395, LENS_R = 0.190;
+      var CARD1_X = 0.35,  CARD2_X = 0.65;
+      var CARD_TOP_Y = 0.30, CARD_BOT_Y = 0.70;
+      var MAG_W_PCT = 0.504, ZOOM = 2.0;
+      var P_DOWN_1 = 1500, P_UP_1 = 1100, P_SLIDE = 1000;
+      var P_DOWN_2 = 1500, P_UP_2 = 1100, P_HOLD  = 1000;
+      var TOTAL = P_DOWN_1 + P_UP_1 + P_SLIDE + P_DOWN_2 + P_UP_2 + P_HOLD;
+
+      function easeInOutSine(t) { return -(Math.cos(Math.PI * t) - 1) / 2; }
+
+      function pathAt(t) {
+        var x, y, msg, cur = 0;
+        if (t < (cur += P_DOWN_1)) {
+          var p = (t - (cur - P_DOWN_1)) / P_DOWN_1;
+          x = CARD1_X; y = CARD_TOP_Y + (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+          msg = '> SCANNING SIDE A .>';
+        } else if (t < (cur += P_UP_1)) {
+          var p = (t - (cur - P_UP_1)) / P_UP_1;
+          x = CARD1_X; y = CARD_BOT_Y - (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+          msg = '> SCANNING SIDE A ..>';
+        } else if (t < (cur += P_SLIDE)) {
+          var p = (t - (cur - P_SLIDE)) / P_SLIDE;
+          x = CARD1_X + (CARD2_X - CARD1_X) * easeInOutSine(p); y = CARD_TOP_Y;
+          msg = '> CROSS-CHECK ...>';
+        } else if (t < (cur += P_DOWN_2)) {
+          var p = (t - (cur - P_DOWN_2)) / P_DOWN_2;
+          x = CARD2_X; y = CARD_TOP_Y + (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+          msg = '> SCANNING SIDE B .>';
+        } else if (t < (cur += P_UP_2)) {
+          var p = (t - (cur - P_UP_2)) / P_UP_2;
+          x = CARD2_X; y = CARD_BOT_Y - (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+          msg = '> SCANNING SIDE B ..>';
+        } else {
+          x = CARD2_X; y = CARD_TOP_Y; msg = '> VERIFIED .>';
+        }
+        return { x: x, y: y, msg: msg };
+      }
+
+      function layout() {
+        var r = scene.getBoundingClientRect();
+        var sceneW = r.width, sceneH = r.height;
+        var magW = sceneW * MAG_W_PCT;
+        var magH = magW * (715 / 1000);
+        var lensD = magW * LENS_R * 2;
+        var lensL = magW * LENS_CX - lensD / 2;
+        var lensT = magH * LENS_CY - lensD / 2;
+        scene.style.setProperty('--ftmg-scene-w', sceneW + 'px');
+        scene.style.setProperty('--ftmg-scene-h', sceneH + 'px');
+        scene.style.setProperty('--ftmg-w',     magW + 'px');
+        scene.style.setProperty('--ftmg-h',     magH + 'px');
+        scene.style.setProperty('--ftmg-lens-l', lensL + 'px');
+        scene.style.setProperty('--ftmg-lens-t', lensT + 'px');
+        scene.style.setProperty('--ftmg-lens-d', lensD + 'px');
+        return { sceneW: sceneW, sceneH: sceneH, magW: magW, magH: magH, lensD: lensD };
+      }
+
+      // Cancel any prior in-flight animation and resolve its promise
+      if (_ftMagAnimRaf)     { cancelAnimationFrame(_ftMagAnimRaf); _ftMagAnimRaf = null; }
+      if (_ftMagAnimResolve) { _ftMagAnimResolve(); _ftMagAnimResolve = null; }
+
+      var startTime = performance.now();
+      function tick(now) {
+        var elapsed = Math.min(now - startTime, TOTAL);
+        var L = layout();
+        var pos = pathAt(elapsed);
+        var lensCX = pos.x * L.sceneW;
+        var lensCY = pos.y * L.sceneH;
+        var lensInMagX = LENS_CX * L.magW;
+        var lensInMagY = LENS_CY * L.magH;
+        lens.style.transform = 'translate(' + (lensCX - lensInMagX) + 'px,' + (lensCY - lensInMagY) + 'px)';
+        var tx = -ZOOM * lensCX + L.lensD / 2;
+        var ty = -ZOOM * lensCY + L.lensD / 2;
+        lensImg.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+        if (status) status.textContent = pos.msg;
+
+        if (elapsed >= TOTAL) {
+          _ftMagAnimRaf = null;
+          if (_ftMagAnimResolve) { _ftMagAnimResolve(); _ftMagAnimResolve = null; }
+          return;
+        }
+        _ftMagAnimRaf = requestAnimationFrame(tick);
+      }
+
+      _ftMagAnimPromise = new Promise(function(resolve) { _ftMagAnimResolve = resolve; });
+      _ftMagAnimRaf = requestAnimationFrame(tick);
+      return _ftMagAnimPromise;
+    }
+
+    function _ftStopMagAnim() {
+      if (_ftMagAnimRaf)     { cancelAnimationFrame(_ftMagAnimRaf); _ftMagAnimRaf = null; }
+      if (_ftMagAnimResolve) { _ftMagAnimResolve(); _ftMagAnimResolve = null; }
     }
 
     // ── Binder picker ────────────────────────────────────────────────────
@@ -16346,6 +16438,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Small dramatic pause so the scale reveal feels intentional
       if (progEl) progEl.textContent = 'Weighing the trade…';
       await new Promise(function(r) { setTimeout(r, 600); });
+
+      // Wait for the magglass animation's full cycle to finish before
+      // switching to results — guarantees the scan plays through both
+      // sides even if prices fetched faster than the animation.
+      if (_ftMagAnimPromise) {
+        try { await _ftMagAnimPromise; } catch(_) {}
+      }
 
       // Switch to results state — trigger wobble animation
       _ftWobbleOnNext = true;
