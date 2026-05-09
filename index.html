@@ -12652,16 +12652,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       document.getElementById('binderDetailContent').innerHTML = `
 
-        <!-- Photo — card-shaped slot; image fills with object-fit:contain
-             so user-uploaded photos at any aspect ratio show the whole
-             photo letterboxed inside a Pokemon-card-shaped frame. -->
-        <div style="width:100%;max-width:240px;aspect-ratio:245/342;margin:0 auto 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;overflow:hidden;${item.card_image_url ? 'cursor:zoom-in;' : ''}"
+        <!-- Photo — card-shaped slot; absolutely-positioned img fills
+             the slot with object-fit:contain so the whole user photo is
+             visible inside a Pokemon-card-shaped frame regardless of
+             the photo's natural aspect ratio or intrinsic size. -->
+        <div style="position:relative;width:100%;max-width:240px;aspect-ratio:245/342;margin:0 auto 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;overflow:hidden;${item.card_image_url ? 'cursor:zoom-in;' : ''}"
              onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
           ${(item.card_image_url || item.api_card_id)
             ? `<img src="${_thumbUrl(item.card_image_url, 480) || 'data:,'}"
-                 style="width:100%;height:100%;object-fit:contain;display:block"
+                 style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block"
                  onerror="_binderImgFail(this,'${item.id}')">`
-            : `<div style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;width:100%;height:100%">?</div>`}
+            : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem">?</div>`}
         </div>
 
         <!-- Badge -->
@@ -17957,35 +17958,45 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     .listing-card:hover .card-thumb { filter: none !important; }
 
-    /* Binder grid cards (3x3 / 2x2 / 1x1) — high specificity to beat
-       any inline styles or earlier rules on mobile. */
+    /* Binder grid cards (3x3 / 2x2 / 1x1) — absolute-positioned img
+       fills the card-shaped wrapper. Using position:absolute beats any
+       layout flakiness from flex parents or intrinsic-size sizing. */
     #collectionContent .binder-card-img-wrap {
+      position: relative !important;
       aspect-ratio: 245 / 342;
       background: var(--surface2);
+      overflow: hidden;
     }
     #collectionContent .binder-card-img,
     #collectionContent .binder-card-img-wrap > img {
+      position: absolute !important;
+      inset: 0 !important;
       width: 100% !important;
       height: 100% !important;
       object-fit: contain !important;
       background: var(--surface2);
     }
 
-    /* Binder LIST view row thumbnail — beats the inline width:36px;height:50px
-       style. Slightly larger and contained instead of cropped. */
+    /* Binder LIST view row thumbnail — wrap-style absolute positioning
+       inside a fixed-size box so user photos always fill horizontally. */
     #collectionContent .allcards-row > img {
       width: 44px !important;
       height: 60px !important;
+      min-width: 44px !important;
       object-fit: contain !important;
       background: var(--surface2);
     }
 
-    /* All Cards 4-col grid view */
+    /* All Cards 4-col grid view — same approach as binder grid. */
     #collectionContent .acg-card-art {
+      position: relative !important;
       aspect-ratio: 245 / 342;
       background: var(--surface2);
+      overflow: hidden;
     }
     #collectionContent .acg-card-art img {
+      position: absolute !important;
+      inset: 0 !important;
       width: 100% !important;
       height: 100% !important;
       object-fit: contain !important;
