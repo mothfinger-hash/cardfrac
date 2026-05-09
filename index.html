@@ -1285,6 +1285,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .acg-card:hover{border-color:var(--accent);transform:translateY(-1px)}
     .acg-card-art{aspect-ratio:245/342;width:100%;overflow:hidden;background:var(--surface2);flex-shrink:0}
     .acg-card-art img{width:100%;height:100%;object-fit:cover;display:block}
+    /* Ghost cards in the All Cards 4-col grid — match the visual
+       treatment used by the binder grid (.binder-card.ghost-card)
+       and the list view: faded opacity + dashed muted border, with
+       a teal hover state. Grayscale on the image stays as well. */
+    .acg-card.ghost-card{opacity:.52;border:1px dashed var(--muted)}
+    .acg-card.ghost-card:hover{opacity:.75;border-color:var(--teal)}
     .acg-card.ghost-card img{filter:grayscale(30%)}
     .acg-name{font-size:.54rem;color:var(--muted);padding:3px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--surface);line-height:1.3}
     @media(max-width:480px){.acg-grid{gap:4px;padding:5px}}
@@ -6418,13 +6424,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         dashAlerts.push({ico:up?'accent':'warn',title:c.card_name,sub:`Price ${up?'↑':'↓'} ${Math.abs(d)}% vs purchase`,delta:(up?'+':'')+d+'%',up});
       });
       ghostCards.slice(0,3).forEach(c => {
-        const goal  = c.savings_goal || 0;
-        const saved = c.amount_saved || 0;
+        // Coerce to Number — Postgres `numeric` columns sometimes
+        // arrive from Supabase as strings, in which case "20" || 0
+        // stays a string and .toFixed() throws, leaving the alert
+        // stuck at its previous "0/X" rendering.
+        const goal  = Number(c.savings_goal) || 0;
+        const saved = Number(c.amount_saved) || 0;
         let sub;
         if (goal > 0) {
           const pct = (saved / goal * 100).toFixed(0);
-          // Show actual dollars saved alongside the goal so the saved
-          // amount is visible at a glance, not just a percentage.
           sub = `$${saved.toFixed(2)} of $${goal.toFixed(2)} saved (${pct}%)`;
         } else if (saved > 0) {
           sub = `$${saved.toFixed(2)} saved (no goal set)`;
@@ -13231,6 +13239,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!currentUser || !pendingCollectionCard) return;
       const savingsGoal  = parseFloat(document.getElementById('wishlistGoal').value)  || 0;
       const amountSaved  = parseFloat(document.getElementById('wishlistSaved').value)  || 0;
+      console.log('[saveToWishlist] inputs → goal:', savingsGoal, '| saved:', amountSaved);
       const priceUrl     = document.getElementById('wishlistPriceUrl').value.trim() || null;
       const binderId     = document.getElementById('wishlistBinderId')?.value || null;
 
@@ -13298,13 +13307,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     async function updateSavingsAmount(itemId, newAmount) {
       const amount = parseFloat(newAmount);
       if (isNaN(amount) || amount < 0) { showToast('Enter a valid amount'); return; }
+      console.log('[updateSavingsAmount] item:', itemId, '| new amount_saved:', amount);
       const btn = document.getElementById('savingsUpdateBtn_' + itemId);
       if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
       const { error } = await sb.from('collection_items')
         .update({ amount_saved: amount })
         .eq('id', itemId);
       if (btn) { btn.textContent = 'Update'; btn.disabled = false; }
-      if (error) { showToast('Error: ' + error.message); return; }
+      if (error) { showToast('Error: ' + error.message); console.warn('[updateSavingsAmount] DB error:', error); return; }
       const local = collectionItems.find(c => String(c.id) === String(itemId));
       if (local) local.amount_saved = amount;
       showToast('Savings updated!');
@@ -14631,12 +14641,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           }
         });
 
-        // Replace cropper source with bg-removed PNG
+        // Replace cropper source with bg-removed PNG, preserving the
+        // user's current crop region so they don't have to re-crop
+        // after bg-removal. Also use the same config as the initial
+        // cropper init in cpLoadFile so behavior is consistent.
+        var savedCropData = _cpCropper ? _cpCropper.getData() : null;
         _cpOrigBlob = result;
         if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
         img.src = URL.createObjectURL(result);
         img.onload = function() {
-          _cpCropper = new Cropper(img, { viewMode: 1, aspectRatio: NaN, autoCropArea: 0.92, background: true });
+          _cpCropper = new Cropper(img, {
+            viewMode:     1,
+            aspectRatio:  NaN,
+            autoCropArea: 0.92,
+            background:   true,
+            movable:      true,
+            zoomable:     true,
+            rotatable:    true,
+            guides:       true,
+            ready:        function() {
+              if (savedCropData) {
+                try { this.cropper.setData(savedCropData); } catch(_) {}
+              }
+            },
+          });
         };
         if (btn)    { btn.textContent = '✓ Background Removed'; btn.dataset.done = '1'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
         if (status) status.textContent = '✓ Adjust crop if needed, then save';
@@ -14662,6 +14690,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var btn    = document.getElementById('cpSaveBtn');
       var status = document.getElementById('cpStatus');
       if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+      // Commit any in-progress crop drag to the cropper's internal
+      // state before extracting — Cropper.js sometimes lags one frame
+      // behind a fast click+drop, leaving the visual crop box ahead
+      // of the data backing it.
+      try { _cpCropper.crop(); } catch(_) {}
+
+      // Log the crop region we're about to export so it's easy to
+      // confirm the saved image actually matches the visible crop.
+      try {
+        var d = _cpCropper.getData();
+        console.log('[cpSavePhoto] crop region (px):', d);
+      } catch(_) {}
 
       // Export the cropped region as webp (smaller than PNG); fall
       // back to PNG only if the browser can't encode webp from canvas
