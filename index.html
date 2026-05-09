@@ -1004,34 +1004,19 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-stack-front img{width:100%;display:block}
     .ft-card-no-img{width:100%;aspect-ratio:63/88;background:var(--surface);display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:.8rem;color:var(--muted);text-align:center;padding:12px;box-sizing:border-box}
 
-    /* Slide animation — gentle, symmetric easing with smaller offsets
-       so the new card materializes smoothly instead of popping in from
-       a displaced position. */
-    @keyframes ftSlideNext{
-      from{opacity:0;transform:translateX(18px) scale(0.985)}
-      to  {opacity:1;transform:translateX(0)    scale(1)}
-    }
-    @keyframes ftSlidePrev{
-      from{opacity:0;transform:translateX(-18px) scale(0.985)}
-      to  {opacity:1;transform:translateX(0)     scale(1)}
-    }
-    @keyframes ftSlideOutLeft{
-      from{opacity:1;transform:translateX(0)     scale(1)}
-      to  {opacity:0;transform:translateX(-14px) scale(0.985)}
-    }
-    @keyframes ftSlideOutRight{
-      from{opacity:1;transform:translateX(0)    scale(1)}
-      to  {opacity:0;transform:translateX(14px) scale(0.985)}
-    }
-    /* Both phases use the same gentle ease-out-cubic so exit and entry
-       feel like one continuous motion rather than two abrupt steps. */
-    .ft-stack-front.slide-next     {animation:ftSlideNext     .34s cubic-bezier(0.33,1,0.68,1) both}
-    .ft-stack-front.slide-prev     {animation:ftSlidePrev     .34s cubic-bezier(0.33,1,0.68,1) both}
-    .ft-stack-front.slide-out-left {animation:ftSlideOutLeft  .19s cubic-bezier(0.33,1,0.68,1) both}
-    .ft-stack-front.slide-out-right{animation:ftSlideOutRight .19s cubic-bezier(0.33,1,0.68,1) both}
-    /* Back-card fan rotation rides the same easing, slightly longer
-       so the stack reshuffle "settles" rather than snapping. */
-    .ft-stack-back{transition:transform .38s cubic-bezier(0.33,1,0.68,1)}
+    /* Pure opacity crossfade — no translate, no scale. The card stays
+       in place and dissolves to/from the back stack underneath, which
+       is the calmest possible transition. */
+    @keyframes ftSlideNext     {from{opacity:0}to{opacity:1}}
+    @keyframes ftSlidePrev     {from{opacity:0}to{opacity:1}}
+    @keyframes ftSlideOutLeft  {from{opacity:1}to{opacity:0}}
+    @keyframes ftSlideOutRight {from{opacity:1}to{opacity:0}}
+    .ft-stack-front.slide-next     {animation:ftSlideNext     .26s ease-out both}
+    .ft-stack-front.slide-prev     {animation:ftSlidePrev     .26s ease-out both}
+    .ft-stack-front.slide-out-left {animation:ftSlideOutLeft  .18s ease-in  both}
+    .ft-stack-front.slide-out-right{animation:ftSlideOutRight .18s ease-in  both}
+    /* Back-card fan rotation matches so any reshuffle feels coherent. */
+    .ft-stack-back{transition:transform .32s ease-out}
 
     /* Nav arrows — float just outside the card edges */
     .ft-nav-btn{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s;line-height:1}
@@ -15738,12 +15723,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // Force reflow so removing exitCls and adding enterCls are separate frames
         void front.offsetWidth;
         front.classList.add(enterCls);
-        setTimeout(function() { front.classList.remove(enterCls); }, 360);
+        setTimeout(function() { front.classList.remove(enterCls); }, 280);
 
         // ── Step 6: preload neighbours of the new position ────────────────
         _ftPreloadAdjacent(side);
 
-      }, 190); // matches exit animation duration (.19s)
+      }, 180); // matches exit animation duration (.18s)
     }
 
     // Show lock-in buttons (session mode) or analyze button (solo mode)
@@ -17970,14 +17955,37 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     .listing-card:hover .card-thumb { filter: none !important; }
 
-    /* Binder grid cards (3x3 / 2x2 / 1x1) */
-    .binder-card-img {
+    /* Binder grid cards (3x3 / 2x2 / 1x1) — high specificity to beat
+       any inline styles or earlier rules on mobile. */
+    #collectionContent .binder-card-img-wrap {
+      aspect-ratio: 245 / 342;
+      background: var(--surface2);
+    }
+    #collectionContent .binder-card-img,
+    #collectionContent .binder-card-img-wrap > img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain !important;
+      background: var(--surface2);
+    }
+
+    /* Binder LIST view row thumbnail — beats the inline width:36px;height:50px
+       style. Slightly larger and contained instead of cropped. */
+    #collectionContent .allcards-row > img {
+      width: 44px !important;
+      height: 60px !important;
       object-fit: contain !important;
       background: var(--surface2);
     }
 
     /* All Cards 4-col grid view */
-    .acg-card-art img {
+    #collectionContent .acg-card-art {
+      aspect-ratio: 245 / 342;
+      background: var(--surface2);
+    }
+    #collectionContent .acg-card-art img {
+      width: 100% !important;
+      height: 100% !important;
       object-fit: contain !important;
       background: var(--surface2);
     }
