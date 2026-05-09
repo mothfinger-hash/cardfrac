@@ -17943,6 +17943,84 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         margin:0 auto;
       }
     }
+
+    /* ─── USER-SUPPLIED PHOTO NORMALIZATION ──────────────────────────
+       Makes user-uploaded listing photos render at the same size and
+       aspect ratio as the catalog/generic card images (63:88 Pokemon
+       card ratio). Uses object-fit:cover so user photos fill the slot
+       and any excess is cropped (instead of letterboxing in an empty
+       padded box, which is what made phone-camera shots look tiny and
+       odd). Also disables sticky hover-scale on touch devices, which
+       was clipping photos after taps. */
+    .card-thumb {
+      height: auto !important;
+      aspect-ratio: 63 / 88;
+      object-fit: cover !important;
+      padding: 0 !important;
+      filter: none !important;
+    }
+    .listing-card:hover .card-thumb {
+      filter: none !important;
+    }
+    .gallery-main {
+      height: auto !important;
+      aspect-ratio: 63 / 88;
+      max-height: 70vh;
+    }
+    .gallery-main img {
+      max-height: 70vh;
+      object-fit: contain;
+    }
+    @media (hover: none) {
+      .listing-card:hover { transform: none !important; }
+      .listing-card:hover .card-thumb { transform: none !important; }
+      .gallery-main:hover img { transform: none !important; }
+    }
+
+    /* ─── ALL CARDS — BOUNDED SCROLL CONTAINER ───────────────────────
+       The All Cards view's lazy-load IntersectionObserver already uses
+       #collectionContent as its scroll root, so we give it an explicit
+       bounded height (about 3 grid-rows on a typical desktop) and
+       overflow-y:auto. Scoped via .binder-frame.all-cards-wide so this
+       only affects All Cards — individual binders remain paginated. */
+    .binder-frame.all-cards-wide #collectionContent {
+      /* ~3 rows of the 4-col grid on a 1080p desktop, capped to fit in
+         the viewport. Scrolls internally via overflow-y:auto. */
+      max-height: clamp(360px, calc(100vh - 220px), 1100px);
+      min-height: 360px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      /* Smooth momentum scroll on trackpads / touch */
+      -webkit-overflow-scrolling: touch;
+      /* Reserve room for scrollbar so cards don't reflow when it appears */
+      scrollbar-gutter: stable;
+    }
+    .binder-frame.all-cards-wide #collectionContent::-webkit-scrollbar {
+      width: 10px;
+    }
+    .binder-frame.all-cards-wide #collectionContent::-webkit-scrollbar-track {
+      background: var(--surface2);
+    }
+    .binder-frame.all-cards-wide #collectionContent::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 5px;
+    }
+    .binder-frame.all-cards-wide #collectionContent::-webkit-scrollbar-thumb:hover {
+      background: var(--accent);
+    }
+
+    /* ─── HIDE RAW / GRADED BADGES IN BINDER ─────────────────────────
+       Hides the Raw/Graded condition pill on binder cards (3x3 / 2x2 /
+       1x1 / list / All Cards). Scoped to #collectionContent so the
+       same badges still appear on marketplace listings, transactions,
+       dashboards, public binders, etc. */
+    #collectionContent .raw-badge,
+    #collectionContent .grade-badge,
+    #collectionContent .binder-card-badge {
+      display: none !important;
+    }
   </style>
 
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
