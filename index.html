@@ -13425,7 +13425,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     async function searchJapaneseCards(query) {
       const grid = document.getElementById('acMobGrid');
       if (!grid) return;
-      grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING JP DATABASE…</div></div>';
+      grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" id="_jpSearchStatus" style="color:rgba(0,229,255,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING JP DATABASE…</div></div>';
+      _setProcessingText(document.getElementById('_jpSearchStatus'), 'SEARCHING JP DATABASE…');
 
       try {
         const { data: items, error } = await sb
@@ -13647,10 +13648,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const deskGrid   = document.getElementById('acDeskGrid');
       const mobGrid    = document.getElementById('acMobGrid');
 
-      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING JP DATABASE…'; }
+      if (deskStatus) { deskStatus.style.display = 'block'; _setProcessingText(deskStatus, '// SEARCHING JP DATABASE…'); }
       if (deskCount)  deskCount.textContent = '—';
       if (deskGrid)   deskGrid.innerHTML = '';
-      if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(0,229,255,.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
+      if (mobGrid) {
+        mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" id="_mobSearchStatus" style="color:rgba(0,229,255,.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
+        _setProcessingText(document.getElementById('_mobSearchStatus'), 'SEARCHING…');
+      }
 
       try {
         const q = query.trim();
@@ -13723,7 +13727,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const deskCount  = document.getElementById('acDeskCount');
       const deskGrid   = document.getElementById('acDeskGrid');
 
-      if (deskStatus) { deskStatus.style.display = 'block'; deskStatus.textContent = '// SEARCHING…'; }
+      if (deskStatus) { deskStatus.style.display = 'block'; _setProcessingText(deskStatus, '// SEARCHING…'); }
       if (deskCount)  deskCount.textContent = '—';
       if (deskGrid)   deskGrid.innerHTML = '';
 
@@ -18559,9 +18563,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   <script>
     /* ── SCANNER CONTROLLER ── */
 
+    // Animated processing-dots — when a status message ends with "…" or
+    // ".." we treat it as in-progress and append a cycling " .>" → " ..>"
+    // → " ...>" tail that updates ~3×/sec. Final/error messages render
+    // as-is. One timer per element, tracked in a WeakMap so we can
+    // cancel cleanly when the same element gets a new message.
+    const _processingTimers = new WeakMap();
+    function _setProcessingText(el, msg) {
+      if (!el) return;
+      const existing = _processingTimers.get(el);
+      if (existing) { clearInterval(existing); _processingTimers.delete(el); }
+      const isProgress = /(?:…|\.{2,3})\s*$/.test(msg);
+      if (!isProgress) { el.textContent = msg; return; }
+      const base   = msg.replace(/(?:…|\.{2,})\s*$/, '').trim();
+      const frames = [' .>', ' ..>', ' ...>'];
+      let i = 0;
+      const tick = () => { el.textContent = base + frames[i]; i = (i + 1) % frames.length; };
+      tick();
+      _processingTimers.set(el, setInterval(tick, 320));
+    }
+
     function setScanStatus(msg) {
-      const el = document.getElementById('scannerStatus');
-      if (el) el.textContent = msg;
+      _setProcessingText(document.getElementById('scannerStatus'), msg);
     }
 
     // Called directly from the "Scan a Card" label on the Add Card page.
@@ -19681,9 +19704,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       const SUFFIX    = /^(VSTAR|VMAX|GX|EX|V|VUNION|TAG\s*TEAM)$/i;
       const STAGE_PRE = /^(Basic|Stage\s*[12])\s+/i;  // stage as prefix on same line
-      const STAGE     = /^(Basic|Stage\s*[12])$/i;     // stage alone on its own line
-      const SKIP      = /^(Basic|Stage\s*[12]|VMAX|VSTAR|GX|EX|V|VUNION|TAG\s*TEAM|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule|DX)$/i;
-      const NAME_RE   = /^[A-ZÀ-Ö][a-zA-ZÀ-ö0-9\s\-'éèê&]+$/;
+      const STAGE     = /^(Basic|Stage\s*[12]|STAGE)$/i; // stage alone on its own line (incl. bare STAGE from OCR-truncated label)
+      const SKIP      = /^(Basic|Stage\s*[12]|STAGE|VMAX|VSTAR|GX|EX|V|VUNION|TAG\s*TEAM|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule|DX|VOLUME|RASH|TRASH|HATS?|MUTE|MAX|MIN|MOD)$/i;
+      // Card names are ALWAYS mixed case ("Espurr", "Mewtwo", "Ho-Oh"),
+      // never SHOUTING. The (?=...) lookahead requires at least one
+      // lowercase letter — this rejects all-uppercase background OCR
+      // junk like "HAT", "OLUME", "ATS", "LUME" that bleeds in from
+      // desk pads, keyboards, and labels behind the card.
+      const NAME_RE   = /^(?=.*[a-zà-ö])[A-ZÀ-Ö][a-zA-ZÀ-ö0-9\s\-'éèê&]+$/;
 
       for (let i = 0; i < Math.min(12, lines.length); i++) {
         const line = lines[i];
@@ -19727,10 +19755,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         // Fallback: first valid title-case line that isn't a keyword
         if (!SKIP.test(line) && NAME_RE.test(line) && line.length > 2 && line.length < 40) {
-          return line;
+          return _cleanCardName(line);
         }
       }
       return null;
+    }
+
+    // Strip trailing OCR junk that gets jammed onto the name line.
+    // Common cases the GCV OCR produces:
+    //   "MewtwoEX 180 HP O"  → "MewtwoEX"   (HP/damage glued to name)
+    //   "Charizard 60 HP"    → "Charizard"
+    //   "Ho-Oh 160"          → "Ho-Oh"
+    // Anything from the first standalone digit onward is treated as
+    // attack/HP/junk and removed.
+    function _cleanCardName(name) {
+      if (!name) return name;
+      // Drop everything from the first run of digits onward
+      var m = name.match(/^([^\d]+?)(?:\s+\d|HP\s*\d|\d).*$/i);
+      if (m && m[1].trim().length >= 3) name = m[1];
+      return name.trim();
     }
 
     // ── Scanner — full-image OCR + name×number search + CLIP fallback ──────────
