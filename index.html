@@ -12006,9 +12006,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       // Apply search filter (All Cards views always; list view inside binders too)
+      let _isSearching = false;
       if (effectiveView === 'list' || isAllCards) {
         const q = (document.getElementById('binderListSearch')?.value || '').toLowerCase().trim();
         if (q) {
+          _isSearching = true;
           activeItems = activeItems.filter(c =>
             (c.card_name || '').toLowerCase().includes(q) ||
             (c.set_name  || '').toLowerCase().includes(q) ||
@@ -12061,18 +12063,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
       }
 
-      // Paginate active items only (owned + ghost, no sold)
-      const perPage = effectiveView === '3x3' ? 9 : effectiveView === '2x2' ? 4 : effectiveView === '1x1' ? 1 : 40;
+      // Paginate active items only (owned + ghost, no sold).
+      // When a search query is active in list view, show ALL matching
+      // results on one page (no pagination cap) — search results are
+      // already narrowed down so volume isn't an issue, and users
+      // expect to see every match without clicking through pages.
+      const _listPageSize = (_isSearching && effectiveView === 'list')
+        ? Math.max(activeItems.length, 1)
+        : 40;
+      const perPage = effectiveView === '3x3' ? 9 : effectiveView === '2x2' ? 4 : effectiveView === '1x1' ? 1 : _listPageSize;
       const totalPages = Math.ceil(activeItems.length / perPage);
       binderPage = Math.max(0, Math.min(binderPage, Math.max(0, totalPages - 1)));
       const pageStart = binderPage * perPage;
       const pageItems = activeItems.slice(pageStart, pageStart + perPage);
 
       if (isAllCards && effectiveView === 'acgrid') {
-        // ── All Cards: 4-col grid with lazy loading ──────────────────────────
-        const firstBatch = _acItems.slice(0, _AC_BATCH);
+        // ── All Cards: 4-col grid with lazy loading. When searching,
+        //   render ALL matching results at once (no lazy-load) so users
+        //   see every match without scrolling/limit issues. ────────────
+        const renderAll = _isSearching;
+        const firstBatch = renderAll ? _acItems : _acItems.slice(0, _AC_BATCH);
         _acOffset = firstBatch.length;
-        const hasMore = _acOffset < _acItems.length;
+        const hasMore = !renderAll && _acOffset < _acItems.length;
         content.innerHTML = `<div class="acg-grid" id="acGridEl">
           ${firstBatch.map(_acRenderGridCard).join('')}
           ${hasMore ? '<div id="acSentinel" style="height:1px;grid-column:1/-1"></div>' : ''}
@@ -12080,10 +12092,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (hasMore) _acAttachObserver(true);
       } else if (effectiveView === 'list') {
         if (isAllCards) {
-          // ── All Cards: lazy-load list with drag-to-binder ───────────────────
-          const firstBatch = _acItems.slice(0, _AC_BATCH);
+          // ── All Cards: lazy-load list with drag-to-binder. Same
+          //   search behavior as grid — render all matching results
+          //   at once when searching. ──────────────────────────────────
+          const renderAll = _isSearching;
+          const firstBatch = renderAll ? _acItems : _acItems.slice(0, _AC_BATCH);
           _acOffset = firstBatch.length;
-          const hasMore = _acOffset < _acItems.length;
+          const hasMore = !renderAll && _acOffset < _acItems.length;
           content.innerHTML = `
             <div style="font-size:.63rem;color:var(--muted);letter-spacing:.06em;padding:7px 10px 4px;border-bottom:1px solid var(--border)">Drag any card to a binder to assign it</div>
             <div id="binderGrid" style="display:flex;flex-direction:column">
@@ -13327,7 +13342,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           .select('id, name, set_name, set_code, card_number, rarity, image_url')
           .ilike('name', `%${query.trim()}%`)
           .or('id.like.jp-%,id.like.pd-%')
-          .limit(100);
+          .limit(1000);
 
         if (error) throw new Error(error.message);
 
@@ -13413,7 +13428,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const mob = document.getElementById('acMobGrid');
       if (!mob || !cards || cards.length === 0) return;
       window._acLastSearchCards = cards; // store full card objects for detail popup
-      const display = cards.slice(0, 20);   // show up to 20, scrollable
+      // Render ALL search results in the scrollable phondex grid — the
+      // container already scrolls internally, and lazy <img loading="lazy">
+      // means only visible card images decode, so a few hundred result
+      // tiles aren't expensive.
+      const display = cards;
       const html = display.map((card, idx) => {
         return `<div class="ac-mc" onclick="openSearchCardDetail(${idx}, false)">
           ${card.images && card.images.small
@@ -13642,7 +13661,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         if (deskGrid) deskGrid.innerHTML = cardHTML;
 
-        // Mobile 2×2 grid (first 4) — also stores to _acLastSearchCards
+        // Mobile phondex grid — renders all results (scrollable),
+        //   stores to _acLastSearchCards for the detail popup.
         acRenderMobGrid(cards);
 
         // CRT flash on desktop right panel
