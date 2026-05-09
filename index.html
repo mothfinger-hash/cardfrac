@@ -1004,29 +1004,34 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-stack-front img{width:100%;display:block}
     .ft-card-no-img{width:100%;aspect-ratio:63/88;background:var(--surface);display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:.8rem;color:var(--muted);text-align:center;padding:12px;box-sizing:border-box}
 
-    /* Slide animation — fluid ease-out with subtle scale */
+    /* Slide animation — gentle, symmetric easing with smaller offsets
+       so the new card materializes smoothly instead of popping in from
+       a displaced position. */
     @keyframes ftSlideNext{
-      from{opacity:0;transform:translateX(42px) scale(0.95)}
+      from{opacity:0;transform:translateX(18px) scale(0.985)}
       to  {opacity:1;transform:translateX(0)    scale(1)}
     }
     @keyframes ftSlidePrev{
-      from{opacity:0;transform:translateX(-42px) scale(0.95)}
+      from{opacity:0;transform:translateX(-18px) scale(0.985)}
       to  {opacity:1;transform:translateX(0)     scale(1)}
     }
     @keyframes ftSlideOutLeft{
       from{opacity:1;transform:translateX(0)     scale(1)}
-      to  {opacity:0;transform:translateX(-28px) scale(0.95)}
+      to  {opacity:0;transform:translateX(-14px) scale(0.985)}
     }
     @keyframes ftSlideOutRight{
       from{opacity:1;transform:translateX(0)    scale(1)}
-      to  {opacity:0;transform:translateX(28px) scale(0.95)}
+      to  {opacity:0;transform:translateX(14px) scale(0.985)}
     }
-    .ft-stack-front.slide-next     {animation:ftSlideNext     .3s cubic-bezier(0.16,1,0.3,1) both}
-    .ft-stack-front.slide-prev     {animation:ftSlidePrev     .3s cubic-bezier(0.16,1,0.3,1) both}
-    .ft-stack-front.slide-out-left {animation:ftSlideOutLeft  .13s ease-in both}
-    .ft-stack-front.slide-out-right{animation:ftSlideOutRight .13s ease-in both}
-    /* Smooth back-card rotation transition when stack reshuffles */
-    .ft-stack-back{transition:transform .25s cubic-bezier(0.16,1,0.3,1)}
+    /* Both phases use the same gentle ease-out-cubic so exit and entry
+       feel like one continuous motion rather than two abrupt steps. */
+    .ft-stack-front.slide-next     {animation:ftSlideNext     .34s cubic-bezier(0.33,1,0.68,1) both}
+    .ft-stack-front.slide-prev     {animation:ftSlidePrev     .34s cubic-bezier(0.33,1,0.68,1) both}
+    .ft-stack-front.slide-out-left {animation:ftSlideOutLeft  .19s cubic-bezier(0.33,1,0.68,1) both}
+    .ft-stack-front.slide-out-right{animation:ftSlideOutRight .19s cubic-bezier(0.33,1,0.68,1) both}
+    /* Back-card fan rotation rides the same easing, slightly longer
+       so the stack reshuffle "settles" rather than snapping. */
+    .ft-stack-back{transition:transform .38s cubic-bezier(0.33,1,0.68,1)}
 
     /* Nav arrows — float just outside the card edges */
     .ft-nav-btn{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s;line-height:1}
@@ -15733,12 +15738,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // Force reflow so removing exitCls and adding enterCls are separate frames
         void front.offsetWidth;
         front.classList.add(enterCls);
-        setTimeout(function() { front.classList.remove(enterCls); }, 320);
+        setTimeout(function() { front.classList.remove(enterCls); }, 360);
 
         // ── Step 6: preload neighbours of the new position ────────────────
         _ftPreloadAdjacent(side);
 
-      }, 130); // matches exit animation duration
+      }, 190); // matches exit animation duration (.19s)
     }
 
     // Show lock-in buttons (session mode) or analyze button (solo mode)
@@ -17945,23 +17950,39 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     /* ─── USER-SUPPLIED PHOTO NORMALIZATION ──────────────────────────
-       Makes user-uploaded listing photos render at the same size and
-       aspect ratio as the catalog/generic card images (63:88 Pokemon
-       card ratio). Uses object-fit:cover so user photos fill the slot
-       and any excess is cropped (instead of letterboxing in an empty
-       padded box, which is what made phone-camera shots look tiny and
-       odd). Also disables sticky hover-scale on touch devices, which
-       was clipping photos after taps. */
+       Makes user-uploaded photos render at the same size and aspect
+       ratio as the catalog/generic card images (63:88 Pokemon card
+       ratio). The container is card-shaped; the image inside uses
+       object-fit:contain so the WHOLE user photo is visible inside the
+       card slot (with a small letterbox if the photo isn't card-shaped)
+       — instead of cover, which crops to a vertical slice and made
+       phone-camera shots look like elongated stripes. Catalog images
+       are already card-shaped so they still fill perfectly. */
+
+    /* Marketplace listing thumbnails */
     .card-thumb {
       height: auto !important;
       aspect-ratio: 63 / 88;
-      object-fit: cover !important;
+      object-fit: contain !important;
       padding: 0 !important;
       filter: none !important;
+      background: var(--surface2);
     }
-    .listing-card:hover .card-thumb {
-      filter: none !important;
+    .listing-card:hover .card-thumb { filter: none !important; }
+
+    /* Binder grid cards (3x3 / 2x2 / 1x1) */
+    .binder-card-img {
+      object-fit: contain !important;
+      background: var(--surface2);
     }
+
+    /* All Cards 4-col grid view */
+    .acg-card-art img {
+      object-fit: contain !important;
+      background: var(--surface2);
+    }
+
+    /* Detail-page gallery */
     .gallery-main {
       height: auto !important;
       aspect-ratio: 63 / 88;
@@ -17971,6 +17992,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       max-height: 70vh;
       object-fit: contain;
     }
+
     @media (hover: none) {
       .listing-card:hover { transform: none !important; }
       .listing-card:hover .card-thumb { transform: none !important; }
