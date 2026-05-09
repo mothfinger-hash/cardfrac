@@ -19428,32 +19428,41 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // "PSA10", "BGS9.5", "CGC10" etc. — word boundaries fail between
       // two word chars (e.g., A→1), so /\bPSA\b/ wouldn't match "PSA10"
       // which is a common OCR output from a slab label.
+      // Also accept each grader's official tagline, since the company
+      // logo (icon next to the letters) frequently OCRs as junk that
+      // breaks the leading word boundary (e.g. "DCGC" instead of "CGC").
       var company = null;
-      if      (/\bPSA(?![A-Z])/.test(t))           company = 'psa';
-      else if (/\b(BGS|BECKETT)(?![A-Z])/.test(t)) company = 'bgs';
-      else if (/\bCGC(?![A-Z])/.test(t))           company = 'cgc';
-      else if (/\bSGC(?![A-Z])/.test(t))           company = 'sgc';
+      if      (/\bPSA(?![A-Z])/.test(t) || /PROFESSIONAL\s+SPORTS\s+AUTHENTICATOR/i.test(t)) company = 'psa';
+      else if (/\b(BGS|BECKETT)(?![A-Z])/.test(t) || /BECKETT\s+GRADING/i.test(t))            company = 'bgs';
+      else if (/\bCGC(?![A-Z])/.test(t) || /CERTIFIED\s+GUARANTY\s+COMP/i.test(t))            company = 'cgc';
+      else if (/\bSGC(?![A-Z])/.test(t) || /SPORTSCARD\s+GUARANTY/i.test(t)
+            || /\bSGC\s+CERTIFIED\b/i.test(t))                                                company = 'sgc';
       // ACE: require "ACE GRADING" phrase or "ACE" + grading word (not "Ace Trainer" cards)
       else if (/ACE[\s\-]GRADING/i.test(t) || (/\bACE\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t))) company = 'ace';
       // TAG Grading (taggrading.com) — match "TAG GRADING" or "TAG GRADED" phrase, avoid "TAG TEAM"
       else if (/TAG[\s\-]GRADING|TAG[\s\-]GRADED|TAG[\s\-]CARDS?/i.test(t) || (/\bTAG\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t) && !/TAG[\s\-]TEAM/i.test(t))) company = 'tag';
 
-      // Fallback: PSA's company logo is a graphical shield, not letters,
-      // so OCR often fails to read "PSA". When NO grader name was
-      // matched but the text still has the unmistakable slab-label
-      // fingerprint — a year (YYYY), a PSA grade keyword (MINT, GEM
-      // MT, NM-MT, etc.), AND an 8-11 digit standalone number that
-      // looks like a cert — assume PSA. PSA is the dominant grader
-      // and uses this exact label layout; the heuristic is a safe bet.
+      // Fallback: a grader's company logo is often a graphical shield
+      // (not letters), so OCR can fail to read its text. When NO
+      // grader name OR tagline was matched but the text still has the
+      // unmistakable slab-label fingerprint — a year (YYYY), a grade
+      // keyword (MINT, GEM MT, NM-MT, etc.), AND a cert-shaped
+      // standalone number — infer the grader.
+      //
+      // Cert-length hint: 12+ digits today is CGC; PSA/BGS/SGC sit in
+      // the 7-11 range. Both ranges WILL grow over time as more cards
+      // get graded — kept as a soft hint, not a hard rule. PSA is the
+      // sensible default since it's the dominant grader by volume.
       if (!company) {
         var hasYear  = /\b(19[5-9]\d|20[0-3]\d)\b/.test(t);
         var hasGrade = /\b(GEM\s*MT|GEM\s*MINT|MINT|NM[\s\-]?MT|NM[\s\-]?M|NEAR\s*MINT|EX[\s\-]?MT|VG[\s\-]?EX|PRISTINE|PERFECT|AUTHENTIC)\b/i.test(t);
         // Strip card fractions first so e.g. 094/165 doesn't pollute the match.
         var noFrac    = text.replace(/\b[A-Z]{0,3}\d{1,4}[\/\\][A-Z]{0,3}\d{1,4}\b/g, ' ');
-        var hasCertNo = /\b\d{8,11}\b/.test(noFrac);
-        if (hasYear && hasGrade && hasCertNo) {
-          company = 'psa';
-          console.log('[Scanner] Slab inferred as PSA via heuristic (no grader text was OCR-readable)');
+        var certLong  = noFrac.match(/\b(\d{12,18})\b/); // CGC range, with growth headroom
+        var certAny   = noFrac.match(/\b(\d{7,18})\b/);  // any cert-shaped number
+        if (hasYear && hasGrade && certAny) {
+          company = certLong ? 'cgc' : 'psa';
+          console.log('[Scanner] Slab inferred as ' + company.toUpperCase() + ' via heuristic (no grader text was OCR-readable)');
         }
       }
       if (!company) return null;
@@ -19511,10 +19520,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // typically 8-10 digits but the newest series go up to 11.
       var stripped = text.replace(/\b[A-Z]{0,3}\d{1,4}[\/\\][A-Z]{0,3}\d{1,4}\b/g, ' ');
 
-      var cm = stripped.match(/CERT(?:IFICATE|IFIED)?(?:\s*(?:NUMBER|NO\.?|N°|#|ID))?\s*[:\-#]?\s*(\d{7,11})/i)
-            || stripped.match(/\b(\d{8,11})\b/)              // PSA / BGS / CGC / SGC range
-            || stripped.match(/\b(\d{7})\b/)                  // older 7-digit certs
-            || stripped.match(/\b([A-Z]\d{6,9})\b/);          // letter-prefixed (TAG, ACE)
+      // Cert detection — single 7-18 digit range covers every grader
+      // today AND leaves headroom as cert numbers continue to grow:
+      //   PSA  ~8-11 digits today (was 8 historically, now 10-11)
+      //   BGS  ~8-10 digits today
+      //   CGC  ~10-13 digits today
+      //   SGC  ~7-9 digits today
+      //   ACE/TAG ~7-10 digits with optional letter prefix
+      // The regex engine matches greedily within the range, so a
+      // 13-digit CGC cert won't get truncated to 11 to fit an older
+      // bound — and as new graders or longer certs appear, the
+      // 7-18 range absorbs them without code changes.
+      var cm = stripped.match(/CERT(?:IFICATE|IFICATION)?(?:\s*(?:NUMBER|NO\.?|N°|#|ID))?\s*[:\-#]?\s*(\d{7,18})/i)
+            || stripped.match(/\b(\d{7,18})\b/)
+            || stripped.match(/\b([A-Z]\d{6,12})\b/);  // letter-prefixed (TAG, ACE)
       var certNumber = cm ? cm[1] : null;
 
       return { company: company, certNumber: certNumber, grade: grade };
