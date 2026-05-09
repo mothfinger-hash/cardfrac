@@ -2236,7 +2236,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-fund-meta{font-family:'Press Start 2P',monospace;font-size:6.5px;color:var(--muted);letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ndash-fund-target{font-family:'Orbitron',monospace;font-weight:800;font-size:16px;color:var(--accent);margin-top:4px}
 .ndash-fund-bar{height:6px;background:var(--surface2);border:1px solid var(--border);position:relative;overflow:hidden;margin-top:3px}
-.ndash-fund-bar-fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--accent),#00CCFF);box-shadow:0 0 8px var(--accent)}
+/* Bar fill — explicit top/left/bottom + width set inline. Avoids
+   the `inset:0 auto 0 0` shorthand which can be unreliable when
+   combined with a width-based fill in some renderers. */
+.ndash-fund-bar-fill{position:absolute;top:0;left:0;bottom:0;background:linear-gradient(90deg,var(--accent),#00CCFF);box-shadow:0 0 8px var(--accent);transition:width .35s cubic-bezier(0.33,1,0.68,1)}
+
+/* ── Ghost Fund — multi-card list (populates on panel resize) ── */
+.ndash-fund-list{display:flex;flex-direction:column;gap:10px}
+.ndash-fund-row{display:grid;grid-template-columns:40px 1fr;gap:10px;align-items:center;cursor:pointer;padding:4px 2px;border-radius:2px;transition:background .12s}
+.ndash-fund-row:hover{background:rgba(0,229,255,.04)}
+.ndash-fund-row + .ndash-fund-row{border-top:1px dashed rgba(0,229,255,.08);padding-top:10px}
+.ndash-fund-mini{width:40px;aspect-ratio:.72;border:1px solid var(--gold,#FFD700);overflow:hidden;position:relative;background:var(--surface2);box-shadow:1px 1px 0 #000}
+.ndash-fund-mini img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0}
+.ndash-fund-mini-ph{width:100%;height:100%;display:grid;place-items:center;color:var(--accent);font-size:.9rem}
+.ndash-fund-row .ndash-fund-name{margin-bottom:2px}
+.ndash-fund-progress{font-size:9px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
 
 /* ── Market movers ── */
 .ndash-market-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border);cursor:pointer;transition:background .1s}
@@ -6404,8 +6418,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         dashAlerts.push({ico:up?'accent':'warn',title:c.card_name,sub:`Price ${up?'↑':'↓'} ${Math.abs(d)}% vs purchase`,delta:(up?'+':'')+d+'%',up});
       });
       ghostCards.slice(0,3).forEach(c => {
-        const pct = c.savings_goal > 0 ? ((c.amount_saved||0)/c.savings_goal*100).toFixed(0) : null;
-        dashAlerts.push({ico:'info',title:c.card_name,sub:pct ? `${pct}% saved toward goal` : 'Wishlist card'});
+        const goal  = c.savings_goal || 0;
+        const saved = c.amount_saved || 0;
+        let sub;
+        if (goal > 0) {
+          const pct = (saved / goal * 100).toFixed(0);
+          // Show actual dollars saved alongside the goal so the saved
+          // amount is visible at a glance, not just a percentage.
+          sub = `$${saved.toFixed(2)} of $${goal.toFixed(2)} saved (${pct}%)`;
+        } else if (saved > 0) {
+          sub = `$${saved.toFixed(2)} saved (no goal set)`;
+        } else {
+          sub = 'Wishlist card';
+        }
+        dashAlerts.push({ico:'info', title: c.card_name, sub});
       });
 
       const _ico = (type) => {
@@ -6641,7 +6667,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               <div class="ndash-panel-body ndash-ytd-compact">${ytdHtml}</div>
             </div>` : ''}
 
-            <!-- Ghost Card Fund -->
+            <!-- Ghost Card Fund — multi-card list, populates more rows
+                 as the panel is stretched (see _refreshGhostFundList) -->
             <div class="ndash-panel" data-panel-id="ghost-fund">
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Ghost Card Fund</div>
@@ -6651,18 +6678,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 </div>
               </div>
               <div class="ndash-panel-body">
-                ${topGhost ? `<div class="ndash-fund-body">
-                  <div class="ndash-fund-card">
-                    ${topGhost.card_image_url?`<img src="${topGhost.card_image_url}" alt="">`:' ♡'}
-                  </div>
-                  <div class="ndash-fund-info">
-                    <div class="ndash-fund-name">${_escHtml((topGhost.card_name||'').slice(0,18))}</div>
-                    <div class="ndash-fund-meta">${_escHtml(topGhost.set_name||'Unknown Set')}</div>
-                    ${topGhost.savings_goal>0?`<div class="ndash-fund-target">$${topGhost.savings_goal.toFixed(2)}</div>
-                    <div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}%"></div></div>
-                    <div style="font-size:9px;color:var(--muted);margin-top:3px">${Math.min(100,((topGhost.amount_saved||0)/topGhost.savings_goal*100)).toFixed(0)}% · $${(topGhost.amount_saved||0).toFixed(2)} saved</div>`:'<div style="font-size:9px;color:var(--muted);margin-top:4px">No savings goal set</div>'}
-                  </div>
-                </div>` : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">No wishlist cards yet</div>`}
+                ${ghostCards.length > 0
+                  ? `<div class="ndash-fund-list" id="ndashFundList"></div>`
+                  : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">No wishlist cards yet</div>`}
               </div>
             </div>
 
@@ -7061,14 +7079,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }, { passive: true });
       });
 
-      // Binder panel: load more cards as the panel grows
+      // Resize-aware panels: load more content as the panel grows.
+      // Binder grid loads more cards; Ghost Fund loads more wishlist
+      // rows. One ResizeObserver, dispatches per-panel.
       var binderPanel = document.querySelector('[data-panel-id="binder"]');
-      if (binderPanel && window.ResizeObserver) {
-        _dashResizeObs = new ResizeObserver(function() {
-          _refreshBinderGrid(binderPanel);
+      var ghostPanel  = document.querySelector('[data-panel-id="ghost-fund"]');
+      if (window.ResizeObserver && (binderPanel || ghostPanel)) {
+        _dashResizeObs = new ResizeObserver(function(entries) {
+          entries.forEach(function(e) {
+            if (binderPanel && e.target === binderPanel) _refreshBinderGrid(binderPanel);
+            if (ghostPanel  && e.target === ghostPanel)  _refreshGhostFundList(ghostPanel);
+          });
         });
-        _dashResizeObs.observe(binderPanel);
+        if (binderPanel) _dashResizeObs.observe(binderPanel);
+        if (ghostPanel)  _dashResizeObs.observe(ghostPanel);
       }
+
+      // Initial render of the ghost fund list (the ResizeObserver may
+      // not fire immediately on first load if the panel size hasn't
+      // changed since registration).
+      if (ghostPanel) _refreshGhostFundList(ghostPanel);
 
       loadDashHeights();
       loadDashCollapse();
@@ -7113,6 +7143,56 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           '</div>' +
         '</div>';
       }).join('');
+    }
+
+    // ── Ghost Card Fund — render one row + dynamic list refresh ─────────────
+    // Renders a single fund row (mini-card thumb + name + progress bar
+    // + saved/goal text). Number() coercion guards against Supabase
+    // returning numeric columns as strings, which would silently break
+    // the percentage math (e.g., '50' / 250 still works, but '50' >
+    // 0 also is "true" for non-empty strings — we want real numbers).
+    function _renderGhostFundRow(c) {
+      var goal  = Number(c.savings_goal) || 0;
+      var saved = Number(c.amount_saved) || 0;
+      var pct   = goal > 0 ? Math.min(100, (saved / goal) * 100) : 0;
+      var pctStr = pct.toFixed(0);
+      var img = c.card_image_url
+        ? '<img src="' + c.card_image_url + '" alt="" loading="lazy" decoding="async">'
+        : '<div class="ndash-fund-mini-ph">♡</div>';
+      var progress = goal > 0
+        ? '<div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:' + pctStr + '%"></div></div>' +
+          '<div class="ndash-fund-progress">$' + saved.toFixed(2) + ' / $' + goal.toFixed(2) + ' (' + pctStr + '%)</div>'
+        : '<div class="ndash-fund-progress" style="font-style:italic">No savings goal set</div>';
+      return '<div class="ndash-fund-row" onclick="openBinderCardDetail(\'' + c.id + '\')">' +
+        '<div class="ndash-fund-mini">' + img + '</div>' +
+        '<div class="ndash-fund-info">' +
+          '<div class="ndash-fund-name">' + _escHtml((c.card_name || '').slice(0, 28)) + '</div>' +
+          progress +
+        '</div>' +
+      '</div>';
+    }
+
+    // Calculate how many ghost-fund rows fit in the current panel
+    // height and render exactly that many. Sorted by largest savings
+    // goal so the "main" wishlist target stays visible at the top.
+    function _refreshGhostFundList(panel) {
+      var list = panel.querySelector('.ndash-fund-list');
+      if (!list) return;
+      var body = panel.querySelector('.ndash-panel-body');
+      if (!body) return;
+      var bodyH = body.clientHeight;
+      var rowH  = 64; // approx height of one fund row + gap
+      var rows  = Math.max(1, Math.floor(bodyH / rowH));
+
+      var ghostCards = typeof collectionItems !== 'undefined'
+        ? collectionItems.filter(function(c) { return c.is_ghost && !c.sold_offline; })
+        : [];
+      var sorted = [...ghostCards].sort(function(a,b) {
+        return (Number(b.savings_goal)||0) - (Number(a.savings_goal)||0);
+      });
+      var show = sorted.slice(0, Math.min(rows, sorted.length));
+      if (show.length === list.children.length && show.length > 0) return; // no change
+      list.innerHTML = show.map(_renderGhostFundRow).join('');
     }
 
     // ── YTD Portfolio Chart ──────────────────────────────────────────────────
@@ -9068,12 +9148,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const saveBtn = document.querySelector('#listCardModal .lc-save-btn');
       if (saveBtn) { saveBtn.textContent = 'Uploading...'; saveBtn.disabled = true; }
 
-      // Upload photos to Supabase Storage
+      // Upload photos to Supabase Storage (re-encoded as webp on-the-fly
+      // for smaller file sizes; falls back to original if encoding fails)
       const photoUrls = [];
       for (const file of lcPhotos) {
-        const ext = file.name.split('.').pop() || 'jpg';
-        const path = `listings/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-        const { data: upData, error: upErr } = await sb.storage.from('card-photos').upload(path, file, { upsert: false });
+        const conv = await _imgToWebpBlob(file);
+        const path = `listings/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${conv.ext}`;
+        const { data: upData, error: upErr } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: false, contentType: conv.contentType });
         if (upErr) {
           // If storage bucket doesn't exist, continue without photos
           console.warn('Photo upload failed:', upErr.message);
@@ -10441,9 +10522,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         };
         reader.readAsDataURL(file);
 
-        const ext = file.name.split('.').pop();
-        const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${ext}`;
-        const { error } = await sb.storage.from('card-photos').upload(path, file, { upsert: true });
+        const conv = await _imgToWebpBlob(file);
+        const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${conv.ext}`;
+        const { error } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: true, contentType: conv.contentType });
         if (!error) {
           const { data } = sb.storage.from('card-photos').getPublicUrl(path);
           editPendingPhotoUrls.push(data.publicUrl);
@@ -10595,10 +10676,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           };
           reader.readAsDataURL(file);
 
-          // Upload to Supabase Storage
-          const ext = file.name.split('.').pop();
-          const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${ext}`;
-          const { error } = await sb.storage.from('card-photos').upload(path, file, { upsert: true });
+          // Upload to Supabase Storage (webp re-encoded)
+          const conv = await _imgToWebpBlob(file);
+          const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${conv.ext}`;
+          const { error } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: true, contentType: conv.contentType });
 
           if (error) {
             console.error('Upload error:', error);
@@ -11718,10 +11799,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     async function _uploadBinderCover(binderId, file) {
-      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `${currentUser.id}/${binderId}.${ext}`;
+      const conv = await _imgToWebpBlob(file);
+      const path = `${currentUser.id}/${binderId}.${conv.ext}`;
       const { error } = await sb.storage.from('binder-covers')
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, conv.blob, { upsert: true, contentType: conv.contentType });
       if (error) throw error;
       const { data: pub } = sb.storage.from('binder-covers').getPublicUrl(path);
       // Cache-bust so the new image shows immediately
@@ -13372,9 +13453,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>`;
         }).join('');
 
-        grid.innerHTML = '';
+        // Populate cards first, then run CRT flash so the tube effect
+        // plays over the visible cards (matches desktop pdex flow).
+        grid.innerHTML = html;
+        grid.scrollTop = 0;
         window._pendingJpCard = true;
-        acCrtFlash('acCrtMob', () => { grid.innerHTML = html; grid.scrollTop = 0; });
+        acCrtFlash('acCrtMob');
 
       } catch (err) {
         const msg = err?.message || String(err);
@@ -13443,12 +13527,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div class="ac-mc-add">VIEW DETAILS</div>
         </div>`;
       }).join('');
-      // CRT power-on animation fires first, results populate when it peaks
-      mob.innerHTML = '';
-      acCrtFlash('acCrtMob', () => {
-        mob.innerHTML = html;
-        mob.scrollTop = 0;
-      });
+      // Populate cards FIRST, then run the CRT power-on animation so
+      // the tube effect actually plays over the visible cards (matches
+      // the desktop pdex flow). Previously cards were added after the
+      // animation peaked, which made them appear with no visible CRT
+      // effect — just a sudden pop.
+      mob.innerHTML = html;
+      mob.scrollTop = 0;
+      acCrtFlash('acCrtMob');
     }
     /* ══ END ADD CARD DEVICE FUNCTIONS ══════════════════════════════════════ */
 
@@ -14002,9 +14088,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         let userPhotoUrl = null;
         if (_atcPhotoBlob) {
           try {
-            const ext  = _atcPhotoBlob.type === 'image/png' ? 'png' : 'jpg';
-            const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
-            const { error: upErr } = await sb.storage.from('card-photos').upload(path, _atcPhotoBlob, { upsert: false, contentType: _atcPhotoBlob.type });
+            const conv = await _imgToWebpBlob(_atcPhotoBlob);
+            const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${conv.ext}`;
+            const { error: upErr } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: false, contentType: conv.contentType });
             if (!upErr) {
               const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
               userPhotoUrl = urlData?.publicUrl || null;
@@ -14198,9 +14284,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       let userPhotoUrl = null;
       if (_atcPhotoBlob) {
         try {
-          const ext  = _atcPhotoBlob.type === 'image/png' ? 'png' : 'jpg';
-          const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
-          const { error: upErr } = await sb.storage.from('card-photos').upload(path, _atcPhotoBlob, { upsert: false, contentType: _atcPhotoBlob.type });
+          const conv = await _imgToWebpBlob(_atcPhotoBlob);
+          const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${conv.ext}`;
+          const { error: upErr } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: false, contentType: conv.contentType });
           if (!upErr) {
             const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
             userPhotoUrl = urlData?.publicUrl || null;
@@ -14568,13 +14654,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var status = document.getElementById('cpStatus');
       if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
 
-      // Export the cropped region
+      // Export the cropped region as webp (smaller than PNG); fall
+      // back to PNG only if the browser can't encode webp from canvas
       var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
-      var blob   = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
+      var blob = await new Promise(function(res) { canvas.toBlob(res, 'image/webp', 0.85); });
+      var ext = 'webp', contentType = 'image/webp';
+      if (!blob) {
+        blob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
+        ext = 'png'; contentType = 'image/png';
+      }
       if (status) status.textContent = 'Uploading…';
 
-      var path = 'collection/' + currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.png';
-      var upResult = await sb.storage.from('card-photos').upload(path, blob, { upsert: false, contentType: 'image/png' });
+      var path = 'collection/' + currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ext;
+      var upResult = await sb.storage.from('card-photos').upload(path, blob, { upsert: false, contentType: contentType });
       if (upResult.error) {
         if (status) status.textContent = 'Upload failed: ' + upResult.error.message;
         if (btn) { btn.textContent = 'Save Photo'; btn.disabled = false; }
@@ -16438,6 +16530,59 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return url;
     }
 
+    // ── WEBP CONVERSION HELPER ───────────────────────────────────────────────
+    // Re-encode a user-supplied image File/Blob as webp (smaller, faster
+    // to download). Returns { blob, ext, contentType }. On any failure
+    // (decoder error, unsupported source format, etc.) returns the
+    // original blob untouched so uploads always succeed.
+    //
+    // Webp is chosen only if the encoded size is smaller than the
+    // original — for some already-optimized images, webp is bigger and
+    // we'd be wasting CPU + producing a worse result.
+    async function _imgToWebpBlob(input, quality = 0.85) {
+      const origExt = (input.name && input.name.split('.').pop().toLowerCase()) ||
+                      (input.type === 'image/png'  ? 'png'  :
+                       input.type === 'image/webp' ? 'webp' :
+                       input.type === 'image/gif'  ? 'gif'  : 'jpg');
+      const fallback = {
+        blob: input,
+        ext: origExt,
+        contentType: input.type || 'application/octet-stream',
+      };
+      // Already webp — nothing to do
+      if (input.type === 'image/webp') {
+        return { blob: input, ext: 'webp', contentType: 'image/webp' };
+      }
+      // Skip GIFs (lose animation if we re-encode)
+      if (input.type === 'image/gif') return fallback;
+      let url = null;
+      try {
+        url = URL.createObjectURL(input);
+        const img = await new Promise((resolve, reject) => {
+          const i = new Image();
+          i.onload  = () => resolve(i);
+          i.onerror = () => reject(new Error('image decode failed'));
+          i.src = url;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const webpBlob = await new Promise((resolve) => {
+          canvas.toBlob(resolve, 'image/webp', quality);
+        });
+        if (!webpBlob)             return fallback;        // encoder returned null
+        if (webpBlob.size >= input.size) return fallback; // webp is bigger; keep original
+        return { blob: webpBlob, ext: 'webp', contentType: 'image/webp' };
+      } catch (err) {
+        console.warn('[webp] conversion failed, falling back to original:', err);
+        return fallback;
+      } finally {
+        if (url) URL.revokeObjectURL(url);
+      }
+    }
+
 
     // ── Coin Flip ─────────────────────────────────────────────────────────
     var _ftLastCoinFlipId = null; // tracks synced flip IDs so we don't replay our own
@@ -18191,15 +18336,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       background: var(--accent);
     }
 
-    /* ─── HIDE RAW / GRADED BADGES IN BINDER ─────────────────────────
-       Hides the Raw/Graded condition pill on binder cards (3x3 / 2x2 /
-       1x1 / list / All Cards). Scoped to #collectionContent so the
-       same badges still appear on marketplace listings, transactions,
-       dashboards, public binders, etc. */
+    /* ─── HIDE RAW / GRADED / WANT BADGES IN BINDER ──────────────────
+       Hides the Raw/Graded condition pill AND the WANT (wishlist) badge
+       on binder cards (3x3 / 2x2 / 1x1 / list / All Cards). Scoped to
+       #collectionContent so the same badges still appear on marketplace
+       listings, transactions, dashboards, public binders, etc. */
     #collectionContent .raw-badge,
     #collectionContent .grade-badge,
-    #collectionContent .binder-card-badge {
+    #collectionContent .binder-card-badge,
+    #collectionContent .want-badge {
       display: none !important;
+    }
+
+    /* ─── BINDER CONTROLS — MOBILE WRAP ──────────────────────────────
+       In specific binders the Share/Import buttons appear alongside
+       Trade Analyzer + Add Card, plus the 4 view-toggle buttons. Eight
+       buttons in one flex row overflow a 360px mobile viewport, which
+       triggers horizontal page scroll and clips the header. Allowing
+       the row and the actions group to wrap fixes both. */
+    @media (max-width: 600px) {
+      .pb-panel-h {
+        flex-wrap: wrap;
+        row-gap: 8px;
+      }
+      .pb-panel-actions {
+        flex-wrap: wrap;
+        row-gap: 6px;
+      }
+      /* Belt-and-suspenders: prevent any other horizontal page scroll
+         while in the binder page on mobile. */
+      body.on-binder { overflow-x: hidden; }
     }
   </style>
 
@@ -18515,8 +18681,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     async function handleSlabScan(slab) {
       const label = _slabCompanyLabels[slab.company] || slab.company.toUpperCase();
+      const hasCert = !!slab.certNumber;
 
-      if (slab.company === 'psa') {
+      if (slab.company === 'psa' && hasCert) {
         // ── PSA: hit our edge function with one automatic retry ───────────
         setScanStatus('PSA slab · cert #' + slab.certNumber + ' · looking up…');
         let result = null;
@@ -18541,14 +18708,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         // Both attempts failed — show cert number so user can verify manually
         setScanStatus('PSA cert #' + slab.certNumber + ' — lookup failed, add manually or paste cert text below');
-      } else {
+      } else if (hasCert) {
         setScanStatus(label + ' slab detected · cert #' + slab.certNumber);
+      } else {
+        // Slab company detected but cert digits weren't readable
+        setScanStatus(label + ' slab detected — couldn\'t read cert number, enter it below or paste cert text');
       }
 
-      // ── Non-PSA or PSA lookup failed: show a cert panel with a verify link ─
-      const certUrl = (typeof _certLookupUrls !== 'undefined' && _certLookupUrls[slab.company])
+      // ── Show cert panel: verify link (if cert known) + paste box ────
+      const certUrl = (hasCert && typeof _certLookupUrls !== 'undefined' && _certLookupUrls[slab.company])
         ? _certLookupUrls[slab.company](slab.certNumber)
         : null;
+
+      // When the OCR couldn't read the cert digits we show a manual
+      // input so the user can type/paste it. The Verify link and paste
+      // tools then become available once a cert is entered.
+      const certBlock = hasCert
+        ? `<div style="font-size:.68rem;color:var(--muted);margin-bottom:12px">Cert # ${slab.certNumber}</div>`
+        : `<div style="font-size:.66rem;color:var(--gold);margin-bottom:8px;line-height:1.45">⚠ Cert # not readable from photo — enter it below to enable lookup &amp; verify link.</div>
+           <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px">
+             <input id="slabManualCert" type="text" inputmode="numeric" autocomplete="off"
+               placeholder="Cert # (e.g. 12345678)"
+               style="flex:1;background:rgba(0,0,0,.35);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;padding:7px 9px;letter-spacing:.06em;box-sizing:border-box;outline:none">
+             <button onclick="_applyManualSlabCert('${slab.company}','${slab.grade||''}')"
+               style="padding:7px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;cursor:pointer;white-space:nowrap">
+               ⟳ Apply
+             </button>
+           </div>`;
 
       const wrap = document.getElementById('scannerResults');
       if (wrap) wrap.innerHTML = `
@@ -18556,13 +18742,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <div style="font-size:.56rem;color:var(--teal);letter-spacing:.1em;margin-bottom:8px">◈ GRADED SLAB DETECTED</div>
           <div style="font-size:.9rem;color:var(--text);font-weight:700;margin-bottom:3px">${label}</div>
           ${slab.grade ? `<div style="font-size:.72rem;color:var(--accent);margin-bottom:3px">Grade: ${slab.grade}</div>` : ''}
-          <div style="font-size:.68rem;color:var(--muted);margin-bottom:12px">Cert # ${slab.certNumber}</div>
+          ${certBlock}
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
             ${certUrl ? `<a href="${certUrl}" target="_blank" rel="noopener"
               style="padding:7px 14px;border:1px solid var(--teal);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;text-decoration:none;cursor:pointer">
               ↗ Verify on ${label}
             </a>` : ''}
-            <button onclick="openManualSlabAdd('${slab.company}','${slab.certNumber}','${slab.grade||''}')"
+            <button onclick="openManualSlabAdd('${slab.company}','${slab.certNumber||''}','${slab.grade||''}')"
               style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer">
               + Add to My Binder
             </button>
@@ -18574,7 +18760,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               style="width:100%;background:rgba(0,0,0,.35);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.61rem;padding:7px;resize:vertical;box-sizing:border-box"
               placeholder="Paste cert page text here…"></textarea>
             <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
-              <button onclick="parsePastedCertText('${slab.company}','${slab.certNumber}','${slab.grade||''}')"
+              <button onclick="parsePastedCertText('${slab.company}','${slab.certNumber||''}','${slab.grade||''}')"
                 style="padding:6px 14px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.65rem;cursor:pointer">
                 ⟳ Parse &amp; Fill
               </button>
@@ -18582,6 +18768,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
           </div>
         </div>`;
+    }
+
+    // Re-render the slab panel with the manually-entered cert number,
+    // unlocking the Verify link and enabling proper add-to-binder.
+    function _applyManualSlabCert(company, grade) {
+      var input = document.getElementById('slabManualCert');
+      if (!input) return;
+      var cert = (input.value || '').trim().replace(/[^\dA-Za-z]/g, '');
+      if (!cert || cert.length < 5) {
+        input.style.borderColor = 'var(--gold)';
+        input.focus();
+        return;
+      }
+      var slab = window._detectedSlab || { company: company, grade: grade };
+      slab.certNumber = cert;
+      window._detectedSlab = slab;
+      handleSlabScan(slab);
     }
 
     // ── Parse pasted cert page text for non-PSA slabs ────────────────────────
@@ -19220,30 +19423,65 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!text) return null;
       var t = text.toUpperCase();
 
-      // Detect grading company
+      // ── Detect grading company ───────────────────────────────────────
+      // Use (?![A-Z]) instead of trailing \b so we still match
+      // "PSA10", "BGS9.5", "CGC10" etc. — word boundaries fail between
+      // two word chars (e.g., A→1), so /\bPSA\b/ wouldn't match "PSA10"
+      // which is a common OCR output from a slab label.
       var company = null;
-      if      (/\bPSA\b/.test(t))           company = 'psa';
-      else if (/\b(BGS|BECKETT)\b/.test(t)) company = 'bgs';
-      else if (/\bCGC\b/.test(t))           company = 'cgc';
-      else if (/\bSGC\b/.test(t))           company = 'sgc';
+      if      (/\bPSA(?![A-Z])/.test(t))           company = 'psa';
+      else if (/\b(BGS|BECKETT)(?![A-Z])/.test(t)) company = 'bgs';
+      else if (/\bCGC(?![A-Z])/.test(t))           company = 'cgc';
+      else if (/\bSGC(?![A-Z])/.test(t))           company = 'sgc';
       // ACE: require "ACE GRADING" phrase or "ACE" + grading word (not "Ace Trainer" cards)
       else if (/ACE[\s\-]GRADING/i.test(t) || (/\bACE\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t))) company = 'ace';
       // TAG Grading (taggrading.com) — match "TAG GRADING" or "TAG GRADED" phrase, avoid "TAG TEAM"
       else if (/TAG[\s\-]GRADING|TAG[\s\-]GRADED|TAG[\s\-]CARDS?/i.test(t) || (/\bTAG\b/.test(t) && /GRAD(ED?|ING)|GEM[\s\-]MINT|PRISTINE/i.test(t) && !/TAG[\s\-]TEAM/i.test(t))) company = 'tag';
       if (!company) return null;
 
-      // Detect grade — standalone grade value (10, 9.5 … 1)
+      // ── Detect grade ────────────────────────────────────────────────
+      // Prefer the digit ADJACENT to the company name or to a quality
+      // keyword, otherwise we'd just pick the first 1–10 number in the
+      // OCR'd text — which on a PSA slab very often reads HP, damage,
+      // or attack costs from the card itself before the actual grade.
       var grade = null;
-      var gm = text.match(/\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3|2|1)\b/);
-      if (gm) grade = gm[1];
+      var GRADE_VALS = '10|9(?:\\.5)?|8(?:\\.5)?|7(?:\\.5)?|6(?:\\.5)?|5(?:\\.5)?|4(?:\\.5)?|[123]';
+      var KW = '(?:GEM\\s*MT|GEM\\s*MINT|MINT|NM[\\s\\-]?MT|NM[\\s\\-]?M|NM|EX[\\s\\-]?MT|EX|VG[\\s\\-]?EX|VG|GOOD|POOR|FR|PR|AUTH(?:ENTIC)?)';
+      var COMP = company.toUpperCase();
+
+      // 1) Grade attached to or right after the company name (PSA 10, PSA10, PSA GEM MT 10, PSA-10)
+      var compRe = new RegExp('\\b' + COMP + '[\\s\\-.:#]*' + KW + '?[\\s\\-.:#]*(' + GRADE_VALS + ')(?![\\d])', 'i');
+      var gm1 = text.match(compRe);
+      if (gm1) grade = gm1[1];
+
+      // 2) Grade keyword + number anywhere in text (GEM MT 10, MINT 9)
+      if (!grade) {
+        var kwRe = new RegExp(KW + '[\\s\\-.:#]*(' + GRADE_VALS + ')(?![\\d])', 'i');
+        var gm2 = text.match(kwRe);
+        if (gm2) grade = gm2[1];
+      }
+
+      // 3) Mint-tier wording with no explicit number → assume 10 / 9
       if (!grade && /GEM[\s\-]?MT|PRISTINE|PERFECT/i.test(t)) grade = '10';
       if (!grade && /NEAR[\s\-]?MINT/i.test(t))               grade = '9';
 
-      // Detect cert number — standalone 7–10 digit number OR one-letter-prefix cert (e.g. TAG Y5677220)
-      // Strip card fraction patterns (X/Y) first so they don't pollute the match
+      // 4) Last-resort: any standalone 1–10 in the OCR (least reliable)
+      if (!grade) {
+        var gm3 = text.match(new RegExp('\\b(' + GRADE_VALS + ')\\b'));
+        if (gm3) grade = gm3[1];
+      }
+
+      // ── Detect cert number ──────────────────────────────────────────
+      // Strip card fraction patterns (e.g. "94/165") first so they
+      // don't pollute the match. Then prefer numbers adjacent to a
+      // "CERT" / "CERTIFICATE" keyword for accuracy. PSA certs are
+      // typically 8-10 digits but the newest series go up to 11.
       var stripped = text.replace(/\b[A-Z]{0,3}\d{1,4}[\/\\][A-Z]{0,3}\d{1,4}\b/g, ' ');
-      // Try all-digit cert first (PSA, BGS, CGC, SGC), then letter-prefixed (TAG, ACE)
-      var cm = stripped.match(/\b(\d{7,10})\b/) || stripped.match(/\b([A-Z]\d{6,9})\b/);
+
+      var cm = stripped.match(/CERT(?:IFICATE|IFIED)?(?:\s*(?:NUMBER|NO\.?|N°|#|ID))?\s*[:\-#]?\s*(\d{7,11})/i)
+            || stripped.match(/\b(\d{8,11})\b/)              // PSA / BGS / CGC / SGC range
+            || stripped.match(/\b(\d{7})\b/)                  // older 7-digit certs
+            || stripped.match(/\b([A-Z]\d{6,9})\b/);          // letter-prefixed (TAG, ACE)
       var certNumber = cm ? cm[1] : null;
 
       return { company: company, certNumber: certNumber, grade: grade };
@@ -19424,9 +19662,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         window._detectedSlab = parseGradedSlab(fullText);
         if (window._detectedSlab) {
           console.log('[Scanner] Slab detected:', window._detectedSlab);
-          // If we have a cert number, skip card matching entirely and go straight
-          // to the cert lookup / manual-add flow.
-          if (!silent && window._detectedSlab.certNumber) {
+          // ALWAYS hand off to the slab handler when a slab is detected.
+          // Previously this was gated on certNumber being truthy — but
+          // when the OCR sees the company name (PSA, BGS, etc.) yet
+          // can't quite read the small cert digits, falling through to
+          // regular card matching shows the card-picker instead of the
+          // paste-cert UI. The slab handler now gracefully shows a
+          // manual cert-entry input + paste-text area when the cert
+          // number is missing.
+          if (!silent) {
             await handleSlabScan(window._detectedSlab);
             return [];
           }
