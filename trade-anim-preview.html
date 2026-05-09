@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade Animation Preview</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#060814;
+    color:#cbd5e1;
+    font-family:'Space Mono', ui-monospace, monospace;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  h1{font-size:14px;letter-spacing:.2em;color:#06b6d4;margin-bottom:6px;font-weight:700}
+  p.sub{font-size:11px;color:#64748b;margin-bottom:18px;letter-spacing:.1em}
+
+  .scene{
+    position:relative;
+    width:100%;
+    max-width:760px;
+    aspect-ratio:1061 / 714;
+    background:#0a0d1a;
+    border:1px solid #1e293b;
+    border-radius:8px;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+
+  /* Cards image shrunk to 60% (40% smaller) and centered in the scene */
+  .base-cards{
+    position:absolute;inset:0;
+    background-image:url('trade_cards.webp');
+    background-size:60% auto;
+    background-position:center;
+    background-repeat:no-repeat;
+  }
+
+  .lens-wrap{
+    position:absolute;left:0;top:0;
+    width:var(--mg-w);height:var(--mg-h);
+    pointer-events:none;
+    will-change:transform;
+    transform:translate(-9999px,-9999px);
+  }
+
+  .lens-zoom{
+    position:absolute;
+    left:var(--lens-l);top:var(--lens-t);
+    width:var(--lens-d);height:var(--lens-d);
+    border-radius:50%;
+    overflow:hidden;
+    background:#0a0d1a;
+  }
+
+  .lens-zoom::after{
+    content:'';
+    position:absolute;inset:0;
+    background:
+      radial-gradient(circle at 35% 30%, rgba(255,255,255,.18), transparent 50%),
+      radial-gradient(circle at 50% 50%, transparent 55%, rgba(34,211,238,.18) 78%, rgba(0,0,0,.45) 100%);
+    pointer-events:none;
+    mix-blend-mode:screen;
+  }
+
+  /* Zoom view: backgrounds at 2× the visible scene size so the same
+     "60% auto / center" placement renders the cards 2× as big inside
+     the lens. Translated below to track the lens position. */
+  .lens-zoom-img{
+    position:absolute;
+    width:calc(var(--scene-w) * 2);
+    height:calc(var(--scene-h) * 2);
+    transform-origin:0 0;
+    background-image:url('trade_cards.webp');
+    background-size:60% auto;
+    background-position:center;
+    background-repeat:no-repeat;
+    will-change:transform;
+    filter:saturate(1.15) contrast(1.05);
+  }
+
+  .lens-frame{
+    position:absolute;left:0;top:0;
+    width:var(--mg-w);height:var(--mg-h);
+    background-image:url('mag_glass.webp');
+    background-size:100% 100%;
+    pointer-events:none;
+    filter:drop-shadow(0 8px 18px rgba(0,0,0,.5));
+  }
+
+  .label{
+    position:absolute;
+    font-size:10px;letter-spacing:.18em;font-weight:700;
+    color:#06b6d4;text-shadow:1px 1px 0 #000;
+  }
+  .label-top{top:14px;left:18px}
+  .label-bot{bottom:14px;left:18px;color:#94a3b8;font-weight:400;letter-spacing:.1em;font-size:11px}
+
+  .controls{
+    margin-top:20px;
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;
+  }
+  .controls button{
+    background:transparent;
+    border:1px solid #334155;
+    color:#cbd5e1;
+    padding:7px 14px;
+    font-family:inherit;font-size:12px;
+    cursor:pointer;letter-spacing:.05em;
+    transition:all .15s;
+  }
+  .controls button:hover{border-color:#06b6d4;color:#06b6d4}
+
+  .controls label{
+    font-size:11px;color:#64748b;display:flex;gap:6px;align-items:center;
+  }
+  .controls input[type=range]{width:110px}
+
+  .tuning{
+    margin-top:14px;font-size:10px;color:#475569;letter-spacing:.05em;text-align:center;line-height:1.6;
+  }
+  .tuning code{background:#0f172a;padding:2px 5px;border-radius:2px;color:#94a3b8}
+</style>
+</head>
+<body>
+
+<h1>⌬ TRADE LOCKED · INSPECTING</h1>
+<p class="sub">Animation preview — using real mag_glass.webp + trade_cards.webp assets</p>
+
+<div class="scene" id="scene">
+  <div class="base-cards"></div>
+
+  <div class="lens-wrap" id="lens">
+    <div class="lens-zoom">
+      <div class="lens-zoom-img" id="lensImg"></div>
+    </div>
+    <div class="lens-frame"></div>
+  </div>
+
+  <div class="label label-top">⌬ TRADE LOCKED · INSPECTING</div>
+  <div class="label label-bot" id="status">&gt; INITIALIZING</div>
+</div>
+
+<div class="controls">
+  <button id="replay">↻ Replay</button>
+  <button id="pause">⏸ Pause</button>
+  <label>Speed <input type="range" id="speed" min="0.4" max="2" step="0.1" value="1"></label>
+  <span id="speed-out" style="font-size:11px;color:#94a3b8;width:30px">1.0×</span>
+</div>
+
+<div class="tuning">
+  Tweakables in JS: <code>LENS_CENTER_X / Y</code> and <code>LENS_RADIUS</code> on magglass image,<br>
+  <code>CARD1_X / CARD2_X</code> for horizontal centers, <code>CARD_TOP_Y / CARD_BOT_Y</code> for the down-up sweep range.<br>
+  All in normalized 0–1 scene coords — adjust to taste.
+</div>
+
+<script>
+(function(){
+  // ── TUNABLES ─────────────────────────────────────────────────────
+  // Where the LENS (round glass) sits inside mag_glass.webp (1000x715),
+  // expressed as a fraction of the image. Glass is in the upper-left.
+  const LENS_CX = 0.285;   // 28.5% from left
+  const LENS_CY = 0.395;   // 39.5% from top
+  const LENS_R  = 0.190;   // radius = 19% of image width
+
+  // Card centers in the SCENE (after the cards image is shrunk to 60% and
+  // centered). Image bounds: 20%–80% horizontal/vertical. Card 1 sits at
+  // ~25% of the image (= 20%+25%*60% = 35% of scene); Card 2 at ~75% of
+  // image (= 65% of scene). Verticals scan top to bottom of each card.
+  const CARD1_X    = 0.35;
+  const CARD2_X    = 0.65;
+  const CARD_TOP_Y = 0.30;
+  const CARD_BOT_Y = 0.70;
+
+  // Visual size of the displayed magnifier (% of scene width).
+  // Bumped from 0.42 → 0.504 (+20%) so the lens covers more of the card.
+  const MAG_W_PCT = 0.504;
+
+  // Zoom level applied when looking through the lens
+  const ZOOM = 2.0;
+
+  // Animation timing (ms) — slowed ~70% so the inspection feels deliberate
+  const PHASE_DOWN_1 = 1500;
+  const PHASE_UP_1   = 1100;
+  const PHASE_SLIDE  = 1000;
+  const PHASE_DOWN_2 = 1500;
+  const PHASE_UP_2   = 1100;
+  const PHASE_HOLD   = 1000;
+
+  // ── DOM ──────────────────────────────────────────────────────────
+  const scene  = document.getElementById('scene');
+  const lens   = document.getElementById('lens');
+  const lensImg= document.getElementById('lensImg');
+  const status = document.getElementById('status');
+
+  let paused = false;
+  let speed  = 1;
+  let cycleStart = performance.now();
+
+  // ── Layout helpers — recompute on resize ─────────────────────────
+  function layout(){
+    const r = scene.getBoundingClientRect();
+    const sceneW = r.width, sceneH = r.height;
+    const magW = sceneW * MAG_W_PCT;
+    // mag image is 1000x715, preserve aspect ratio
+    const magH = magW * (715/1000);
+    const lensD = magW * LENS_R * 2;
+    // lens position WITHIN the magglass image (top-left of the lens square).
+    // X uses magW (LENS_CX is fraction of image width), Y uses magH (LENS_CY
+    // is fraction of image HEIGHT — was incorrectly using magW which pushed
+    // the zoom circle down by ~16% of the magglass height).
+    const lensL = magW * LENS_CX - lensD/2;
+    const lensT = magH * LENS_CY - lensD/2;
+
+    scene.style.setProperty('--scene-w', sceneW + 'px');
+    scene.style.setProperty('--scene-h', sceneH + 'px');
+    scene.style.setProperty('--mg-w',   magW + 'px');
+    scene.style.setProperty('--mg-h',   magH + 'px');
+    scene.style.setProperty('--lens-l', lensL + 'px');
+    scene.style.setProperty('--lens-t', lensT + 'px');
+    scene.style.setProperty('--lens-d', lensD + 'px');
+
+    return { sceneW, sceneH, magW, magH, lensL, lensT, lensD };
+  }
+
+  // ── Animation phases — pure down-up on each card, no dip ─────────
+  function pathAt(elapsed){
+    const total = PHASE_DOWN_1 + PHASE_UP_1 + PHASE_SLIDE + PHASE_DOWN_2 + PHASE_UP_2 + PHASE_HOLD;
+    const t = elapsed % total;
+
+    let phase, p, x, y, msg;
+    let cursor = 0;
+
+    if (t < (cursor += PHASE_DOWN_1)) {
+      p = (t - (cursor - PHASE_DOWN_1)) / PHASE_DOWN_1;
+      x = CARD1_X;
+      y = CARD_TOP_Y + (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+      msg = '> SCANNING SIDE A .>';
+    } else if (t < (cursor += PHASE_UP_1)) {
+      p = (t - (cursor - PHASE_UP_1)) / PHASE_UP_1;
+      x = CARD1_X;
+      y = CARD_BOT_Y - (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+      msg = '> SCANNING SIDE A ..>';
+    } else if (t < (cursor += PHASE_SLIDE)) {
+      p = (t - (cursor - PHASE_SLIDE)) / PHASE_SLIDE;
+      x = CARD1_X + (CARD2_X - CARD1_X) * easeInOutSine(p);
+      y = CARD_TOP_Y;
+      msg = '> CROSS-CHECK ...>';
+    } else if (t < (cursor += PHASE_DOWN_2)) {
+      p = (t - (cursor - PHASE_DOWN_2)) / PHASE_DOWN_2;
+      x = CARD2_X;
+      y = CARD_TOP_Y + (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+      msg = '> SCANNING SIDE B .>';
+    } else if (t < (cursor += PHASE_UP_2)) {
+      p = (t - (cursor - PHASE_UP_2)) / PHASE_UP_2;
+      x = CARD2_X;
+      y = CARD_BOT_Y - (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
+      msg = '> SCANNING SIDE B ..>';
+    } else {
+      x = CARD2_X;
+      y = CARD_TOP_Y;
+      msg = '> VERIFIED .>';
+    }
+    return { x, y, msg };
+  }
+
+  function easeInOutSine(t){ return -(Math.cos(Math.PI*t) - 1) / 2; }
+
+  // ── Render loop ─────────────────────────────────────────────────
+  let lastTime = performance.now();
+  let virtualElapsed = 0;
+
+  function tick(now){
+    const dt = now - lastTime;
+    lastTime = now;
+    if (!paused) virtualElapsed += dt * speed;
+
+    const L = layout();
+    const { x, y, msg } = pathAt(virtualElapsed);
+
+    // Lens center in scene px
+    const lensCX = x * L.sceneW;
+    const lensCY = y * L.sceneH;
+
+    // Position the magglass so its lens hole aligns with (lensCX, lensCY).
+    // LENS_CX is a fraction of image WIDTH, LENS_CY is a fraction of image
+    // HEIGHT — so use magW for X and magH for Y.
+    const lensInMagX = LENS_CX * L.magW;
+    const lensInMagY = LENS_CY * L.magH;
+    lens.style.transform = 'translate(' + (lensCX - lensInMagX) + 'px,' + (lensCY - lensInMagY) + 'px)';
+
+    // Counter-translate the zoom layer so the lens always shows what's
+    // directly underneath at ZOOM× magnification. The zoom element is
+    // already 2× the scene size with the same background-size+position,
+    // so a 2x-shrunk image at scene point (lensCX, lensCY) lives at
+    // (2*lensCX, 2*lensCY) on the zoom element. We slide that point to
+    // the lens center (lensD/2, lensD/2). No CSS scale needed.
+    const tx = -ZOOM * lensCX + L.lensD/2;
+    const ty = -ZOOM * lensCY + L.lensD/2;
+    lensImg.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+
+    status.textContent = msg;
+
+    requestAnimationFrame(tick);
+  }
+
+  // ── Controls ────────────────────────────────────────────────────
+  document.getElementById('replay').addEventListener('click', ()=>{
+    virtualElapsed = 0;
+    paused = false;
+    document.getElementById('pause').textContent = '⏸ Pause';
+  });
+  document.getElementById('pause').addEventListener('click', (e)=>{
+    paused = !paused;
+    e.target.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  });
+  const speedEl = document.getElementById('speed');
+  const speedOut = document.getElementById('speed-out');
+  speedEl.addEventListener('input', ()=>{
+    speed = parseFloat(speedEl.value);
+    speedOut.textContent = speed.toFixed(1) + '×';
+  });
+
+  window.addEventListener('resize', layout);
+  layout();
+  // Preload the magglass image so first frame doesn't flash
+  const preload = new Image();
+  preload.src = 'mag_glass.webp';
+  preload.onload = () => requestAnimationFrame(tick);
+  preload.onerror = () => requestAnimationFrame(tick);
+})();
+</script>
+
+</body>
+</html>

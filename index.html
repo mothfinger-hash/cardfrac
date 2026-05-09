@@ -13198,9 +13198,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       pendingCollectionCard = cardData;
       const nameEl = document.getElementById('wishlistCardName');
-      if (nameEl) nameEl.textContent = cardData.cardName + (cardData.setName ? ' — ' + cardData.setName : '');
+      if (nameEl) nameEl.textContent = (cardData.cardName || '(unnamed card)') + (cardData.setName ? ' — ' + cardData.setName : '');
+      // Show manual name input when the catalog row has no name —
+      // otherwise the user has nowhere to enter one.
+      const _hasName = !!(cardData.cardName && String(cardData.cardName).trim());
       const manualRow = document.getElementById('wishlistManualNameRow');
-      if (manualRow) manualRow.style.display = 'none';
+      if (manualRow) manualRow.style.display = _hasName ? 'none' : '';
+      const manualNameInput = document.getElementById('wishlistManualNameInput');
+      if (manualNameInput) manualNameInput.value = cardData.cardName || '';
       document.getElementById('wishlistGoal').value = '';
       document.getElementById('wishlistSaved').value = '';
       document.getElementById('wishlistPriceUrl').value = '';
@@ -13250,7 +13255,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (manualRow && manualRow.style.display !== 'none' && manualInput) {
         cardName = manualInput.value.trim();
       }
-      if (!cardName) { showToast('Please enter a card name'); return; }
+      if (!cardName) {
+        // Reveal + focus the manual input so the user has somewhere
+        // to type a name when the card has no catalog name attached.
+        if (manualRow)   manualRow.style.display = '';
+        if (manualInput) { manualInput.focus(); manualInput.style.borderColor = 'var(--gold)'; }
+        showToast('Please enter a card name');
+        return;
+      }
 
       const btn = document.querySelector('#addToWishlistModal button[onclick="saveToWishlist()"]');
       if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
@@ -14008,11 +14020,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       pendingCollectionCard = cardData;
       const nameEl = document.getElementById('atcCardName');
-      if (nameEl) nameEl.textContent = cardData.cardName + (cardData.setName ? ' — ' + cardData.setName : '');
+      if (nameEl) nameEl.textContent = (cardData.cardName || '(unnamed card)') + (cardData.setName ? ' — ' + cardData.setName : '');
+      // Show the manual name input when the catalog row has no name
+      // (newer JP-only cards, custom uploads, etc.) — otherwise the
+      // user has no way to enter a name and the save errors out with
+      // "Please enter a card name" with nowhere to type one.
+      const _hasName = !!(cardData.cardName && String(cardData.cardName).trim());
       const manualRow = document.getElementById('atcManualNameRow');
-      if (manualRow) manualRow.style.display = 'none';
+      if (manualRow) manualRow.style.display = _hasName ? 'none' : '';
       const manualInput = document.getElementById('atcManualNameInput');
-      if (manualInput) manualInput.value = '';
+      if (manualInput) manualInput.value = cardData.cardName || '';
       // Reset form
       document.getElementById('atcCondition').value = 'raw';
       document.getElementById('atcGrade').value = '10';
@@ -14284,10 +14301,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       let cardName = pendingCollectionCard.cardName;
       const manualInput = document.getElementById('atcManualNameInput');
-      if (manualInput && document.getElementById('atcManualNameRow').style.display !== 'none') {
+      const manualRow   = document.getElementById('atcManualNameRow');
+      if (manualInput && manualRow && manualRow.style.display !== 'none') {
         cardName = manualInput.value.trim();
       }
-      if (!cardName) { showToast('Please enter a card name'); return; }
+      if (!cardName) {
+        // Reveal the manual input + focus it, so the user has somewhere
+        // to type a name (otherwise they hit a dead end on cards
+        // without a catalog name, like newer JP-only releases).
+        if (manualRow)   manualRow.style.display = '';
+        if (manualInput) { manualInput.focus(); manualInput.style.borderColor = 'var(--gold)'; }
+        showToast('Please enter a card name');
+        return;
+      }
 
       const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
       if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
