@@ -11834,26 +11834,46 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       event.dataTransfer.setData('text/plain', String(itemId));
       event.dataTransfer.effectAllowed = 'move';
 
-      // Render a small card-shaped drag ghost so the dragged image
-      // doesn't obscure the drop targets in grid view. The browser
-      // snapshots whatever element we pass to setDragImage at this
-      // moment; we then remove the element from the DOM.
+      // Render a small card-shaped drag ghost on a canvas so the
+      // dragged image doesn't obscure the drop targets. Using a canvas
+      // (vs a background-image div) makes the snapshot synchronous and
+      // independent of image-load timing — the original card image is
+      // already rendered in the page so drawImage works immediately.
       const img = event.currentTarget.querySelector('img');
       if (img && img.complete && img.naturalWidth > 0) {
+        const DPR = window.devicePixelRatio || 1;
         const GHOST_W = 90;                              // card-aspect 63:88
         const GHOST_H = Math.round(GHOST_W * 88 / 63);   // ≈ 126
-        const ghost = document.createElement('div');
-        ghost.style.cssText =
+        const canvas = document.createElement('canvas');
+        canvas.width  = GHOST_W * DPR;
+        canvas.height = GHOST_H * DPR;
+        canvas.style.cssText =
           'position:absolute;top:-9999px;left:-9999px;' +
-          'width:' + GHOST_W + 'px;height:' + GHOST_H + 'px;' +
-          'background:#1a1a1a center/cover no-repeat url("' + img.src + '");' +
-          'border:2px solid #00E5FF;border-radius:4px;' +
-          'box-shadow:0 6px 16px rgba(0,0,0,.6);' +
-          'transform:rotate(-3deg);';
-        document.body.appendChild(ghost);
-        event.dataTransfer.setDragImage(ghost, GHOST_W / 2, GHOST_H / 2);
+          'width:' + GHOST_W + 'px;height:' + GHOST_H + 'px;';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(DPR, DPR);
+        // Background fill (in case the image has transparency)
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, GHOST_W, GHOST_H);
+        // Draw image with object-fit:cover semantics
+        const imgAspect = img.naturalWidth / img.naturalHeight;
+        const ghostAspect = GHOST_W / GHOST_H;
+        let dw, dh, dx, dy;
+        if (imgAspect > ghostAspect) {
+          dh = GHOST_H; dw = dh * imgAspect; dx = (GHOST_W - dw) / 2; dy = 0;
+        } else {
+          dw = GHOST_W; dh = dw / imgAspect; dx = 0; dy = (GHOST_H - dh) / 2;
+        }
+        ctx.drawImage(img, dx, dy, dw, dh);
+        // Cyan border
+        ctx.strokeStyle = '#00E5FF';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, GHOST_W - 2, GHOST_H - 2);
+
+        document.body.appendChild(canvas);
+        event.dataTransfer.setDragImage(canvas, GHOST_W / 2, GHOST_H / 2);
         // Browser has already snapshotted; safe to remove on next tick
-        setTimeout(function() { ghost.remove(); }, 0);
+        setTimeout(function() { canvas.remove(); }, 0);
       }
 
       event.currentTarget.classList.add('dragging');
