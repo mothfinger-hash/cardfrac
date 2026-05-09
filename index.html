@@ -11225,8 +11225,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         ondragend="allCardsDragEnd(event)"
         ${isGhost ? 'style="opacity:.52"' : ''}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
-        <img src="${_thumbUrl(item.card_image_url, 160) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-          style="width:44px;height:60px;object-fit:contain;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
+        <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+          style="width:44px;height:60px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
           onerror="this.style.visibility='hidden'">
         <div style="flex:1;min-width:0">
           <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
@@ -11249,7 +11249,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return `<div class="acg-card${isGhost ? ' ghost-card' : ''}" onclick="openBinderCardDetail('${item.id}')">
         <div class="acg-card-art">
           ${item.card_image_url
-            ? `<img src="${_thumbUrl(item.card_image_url, 220)}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async">`
+            ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async">`
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">${isGhost ? '♡' : '?'}</div>`}
           ${isGhost
             ? `<span class="want-badge" style="position:absolute;top:3px;right:3px;font-size:.44rem;padding:1px 4px">WANT</span>`
@@ -12036,8 +12036,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               class="allcards-row${isGhost ? ' ghost-card' : ''}"
               style="cursor:pointer${isGhost ? ';opacity:.52' : ''}"
               onclick="openBinderCardDetail('${item.id}')">
-              <img src="${_thumbUrl(item.card_image_url, 160) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-                style="width:44px;height:60px;object-fit:contain;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
+              <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+                style="width:44px;height:60px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
                 onerror="this.style.visibility='hidden'">
               <div style="flex:1;min-width:0">
                 <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
@@ -12077,7 +12077,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             style="cursor:grab">
             <div class="binder-card-img-wrap">
               ${item.card_image_url
-                ? `<img src="${_thumbUrl(item.card_image_url, 220)}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
+                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
@@ -12652,17 +12652,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       document.getElementById('binderDetailContent').innerHTML = `
 
-        <!-- Photo — card-shaped slot; absolutely-positioned img fills
-             the slot with object-fit:contain so the whole user photo is
-             visible inside a Pokemon-card-shaped frame regardless of
-             the photo's natural aspect ratio or intrinsic size. -->
-        <div style="position:relative;width:100%;max-width:240px;aspect-ratio:245/342;margin:0 auto 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;overflow:hidden;${item.card_image_url ? 'cursor:zoom-in;' : ''}"
+        <!-- Photo — natural aspect ratio (like the lightbox preview).
+             The .pb-detail-photo-slot CSS class handles sizing/centering. -->
+        <div class="pb-detail-photo-slot" ${item.card_image_url ? `style="cursor:zoom-in"` : ''}
              onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
           ${(item.card_image_url || item.api_card_id)
-            ? `<img src="${_thumbUrl(item.card_image_url, 480) || 'data:,'}"
-                 style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block"
+            ? `<img src="${item.card_image_url || 'data:,'}"
                  onerror="_binderImgFail(this,'${item.id}')">`
-            : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem">?</div>`}
+            : `<div style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;padding:30px">?</div>`}
         </div>
 
         <!-- Badge -->
@@ -17958,9 +17955,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     .listing-card:hover .card-thumb { filter: none !important; }
 
-    /* Binder grid cards (3x3 / 2x2 / 1x1) — absolute-positioned img
-       fills the card-shaped wrapper. Using position:absolute beats any
-       layout flakiness from flex parents or intrinsic-size sizing. */
+    /* Binder grid cards (3x3 / 2x2 / 1x1) — match the dashboard widget
+       (.ndash-tcard-art) which uses object-fit:cover. This crops user
+       photos to card-shape but since the photos are OF cards, the card
+       fills the slot exactly like the catalog images do. Contain was
+       causing user photos to render as thin centered slivers because
+       phone-camera photos are often wider than card aspect. */
     #collectionContent .binder-card-img-wrap {
       position: relative !important;
       aspect-ratio: 245 / 342;
@@ -17973,21 +17973,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       inset: 0 !important;
       width: 100% !important;
       height: 100% !important;
-      object-fit: contain !important;
+      object-fit: cover !important;
       background: var(--surface2);
     }
 
-    /* Binder LIST view row thumbnail — wrap-style absolute positioning
-       inside a fixed-size box so user photos always fill horizontally. */
+    /* Binder LIST view row thumbnail — small fixed-size card-shape with
+       cover, matches the grid views. */
     #collectionContent .allcards-row > img {
       width: 44px !important;
       height: 60px !important;
       min-width: 44px !important;
-      object-fit: contain !important;
+      object-fit: cover !important;
       background: var(--surface2);
     }
 
-    /* All Cards 4-col grid view — same approach as binder grid. */
+    /* All Cards 4-col grid view — same cover behavior as dashboard. */
     #collectionContent .acg-card-art {
       position: relative !important;
       aspect-ratio: 245 / 342;
@@ -17999,8 +17999,38 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       inset: 0 !important;
       width: 100% !important;
       height: 100% !important;
-      object-fit: contain !important;
+      object-fit: cover !important;
       background: var(--surface2);
+    }
+
+    /* Card Detail modal — exactly mirrors the dashboard widget approach
+       (.ndash-tcard-art): card-shaped wrapper, absolutely-positioned img
+       with object-fit:cover. Now that the source URL is also raw (no
+       _thumbUrl), this should render identically to the dashboard. */
+    #binderDetailContent .pb-detail-photo-slot {
+      display: block !important;
+      position: relative !important;
+      width: 100% !important;
+      max-width: 240px !important;
+      aspect-ratio: 245 / 342 !important;
+      margin: 0 auto 10px !important;
+      padding: 0 !important;
+      background: var(--surface2) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 4px !important;
+      overflow: hidden !important;
+    }
+    #binderDetailContent .pb-detail-photo-slot img {
+      display: block !important;
+      position: absolute !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      object-fit: cover !important;
+      background: var(--surface2);
+      border-radius: 0 !important;
     }
 
     /* Detail-page gallery */
