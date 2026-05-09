@@ -14572,7 +14572,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           background:   true,
           movable:      true,
           zoomable:     true,
-          rotatable:    false,
+          rotatable:    true,   // was false — silently broke the Rotate 90° button
           guides:       true,
         });
       };
@@ -14642,7 +14642,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (status) status.textContent = '✓ Adjust crop if needed, then save';
       } catch (err) {
         console.error('[BG Remove]', err);
-        if (status) status.textContent = 'Background removal failed — original photo kept';
+        // Surface a more diagnostic message — most failures are network
+        // (CDN model download blocked) or memory (mobile Safari OOM
+        // on large photos). Generic "failed" left users guessing.
+        var msg = (err && err.message) ? String(err.message) : '';
+        var hint = /network|fetch|load|CORS|abort/i.test(msg)
+          ? ' (model download blocked — check connection or extension)'
+          : /memory|allocat|wasm/i.test(msg)
+          ? ' (out of memory — try a smaller photo)'
+          : '';
+        if (status) status.textContent = 'Background removal failed — original photo kept' + hint;
         if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
       }
       _cpBgBusy = false;
@@ -16555,30 +16564,57 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       // Skip GIFs (lose animation if we re-encode)
       if (input.type === 'image/gif') return fallback;
+
       let url = null;
+      let bitmap = null;
       try {
-        url = URL.createObjectURL(input);
-        const img = await new Promise((resolve, reject) => {
-          const i = new Image();
-          i.onload  = () => resolve(i);
-          i.onerror = () => reject(new Error('image decode failed'));
-          i.src = url;
-        });
+        // Decode the image. Prefer createImageBitmap with
+        // `imageOrientation: 'from-image'` so EXIF rotation tags are
+        // applied to the pixel data — without this, iPhone photos
+        // taken in portrait mode (which are stored as landscape pixels
+        // + a "rotate 90°" EXIF tag) get drawn sideways onto canvas
+        // and uploaded that way. <img> rendering applies EXIF
+        // automatically, but canvas drawImage does not.
+        let drawW, drawH;
+        if (typeof createImageBitmap === 'function') {
+          try {
+            bitmap = await createImageBitmap(input, { imageOrientation: 'from-image' });
+          } catch (_) {
+            // Older Safari (< 15) doesn't accept the options bag; retry without
+            bitmap = await createImageBitmap(input);
+          }
+          drawW = bitmap.width;
+          drawH = bitmap.height;
+        } else {
+          // Last-resort fallback for very old browsers — won't apply
+          // EXIF to canvas, but at least preserves the upload.
+          url = URL.createObjectURL(input);
+          bitmap = await new Promise((resolve, reject) => {
+            const i = new Image();
+            i.onload  = () => resolve(i);
+            i.onerror = () => reject(new Error('image decode failed'));
+            i.src = url;
+          });
+          drawW = bitmap.naturalWidth;
+          drawH = bitmap.naturalHeight;
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width  = img.naturalWidth;
-        canvas.height = img.naturalHeight;
+        canvas.width  = drawW;
+        canvas.height = drawH;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(bitmap, 0, 0);
         const webpBlob = await new Promise((resolve) => {
           canvas.toBlob(resolve, 'image/webp', quality);
         });
-        if (!webpBlob)             return fallback;        // encoder returned null
+        if (!webpBlob)                   return fallback; // encoder returned null
         if (webpBlob.size >= input.size) return fallback; // webp is bigger; keep original
         return { blob: webpBlob, ext: 'webp', contentType: 'image/webp' };
       } catch (err) {
         console.warn('[webp] conversion failed, falling back to original:', err);
         return fallback;
       } finally {
+        if (bitmap && typeof bitmap.close === 'function') bitmap.close();
         if (url) URL.revokeObjectURL(url);
       }
     }
