@@ -11225,8 +11225,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         ondragend="allCardsDragEnd(event)"
         ${isGhost ? 'style="opacity:.52"' : ''}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
-        <img src="${_thumbUrl(item.card_image_url, 80) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-          style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
+        <img src="${_thumbUrl(item.card_image_url, 160) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+          style="width:44px;height:60px;object-fit:contain;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
           onerror="this.style.visibility='hidden'">
         <div style="flex:1;min-width:0">
           <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
@@ -12036,8 +12036,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               class="allcards-row${isGhost ? ' ghost-card' : ''}"
               style="cursor:pointer${isGhost ? ';opacity:.52' : ''}"
               onclick="openBinderCardDetail('${item.id}')">
-              <img src="${_thumbUrl(item.card_image_url, 80) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-                style="width:36px;height:50px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
+              <img src="${_thumbUrl(item.card_image_url, 160) || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+                style="width:44px;height:60px;object-fit:contain;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
                 onerror="this.style.visibility='hidden'">
               <div style="flex:1;min-width:0">
                 <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
@@ -12652,14 +12652,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       document.getElementById('binderDetailContent').innerHTML = `
 
-        <!-- Photo — natural aspect ratio, not forced to card shape -->
-        <div style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:10px;${item.card_image_url ? 'cursor:zoom-in;' : ''}min-height:60px"
+        <!-- Photo — card-shaped slot; image fills with object-fit:contain
+             so user-uploaded photos at any aspect ratio show the whole
+             photo letterboxed inside a Pokemon-card-shaped frame. -->
+        <div style="width:100%;max-width:240px;aspect-ratio:245/342;margin:0 auto 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;overflow:hidden;${item.card_image_url ? 'cursor:zoom-in;' : ''}"
              onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
           ${(item.card_image_url || item.api_card_id)
             ? `<img src="${_thumbUrl(item.card_image_url, 480) || 'data:,'}"
-                 style="max-height:300px;max-width:100%;width:auto;height:auto;display:block"
+                 style="width:100%;height:100%;object-fit:contain;display:block"
                  onerror="_binderImgFail(this,'${item.id}')">`
-            : `<div style="height:80px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;width:100%">?</div>`}
+            : `<div style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;width:100%;height:100%">?</div>`}
         </div>
 
         <!-- Badge -->
