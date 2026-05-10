@@ -14456,7 +14456,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (status) status.textContent = 'Loading AI model… (~50 MB, cached after first use)';
       try {
         var resultBlob = await removeBg(_atcPhotoBlob, {
-          publicPath: window._imglyPublicPath || 'https://esm.sh/@imgly/background-removal@1.4.5/dist/',
+          publicPath: window._imglyPublicPath || 'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/',
           progress: function(key, current, total) {
             if (total && status) status.textContent = 'Removing background… ' + Math.round((current / total) * 100) + '%';
           }
@@ -14710,7 +14710,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       try {
         var result = await removeBg2(sourceBlob, {
-          publicPath: window._imglyPublicPath || 'https://esm.sh/@imgly/background-removal@1.4.5/dist/',
+          publicPath: window._imglyPublicPath || 'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/',
           progress: function(k, cur, tot) {
             if (tot && status) status.textContent = 'Removing background… ' + Math.round(cur / tot * 100) + '%';
           }
@@ -18845,20 +18845,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     window._preloadClip      = loadClip;
   </script>
 
-  <!-- Background removal — loaded eagerly as a module so CORS works from esm.sh -->
+  <!-- Background removal — load the JS bundle from esm.sh (CORS-friendly),
+       but point publicPath at IMG.LY's official static-asset CDN that
+       hosts the actual ONNX models + WASM. esm.sh / jsdelivr only serve
+       the JS bundle; the data package is ~240 MB and lives separately on
+       staticimgly.com (the package's own default). Wrong publicPath was
+       why bg-removal failed with "/models/medium not found". -->
   <script type="module">
+    // Always point the data path at the model CDN — the JS bundle host
+    // is irrelevant to where the runtime fetches `resources.json` and
+    // the binary blobs from. staticimgly.com is the official mirror.
+    window._imglyPublicPath = 'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/';
     try {
       // esm.sh sets Access-Control-Allow-Origin: * on all responses — reliable for browser ESM
       const mod = await import('https://esm.sh/@imgly/background-removal@1.4.5');
-      window._imglyRemoveBg    = mod.removeBackground;
-      window._imglyPublicPath  = 'https://esm.sh/@imgly/background-removal@1.4.5/dist/';
-      console.log('[BG Remove] Library ready');
+      window._imglyRemoveBg = mod.removeBackground;
+      console.log('[BG Remove] Library ready (esm.sh)');
     } catch(e) {
       console.warn('[BG Remove] esm.sh failed, trying jsdelivr fallback…', e.message);
       try {
         const mod2 = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.browser.esm.js');
-        window._imglyRemoveBg   = mod2.removeBackground;
-        window._imglyPublicPath = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/';
+        window._imglyRemoveBg = mod2.removeBackground;
         console.log('[BG Remove] jsdelivr fallback ready');
       } catch(e2) {
         console.warn('[BG Remove] Both CDNs failed — feature disabled', e2.message);
