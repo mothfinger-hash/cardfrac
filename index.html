@@ -14738,6 +14738,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // so the new image's natural orientation is correct. Re-applying
         // a saved rotate value caused the photo to rotate twice on every
         // bg-removal pass.
+        // autoCropArea is 1.0 here (vs 0.92 in cpLoadFile) because the
+        // bg-removed image IS the user's previous crop result — shrinking
+        // back to 92% would silently cut a margin off and feel like the
+        // crop got reset.
         _cpOrigBlob = result;
         if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
         img.src = URL.createObjectURL(result);
@@ -14745,7 +14749,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           _cpCropper = new Cropper(img, {
             viewMode:     1,
             aspectRatio:  NaN,
-            autoCropArea: 0.92,
+            autoCropArea: 1.0,
             background:   true,
             movable:      true,
             zoomable:     true,
@@ -14753,8 +14757,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             guides:       true,
           });
         };
-        if (btn)    { btn.textContent = 'Background Removed'; btn.dataset.done = '1'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
-        if (status) status.textContent = 'Adjust crop if needed, then save';
+        // Use _setProcessingText for both completion lines so the loading
+        // animation timer gets cleared — otherwise it keeps overwriting
+        // the success text with animated dots indefinitely.
+        if (btn) {
+          _setProcessingText(btn, 'Background Removed');
+          btn.dataset.done = '1';
+          btn.style.borderColor = 'var(--accent)';
+          btn.style.color = 'var(--accent)';
+        }
+        if (status) _setProcessingText(status, 'Adjust crop if needed, then save');
         _cpDirty = true;
       } catch (err) {
         console.error('[BG Remove]', err);
@@ -14767,8 +14779,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           : /memory|allocat|wasm/i.test(msg)
           ? ' (out of memory — try a smaller photo)'
           : '';
-        if (status) status.textContent = 'Background removal failed — original photo kept' + hint;
-        if (btn)    { btn.textContent = 'Remove Background'; btn.disabled = false; }
+        if (status) _setProcessingText(status, 'Background removal failed — original photo kept' + hint);
+        if (btn)    { _setProcessingText(btn, 'Remove Background'); btn.disabled = false; }
       }
       _cpBgBusy = false;
     }
@@ -18943,7 +18955,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const isProgress = /(?:…|\.{2,3})\s*$/.test(msg);
       if (!isProgress) { el.textContent = msg; return; }
       const base   = msg.replace(/(?:…|\.{2,})\s*$/, '').trim();
-      const frames = [' .>', ' ..>', ' ...>'];
+      // Pad each frame to the same width so the text doesn't wobble as
+      // the dots cycle. " .  " / " .. " / " ...".
+      const frames = [' .  ', ' .. ', ' ...'];
       let i = 0;
       const tick = () => { el.textContent = base + frames[i]; i = (i + 1) % frames.length; };
       tick();
