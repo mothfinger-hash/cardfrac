@@ -11123,6 +11123,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           ...c,
           price_history_log: histMap[String(c.id)] || []
         }));
+        // Safety net — every collection refresh re-checks size-based badges
+        // so any add-card path that calls loadCollection picks up the
+        // STACKED + PHANTOM badge progress, even if it skipped a direct
+        // checkBadge call.
+        try { checkBadge_stacked(); } catch(_) {}
+        try { checkBadge_phantom_p2(); } catch(_) {}
       }
     }
 
@@ -13948,6 +13954,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Update local cache
       const fresh = { id: newRow.id, ...row, current_value: null, purchase_price: null, price_history_log: [] };
       collectionItems.unshift(fresh);
+      try { checkBadge_stacked(); } catch(_) {}
       renderCollection();
 
       const binderLabel = b ? (binders.find(bb => String(bb.id) === String(b))?.name || 'binder') : 'your binder';
@@ -16647,6 +16654,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             errors.push('Add ' + rc.name + ': ' + insErr.message);
           }
         }
+        // Trade-received cards count toward the collection-size badges too.
+        try { checkBadge_stacked(); } catch(_) {}
+        try { checkBadge_phantom_p2(); } catch(_) {}
 
         // ── 3. Log to trade_history ──────────────────────────────────
         var verdict = (document.getElementById('ftVerdict') || {}).textContent || '';
@@ -17633,6 +17643,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       const fresh = { id: newRow.id, ...row };
       collectionItems.unshift(fresh);
+      try { checkBadge_stacked(); } catch(_) {}
       renderCollection();
       showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
     }
@@ -17897,6 +17908,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       const fresh = { id: newRow.id, ...row };
       collectionItems.unshift(fresh);
+      try { checkBadge_stacked(); } catch(_) {}
       renderCollection();
       showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
     }
@@ -20388,6 +20400,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           _multiScanResults[idx].matches       = matches || [];
           _multiScanResults[idx].selectedMatch = (matches && matches.length > 0) ? matches[0] : null;
           _multiScanResults[idx].status        = 'done';
+          // Each photo is a real scan — runMatch was called with silent=true
+          // so its internal scanner-badge increment was skipped. Tally it
+          // here so the SCANNER.EXE badge progresses through multi-scan too.
+          try { checkBadge_scanner(); } catch(_) {}
           done++;
           var pct = Math.round(done / dataURLs.length * 100);
           document.getElementById('msProgressBar').style.width   = pct + '%';
@@ -20657,6 +20673,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       closeModal('multiScanModal');
       await loadCollection();
+      // Multi-scan adds bypass the modal-save flow, so trigger the
+      // collection-size badge checks here too.
+      try { checkBadge_stacked(); } catch(_) {}
+      try { checkBadge_phantom_p2(); } catch(_) {}
       renderCollection();
       // Navigate to the collection page so the user sees their new cards
       showPage('collection'); setMobileNav('collection');
