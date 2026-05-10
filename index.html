@@ -14551,6 +14551,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function closeCardPhotoModal() {
       if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
       _cpDirty = false;
+      // Clear any in-flight animated-dots timers so they don't keep
+      // running after the modal closes.
+      var btn    = document.getElementById('cpSaveBtn');
+      var status = document.getElementById('cpStatus');
+      var bgBtn  = document.getElementById('cpBgBtn');
+      [btn, status, bgBtn].forEach(function(el) {
+        if (!el) return;
+        var t = _processingTimers.get(el);
+        if (t) { clearInterval(t); _processingTimers.delete(el); }
+      });
+      if (btn)   { btn.textContent = 'Save Photo'; btn.disabled = false; }
+      if (bgBtn) { bgBtn.textContent = 'Remove Background'; bgBtn.disabled = false; }
+      if (status) status.textContent = '';
       closeModal('cardPhotoModal');
     }
 
@@ -14642,7 +14655,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.getElementById('cpSaveBtn').style.display    = '';
 
       var btn = document.getElementById('cpBgBtn');
-      if (btn) { btn.textContent = '✦ Remove Background'; btn.disabled = false; btn.dataset.done = ''; btn.style.borderColor = 'var(--teal)'; btn.style.color = 'var(--teal)'; }
+      if (btn) { btn.textContent = 'Remove Background'; btn.disabled = false; btn.dataset.done = ''; btn.style.borderColor = 'var(--teal)'; btn.style.color = 'var(--teal)'; }
       document.getElementById('cpStatus').textContent = '';
 
       if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
@@ -14699,28 +14712,32 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Library is pre-loaded as a module at page start (window._imglyRemoveBg)
       var removeBg2 = window._imglyRemoveBg;
       if (!removeBg2) {
-        if (status) status.textContent = '⚠ Background removal unavailable — CDN blocked. Try refreshing.';
-        if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+        if (status) status.textContent = 'Background removal unavailable — CDN blocked. Try refreshing.';
+        if (btn)    { btn.textContent = 'Remove Background'; btn.disabled = false; }
         _cpBgBusy = false;
         return;
       }
 
-      if (btn)    { btn.disabled = true; btn.textContent = '⏳ Processing…'; }
-      if (status) status.textContent = 'Loading AI model… (~50 MB, cached after first use)';
+      if (btn)    { btn.disabled = true; _setProcessingText(btn, 'Processing…'); }
+      if (status) _setProcessingText(status, 'Loading AI model (~50 MB, cached after first use)…');
 
       try {
         var result = await removeBg2(sourceBlob, {
           publicPath: window._imglyPublicPath || 'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/',
           progress: function(k, cur, tot) {
-            if (tot && status) status.textContent = 'Removing background… ' + Math.round(cur / tot * 100) + '%';
+            // Use _setProcessingText so it cancels the loading-model
+            // animation timer; ending with … keeps the dots animating
+            // through each percentage update.
+            if (tot && status) _setProcessingText(status, 'Removing background ' + Math.round(cur / tot * 100) + '%…');
           }
         });
 
-        // Replace cropper source with bg-removed PNG, preserving the
-        // user's current crop region so they don't have to re-crop
-        // after bg-removal. Also use the same config as the initial
-        // cropper init in cpLoadFile so behavior is consistent.
-        var savedCropData = _cpCropper ? _cpCropper.getData() : null;
+        // Replace cropper source with the bg-removed PNG. We INTENTIONALLY
+        // do NOT restore the previous getData() — getCroppedCanvas already
+        // baked the user's rotation/scale and crop region into `result`,
+        // so the new image's natural orientation is correct. Re-applying
+        // a saved rotate value caused the photo to rotate twice on every
+        // bg-removal pass.
         _cpOrigBlob = result;
         if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
         img.src = URL.createObjectURL(result);
@@ -14734,15 +14751,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             zoomable:     true,
             rotatable:    true,
             guides:       true,
-            ready:        function() {
-              if (savedCropData) {
-                try { this.cropper.setData(savedCropData); } catch(_) {}
-              }
-            },
           });
         };
-        if (btn)    { btn.textContent = '✓ Background Removed'; btn.dataset.done = '1'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
-        if (status) status.textContent = '✓ Adjust crop if needed, then save';
+        if (btn)    { btn.textContent = 'Background Removed'; btn.dataset.done = '1'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
+        if (status) status.textContent = 'Adjust crop if needed, then save';
         _cpDirty = true;
       } catch (err) {
         console.error('[BG Remove]', err);
@@ -14756,7 +14768,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           ? ' (out of memory — try a smaller photo)'
           : '';
         if (status) status.textContent = 'Background removal failed — original photo kept' + hint;
-        if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
+        if (btn)    { btn.textContent = 'Remove Background'; btn.disabled = false; }
       }
       _cpBgBusy = false;
     }
@@ -14765,7 +14777,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!_cpItemId || !_cpCropper) return;
       var btn    = document.getElementById('cpSaveBtn');
       var status = document.getElementById('cpStatus');
-      if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+      // Animated "Saving …" → "Saving ..>" → "Saving ...>" feedback so
+      // the user can tell something is happening even when the network
+      // is slow. _setProcessingText only animates strings ending with …
+      // or .. — finish messages render as-is.
+      function setBusy(msg) {
+        if (btn)    _setProcessingText(btn, msg);
+        if (status) _setProcessingText(status, msg);
+      }
+      function setDoneText(msg) {
+        if (btn)    _setProcessingText(btn, msg);    // clears the timer
+        if (status) _setProcessingText(status, msg);
+      }
+      function reEnable(label) {
+        if (btn) { _setProcessingText(btn, label || 'Save Photo'); btn.disabled = false; }
+      }
+
+      if (btn) btn.disabled = true;
+      setBusy('Saving…');
 
       // Commit any in-progress crop drag to the cropper's internal
       // state before extracting — Cropper.js sometimes lags one frame
@@ -14780,59 +14810,82 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         console.log('[cpSavePhoto] crop region (px):', d);
       } catch(_) {}
 
-      // Export the cropped region as webp (smaller than PNG); fall
-      // back to PNG only if the browser can't encode webp from canvas
-      var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
-      var blob = await new Promise(function(res) { canvas.toBlob(res, 'image/webp', 0.85); });
-      var ext = 'webp', contentType = 'image/webp';
-      if (!blob) {
-        blob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
-        ext = 'png'; contentType = 'image/png';
-      }
-      if (status) status.textContent = 'Uploading…';
-
-      var path = 'collection/' + currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ext;
-      var upResult = await sb.storage.from('card-photos').upload(path, blob, { upsert: false, contentType: contentType });
-      if (upResult.error) {
-        if (status) status.textContent = 'Upload failed: ' + upResult.error.message;
-        if (btn) { btn.textContent = 'Save Photo'; btn.disabled = false; }
-        return;
+      // Helper — wrap any promise with a timeout so a hung upload
+      // can't leave the UI stuck on "Saving" forever.
+      function withTimeout(p, ms, label) {
+        return Promise.race([
+          p,
+          new Promise(function(_, rej) {
+            setTimeout(function() { rej(new Error((label || 'Operation') + ' timed out after ' + (ms / 1000) + 's')); }, ms);
+          })
+        ]);
       }
 
-      var urlData = sb.storage.from('card-photos').getPublicUrl(path);
-      var publicUrl = urlData.data && urlData.data.publicUrl;
-
-      // Save to either card_image_url (front) or card_back_image_url (back)
-      // depending on the active side tab.
-      var updateField = (_cpSide === 'back') ? 'card_back_image_url' : 'card_image_url';
-      var patch = {};
-      patch[updateField] = publicUrl;
-      var dbResult = await sb.from('collection_items').update(patch).eq('id', _cpItemId);
-      if (dbResult.error) {
-        var msg = (dbResult.error.message || '').toLowerCase();
-        // Missing column → prompt the user with the SQL to add it.
-        if (_cpSide === 'back' && (msg.indexOf('column') !== -1 || msg.indexOf('schema') !== -1)) {
-          var sql = "alter table collection_items\n  add column if not exists card_back_image_url text;";
-          console.log('%cBack-Photo SQL Migration:', 'color:orange;font-weight:bold');
-          console.log(sql);
-          if (status) status.textContent = 'Database needs migration — see console for SQL';
-          showToast('Run the back-photo SQL migration in Supabase first (see console)');
-        } else {
-          if (status) status.textContent = 'Save failed: ' + dbResult.error.message;
+      try {
+        // Export the cropped region as webp (smaller than PNG); fall
+        // back to PNG only if the browser can't encode webp from canvas
+        setBusy('Encoding image…');
+        var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
+        var blob = await new Promise(function(res) { canvas.toBlob(res, 'image/webp', 0.85); });
+        var ext = 'webp', contentType = 'image/webp';
+        if (!blob) {
+          blob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
+          ext = 'png'; contentType = 'image/png';
         }
-        if (btn) { btn.textContent = 'Save Photo'; btn.disabled = false; }
-        return;
+        if (!blob) throw new Error('Failed to encode the image');
+
+        setBusy('Uploading…');
+        var path = 'collection/' + currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ext;
+        var upResult = await withTimeout(
+          sb.storage.from('card-photos').upload(path, blob, { upsert: false, contentType: contentType }),
+          60000, 'Upload'
+        );
+        if (upResult.error) throw upResult.error;
+
+        var urlData = sb.storage.from('card-photos').getPublicUrl(path);
+        var publicUrl = urlData.data && urlData.data.publicUrl;
+
+        // Save to either card_image_url (front) or card_back_image_url (back)
+        // depending on the active side tab.
+        setBusy('Updating record…');
+        var updateField = (_cpSide === 'back') ? 'card_back_image_url' : 'card_image_url';
+        var patch = {};
+        patch[updateField] = publicUrl;
+        var dbResult = await withTimeout(
+          sb.from('collection_items').update(patch).eq('id', _cpItemId),
+          15000, 'Save'
+        );
+        if (dbResult.error) {
+          var msg = (dbResult.error.message || '').toLowerCase();
+          if (_cpSide === 'back' && (msg.indexOf('column') !== -1 || msg.indexOf('schema') !== -1)) {
+            var sql = "alter table collection_items\n  add column if not exists card_back_image_url text;";
+            console.log('%cBack-Photo SQL Migration:', 'color:orange;font-weight:bold');
+            console.log(sql);
+            setDoneText('Database needs migration — see console for SQL');
+            showToast('Run the back-photo SQL migration in Supabase first (see console)');
+            reEnable();
+            return;
+          }
+          throw dbResult.error;
+        }
+
+        // Update local cache so the binder view reflects it immediately
+        var local = collectionItems.find(function(c) { return String(c.id) === String(_cpItemId); });
+        if (local) local[updateField] = publicUrl;
+        _cpDirty = false;
+        renderCollection();
+
+        // Clear any animation timers before closing
+        setDoneText('Saved');
+        showToast((_cpSide === 'back' ? 'Back' : 'Front') + ' photo updated!');
+        closeCardPhotoModal();
+        openBinderCardDetail(_cpItemId);
+      } catch (err) {
+        console.error('[cpSavePhoto]', err);
+        var em = (err && err.message) ? err.message : String(err);
+        setDoneText('Save failed — ' + em);
+        reEnable();
       }
-
-      // Update local cache so the binder view reflects it immediately
-      var local = collectionItems.find(function(c) { return String(c.id) === String(_cpItemId); });
-      if (local) local[updateField] = publicUrl;
-      _cpDirty = false;
-      renderCollection();
-
-      showToast((_cpSide === 'back' ? 'Back' : 'Front') + ' photo updated!');
-      closeCardPhotoModal();
-      openBinderCardDetail(_cpItemId);
     }
     // ── End Card Photo Update Modal ───────────────────────────────────────
 
@@ -18427,7 +18480,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         ondragover="event.preventDefault();document.getElementById('cpUploadZone').style.borderColor='var(--accent)'"
         ondragleave="document.getElementById('cpUploadZone').style.borderColor='var(--border)'"
         ondrop="cpHandleDrop(event)">
-        <div style="font-size:2rem;line-height:1">[ SCAN ]</div>
+        <div style="font-size:1.1rem;line-height:1;letter-spacing:.12em;color:var(--muted)">UPLOAD</div>
         <div id="cpUploadHint" style="font-size:.78rem;color:var(--muted);margin-top:8px">Click or drag your card photo here</div>
         <div style="font-size:.65rem;color:var(--muted);margin-top:3px">JPG · PNG · WEBP</div>
       </div>
@@ -18435,24 +18488,24 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       <!-- Crop zone (visible after file chosen) -->
       <div id="cpCropZone" style="display:none;margin-bottom:14px">
-        <div style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-bottom:6px">◈ DRAG TO REPOSITION · SCROLL TO ZOOM · DRAG HANDLES TO CROP</div>
+        <div style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-bottom:6px">DRAG TO REPOSITION · SCROLL TO ZOOM · DRAG HANDLES TO CROP</div>
         <div style="background:var(--surface2);border:1px solid var(--border);max-height:340px;overflow:hidden">
           <img id="cpCropImg" style="max-width:100%;display:block">
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
           <button onclick="cpRotate()"
             style="font-size:.65rem;padding:5px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace">
-            ↻ Rotate 90°
+            Rotate 90°
           </button>
           <button id="cpBgBtn" onclick="cpRemoveBg()"
             style="font-size:.65rem;padding:5px 11px;border:1px solid var(--teal);background:transparent;color:var(--teal);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;transition:all .12s"
             onmouseenter="this.style.background='var(--teal)';this.style.color='#000'"
             onmouseleave="this.style.background='transparent';this.style.color=document.getElementById('cpBgBtn').dataset.done?'var(--accent)':'var(--teal)'">
-            ✦ Remove Background
+            Remove Background
           </button>
           <button onclick="cpResetFile()"
             style="font-size:.65rem;padding:5px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace">
-            ↺ Choose Different
+            Choose Different
           </button>
         </div>
         <div id="cpStatus" style="font-size:.68rem;color:var(--muted);margin-top:6px;min-height:1em"></div>
