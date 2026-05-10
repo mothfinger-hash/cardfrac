@@ -4642,6 +4642,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </table>
     </div>
 
+    <!-- Card Editor — admin-curated overrides driven by user error reports -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Card Editor</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="adminLoadCardReports('open')" id="adminCRTabOpen"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);cursor:pointer">Open Reports</button>
+          <button onclick="adminLoadCardReports('resolved')" id="adminCRTabResolved"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Resolved</button>
+          <button onclick="adminOpenCardOverrideEditor(null)"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">+ Manual Override</button>
+        </div>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Review user-submitted reports about wrong card data and curate global overrides. Saved corrections apply to every new card add via search/scan.
+      </div>
+      <div id="adminCardReportsList" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.62rem;color:rgba(0,229,255,.4);letter-spacing:.08em">Click "Open Reports" to load.</div>
+      </div>
+    </div>
+
     <!-- Image Backfill Tool -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">◈ Image Backfill</div>
@@ -9910,6 +9931,341 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       loadAdminClearCollectionUsers(); // refresh counts
     }
 
+    // ── Admin Card Editor — manages card_reports and card_overrides ──────
+    var _adminCardReportsCache = [];
+
+    function _adminSetCRTab(active) {
+      var open     = document.getElementById('adminCRTabOpen');
+      var resolved = document.getElementById('adminCRTabResolved');
+      function activate(el)   { if (el) { el.style.borderColor='var(--copper)'; el.style.background='rgba(184,115,51,.12)'; el.style.color='var(--copper)'; } }
+      function deactivate(el) { if (el) { el.style.borderColor='var(--border)'; el.style.background='transparent'; el.style.color='var(--muted)'; } }
+      if (active === 'open')     { activate(open); deactivate(resolved); }
+      else if (active === 'resolved') { activate(resolved); deactivate(open); }
+    }
+
+    async function adminLoadCardReports(filter) {
+      if (!currentUser?.is_admin) return;
+      var list = document.getElementById('adminCardReportsList');
+      if (!list) return;
+      _adminSetCRTab(filter);
+      list.innerHTML = '<div style="font-size:.62rem;color:rgba(0,229,255,.4);letter-spacing:.08em">Loading reports…</div>';
+
+      var query = sb.from('card_reports').select('*').order('created_at', { ascending: false }).limit(60);
+      if (filter === 'open')     query = query.eq('status', 'open');
+      if (filter === 'resolved') query = query.eq('status', 'resolved');
+      var res = await query;
+      if (res.error) {
+        var msg = (res.error.message || '').toLowerCase();
+        if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1) {
+          printAdminCardSQL();
+          list.innerHTML = '<div style="font-size:.7rem;color:#ff6b6b">Migration required — see console for SQL.</div>';
+          return;
+        }
+        list.innerHTML = '<div style="font-size:.7rem;color:#ff6b6b">Error: ' + _escHtml(res.error.message) + '</div>';
+        return;
+      }
+
+      _adminCardReportsCache = res.data || [];
+      if (!_adminCardReportsCache.length) {
+        list.innerHTML = '<div style="font-size:.7rem;color:var(--muted);font-style:italic;padding:8px 0">No ' + filter + ' reports.</div>';
+        return;
+      }
+
+      // Look up reporter usernames in one query for the rendered list.
+      var userIds = Array.from(new Set(_adminCardReportsCache.map(function(r) { return r.user_id; }).filter(Boolean)));
+      var nameMap = {};
+      if (userIds.length) {
+        try {
+          var pf = await sb.from('profiles').select('id, username, name').in('id', userIds);
+          (pf.data || []).forEach(function(p) { nameMap[p.id] = p.username || p.name || ''; });
+        } catch(_) {}
+      }
+
+      list.innerHTML = _adminCardReportsCache.map(function(r) {
+        var who   = nameMap[r.user_id] ? '@' + _escHtml(nameMap[r.user_id]) : 'Anonymous';
+        var when  = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+        var card  = (r.card_name || 'Unknown card') + (r.set_name ? ' · ' + r.set_name : '');
+        var apiId = r.api_card_id || '';
+        var statusBadge = r.status === 'resolved'
+          ? '<span style="font-size:.55rem;color:var(--green);border:1px solid var(--green);padding:1px 6px;letter-spacing:.06em">RESOLVED</span>'
+          : '<span style="font-size:.55rem;color:var(--copper);border:1px solid var(--copper);padding:1px 6px;letter-spacing:.06em">OPEN</span>';
+        return (
+          '<div style="border:1px solid var(--border);background:var(--surface2);padding:10px 12px;font-family:\'Space Mono\',monospace">' +
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">' +
+              '<div style="flex:1;min-width:0">' +
+                '<div style="display:flex;gap:8px;align-items:center;font-size:.62rem;color:var(--muted);margin-bottom:4px">' +
+                  statusBadge +
+                  '<span>' + _escHtml(who) + '</span>' +
+                  '<span>·</span>' +
+                  '<span>' + _escHtml(when) + '</span>' +
+                '</div>' +
+                '<div style="font-size:.78rem;font-weight:600;color:var(--text);margin-bottom:2px">' + _escHtml(card) + '</div>' +
+                (apiId ? '<div style="font-size:.58rem;color:rgba(0,229,255,.5)">api_card_id: ' + _escHtml(apiId) + '</div>' : '') +
+                '<div style="font-size:.7rem;color:rgba(210,240,255,.78);margin-top:6px;line-height:1.5;white-space:pre-wrap;border-left:2px solid rgba(184,115,51,.4);padding-left:8px">' + _escHtml(r.description || '') + '</div>' +
+              '</div>' +
+              '<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">' +
+                (r.api_card_id
+                  ? '<button onclick="adminOpenCardOverrideEditor(\'' + r.api_card_id + '\',\'' + r.id + '\')" style="font-size:.6rem;padding:5px 11px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-family:inherit;letter-spacing:.04em">Edit Card Data</button>'
+                  : '<button disabled style="font-size:.6rem;padding:5px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;letter-spacing:.04em;cursor:not-allowed" title="No api_card_id — manual override only">No API ID</button>'
+                ) +
+                (r.status === 'open'
+                  ? '<button onclick="adminResolveCardReport(\'' + r.id + '\', \'dismissed\')" style="font-size:.55rem;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;letter-spacing:.04em">Dismiss</button>'
+                  : '<button onclick="adminResolveCardReport(\'' + r.id + '\', \'open\')" style="font-size:.55rem;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;letter-spacing:.04em">Reopen</button>'
+                ) +
+              '</div>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    async function adminResolveCardReport(reportId, newStatus) {
+      if (!currentUser?.is_admin) return;
+      var patch = { status: newStatus };
+      if (newStatus === 'resolved') {
+        patch.resolved_at = new Date().toISOString();
+        patch.resolved_by = currentUser.id;
+      } else if (newStatus === 'open') {
+        patch.resolved_at = null;
+        patch.resolved_by = null;
+      }
+      var res = await sb.from('card_reports').update(patch).eq('id', reportId);
+      if (res.error) { showToast('Error: ' + res.error.message); return; }
+      showToast('Report ' + newStatus);
+      // Refresh whichever tab is currently active
+      var activeOpen = document.getElementById('adminCRTabOpen');
+      var current = (activeOpen && activeOpen.style.background.indexOf('184,115,51') !== -1) ? 'open' : 'resolved';
+      adminLoadCardReports(current);
+    }
+
+    // Override editor — opens an inline form keyed by api_card_id.
+    // Pass reportId to auto-resolve the linked report on save.
+    async function adminOpenCardOverrideEditor(apiCardId, reportId) {
+      if (!currentUser?.is_admin) return;
+      // If apiCardId is null we're in "manual" mode — let the admin type it
+      var prompted = apiCardId;
+      if (!prompted) {
+        prompted = prompt('Enter the api_card_id of the card to override (e.g. xy7-54):');
+        if (!prompted) return;
+        prompted = prompted.trim();
+      }
+
+      // Fetch existing override (if any) + the live API data for context
+      var override = null, apiData = null;
+      try {
+        var ov = await sb.from('card_overrides').select('*').eq('api_card_id', prompted).maybeSingle();
+        override = ov.data || null;
+      } catch(_) {}
+      try {
+        var ar = await fetch('https://api.pokemontcg.io/v2/cards/' + encodeURIComponent(prompted));
+        if (ar.ok) {
+          var aj = await ar.json();
+          apiData = aj.data || null;
+        }
+      } catch(_) {}
+
+      // Render the editor inline at the top of the reports list
+      var list = document.getElementById('adminCardReportsList');
+      if (!list) return;
+      var current = function(field, fallback) {
+        if (override && override[field] != null && override[field] !== '') return override[field];
+        return fallback != null ? fallback : '';
+      };
+      var hint = function(label, val) { return '<div style="font-size:.55rem;color:var(--muted);margin-top:2px">' + label + ': <span style="color:rgba(210,240,255,.6)">' + (val ? _escHtml(String(val)) : '<em>none</em>') + '</span></div>'; };
+
+      var apiName  = apiData ? apiData.name : '';
+      var apiSet   = apiData && apiData.set ? (apiData.set.name || '') : '';
+      var apiCode  = apiData && apiData.set ? (apiData.set.id || '') : '';
+      var apiNum   = apiData ? apiData.number : '';
+      var apiImg   = apiData && apiData.images ? (apiData.images.large || apiData.images.small || '') : '';
+      var apiRare  = apiData ? apiData.rarity : '';
+
+      var editor =
+        '<div id="adminOverrideEditor" style="border:1px solid var(--copper);background:rgba(184,115,51,.06);padding:14px 16px;font-family:\'Space Mono\',monospace">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
+            '<div style="font-size:.7rem;color:var(--copper);letter-spacing:.08em;font-weight:700">EDITING OVERRIDE · ' + _escHtml(prompted) + '</div>' +
+            '<button onclick="document.getElementById(\'adminOverrideEditor\').remove()" style="font-size:.55rem;padding:3px 9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">Close Editor</button>' +
+          '</div>' +
+          (apiData
+            ? '<div style="display:flex;gap:12px;margin-bottom:12px">' +
+                (apiImg ? '<img src="' + apiImg + '" style="width:80px;height:auto;flex-shrink:0;border:1px solid var(--border)" alt="">' : '') +
+                '<div style="flex:1;font-size:.6rem;color:var(--muted);line-height:1.6">' +
+                  '<div style="color:var(--text);font-size:.66rem;font-weight:600;margin-bottom:2px">CATALOG (live):</div>' +
+                  '<div>' + _escHtml(apiName || '—') + '</div>' +
+                  '<div>' + _escHtml(apiSet || '—') + (apiNum ? ' · #' + _escHtml(apiNum) : '') + '</div>' +
+                  '<div>Rarity: ' + _escHtml(apiRare || '—') + '</div>' +
+                '</div>' +
+              '</div>'
+            : '<div style="font-size:.62rem;color:#ff8888;margin-bottom:10px">No live catalog data — pokemontcg.io returned nothing for this id. Override fields will be applied as-is.</div>') +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
+            _ovField('Card name',     'ovName',  current('card_name', ''),       apiName) +
+            _ovField('Set name',      'ovSet',   current('set_name', ''),        apiSet) +
+            _ovField('Set code',      'ovCode',  current('set_code', ''),        apiCode) +
+            _ovField('Card number',   'ovNum',   current('card_number', ''),     apiNum) +
+            _ovField('Rarity',        'ovRare',  current('rarity', ''),          apiRare) +
+            _ovField('Image URL',     'ovImg',   current('card_image_url', ''),  apiImg) +
+          '</div>' +
+          '<label style="font-size:.58rem;color:var(--muted);letter-spacing:.06em;display:block;margin-bottom:4px">Admin notes (optional)</label>' +
+          '<textarea id="ovNotes" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 8px;font-family:inherit;font-size:.65rem;box-sizing:border-box;margin-bottom:10px">' + _escHtml(current('notes', '')) + '</textarea>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+            '<button onclick="adminSaveCardOverride(\'' + prompted + '\',' + (reportId ? '\'' + reportId + '\'' : 'null') + ')" style="font-size:.65rem;padding:7px 14px;border:1px solid var(--copper);background:var(--copper);color:#000;cursor:pointer;font-family:inherit;letter-spacing:.04em;font-weight:700">Save Override' + (reportId ? ' + Resolve Report' : '') + '</button>' +
+            (override
+              ? '<button onclick="adminDeleteCardOverride(\'' + prompted + '\')" style="font-size:.6rem;padding:7px 14px;border:1px solid #ff6b6b;background:transparent;color:#ff6b6b;cursor:pointer;font-family:inherit;letter-spacing:.04em">Delete Override</button>'
+              : '') +
+            '<button onclick="adminPrefillFromCatalog(' + (apiData ? 'true' : 'false') + ')" style="font-size:.6rem;padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;letter-spacing:.04em">Prefill from Catalog</button>' +
+          '</div>' +
+          '<div id="ovStatus" style="font-size:.62rem;color:var(--muted);margin-top:8px;min-height:1em"></div>' +
+        '</div>';
+
+      // Insert at the top of the reports list, leaving the report list visible below.
+      var existing = document.getElementById('adminOverrideEditor');
+      if (existing) existing.remove();
+      list.insertAdjacentHTML('afterbegin', editor);
+      // Stash live API data so prefill button works without refetching
+      window._adminLastApiData = apiData;
+    }
+
+    function _ovField(label, id, value, placeholder) {
+      var safeVal  = _escHtml(value || '');
+      var safePh   = _escHtml(placeholder || '');
+      return (
+        '<div>' +
+          '<label style="font-size:.58rem;color:var(--muted);letter-spacing:.06em;display:block;margin-bottom:3px">' + label + '</label>' +
+          '<input type="text" id="' + id + '" value="' + safeVal + '" placeholder="' + safePh + '" ' +
+            'style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 8px;font-family:inherit;font-size:.66rem;box-sizing:border-box">' +
+        '</div>'
+      );
+    }
+
+    function adminPrefillFromCatalog(haveApi) {
+      if (!haveApi) { showToast('No catalog data to prefill from'); return; }
+      var ad = window._adminLastApiData;
+      if (!ad) return;
+      function setIf(id, val) { var el = document.getElementById(id); if (el && val) el.value = val; }
+      setIf('ovName', ad.name);
+      setIf('ovSet',  ad.set && ad.set.name);
+      setIf('ovCode', ad.set && ad.set.id);
+      setIf('ovNum',  ad.number);
+      setIf('ovRare', ad.rarity);
+      setIf('ovImg',  ad.images && (ad.images.large || ad.images.small));
+    }
+
+    async function adminSaveCardOverride(apiCardId, reportId) {
+      if (!currentUser?.is_admin) return;
+      var st = document.getElementById('ovStatus');
+      function readVal(id) { var el = document.getElementById(id); return el ? (el.value || '').trim() : ''; }
+      var payload = {
+        api_card_id:    apiCardId,
+        card_name:      readVal('ovName')  || null,
+        set_name:       readVal('ovSet')   || null,
+        set_code:       readVal('ovCode')  || null,
+        card_number:    readVal('ovNum')   || null,
+        rarity:         readVal('ovRare')  || null,
+        card_image_url: readVal('ovImg')   || null,
+        notes:          readVal('ovNotes') || null,
+        updated_at:     new Date().toISOString(),
+        updated_by:     currentUser.id
+      };
+      if (st) _setProcessingText(st, 'Saving override…');
+      var res = await sb.from('card_overrides').upsert(payload, { onConflict: 'api_card_id' });
+      if (res.error) {
+        var msg = (res.error.message || '').toLowerCase();
+        if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1) {
+          printAdminCardSQL();
+          if (st) _setProcessingText(st, 'Migration required — see console for SQL');
+          return;
+        }
+        if (st) _setProcessingText(st, 'Save failed: ' + res.error.message);
+        return;
+      }
+
+      // If a report was attached, mark it resolved
+      if (reportId) {
+        await sb.from('card_reports').update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          resolved_by: currentUser.id
+        }).eq('id', reportId);
+      }
+      // Refresh in-memory override cache so the new values flow to all
+      // subsequent add-card operations in this session.
+      try { await _loadCardOverrides(); } catch(_) {}
+
+      if (st) _setProcessingText(st, 'Saved');
+      showToast('Override saved' + (reportId ? ' · report resolved' : ''));
+      var existing = document.getElementById('adminOverrideEditor');
+      if (existing) existing.remove();
+      adminLoadCardReports(reportId ? 'open' : 'open');
+    }
+
+    async function adminDeleteCardOverride(apiCardId) {
+      if (!currentUser?.is_admin) return;
+      if (!confirm('Delete the override for ' + apiCardId + '? Catalog data will be used as-is again.')) return;
+      var res = await sb.from('card_overrides').delete().eq('api_card_id', apiCardId);
+      if (res.error) { showToast('Delete failed: ' + res.error.message); return; }
+      showToast('Override deleted');
+      var existing = document.getElementById('adminOverrideEditor');
+      if (existing) existing.remove();
+    }
+    // ── End Admin Card Editor ─────────────────────────────────────────────
+
+    // ── Card Overrides — admin-curated corrections to catalog data ────────
+    // Cached in memory and applied to insert-row payloads so corrections
+    // flow into every newly-added collection item, regardless of which
+    // add-card path the user took (search detail, scan, multi-scan, JP,
+    // sets browser, trade-received).
+    var _cardOverridesCache = {};        // { api_card_id → override row }
+    var _cardOverridesLoaded = false;
+
+    async function _loadCardOverrides() {
+      try {
+        var res = await sb.from('card_overrides').select('*');
+        if (res.error) {
+          // Missing table is fine — the feature just stays inert until
+          // the admin runs the migration.
+          var msg = (res.error.message || '').toLowerCase();
+          if (msg.indexOf('relation') === -1 && msg.indexOf('does not exist') === -1) {
+            console.warn('[CardOverrides] load error:', res.error.message);
+          }
+          _cardOverridesCache = {};
+          _cardOverridesLoaded = true;
+          return;
+        }
+        var map = {};
+        (res.data || []).forEach(function(o) { if (o.api_card_id) map[o.api_card_id] = o; });
+        _cardOverridesCache = map;
+        _cardOverridesLoaded = true;
+      } catch(e) {
+        console.warn('[CardOverrides] fetch failed:', e);
+        _cardOverridesCache = {};
+        _cardOverridesLoaded = true;
+      }
+    }
+
+    // Get the override row for a given api_card_id (or null).
+    function getCardOverride(apiCardId) {
+      if (!apiCardId) return null;
+      return _cardOverridesCache[apiCardId] || null;
+    }
+
+    // Mutate a collection_items insert payload in-place: any non-null
+    // override field replaces the corresponding row field. Returns the
+    // same row for chaining. Safe to call when no override exists.
+    function applyOverrideToInsertRow(row) {
+      if (!row) return row;
+      var apiId = row.api_card_id;
+      var ov = getCardOverride(apiId);
+      if (!ov) return row;
+      if (ov.card_name      != null && ov.card_name      !== '') row.card_name      = ov.card_name;
+      if (ov.set_name       != null && ov.set_name       !== '') row.set_name       = ov.set_name;
+      if (ov.set_code       != null && ov.set_code       !== '') row.set_code       = ov.set_code;
+      if (ov.card_number    != null && ov.card_number    !== '') row.card_number    = ov.card_number;
+      if (ov.rarity         != null && ov.rarity         !== '') row.rarity         = ov.rarity;
+      if (ov.card_image_url != null && ov.card_image_url !== '') row.card_image_url = ov.card_image_url;
+      return row;
+    }
+    // ── End Card Overrides ────────────────────────────────────────────────
+
     async function adminBackfillUserImages() {
       if (!currentUser?.is_admin) return;
       const val = (document.getElementById('adminBackfillUsername')?.value || '').trim();
@@ -12886,6 +13242,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               style="flex:1;padding:9px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
           </div>
           <div id="binderRefreshStatus_${item.id}" style="font-size:.72rem;color:var(--muted);display:none"></div>
+          <button onclick="openCardReportModal('${item.id}')"
+            style="background:none;border:none;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;cursor:pointer;letter-spacing:.06em;padding:6px;text-align:center;text-decoration:underline;text-decoration-color:rgba(184,115,51,.4);text-underline-offset:3px;transition:color .15s"
+            onmouseover="this.style.color='#d99550'"
+            onmouseout="this.style.color='var(--copper)'">
+            Notify admin of an error with this card
+          </button>
         </div>
       `;
       const titleEl2 = document.getElementById('binderDetailTitle');
@@ -13947,6 +14309,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         } catch(_) {}
       }
 
+      // Apply any admin-curated override for this api_card_id before
+      // saving — fixes wrong/missing data globally for new collection rows.
+      applyOverrideToInsertRow(row);
+
       let { data: newRow, error } = await sb.from('collection_items').insert(row).select('id').single();
       // Schema fallback (missing language/rarity columns)
       if (error) {
@@ -14333,6 +14699,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         language,
         rarity:          pendingCollectionCard.rarity || null,
       };
+
+      // Apply admin overrides (image / set / number / rarity / name)
+      // before insert so corrections flow into the saved row.
+      applyOverrideToInsertRow(_insertBase);
 
       let { data: newRow, error } = await sb.from('collection_items').insert(_insertBase).select('id').single();
 
@@ -14900,6 +15270,173 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
     // ── End Card Photo Update Modal ───────────────────────────────────────
+
+    // ── Card Report Modal (user-submitted error reports) ──────────────────
+    var _crItem = null;
+
+    // Stash the original modal markup once so we can restore it after the
+    // "Thanks for contributing" state when the user re-opens the modal.
+    var _crOriginalContent = null;
+
+    function openCardReportModal(itemId) {
+      var item = collectionItems.find(function(c) { return String(c.id) === String(itemId); });
+      if (!item) { showToast('Card not found'); return; }
+      if (!currentUser) { showToast('Sign in to report card issues'); return; }
+      _crItem = item;
+
+      // First time we open, snapshot the markup; on subsequent opens after a
+      // successful report, restore from snapshot so the form re-appears.
+      var content = document.getElementById('cardReportContent');
+      if (content) {
+        if (!_crOriginalContent) _crOriginalContent = content.innerHTML;
+        if (content.dataset.thanked === '1') {
+          content.innerHTML = _crOriginalContent;
+          content.dataset.thanked = '';
+        }
+      }
+
+      var summary = document.getElementById('crCardSummary');
+      if (summary) {
+        summary.innerHTML =
+          '<div style="color:rgba(210,240,255,.9);font-weight:600;margin-bottom:2px">' + _escHtml(item.card_name || 'Unknown card') + '</div>' +
+          '<div>' + _escHtml(item.set_name || 'No set assigned') + (item.card_number ? ' · #' + _escHtml(item.card_number) : '') + '</div>' +
+          (item.api_card_id ? '<div style="font-size:.62rem;opacity:.7;margin-top:2px">API ID: ' + _escHtml(item.api_card_id) + '</div>' : '');
+      }
+      var desc = document.getElementById('crDescription');
+      if (desc) { desc.value = ''; setTimeout(function() { desc.focus(); }, 100); }
+      var st = document.getElementById('crStatus');
+      if (st) st.textContent = '';
+      var btn = document.getElementById('crSendBtn');
+      if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+      openModal('cardReportModal');
+    }
+
+    function closeCardReportModal() {
+      _crItem = null;
+      var st = document.getElementById('crStatus');
+      var btn = document.getElementById('crSendBtn');
+      if (st)  { var t = _processingTimers.get(st);  if (t) { clearInterval(t); _processingTimers.delete(st); } st.textContent = ''; }
+      if (btn) { var t2 = _processingTimers.get(btn); if (t2) { clearInterval(t2); _processingTimers.delete(btn); } }
+      closeModal('cardReportModal');
+    }
+
+    async function submitCardReport() {
+      if (!currentUser || !_crItem) return;
+      var btn  = document.getElementById('crSendBtn');
+      var st   = document.getElementById('crStatus');
+      var desc = (document.getElementById('crDescription') || {}).value || '';
+      desc = String(desc).trim();
+      if (!desc) {
+        if (st) st.textContent = 'Please describe the issue first';
+        return;
+      }
+      if (btn) { btn.disabled = true; _setProcessingText(btn, 'Sending…'); }
+
+      try {
+        var res = await sb.from('card_reports').insert({
+          user_id:            currentUser.id,
+          api_card_id:        _crItem.api_card_id || null,
+          collection_item_id: _crItem.id,
+          card_name:          _crItem.card_name || null,
+          set_name:           _crItem.set_name || null,
+          description:        desc,
+          status:             'open'
+        });
+        if (res.error) {
+          var msg = (res.error.message || '').toLowerCase();
+          // Missing table → emit the SQL migration to console + toast.
+          if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1) {
+            printAdminCardSQL();
+            if (st) _setProcessingText(st, 'Database needs migration — see console for SQL');
+            showToast('Run the card-reports SQL migration in Supabase first');
+            if (btn) { btn.disabled = false; _setProcessingText(btn, 'Send'); }
+            return;
+          }
+          throw res.error;
+        }
+
+        // Success — animate to thank-you state
+        var content = document.getElementById('cardReportContent');
+        if (content) {
+          content.dataset.thanked = '1';
+          content.innerHTML =
+            '<h3 style="margin-bottom:14px">Thanks for contributing</h3>' +
+            '<p style="font-size:.78rem;line-height:1.7;color:rgba(210,240,255,.78);margin-bottom:18px">' +
+              'Your report has been logged. Admins will review it and update the card data so other collectors see the corrected info too.' +
+            '</p>' +
+            '<button onclick="closeCardReportModal()" ' +
+              'style="width:100%;padding:10px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.82rem;cursor:pointer;letter-spacing:.06em;box-shadow:0 0 12px rgba(184,115,51,.25)" ' +
+              'onmouseover="this.style.background=\'rgba(184,115,51,.22)\'" ' +
+              'onmouseout="this.style.background=\'rgba(184,115,51,.12)\'">' +
+              'Close' +
+            '</button>';
+        }
+      } catch (err) {
+        console.error('[cardReport]', err);
+        if (st)  _setProcessingText(st, 'Failed: ' + (err.message || 'unknown error'));
+        if (btn) { btn.disabled = false; _setProcessingText(btn, 'Send'); }
+      }
+    }
+
+    // Print the full SQL migration for card_reports + card_overrides.
+    // Called when an insert fails because the table is missing, or
+    // manually from the admin tab.
+    function printAdminCardSQL() {
+      var sql = [
+        '-- ── PathBinder admin tools migration ─────────────────────────',
+        '-- Run once in your Supabase SQL editor.',
+        '',
+        '-- User-submitted card error reports',
+        'create table if not exists card_reports (',
+        '  id uuid primary key default gen_random_uuid(),',
+        '  user_id uuid references auth.users(id) on delete set null,',
+        '  api_card_id text,',
+        '  collection_item_id uuid references collection_items(id) on delete set null,',
+        '  card_name text,',
+        '  set_name text,',
+        '  description text not null,',
+        '  status text default \'open\',',
+        '  created_at timestamptz default now(),',
+        '  resolved_at timestamptz,',
+        '  resolved_by uuid references auth.users(id) on delete set null,',
+        '  resolution_note text',
+        ');',
+        'create index if not exists card_reports_status_idx on card_reports(status, created_at desc);',
+        'create index if not exists card_reports_api_card_id_idx on card_reports(api_card_id);',
+        '',
+        '-- Admin-curated overrides for catalog cards (Pokemon TCG API data)',
+        'create table if not exists card_overrides (',
+        '  api_card_id text primary key,',
+        '  card_name text,',
+        '  set_name text,',
+        '  set_code text,',
+        '  card_number text,',
+        '  card_image_url text,',
+        '  rarity text,',
+        '  notes text,',
+        '  updated_at timestamptz default now(),',
+        '  updated_by uuid references auth.users(id) on delete set null',
+        ');',
+        '',
+        'alter table card_reports enable row level security;',
+        'alter table card_overrides enable row level security;',
+        '',
+        '-- card_reports policies',
+        'create policy "users can submit reports" on card_reports for insert to authenticated with check (auth.uid() = user_id);',
+        'create policy "users can read own reports" on card_reports for select to authenticated using (auth.uid() = user_id);',
+        'create policy "admins read all reports" on card_reports for select to authenticated using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));',
+        'create policy "admins update reports" on card_reports for update to authenticated using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));',
+        '',
+        '-- card_overrides policies (anyone reads, only admins write)',
+        'create policy "anyone reads overrides" on card_overrides for select to authenticated using (true);',
+        'create policy "admins insert overrides" on card_overrides for insert to authenticated with check (exists (select 1 from profiles where id = auth.uid() and is_admin = true));',
+        'create policy "admins update overrides" on card_overrides for update to authenticated using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));',
+        'create policy "admins delete overrides" on card_overrides for delete to authenticated using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));'
+      ].join('\n');
+      console.log('%cPathBinder Admin SQL Migration (card_reports + card_overrides):', 'color:orange;font-weight:bold;font-size:14px');
+      console.log(sql);
+    }
+    // ── End Card Report Modal ─────────────────────────────────────────────
 
     function atcCertReset() {
       _atcPsaData = null;
@@ -16800,7 +17337,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         var now = new Date().toISOString();
         for (var j = 0; j < received.length; j++) {
           var rc = received[j];
-          var insertData = {
+          var insertData = applyOverrideToInsertRow({
             user_id:        currentUser.id,
             card_name:      rc.name || 'Unknown Card',
             game_type:      'pokemon',
@@ -16815,7 +17352,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             quantity:       rc.qty || 1,
             purchase_date:  now.slice(0, 10),
             notes:          'trade_received'
-          };
+          });
           var { data: newItem, error: insErr } = await sb.from('collection_items').insert(insertData).select().single();
           if (!insErr && newItem) {
             collectionItems.unshift(newItem);
@@ -17798,6 +18335,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         } catch(_) {}
       }
 
+      applyOverrideToInsertRow(row);
+
       let { data: newRow, error } = await sb.from('collection_items').insert(row).select('id').single();
       // Schema fallback (missing language/rarity columns)
       if (error) {
@@ -18063,6 +18602,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         } catch(_) {}
       }
 
+      applyOverrideToInsertRow(row);
+
       let { data: newRow, error } = await sb.from('collection_items').insert(row).select('id').single();
       // Schema fallback (missing language/rarity columns)
       if (error) {
@@ -18182,6 +18723,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     async function initApp() {
       const browseGrid = document.getElementById('browseGrid');
       if (browseGrid) browseGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
+
+      // Card overrides — load once at startup (small table, cached in
+      // memory) so every add-card path can apply corrections without an
+      // extra round-trip. Failures are silent; the feature stays inert
+      // until the admin runs the migration.
+      _loadCardOverrides();
 
       try {
         // 1. Restore auth session + fetch listings — in parallel
@@ -18533,6 +19080,37 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">
           Cancel
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD REPORT MODAL — user-submitted card-data error reports -->
+  <div class="modal-overlay" id="cardReportModal">
+    <div class="modal" style="max-width:440px">
+      <button class="modal-close" onclick="closeCardReportModal()">×</button>
+      <div id="cardReportContent">
+        <h3 style="margin-bottom:6px">Report Card Issue</h3>
+        <p class="modal-sub" style="font-size:.74rem;margin-bottom:14px">Spotted wrong data, a missing photo, or a card in the wrong set? Tell us — admins will review it.</p>
+
+        <div id="crCardSummary" style="font-size:.7rem;color:var(--muted);background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.2);padding:8px 10px;margin-bottom:12px;line-height:1.5"></div>
+
+        <textarea id="crDescription" placeholder="Please describe your issue…" rows="5"
+          style="width:100%;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.2);color:rgba(210,240,255,.9);padding:10px 12px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;line-height:1.5;resize:vertical;margin-bottom:14px;box-sizing:border-box"></textarea>
+
+        <div id="crStatus" style="font-size:.68rem;color:var(--muted);min-height:1em;margin-bottom:8px"></div>
+
+        <div style="display:flex;gap:10px">
+          <button id="crSendBtn" onclick="submitCardReport()"
+            style="flex:1;padding:10px;background:var(--copper);color:#000;border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.06em;box-shadow:0 0 14px rgba(184,115,51,.4),inset 0 0 12px rgba(255,180,90,.18);transition:box-shadow .15s,transform .12s"
+            onmouseover="this.style.boxShadow='0 0 22px rgba(184,115,51,.65),inset 0 0 18px rgba(255,180,90,.28)'"
+            onmouseout="this.style.boxShadow='0 0 14px rgba(184,115,51,.4),inset 0 0 12px rgba(255,180,90,.18)'">
+            Send
+          </button>
+          <button onclick="closeCardReportModal()"
+            style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;cursor:pointer">
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -20845,7 +21423,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var success = 0, failed = 0;
       for (var ri = 0; ri < toAdd.length; ri++) {
         var m = toAdd[ri].selectedMatch;
-        var res = await sb.from('collection_items').insert({
+        var msRow = {
           user_id:        currentUser.id,
           api_card_id:    m.id            || null,
           card_name:      m.name,
@@ -20856,7 +21434,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           game_type:      'pokemon',
           quantity:       1,
           binder_id:      binderId        || null,
-        });
+        };
+        applyOverrideToInsertRow(msRow);
+        var res = await sb.from('collection_items').insert(msRow);
         if (res.error) { console.error('Multi-scan add error:', res.error.message); failed++; }
         else success++;
       }
