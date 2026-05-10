@@ -16490,6 +16490,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       _ftShowState('results');
       ftRecalc();
       _ftRenderBreakdown(fetched);
+
+      // Resume polling so the coin-flip handshake works on the results
+      // screen. Polling was stopped at lock-in time so analyze had a
+      // clean run; without restart, neither side ever sees the other's
+      // "ready" broadcast and the coin flip hangs forever.
+      // IMPORTANT: leave _ftAnalyzingFromLock = true so the next sync
+      // doesn't re-trigger analyze (locked_a + locked_b are still true
+      // in the DB row).
+      if (_ftSession) {
+        _ftStartPolling();
+      }
     }
 
     function _ftRenderBreakdown(fetched) {
