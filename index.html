@@ -1150,10 +1150,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-mag-lens-zoom{position:absolute;left:var(--ftmg-lens-l);top:var(--ftmg-lens-t);width:var(--ftmg-lens-d);height:var(--ftmg-lens-d);border-radius:50%;overflow:hidden;background:#0a0d1a}
     .ft-mag-lens-zoom::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.18), transparent 50%),radial-gradient(circle at 50% 50%, transparent 55%, rgba(34,211,238,.18) 78%, rgba(0,0,0,.45) 100%);mix-blend-mode:screen}
     /* Lens zoom-source: 2× scene size with the cards image centered.
-       Uses explicit px background-size (calc'd from CSS vars set by JS)
-       instead of "60% auto" — iOS Safari's auto-keyword handling for
-       background-size is finicky with non-square containers. */
-    .ft-mag-lens-img{position:absolute;width:calc(var(--ftmg-scene-w) * 2);height:calc(var(--ftmg-scene-h) * 2);transform-origin:0 0;background-image:url('/trade_cards.webp');background-size:calc(var(--ftmg-scene-w) * 1.2) calc(var(--ftmg-scene-h) * 1.2);background-position:center;background-repeat:no-repeat;will-change:transform;filter:saturate(1.15) contrast(1.05)}
+       Uses background-size:60% 60% (both axes %). The scene aspect
+       matches the cards image aspect, so 60% of width × 60% of height
+       renders the image correctly proportioned. Avoids the "auto"
+       keyword (flaky on iOS Safari) AND avoids depending on JS-set
+       CSS vars that aren't ready on the first paint frame. */
+    .ft-mag-lens-img{position:absolute;width:calc(var(--ftmg-scene-w, 480px) * 2);height:calc(var(--ftmg-scene-h, 323px) * 2);transform-origin:0 0;background-image:url('/trade_cards.webp');background-size:60% 60%;background-position:center;background-repeat:no-repeat;will-change:transform;filter:saturate(1.15) contrast(1.05)}
     .ft-mag-lens-frame{position:absolute;left:0;top:0;width:var(--ftmg-w);height:var(--ftmg-h);background-image:url('/mag_glass.webp');background-size:100% 100%;pointer-events:none}
     .ft-mag-label-top{position:absolute;top:12px;left:16px;font-size:10px;letter-spacing:.18em;font-weight:700;color:#06b6d4;text-shadow:1px 1px 0 #000}
     .ft-mag-label-bot{position:absolute;bottom:12px;left:16px;font-size:11px;letter-spacing:.1em;color:#94a3b8}
@@ -15075,6 +15077,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Cancel any prior in-flight animation and resolve its promise
       if (_ftMagAnimRaf)     { cancelAnimationFrame(_ftMagAnimRaf); _ftMagAnimRaf = null; }
       if (_ftMagAnimResolve) { _ftMagAnimResolve(); _ftMagAnimResolve = null; }
+
+      // Run layout() synchronously *before* scheduling the first RAF
+      // so the CSS vars (--ftmg-scene-w/h, --ftmg-w/h, --ftmg-lens-*)
+      // are populated by the time the browser does its first paint.
+      // Otherwise the lens-img element renders with calc(undefined*2)
+      // = 0 size on the first frame and the zoom view stays blank
+      // until the next frame.
+      layout();
 
       var startTime = performance.now();
       function tick(now) {
