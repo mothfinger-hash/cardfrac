@@ -12783,7 +12783,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       document.getElementById('binderDetailContent').innerHTML = `
 
-        <!-- Photo — natural aspect ratio (like the lightbox preview).
+        <!-- Photo(s) — front always shown; back appears below it when set.
              The .pb-detail-photo-slot CSS class handles sizing/centering. -->
         <div class="pb-detail-photo-slot" ${item.card_image_url ? `style="cursor:zoom-in"` : ''}
              onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
@@ -12792,6 +12792,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                  onerror="_binderImgFail(this,'${item.id}')">`
             : `<div style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;padding:30px">?</div>`}
         </div>
+        ${item.card_back_image_url ? `
+          <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 4px">FRONT</div>
+          <div class="pb-detail-photo-slot" style="cursor:zoom-in"
+               onclick="openImageLightbox('${item.card_back_image_url}')">
+            <img src="${item.card_back_image_url}" onerror="this.style.display='none'">
+          </div>
+          <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 10px">BACK</div>
+        ` : ''}
 
         <!-- Badge -->
         <div style="text-align:center;margin-bottom:${item.notes ? '8px' : '12px'}">
@@ -12851,7 +12859,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <button onclick="openCardPhotoModal('${item.id}')"
               style="flex:1;padding:9px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap"
               onmouseover="this.style.background='rgba(0,204,255,.1)'"
-              onmouseout="this.style.background='transparent'">Update Photo</button>
+              onmouseout="this.style.background='transparent'">${item.card_back_image_url ? 'Edit Photos' : (item.card_image_url ? 'Edit / Add Back' : 'Add Photo')}</button>
             <button onclick="closeModal('binderDetailModal');openEditCardModal('${item.id}')"
               style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap"
               onmouseover="this.style.background='rgba(0,229,255,.08)'"
@@ -14507,6 +14515,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     var _cpCropper  = null;
     var _cpBgBusy   = false;
     var _cpOrigBlob = null;
+    var _cpSide     = 'front';   // 'front' | 'back' — which photo we're editing
+    var _cpDirty    = false;     // true if user has changed something un-saved
 
     async function _cpLoadCropperJs() {
       if (window.Cropper) return;
@@ -14526,15 +14536,83 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       });
     }
 
-    function openCardPhotoModal(itemId) {
+    function openCardPhotoModal(itemId, side) {
       _cpItemId = itemId;
+      _cpSide   = (side === 'back') ? 'back' : 'front';
+      _cpDirty  = false;
       cpResetFile();
+      _cpUpdateSideTabs();
       openModal('cardPhotoModal');
+      // Pre-load the existing photo for the chosen side so the user
+      // can re-crop / rotate / remove-bg without re-uploading anything.
+      _cpTryLoadExisting();
     }
 
     function closeCardPhotoModal() {
       if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
+      _cpDirty = false;
       closeModal('cardPhotoModal');
+    }
+
+    // Switch between Front/Back tabs. If there are unsaved edits we ask
+    // the user before discarding them.
+    function cpSwitchSide(side) {
+      if (side !== 'front' && side !== 'back') return;
+      if (side === _cpSide) return;
+      if (_cpDirty) {
+        if (!confirm('Discard unsaved edits to the ' + _cpSide + ' photo?')) return;
+      }
+      _cpSide  = side;
+      _cpDirty = false;
+      cpResetFile();
+      _cpUpdateSideTabs();
+      _cpTryLoadExisting();
+    }
+
+    function _cpUpdateSideTabs() {
+      var f = document.getElementById('cpSideFront');
+      var b = document.getElementById('cpSideBack');
+      function activate(el) {
+        if (!el) return;
+        el.style.borderColor = 'var(--accent)';
+        el.style.background  = 'rgba(0,229,255,.10)';
+        el.style.color       = 'var(--accent)';
+      }
+      function deactivate(el) {
+        if (!el) return;
+        el.style.borderColor = 'var(--border)';
+        el.style.background  = 'transparent';
+        el.style.color       = 'var(--muted)';
+      }
+      if (_cpSide === 'front') { activate(f); deactivate(b); }
+      else                     { activate(b); deactivate(f); }
+      var hint = document.getElementById('cpUploadHint');
+      if (hint) {
+        hint.textContent = 'Click or drag a new ' + _cpSide + ' photo here';
+      }
+    }
+
+    // Pre-load the existing photo (for whichever side is selected) into
+    // the cropper. If there isn't one, the upload zone stays visible.
+    async function _cpTryLoadExisting() {
+      if (!_cpItemId) return;
+      var item = collectionItems.find(function(c) { return String(c.id) === String(_cpItemId); });
+      if (!item) return;
+      var url = (_cpSide === 'back') ? item.card_back_image_url : item.card_image_url;
+      if (!url) return;
+      try {
+        var res = await fetch(url, { mode: 'cors', cache: 'no-store' });
+        if (!res.ok) return;
+        var blob = await res.blob();
+        var name = 'existing-' + _cpSide + '.' + ((blob.type || '').split('/')[1] || 'png');
+        var file = new File([blob], name, { type: blob.type || 'image/png' });
+        await cpLoadFile(file);
+        var st = document.getElementById('cpStatus');
+        if (st) st.textContent = 'Editing your saved ' + _cpSide + ' photo — adjust and save, or pick a different one';
+      } catch(e) {
+        // CORS or network failure — silently fall back to upload-zone state.
+        console.warn('[cpTryLoadExisting]', e);
+      }
     }
 
     function cpHandleDrop(e) {
@@ -14542,7 +14620,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var dz = document.getElementById('cpUploadZone');
       if (dz) dz.style.borderColor = 'var(--border)';
       var file = e.dataTransfer && e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) cpLoadFile(file);
+      if (file && file.type.startsWith('image/')) { _cpDirty = true; cpLoadFile(file); }
+    }
+
+    // Wrapper used by the <input> onchange so we can flag dirty state
+    // before delegating to cpLoadFile.
+    function cpFileInputChange(input) {
+      var f = input && input.files && input.files[0];
+      if (!f) return;
+      _cpDirty = true;
+      cpLoadFile(f);
     }
 
     async function cpLoadFile(file) {
@@ -14577,7 +14664,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function cpRotate() {
-      if (_cpCropper) _cpCropper.rotate(90);
+      if (_cpCropper) { _cpCropper.rotate(90); _cpDirty = true; }
     }
 
     function cpResetFile() {
@@ -14656,6 +14743,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         };
         if (btn)    { btn.textContent = '✓ Background Removed'; btn.dataset.done = '1'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
         if (status) status.textContent = '✓ Adjust crop if needed, then save';
+        _cpDirty = true;
       } catch (err) {
         console.error('[BG Remove]', err);
         // Surface a more diagnostic message — most failures are network
@@ -14714,19 +14802,35 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var urlData = sb.storage.from('card-photos').getPublicUrl(path);
       var publicUrl = urlData.data && urlData.data.publicUrl;
 
-      var dbResult = await sb.from('collection_items').update({ card_image_url: publicUrl }).eq('id', _cpItemId);
+      // Save to either card_image_url (front) or card_back_image_url (back)
+      // depending on the active side tab.
+      var updateField = (_cpSide === 'back') ? 'card_back_image_url' : 'card_image_url';
+      var patch = {};
+      patch[updateField] = publicUrl;
+      var dbResult = await sb.from('collection_items').update(patch).eq('id', _cpItemId);
       if (dbResult.error) {
-        if (status) status.textContent = 'Save failed: ' + dbResult.error.message;
+        var msg = (dbResult.error.message || '').toLowerCase();
+        // Missing column → prompt the user with the SQL to add it.
+        if (_cpSide === 'back' && (msg.indexOf('column') !== -1 || msg.indexOf('schema') !== -1)) {
+          var sql = "alter table collection_items\n  add column if not exists card_back_image_url text;";
+          console.log('%cBack-Photo SQL Migration:', 'color:orange;font-weight:bold');
+          console.log(sql);
+          if (status) status.textContent = 'Database needs migration — see console for SQL';
+          showToast('Run the back-photo SQL migration in Supabase first (see console)');
+        } else {
+          if (status) status.textContent = 'Save failed: ' + dbResult.error.message;
+        }
         if (btn) { btn.textContent = 'Save Photo'; btn.disabled = false; }
         return;
       }
 
       // Update local cache so the binder view reflects it immediately
       var local = collectionItems.find(function(c) { return String(c.id) === String(_cpItemId); });
-      if (local) local.card_image_url = publicUrl;
+      if (local) local[updateField] = publicUrl;
+      _cpDirty = false;
       renderCollection();
 
-      showToast('Photo updated!');
+      showToast((_cpSide === 'back' ? 'Back' : 'Front') + ' photo updated!');
       closeCardPhotoModal();
       openBinderCardDetail(_cpItemId);
     }
@@ -18302,7 +18406,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div class="modal" style="max-width:480px">
       <button class="modal-close" onclick="closeCardPhotoModal()">×</button>
       <h3 style="margin-bottom:4px">Update Card Photo</h3>
-      <p style="font-size:.72rem;color:var(--muted);margin-bottom:14px">Upload a new photo · drag to reposition · scroll to zoom · crop then save</p>
+      <p style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Edit the existing photo or upload a new one · drag to reposition · scroll to zoom · crop then save</p>
+
+      <!-- Front / Back side tabs -->
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button id="cpSideFront" type="button" onclick="cpSwitchSide('front')"
+          style="flex:1;padding:7px 10px;border:1px solid var(--accent);background:rgba(0,229,255,.10);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;cursor:pointer;letter-spacing:.04em">
+          Front
+        </button>
+        <button id="cpSideBack" type="button" onclick="cpSwitchSide('back')"
+          style="flex:1;padding:7px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;cursor:pointer;letter-spacing:.04em">
+          Back
+        </button>
+      </div>
 
       <!-- Upload dropzone (visible before file chosen) -->
       <div id="cpUploadZone"
@@ -18312,10 +18428,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         ondragleave="document.getElementById('cpUploadZone').style.borderColor='var(--border)'"
         ondrop="cpHandleDrop(event)">
         <div style="font-size:2rem;line-height:1">[ SCAN ]</div>
-        <div style="font-size:.78rem;color:var(--muted);margin-top:8px">Click or drag your card photo here</div>
+        <div id="cpUploadHint" style="font-size:.78rem;color:var(--muted);margin-top:8px">Click or drag your card photo here</div>
         <div style="font-size:.65rem;color:var(--muted);margin-top:3px">JPG · PNG · WEBP</div>
       </div>
-      <input type="file" id="cpFileInput" accept="image/*" style="display:none" onchange="cpLoadFile(this.files[0])">
+      <input type="file" id="cpFileInput" accept="image/*" style="display:none" onchange="cpFileInputChange(this)">
 
       <!-- Crop zone (visible after file chosen) -->
       <div id="cpCropZone" style="display:none;margin-bottom:14px">
