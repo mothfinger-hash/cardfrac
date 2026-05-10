@@ -13169,6 +13169,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div style="margin-bottom:12px">
           <div style="font-size:1rem;color:var(--text);font-weight:600;line-height:1.3">${_escHtml(item.card_name)}</div>
           ${item.set_name ? `<div style="font-size:.75rem;color:var(--muted);margin-top:3px">${_escHtml(item.set_name)}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
+          ${(function(){
+            // Show English set name as subtitle when this is a JP card
+            // (api_card_id starts with jp- or pd-, or language === 'JA').
+            var isJp = item.language === 'JA' || (item.api_card_id && (item.api_card_id.indexOf('jp-') === 0 || item.api_card_id.indexOf('pd-') === 0));
+            if (!isJp) return '';
+            var en = translateJpSetName(item.set_code, item.set_name);
+            return en ? `<div style="font-size:.7rem;color:var(--accent);margin-top:2px;font-style:italic">${_escHtml(en)}</div>` : '';
+          })()}
           ${item.cert_number ? `<div style="font-size:.68rem;color:var(--muted);margin-top:2px">Cert #${item.cert_number}</div>` : ''}
         </div>
 
@@ -18069,6 +18077,190 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ── JP Sets ───────────────────────────────────────────────────────────
     var _jpSetsDetailCache = {}; // setCode → { timestamp, cards }
 
+    // ── JP → EN set name translations ─────────────────────────────────────
+    // Set codes used by the catalog (`set_code` on jp-/pd- rows) mapped to
+    // the English-language equivalent set name. Most modern sets included;
+    // extend the map as new sets release. Keys are case-normalised — the
+    // helper below also tries an all-lowercase lookup as a fallback so
+    // typos like "SV1S" / "sv1s" both resolve.
+    var JP_SET_TRANSLATIONS = {
+      // ── Scarlet & Violet era (2023+) ─────────────────────────────────
+      'sv1S':  'Scarlet ex',
+      'sv1V':  'Violet ex',
+      'sv1a':  'Triplet Beat',
+      'sv2D':  'Clay Burst',
+      'sv2P':  'Snow Hazard',
+      'sv2a':  'Pokémon Card 151',
+      'sv3':   'Ruler of the Black Flame',
+      'sv3a':  'Raging Surf',
+      'sv4M':  'Future Flash',
+      'sv4K':  'Ancient Roar',
+      'sv4a':  'Shiny Treasure ex',
+      'sv5K':  'Wild Force',
+      'sv5M':  'Cyber Judge',
+      'sv5a':  'Crimson Haze',
+      'sv6':   'Mask of Change',
+      'sv6a':  'Night Wanderer',
+      'sv7':   'Stellar Miracle',
+      'sv7a':  'Paradise Dragona',
+      'sv8':   'Super Electric Breaker',
+      'sv8a':  'Terastal Fest ex',
+      'sv9':   'Battle Partners',
+      'sv10':  'Heat Wave Arena',
+      'sv11W': 'Black Bolt',
+      'sv11B': 'White Flare',
+      // ── Sword & Shield era (2019–2022) ───────────────────────────────
+      's1H':   'Sword',
+      's1W':   'Shield',
+      's1a':   'VMAX Rising',
+      's2':    'Rebellion Crash',
+      's2a':   'Explosive Walker',
+      's3':    'Infinity Zone',
+      's3a':   'Legendary Heartbeat',
+      's4':    'Shocking Volt Tackle',
+      's4a':   'Shiny Star V',
+      's5R':   'Rapid Strike Master',
+      's5I':   'Single Strike Master',
+      's5a':   'Matchless Fighters',
+      's6H':   'Silver Lance',
+      's6K':   'Jet-Black Spirit',
+      's6a':   'Eevee Heroes',
+      's7R':   'Skyward Stream',
+      's7D':   'Towering Perfection',
+      's8':    'Fusion Arts',
+      's8a':   '25th Anniversary Collection',
+      's8b':   'VMAX Climax',
+      's9':    'Star Birth',
+      's9a':   'Battle Region',
+      's10D':  'Time Gazer',
+      's10P':  'Space Juggler',
+      's10a':  'Dark Phantasma',
+      's10b':  'Pokémon GO',
+      's11':   'Lost Abyss',
+      's11a':  'Incandescent Arcana',
+      's12':   'Paradigm Trigger',
+      's12a':  'VSTAR Universe',
+      // ── Sun & Moon era (2016–2019) — common ones ─────────────────────
+      'sm1+':  'Collection Sun & Moon',
+      'sm1S':  'Collection Sun',
+      'sm1M':  'Collection Moon',
+      'sm2L':  'Alolan Moonlight',
+      'sm2K':  'Awakened Heroes',
+      'sm3':   'To Have Seen the Battle Rainbow',
+      'sm3H':  'To Have Seen the Fighting Rainbow',
+      'sm3+':  'Shining Legends',
+      'sm4S':  'Sun & Moon Ultra Sun',
+      'sm4M':  'Sun & Moon Ultra Moon',
+      'sm5S':  'Ultra Sun',
+      'sm5M':  'Ultra Moon',
+      'sm6':   'Forbidden Light',
+      'sm6a':  'Dragon Storm',
+      'sm6b':  'Champion Road',
+      'sm7':   'Thunderclap Spark',
+      'sm7a':  'Sky-Splitting Charisma',
+      'sm7b':  'Fairy Rise',
+      'sm8':   'Super Burst Impact',
+      'sm8a':  'Dark Order',
+      'sm8b':  'GX Ultra Shiny',
+      'sm9':   'Tag Bolt',
+      'sm9a':  'Night Unison',
+      'sm9b':  'Full Metal Wall',
+      'sm10':  'Double Blaze',
+      'sm10a': 'Sky Legend',
+      'sm10b': 'Sky Legends',
+      'sm11':  'Miracle Twin',
+      'sm11a': 'Remix Bout',
+      'sm11b': 'Dream League',
+      'sm12':  'Alter Genesis',
+      'sm12a': 'TAG TEAM GX Tag All Stars',
+      // ── Promo / special ──────────────────────────────────────────────
+      'sv-P':  'SV Promo',
+      's-P':   'SWSH Promo',
+      'sm-P':  'SM Promo',
+      'xy-P':  'XY Promo'
+    };
+
+    // Also a small JP-name → EN map for catalog rows that lack a clean
+    // set_code (older or PD prefixed entries). Keep entries here only
+    // when we can't find them by code.
+    var JP_SET_NAME_TRANSLATIONS = {
+      'スカーレットex':      'Scarlet ex',
+      'バイオレットex':      'Violet ex',
+      'ポケモンカード151':   'Pokémon Card 151',
+      'トリプレットビート':  'Triplet Beat',
+      'クレイバースト':      'Clay Burst',
+      'スノーハザード':      'Snow Hazard',
+      '黒炎の支配者':        'Ruler of the Black Flame',
+      'レイジングサーフ':    'Raging Surf',
+      '未来の一閃':          'Future Flash',
+      '古代の咆哮':          'Ancient Roar',
+      'シャイニートレジャーex': 'Shiny Treasure ex',
+      'ワイルドフォース':    'Wild Force',
+      'サイバージャッジ':    'Cyber Judge',
+      '深淵のクリムゾン':    'Crimson Haze',
+      '変幻の仮面':          'Mask of Change',
+      'ナイトワンダラー':    'Night Wanderer',
+      'ステラミラクル':      'Stellar Miracle',
+      'パラダイスドラゴナ':  'Paradise Dragona',
+      '超電ブレイカー':      'Super Electric Breaker',
+      'テラスタルフェスex':  'Terastal Fest ex',
+      'バトルパートナーズ':  'Battle Partners',
+      '熱風のアリーナ':      'Heat Wave Arena',
+      // Sword & Shield
+      'ソード':              'Sword',
+      'シールド':            'Shield',
+      'VMAXライジング':      'VMAX Rising',
+      '反逆クラッシュ':      'Rebellion Crash',
+      '爆炎ウォーカー':      'Explosive Walker',
+      '無限ゾーン':          'Infinity Zone',
+      '伝説の鼓動':          'Legendary Heartbeat',
+      'ショッキングボルテッカー': 'Shocking Volt Tackle',
+      'シャイニースターV':   'Shiny Star V',
+      '連撃マスター':        'Rapid Strike Master',
+      '一撃マスター':        'Single Strike Master',
+      '双璧のファイター':    'Matchless Fighters',
+      '銀のランス':          'Silver Lance',
+      '漆黒のガイスト':      'Jet-Black Spirit',
+      'イーブイヒーローズ':  'Eevee Heroes',
+      '蒼空ストリーム':      'Skyward Stream',
+      '摩天パーフェクト':    'Towering Perfection',
+      'フュージョンアーツ':  'Fusion Arts',
+      '25th ANNIVERSARY COLLECTION': '25th Anniversary Collection',
+      'VMAXクライマックス':  'VMAX Climax',
+      'スターバース':        'Star Birth',
+      'バトルリージョン':    'Battle Region',
+      'タイムゲイザー':      'Time Gazer',
+      'スペースジャグラー':  'Space Juggler',
+      'ダークファンタズマ':  'Dark Phantasma',
+      'ポケモンGO':          'Pokémon GO',
+      'ロストアビス':        'Lost Abyss',
+      '白熱のアルカナ':      'Incandescent Arcana',
+      'パラダイムトリガー':  'Paradigm Trigger',
+      'VSTARユニバース':     'VSTAR Universe'
+    };
+
+    // Returns the English name for a JP set, or null if unknown.
+    // Tries set_code first (most reliable), then falls back to the
+    // raw Japanese name string.
+    function translateJpSetName(setCode, jpName) {
+      if (setCode) {
+        if (JP_SET_TRANSLATIONS[setCode]) return JP_SET_TRANSLATIONS[setCode];
+        // case-insensitive fallback
+        var ckeys = Object.keys(JP_SET_TRANSLATIONS);
+        for (var i = 0; i < ckeys.length; i++) {
+          if (ckeys[i].toLowerCase() === String(setCode).toLowerCase()) return JP_SET_TRANSLATIONS[ckeys[i]];
+        }
+      }
+      if (jpName) {
+        if (JP_SET_NAME_TRANSLATIONS[jpName]) return JP_SET_NAME_TRANSLATIONS[jpName];
+        // strip trailing whitespace / punctuation and retry
+        var trimmed = String(jpName).trim();
+        if (trimmed !== jpName && JP_SET_NAME_TRANSLATIONS[trimmed]) return JP_SET_NAME_TRANSLATIONS[trimmed];
+      }
+      return null;
+    }
+    // ── End JP set translations ───────────────────────────────────────────
+
     async function loadJpSetsPage(el) {
       el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading JP sets…</div>';
       try {
@@ -18121,12 +18313,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const owned = jpOwned[s.set_code] || 0;
           const pct   = s.total > 0 ? Math.min(100, Math.round(owned / s.total * 100)) : 0;
           const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+          const en = translateJpSetName(s.set_code, s.set_name);
+          // Show JP name as primary, English subtitle when known.
           return `<div onclick="loadJpSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}')"
             style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
             onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
             <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
+              ${en ? `<div style="font-size:.66rem;color:var(--accent);margin-top:1px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(en)}</div>` : ''}
               <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.set_code} · ${s.total} cards</div>
               <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
                 <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
@@ -18218,11 +18413,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>`;
         }).join('');
 
+        var _setEn = translateJpSetName(setCode, setName);
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:8px">
+          <h2 style="font-size:1.05rem;margin-bottom:${_setEn ? '2px' : '8px'}">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">JP</span>${_escHtml(setName)}
           </h2>
+          ${_setEn ? `<div style="font-size:.78rem;color:var(--accent);font-style:italic;margin-bottom:10px;letter-spacing:.02em">${_escHtml(_setEn)}</div>` : ''}
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
