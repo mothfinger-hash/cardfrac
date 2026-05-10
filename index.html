@@ -1085,9 +1085,66 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-cash-label{font-size:.72rem;color:var(--muted)}
     .ft-cash-input{width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit}
 
-    /* Scale SVG — force it to render at full size, fix iOS transform-origin */
-    #ftScaleSvg{width:min(320px,90vw);overflow:visible;display:block;margin:0 auto}
-    #ftNeedleGroup{transform-box:view-box;transform-origin:160px 170px}
+    /* PathBinder gauge — gauge.webp + needle.webp overlay rotated by JS.
+       Needle pivot is ~50% horizontal / ~59% vertical of the 1000×1000 image. */
+    .ft-gauge-wrap{
+      position:relative;
+      width:min(320px,90vw);
+      aspect-ratio:1/1;
+      margin:0 auto;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+    .ft-gauge-bg,
+    .ft-gauge-needle{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      pointer-events:none;
+      -webkit-user-drag:none;
+    }
+    .ft-gauge-needle{
+      transform-origin:50% 59%;
+      will-change:transform;
+      transition:transform 0.6s cubic-bezier(.34,1.56,.64,1);
+    }
+    .ft-gauge-info{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:14px;
+      max-width:min(320px,90vw);
+      margin:6px auto 0;
+      padding:0 4px;
+      font-size:.7rem;
+      letter-spacing:.06em;
+    }
+    .ft-gauge-side{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .ft-gauge-side > span:first-child{
+      font-weight:700;
+      font-size:.65rem;
+      color:var(--muted);
+      text-transform:uppercase;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:140px;
+    }
+    .ft-gauge-side > span:last-child{
+      font-weight:700;
+      font-size:.85rem;
+    }
+    .ft-gauge-side-a{align-items:flex-start;text-align:left}
+    .ft-gauge-side-a > span:last-child{color:var(--teal,#5fb6c0)}
+    .ft-gauge-side-b{align-items:flex-end;text-align:right}
+    .ft-gauge-side-b > span:last-child{color:var(--gold,#D2783A)}
 
     /* ── FAIR TRADE — mobile layout ─────────────────────── */
     /* Two-column sides stack to single column on small screens */
@@ -1110,9 +1167,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       .ft-side-search-row{flex-wrap:wrap}
       .ft-side-search-row input{min-width:0;flex:1 1 120px}
 
-      /* Results state scale: a bit smaller */
-      #ftScaleSvg{width:min(280px,88vw)}
-      #ftNeedleGroup{transform-box:view-box;transform-origin:160px 170px}
+      /* Results state gauge: a bit smaller */
+      .ft-gauge-wrap{width:min(280px,88vw)}
+      .ft-gauge-info{max-width:min(280px,88vw)}
 
       /* Breakdown tables: allow horizontal scroll */
       #ftBreakdownContent table{font-size:.68rem}
@@ -4337,123 +4394,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <!-- ── STATE 3: Results (scale + breakdown) ───────────────────────── -->
       <div id="ftResultsState" style="display:none">
 
-        <!-- Vintage Voltmeter -->
+        <!-- PathBinder gauge — gauge.webp + needle.webp overlay rotated by JS -->
         <div style="text-align:center;margin:10px 0 14px;user-select:none">
-          <svg id="ftScaleSvg" viewBox="0 0 320 205" xmlns="http://www.w3.org/2000/svg" style="width:min(320px,90vw);overflow:visible;display:block;margin:0 auto">
-            <defs>
-              <radialGradient id="vmFaceGrad" cx="50%" cy="35%">
-                <stop offset="0%"   stop-color="var(--surface2)"/>
-                <stop offset="100%" stop-color="var(--surface)"/>
-              </radialGradient>
-              <linearGradient id="vmCaseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stop-color="var(--border)"/>
-                <stop offset="40%"  stop-color="var(--surface2)"/>
-                <stop offset="100%" stop-color="var(--border)"/>
-              </linearGradient>
-              <linearGradient id="vmNeedleGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-                <stop offset="0%"   stop-color="var(--muted)"/>
-                <stop offset="75%"  stop-color="var(--text)"/>
-                <stop offset="75%"  stop-color="#ef4444"/>
-                <stop offset="100%" stop-color="#ef4444"/>
-              </linearGradient>
-            </defs>
-
-            <!-- Outer case (bezel) -->
-            <rect x="8" y="8" width="304" height="190" rx="14" fill="url(#vmCaseGrad)" stroke="var(--border)" stroke-width="2.5"/>
-            <!-- Face plate -->
-            <rect x="18" y="16" width="284" height="175" rx="10" fill="url(#vmFaceGrad)" stroke="var(--border)" stroke-width="1"/>
-            <!-- Corner screws -->
-            <circle cx="28" cy="26" r="4.5" fill="var(--border)" opacity=".8"/>
-            <line x1="26" y1="26" x2="30" y2="26" stroke="var(--surface)" stroke-width="1"/>
-            <line x1="28" y1="24" x2="28" y2="28" stroke="var(--surface)" stroke-width="1"/>
-            <circle cx="292" cy="26" r="4.5" fill="var(--border)" opacity=".8"/>
-            <line x1="290" y1="26" x2="294" y2="26" stroke="var(--surface)" stroke-width="1"/>
-            <line x1="292" y1="24" x2="292" y2="28" stroke="var(--surface)" stroke-width="1"/>
-            <circle cx="28" cy="182" r="4.5" fill="var(--border)" opacity=".8"/>
-            <line x1="26" y1="182" x2="30" y2="182" stroke="var(--surface)" stroke-width="1"/>
-            <line x1="28" y1="180" x2="28" y2="184" stroke="var(--surface)" stroke-width="1"/>
-            <circle cx="292" cy="182" r="4.5" fill="var(--border)" opacity=".8"/>
-            <line x1="290" y1="182" x2="294" y2="182" stroke="var(--surface)" stroke-width="1"/>
-            <line x1="292" y1="180" x2="292" y2="184" stroke="var(--surface)" stroke-width="1"/>
-
-            <!-- ── COLORED ZONE ARCS (center 160,170, R_out=105, R_in=95) ── -->
-            <!-- Red left:  -70° to -40° -->
-            <path d="M 61.3,134.1 A 105,105 0 0,1 92.5,89.6 L 98.9,97.2 A 95,95 0 0,0 70.7,137.5 Z"
-                  fill="#ef4444" opacity=".72"/>
-            <!-- Yellow left: -40° to -20° -->
-            <path d="M 92.5,89.6 A 105,105 0 0,1 124.1,71.3 L 127.5,80.7 A 95,95 0 0,0 98.9,97.2 Z"
-                  fill="#f59e0b" opacity=".72"/>
-            <!-- Green center: -20° to +20° -->
-            <path d="M 124.1,71.3 A 105,105 0 0,1 195.9,71.3 L 192.5,80.7 A 95,95 0 0,0 127.5,80.7 Z"
-                  fill="#10b981" opacity=".72"/>
-            <!-- Yellow right: +20° to +40° -->
-            <path d="M 195.9,71.3 A 105,105 0 0,1 227.5,89.6 L 221.1,97.2 A 95,95 0 0,0 192.5,80.7 Z"
-                  fill="#f59e0b" opacity=".72"/>
-            <!-- Red right: +40° to +70° -->
-            <path d="M 227.5,89.6 A 105,105 0 0,1 258.7,134.1 L 249.3,137.5 A 95,95 0 0,0 221.1,97.2 Z"
-                  fill="#ef4444" opacity=".72"/>
-
-            <!-- Arc border lines -->
-            <path d="M 61.3,134.1 A 105,105 0 0,1 258.7,134.1" fill="none" stroke="var(--border)" stroke-width="1"/>
-            <path d="M 70.7,137.5 A 95,95 0 0,1 249.3,137.5" fill="none" stroke="var(--border)" stroke-width="1"/>
-
-            <!-- ── TICK MARKS ── -->
-            <line x1="61.3"  y1="134.1" x2="74.2"  y2="138.3" stroke="var(--muted)" stroke-width="1.5"/>
-            <line x1="68.9"  y1="117.5" x2="83.0"  y2="125.2" stroke="var(--muted)" stroke-width="2"/>
-            <line x1="79.6"  y1="102.5" x2="90.4"  y2="111.7" stroke="var(--muted)" stroke-width="1"/>
-            <line x1="92.5"  y1="89.6"  x2="98.3"  y2="101.2" stroke="var(--muted)" stroke-width="1.5"/>
-            <line x1="107.5" y1="79.1"  x2="116.3" y2="92.6"  stroke="var(--muted)" stroke-width="2"/>
-            <line x1="124.1" y1="71.3"  x2="128.0" y2="83.6"  stroke="var(--muted)" stroke-width="1"/>
-            <line x1="141.8" y1="66.6"  x2="143.8" y2="79.3"  stroke="var(--muted)" stroke-width="1"/>
-            <line x1="160"   y1="65"    x2="160"   y2="80"    stroke="var(--muted)" stroke-width="2.5"/>
-            <line x1="178.2" y1="66.6"  x2="176.2" y2="79.3"  stroke="var(--muted)" stroke-width="1"/>
-            <line x1="195.9" y1="71.3"  x2="192.0" y2="83.6"  stroke="var(--muted)" stroke-width="1"/>
-            <line x1="212.5" y1="79.1"  x2="203.7" y2="92.6"  stroke="var(--muted)" stroke-width="2"/>
-            <line x1="227.5" y1="89.6"  x2="221.7" y2="101.2" stroke="var(--muted)" stroke-width="1.5"/>
-            <line x1="240.4" y1="102.5" x2="229.6" y2="111.7" stroke="var(--muted)" stroke-width="1"/>
-            <line x1="251.1" y1="117.5" x2="237.0" y2="125.2" stroke="var(--muted)" stroke-width="2"/>
-            <line x1="258.7" y1="134.1" x2="245.8" y2="138.3" stroke="var(--muted)" stroke-width="1.5"/>
-
-            <!-- Zone hint labels -->
-            <text x="80"  y="130" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">A+</text>
-            <text x="116" y="101" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">~A</text>
-            <text x="160" y="92"  text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">FAIR</text>
-            <text x="204" y="101" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">~B</text>
-            <text x="240" y="130" text-anchor="middle" font-size="6.5" fill="var(--text)" font-family="monospace" opacity=".55">B+</text>
-
-            <!-- Brand text -->
-            <text x="160" y="143" text-anchor="middle" font-size="7.5" fill="var(--muted)" font-family="monospace" letter-spacing="2.5" opacity=".45">PathBinder™</text>
-            <text x="160" y="153" text-anchor="middle" font-size="5.5" fill="var(--muted)" font-family="monospace" letter-spacing="1.5" opacity=".35">TRADE ANALYZER</text>
-
-            <!-- ── NEEDLE GROUP (rotates around 160,170) ── -->
-            <g id="ftNeedleGroup" style="transform:rotate(0deg)">
-              <!-- Counterweight tail -->
-              <rect x="157.5" y="170" width="5" height="10" rx="2.5" fill="var(--muted)" opacity=".6"/>
-              <!-- Needle shaft -->
-              <polygon points="158.5,170 161.5,170 161,75 159,75" fill="url(#vmNeedleGrad)"/>
-              <!-- Red tip accent -->
-              <rect x="159" y="67" width="2" height="8" rx="1" fill="#ef4444"/>
-            </g>
-
-            <!-- Pivot cap (on top of everything) -->
-            <circle cx="160" cy="170" r="7" fill="var(--border)" stroke="var(--surface)" stroke-width="1.5"/>
-            <circle cx="160" cy="170" r="3.5" fill="var(--muted)"/>
-            <circle cx="160" cy="170" r="1.5" fill="var(--surface2)"/>
-
-            <!-- ── USERNAME LABELS ── -->
-            <text id="ftMeterNameA" x="46" y="163" text-anchor="middle" font-size="8" fill="var(--teal)" font-family="monospace" font-weight="700" letter-spacing=".5">SIDE A</text>
-            <text id="ftMeterNameB" x="274" y="163" text-anchor="middle" font-size="8" fill="var(--gold)" font-family="monospace" font-weight="700" letter-spacing=".5">SIDE B</text>
-
-            <!-- ── PRICE LABELS ── -->
-            <text id="ftLabelLeft"  x="46"  y="174" text-anchor="middle" font-size="7" fill="var(--muted)" font-family="monospace"></text>
-            <text id="ftLabelRight" x="274" y="174" text-anchor="middle" font-size="7" fill="var(--muted)" font-family="monospace"></text>
-
-            <!-- Terminal studs (decorative) -->
-            <rect x="133" y="192" width="14" height="9" rx="2.5" fill="var(--teal)" opacity=".7"/>
-            <rect x="173" y="192" width="14" height="9" rx="2.5" fill="var(--gold)" opacity=".7"/>
-            <text x="140" y="199" text-anchor="middle" font-size="6" fill="#000" font-family="monospace" font-weight="700">A</text>
-            <text x="180" y="199" text-anchor="middle" font-size="6" fill="#000" font-family="monospace" font-weight="700">B</text>
-          </svg>
+          <div class="ft-gauge-wrap">
+            <img class="ft-gauge-bg" src="/gauge.webp" alt="" draggable="false">
+            <img class="ft-gauge-needle" id="ftNeedleImg" src="/needle.webp" alt="" draggable="false">
+          </div>
+          <div class="ft-gauge-info">
+            <div class="ft-gauge-side ft-gauge-side-a">
+              <span id="ftMeterNameA">SIDE A</span>
+              <span id="ftLabelLeft"></span>
+            </div>
+            <div class="ft-gauge-side ft-gauge-side-b">
+              <span id="ftMeterNameB">SIDE B</span>
+              <span id="ftLabelRight"></span>
+            </div>
+          </div>
           <div id="ftVerdict" style="font-size:.9rem;font-weight:700;letter-spacing:.06em;margin-top:6px;min-height:22px;transition:color .4s"></div>
           <!-- ── Coin Flip ── -->
           <div id="ftCoinFlipWrap" style="text-align:center;margin-top:14px">
@@ -15087,8 +15043,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       layout();
 
       var startTime = performance.now();
+      var firstCycleDone = false;
       function tick(now) {
-        var elapsed = Math.min(now - startTime, TOTAL);
+        var totalElapsed = now - startTime;
+        // Loop continuously — animation keeps playing while prices fetch
+        // in the background. The promise below resolves after the first
+        // full cycle so the analyze flow knows the user has seen the scan.
+        var elapsed = totalElapsed % TOTAL;
         var L = layout();
         var pos = pathAt(elapsed);
         var lensCX = pos.x * L.sceneW;
@@ -15101,10 +15062,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         lensImg.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
         if (status) status.textContent = pos.msg;
 
-        if (elapsed >= TOTAL) {
-          _ftMagAnimRaf = null;
+        if (!firstCycleDone && totalElapsed >= TOTAL) {
+          firstCycleDone = true;
           if (_ftMagAnimResolve) { _ftMagAnimResolve(); _ftMagAnimResolve = null; }
-          return;
         }
         _ftMagAnimRaf = requestAnimationFrame(tick);
       }
@@ -16262,7 +16222,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     function _ftUpdateScale(totalA, totalB) {
-      var needleEl = document.getElementById('ftNeedleGroup');
+      var needleEl = document.getElementById('ftNeedleImg');
       var verdict  = document.getElementById('ftVerdict');
       var labelL   = document.getElementById('ftLabelLeft');
       var labelR   = document.getElementById('ftLabelRight');
@@ -16326,7 +16286,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     function _ftResetScale() {
       if (_ftNeedleAnimId) { cancelAnimationFrame(_ftNeedleAnimId); _ftNeedleAnimId = null; }
-      var needleEl = document.getElementById('ftNeedleGroup');
+      var needleEl = document.getElementById('ftNeedleImg');
       if (needleEl) {
         needleEl.style.transition = 'transform 0.4s ease';
         _ftSetNeedleAngle(needleEl, 0);
@@ -16359,7 +16319,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return;
       }
 
-      // Switch to loading state — Pikachu appears
+      // Switch to loading state — magglass animation kicks off.
+      // The animation now LOOPS continuously while prices fetch in
+      // parallel below. _ftMagAnimPromise resolves after the first
+      // full cycle so we always show the user a complete scan.
       _ftShowState('loading');
       var msgEl  = document.getElementById('ftLoadingMsg');
       var progEl = document.getElementById('ftLoadingProgress');
@@ -16372,12 +16335,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         'Almost there…'
       ];
 
-      var fetched = {};  // keyed by card.id
-      for (var i = 0; i < allCards.length; i++) {
-        var c = allCards[i];
-        if (msgEl) msgEl.textContent = loadingMsgs[Math.min(i, loadingMsgs.length - 1)];
-        if (progEl) progEl.textContent = 'Card ' + (i + 1) + ' of ' + allCards.length + ' — ' + c.name;
+      // Rotate the loading copy on a timer (fetches run in parallel,
+      // so per-card progress text wouldn't be meaningful).
+      var _ftLoadingTick = 0;
+      if (msgEl) msgEl.textContent = loadingMsgs[0];
+      if (progEl) progEl.textContent = 'Scanning ' + allCards.length + ' card' + (allCards.length === 1 ? '' : 's') + '…';
+      var _ftLoadingTimer = setInterval(function() {
+        _ftLoadingTick++;
+        if (msgEl) msgEl.textContent = loadingMsgs[_ftLoadingTick % loadingMsgs.length];
+      }, 1500);
 
+      // ── Per-card fetch (TCG + PriceCharting in parallel) ─────────
+      async function _ftFetchOne(c) {
         var tcgPrice = null;
         var pcPrice  = null;
 
@@ -16385,39 +16354,43 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // Cards added from the binder have a "binder_<uuid>" id — use apiCardId instead.
         // Cards added via search/scan already have a real pokemontcg.io id.
         var tcgLookupId = c.apiCardId || (c.id && !c.id.startsWith('binder_') ? c.id : null);
-        try {
-          if (!tcgLookupId) throw new Error('no tcg id');
-          var apiRes = await fetch('https://api.pokemontcg.io/v2/cards/' + encodeURIComponent(tcgLookupId));
-          if (apiRes.ok) {
+        var tcgPromise = (async function() {
+          try {
+            if (!tcgLookupId) return null;
+            var apiRes = await fetch('https://api.pokemontcg.io/v2/cards/' + encodeURIComponent(tcgLookupId));
+            if (!apiRes.ok) return null;
             var apiData = await apiRes.json();
             var pricesObj = apiData.data && apiData.data.tcgplayer && apiData.data.tcgplayer.prices;
-            if (pricesObj) {
-              var variants = ['holofoil','reverseHolofoil','normal','1stEditionHolofoil','unlimitedHolofoil'];
-              for (var vi = 0; vi < variants.length; vi++) {
-                var vp = pricesObj[variants[vi]];
-                if (vp && vp.market != null) { tcgPrice = vp.market; break; }
-              }
-              if (tcgPrice == null) {
-                for (var key in pricesObj) {
-                  if (pricesObj[key] && pricesObj[key].market != null) { tcgPrice = pricesObj[key].market; break; }
-                }
-              }
+            if (!pricesObj) return null;
+            var variants = ['holofoil','reverseHolofoil','normal','1stEditionHolofoil','unlimitedHolofoil'];
+            for (var vi = 0; vi < variants.length; vi++) {
+              var vp = pricesObj[variants[vi]];
+              if (vp && vp.market != null) return vp.market;
             }
-          }
-        } catch(_) {}
+            for (var key in pricesObj) {
+              if (pricesObj[key] && pricesObj[key].market != null) return pricesObj[key].market;
+            }
+            return null;
+          } catch(_) { return null; }
+        })();
 
         // 2. PriceCharting via /api/lookup-price
-        try {
-          var pcRes = await fetch('/api/lookup-price', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: c.name, condition: 'raw' })
-          });
-          if (pcRes.ok) {
+        var pcPromise = (async function() {
+          try {
+            var pcRes = await fetch('/api/lookup-price', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: c.name, condition: 'raw' })
+            });
+            if (!pcRes.ok) return null;
             var pcData = await pcRes.json();
-            if (pcData && pcData.price) pcPrice = pcData.price;
-          }
-        } catch(_) {}
+            return (pcData && pcData.price) ? pcData.price : null;
+          } catch(_) { return null; }
+        })();
+
+        var results = await Promise.all([tcgPromise, pcPromise]);
+        tcgPrice = results[0];
+        pcPrice  = results[1];
 
         // 3. If TCG lookup missed (no apiCardId), try TCG name search as fallback
         if (tcgPrice == null && c.name) {
@@ -16448,9 +16421,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         var avg = sources.length ? sources.reduce(function(a, b) { return a + b; }, 0) / sources.length : null;
         // If both API sources failed but card came from the binder with a known price, use that
         if (avg == null && c.binderPrice) avg = parseFloat(c.binderPrice);
-        fetched[c.id] = { tcg: tcgPrice, pc: pcPrice, avg: avg, fromBinder: (!tcgPrice && !pcPrice && avg != null) };
+        return { tcg: tcgPrice, pc: pcPrice, avg: avg, fromBinder: (!tcgPrice && !pcPrice && avg != null) };
+      }
 
-        if (i < allCards.length - 1) await new Promise(function(r) { setTimeout(r, 400); });
+      // Kick off ALL card fetches in parallel — runs in the background
+      // while the magglass animation loops on screen.
+      var fetchPromise = Promise.all(allCards.map(_ftFetchOne)).then(function(arr) {
+        var fetched = {};
+        allCards.forEach(function(c, i) { fetched[c.id] = arr[i]; });
+        return fetched;
+      });
+
+      // Wait for BOTH the price fetch AND at least one full animation
+      // cycle. Whichever finishes last gates the transition, so the
+      // user always sees a complete scan and never waits on a frozen
+      // end-frame after fetch finishes.
+      var fetched = {};
+      try {
+        var both = await Promise.all([
+          fetchPromise,
+          _ftMagAnimPromise || Promise.resolve()
+        ]);
+        fetched = both[0] || {};
+      } catch(_) {
+        // If the fetch threw catastrophically, still try to render.
+        try { fetched = await fetchPromise; } catch(__) { fetched = {}; }
+      } finally {
+        clearInterval(_ftLoadingTimer);
       }
 
       // Apply prices back
@@ -16461,17 +16458,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           else   { c.prices = { tcg: null, pc: null };   c.avgPrice = null;  }
         });
       });
-
-      // Small dramatic pause so the scale reveal feels intentional
-      if (progEl) progEl.textContent = 'Weighing the trade…';
-      await new Promise(function(r) { setTimeout(r, 600); });
-
-      // Wait for the magglass animation's full cycle to finish before
-      // switching to results — guarantees the scan plays through both
-      // sides even if prices fetched faster than the animation.
-      if (_ftMagAnimPromise) {
-        try { await _ftMagAnimPromise; } catch(_) {}
-      }
 
       // Switch to results state — trigger wobble animation
       _ftWobbleOnNext = true;

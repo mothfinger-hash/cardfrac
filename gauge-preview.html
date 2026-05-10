@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Gauge alignment preview</title>
+<style>
+  body{background:#0d0d0f;color:#bbb;font-family:monospace;padding:30px;display:flex;flex-direction:column;align-items:center;gap:24px}
+  .wrap{position:relative;width:320px;aspect-ratio:1/1}
+  .wrap img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-user-drag:none}
+  .needle{transform-origin:50% 59%;transition:transform .8s cubic-bezier(.34,1.56,.64,1)}
+  .pivot-dot{position:absolute;width:8px;height:8px;border-radius:50%;background:lime;left:50%;top:59%;transform:translate(-50%,-50%);pointer-events:none}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  button{background:#222;color:#bbb;border:1px solid #444;padding:6px 12px;font-family:inherit;cursor:pointer}
+  .label{font-size:.8rem;opacity:.6}
+</style></head>
+<body>
+  <div class="label">Green dot = transform-origin (50% 59%)</div>
+  <div class="wrap">
+    <img src="gauge.webp" alt="">
+    <img class="needle" id="n" src="needle.webp" alt="">
+    <div class="pivot-dot"></div>
+  </div>
+  <div class="controls">
+    <button onclick="set(-70)">-70°</button>
+    <button onclick="set(-35)">-35°</button>
+    <button onclick="set(0)">0°</button>
+    <button onclick="set(35)">35°</button>
+    <button onclick="set(70)">70°</button>
+    <button onclick="wobble()">wobble</button>
+  </div>
+  <div class="label" id="info">angle: 0°</div>
+
+<script>
+  const n = document.getElementById('n');
+  const info = document.getElementById('info');
+  function set(deg){ n.style.transform='rotate('+deg+'deg)'; info.textContent='angle: '+deg+'°'; }
+  function wobble(){
+    n.style.transition='none';
+    const start = performance.now();
+    const dur = 2800;
+    const target = (Math.random()*140 - 70);
+    function tick(now){
+      const t = Math.min((now-start)/dur, 1);
+      const base = target * (1 - Math.exp(-5*t));
+      const w = Math.exp(-4*t) * 35 * Math.sin(t*18);
+      n.style.transform = 'rotate('+(base+w)+'deg)';
+      info.textContent = 'angle: '+(base+w).toFixed(1)+'°';
+      if (t<1) requestAnimationFrame(tick);
+      else n.style.transition='transform .8s cubic-bezier(.34,1.56,.64,1)';
+    }
+    requestAnimationFrame(tick);
+  }
+</script>
+</body></html>
