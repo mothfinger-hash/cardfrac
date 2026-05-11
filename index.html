@@ -16937,7 +16937,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     var _ftWobbleOnNext = false;
 
     function _ftSetNeedleAngle(el, deg) {
-      el.style.transform = 'rotate(' + deg + 'deg)';
+      // scale(0.9) shrinks the needle ~10% — combined with the CSS
+      // transform-origin: 50% 59% on .ft-gauge-needle, the pivot/base
+      // stays anchored to the gauge while the tip pulls in.
+      el.style.transform = 'rotate(' + deg + 'deg) scale(0.9)';
     }
 
     function _ftAnimateNeedleWobble(el, targetDeg, onDone) {
