@@ -81,6 +81,34 @@ except Exception as e:
 _session = requests.Session()
 _session.headers.update({"User-Agent": "PathBinder/1.0 (contact: charles@merchunlimited.com)"})
 
+
+# ── Pokedata membership cookie loader (mirrors fetch_jp_pokedata.py) ─────────
+def _load_pokedata_cookies(path="pokedata_session.txt"):
+    if not os.path.exists(path):
+        return {}
+    cookies = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            v = v.strip().strip('"').strip("'")
+            if v:
+                cookies[k.strip()] = v
+    return cookies
+
+_pd_cookies = _load_pokedata_cookies()
+if _pd_cookies:
+    for _k, _v in _pd_cookies.items():
+        _session.cookies.set(_k, _v, domain=".pokedata.io")
+    print(f"  Loaded {len(_pd_cookies)} membership cookies — fetching as logged-in user")
+else:
+    print(f"  (no pokedata_session.txt — fetching anonymously)")
+
+
 def fetch_page(url):
     try:
         r = _session.get(url, timeout=REQUEST_TIMEOUT)

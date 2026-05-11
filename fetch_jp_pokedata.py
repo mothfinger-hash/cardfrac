@@ -79,6 +79,38 @@ except Exception as e:
 _session = requests.Session()
 _session.headers.update({"User-Agent": "PathBinder/1.0 (contact: charles@merchunlimited.com)"})
 
+
+# ── Pokedata membership cookie loader ────────────────────────────────────────
+# Reads pokedata_session.txt (gitignored) containing key=value lines for the
+# `session` and `remember_token` cookies copied from a logged-in browser.
+# When present these are attached to every request so the scrape sees whatever
+# premium-tier rendered state the membership unlocks.
+def _load_pokedata_cookies(path="pokedata_session.txt"):
+    if not os.path.exists(path):
+        return {}
+    cookies = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            v = v.strip().strip('"').strip("'")
+            if v:
+                cookies[k.strip()] = v
+    return cookies
+
+_pd_cookies = _load_pokedata_cookies()
+if _pd_cookies:
+    for _k, _v in _pd_cookies.items():
+        _session.cookies.set(_k, _v, domain=".pokedata.io")
+    print(f"  Loaded {len(_pd_cookies)} membership cookies — fetching as logged-in user")
+else:
+    print(f"  (no pokedata_session.txt — fetching anonymously)")
+
+
 def fetch_page(url):
     try:
         r = _session.get(url, timeout=REQUEST_TIMEOUT)
@@ -265,7 +297,15 @@ for (set_name, set_code), cards in cards_by_set.items():
                     final_url = uploaded
 
         if not args.dry_run:
-            sb.table("catalog").update({"image_url": final_url}).eq("id", card["id"]).execute()
+            # Patch image_url, and ALSO overwrite set_name with pokedata's
+            # English name (pd_name) when it differs from what's already
+            # stored. This is what turns Japanese set names into clean
+            # English ones in one pass.
+            patch = {"image_url": final_url}
+            existing_name = _str(card.get("set_name"))
+            if pd_name and pd_name != existing_name:
+                patch["set_name"] = pd_name
+            sb.table("catalog").update(patch).eq("id", card["id"]).execute()
 
         set_updated += 1
         time.sleep(DELAY)

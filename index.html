@@ -1120,7 +1120,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       content:'';
       position:absolute;
       left:50%;
-      top:43%;
+      top:55%;
       width:24%;
       height:24%;
       transform:translate(-50%,-50%);
@@ -2826,6 +2826,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div class="dropdown-divider"></div>
     <div class="dropdown-item" id="createAvatarBtn">Create Avatar</div>
     <div class="dropdown-divider"></div>
+    <div class="dropdown-item" onclick="openModal('redeemBetaModal');document.getElementById('avatarDropdown')?.classList?.remove('open')">⬡ Redeem Beta Code</div>
+    <div class="dropdown-divider"></div>
     <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">⏻ Sign Out</div>
   </div>
 
@@ -3083,6 +3085,43 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           Already have an account? <a href="#" onclick="switchModal('registerModal','loginModal');return false" style="color:var(--accent2);text-decoration:none">Sign In</a>
         </p>
       </form>
+    </div>
+  </div>
+
+  <!-- REDEEM BETA CODE MODAL -->
+  <div class="modal-overlay" id="redeemBetaModal">
+    <div class="modal" style="max-width:440px">
+      <button class="modal-close" onclick="closeModal('redeemBetaModal')">×</button>
+      <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Beta Access</div>
+      <h3 style="margin-bottom:4px;font-size:1.1rem">Redeem Invite Code</h3>
+      <p class="modal-sub" style="margin-bottom:14px">Enter the beta invite code an admin shared with you. Codes are case-insensitive and look like <code style="font-family:'Space Mono',monospace;color:var(--accent)">XXXX-XXXX-XXXX</code>.</p>
+      <div class="form-group">
+        <label>Invite Code</label>
+        <input type="text" id="betaRedeemCode" placeholder="XXXX-XXXX-XXXX" autocomplete="off"
+          style="font-family:'Space Mono',monospace;letter-spacing:.08em;text-transform:uppercase"
+          onkeydown="if(event.key==='Enter')redeemBetaCode()" />
+      </div>
+      <div id="betaRedeemStatus" style="font-size:.72rem;min-height:18px;margin-bottom:10px;color:var(--muted)"></div>
+      <button type="button" class="btn btn-primary" onclick="redeemBetaCode()" style="width:100%">Redeem</button>
+    </div>
+  </div>
+
+  <!-- DISCORD JOIN PROMPT (shown after beta confirmation) -->
+  <div class="modal-overlay" id="betaDiscordModal">
+    <div class="modal" style="max-width:440px;text-align:center">
+      <button class="modal-close" onclick="closeModal('betaDiscordModal')">×</button>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:6px;text-transform:uppercase">◈ Welcome to the Beta</div>
+      <h3 style="margin-bottom:6px;font-size:1.15rem">You're in.</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.55;margin-bottom:18px">
+        Beta testers report bugs and feature ideas in real time on our Discord. It's the fastest way to reach the team and shape PathBinder before launch.
+      </p>
+      <div id="betaDiscordTierBadge" style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--copper);letter-spacing:.1em;margin-bottom:18px"></div>
+      <a id="betaDiscordJoinBtn" href="#" target="_blank" rel="noopener"
+        class="btn btn-primary"
+        style="display:inline-block;width:100%;text-decoration:none;margin-bottom:10px">Join the Discord →</a>
+      <button type="button" class="btn"
+        onclick="closeModal('betaDiscordModal')"
+        style="width:100%;background:transparent;color:var(--muted);border:1px solid var(--border)">Maybe later</button>
     </div>
   </div>
 
@@ -4190,8 +4229,24 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <div class="ac-lp">
               <div class="ac-lp-title">ADD CARD</div>
 
+              <label class="ac-fl">GAME</label>
+              <!-- Game switcher — 4 TCGs in a copper-trimmed pill row.
+                   Active game tinted cyan to match the rest of the app.
+                   Cyan/copper hologram palette throughout. -->
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:6px;border:1px solid rgba(184,115,51,.32);border-radius:3px;overflow:hidden;font-size:.46em;letter-spacing:.08em;font-family:inherit;box-shadow:inset 0 0 8px rgba(184,115,51,.08)">
+                <button id="acDeskGame_pokemon"  onclick="acDeskSetGame('pokemon')"
+                  style="padding:5px 2px;border:none;cursor:pointer;background:rgba(0,229,255,.12);color:#00E5FF;transition:all .15s;font-family:inherit;letter-spacing:.06em;border-right:1px solid rgba(184,115,51,.22)">PKMN</button>
+                <button id="acDeskGame_magic"    onclick="acDeskSetGame('magic')"
+                  style="padding:5px 2px;border:none;cursor:pointer;background:transparent;color:rgba(0,229,255,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em;border-right:1px solid rgba(184,115,51,.22)">MTG</button>
+                <button id="acDeskGame_yugioh"   onclick="acDeskSetGame('yugioh')"
+                  style="padding:5px 2px;border:none;cursor:pointer;background:transparent;color:rgba(0,229,255,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em;border-right:1px solid rgba(184,115,51,.22)">YGO</button>
+                <button id="acDeskGame_onepiece" onclick="acDeskSetGame('onepiece')"
+                  style="padding:5px 2px;border:none;cursor:pointer;background:transparent;color:rgba(0,229,255,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em">OP</button>
+              </div>
+
               <label class="ac-fl">SEARCH</label>
-              <div style="display:flex;gap:0;margin-bottom:6px;border:1px solid rgba(0,229,255,.22);border-radius:3px;overflow:hidden;font-size:.5em;letter-spacing:.08em;font-family:inherit">
+              <!-- EN/JP language toggle — only relevant for Pokemon, hidden for other TCGs -->
+              <div id="acDeskLangRow" style="display:flex;gap:0;margin-bottom:6px;border:1px solid rgba(0,229,255,.22);border-radius:3px;overflow:hidden;font-size:.5em;letter-spacing:.08em;font-family:inherit">
                 <button id="acDeskLangEN" onclick="acDeskSetLang('EN')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:rgba(0,229,255,.12);color:#00E5FF;transition:all .15s;font-family:inherit;letter-spacing:.06em">EN</button>
                 <button id="acDeskLangJA" onclick="acDeskSetLang('JA')" style="flex:1;padding:5px 4px;border:none;cursor:pointer;background:transparent;color:rgba(0,229,255,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em">JP</button>
               </div>
@@ -4690,6 +4745,70 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>
       <div id="adminCardReportsList" style="display:flex;flex-direction:column;gap:8px">
         <div style="font-size:.62rem;color:rgba(0,229,255,.4);letter-spacing:.08em">Click "Open Reports" to load.</div>
+      </div>
+    </div>
+
+    <!-- Beta Tester Manager — invite-only access for pre-launch testers -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Beta Testers</div>
+        <button onclick="printBetaTesterSQL();showToast('Beta tester SQL printed to console')"
+          style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Print SQL</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Invite-only access for pre-launch testers. Email-grant applies the tier immediately if the email matches a user, or waits for them to sign up. Codes can be redeemed from the user dropdown. Email changes on beta accounts are logged automatically.
+      </div>
+
+      <!-- Founding Beta (vendor tier × 10) -->
+      <div id="betaSectionFounding" style="margin-bottom:14px;border:1px solid rgba(184,115,51,.35);background:rgba(184,115,51,.04)">
+        <div onclick="adminToggleBetaSection('founding')"
+          style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="betaCaretFounding" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--copper);transition:transform .15s">▾</span>
+            <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Founding Beta — Vendor</span>
+            <span id="betaCountFounding" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 10</span>
+          </div>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent vendor access · no subscription required</span>
+        </div>
+        <div id="betaBodyFounding" style="padding:0 14px 14px 14px">
+          <div id="betaListFounding" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+            <div style="font-size:.6rem;color:rgba(184,115,51,.5);letter-spacing:.06em">Loading…</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px solid rgba(184,115,51,.2)">
+            <input type="text" id="betaInviteEmailFounding" placeholder="email@example.com"
+              style="flex:1;min-width:170px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
+            <button onclick="adminInviteBetaTester('founding','email')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
+            <button onclick="adminInviteBetaTester('founding','code')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">Generate Code</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collector Beta (collector tier × 50) -->
+      <div id="betaSectionCollector" style="border:1px solid rgba(0,229,255,.25);background:rgba(0,229,255,.03)">
+        <div onclick="adminToggleBetaSection('collector')"
+          style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="betaCaretCollector" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--accent);transition:transform .15s">▾</span>
+            <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Collector Beta</span>
+            <span id="betaCountCollector" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 50</span>
+          </div>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent collector access · upgrade-eligible</span>
+        </div>
+        <div id="betaBodyCollector" style="padding:0 14px 14px 14px">
+          <div id="betaListCollector" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+            <div style="font-size:.6rem;color:rgba(0,229,255,.4);letter-spacing:.06em">Loading…</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px solid rgba(0,229,255,.15)">
+            <input type="text" id="betaInviteEmailCollector" placeholder="email@example.com"
+              style="flex:1;min-width:170px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
+            <button onclick="adminInviteBetaTester('collector','email')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
+            <button onclick="adminInviteBetaTester('collector','code')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">Generate Code</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -9913,6 +10032,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       updateRevenuePanel();
       loadVendorApplications().then(renderAdminVendorApplications);
       loadAdminClearCollectionUsers();
+      renderAdminBetaTesters();
     }
 
     async function loadAdminClearCollectionUsers() {
@@ -13199,14 +13319,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div style="margin-bottom:12px">
           <div style="font-size:1rem;color:var(--text);font-weight:600;line-height:1.3">${_escHtml(item.card_name)}</div>
           ${item.set_name ? `<div style="font-size:.75rem;color:var(--muted);margin-top:3px">${_escHtml(item.set_name)}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
-          ${(function(){
-            // Show English set name as subtitle when this is a JP card
-            // (api_card_id starts with jp- or pd-, or language === 'JA').
-            var isJp = item.language === 'JA' || (item.api_card_id && (item.api_card_id.indexOf('jp-') === 0 || item.api_card_id.indexOf('pd-') === 0));
-            if (!isJp) return '';
-            var en = translateJpSetName(item.set_code, item.set_name);
-            return en ? `<div style="font-size:.7rem;color:var(--accent);margin-top:2px;font-style:italic">${_escHtml(en)}</div>` : '';
-          })()}
           ${item.cert_number ? `<div style="font-size:.68rem;color:var(--muted);margin-top:2px">Cert #${item.cert_number}</div>` : ''}
         </div>
 
@@ -13492,43 +13604,68 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (status) { status.style.display = 'inline'; status.textContent = ''; }
 
       try {
-        const condition = _priceCondition(item);
-        const payload = { name: item.card_name, condition };
-        if (item.price_source_url) payload.url = item.price_source_url;
-        const res = await fetch('/api/lookup-price', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (data.price) {
+        // ── Game-aware price lookup ─────────────────────────────────────
+        // Pokemon uses the existing /api/lookup-price endpoint (PriceCharting +
+        // user-supplied URL scraping). Magic uses Scryfall. Yu-Gi-Oh uses
+        // YGOPRODeck. One Piece has no good external price source yet,
+        // so it falls through and reports no price.
+        const game  = String(item.game_type || '').toLowerCase();
+        const apiId = String(item.api_card_id || '');
+        let price  = null;
+        let src    = '';
+
+        if (game === 'magic' || apiId.startsWith('mtg-')) {
+          const f = await _fetchMagicPrices(item.card_name, item.set_code, item.card_number);
+          const v = f && f.prices && (f.prices.usd || f.prices.usd_foil);
+          if (v) { price = Number(v); src = 'Scryfall'; }
+        } else if (game === 'yugioh' || apiId.startsWith('ygo-')) {
+          const f = await _fetchYugiohPrices(item.card_name);
+          const v = f && f.prices && (f.prices.tcgplayer_price || f.prices.cardmarket_price);
+          if (v) { price = Number(v); src = 'YGOPRODeck'; }
+        } else {
+          // Pokemon (or unknown) — existing PriceCharting / source-URL path
+          const condition = _priceCondition(item);
+          const payload = { name: item.card_name, condition };
+          if (item.price_source_url) payload.url = item.price_source_url;
+          const res = await fetch('/api/lookup-price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (data && data.price) {
+            price = data.price;
+            src   = data.source === 'url' ? 'price source URL' : 'PriceCharting';
+          }
+        }
+
+        if (price !== null && !isNaN(price)) {
           const oldPrice = item.current_value || item.purchase_price || null;
           // Write updated current_value to Supabase
           const { error } = await sb
             .from('collection_items')
-            .update({ current_value: data.price })
+            .update({ current_value: price })
             .eq('id', itemId);
           if (error) throw new Error(error.message);
           // Update local state
           const local = collectionItems.find(c => String(c.id) === String(itemId));
-          if (local) local.current_value = data.price;
-          const src = data.source === 'url' ? 'price source URL' : 'PriceCharting';
-          if (status) { status.style.color = 'var(--accent)'; status.textContent = `Updated → $${data.price.toFixed(2)} (${src})`; }
+          if (local) local.current_value = price;
+          if (status) { status.style.color = 'var(--accent)'; status.textContent = `Updated → $${price.toFixed(2)} (${src})`; }
           // Log price history if value changed
-          if (oldPrice !== data.price && currentUser) {
+          if (oldPrice !== price && currentUser) {
             const todayStr = new Date().toISOString().slice(0, 10);
             sb.from('price_history').upsert({
               collection_item_id: itemId,
               user_id: currentUser.id,
-              recorded_value: data.price,
+              recorded_value: price,
               recorded_at: todayStr
             }, { onConflict: 'collection_item_id,recorded_at' }).then(null, () => {});
             // Also update local price_history_log array for movers chart
             if (local) {
               local.price_history_log = local.price_history_log || [];
               const existing = local.price_history_log.findIndex(h => h.date === todayStr);
-              if (existing >= 0) local.price_history_log[existing].value = data.price;
-              else local.price_history_log.push({ date: todayStr, value: data.price });
+              if (existing >= 0) local.price_history_log[existing].value = price;
+              else local.price_history_log.push({ date: todayStr, value: price });
             }
           }
           // Re-open the modal with fresh data so values update —
@@ -13806,12 +13943,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       _setProcessingText(document.getElementById('_jpSearchStatus'), 'SEARCHING JP DATABASE…');
 
       try {
-        const { data: items, error } = await sb
-          .from('catalog')
-          .select('id, name, set_name, set_code, card_number, rarity, image_url')
-          .ilike('name', `%${query.trim()}%`)
-          .or('id.like.jp-%,id.like.pd-%')
-          .limit(1000);
+        // Use the same RPC as EN search but with jp_mode='only' — gives
+        // trigram-similarity ranking (so "Charizard" beats "Charizard ex"
+        // beats "Charizard VMAX") and consistent behavior across the two
+        // search panels.
+        const { data: items, error } = await sb.rpc('search_catalog_cards', {
+          q: query.trim(),
+          game: 'pokemon',
+          jp_mode: 'only',
+          result_limit: 1000
+        });
 
         if (error) throw new Error(error.message);
 
@@ -13995,6 +14136,32 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       el.textContent = lines.join(' · ');
     }
 
+    // ── Desktop game switcher (cross-TCG) ──────────────────────────────────────
+    let acDeskGame = 'pokemon';  // 'pokemon' | 'magic' | 'yugioh' | 'onepiece'
+    function acDeskSetGame(game) {
+      acDeskGame = game;
+      const games = ['pokemon', 'magic', 'yugioh', 'onepiece'];
+      games.forEach(g => {
+        const btn = document.getElementById('acDeskGame_' + g);
+        if (!btn) return;
+        const active = g === game;
+        btn.style.background = active ? 'rgba(0,229,255,.12)' : 'transparent';
+        btn.style.color      = active ? '#00E5FF' : 'rgba(0,229,255,.45)';
+      });
+      // EN/JP language toggle is only relevant for Pokemon
+      const langRow = document.getElementById('acDeskLangRow');
+      if (langRow) langRow.style.display = (game === 'pokemon') ? 'flex' : 'none';
+      // Update placeholder hint per game
+      const placeholders = {
+        pokemon:  acDeskLang === 'JA' ? 'Pikachu, Charizard...' : 'Charizard...',
+        magic:    'Lightning Bolt...',
+        yugioh:   'Blue-Eyes...',
+        onepiece: 'Luffy...',
+      };
+      const inp = document.getElementById('cardSearchInput');
+      if (inp) inp.placeholder = placeholders[game] || 'Card name...';
+    }
+
     // ── Desktop language toggle ────────────────────────────────────────────────
     let acDeskLang = 'EN';
     function acDeskSetLang(lang) {
@@ -14011,10 +14178,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const input = document.getElementById('cardSearchInput');
       const query = input ? input.value.trim() : '';
       if (!query) { showToast('Enter a card name to search'); return; }
-      if (acDeskLang === 'JA') {
-        searchJapaneseAllPanels(query);
+      // Dispatch by active game + (for Pokemon) language
+      if (acDeskGame === 'pokemon') {
+        if (acDeskLang === 'JA') searchJapaneseAllPanels(query);
+        else                     searchPokemonCards();
       } else {
-        searchPokemonCards();
+        searchOtherTcgCards(acDeskGame);
       }
     }
 
@@ -14095,6 +14264,263 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
+    // Transform a catalog row → the shape pokemontcg.io API returns.
+    // Keeps openSearchCardDetail and the rest of the download path
+    // working unchanged for both data sources.
+    function _catalogRowToApiShape(r) {
+      const code = (r.set_code || '').toLowerCase();
+      return {
+        id:     r.id,
+        name:   r.name || '',
+        number: r.card_number || '',
+        rarity: r.rarity || '',
+        set: {
+          id:   code,
+          name: r.set_name || ''
+        },
+        images: {
+          small: r.image_url || '',
+          large: r.image_url || ''
+        },
+        // API-only fields the catalog doesn't have. Empty objects so
+        // optional chaining downstream (`card.tcgplayer?.prices`) returns
+        // undefined gracefully instead of throwing.
+        tcgplayer:  {},
+        cardmarket: {},
+        // Flag so downstream code can tell where this came from
+        _source: 'catalog',
+        _gameType: r.game_type || 'pokemon',
+      };
+    }
+
+    // ── External fallback APIs for non-Pokemon TCGs ────────────────────────
+    // All three are free, public, no auth/signup required. Polite headers
+    // include a User-Agent identifying our app per each provider's TOS.
+    const _FALLBACK_HEADERS = {
+      'Accept':     'application/json',
+      'User-Agent': 'PathBinder/1.0 (https://pathbinder.vercel.app)',
+    };
+
+    // Fetch one Magic card's current prices + purchase URIs from Scryfall.
+    // Used by openSearchCardDetail when the clicked card came from our local
+    // catalog (which doesn't store live prices). Tries set+number lookup
+    // first (most precise — gets THE specific printing the user clicked),
+    // falls back to fuzzy named search if that 404s.
+    async function _fetchMagicPrices(cardName, setCode, collectorNumber) {
+      const tryUrls = [];
+      if (setCode && collectorNumber) {
+        tryUrls.push(`https://api.scryfall.com/cards/${encodeURIComponent(setCode.toLowerCase())}/${encodeURIComponent(collectorNumber)}`);
+      }
+      if (cardName) {
+        tryUrls.push(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardName)}`);
+        tryUrls.push(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
+      }
+      for (const url of tryUrls) {
+        try {
+          const r = await fetch(url, { headers: _FALLBACK_HEADERS });
+          if (!r.ok) continue;
+          const j = await r.json();
+          if (j && j.prices) {
+            return { prices: j.prices, purchase_uris: j.purchase_uris || {}, _scryfall_id: j.id };
+          }
+        } catch (_) { /* try next */ }
+      }
+      return null;
+    }
+
+    // Scryfall — the gold standard for Magic data.
+    // https://scryfall.com/docs/api/cards/search
+    async function _fallbackMagic(query) {
+      const url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&order=name&unique=cards`;
+      try {
+        const r = await fetch(url, { headers: _FALLBACK_HEADERS });
+        if (!r.ok) return [];
+        const json = await r.json();
+        return (json.data || []).slice(0, 250).map(c => ({
+          id:     'mtg-' + (c.id || ''),
+          name:   c.name || '',
+          number: c.collector_number || '',
+          rarity: c.rarity || '',
+          set:    { id: c.set || '', name: c.set_name || '' },
+          images: {
+            small: (c.image_uris && (c.image_uris.small || c.image_uris.normal)) ||
+                   (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris && c.card_faces[0].image_uris.small) || '',
+            large: (c.image_uris && (c.image_uris.large || c.image_uris.normal)) ||
+                   (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris && c.card_faces[0].image_uris.large) || '',
+          },
+          tcgplayer:  {},
+          cardmarket: {},
+          // Scryfall's prices object — preserved verbatim so openSearchCardDetail
+          // can render Magic-specific tiers (usd, usd_foil, eur, eur_foil, tix).
+          prices: c.prices || {},
+          // Purchase links — useful for "Buy at TCGplayer" buttons later
+          purchase_uris: c.purchase_uris || {},
+          _source:    'scryfall',
+          _gameType:  'magic',
+          _scryfall_id: c.id || null,    // for follow-up live price fetch
+        }));
+      } catch (e) { console.warn('[scryfall]', e); return []; }
+    }
+
+    // Fetch one Yu-Gi-Oh card's current prices from YGOPRODeck. Used by
+    // openSearchCardDetail for catalog YGO hits (catalog has no prices).
+    // YGO doesn't have per-printing pricing in the basic API — prices are
+    // keyed by card name, which is fine for most use cases.
+    async function _fetchYugiohPrices(cardName) {
+      if (!cardName) return null;
+      // Try exact name first (no false positives), fall back to fuzzy.
+      const urls = [
+        `https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(cardName)}`,
+        `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(cardName)}&num=1&offset=0`,
+      ];
+      for (const url of urls) {
+        try {
+          const r = await fetch(url, { headers: _FALLBACK_HEADERS });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const c = (j.data || [])[0];
+          if (c && c.card_prices && c.card_prices[0]) {
+            return { prices: c.card_prices[0], _ygoprodeck_id: c.id };
+          }
+        } catch (_) { /* try next */ }
+      }
+      return null;
+    }
+
+    // YGOPRODeck — free, no auth, very comprehensive.
+    // https://ygoprodeck.com/api-guide/
+    async function _fallbackYugioh(query) {
+      const url = `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}&num=250&offset=0`;
+      try {
+        const r = await fetch(url, { headers: _FALLBACK_HEADERS });
+        if (!r.ok) return [];
+        const json = await r.json();
+        return (json.data || []).slice(0, 250).map(c => {
+          const img    = (c.card_images && c.card_images[0]) || {};
+          const cprice = (c.card_prices && c.card_prices[0]) || {};
+          return {
+            id:     'ygo-' + (c.id || ''),
+            name:   c.name || '',
+            number: '',                   // YGOPRODeck doesn't expose printed card numbers in the basic list
+            rarity: c.rarity || '',       // usually not populated; rarity is per-print on YGO
+            set:    { id: '', name: (c.misc_info && c.misc_info[0] && c.misc_info[0].konami_id) || '' },
+            images: {
+              small: img.image_url_small || img.image_url || '',
+              large: img.image_url || img.image_url_cropped || '',
+            },
+            tcgplayer:  {},
+            cardmarket: {},
+            // YGOPRODeck stores all prices on card_prices[0] — preserve so
+            // openSearchCardDetail can render them.
+            prices: cprice,
+            _source:    'ygoprodeck',
+            _gameType:  'yugioh',
+            _ygoprodeck_id: c.id || null,
+          };
+        });
+      } catch (e) { console.warn('[ygoprodeck]', e); return []; }
+    }
+
+    // apitcg.com One Piece — free tier doesn't require an API key.
+    // https://apitcg.com/api/one-piece
+    async function _fallbackOnePiece(query) {
+      const url = `https://www.apitcg.com/api/one-piece/cards?name=${encodeURIComponent(query)}`;
+      try {
+        const r = await fetch(url, { headers: _FALLBACK_HEADERS });
+        if (!r.ok) return [];
+        const json = await r.json();
+        const list = json.data || json.cards || (Array.isArray(json) ? json : []);
+        return list.slice(0, 250).map(c => ({
+          id:     'op-' + (c.id || c.code || ''),
+          name:   c.name || '',
+          number: c.code || c.number || '',
+          rarity: c.rarity || '',
+          set:    { id: c.set_code || '', name: (c.set && (c.set.name || c.set)) || '' },
+          images: {
+            small: (c.images && (c.images.small || c.images.large)) || c.image_url || '',
+            large: (c.images && (c.images.large || c.images.small)) || c.image_url || '',
+          },
+          tcgplayer:  {},
+          cardmarket: {},
+          _source:    'apitcg',
+          _gameType:  'onepiece',
+        }));
+      } catch (e) { console.warn('[apitcg-onepiece]', e); return []; }
+    }
+
+    // Search a non-Pokemon TCG (Magic / Yu-Gi-Oh / One Piece). Catalog
+    // first, then falls back to the game-specific external API if local
+    // catalog returned nothing.
+    async function searchOtherTcgCards(gameType) {
+      const input = document.getElementById('cardSearchInput');
+      const query = input ? input.value.trim() : '';
+      if (!query) { showToast('Enter a card name to search'); return; }
+
+      const deskStatus = document.getElementById('acDeskStatus');
+      const deskCount  = document.getElementById('acDeskCount');
+      const deskGrid   = document.getElementById('acDeskGrid');
+
+      if (deskStatus) { deskStatus.style.display = 'block'; _setProcessingText(deskStatus, '// SEARCHING…'); }
+      if (deskCount)  deskCount.textContent = '—';
+      if (deskGrid)   deskGrid.innerHTML = '';
+
+      let cards = [];
+      let source = 'catalog';
+
+      try {
+        const { data: rows, error } = await sb.rpc('search_catalog_cards', {
+          q: query,
+          game: gameType,
+          jp_mode: 'all',
+          result_limit: 250
+        });
+        if (error) throw error;
+        cards = (rows || []).map(_catalogRowToApiShape);
+      } catch (e) {
+        console.warn('[search] catalog query failed for', gameType, e);
+      }
+
+      // External fallback for non-Pokemon games when catalog has zero hits.
+      // Each game uses its own free public API — Scryfall (Magic),
+      // YGOPRODeck (Yu-Gi-Oh), apitcg.com (One Piece).
+      if (cards.length === 0) {
+        if (gameType === 'magic')    cards = await _fallbackMagic(query);
+        if (gameType === 'yugioh')   cards = await _fallbackYugioh(query);
+        if (gameType === 'onepiece') cards = await _fallbackOnePiece(query);
+        if (cards.length > 0) {
+          source = (cards[0] && cards[0]._source) || 'external';
+        }
+      }
+
+      try {
+        if (cards.length === 0) {
+          if (deskStatus) deskStatus.textContent = `// NO RESULTS FOR "${query.toUpperCase()}"`;
+          if (deskCount)  deskCount.textContent = '0 results';
+          acRenderMobGrid([]);
+          return;
+        }
+        if (deskStatus) deskStatus.textContent = `// CLICK A CARD TO ADD IT`;
+        if (deskCount)  deskCount.textContent = `${cards.length} result${cards.length !== 1 ? 's' : ''}${source === 'catalog' ? ' · local' : ' · ' + source}`;
+
+        window._acLastSearchCards = cards;
+        const cardHTML = cards.map((card, idx) => {
+          return `<div class="card-result" onclick="openSearchCardDetail(${idx}, false)" style="cursor:pointer">
+              ${card.images && card.images.small
+                ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">`
+                : '<div style="height:70px;background:rgba(0,229,255,.04);display:flex;align-items:center;justify-content:center;color:rgba(0,229,255,.18);font-size:.5rem;letter-spacing:.1em">NO IMG</div>'}
+              <div class="card-result-name">${card.name}</div>
+              <div class="card-result-set">${(card.set && card.set.name) || ''} #${card.number || '?'}</div>
+          </div>`;
+        }).join('');
+        if (deskGrid) deskGrid.innerHTML = cardHTML;
+        acRenderMobGrid(cards);
+        acCrtFlash('acCrtRight');
+      } catch (e) {
+        if (deskStatus) deskStatus.textContent = '// SEARCH FAILED';
+        console.error('[search]', gameType, e);
+      }
+    }
+
     async function searchPokemonCards() {
       const input = document.getElementById('cardSearchInput');
       const query = input ? input.value.trim() : '';
@@ -14109,11 +14535,45 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (deskGrid)   deskGrid.innerHTML = '';
 
       try {
-        const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=250&orderBy=name`);
-        if (!res.ok) throw new Error('API error ' + res.status);
-        const json  = await res.json();
-        const cards = json.data || [];
-        const total = json.totalCount || cards.length;
+        // ── CATALOG-FIRST SEARCH ────────────────────────────────────────
+        // Query the local catalog (130K+ rows across all TCGs after the
+        // Pokedata sync, indexed via pg_trgm) before hitting any external
+        // API. This is dramatically faster (<100ms vs 500–2000ms), works
+        // offline-ish, and survives third-party rate limits / outages.
+        // Falls back to pokemontcg.io only when catalog returns nothing.
+        let cards = [];
+        let total = 0;
+        let source = 'catalog';
+
+        try {
+          // RPC call uses the search_catalog_cards Postgres function for
+          // trigram-similarity-ranked results — base cards surface above
+          // their EX/VMAX/VSTAR variants because similarity scoring boosts
+          // shorter/closer name matches.
+          const { data: rows, error } = await sb.rpc('search_catalog_cards', {
+            q: query,
+            game: 'pokemon',
+            jp_mode: 'exclude',   // EN-only — leaves jp-/pd- rows out
+            result_limit: 250
+          });
+          if (error) throw error;
+          cards = (rows || []).map(_catalogRowToApiShape);
+          total = cards.length;
+        } catch (e) {
+          console.warn('[search] catalog query failed, falling through to API:', e);
+        }
+
+        // Fall back to pokemontcg.io if catalog had nothing — covers
+        // brand-new cards we haven't synced yet, or weird typos that
+        // beat the catalog's ILIKE but the API can still resolve.
+        if (cards.length === 0) {
+          source = 'pokemontcg';
+          const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=250&orderBy=name`);
+          if (!res.ok) throw new Error('API error ' + res.status);
+          const json  = await res.json();
+          cards = json.data || [];
+          total = json.totalCount || cards.length;
+        }
 
         if (cards.length === 0) {
           if (deskStatus) deskStatus.textContent = `// NO RESULTS FOR "${query.toUpperCase()}"`;
@@ -14123,7 +14583,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         const moreNote = total > cards.length ? ` (${cards.length} of ${total})` : `${total} result${total !== 1 ? 's' : ''}`;
         if (deskStatus) { deskStatus.textContent = `// CLICK A CARD TO ADD IT`; }
-        if (deskCount)  deskCount.textContent = moreNote;
+        if (deskCount)  deskCount.textContent = `${moreNote}${source === 'catalog' ? ' · local' : ''}`;
 
         window._acLastSearchCards = cards; // store full objects for detail popup
         const cardHTML = cards.map((card, idx) => {
@@ -14221,6 +14681,54 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       _p('Reverse Holo',   tcgp.reverseHolofoil?.market);
       _p('1st Edition',    tcgp['1stEditionHolofoil']?.market || tcgp['1stEditionNormal']?.market);
       _p('CardMarket Avg', cm.averageSellPrice);
+
+      // ── Magic prices via Scryfall ──────────────────────────────────────
+      // If the card came from our Scryfall fallback (_fallbackMagic),
+      // prices are already on card.prices. If it came from the catalog
+      // (no stored prices), fetch live from Scryfall by set+number.
+      if (card._gameType === 'magic' || card.id?.startsWith('mtg-')) {
+        let mp = (card.prices && (card.prices.usd || card.prices.usd_foil || card.prices.eur)) ? card.prices : null;
+        if (!mp) {
+          try {
+            const fetched = await _fetchMagicPrices(card.name, card.set?.id, card.number);
+            if (fetched && fetched.prices) {
+              mp = fetched.prices;
+              card.prices = mp;
+              card.purchase_uris = fetched.purchase_uris;
+            }
+          } catch (_) {}
+        }
+        if (mp) {
+          _p('TCGplayer Normal', mp.usd        ? Number(mp.usd)        : null);
+          _p('TCGplayer Foil',   mp.usd_foil   ? Number(mp.usd_foil)   : null);
+          _p('TCGplayer Etched', mp.usd_etched ? Number(mp.usd_etched) : null);
+          _p('CardMarket EUR',   mp.eur        ? Number(mp.eur)        : null);
+        }
+      }
+
+      // ── Yu-Gi-Oh prices via YGOPRODeck ─────────────────────────────────
+      // Same pattern as Magic — embedded on YGOPRODeck fallback results,
+      // fetched on demand for catalog hits.
+      if (card._gameType === 'yugioh' || card.id?.startsWith('ygo-')) {
+        let yp = (card.prices && (card.prices.tcgplayer_price || card.prices.cardmarket_price)) ? card.prices : null;
+        if (!yp) {
+          try {
+            const fetched = await _fetchYugiohPrices(card.name);
+            if (fetched && fetched.prices) {
+              yp = fetched.prices;
+              card.prices = yp;
+            }
+          } catch (_) {}
+        }
+        if (yp) {
+          _p('TCGplayer',  yp.tcgplayer_price    ? Number(yp.tcgplayer_price)    : null);
+          _p('CardMarket', yp.cardmarket_price   ? Number(yp.cardmarket_price)   : null);
+          _p('CoolStuff',  yp.coolstuffinc_price ? Number(yp.coolstuffinc_price) : null);
+          _p('eBay',       yp.ebay_price         ? Number(yp.ebay_price)         : null);
+          _p('Amazon',     yp.amazon_price       ? Number(yp.amazon_price)       : null);
+        }
+      }
+
       const bestPrice = priceRows[0]?.val || null;
 
       const priceHtml = priceRows.length
@@ -15474,6 +15982,474 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       console.log('%cPathBinder Admin SQL Migration (card_reports + card_overrides):', 'color:orange;font-weight:bold;font-size:14px');
       console.log(sql);
     }
+
+    // ── Beta Tester System ────────────────────────────────────────────────
+    // PathBinder Discord invite URL. Swap this in once the Discord exists.
+    // Used by the post-claim "join Discord" prompt for new beta testers.
+    var PATHBINDER_DISCORD_URL = 'https://discord.gg/pathbinder';
+    var BETA_LIMITS = { founding: 10, collector: 50 };
+
+    function printBetaTesterSQL() {
+      var sql = [
+        '-- ── PathBinder Beta Tester System ──────────────────────────────',
+        '-- Run once in your Supabase SQL editor.',
+        '',
+        '-- beta_testers: one row per invite (pending or claimed).',
+        '-- A row is "active" when revoked_at IS NULL.',
+        'create table if not exists beta_testers (',
+        '  id uuid primary key default gen_random_uuid(),',
+        '  tier text not null check (tier in (\'founding\',\'collector\')),',
+        '  invited_email text,',
+        '  invite_code text unique,',
+        '  user_id uuid references profiles(id) on delete cascade,',
+        '  invited_by uuid references profiles(id),',
+        '  invited_at timestamptz default now(),',
+        '  claimed_at timestamptz,',
+        '  revoked_at timestamptz,',
+        '  notes text,',
+        '  check (invited_email is not null or invite_code is not null)',
+        ');',
+        'create unique index if not exists beta_testers_user_active_idx',
+        '  on beta_testers(user_id) where revoked_at is null and user_id is not null;',
+        'create index if not exists beta_testers_tier_active_idx',
+        '  on beta_testers(tier) where revoked_at is null;',
+        'create index if not exists beta_testers_email_idx',
+        '  on beta_testers(lower(invited_email));',
+        '',
+        '-- beta_tester_email_log: anti-resale audit trail.',
+        '-- Every email change on a beta tester profile gets logged.',
+        'create table if not exists beta_tester_email_log (',
+        '  id uuid primary key default gen_random_uuid(),',
+        '  beta_tester_id uuid references beta_testers(id) on delete cascade,',
+        '  user_id uuid references profiles(id) on delete cascade,',
+        '  old_email text,',
+        '  new_email text,',
+        '  changed_at timestamptz default now()',
+        ');',
+        'create index if not exists beta_email_log_tester_idx',
+        '  on beta_tester_email_log(beta_tester_id, changed_at desc);',
+        '',
+        '-- RLS',
+        'alter table beta_testers enable row level security;',
+        'alter table beta_tester_email_log enable row level security;',
+        '',
+        'drop policy if exists "admins manage beta testers" on beta_testers;',
+        'create policy "admins manage beta testers" on beta_testers',
+        '  for all to authenticated',
+        '  using (exists (select 1 from profiles where id = auth.uid() and is_admin = true))',
+        '  with check (exists (select 1 from profiles where id = auth.uid() and is_admin = true));',
+        'drop policy if exists "users read own beta row" on beta_testers;',
+        'create policy "users read own beta row" on beta_testers',
+        '  for select to authenticated using (user_id = auth.uid());',
+        '',
+        'drop policy if exists "admins read email log" on beta_tester_email_log;',
+        'create policy "admins read email log" on beta_tester_email_log',
+        '  for select to authenticated',
+        '  using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));',
+        '',
+        '-- Log email changes for active beta testers (anti-resale)',
+        'create or replace function log_beta_email_change() returns trigger as $$',
+        'begin',
+        '  if old.email is distinct from new.email then',
+        '    insert into beta_tester_email_log (beta_tester_id, user_id, old_email, new_email)',
+        '    select id, new.id, old.email, new.email',
+        '    from beta_testers',
+        '    where user_id = new.id and revoked_at is null;',
+        '  end if;',
+        '  return new;',
+        'end;',
+        '$$ language plpgsql security definer;',
+        '',
+        'drop trigger if exists profiles_log_beta_email_change on profiles;',
+        'create trigger profiles_log_beta_email_change',
+        '  after update of email on profiles',
+        '  for each row execute function log_beta_email_change();',
+        '',
+        '-- Auto-claim pending invites when a matching email signs up',
+        'create or replace function claim_beta_on_profile_create() returns trigger as $$',
+        'declare',
+        '  v_invite beta_testers;',
+        'begin',
+        '  select * into v_invite from beta_testers',
+        '    where lower(invited_email) = lower(new.email)',
+        '      and user_id is null and revoked_at is null',
+        '    order by invited_at asc',
+        '    limit 1;',
+        '  if found then',
+        '    update beta_testers set user_id = new.id, claimed_at = now() where id = v_invite.id;',
+        '    update profiles set subscription_tier =',
+        '      case when v_invite.tier = \'founding\' then \'vendor\' else \'collector\' end',
+        '    where id = new.id;',
+        '  end if;',
+        '  return new;',
+        'end;',
+        '$$ language plpgsql security definer;',
+        '',
+        'drop trigger if exists profiles_claim_beta_on_insert on profiles;',
+        'create trigger profiles_claim_beta_on_insert',
+        '  after insert on profiles',
+        '  for each row execute function claim_beta_on_profile_create();',
+        '',
+        '-- RPC: admin invites a beta tester by email or with a generated code',
+        'create or replace function admin_invite_beta(',
+        '  p_tier text,',
+        '  p_email text default null,',
+        '  p_code text default null,',
+        '  p_notes text default null',
+        ') returns table(id uuid, claimed boolean, claimed_user_id uuid) as $$',
+        'declare',
+        '  v_id uuid;',
+        '  v_count int;',
+        '  v_user_id uuid;',
+        'begin',
+        '  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then',
+        '    raise exception \'Admin only\';',
+        '  end if;',
+        '  if p_tier not in (\'founding\',\'collector\') then',
+        '    raise exception \'Invalid tier %\', p_tier;',
+        '  end if;',
+        '  if p_email is null and p_code is null then',
+        '    raise exception \'Must supply email or code\';',
+        '  end if;',
+        '  select count(*) into v_count from beta_testers',
+        '    where tier = p_tier and revoked_at is null;',
+        '  if p_tier = \'founding\' and v_count >= 10 then',
+        '    raise exception \'Founding beta is full (10/10)\';',
+        '  end if;',
+        '  if p_tier = \'collector\' and v_count >= 50 then',
+        '    raise exception \'Collector beta is full (50/50)\';',
+        '  end if;',
+        '  if p_email is not null then',
+        '    select id into v_user_id from profiles where lower(email) = lower(p_email) limit 1;',
+        '  end if;',
+        '  insert into beta_testers (tier, invited_email, invite_code, user_id, invited_by, claimed_at, notes)',
+        '  values (',
+        '    p_tier, p_email, p_code, v_user_id, auth.uid(),',
+        '    case when v_user_id is not null then now() else null end,',
+        '    p_notes',
+        '  ) returning beta_testers.id into v_id;',
+        '  if v_user_id is not null then',
+        '    update profiles set subscription_tier =',
+        '      case when p_tier = \'founding\' then \'vendor\' else \'collector\' end',
+        '    where id = v_user_id;',
+        '  end if;',
+        '  return query select v_id, (v_user_id is not null), v_user_id;',
+        'end;',
+        '$$ language plpgsql security definer;',
+        '',
+        '-- RPC: user redeems an invite code',
+        'create or replace function claim_beta_code(p_code text)',
+        'returns table(tier text, success boolean, message text) as $$',
+        'declare',
+        '  v_invite beta_testers;',
+        '  v_count int;',
+        'begin',
+        '  if auth.uid() is null then',
+        '    return query select null::text, false, \'Must be signed in\'; return;',
+        '  end if;',
+        '  select * into v_invite from beta_testers',
+        '    where invite_code = p_code and user_id is null and revoked_at is null limit 1;',
+        '  if not found then',
+        '    return query select null::text, false, \'Invalid or already-claimed code\'; return;',
+        '  end if;',
+        '  if exists (select 1 from beta_testers where user_id = auth.uid() and revoked_at is null) then',
+        '    return query select null::text, false, \'You already have an active beta slot\'; return;',
+        '  end if;',
+        '  select count(*) into v_count from beta_testers',
+        '    where tier = v_invite.tier and user_id is not null and revoked_at is null;',
+        '  if v_invite.tier = \'founding\' and v_count >= 10 then',
+        '    return query select null::text, false, \'Founding beta is full\'; return;',
+        '  end if;',
+        '  if v_invite.tier = \'collector\' and v_count >= 50 then',
+        '    return query select null::text, false, \'Collector beta is full\'; return;',
+        '  end if;',
+        '  update beta_testers set user_id = auth.uid(), claimed_at = now() where id = v_invite.id;',
+        '  update profiles set subscription_tier =',
+        '    case when v_invite.tier = \'founding\' then \'vendor\' else \'collector\' end',
+        '  where id = auth.uid();',
+        '  return query select v_invite.tier, true, \'Welcome to the beta\';',
+        'end;',
+        '$$ language plpgsql security definer;',
+        '',
+        '-- RPC: admin revokes a beta slot (drops user to free tier)',
+        'create or replace function admin_revoke_beta(p_id uuid) returns void as $$',
+        'declare',
+        '  v_tester beta_testers;',
+        'begin',
+        '  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then',
+        '    raise exception \'Admin only\';',
+        '  end if;',
+        '  select * into v_tester from beta_testers where id = p_id;',
+        '  if v_tester is null then raise exception \'No such beta tester\'; end if;',
+        '  if v_tester.user_id is not null then',
+        '    update profiles set subscription_tier = \'free\' where id = v_tester.user_id;',
+        '  end if;',
+        '  update beta_testers set revoked_at = now() where id = p_id;',
+        'end;',
+        '$$ language plpgsql security definer;',
+        '',
+        'grant execute on function admin_invite_beta(text,text,text,text) to authenticated;',
+        'grant execute on function claim_beta_code(text) to authenticated;',
+        'grant execute on function admin_revoke_beta(uuid) to authenticated;'
+      ].join('\n');
+      console.log('%cPathBinder Beta Tester SQL Migration:', 'color:orange;font-weight:bold;font-size:14px');
+      console.log(sql);
+    }
+
+    // Collapse/expand cache (defaults: both expanded)
+    var _betaCollapsed = { founding: false, collector: false };
+
+    function adminToggleBetaSection(tier) {
+      _betaCollapsed[tier] = !_betaCollapsed[tier];
+      var body  = document.getElementById('betaBody' + (tier === 'founding' ? 'Founding' : 'Collector'));
+      var caret = document.getElementById('betaCaret' + (tier === 'founding' ? 'Founding' : 'Collector'));
+      if (body)  body.style.display = _betaCollapsed[tier] ? 'none' : '';
+      if (caret) caret.style.transform = _betaCollapsed[tier] ? 'rotate(-90deg)' : 'rotate(0)';
+    }
+
+    function _fmtBetaDate(s) {
+      if (!s) return '';
+      try { return new Date(s).toISOString().slice(0,10); } catch(_) { return ''; }
+    }
+
+    function _genBetaInviteCode() {
+      // 12-char alpha-num, no ambiguous chars (0/O, 1/l/I)
+      var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      var out = '';
+      var arr = new Uint8Array(12);
+      (window.crypto || window.msCrypto).getRandomValues(arr);
+      for (var i = 0; i < 12; i++) out += chars[arr[i] % chars.length];
+      return out.slice(0,4) + '-' + out.slice(4,8) + '-' + out.slice(8,12);
+    }
+
+    async function renderAdminBetaTesters() {
+      if (!currentUser?.is_admin) return;
+      // Pull both tiers in one query, then render each list independently
+      var res = await sb.from('beta_testers')
+        .select('id, tier, invited_email, invite_code, user_id, invited_at, claimed_at, notes, profile:user_id (id, username, email, subscription_tier)')
+        .is('revoked_at', null)
+        .order('invited_at', { ascending: true });
+
+      if (res.error) {
+        var msg = (res.error.message || '').toLowerCase();
+        var listF = document.getElementById('betaListFounding');
+        var listC = document.getElementById('betaListCollector');
+        if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1 || msg.indexOf('schema') !== -1) {
+          var warn = '<div style="font-size:.6rem;color:var(--copper)">Run the beta SQL migration first — click "Print SQL" above and paste into Supabase.</div>';
+          if (listF) listF.innerHTML = warn;
+          if (listC) listC.innerHTML = warn;
+          printBetaTesterSQL();
+        } else {
+          var err = '<div style="font-size:.6rem;color:var(--red)">Error: ' + res.error.message + '</div>';
+          if (listF) listF.innerHTML = err;
+          if (listC) listC.innerHTML = err;
+        }
+        return;
+      }
+
+      var rows = res.data || [];
+      var founding  = rows.filter(function(r){ return r.tier === 'founding';  });
+      var collector = rows.filter(function(r){ return r.tier === 'collector'; });
+
+      _renderBetaList('Founding',  founding,  10);
+      _renderBetaList('Collector', collector, 50);
+    }
+
+    function _renderBetaList(label, rows, cap) {
+      var list  = document.getElementById('betaList'  + label);
+      var count = document.getElementById('betaCount' + label);
+      if (count) count.textContent = rows.length + ' / ' + cap;
+      if (!list) return;
+
+      if (!rows.length) {
+        list.innerHTML = '<div style="font-size:.6rem;color:var(--muted);letter-spacing:.06em;padding:6px 0">No beta testers yet. Invite one below.</div>';
+        return;
+      }
+
+      list.innerHTML = rows.map(function(r, i) {
+        var n      = i + 1;
+        var prof   = r.profile;
+        var who    = prof ? (prof.username || prof.email) : (r.invited_email || '(code: ' + (r.invite_code || '—') + ')');
+        var status = prof ? 'claimed' : (r.invite_code ? 'code pending' : 'email pending');
+        var statusColor = prof ? 'var(--accent)' : 'var(--copper)';
+        var sub    = prof ? (prof.subscription_tier || 'free') : '';
+
+        // Email change history line (lazy loaded on expand)
+        var historyId = 'betaHist_' + r.id;
+        var safeCode = _escJsAttr(r.invite_code);
+        var safeId   = _escJsAttr(r.id);
+        var safeWho  = _escJsAttr(who);
+        var copyBtn = r.invite_code
+          ? '<button onclick="event.stopPropagation();navigator.clipboard.writeText(\'' + safeCode + '\');showToast(\'Code copied: ' + safeCode + '\')" style="font-family:\'Space Mono\',monospace;font-size:.5rem;letter-spacing:.04em;padding:2px 6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">Copy ' + _escHtml(r.invite_code) + '</button>'
+          : '';
+
+        return '<div style="border:1px solid var(--border);background:rgba(0,0,0,.2);padding:8px 10px">' +
+          '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+            '<span style="font-family:\'Space Mono\',monospace;font-size:.6rem;color:var(--muted);min-width:24px">' + String(n).padStart(2,'0') + '.</span>' +
+            '<span style="flex:1;font-family:\'Space Mono\',monospace;font-size:.65rem;color:var(--text);min-width:140px">' + _escHtml(who) + '</span>' +
+            '<span style="font-family:\'Space Mono\',monospace;font-size:.55rem;color:' + statusColor + ';letter-spacing:.06em">' + status + (sub ? ' · ' + _escHtml(sub) : '') + '</span>' +
+            '<span style="font-family:\'Space Mono\',monospace;font-size:.55rem;color:var(--muted)">' + _fmtBetaDate(r.invited_at) + '</span>' +
+            copyBtn +
+            (prof ? '<button onclick="event.stopPropagation();adminToggleBetaHistory(\'' + safeId + '\')" style="font-family:\'Space Mono\',monospace;font-size:.5rem;letter-spacing:.04em;padding:2px 6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Log</button>' : '') +
+            '<button onclick="event.stopPropagation();adminRevokeBetaTester(\'' + safeId + '\',\'' + safeWho + '\')" style="font-family:\'Space Mono\',monospace;font-size:.5rem;letter-spacing:.04em;padding:2px 6px;border:1px solid rgba(255,60,60,.5);background:transparent;color:rgba(255,100,100,.85);cursor:pointer">Revoke</button>' +
+          '</div>' +
+          '<div id="' + historyId + '" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,229,255,.1);font-family:\'Space Mono\',monospace;font-size:.55rem;color:var(--muted)"></div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function _escHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, function(c) {
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+      });
+    }
+    // Safe for use as a JS-string literal embedded inside an HTML onclick attr.
+    // Strips backslash, both quote types, angle brackets, and any newlines.
+    function _escJsAttr(s) {
+      return String(s || '').replace(/[\\'"<>\n\r]/g, '');
+    }
+
+    async function adminToggleBetaHistory(testerId) {
+      var box = document.getElementById('betaHist_' + testerId);
+      if (!box) return;
+      if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+      box.style.display = '';
+      box.textContent = 'Loading email change history…';
+      var res = await sb.from('beta_tester_email_log')
+        .select('old_email, new_email, changed_at')
+        .eq('beta_tester_id', testerId)
+        .order('changed_at', { ascending: false })
+        .limit(20);
+      if (res.error) { box.textContent = 'Error: ' + res.error.message; return; }
+      var rows = res.data || [];
+      if (!rows.length) { box.textContent = 'No email changes recorded.'; return; }
+      box.innerHTML = '<div style="margin-bottom:4px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase">Email change log</div>' +
+        rows.map(function(r) {
+          return '<div>' + _fmtBetaDate(r.changed_at) + ' &nbsp; ' + _escHtml(r.old_email || '(unset)') + ' → ' + _escHtml(r.new_email || '(unset)') + '</div>';
+        }).join('');
+    }
+
+    async function adminInviteBetaTester(tier, mode) {
+      if (!currentUser?.is_admin) return;
+      var emailInput = document.getElementById('betaInviteEmail' + (tier === 'founding' ? 'Founding' : 'Collector'));
+      var email = (emailInput?.value || '').trim();
+      var code  = null;
+
+      if (mode === 'email') {
+        if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email first'); return; }
+      } else if (mode === 'code') {
+        code = _genBetaInviteCode();
+        // Allow email to be optional on code-mode (just leaves a record of who it was for)
+        email = email || null;
+      }
+
+      var res = await sb.rpc('admin_invite_beta', {
+        p_tier:  tier,
+        p_email: email,
+        p_code:  code,
+        p_notes: null
+      });
+      if (res.error) { showToast('Invite failed: ' + res.error.message); return; }
+
+      if (emailInput) emailInput.value = '';
+      if (mode === 'code') {
+        // Copy code to clipboard for the admin to share
+        try { await navigator.clipboard.writeText(code); } catch(_) {}
+        showToast('Code generated and copied: ' + code);
+      } else {
+        var info = (res.data && res.data[0]) || {};
+        showToast(info.claimed ? 'Granted to existing user' : 'Invite saved — will apply when they sign up');
+      }
+      renderAdminBetaTesters();
+    }
+
+    async function adminRevokeBetaTester(testerId, label) {
+      if (!currentUser?.is_admin) return;
+      if (!confirm('Revoke beta access for ' + (label || 'this user') + '?\n\nTheir subscription_tier will drop to free.')) return;
+      var res = await sb.rpc('admin_revoke_beta', { p_id: testerId });
+      if (res.error) { showToast('Revoke failed: ' + res.error.message); return; }
+      showToast('Beta access revoked');
+      renderAdminBetaTesters();
+    }
+
+    // ── User-facing beta redemption ───────────────────────────────────────
+    async function redeemBetaCode() {
+      var input  = document.getElementById('betaRedeemCode');
+      var status = document.getElementById('betaRedeemStatus');
+      if (!currentUser) {
+        if (status) { status.style.color = 'var(--red)'; status.textContent = 'Sign in first to redeem a beta code.'; }
+        return;
+      }
+      var code = (input?.value || '').trim().toUpperCase();
+      if (!code) {
+        if (status) { status.style.color = 'var(--red)'; status.textContent = 'Enter a code.'; }
+        return;
+      }
+
+      if (status) { status.style.color = 'var(--muted)'; status.textContent = 'Redeeming…'; }
+      var res = await sb.rpc('claim_beta_code', { p_code: code });
+      if (res.error) {
+        if (status) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + res.error.message; }
+        return;
+      }
+      var info = (res.data && res.data[0]) || {};
+      if (!info.success) {
+        if (status) { status.style.color = 'var(--red)'; status.textContent = info.message || 'Invalid code.'; }
+        return;
+      }
+      if (status) { status.style.color = 'var(--accent)'; status.textContent = info.message || 'Welcome to the beta!'; }
+      // Refresh local profile so the new tier takes effect immediately
+      try {
+        var prof = await sb.from('profiles').select('subscription_tier, is_premium, is_vendor, is_admin').eq('id', currentUser.id).maybeSingle();
+        if (prof.data) {
+          currentUser.subscription_tier = prof.data.subscription_tier || currentUser.subscription_tier;
+          currentUser.is_premium = !!prof.data.is_premium || currentUser.is_premium;
+          currentUser.is_vendor  = !!prof.data.is_vendor  || currentUser.is_vendor;
+        }
+      } catch(_) {}
+      setTimeout(function() {
+        closeModal('redeemBetaModal');
+        showBetaDiscordPrompt(info.tier);
+      }, 700);
+    }
+
+    // Show the Discord join prompt. Tier label is shown in the modal so
+    // testers know what they got. Safe to call any time after a successful
+    // claim (whether by code or by admin email-grant landing on this user).
+    function showBetaDiscordPrompt(tier) {
+      var badge = document.getElementById('betaDiscordTierBadge');
+      var join  = document.getElementById('betaDiscordJoinBtn');
+      if (badge) {
+        badge.textContent = tier === 'founding'
+          ? 'You\'ve been granted Founding Beta access — permanent Vendor tier.'
+          : tier === 'collector'
+            ? 'You\'ve been granted Collector Beta access — permanent Collector tier.'
+            : 'Your beta access is active.';
+      }
+      if (join) join.href = PATHBINDER_DISCORD_URL;
+      openModal('betaDiscordModal');
+    }
+
+    // Auto-check on sign-in: if this user has a freshly-claimed beta row
+    // they've never been shown the Discord prompt for, show it once.
+    // We use a localStorage flag so the prompt fires exactly once per beta slot.
+    async function maybeShowBetaWelcome() {
+      if (!currentUser) return;
+      try {
+        var res = await sb.from('beta_testers')
+          .select('id, tier, claimed_at')
+          .eq('user_id', currentUser.id)
+          .is('revoked_at', null)
+          .limit(1);
+        var row = res.data && res.data[0];
+        if (!row) return;
+        var seenKey = 'pb_beta_welcome_seen_' + row.id;
+        if (localStorage.getItem(seenKey)) return;
+        localStorage.setItem(seenKey, '1');
+        showBetaDiscordPrompt(row.tier);
+      } catch(_) {}
+    }
+    // ── End Beta Tester System ────────────────────────────────────────────
     // ── End Card Report Modal ─────────────────────────────────────────────
 
     function atcCertReset() {
@@ -18110,189 +19086,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ── JP Sets ───────────────────────────────────────────────────────────
     var _jpSetsDetailCache = {}; // setCode → { timestamp, cards }
 
-    // ── JP → EN set name translations ─────────────────────────────────────
-    // Set codes used by the catalog (`set_code` on jp-/pd- rows) mapped to
-    // the English-language equivalent set name. Most modern sets included;
-    // extend the map as new sets release. Keys are case-normalised — the
-    // helper below also tries an all-lowercase lookup as a fallback so
-    // typos like "SV1S" / "sv1s" both resolve.
-    var JP_SET_TRANSLATIONS = {
-      // ── Scarlet & Violet era (2023+) ─────────────────────────────────
-      'sv1S':  'Scarlet ex',
-      'sv1V':  'Violet ex',
-      'sv1a':  'Triplet Beat',
-      'sv2D':  'Clay Burst',
-      'sv2P':  'Snow Hazard',
-      'sv2a':  'Pokémon Card 151',
-      'sv3':   'Ruler of the Black Flame',
-      'sv3a':  'Raging Surf',
-      'sv4M':  'Future Flash',
-      'sv4K':  'Ancient Roar',
-      'sv4a':  'Shiny Treasure ex',
-      'sv5K':  'Wild Force',
-      'sv5M':  'Cyber Judge',
-      'sv5a':  'Crimson Haze',
-      'sv6':   'Mask of Change',
-      'sv6a':  'Night Wanderer',
-      'sv7':   'Stellar Miracle',
-      'sv7a':  'Paradise Dragona',
-      'sv8':   'Super Electric Breaker',
-      'sv8a':  'Terastal Fest ex',
-      'sv9':   'Battle Partners',
-      'sv10':  'Heat Wave Arena',
-      'sv11W': 'Black Bolt',
-      'sv11B': 'White Flare',
-      // ── Sword & Shield era (2019–2022) ───────────────────────────────
-      's1H':   'Sword',
-      's1W':   'Shield',
-      's1a':   'VMAX Rising',
-      's2':    'Rebellion Crash',
-      's2a':   'Explosive Walker',
-      's3':    'Infinity Zone',
-      's3a':   'Legendary Heartbeat',
-      's4':    'Shocking Volt Tackle',
-      's4a':   'Shiny Star V',
-      's5R':   'Rapid Strike Master',
-      's5I':   'Single Strike Master',
-      's5a':   'Matchless Fighters',
-      's6H':   'Silver Lance',
-      's6K':   'Jet-Black Spirit',
-      's6a':   'Eevee Heroes',
-      's7R':   'Skyward Stream',
-      's7D':   'Towering Perfection',
-      's8':    'Fusion Arts',
-      's8a':   '25th Anniversary Collection',
-      's8b':   'VMAX Climax',
-      's9':    'Star Birth',
-      's9a':   'Battle Region',
-      's10D':  'Time Gazer',
-      's10P':  'Space Juggler',
-      's10a':  'Dark Phantasma',
-      's10b':  'Pokémon GO',
-      's11':   'Lost Abyss',
-      's11a':  'Incandescent Arcana',
-      's12':   'Paradigm Trigger',
-      's12a':  'VSTAR Universe',
-      // ── Sun & Moon era (2016–2019) — common ones ─────────────────────
-      'sm1+':  'Collection Sun & Moon',
-      'sm1S':  'Collection Sun',
-      'sm1M':  'Collection Moon',
-      'sm2L':  'Alolan Moonlight',
-      'sm2K':  'Awakened Heroes',
-      'sm3':   'To Have Seen the Battle Rainbow',
-      'sm3H':  'To Have Seen the Fighting Rainbow',
-      'sm3+':  'Shining Legends',
-      'sm4S':  'Sun & Moon Ultra Sun',
-      'sm4M':  'Sun & Moon Ultra Moon',
-      'sm5S':  'Ultra Sun',
-      'sm5M':  'Ultra Moon',
-      'sm6':   'Forbidden Light',
-      'sm6a':  'Dragon Storm',
-      'sm6b':  'Champion Road',
-      'sm7':   'Thunderclap Spark',
-      'sm7a':  'Sky-Splitting Charisma',
-      'sm7b':  'Fairy Rise',
-      'sm8':   'Super Burst Impact',
-      'sm8a':  'Dark Order',
-      'sm8b':  'GX Ultra Shiny',
-      'sm9':   'Tag Bolt',
-      'sm9a':  'Night Unison',
-      'sm9b':  'Full Metal Wall',
-      'sm10':  'Double Blaze',
-      'sm10a': 'Sky Legend',
-      'sm10b': 'Sky Legends',
-      'sm11':  'Miracle Twin',
-      'sm11a': 'Remix Bout',
-      'sm11b': 'Dream League',
-      'sm12':  'Alter Genesis',
-      'sm12a': 'TAG TEAM GX Tag All Stars',
-      // ── Promo / special ──────────────────────────────────────────────
-      'sv-P':  'SV Promo',
-      's-P':   'SWSH Promo',
-      'sm-P':  'SM Promo',
-      'xy-P':  'XY Promo'
-    };
-
-    // Also a small JP-name → EN map for catalog rows that lack a clean
-    // set_code (older or PD prefixed entries). Keep entries here only
-    // when we can't find them by code.
-    var JP_SET_NAME_TRANSLATIONS = {
-      'スカーレットex':      'Scarlet ex',
-      'バイオレットex':      'Violet ex',
-      'ポケモンカード151':   'Pokémon Card 151',
-      'トリプレットビート':  'Triplet Beat',
-      'クレイバースト':      'Clay Burst',
-      'スノーハザード':      'Snow Hazard',
-      '黒炎の支配者':        'Ruler of the Black Flame',
-      'レイジングサーフ':    'Raging Surf',
-      '未来の一閃':          'Future Flash',
-      '古代の咆哮':          'Ancient Roar',
-      'シャイニートレジャーex': 'Shiny Treasure ex',
-      'ワイルドフォース':    'Wild Force',
-      'サイバージャッジ':    'Cyber Judge',
-      '深淵のクリムゾン':    'Crimson Haze',
-      '変幻の仮面':          'Mask of Change',
-      'ナイトワンダラー':    'Night Wanderer',
-      'ステラミラクル':      'Stellar Miracle',
-      'パラダイスドラゴナ':  'Paradise Dragona',
-      '超電ブレイカー':      'Super Electric Breaker',
-      'テラスタルフェスex':  'Terastal Fest ex',
-      'バトルパートナーズ':  'Battle Partners',
-      '熱風のアリーナ':      'Heat Wave Arena',
-      // Sword & Shield
-      'ソード':              'Sword',
-      'シールド':            'Shield',
-      'VMAXライジング':      'VMAX Rising',
-      '反逆クラッシュ':      'Rebellion Crash',
-      '爆炎ウォーカー':      'Explosive Walker',
-      '無限ゾーン':          'Infinity Zone',
-      '伝説の鼓動':          'Legendary Heartbeat',
-      'ショッキングボルテッカー': 'Shocking Volt Tackle',
-      'シャイニースターV':   'Shiny Star V',
-      '連撃マスター':        'Rapid Strike Master',
-      '一撃マスター':        'Single Strike Master',
-      '双璧のファイター':    'Matchless Fighters',
-      '銀のランス':          'Silver Lance',
-      '漆黒のガイスト':      'Jet-Black Spirit',
-      'イーブイヒーローズ':  'Eevee Heroes',
-      '蒼空ストリーム':      'Skyward Stream',
-      '摩天パーフェクト':    'Towering Perfection',
-      'フュージョンアーツ':  'Fusion Arts',
-      '25th ANNIVERSARY COLLECTION': '25th Anniversary Collection',
-      'VMAXクライマックス':  'VMAX Climax',
-      'スターバース':        'Star Birth',
-      'バトルリージョン':    'Battle Region',
-      'タイムゲイザー':      'Time Gazer',
-      'スペースジャグラー':  'Space Juggler',
-      'ダークファンタズマ':  'Dark Phantasma',
-      'ポケモンGO':          'Pokémon GO',
-      'ロストアビス':        'Lost Abyss',
-      '白熱のアルカナ':      'Incandescent Arcana',
-      'パラダイムトリガー':  'Paradigm Trigger',
-      'VSTARユニバース':     'VSTAR Universe'
-    };
-
-    // Returns the English name for a JP set, or null if unknown.
-    // Tries set_code first (most reliable), then falls back to the
-    // raw Japanese name string.
-    function translateJpSetName(setCode, jpName) {
-      if (setCode) {
-        if (JP_SET_TRANSLATIONS[setCode]) return JP_SET_TRANSLATIONS[setCode];
-        // case-insensitive fallback
-        var ckeys = Object.keys(JP_SET_TRANSLATIONS);
-        for (var i = 0; i < ckeys.length; i++) {
-          if (ckeys[i].toLowerCase() === String(setCode).toLowerCase()) return JP_SET_TRANSLATIONS[ckeys[i]];
-        }
-      }
-      if (jpName) {
-        if (JP_SET_NAME_TRANSLATIONS[jpName]) return JP_SET_NAME_TRANSLATIONS[jpName];
-        // strip trailing whitespace / punctuation and retry
-        var trimmed = String(jpName).trim();
-        if (trimmed !== jpName && JP_SET_NAME_TRANSLATIONS[trimmed]) return JP_SET_NAME_TRANSLATIONS[trimmed];
-      }
-      return null;
-    }
-    // ── End JP set translations ───────────────────────────────────────────
 
     async function loadJpSetsPage(el) {
       el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading JP sets…</div>';
@@ -18346,15 +19139,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const owned = jpOwned[s.set_code] || 0;
           const pct   = s.total > 0 ? Math.min(100, Math.round(owned / s.total * 100)) : 0;
           const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
-          const en = translateJpSetName(s.set_code, s.set_name);
-          // Show JP name as primary, English subtitle when known.
           return `<div onclick="loadJpSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}')"
             style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
             onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
             <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
-              ${en ? `<div style="font-size:.66rem;color:var(--accent);margin-top:1px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(en)}</div>` : ''}
               <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.set_code} · ${s.total} cards</div>
               <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
                 <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
@@ -18446,13 +19236,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>`;
         }).join('');
 
-        var _setEn = translateJpSetName(setCode, setName);
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:${_setEn ? '2px' : '8px'}">
+          <h2 style="font-size:1.05rem;margin-bottom:8px">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">JP</span>${_escHtml(setName)}
           </h2>
-          ${_setEn ? `<div style="font-size:.78rem;color:var(--accent);font-style:italic;margin-bottom:10px;letter-spacing:.02em">${_escHtml(_setEn)}</div>` : ''}
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
@@ -18972,6 +19760,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (session?.user) {
           const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
           currentUser = { ...session.user, ...(profile || {}) };
+          // Fire beta-welcome modal exactly once per claimed slot (gated by localStorage)
+          try { maybeShowBetaWelcome(); } catch(_) {}
         }
 
         // Load listings (marketplace fields included)
@@ -19151,6 +19941,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false })
         ]).then(([profileRes, listingsRes]) => {
           currentUser = { ...session.user, ...(profileRes.data || {}) };
+          // If a pending email-grant just landed on this user (or they
+          // refreshed mid-onboarding), fire the Discord prompt once.
+          try { maybeShowBetaWelcome(); } catch(_) {}
           if (listingsRes.data) {
             listings = listingsRes.data.map(mapListing);
           }
