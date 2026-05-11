@@ -1111,10 +1111,40 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       pointer-events:none;
       -webkit-user-drag:none;
     }
+    /* Soft cyan glow centered on the "PB" emblem in gauge.webp. Layered
+       between the gauge background (z-index 1) and the needle (z-index 3)
+       so the needle still sweeps cleanly over the top. Pulses gently for
+       a subtle "live readout" feel. */
+    .ft-gauge-bg     { z-index:1; }
+    .ft-gauge-wrap::after{
+      content:'';
+      position:absolute;
+      left:50%;
+      top:43%;
+      width:24%;
+      height:24%;
+      transform:translate(-50%,-50%);
+      border-radius:50%;
+      background:radial-gradient(circle,
+        rgba(0,229,255,.42) 0%,
+        rgba(0,229,255,.18) 45%,
+        rgba(0,229,255,.05) 70%,
+        transparent 82%);
+      mix-blend-mode:screen;
+      filter:blur(2px);
+      pointer-events:none;
+      z-index:2;
+      animation:ftPbGlow 3.6s ease-in-out infinite;
+    }
+    @keyframes ftPbGlow{
+      0%,100%{ opacity:.55; transform:translate(-50%,-50%) scale(1);    }
+      50%   { opacity:.95; transform:translate(-50%,-50%) scale(1.06); }
+    }
     .ft-gauge-needle{
       transform-origin:50% 59%;
       will-change:transform;
       transition:transform 0.6s cubic-bezier(.34,1.56,.64,1);
+      z-index:3;
     }
     .ft-gauge-info{
       display:flex;
@@ -16937,10 +16967,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     var _ftWobbleOnNext = false;
 
     function _ftSetNeedleAngle(el, deg) {
-      // scale(0.9) shrinks the needle ~10% — combined with the CSS
+      // scale(0.85) shrinks the needle ~15% — combined with the CSS
       // transform-origin: 50% 59% on .ft-gauge-needle, the pivot/base
       // stays anchored to the gauge while the tip pulls in.
-      el.style.transform = 'rotate(' + deg + 'deg) scale(0.9)';
+      el.style.transform = 'rotate(' + deg + 'deg) scale(0.85)';
     }
 
     function _ftAnimateNeedleWobble(el, targetDeg, onDone) {
