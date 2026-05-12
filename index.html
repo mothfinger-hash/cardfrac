@@ -19188,12 +19188,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Tab definitions — order, label, and key. EN is the only one that hits
     // an external API (pokemontcg.io); everything else is catalog-driven via
     // id-prefix filters, so new sets appear automatically as the syncs land.
+    // No emojis or pictographic glyphs in labels — see CLAUDE.md.
     var _SETS_TABS = [
-      { key: 'EN',  label: '🇺🇸 ENGLISH'   },
-      { key: 'JP',  label: '🇯🇵 JAPANESE'  },
-      { key: 'MTG', label: '◆ MAGIC'       },
-      { key: 'YGO', label: '◇ YU-GI-OH'    },
-      { key: 'OP',  label: '⚓ ONE PIECE'   }
+      { key: 'EN',  label: 'ENGLISH'   },
+      { key: 'JP',  label: 'JAPANESE'  },
+      { key: 'MTG', label: 'MAGIC'     },
+      { key: 'YGO', label: 'YU-GI-OH'  },
+      { key: 'OP',  label: 'ONE PIECE' }
     ];
 
     function _setsTabsHtml() {
@@ -19287,36 +19288,53 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       try {
         const now = Date.now();
         if (!_jpSetsCache || (now - _jpSetsCache.timestamp > 600000)) {
-          // Paginate through catalog to collect JP set info. We grab
-          // created_at so we can sort sets by "newest first" (the time the
-          // last card from that set was added to our catalog — a good
-          // proxy for release date since pokedata returns sets in
-          // release-date order and we sync in that order).
+          // Paginate through catalog to collect JP set info. We try first
+          // with created_at so we can sort by recency; if that column
+          // doesn't exist on this DB, fall back to plain SELECT + alpha sort.
           let allRows = [];
           let offset = 0;
+          let useCreatedAt = true;
+          let firstErr = null;
           while (true) {
-            const { data } = await sb.from('catalog')
-              .select('set_name, set_code, created_at')
+            const cols = useCreatedAt ? 'set_name, set_code, created_at' : 'set_name, set_code';
+            const res = await sb.from('catalog')
+              .select(cols)
               .or('id.like.jp-%,id.like.pd-%')
               .range(offset, offset + 999);
-            if (!data || data.length === 0) break;
+            if (res.error) {
+              const msg = (res.error.message || '').toLowerCase();
+              if (useCreatedAt && (msg.includes('created_at') || msg.includes('column'))) {
+                console.warn('[jp sets] catalog.created_at not available — falling back to alpha sort');
+                useCreatedAt = false;
+                continue;
+              }
+              firstErr = res.error;
+              break;
+            }
+            const data = res.data || [];
+            if (data.length === 0) break;
             allRows = allRows.concat(data);
             if (data.length < 1000) break;
             offset += 1000;
           }
-          // Group by set_code, count cards, track max(created_at)
+          if (firstErr) throw new Error(firstErr.message || 'catalog query failed');
+
+          // Group by set_code, count cards, track max(created_at) if available
           const byCode = {};
           allRows.forEach(r => {
             const key = r.set_code || r.set_name || '?';
             if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0, max_created_at: 0 };
             byCode[key].total++;
-            const t = r.created_at ? new Date(r.created_at).getTime() : 0;
-            if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
+            if (useCreatedAt && r.created_at) {
+              const t = new Date(r.created_at).getTime();
+              if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
+            }
           });
           const sets = Object.values(byCode).sort((a, b) => {
-            // Newest first; fall back to alpha when timestamps tie or are missing.
-            const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
-            if (dt !== 0) return dt;
+            if (useCreatedAt) {
+              const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
+              if (dt !== 0) return dt;
+            }
             return (a.set_name || '').localeCompare(b.set_name || '');
           });
           _jpSetsCache = { timestamp: now, sets };
@@ -19478,33 +19496,55 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const now = Date.now();
         let cachedBlock = _tcgSetsCache[gameKey];
         if (!cachedBlock || (now - cachedBlock.timestamp > 600000)) {
-          // Paginate through catalog filtered by id prefix. We pull
-          // created_at so we can sort by recency (newest first) — same
-          // proxy used by the JP loader.
+          // Paginate through catalog filtered by id prefix. Try first with
+          // created_at so we can sort by recency. If the column doesn't
+          // exist on this DB, fall back to a basic SELECT and alpha sort —
+          // we don't want a missing column to silently produce empty results.
           let allRows = [];
           let offset = 0;
+          let useCreatedAt = true;
+          let firstErr = null;
           while (true) {
-            const { data } = await sb.from('catalog')
-              .select('set_name, set_code, created_at')
+            const cols = useCreatedAt ? 'set_name, set_code, created_at' : 'set_name, set_code';
+            const res = await sb.from('catalog')
+              .select(cols)
               .like('id', cfg.prefix + '%')
               .range(offset, offset + 999);
-            if (!data || data.length === 0) break;
+            if (res.error) {
+              const msg = (res.error.message || '').toLowerCase();
+              // Column-missing error → fall back to schema without created_at
+              if (useCreatedAt && (msg.includes('created_at') || msg.includes('column'))) {
+                console.warn('[sets] catalog.created_at not available — falling back to alpha sort');
+                useCreatedAt = false;
+                continue; // retry the same page without created_at
+              }
+              firstErr = res.error;
+              break;
+            }
+            const data = res.data || [];
+            if (data.length === 0) break;
             allRows = allRows.concat(data);
             if (data.length < 1000) break;
             offset += 1000;
           }
-          // Group by set_code, count cards, track max(created_at)
+          if (firstErr) throw new Error(firstErr.message || 'catalog query failed');
+
+          // Group by set_code, count cards, track max(created_at) if available
           const byCode = {};
           allRows.forEach(r => {
             const key = r.set_code || r.set_name || '?';
             if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0, max_created_at: 0 };
             byCode[key].total++;
-            const t = r.created_at ? new Date(r.created_at).getTime() : 0;
-            if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
+            if (useCreatedAt && r.created_at) {
+              const t = new Date(r.created_at).getTime();
+              if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
+            }
           });
           const sets = Object.values(byCode).sort((a, b) => {
-            const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
-            if (dt !== 0) return dt;
+            if (useCreatedAt) {
+              const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
+              if (dt !== 0) return dt;
+            }
             return (a.set_name || '').localeCompare(b.set_name || '');
           });
           _tcgSetsCache[gameKey] = { timestamp: now, sets };
