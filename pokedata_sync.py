@@ -90,6 +90,8 @@ mode.add_argument("--check-images", action="store_true",
     help="Audit per-TCG image mirror status: how many rows are mirrored, still pending on pokedata, or missing entirely. Read-only. Pass --verbose to see sample failing rows.")
 mode.add_argument("--diagnose-jp-legacy", action="store_true",
     help="Find legacy JP Pokemon catalog rows from a pre-Pokedata scrape (NULL image_url + non-ASCII set_name). Reports counts and a safe deletion preview. Pass --confirm to actually delete orphans (rows not referenced in collection_items).")
+mode.add_argument("--probe-pending-urls", action="store_true",
+    help="HEAD-check a sample of pending pokedata.io URLs per set to distinguish 'whole set is broken' (all 404s — usually wrong set_name) from 'individual cards missing' (mixed pass/fail). Read-only.")
 parser.add_argument("--confirm", action="store_true",
     help="Required for destructive operations like --diagnose-jp-legacy deletion.")
 parser.add_argument("--fallback-source", action="store_true",
@@ -1041,6 +1043,150 @@ def _has_non_ascii(s):
     return any(ord(c) > 127 for c in (s or ""))
 
 
+def mode_probe_pending_urls():
+    """HEAD-check a sample of pending pokedata.io URLs per set so we can
+    tell apart 'this whole set is broken' (e.g. set_name='Garchomp Half
+    Deck 2009' should be 'Garchomp Half Deck') from 'a few cards in this
+    set are genuinely missing from pokedata' (e.g. high-number Sun & Moon
+    promos that pokedata never indexed).
+
+    Read-only. Pulls all pending rows, groups by (game-id-prefix, set_name),
+    samples up to 5 URLs per set, HEAD-checks in parallel."""
+    print("\nProbing pending pokedata URLs per set…\n")
+
+    # 1. Pull pending rows
+    rows = []
+    offset = 0
+    while True:
+        try:
+            res = sb.table("catalog") \
+                .select("id, set_name, image_url") \
+                .like("image_url", "%pokedata.io%") \
+                .range(offset, offset + 999).execute()
+        except Exception as e:
+            print(f"  ✗ catalog read failed: {e}")
+            return
+        chunk = res.data or []
+        rows.extend(chunk)
+        if len(chunk) < 1000:
+            break
+        offset += 1000
+
+    if not rows:
+        print("  No pending rows. Nothing to probe.")
+        return
+
+    print(f"  {len(rows):,} pending rows total. Grouping by (game prefix, set_name)…")
+
+    # 2. Group by (game prefix, set_name)
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for r in rows:
+        rid = r.get("id", "")
+        pfx = rid.split("-", 1)[0] if "-" in rid else "(none)"
+        sn  = r.get("set_name") or "(null set_name)"
+        groups[(pfx, sn)].append(r)
+
+    print(f"  {len(groups):,} distinct sets with pending images.")
+
+    # 3. Sample + HEAD-check in parallel
+    workers = max(1, int(getattr(args, "workers", 5) or 5))
+    SAMPLE_PER_SET = 5
+
+    def _head(url):
+        try:
+            r = _session.head(url, timeout=10, allow_redirects=True)
+            return r.status_code
+        except Exception:
+            return 0
+
+    # Build a flat list of (group_key, row, url) probes
+    probes = []
+    for key, group_rows in groups.items():
+        sample = group_rows[:SAMPLE_PER_SET]
+        for r in sample:
+            url = r.get("image_url") or ""
+            if url:
+                probes.append((key, r, url))
+
+    print(f"  Probing {len(probes):,} URLs with {workers} parallel workers (HEAD requests)…\n")
+
+    results = defaultdict(lambda: {"ok": 0, "fail": 0, "fail_codes": [], "ok_sample": "", "fail_sample": ""})
+    done = 0
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        future_to_key = {ex.submit(_head, url): (key, row, url) for key, row, url in probes}
+        for fut in as_completed(future_to_key):
+            key, row, url = future_to_key[fut]
+            code = fut.result()
+            entry = results[key]
+            if code == 200:
+                entry["ok"] += 1
+                if not entry["ok_sample"]:
+                    entry["ok_sample"] = url[:80]
+            else:
+                entry["fail"] += 1
+                entry["fail_codes"].append(code)
+                if not entry["fail_sample"]:
+                    entry["fail_sample"] = url[:80]
+            done += 1
+            if done % 50 == 0:
+                print(f"    probed {done}/{len(probes)}")
+
+    # 4. Report by category. Sort sets with all-fail first (most actionable).
+    print(f"\n  ════════════════════════════════════")
+    print(f"  Results by set (sample = {SAMPLE_PER_SET}):\n")
+    all_fail   = []
+    all_ok     = []
+    mixed      = []
+    for key, entry in results.items():
+        pfx, sn = key
+        total_in_set = len(groups[key])
+        sampled      = entry["ok"] + entry["fail"]
+        record = (pfx, sn, total_in_set, entry["ok"], entry["fail"], entry["fail_sample"] or entry["ok_sample"])
+        if entry["ok"] == 0:
+            all_fail.append(record)
+        elif entry["fail"] == 0:
+            all_ok.append(record)
+        else:
+            mixed.append(record)
+
+    if all_fail:
+        print(f"  ✗ Sets where ALL sampled URLs failed ({len(all_fail)} sets — likely wrong set_name or pokedata removed the set):")
+        all_fail.sort(key=lambda x: -x[2])  # sort by pending count desc
+        for pfx, sn, total, ok, fail, sample in all_fail:
+            print(f"     [{pfx:<4}] {sn:<40} pending: {total:>6,}   sample: {sample}")
+        print()
+
+    if mixed:
+        print(f"  ◇ Sets with mixed results ({len(mixed)} sets — set exists but individual cards missing):")
+        mixed.sort(key=lambda x: -x[2])
+        for pfx, sn, total, ok, fail, sample in mixed[:20]:
+            print(f"     [{pfx:<4}] {sn:<40} pending: {total:>6,}   sample {ok} ok / {fail} fail")
+        if len(mixed) > 20:
+            print(f"     … and {len(mixed) - 20} more mixed sets")
+        print()
+
+    if all_ok:
+        print(f"  ✓ Sets where all sampled URLs returned 200 ({len(all_ok)} sets — should re-mirror cleanly):")
+        all_ok.sort(key=lambda x: -x[2])
+        for pfx, sn, total, ok, fail, sample in all_ok[:10]:
+            print(f"     [{pfx:<4}] {sn:<40} pending: {total:>6,}")
+        if len(all_ok) > 10:
+            print(f"     … and {len(all_ok) - 10} more")
+        print()
+
+    print(f"  ════════════════════════════════════")
+    if all_fail:
+        broken_pending = sum(r[2] for r in all_fail)
+        print(f"  {broken_pending:,} pending rows live in sets with all-failing URLs.")
+        print(f"  Recommended actions:")
+        print(f"    - For Pokemon sets with wrong set_name: fix the catalog set_name and re-run mirror.")
+        print(f"    - For non-Pokemon (mtg/ygo/op): clear image_url and use --mirror-images --fallback-source.")
+    if all_ok:
+        ok_pending = sum(r[2] for r in all_ok)
+        print(f"  {ok_pending:,} pending rows are in healthy sets — re-running --mirror-images should sweep them.")
+
+
 def mode_diagnose_jp_legacy():
     """Find and optionally clean up legacy JP Pokemon catalog rows.
 
@@ -1889,6 +2035,8 @@ if __name__ == "__main__":
         mode_check_images()
     elif args.diagnose_jp_legacy:
         mode_diagnose_jp_legacy()
+    elif args.probe_pending_urls:
+        mode_probe_pending_urls()
     elif args.mirror_images:
         mode_mirror_images()
     elif args.enrich_rarity:
