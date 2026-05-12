@@ -18924,14 +18924,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     var _setsOwnedFirst    = false;    // independent toggle layered on top of sort
     var _setsDetailOwnedMap = {};
     var _RARITY_RANK = {
+      // Pokemon
       'Common':1,'Uncommon':2,'Rare':3,'Rare Holo':4,
       'Double Rare':5,'Rare Holo EX':5,'Rare Holo GX':5,'Rare Holo V':5,
       'Rare Holo VMAX':6,'Rare Holo VSTAR':6,'Shiny Rare':6,'Trainer Gallery Rare Holo':6,
       'Illustration Rare':7,'Rare Ultra':7,'Ultra Rare':7,'Amazing Rare':7,'Radiant Rare':7,
       'ACE SPEC Rare':8,'Rare Rainbow':8,'LEGEND':8,'Hyper Rare':9,
-      'Rare Secret':9,'Shiny Ultra Rare':9,'Special Illustration Rare':10,'Rare Shiny GX':10
+      'Rare Secret':9,'Shiny Ultra Rare':9,'Special Illustration Rare':10,'Rare Shiny GX':10,
+      // Magic the Gathering (Scryfall returns lowercase; pokedata sometimes capitalizes)
+      'common':1,'uncommon':2,'rare':3,'mythic':7,'mythic rare':7,'special':8,'bonus':6,
+      // Yu-Gi-Oh
+      'Super Rare':5,'Ultimate Rare':8,'Secret Rare':9,'Ghost Rare':10,
+      'Starlight Rare':10,'Prismatic Secret Rare':10,'Quarter Century Secret Rare':10,
+      "Collector's Rare":10,'Platinum Secret Rare':10,
+      // One Piece (apitcg uses short codes; pokedata may use words)
+      'C':1,'UC':2,'R':3,'SR':5,'L':6,'SEC':9,'P':3,'Promo':3,'Leader':6,'Super':5
     };
-    function _rarityRank(r) { return _RARITY_RANK[r] || 5; }
+    function _rarityRank(r) {
+      if (!r) return 5;
+      return _RARITY_RANK[r] || _RARITY_RANK[String(r).toLowerCase()] || 5;
+    }
 
     // Sorted array cache for lazy loading
     var _setsSorted    = [];
@@ -19044,6 +19056,109 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const next   = isDesc ? 'rarity-asc' : 'rarity-desc';
       btn.textContent = isDesc ? 'RARITY ↑' : 'RARITY ↓';
       sortSetCards(next);
+    }
+
+    // ── Catalog-driven set-detail sort (JP/MTG/YGO/OP) ───────────────────
+    // Parallel to the EN sortSetCards, but operates on catalog row shape
+    // (card_number / image_url instead of number / images.small) and is
+    // shared by both loadJpSetDetail and loadTcgSetDetail.
+    var _catalogSetDetailSort = 'number';
+    var _catalogSetOwnedFirst = false;
+    // Set by the set-detail loaders so the sort handlers can rebuild the
+    // list without duplicating the source-of-truth.
+    window._catalogSetDetailCards   = [];
+    window._catalogSetDetailOwned   = {};
+    window._catalogSetDetailOpenFn  = 'openJpSetCardDetail';
+
+    function _renderCatalogCardRow(card, idx, ownedMap, openFn) {
+      const ci    = ownedMap[card.id];
+      const owned = !!ci;
+      const qty   = ci ? (ci.quantity || 1) : 0;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
+        onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
+        onclick="${openFn}(${idx})">
+        ${card.image_url
+          ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
+          : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
+          <div style="font-size:.62rem;color:var(--muted)">#${_escHtml(card.card_number||'?')}${card.rarity ? ' · '+_escHtml(card.rarity) : ''}</div>
+        </div>
+        ${owned
+          ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}</span>`
+          : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
+        <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
+      </div>`;
+    }
+
+    function _buildCatalogSetCardRows(cards, ownedMap, openFn) {
+      // Card-number sort with numeric-first parsing (handles "T-1", "057a", etc.)
+      const numCmp = (a, b) => {
+        const an = parseInt(a.card_number);
+        const bn = parseInt(b.card_number);
+        if (!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+        return String(a.card_number || '').localeCompare(String(b.card_number || ''));
+      };
+      let sorted = cards.slice();
+      if (_catalogSetDetailSort === 'rarity-asc') {
+        sorted.sort((a, b) => _rarityRank(a.rarity) - _rarityRank(b.rarity) || numCmp(a, b));
+      } else if (_catalogSetDetailSort === 'rarity-desc') {
+        sorted.sort((a, b) => _rarityRank(b.rarity) - _rarityRank(a.rarity) || numCmp(a, b));
+      } else {
+        sorted.sort(numCmp);
+      }
+      if (_catalogSetOwnedFirst) {
+        sorted.sort((a, b) => (ownedMap[b.id] ? 1 : 0) - (ownedMap[a.id] ? 1 : 0));
+      }
+      // We pass the ORIGINAL idx (from the unsorted cards array) to the
+      // open-detail function so it can pull the right card from the cache
+      // without us having to re-stash a parallel sorted array.
+      const origIdx = (c) => cards.indexOf(c);
+      return sorted.map(c => _renderCatalogCardRow(c, origIdx(c), ownedMap, openFn)).join('') ||
+        '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>';
+    }
+
+    function _catalogSetSortPillsHtml() {
+      const isRarity = _catalogSetDetailSort.startsWith('rarity');
+      const isNum    = _catalogSetDetailSort === 'number';
+      const pill = (active, label, onclick, data) =>
+        `<button class="catalog-sort-pill" data-sort="${data}" onclick="${onclick}" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${active?'var(--accent)':'var(--border)'};color:${active?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${label}</button>`;
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
+        ${pill(isNum,    '#  NUMBER',                                        "sortCatalogSetCards('number')",  'number')}
+        ${pill(isRarity, _catalogSetDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓', "toggleCatalogRarity(this)",       'rarity')}
+        ${pill(_catalogSetOwnedFirst, '✓ OWNED FIRST',                       "sortCatalogSetCards('owned')",   'owned')}
+      </div>`;
+    }
+
+    function sortCatalogSetCards(sort) {
+      if (sort === 'owned') {
+        _catalogSetOwnedFirst = !_catalogSetOwnedFirst;
+      } else {
+        _catalogSetDetailSort = sort;
+      }
+      const grid = document.getElementById('catalogSetCardList');
+      if (!grid) return;
+      const cards    = window._catalogSetDetailCards || [];
+      const ownedMap = window._catalogSetDetailOwned || {};
+      const openFn   = window._catalogSetDetailOpenFn || 'openJpSetCardDetail';
+      grid.innerHTML = _buildCatalogSetCardRows(cards, ownedMap, openFn);
+      // Update active pills
+      document.querySelectorAll('.catalog-sort-pill').forEach(p => {
+        const s = p.dataset.sort;
+        const active = s === 'owned' ? _catalogSetOwnedFirst
+                     : s === 'rarity' ? _catalogSetDetailSort.startsWith('rarity')
+                     : s === _catalogSetDetailSort;
+        p.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+        p.style.color       = active ? 'var(--accent)' : 'var(--muted)';
+      });
+    }
+
+    function toggleCatalogRarity(btn) {
+      const isDesc = _catalogSetDetailSort === 'rarity-desc';
+      const next   = isDesc ? 'rarity-asc' : 'rarity-desc';
+      btn.textContent = isDesc ? 'RARITY ↑' : 'RARITY ↓';
+      sortCatalogSetCards(next);
     }
 
     // Sets page helpers
@@ -19428,27 +19543,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         window._jpSetDetailCards = cards;
         window._jpSetOwnedMap    = ownedMap;
         window._setDetailGameKey = null;
+        // Wire the shared sort handler to this view's data
+        window._catalogSetDetailCards  = cards;
+        window._catalogSetDetailOwned  = ownedMap;
+        window._catalogSetDetailOpenFn = 'openJpSetCardDetail';
+        _catalogSetDetailSort = 'number';
+        _catalogSetOwnedFirst = false;
 
-        const rows = cards.map((card, idx) => {
-          const ci    = ownedMap[card.id];
-          const owned = !!ci;
-          const qty   = ci ? (ci.quantity || 1) : 0;
-          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
-            onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
-            onclick="openJpSetCardDetail(${idx})">
-            ${card.image_url
-              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
-              : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
-              <div style="font-size:.62rem;color:var(--muted)">#${card.card_number||'?'}${card.rarity ? ' · '+card.rarity : ''}</div>
-            </div>
-            ${owned
-              ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}</span>`
-              : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
-            <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
-          </div>`;
-        }).join('');
+        const rows = _buildCatalogSetCardRows(cards, ownedMap, 'openJpSetCardDetail');
 
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
@@ -19464,8 +19566,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
             <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
           </div>
-          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 340px);overflow-y:auto;overflow-x:hidden">
-            ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
+          ${_catalogSetSortPillsHtml()}
+          <div id="catalogSetCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 370px);overflow-y:auto;overflow-x:hidden">
+            ${rows}
           </div>
         </div>`;
       } catch(e) {
@@ -19645,27 +19748,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         window._tcgSetDetailCards = cards;
         window._tcgSetOwnedMap    = ownedMap;
         window._tcgSetDetailGame  = gameKey;
+        // Wire the shared sort handler to this view's data
+        window._catalogSetDetailCards  = cards;
+        window._catalogSetDetailOwned  = ownedMap;
+        window._catalogSetDetailOpenFn = 'openTcgSetCardDetail';
+        _catalogSetDetailSort = 'number';
+        _catalogSetOwnedFirst = false;
 
-        const rows = cards.map((card, idx) => {
-          const ci    = ownedMap[card.id];
-          const owned = !!ci;
-          const qty   = ci ? (ci.quantity || 1) : 0;
-          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
-            onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
-            onclick="openTcgSetCardDetail(${idx})">
-            ${card.image_url
-              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
-              : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
-              <div style="font-size:.62rem;color:var(--muted)">#${_escHtml(card.card_number||'?')}${card.rarity ? ' · '+_escHtml(card.rarity) : ''}</div>
-            </div>
-            ${owned
-              ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}</span>`
-              : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
-            <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
-          </div>`;
-        }).join('');
+        const rows = _buildCatalogSetCardRows(cards, ownedMap, 'openTcgSetCardDetail');
 
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
@@ -19681,8 +19771,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
             <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
           </div>
-          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 340px);overflow-y:auto;overflow-x:hidden">
-            ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
+          ${_catalogSetSortPillsHtml()}
+          <div id="catalogSetCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 370px);overflow-y:auto;overflow-x:hidden">
+            ${rows}
           </div>
         </div>`;
       } catch(e) {
