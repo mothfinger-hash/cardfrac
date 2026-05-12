@@ -3717,8 +3717,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       <div style="background:var(--surface2);border:1px solid var(--border);padding:10px 14px;font-size:.75rem;color:var(--muted);margin-bottom:16px;line-height:1.7">
         Platform fee: <strong style="color:var(--accent)">5%</strong> deducted from your payout on sale ·
-        Funds held in escrow until buyer confirms delivery ·
-        7-day buyer protection window after delivery
+        Payouts processed on Stripe's standard schedule ·
+        7-day buyer protection window via Stripe dispute resolution
       </div>
 
       <div id="lcSaveError" style="display:none;color:var(--red);font-size:.78rem;padding:8px 12px;border:1px solid var(--red);margin-bottom:10px;background:rgba(239,68,68,.06)"></div>
@@ -3743,9 +3743,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <div style="display:flex;justify-content:space-between"><span style="color:var(--accent)">Total</span><span id="buyCardTotal" style="color:var(--accent);font-weight:700"></span></div>
       </div>
       <div style="font-size:.72rem;color:var(--muted);margin-bottom:16px;line-height:1.7">
-        ✓ Funds held in escrow until delivery confirmed<br>
-        ✓ 7-day buyer protection after delivery<br>
-        ✓ File a claim if card doesn't match description
+        ✓ Secure payment via Stripe<br>
+        ✓ 7-day buyer protection window — dispute if the card doesn't match the listing<br>
+        ✓ Verified sellers only · Stripe dispute resolution if needed
       </div>
       <input type="hidden" id="buyCardListingId" />
       <div style="display:flex;gap:10px">
@@ -3972,7 +3972,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div class="pb-page-hdr">
       <div class="pb-page-hdr-main">
         <div class="pb-page-hdr-title">⬡ Marketplace</div>
-        <div class="pb-page-hdr-sub">Buy and sell trading cards — secured escrow, buyer protection, seller ratings.</div>
+        <div class="pb-page-hdr-sub">Buy and sell trading cards — verified sellers, secure Stripe payments, 7-day buyer protection.</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
         <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted)" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Binder</button>
@@ -4830,6 +4830,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Order Refund Tool -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);margin-bottom:8px;text-transform:uppercase">◈ Order Refund</div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Refund a marketplace order via the Stripe refund API. Refunds the buyer, marks the order refunded, and restores the listing to available. Use within the 7-day buyer protection window or when resolving disputes.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="adminRefundOrderId" placeholder="Order ID (full uuid)"
+          style="flex:1;min-width:240px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--text);outline:none"
+          onkeydown="if(event.key==='Enter')adminRefundOrder()">
+        <select id="adminRefundReason"
+          style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
+          <option value="requested_by_customer">Requested by customer</option>
+          <option value="fraudulent">Fraudulent</option>
+          <option value="duplicate">Duplicate</option>
+        </select>
+        <button onclick="adminRefundOrder()"
+          style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:6px 14px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">
+          Refund via Stripe
+        </button>
+      </div>
+      <div id="adminRefundStatus" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);min-height:16px;line-height:1.6"></div>
     </div>
 
     <!-- Image Backfill Tool -->
@@ -5845,7 +5869,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 Buy Now → $${total.toFixed(2)}
               </button>
               <div style="font-size:.72rem;color:var(--muted);line-height:1.8;text-align:center">
-                ✓ Funds held in escrow · ✓ 7-day buyer protection · ✓ 5% platform fee paid by seller
+                ✓ Secure Stripe payment · ✓ 7-day buyer protection · ✓ 5% platform fee paid by seller
               </div>
             </div>` : ''}
             ${isOwn && !isSold ? `
@@ -6491,7 +6515,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!currentUser) return;
       const myListingItems = listings.filter(l => l.seller_id === currentUser.id || l.sellerId === currentUser.id);
       const activeSales    = myListingItems.filter(l => l.status === 'active' || l.status === 'available').length;
-      const pendingPayouts = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed' && !o.payout_sent_at).length;
+      // Awaiting-shipment count replaces the old "pending payout" alert.
+      // Payouts now go on Stripe's standard schedule — sellers don't wait
+      // on platform action, so the old alert was misleading.
+      const awaitingShip   = orders.filter(o => o.seller_id === currentUser.id && o.status === 'paid').length;
       const totalEarned    = orders.filter(o => o.seller_id === currentUser.id && o.status === 'completed')
         .reduce((s, o) => s + (o.seller_payout || 0), 0);
 
@@ -6561,7 +6588,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const totalCards = ownedCards.reduce((s,c)=>s+(c.quantity||1),0);
       // Build alert items
       const dashAlerts = [];
-      if (pendingPayouts > 0) dashAlerts.push({ico:'warn',title:`${pendingPayouts} pending payout${pendingPayouts>1?'s':''}`,sub:'Platform payouts awaiting processing'});
+      if (awaitingShip > 0) dashAlerts.push({ico:'warn',title:`${awaitingShip} order${awaitingShip>1?'s':''} awaiting shipment`,sub:'Add tracking once shipped — payouts go via Stripe\'s normal schedule'});
       movers.slice(0,2).forEach(c => {
         const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
         const up = Number(d) >= 0;
@@ -7593,8 +7620,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return;
       }
 
-      const statusLabel = { pending_payment:'Pending Payment', paid:'Paid — Awaiting Shipment', shipped:'Shipped — Confirm Delivery', delivered:'Delivered', completed:'Completed', cancelled:'Cancelled', disputed:'Disputed', return_requested:'Return Requested — Ship Card Back' };
-      const statusColor = { pending_payment:'var(--muted)', paid:'var(--yellow)', shipped:'var(--teal)', delivered:'var(--green)', completed:'var(--green)', cancelled:'var(--red)', disputed:'var(--red)', return_requested:'var(--yellow)' };
+      const statusLabel = { pending_payment:'Pending Payment', paid:'Paid — Awaiting Shipment', shipped:'Shipped — In Transit', delivered:'Delivered', completed:'Completed', cancelled:'Cancelled', disputed:'Disputed', return_requested:'Return Requested — Ship Card Back', refunded:'Refunded' };
+      const statusColor = { pending_payment:'var(--muted)', paid:'var(--yellow)', shipped:'var(--teal)', delivered:'var(--green)', completed:'var(--green)', cancelled:'var(--red)', disputed:'var(--red)', return_requested:'var(--yellow)', refunded:'var(--muted)' };
 
       content.innerHTML = mine.map(order => {
         const listing = listings.find(l => String(l.id) === String(order.listing_id));
@@ -7605,11 +7632,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         let actionHtml = '';
         if (isBuying && status === 'shipped') {
+          // Buyer can mark received (which opens a rate-seller prompt) OR
+          // file a dispute if there's an issue. No more "Confirm Delivery"
+          // gating a payout — sellers are paid via Stripe's normal schedule.
           actionHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button onclick="confirmDelivery('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Confirm Delivery</button>
+            <button onclick="markOrderReceived('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Mark Received</button>
+            <button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">⚠ Report Issue</button>
           </div>`;
         } else if (isBuying && status === 'completed') {
-          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return</button>`;
+          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return / Refund Request</button>`;
         } else if (!isBuying && status === 'paid') {
           actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add Tracking #</button>`;
         }
@@ -7625,7 +7656,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               </div>
               ${order.tracking_number ? `<div style="font-size:.72rem;color:var(--muted)">Tracking: ${order.tracking_carrier || ''} ${order.tracking_number}</div>` : ''}
               <div style="font-size:.78rem;color:var(--muted);margin-top:4px">
-                ${isBuying ? `Paid: $${(order.amount||0).toFixed(2)}` : `Your payout: $${(order.seller_payout||0).toFixed(2)} ${order.payout_sent_at ? '✓ Sent' : '(pending)'}`}
+                ${isBuying ? `Paid: $${(order.amount||0).toFixed(2)}` : `Your payout: $${(order.seller_payout||0).toFixed(2)} · paid via Stripe`}
               </div>
             </div>
             ${actionHtml ? `<div>${actionHtml}</div>` : ''}
@@ -9003,8 +9034,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       showToast('Listing removed');
     }
 
-    async function confirmDelivery(orderId) {
-      if (!confirm('Confirm you received the card? This releases payment to the seller.')) return;
+    // Buyer marks the order as received. This is NOT a payment gate (sellers
+    // get paid on Stripe's standard schedule regardless). It just closes the
+    // order, adds the card to the buyer's binder, and prompts for a rating.
+    // If anything is wrong with the card, the buyer should use "Report Issue"
+    // (requestReturn) which opens a dispute flow inside the 7-day window.
+    async function markOrderReceived(orderId) {
+      if (!confirm('Mark this order as received? The card will be added to your binder. If there\'s an issue with the card, use "Report Issue" instead.')) return;
       const now = new Date().toISOString();
       const { error } = await sb.from('orders').update({
         status: 'completed',
@@ -9043,12 +9079,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
       }
 
-      showToast('Delivery confirmed! Payment will be released to the seller.');
+      showToast('Order marked received. Thanks for the trade!');
       renderOrders();
       updateOrderNotification();
       // Prompt for seller rating
       if (o) setTimeout(() => openRateSellerModal(orderId, o.seller_id, o.seller_name || 'the seller'), 800);
     }
+    // Legacy alias — older code paths may still call confirmDelivery
+    var confirmDelivery = markOrderReceived;
 
     async function requestReturn(orderId) {
       if (!confirm('Request a return? This will open a dispute and remove the card from your binder. You will need to ship the card back to the seller.')) return;
@@ -10438,6 +10476,52 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return row;
     }
     // ── End Card Overrides ────────────────────────────────────────────────
+
+    // Admin: refund a marketplace order via the Stripe refund API.
+    // Calls /api/refund-order with the current user's auth token; the
+    // backend re-verifies admin status before issuing the Stripe refund.
+    async function adminRefundOrder() {
+      if (!currentUser?.is_admin) return;
+      var idEl     = document.getElementById('adminRefundOrderId');
+      var reasonEl = document.getElementById('adminRefundReason');
+      var statusEl = document.getElementById('adminRefundStatus');
+      var orderId  = (idEl?.value || '').trim();
+      var reason   = reasonEl?.value || 'requested_by_customer';
+      if (!orderId) {
+        if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '// Enter an order id'; }
+        return;
+      }
+      if (!confirm('Refund order ' + orderId.slice(0, 8) + '…?\n\nThis will refund the buyer via Stripe, mark the order refunded, and restore the listing to available.')) return;
+
+      if (statusEl) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = '// Refunding via Stripe…'; }
+
+      try {
+        var session = await sb.auth.getSession();
+        var token = session?.data?.session?.access_token || '';
+        var res = await fetch('/api/refund-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': 'Bearer ' + token,
+          },
+          body: JSON.stringify({ orderId: orderId, reason: reason }),
+        });
+        var body = await res.json();
+        if (!res.ok || !body.success) {
+          if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '// Error: ' + (body.error || ('HTTP ' + res.status)); }
+          return;
+        }
+        if (statusEl) {
+          statusEl.style.color = 'var(--accent)';
+          statusEl.textContent = '// Refunded $' + Number(body.amount).toFixed(2) + ' (' + body.status + ') · refund id ' + (body.refundId || '').slice(0, 16);
+        }
+        if (idEl) idEl.value = '';
+        // Refresh local orders cache so the admin sees the new status
+        try { loadOrders(); } catch (_) {}
+      } catch (e) {
+        if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '// Network error: ' + e.message; }
+      }
+    }
 
     async function adminBackfillUserImages() {
       if (!currentUser?.is_admin) return;
@@ -14447,7 +14531,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // apitcg.com One Piece — free tier doesn't require an API key.
     // https://apitcg.com/api/one-piece
     async function _fallbackOnePiece(query) {
-      const url = `https://www.apitcg.com/api/one-piece/cards?name=${encodeURIComponent(query)}`;
+      // apitcg now requires an API key. We proxy through our own serverless
+      // function (/api/apitcg-onepiece) which adds the key from a Vercel env
+      // var so it's never exposed to the browser.
+      const url = `/api/apitcg-onepiece?name=${encodeURIComponent(query)}`;
       try {
         const r = await fetch(url, { headers: _FALLBACK_HEADERS });
         if (!r.ok) return [];
@@ -19123,12 +19210,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const isNum    = _catalogSetDetailSort === 'number';
       const pill = (active, label, onclick, data) =>
         `<button class="catalog-sort-pill" data-sort="${data}" onclick="${onclick}" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${active?'var(--accent)':'var(--border)'};color:${active?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${label}</button>`;
-      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
         <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
         ${pill(isNum,    '#  NUMBER',                                        "sortCatalogSetCards('number')",  'number')}
         ${pill(isRarity, _catalogSetDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓', "toggleCatalogRarity(this)",       'rarity')}
         ${pill(_catalogSetOwnedFirst, '✓ OWNED FIRST',                       "sortCatalogSetCards('owned')",   'owned')}
-      </div>`;
+      </div>
+      <div id="catalogSortHint" style="display:none;font-size:.58rem;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;padding-left:2px"></div>`;
+    }
+
+    // Show / hide the "no rarity data" hint based on current sort + data.
+    // Called from sortCatalogSetCards after the active state is updated.
+    function _updateCatalogSortHint() {
+      const hint = document.getElementById('catalogSortHint');
+      if (!hint) return;
+      const cards = window._catalogSetDetailCards || [];
+      const isRarity = _catalogSetDetailSort.startsWith('rarity');
+      if (isRarity && cards.length > 0 && cards.every(c => !c.rarity)) {
+        hint.style.display = '';
+        hint.textContent = 'No rarity data for this set yet — run pokedata_sync.py --enrich-rarity to backfill.';
+      } else {
+        hint.style.display = 'none';
+      }
     }
 
     function sortCatalogSetCards(sort) {
@@ -19152,6 +19255,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         p.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
         p.style.color       = active ? 'var(--accent)' : 'var(--muted)';
       });
+      // Surface the "no rarity data" hint when applicable so a no-op sort
+      // doesn't look like a broken button.
+      _updateCatalogSortHint();
     }
 
     function toggleCatalogRarity(btn) {

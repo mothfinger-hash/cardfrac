@@ -84,6 +84,16 @@ mode.add_argument("--list-sets", action="store_true",
     help="Print all sets Pokedata knows about and exit")
 mode.add_argument("--mirror-images", action="store_true",
     help="Download every catalog image still hosted on Pokedata, upload to Supabase Storage, rewrite image_url. Run after the main sync.")
+mode.add_argument("--enrich-rarity", action="store_true",
+    help="Backfill catalog.rarity for non-Pokemon TCGs. Uses Scryfall bulk data for Magic, YGOPRODeck for Yu-Gi-Oh, apitcg for One Piece. Idempotent — only fills NULL rarities by default. Use --tcg to scope per game.")
+mode.add_argument("--check-images", action="store_true",
+    help="Audit per-TCG image mirror status: how many rows are mirrored, still pending on pokedata, or missing entirely. Read-only. Pass --verbose to see sample failing rows.")
+mode.add_argument("--diagnose-jp-legacy", action="store_true",
+    help="Find legacy JP Pokemon catalog rows from a pre-Pokedata scrape (NULL image_url + non-ASCII set_name). Reports counts and a safe deletion preview. Pass --confirm to actually delete orphans (rows not referenced in collection_items).")
+parser.add_argument("--confirm", action="store_true",
+    help="Required for destructive operations like --diagnose-jp-legacy deletion.")
+parser.add_argument("--fallback-source", action="store_true",
+    help="With --mirror-images, fetch from the canonical source (Scryfall/YGOPRODeck/apitcg) instead of pokedata. Use for stragglers that pokedata permanently 404s.")
 parser.add_argument("--language", choices=["EN", "JA"], default=None,
     help="Limit to one language (default: both). Mostly relevant for Pokemon — most other TCGs are English-only on Pokedata.")
 parser.add_argument("--tcg", type=str, default="Pokemon",
@@ -104,6 +114,8 @@ parser.add_argument("--workers", type=int, default=5,
     help="Parallel uploads for --mirror-images (default 5). Bump for speed; lower if you see lots of 429s.")
 parser.add_argument("--legacy-only", action="store_true",
     help="Only target rows whose id has no en-/jp-/pd- prefix (the raw-tcg-id imports). Useful as a third mirror terminal that doesn't conflict with --language EN / JA runs.")
+parser.add_argument("--reenrich", action="store_true",
+    help="With --enrich-rarity, also overwrite rows that already have a rarity. Default is to fill only NULLs.")
 args = parser.parse_args()
 
 
@@ -111,9 +123,13 @@ args = parser.parse_args()
 # SUPABASE
 # ═════════════════════════════════════════════════════════════════════════════
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Lightweight connectivity check. We used to do `count="exact"` here for a
+# nice "catalog has X rows" message, but once the catalog grew past ~100K
+# rows the COUNT(*) started hitting Supabase's 8s statement timeout —
+# especially while mirror runs are generating concurrent UPDATE traffic.
 try:
-    res = sb.table("catalog").select("id", count="exact").limit(1).execute()
-    print(f"✓ Supabase connected — catalog has {res.count:,} rows")
+    res = sb.table("catalog").select("id").limit(1).execute()
+    print(f"✓ Supabase connected — catalog reachable")
 except Exception as e:
     sys.exit(f"✗ Cannot reach catalog: {e}")
 
@@ -489,18 +505,55 @@ def canonical_tcg(tcg):
 # UPSERT
 # ═════════════════════════════════════════════════════════════════════════════
 def upsert_rows(rows):
-    """Upsert in batches with on_conflict='id'. Returns count written."""
+    """Upsert in batches with on_conflict='id'. Returns count written.
+
+    CRITICAL: Pokedata always returns its own image URLs (pokemoncardimages
+    .pokedata.io / alltcgcardimages.pokedata.io). If we upsert blindly, we
+    overwrite already-mirrored supabase.co URLs and waste hours of mirror
+    work. Before each chunk, we check which existing rows already have a
+    supabase.co image and strip image_url from those patches so the mirror
+    persists. Rows that don't exist yet (INSERT branch of the upsert) and
+    rows still on pokedata get the new image_url written normally."""
     if not rows or args.dry_run:
         return 0
     written = 0
     for i in range(0, len(rows), UPSERT_BATCH):
         chunk = rows[i:i+UPSERT_BATCH]
+        chunk = _strip_image_url_for_mirrored(chunk)
         try:
             sb.table("catalog").upsert(chunk, on_conflict="id").execute()
             written += len(chunk)
         except Exception as e:
             print(f"    ✗ Upsert error: {e}")
     return written
+
+
+def _strip_image_url_for_mirrored(chunk):
+    """For each row in the chunk whose corresponding catalog row already has
+    a supabase.co image_url, remove image_url from the payload so the upsert
+    doesn't downgrade the mirrored URL back to pokedata."""
+    ids = [r.get("id") for r in chunk if r.get("id")]
+    if not ids:
+        return chunk
+    try:
+        res = sb.table("catalog").select("id, image_url").in_("id", ids).execute()
+    except Exception as e:
+        # If we can't check, fail-safe: leave chunk unchanged so the sync
+        # still progresses. Worst case is a re-mirror.
+        print(f"    ⚠ image-url pre-check failed ({e}); proceeding without strip")
+        return chunk
+    mirrored = {row["id"] for row in (res.data or [])
+                if (row.get("image_url") or "").lower().find("supabase.co") != -1}
+    if not mirrored:
+        return chunk
+    cleaned = []
+    for r in chunk:
+        if r.get("id") in mirrored and "image_url" in r:
+            new = {k: v for k, v in r.items() if k != "image_url"}
+            cleaned.append(new)
+        else:
+            cleaned.append(r)
+    return cleaned
 
 
 def fetch_existing_ids_for_set(language, set_code, set_name=None):
@@ -869,9 +922,347 @@ def main_sync():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# MODE: --mirror-images
+# MODE: --mirror-images   (and --check-images audit)
 # ═════════════════════════════════════════════════════════════════════════════
 STORAGE_BUCKET = "card-images"
+
+# Per-TCG audit groups for --check-images. Pokemon JP rows can use either
+# 'jp-' or 'pd-' prefixes depending on which sync ingested them, so we
+# aggregate both into one bucket.
+_IMAGE_AUDIT_GROUPS = [
+    ("Pokemon EN",  ["en-"]),
+    ("Pokemon JP",  ["jp-", "pd-"]),
+    ("Magic",       ["mtg-"]),
+    ("Yu-Gi-Oh",    ["ygo-"]),
+    ("One Piece",   ["op-"]),
+]
+
+
+def _count_with_or(prefixes, extra_filter=None, sample_limit=0):
+    """Count catalog rows matching id-prefix(es) and an optional image-state
+    filter. extra_filter is one of: 'mirrored' (image_url has supabase.co),
+    'pending' (has pokedata.io), 'missing' (NULL image_url), or None (total).
+    Returns (count, sample_rows).
+
+    We avoid `count='exact'` because COUNT(*) on the now-large catalog (~150K
+    rows) routinely trips Supabase's 8s statement timeout while mirror runs
+    are writing. Instead we paginate id+image_url rows and count client-side.
+    Slower by a few seconds per call but never times out."""
+    def _apply_filters(q):
+        if len(prefixes) == 1:
+            q = q.like("id", f"{prefixes[0]}%")
+        else:
+            ors = ",".join([f"id.like.{p}%" for p in prefixes])
+            q = q.or_(ors)
+        if extra_filter == "mirrored":
+            q = q.like("image_url", "%supabase.co%")
+        elif extra_filter == "pending":
+            q = q.like("image_url", "%pokedata.io%")
+        elif extra_filter == "missing":
+            q = q.is_("image_url", "null")
+        return q
+
+    samples = []
+    count   = 0
+    offset  = 0
+    PAGE    = 1000
+    while True:
+        q = sb.table("catalog").select("id, image_url")
+        q = _apply_filters(q).range(offset, offset + PAGE - 1)
+        try:
+            res = q.execute()
+        except Exception as e:
+            print(f"    (page at offset {offset} failed: {e})")
+            break
+        chunk = res.data or []
+        if not chunk:
+            break
+        count += len(chunk)
+        if sample_limit and len(samples) < sample_limit:
+            samples.extend(chunk[:max(0, sample_limit - len(samples))])
+        if len(chunk) < PAGE:
+            break
+        offset += PAGE
+    return count, samples
+
+
+def mode_check_images():
+    """Audit-only: report per-TCG image mirror status. Read-only, safe to
+    run anytime. Useful after a long mirror run to see what's still
+    outstanding before deciding whether to retry."""
+    print("\nAuditing image mirror status across all TCGs…\n")
+
+    groups = _IMAGE_AUDIT_GROUPS
+    if args.tcg and args.tcg.lower() != "pokemon":
+        # Filter to the matching group (by name substring)
+        canon = canonical_tcg(args.tcg).lower()
+        groups = [g for g in groups if canon in g[0].lower()
+                  or g[0].lower().replace("-", "") in canon.replace("-", "")]
+        if not groups:
+            print(f"  No audit group matched --tcg '{args.tcg}'. Showing all.\n")
+            groups = _IMAGE_AUDIT_GROUPS
+
+    totals = {"total": 0, "mirrored": 0, "pending": 0, "missing": 0}
+
+    header = f"  {'TCG':<14} {'total':>9}  {'mirrored':>14}  {'pending':>8}  {'missing':>8}"
+    print(header)
+    print("  " + "─" * (len(header) - 2))
+
+    for label, prefixes in groups:
+        total,    _ = _count_with_or(prefixes)
+        mirrored, _ = _count_with_or(prefixes, "mirrored")
+        pending,  pending_sample  = _count_with_or(prefixes, "pending",
+                                                   sample_limit=(5 if args.verbose else 0))
+        missing,  _ = _count_with_or(prefixes, "missing")
+        pct = (mirrored / total * 100) if total > 0 else 0
+        print(f"  {label:<14} {total:>9,}  {mirrored:>7,} ({pct:>5.1f}%)  {pending:>8,}  {missing:>8,}")
+        totals["total"]    += total
+        totals["mirrored"] += mirrored
+        totals["pending"]  += pending
+        totals["missing"]  += missing
+
+        if args.verbose and pending_sample:
+            for row in pending_sample:
+                url = (row.get("image_url") or "")[:64]
+                print(f"      sample pending: {row['id']:<28} {url}")
+
+    print("  " + "─" * (len(header) - 2))
+    pct_total = (totals["mirrored"] / totals["total"] * 100) if totals["total"] > 0 else 0
+    print(f"  {'TOTAL':<14} {totals['total']:>9,}  {totals['mirrored']:>7,} ({pct_total:>5.1f}%)  {totals['pending']:>8,}  {totals['missing']:>8,}")
+
+    if totals["pending"] > 0:
+        print(f"\n  To retry pending images: python3 pokedata_sync.py --mirror-images")
+    if totals["pending"] > 0 and any(g[0] in ('Magic','Yu-Gi-Oh','One Piece') for g in groups):
+        print(f"  For permanent-404 stragglers: --mirror-images --fallback-source --tcg <game>")
+
+
+def _has_non_ascii(s):
+    """True if string contains any non-ASCII (e.g. Japanese kana/kanji) char."""
+    return any(ord(c) > 127 for c in (s or ""))
+
+
+def mode_diagnose_jp_legacy():
+    """Find and optionally clean up legacy JP Pokemon catalog rows.
+
+    A "legacy" row is one ingested by an old scraper (pre-Pokedata sync)
+    that left behind:
+      - NULL image_url   (no image was ever attached)
+      - non-ASCII set_name (Japanese characters that never got translated)
+
+    These rows are typically orphans — created during testing or an early
+    scrape and never re-touched by the canonical pokedata_sync flow. Most
+    of them are not referenced by any user's collection_items, in which case
+    they can be safely deleted. The next `--tcg Pokemon --language JA` run
+    will re-create them with proper translated set names and image URLs.
+
+    Read-only by default. Pass --confirm to actually delete orphans."""
+    print("\nDiagnosing legacy JP catalog rows…\n")
+
+    # 1. Pull every JP-prefixed row with NULL image_url
+    rows = []
+    offset = 0
+    while True:
+        try:
+            res = sb.table("catalog") \
+                .select("id, name, set_name, set_code, card_number") \
+                .or_("id.like.jp-%,id.like.pd-%") \
+                .is_("image_url", "null") \
+                .range(offset, offset + 999) \
+                .execute()
+        except Exception as e:
+            print(f"  ✗ catalog read failed: {e}")
+            return
+        chunk = res.data or []
+        rows.extend(chunk)
+        if len(chunk) < 1000:
+            break
+        offset += 1000
+
+    print(f"  JP rows with NULL image_url:         {len(rows):,}")
+
+    # 2. Of those, how many have non-ASCII set_name (the legacy signature)
+    legacy = [r for r in rows if _has_non_ascii(r.get("set_name") or "")]
+    legacy_with_name = [r for r in legacy if r.get("name")]
+    print(f"  Of those, with non-ASCII set_name:   {len(legacy):,}  (legacy old-scrape signature)")
+    print(f"  Of those, with card name populated:  {len(legacy_with_name):,}")
+
+    if not legacy:
+        print(f"\n  Nothing to clean up — no rows match the legacy pattern.")
+        return
+
+    # 3. Sample a few so the user can eyeball them
+    print(f"\n  Sample legacy rows:")
+    for r in legacy[:8]:
+        sn = (r.get("set_name") or "")[:40]
+        nm = (r.get("name") or "")[:30]
+        print(f"    {r['id']:<28}  set_name={sn:<42}  name={nm}")
+
+    # 4. Check which are referenced by user collections.
+    # We chunk the IN clause because PostgREST has a URL length limit.
+    ids = [r["id"] for r in legacy]
+    referenced = set()
+    for i in range(0, len(ids), 200):
+        chunk_ids = ids[i:i+200]
+        try:
+            res = sb.table("collection_items") \
+                .select("api_card_id") \
+                .in_("api_card_id", chunk_ids) \
+                .execute()
+            for row in (res.data or []):
+                if row.get("api_card_id"):
+                    referenced.add(row["api_card_id"])
+        except Exception as e:
+            print(f"  ⚠ collection_items check failed for chunk {i//200}: {e}")
+
+    orphans  = [r for r in legacy if r["id"] not in referenced]
+    in_use   = [r for r in legacy if r["id"] in referenced]
+    print(f"\n  Of {len(legacy):,} legacy rows:")
+    print(f"    Orphaned (safe to delete):         {len(orphans):,}")
+    print(f"    Referenced by collection_items:    {len(in_use):,}")
+
+    if in_use:
+        print(f"\n  Referenced rows (cannot auto-delete — manual review):")
+        for r in in_use[:5]:
+            print(f"    {r['id']:<28}  {(r.get('set_name') or '')[:40]}")
+
+    if not args.confirm:
+        print(f"\n  Read-only. To delete the {len(orphans):,} orphaned rows, re-run with --confirm.")
+        print(f"  Note: the next `--tcg Pokemon --language JA` sync will re-create them properly.")
+        return
+
+    if not orphans:
+        print(f"\n  No orphans to delete.")
+        return
+
+    # 5. Delete in chunks
+    print(f"\n  Deleting {len(orphans):,} orphan rows in chunks of 200…")
+    deleted = 0
+    errors  = 0
+    for i in range(0, len(orphans), 200):
+        chunk_ids = [r["id"] for r in orphans[i:i+200]]
+        try:
+            sb.table("catalog").delete().in_("id", chunk_ids).execute()
+            deleted += len(chunk_ids)
+            print(f"    {deleted}/{len(orphans)}")
+        except Exception as e:
+            errors += len(chunk_ids)
+            print(f"    ✗ chunk {i//200} failed: {e}")
+    print(f"\n  Done: deleted {deleted:,}, errors {errors:,}")
+    print(f"  Next step: python3 pokedata_sync.py --tcg Pokemon --language JA")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fallback image sources (per-TCG canonical APIs)
+# ─────────────────────────────────────────────────────────────────────────────
+# Used by --mirror-images --fallback-source for rows where pokedata 404s
+# permanently. Each returns a usable HTTPS image URL or None.
+
+def _fallback_image_mtg(set_code, card_number):
+    """Scryfall: GET /cards/{set}/{collector_number}. Returns normal-size PNG."""
+    try:
+        url = f"https://api.scryfall.com/cards/{set_code.lower()}/{card_number}"
+        r = _session.get(url, timeout=20)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        imgs = data.get("image_uris") or {}
+        return imgs.get("normal") or imgs.get("large") or imgs.get("png") or None
+    except Exception:
+        return None
+
+
+def _fallback_image_ygo(name, set_code, card_number):
+    """YGOPRODeck images are keyed by numeric card id, not set+number. We
+    look up by name with set filter, then use the card's id to construct
+    the canonical image URL."""
+    if not name:
+        return None
+    try:
+        r = _session.get("https://db.ygoprodeck.com/api/v7/cardinfo.php",
+                        params={"fname": name}, timeout=20)
+        if r.status_code != 200:
+            return None
+        cards = r.json().get("data") or []
+        # If multiple cards match the fuzzy name, prefer the one whose
+        # card_sets includes our set_code.
+        best = None
+        for c in cards:
+            for p in (c.get("card_sets") or []):
+                code = str(p.get("set_code", ""))
+                if set_code and code.lower().startswith(set_code.lower() + "-"):
+                    best = c
+                    break
+            if best:
+                break
+        chosen = best or (cards[0] if cards else None)
+        if not chosen:
+            return None
+        cid = chosen.get("id")
+        if not cid:
+            return None
+        return f"https://images.ygoprodeck.com/images/cards/{cid}.jpg"
+    except Exception:
+        return None
+
+
+def _fallback_image_op(name, set_code, card_number):
+    """apitcg One Piece. Catalog OP rows store card_number as the FULL
+    card code already (e.g. 'EB01-001'), so target_code is just an
+    upper-cased copy. set_code is sometimes 'eb-01' or 'op01' depending
+    on which sync ingested the row — we don't actually need it to match
+    apitcg's 'code' field, only the card_number portion."""
+    api_key = os.environ.get("APITCG_API_KEY")
+    if not api_key or not name:
+        return None
+    target_code = (card_number or "").upper()
+    if not target_code:
+        return None
+    try:
+        r = _session.get("https://www.apitcg.com/api/one-piece/cards",
+                        params={"name": name}, timeout=20,
+                        headers={"x-api-key": api_key, "Accept": "application/json"})
+        if r.status_code != 200:
+            return None
+        cards = (r.json().get("data") or [])
+        chosen = None
+        for c in cards:
+            if str(c.get("code", "")).upper() == target_code:
+                chosen = c
+                break
+        chosen = chosen or (cards[0] if cards else None)
+        if not chosen:
+            return None
+        imgs = chosen.get("images") or {}
+        return imgs.get("large") or imgs.get("small") or chosen.get("image_url") or None
+    except Exception:
+        return None
+
+
+def _resolve_fallback_image(row):
+    """Dispatch to the right fallback source based on the row's id prefix.
+    Returns a usable image URL or None."""
+    rid = row.get("id") or ""
+    name      = str(row.get("name") or "").strip()
+    set_code  = str(row.get("set_code") or "").strip()
+    card_num  = str(row.get("card_number") or "").strip()
+
+    # When name/set_code/card_number are null, derive set+num from the id.
+    if not set_code or not card_num:
+        for pfx in ("mtg", "ygo", "op"):
+            if rid.startswith(pfx + "-"):
+                sc_id, num_id = _split_id(rid, pfx)
+                if not set_code: set_code = sc_id.split("-")[0]   # leading segment
+                if not card_num: card_num = num_id
+                break
+
+    if rid.startswith("mtg-"):
+        return _fallback_image_mtg(set_code, card_num)
+    if rid.startswith("ygo-"):
+        return _fallback_image_ygo(name, set_code, card_num)
+    if rid.startswith("op-"):
+        return _fallback_image_op(name, set_code, card_num)
+    return None
+
 
 def mode_mirror_images():
     """Walk every catalog row whose image_url still points off-Supabase
@@ -909,10 +1300,17 @@ def mode_mirror_images():
         if tcg_prefix:
             print(f"  Scoping mirror to --tcg '{args.tcg}' (id prefix: {tcg_prefix})")
 
+    # When --fallback-source is set, we also include rows whose image_url
+    # is NULL (never had a pokedata URL) because the canonical APIs can
+    # often fill those too.
     while True:
         q = (sb.table("catalog")
-             .select("id,image_url,set_code,card_number")
-             .like("image_url", "%pokedata.io%"))
+             .select("id,image_url,set_code,card_number,name"))
+        if getattr(args, "fallback_source", False):
+            # Either still on pokedata, OR null → fall back to canonical source
+            q = q.or_("image_url.like.%pokedata.io%,image_url.is.null")
+        else:
+            q = q.like("image_url", "%pokedata.io%")
         # Per-TCG scoping
         if tcg_prefix == "POKEMON":
             # Pokemon rows are en-/jp-/pd- prefixed OR legacy raw ids (no prefix)
@@ -1000,35 +1398,54 @@ def mode_mirror_images():
     stats = {"mirrored": 0, "failed": 0, "skipped": 0, "completed": 0}
 
     def _mirror_one(row):
-        url      = _str(row.get("image_url"))
-        set_code = _str(row.get("set_code")).lower()
-        card_num = _str(row.get("card_number"))
-        if not (url and set_code and card_num):
-            return (row["id"], "skipped", "missing fields")
+        rid       = row["id"]
+        url       = _str(row.get("image_url"))
+        set_code  = _str(row.get("set_code")).lower()
+        card_num  = _str(row.get("card_number"))
 
         # Storage path = top-level by game/language. Pokemon stays under
         # jp/ or en/ (existing convention). Non-Pokemon games use their
         # id prefix (mtg/, ygo/, op/, etc.) — same prefix that goes on
         # catalog ids, so storage organization mirrors the catalog.
-        rid = row["id"]
         if rid.startswith(("jp-", "pd-")):
             top = "jp"
         elif rid.startswith("en-"):
             top = "en"
         else:
-            # Non-Pokemon: take the prefix portion of the id (everything before the first '-')
             top = rid.split("-", 1)[0] if "-" in rid else "misc"
+
+        # When set_code or card_num is null on the row, derive from id so we
+        # can still build a deterministic storage path. Critical for fallback
+        # mode where many rows have null columns.
+        if not (set_code and card_num):
+            sc_id, num_id = _split_id(rid, top) if top in ("mtg","ygo","op") else ("","")
+            if not set_code: set_code = (sc_id.split("-")[0] or "misc").lower()
+            if not card_num: card_num = num_id or rid.rsplit("-", 1)[-1]
+
+        if not (set_code and card_num):
+            return (rid, "skipped", "missing set_code / card_number even after id parse")
+
         storage_path = f"{top}/{set_code}/{card_num}.webp"
 
-        # 1. Download
+        # 1. Resolve source URL. Fallback mode uses the canonical API per TCG.
+        # Regular mode uses whatever was on the row (pokedata).
+        if getattr(args, "fallback_source", False):
+            url = _resolve_fallback_image(row)
+            if not url:
+                return (rid, "failed", "fallback source returned no URL")
+
+        if not url:
+            return (rid, "skipped", "no image URL to fetch")
+
+        # 2. Download
         try:
             r = _session.get(url, timeout=REQUEST_TIMEOUT)
             r.raise_for_status()
             img_bytes = r.content
             if not img_bytes:
-                return (row["id"], "failed", "download: empty body")
+                return (rid, "failed", "download: empty body")
         except Exception as e:
-            return (row["id"], "failed", f"download: {e}")
+            return (rid, "failed", f"download: {e}")
 
         # 2. Upload to Supabase Storage (upsert; retry on transient failures)
         last_err = None
@@ -1081,6 +1498,386 @@ def mode_mirror_images():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# MODE: --enrich-rarity
+# ═════════════════════════════════════════════════════════════════════════════
+# Backfills catalog.rarity for non-Pokemon TCGs from the corresponding free
+# public API. Idempotent: by default only fills rows where rarity is NULL.
+# Pass --reenrich to overwrite existing rarities (rare; usually you want NULL-fill).
+#
+# Sources per game:
+#   Magic     → Scryfall bulk data (one JSON download, ~100MB)
+#   Yu-Gi-Oh  → YGOPRODeck cardinfo.php (all cards in one response, ~50MB)
+#   One Piece → apitcg.com /one-piece/cards (paginated)
+
+def _fetch_catalog_rows_missing_rarity(prefix):
+    """Pull every catalog row with the given id prefix that has no rarity yet."""
+    rows = []
+    offset = 0
+    while True:
+        q = sb.table("catalog").select("id, name, set_code, card_number, rarity") \
+              .like("id", f"{prefix}-%")
+        if not args.reenrich:
+            q = q.is_("rarity", "null")
+        q = q.range(offset, offset + 999)
+        try:
+            res = q.execute()
+        except Exception as e:
+            print(f"  ⚠ catalog read failed: {e}")
+            break
+        chunk = res.data or []
+        rows.extend(chunk)
+        if len(chunk) < 1000:
+            break
+        offset += 1000
+    return rows
+
+
+def _norm_num(s):
+    """Normalize card numbers for matching. '011' → '11', 'T-1' stays 'T-1'.
+    Both sides of a match call this."""
+    if s is None:
+        return ""
+    s = str(s).strip()
+    if not s:
+        return ""
+    try:
+        return str(int(s))
+    except ValueError:
+        return s
+
+
+def _split_id(id_str, prefix):
+    """Derive (set_code_lower, card_num) from a catalog id of the form
+    '{prefix}-{set_code}-{card_num}'. set_code may contain dashes; we always
+    treat the LAST dash-separated segment as the card number. Returns
+    ('', '') if the id doesn't match the expected prefix."""
+    if not id_str or not id_str.startswith(prefix + "-"):
+        return "", ""
+    rest = id_str[len(prefix) + 1:]
+    if "-" not in rest:
+        return "", rest
+    set_lower, _, num = rest.rpartition("-")
+    return set_lower.lower(), num
+
+
+def _build_mtg_rarity_index():
+    """Download Scryfall's default_cards bulk JSON. Returns
+    { (set_code_lower, collector_number_norm): rarity_titlecase }."""
+    print("  Fetching Scryfall bulk-data manifest…")
+    try:
+        manifest = _session.get("https://api.scryfall.com/bulk-data", timeout=30).json()
+    except Exception as e:
+        print(f"  ✗ Scryfall manifest fetch failed: {e}")
+        return {}
+    entry = next((b for b in manifest.get("data", []) if b.get("type") == "default_cards"), None)
+    if not entry:
+        print("  ✗ Scryfall default_cards entry missing from manifest")
+        return {}
+    url = entry["download_uri"]
+    size_mb = (entry.get("size") or 0) / 1024 / 1024
+    print(f"  Downloading Scryfall default_cards (~{size_mb:.0f}MB)…")
+    try:
+        data = _session.get(url, timeout=300).json()
+    except Exception as e:
+        print(f"  ✗ Scryfall bulk download failed: {e}")
+        return {}
+    print(f"  Got {len(data):,} Scryfall cards — building index")
+    idx = {}
+    for c in data:
+        sc  = str(c.get("set", "")).lower()
+        num = _norm_num(c.get("collector_number", ""))
+        rar = c.get("rarity", "")
+        if sc and num and rar:
+            # Scryfall returns lowercase ('common','uncommon','rare','mythic') —
+            # title-case to match the existing catalog convention.
+            idx[(sc, num)] = rar.title() if rar != "mythic" else "Mythic Rare"
+    return idx
+
+
+    # Known YGO region prefixes used at the start of card-set codes.
+    # Listing them explicitly avoids stripping 'SP' from 'SP1' or 'TG' from
+    # 'TG01' (those aren't regions, they're real id parts).
+_YGO_REGION_PREFIXES = ("EN", "JP", "KR", "DE", "FR", "IT", "ES", "PT", "EU", "CH", "TC", "SC", "CT", "AE", "RU")
+
+def _ygo_normalize_num(num_part):
+    """YGO card-number normalizer. Catalog stores 'TDGS-ENSP1' or 'TDGS-EN040'.
+    YGOPRODeck stores the same identifiers. We want the SAME stripped form
+    on both sides so the keys match. Rule: strip exactly the known region
+    prefix when one is present, then int-normalize what's left if numeric.
+
+    Examples:
+      'EN040'  → '040' → '40'
+      'JP012'  → '012' → '12'
+      'ENSP1'  → 'SP1' (region EN stripped; SP1 kept as-is — promo / special)
+      'SP1'    → 'SP1' (no region — keep intact, would have been wrong to strip)
+      '001'    → '1'   (no region prefix, numeric → int-normalized)
+    """
+    s = str(num_part or "")
+    for r in _YGO_REGION_PREFIXES:
+        if s.startswith(r) and len(s) > len(r):
+            s = s[len(r):]
+            break
+    return _norm_num(s)
+
+
+def _build_ygo_rarity_index():
+    """Pull all YGO cards from YGOPRODeck. Returns
+    { (set_code_lower, number_norm): rarity }. Catalog YGO rows often have
+    null name, so we key by (set, num) only — derivable from the id."""
+    print("  Fetching YGOPRODeck cardinfo (full DB, ~50MB)…")
+    try:
+        resp = _session.get("https://db.ygoprodeck.com/api/v7/cardinfo.php", timeout=120).json()
+    except Exception as e:
+        print(f"  ✗ YGOPRODeck fetch failed: {e}")
+        return {}
+    cards = resp.get("data") or []
+    print(f"  Got {len(cards):,} YGO cards — building index")
+    idx = {}
+    sample_set_codes = []  # for diagnostics
+    for c in cards:
+        for p in c.get("card_sets") or []:
+            full = str(p.get("set_code", ""))   # e.g. 'LOB-EN001' or 'LOB-001'
+            rar  = p.get("set_rarity", "")
+            if not full or not rar or "-" not in full:
+                continue
+            if len(sample_set_codes) < 8:
+                sample_set_codes.append(full)
+            set_pref, _, num_part = full.rpartition("-")
+            num_norm = _ygo_normalize_num(num_part)
+            if set_pref and num_norm:
+                idx.setdefault((set_pref.lower(), num_norm), rar)
+    print(f"  YGOPRODeck sample set_codes: {sample_set_codes}")
+    if idx:
+        print(f"  Index sample keys: {list(idx.keys())[:8]}")
+    return idx
+
+
+def _build_op_rarity_index(catalog_rows):
+    """For One Piece, apitcg now REQUIRES an API key (free tier closed).
+    Set APITCG_API_KEY in your environment and we'll send it as `x-api-key`.
+    Without a key we probe once, detect the auth-required response, and
+    skip the run cleanly. Returns { (set_code_lower, number_norm): rarity }."""
+    print("  Building OP rarity index from apitcg…")
+    api_key = os.environ.get("APITCG_API_KEY")
+
+    # Quick probe to confirm we can reach the API with what we have.
+    headers = {"User-Agent": "PathBinder/1.0", "Accept": "application/json"}
+    if api_key:
+        headers["x-api-key"] = api_key
+    try:
+        probe = _session.get("https://www.apitcg.com/api/one-piece/cards",
+                            params={"name": "Luffy"}, timeout=15, headers=headers)
+        probe_body = probe.text[:200]
+    except Exception as e:
+        print(f"  ✗ apitcg unreachable: {e}")
+        return {}
+    if probe.status_code in (401, 403) or "API key is required" in probe_body:
+        print(f"  ✗ apitcg requires an API key now (free tier closed).")
+        print(f"    1) Sign up at https://apitcg.com/platform")
+        print(f"    2) Re-run with APITCG_API_KEY=your_key python3 pokedata_sync.py --enrich-rarity --tcg 'One Piece'")
+        return {}
+    if probe.status_code != 200:
+        print(f"  ✗ apitcg probe returned {probe.status_code}: {probe_body}")
+        return {}
+
+    # Probe succeeded — dump the response shape so we can confirm field names.
+    # This prints once, then we move on. If parsing produces 0 results below
+    # you can adjust _ingest() to match what's actually returned.
+    print(f"  apitcg probe sample (first 400 chars):")
+    print(f"    {probe_body[:400]}")
+    try:
+        probe_json = probe.json()
+        first_list = probe_json.get("data") or probe_json.get("cards") or (probe_json if isinstance(probe_json, list) else [])
+        if first_list:
+            print(f"  First card keys: {sorted(list(first_list[0].keys()))[:25]}")
+            sample = first_list[0]
+            print(f"  Sample values: name='{sample.get('name')}', code='{sample.get('code')}', rarity='{sample.get('rarity')}', set_code='{sample.get('set_code')}', set={sample.get('set')}")
+    except Exception as _:
+        pass
+
+    idx = {}
+    workers = max(1, int(getattr(args, "workers", 5) or 5))
+
+    name_set = set()
+    for r in catalog_rows:
+        n = str(r.get("name") or "").strip()
+        if n:
+            name_set.add(n)
+
+    def _ingest(cards):
+        """Walk a list of apitcg one-piece card dicts, populate idx.
+        apitcg's response has 'code' like 'ST14-001' or 'OP01-075' — that's
+        the canonical set+num identifier. No separate set_code is returned,
+        so we parse it out of 'code' directly. Catalog ids look like
+        'op-st14-001' so the set portion lowercased matches cleanly."""
+        for c in cards:
+            code = str(c.get("code") or "").strip()
+            rar  = (c.get("rarity") or "").strip()
+            if not code or not rar or "-" not in code:
+                continue
+            sc, _, num = code.rpartition("-")
+            sc  = sc.lower()
+            num = _norm_num(num)
+            if sc and num:
+                idx.setdefault((sc, num), rar)
+
+    def _fetch_by_name(name):
+        try:
+            r = _session.get("https://www.apitcg.com/api/one-piece/cards",
+                            params={"name": name}, timeout=20, headers=headers)
+            if r.status_code != 200:
+                return []
+            data = r.json()
+            return data.get("data") or data.get("cards") or (data if isinstance(data, list) else [])
+        except Exception:
+            return []
+
+    name_list = sorted(name_set)
+    done = 0
+    print(f"  Querying apitcg for {len(name_list):,} unique names ({workers} workers, key: {'yes' if api_key else 'NO'})…")
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = [ex.submit(_fetch_by_name, n) for n in name_list]
+        for fut in as_completed(futs):
+            _ingest(fut.result())
+            done += 1
+            if done % 100 == 0:
+                print(f"    {done}/{len(name_list)} names  ·  index size: {len(idx)}")
+    return idx
+
+
+def _match_rarity(row, prefix, idx):
+    """Look up a rarity for one catalog row. Prefers explicit column values
+    when present; falls back to parsing the id when name/set_code are null
+    (the common case for non-Pokemon rows ingested by pokedata_sync).
+
+    YGO needs its own card_number parsing because pokedata stores the full
+    card code ('TDGS-ENSP1') in card_number — we have to extract the trailing
+    portion and strip the region prefix the same way YGOPRODeck does."""
+    # YGO-specific path
+    if prefix == "ygo":
+        sc_col = str(row.get("set_code") or "").lower()
+        sc_id, num_id = _split_id(row["id"], "ygo")
+        # Catalog id is 'ygo-{setcode}-{full_card_code}'. First segment of
+        # what's between the prefix and the last '-' is the actual set abbrev
+        # (pokedata sometimes duplicates the set, e.g. 'ygo-tdgs-TDGS-ENSP1'
+        # gives sc_id='tdgs-tdgs' — take the leading piece).
+        sc_id_first = sc_id.split("-")[0] if sc_id else ""
+        sc = sc_col or sc_id_first
+        # card_number column holds the full card code (e.g. 'TDGS-ENSP1').
+        # Fall back to the trailing segment of the id if the column is null.
+        raw_num = str(row.get("card_number") or "") or num_id
+        if "-" in raw_num:
+            raw_num = raw_num.rsplit("-", 1)[-1]
+        num = _ygo_normalize_num(raw_num)
+        if not (sc and num):
+            return None
+        return idx.get((sc, num))
+
+    # Default path (MTG, OP, future games)
+    sc_col   = str(row.get("set_code") or "").lower()
+    num_col  = _norm_num(row.get("card_number") or "")
+    sc_id, num_id = _split_id(row["id"], prefix)
+    sc  = sc_col or sc_id
+    num = num_col or _norm_num(num_id)
+    if not num:
+        return None
+    return idx.get((sc, num)) or idx.get((sc_id, _norm_num(num_id)))
+
+
+def mode_enrich_rarity():
+    """Backfill catalog.rarity for non-Pokemon TCGs."""
+    tcgs_to_run = [args.tcg] if args.tcg and args.tcg.lower() != "pokemon" else \
+                  ["Magic", "Yugioh", "One Piece"]
+    for tcg in tcgs_to_run:
+        prefix = get_id_prefix(tcg)
+        if prefix not in ("mtg", "ygo", "op"):
+            print(f"\nSkipping {tcg} — no rarity source wired (prefix: {prefix})")
+            continue
+
+        print(f"\n══ Enriching {tcg} (prefix: {prefix}-) ══")
+        rows = _fetch_catalog_rows_missing_rarity(prefix)
+        print(f"  {len(rows):,} catalog rows need rarity")
+        if not rows:
+            continue
+
+        # Diagnostic: show a few catalog row ids and what we derive from them.
+        # Helps confirm the key shape matches the index we're about to build.
+        sample = rows[:5]
+        print(f"  Sample catalog rows:")
+        for r in sample:
+            sc_col   = (r.get("set_code") or "").lower()
+            num_col  = _norm_num(r.get("card_number") or "")
+            sc_id, num_id = _split_id(r["id"], prefix)
+            print(f"    id={r['id']:<30} set_col={sc_col or '-':<12} num_col={num_col or '-':<8} set_id={sc_id or '-':<12} num_id={_norm_num(num_id) or '-'}")
+
+        # Build the per-game lookup index
+        if prefix == "mtg":
+            idx = _build_mtg_rarity_index()
+        elif prefix == "ygo":
+            idx = _build_ygo_rarity_index()
+        elif prefix == "op":
+            idx = _build_op_rarity_index(rows)
+
+        if not idx:
+            print(f"  ✗ Empty index — skipping {tcg}")
+            continue
+
+        # Match + collect updates
+        updates = []
+        unmatched = 0
+        for r in rows:
+            rar = _match_rarity(r, prefix, idx)
+            if rar:
+                updates.append({"id": r["id"], "rarity": rar})
+            else:
+                unmatched += 1
+        print(f"  Matched {len(updates):,} / {len(rows):,} rows  (unmatched: {unmatched:,})")
+
+        if args.dry_run:
+            print(f"  Dry-run — sample first 5:")
+            for u in updates[:5]:
+                print(f"    {u['id']} → {u['rarity']}")
+            continue
+
+        if not updates:
+            continue
+
+        # Per-row UPDATE parallelized. We use UPDATE (not UPSERT) because the
+        # catalog has a NOT NULL constraint on `name` and many non-Pokemon
+        # rows have null name — an upsert would re-attempt INSERT on conflict
+        # and fail the NOT NULL check. UPDATE only touches the rarity column.
+        write_workers = max(1, int(getattr(args, "workers", 5) or 5))
+        print(f"  Writing {len(updates):,} rarity updates ({write_workers} workers)…")
+
+        def _apply_one(item):
+            try:
+                sb.table("catalog").update({"rarity": item["rarity"]}).eq("id", item["id"]).execute()
+                return True
+            except Exception as e:
+                return str(e)
+
+        written = 0
+        errors  = 0
+        sample_errs = []
+        with ThreadPoolExecutor(max_workers=write_workers) as ex:
+            futs = [ex.submit(_apply_one, u) for u in updates]
+            for fut in as_completed(futs):
+                result = fut.result()
+                if result is True:
+                    written += 1
+                else:
+                    errors += 1
+                    if len(sample_errs) < 3:
+                        sample_errs.append(result)
+                done = written + errors
+                if done % 500 == 0:
+                    print(f"    {done:,}/{len(updates):,}  (wrote: {written:,}, errors: {errors:,})")
+        for s in sample_errs:
+            print(f"    sample err: {s[:200]}")
+        print(f"  Done: wrote {written:,}, errors {errors:,}")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # DISPATCH
 # ═════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
@@ -1088,7 +1885,13 @@ if __name__ == "__main__":
         mode_probe()
     elif args.list_sets:
         mode_list_sets()
+    elif args.check_images:
+        mode_check_images()
+    elif args.diagnose_jp_legacy:
+        mode_diagnose_jp_legacy()
     elif args.mirror_images:
         mode_mirror_images()
+    elif args.enrich_rarity:
+        mode_enrich_rarity()
     else:
         main_sync()

@@ -81,6 +81,50 @@ The browse view renders many cards. Lookups for cross-cutting data
 (beta tester status, vendor flags, etc.) should be backed by a JS-side
 cache loaded once at app startup — not a query per row.
 
+## Marketplace / Payments — Stripe ToS
+
+PathBinder uses Stripe Connect destination charges in the eBay / Mercari
+model. **Never** re-introduce escrow-style flows. Specifically:
+
+### Forbidden
+
+- Do not call the marketplace flow "escrow", "funds held", "release of
+  funds", "pending payout", "buyer confirms delivery before payout", etc.
+- Do not gate a seller's payout on a buyer's confirmation. Sellers are
+  paid via Stripe's standard payout schedule.
+- Do not hold buyer funds in the platform account custodially. Doing this
+  triggers state money-transmitter laws and violates Stripe's ToS even
+  when the UI calls it something other than escrow.
+
+### Allowed
+
+- 5% `application_fee_amount` on each marketplace charge → platform gets
+  its cut, Stripe routes the rest to the seller's Connect account.
+- 7-day buyer protection window — implemented as "if there's a problem,
+  open a dispute" via standard Stripe chargeback flow. Not a custodial hold.
+- Admin-initiated refunds via `stripe.refunds.create` (see
+  `/api/refund-order.js`). Refunds are allowed; conditional non-payouts
+  are not.
+- "Mark Received" as a UX prompt to add the card to the buyer's binder
+  and open the rate-seller modal. It does NOT release a payment.
+
+### Order status flow
+
+`pending_payment → paid → shipped → completed`, with `cancelled`,
+`disputed`, `return_requested`, `refunded` as terminal/branch states.
+There is no `delivered` gate before `completed` — the buyer's "Mark
+Received" action just flips paid→completed for UX, not for money flow.
+
+### When wiring new payments
+
+- Read `/api/marketplace-checkout.js` — destination-charge scaffolding
+  already exists. If `profiles.stripe_connect_account_id` is set,
+  `transfer_data.destination` and `application_fee_amount` are sent;
+  otherwise the charge falls back to platform-only (manual payout).
+- Phase 2 (Connect Express onboarding) is the remaining work to make
+  destination charges fire for real. Until then, charges land on the
+  platform account and require admin action to forward to sellers.
+
 ## Schema / Supabase
 
 - `profiles` is the canonical user table. Tier resolution goes through

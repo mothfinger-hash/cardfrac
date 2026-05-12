@@ -131,14 +131,21 @@ async function handleSubscriptionDeleted(subscription) {
 }
 
 // ── Marketplace purchase ──────────────────────────────────────────────────────
+// Post-escrow model: order is created with status='paid'. There is NO
+// custodial holding period — sellers receive funds via Stripe's normal
+// payout schedule (handled by Stripe automatically when the checkout used
+// a destination charge with transfer_data, or manually via the admin if
+// the seller hasn't completed Connect onboarding yet).
+//
+// Buyers have a 7-day buyer-protection window during which they can file
+// a dispute with Stripe in the usual way. That flow runs through the
+// standard Stripe chargeback machinery — we don't gate the seller's
+// payout on a "delivery confirmed" event.
 async function handleMarketplacePurchase(session) {
   const meta = session.metadata || {};
   const amountCents = session.amount_total || 0;
   const platformFee = parseInt(meta.platform_fee || 0);
   const sellerPayout = amountCents - platformFee;
-
-  const autoReleaseAt = new Date();
-  autoReleaseAt.setDate(autoReleaseAt.getDate() + 7);
 
   const { error: orderErr } = await sb.from('orders').insert({
     listing_id:             meta.listing_id || null,
@@ -150,7 +157,7 @@ async function handleMarketplacePurchase(session) {
     status:                 'paid',
     stripe_session_id:      session.id,
     stripe_payment_intent:  session.payment_intent,
-    auto_release_at:        autoReleaseAt.toISOString(),
+    payment_route:          meta.payment_route || 'platform_only',
   });
 
   if (orderErr) {
@@ -165,7 +172,7 @@ async function handleMarketplacePurchase(session) {
     }).eq('id', meta.listing_id);
   }
 
-  console.log(`[webhook] order created for listing ${meta.listing_id}`);
+  console.log(`[webhook] order created for listing ${meta.listing_id} via ${meta.payment_route || 'platform_only'}`);
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
