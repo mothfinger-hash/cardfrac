@@ -967,6 +967,26 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .cond-graded{background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent)}
     .cond-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:.66rem;font-weight:700;letter-spacing:.06em}
 
+    /* ── BETA TESTER BADGES ────────────────────────────── */
+    .beta-badge{
+      display:inline-flex;align-items:center;gap:2px;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.55rem;font-weight:700;letter-spacing:.08em;
+      padding:1px 5px;margin-left:4px;
+      vertical-align:middle;text-transform:uppercase;
+      background:var(--surface2);
+    }
+    .beta-badge.founding{border:1.5px solid var(--copper);color:var(--copper);text-shadow:0 0 4px rgba(184,115,51,.4)}
+    .beta-badge.collector{border:1.5px solid var(--accent);color:var(--accent);text-shadow:0 0 4px rgba(0,229,255,.4)}
+    .beta-badge .bb-glyph{font-size:.6rem;line-height:1}
+    /* Compact dot variant for tight spaces like the nav chip */
+    .beta-dot{
+      display:inline-block;width:6px;height:6px;border-radius:50%;
+      margin-left:5px;vertical-align:middle;
+    }
+    .beta-dot.founding{background:var(--copper);box-shadow:0 0 5px rgba(184,115,51,.7)}
+    .beta-dot.collector{background:var(--accent);box-shadow:0 0 5px rgba(0,229,255,.7)}
+
     /* ── MARKET PRICE DIFF ─────────────────────────────── */
     .price-diff-pos{color:var(--green);font-size:.72rem}
     .price-diff-neg{color:var(--red);font-size:.72rem}
@@ -5259,7 +5279,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           chipEl.textContent = initials;
           chipEl.style.backgroundImage = '';
         }
-        document.getElementById('userName').textContent = currentUser.username || currentUser.email?.split('@')[0] || 'User';
+        var _userNameEl = document.getElementById('userName');
+        var _displayName = currentUser.username || currentUser.email?.split('@')[0] || 'User';
+        // Use innerHTML so we can append a beta status dot for testers
+        _userNameEl.innerHTML = _escHtml(_displayName) + renderBetaBadge(currentUser.id, 'dot');
         syncUserDataFromCloud();
         // Show admin tab only if user is admin
         if (currentUser.is_admin) {
@@ -5679,7 +5702,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
             ${marketPriceHtml}
             <div style="font-size:.72rem;color:var(--muted);margin-top:5px">
-              ${sellerName}${vendorBadge}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
+              ${sellerName}${vendorBadge}${renderBetaBadge(listing.seller_id)}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
             </div>
           </div>
           ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy Now →</button>` : ''}
@@ -5795,7 +5818,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
             <h1 style="margin-bottom:6px">${listing.name}</h1>
             <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px">
-              Listed by <strong style="color:var(--text)">${sellerName}</strong>
+              Listed by <strong style="color:var(--text)">${sellerName}</strong>${renderBetaBadge(listing.seller_id)}
               ${sellerRating ? `<span style="color:var(--gold);margin-left:6px">★ ${sellerRating.toFixed(1)}</span>` : ''}
             </div>
 
@@ -15989,6 +16012,53 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     var PATHBINDER_DISCORD_URL = 'https://discord.gg/pathbinder';
     var BETA_LIMITS = { founding: 10, collector: 50 };
 
+    // Global lookup of active beta tester user_id → tier. Loaded once at
+    // app startup (publicly readable via RLS) and refreshed after any admin
+    // invite/revoke or user code redemption. Used by renderBetaBadge() to
+    // decorate seller names on the marketplace and elsewhere without N+1
+    // queries against beta_testers on every render.
+    var _betaUsers = {};
+
+    async function loadBetaUserCache() {
+      try {
+        // Pulls from the public_beta_testers view, which exposes only
+        // (user_id, tier) for active testers — safe for anonymous reads.
+        // If the migration isn't run yet, this errors and we leave the
+        // cache empty so no badges render anywhere.
+        var res = await sb.from('public_beta_testers')
+          .select('user_id, tier');
+        if (res.error) { _betaUsers = {}; return; }
+        var next = {};
+        (res.data || []).forEach(function(r) {
+          if (r.user_id) next[r.user_id] = r.tier;
+        });
+        _betaUsers = next;
+      } catch (_) {
+        _betaUsers = {};
+      }
+    }
+
+    function getBetaTier(userId) {
+      if (!userId) return null;
+      return _betaUsers[userId] || null;
+    }
+
+    // Returns an HTML pill badge (or empty string). Variant 'dot' returns
+    // a small colored dot for tight spaces like the nav chip; default is
+    // the full pill used on marketplace/seller lines.
+    function renderBetaBadge(userId, variant) {
+      var tier = getBetaTier(userId);
+      if (!tier) return '';
+      var label = tier === 'founding' ? 'Founding' : 'Beta';
+      var title = tier === 'founding'
+        ? 'Founding Beta tester — permanent Vendor tier'
+        : 'Collector Beta tester';
+      if (variant === 'dot') {
+        return '<span class="beta-dot ' + tier + '" title="' + title + '"></span>';
+      }
+      return '<span class="beta-badge ' + tier + '" title="' + title + '"><span class="bb-glyph">◈</span>' + label + '</span>';
+    }
+
     function printBetaTesterSQL() {
       var sql = [
         '-- ── PathBinder Beta Tester System ──────────────────────────────',
@@ -16190,7 +16260,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '',
         'grant execute on function admin_invite_beta(text,text,text,text) to authenticated;',
         'grant execute on function claim_beta_code(text) to authenticated;',
-        'grant execute on function admin_revoke_beta(uuid) to authenticated;'
+        'grant execute on function admin_revoke_beta(uuid) to authenticated;',
+        '',
+        '-- Public view exposing only (user_id, tier) so the marketplace UI',
+        '-- can render beta badges next to seller names without leaking emails,',
+        '-- invite codes, or admin notes. Bypasses RLS by running as view owner.',
+        'create or replace view public_beta_testers as',
+        '  select user_id, tier from beta_testers',
+        '  where revoked_at is null and user_id is not null;',
+        'grant select on public_beta_testers to anon, authenticated;'
       ].join('\n');
       console.log('%cPathBinder Beta Tester SQL Migration:', 'color:orange;font-weight:bold;font-size:14px');
       console.log(sql);
@@ -16361,6 +16439,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         showToast(info.claimed ? 'Granted to existing user' : 'Invite saved — will apply when they sign up');
       }
       renderAdminBetaTesters();
+      // Refresh the public badge cache + re-render anywhere badges show
+      loadBetaUserCache().then(function() { try { renderBrowse(); } catch(_) {} updateAuthUI(); });
     }
 
     async function adminRevokeBetaTester(testerId, label) {
@@ -16370,6 +16450,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (res.error) { showToast('Revoke failed: ' + res.error.message); return; }
       showToast('Beta access revoked');
       renderAdminBetaTesters();
+      loadBetaUserCache().then(function() { try { renderBrowse(); } catch(_) {} updateAuthUI(); });
     }
 
     // ── User-facing beta redemption ───────────────────────────────────────
@@ -16407,6 +16488,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           currentUser.is_vendor  = !!prof.data.is_vendor  || currentUser.is_vendor;
         }
       } catch(_) {}
+      // Refresh the beta badge cache so the new tester's badge appears
+      // on their own nav chip and in their public listings immediately.
+      await loadBetaUserCache();
+      try { updateAuthUI(); } catch(_) {}
+      try { renderBrowse(); } catch(_) {}
       setTimeout(function() {
         closeModal('redeemBetaModal');
         showBetaDiscordPrompt(info.tier);
@@ -18984,6 +19070,95 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>`;
     }
 
+    // Renders one row for a catalog-driven set (JP). Pulled out so the
+    // search filter can re-render the list without duplicating template.
+    function _renderJpSetRow(s, owned) {
+      const o   = owned[s.set_code] || 0;
+      const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
+      const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+      return `<div onclick="loadJpSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}')"
+        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
+          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${_escHtml(s.set_code)} · ${s.total} cards</div>
+          <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
+          </div>
+        </div>
+        <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${o}/${s.total}</div>
+      </div>`;
+    }
+
+    // Renders one row for a TCG-driven set (MTG/YGO/OP).
+    function _renderTcgSetRow(s, gameKey, owned) {
+      const cfg = _TCG_SETS_CONFIG[gameKey];
+      const o   = owned[s.set_code] || 0;
+      const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
+      const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+      return `<div onclick="loadTcgSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}','${gameKey}')"
+        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[${cfg.label}]</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
+          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${_escHtml(s.set_code)} · ${s.total} cards</div>
+          <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
+          </div>
+        </div>
+        <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${o}/${s.total}</div>
+      </div>`;
+    }
+
+    // Search-bar HTML shared by JP/MTG/YGO/OP pages. Uses the same id
+    // (setsSearch) the EN page uses, but wires to filterCatalogSets()
+    // which dispatches by _setsLang to the correct cache.
+    function _catalogSetsSearchHtml() {
+      return `<div style="position:relative;margin-bottom:14px">
+        <input id="setsSearch" type="text" autocomplete="off" placeholder="Search sets…"
+          oninput="filterCatalogSets(this.value)"
+          style="width:100%;box-sizing:border-box;padding:9px 14px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;outline:none"
+          onfocusin="this.style.borderColor='var(--accent)'"
+          onfocusout="this.style.borderColor='var(--border)'">
+      </div>`;
+    }
+
+    // Generic filter for the catalog-driven tabs (JP/MTG/YGO/OP). Reads
+    // cached sets + owned map for the active tab, filters by name OR code,
+    // re-renders into #setsListInner.
+    function filterCatalogSets(q) {
+      const term = String(q || '').trim().toLowerCase();
+      const wrap = document.getElementById('setsListInner');
+      if (!wrap) return;
+
+      let sets, renderRow;
+      if (_setsLang === 'JP') {
+        if (!_jpSetsCache) return;
+        sets = _jpSetsCache.sets || [];
+        const owned = _jpSetsCache.owned || {};
+        renderRow = (s) => _renderJpSetRow(s, owned);
+      } else if (_TCG_SETS_CONFIG[_setsLang]) {
+        const block = _tcgSetsCache[_setsLang];
+        if (!block) return;
+        sets = block.sets || [];
+        const owned = block.owned || {};
+        const gameKey = _setsLang;
+        renderRow = (s) => _renderTcgSetRow(s, gameKey, owned);
+      } else {
+        return;
+      }
+
+      const matches = term
+        ? sets.filter(s =>
+            (s.set_name || '').toLowerCase().includes(term) ||
+            (s.set_code || '').toLowerCase().includes(term))
+        : sets;
+      wrap.innerHTML = matches.map(renderRow).join('') ||
+        '<div style="padding:32px;text-align:center;color:var(--muted)">No sets found</div>';
+    }
+
     function filterSetsPage(q) {
       if (!_setsCache) return;
       const term   = q.trim().toLowerCase();
@@ -19010,13 +19185,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     // Shared tab header HTML
+    // Tab definitions — order, label, and key. EN is the only one that hits
+    // an external API (pokemontcg.io); everything else is catalog-driven via
+    // id-prefix filters, so new sets appear automatically as the syncs land.
+    var _SETS_TABS = [
+      { key: 'EN',  label: '🇺🇸 ENGLISH'   },
+      { key: 'JP',  label: '🇯🇵 JAPANESE'  },
+      { key: 'MTG', label: '◆ MAGIC'       },
+      { key: 'YGO', label: '◇ YU-GI-OH'    },
+      { key: 'OP',  label: '⚓ ONE PIECE'   }
+    ];
+
     function _setsTabsHtml() {
-      const enActive = _setsLang === 'EN';
-      const tabBase = 'padding:6px 18px;font-family:inherit;font-size:.68rem;letter-spacing:.08em;cursor:pointer;border:1px solid;transition:all .15s;background:transparent';
-      return `<div style="display:flex;gap:6px;margin-bottom:14px">
-        <button onclick="setSetsLang('EN')" style="${tabBase};border-color:${enActive?'var(--copper)':'var(--border)'};color:${enActive?'var(--copper)':'var(--muted)'};background:${enActive?'var(--copper-glow)':'transparent'}">🇺🇸 ENGLISH</button>
-        <button onclick="setSetsLang('JP')" style="${tabBase};border-color:${!enActive?'var(--copper)':'var(--border)'};color:${!enActive?'var(--copper)':'var(--muted)'};background:${!enActive?'var(--copper-glow)':'transparent'}">🇯🇵 JAPANESE</button>
-      </div>`;
+      const tabBase = 'padding:6px 14px;font-family:inherit;font-size:.66rem;letter-spacing:.07em;cursor:pointer;border:1px solid;transition:all .15s;background:transparent;white-space:nowrap';
+      return '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">' +
+        _SETS_TABS.map(function(t) {
+          var active = _setsLang === t.key;
+          return '<button onclick="setSetsLang(\'' + t.key + '\')" style="' + tabBase +
+            ';border-color:' + (active ? 'var(--copper)' : 'var(--border)') +
+            ';color:' + (active ? 'var(--copper)' : 'var(--muted)') +
+            ';background:' + (active ? 'var(--copper-glow)' : 'transparent') + '">' +
+            t.label + '</button>';
+        }).join('') +
+      '</div>';
     }
 
     function setSetsLang(lang) {
@@ -19029,6 +19220,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!el) return;
 
       if (_setsLang === 'JP') { await loadJpSetsPage(el); return; }
+      if (_setsLang === 'MTG' || _setsLang === 'YGO' || _setsLang === 'OP') {
+        await loadTcgSetsPage(el, _setsLang);
+        return;
+      }
 
       el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>';
 
@@ -19092,12 +19287,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       try {
         const now = Date.now();
         if (!_jpSetsCache || (now - _jpSetsCache.timestamp > 600000)) {
-          // Paginate through catalog to collect JP set info
+          // Paginate through catalog to collect JP set info. We grab
+          // created_at so we can sort sets by "newest first" (the time the
+          // last card from that set was added to our catalog — a good
+          // proxy for release date since pokedata returns sets in
+          // release-date order and we sync in that order).
           let allRows = [];
           let offset = 0;
           while (true) {
             const { data } = await sb.from('catalog')
-              .select('set_name, set_code')
+              .select('set_name, set_code, created_at')
               .or('id.like.jp-%,id.like.pd-%')
               .range(offset, offset + 999);
             if (!data || data.length === 0) break;
@@ -19105,14 +19304,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             if (data.length < 1000) break;
             offset += 1000;
           }
-          // Group by set_code, count cards
+          // Group by set_code, count cards, track max(created_at)
           const byCode = {};
           allRows.forEach(r => {
             const key = r.set_code || r.set_name || '?';
-            if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0 };
+            if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0, max_created_at: 0 };
             byCode[key].total++;
+            const t = r.created_at ? new Date(r.created_at).getTime() : 0;
+            if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
           });
-          const sets = Object.values(byCode).sort((a, b) => (a.set_name || '').localeCompare(b.set_name || ''));
+          const sets = Object.values(byCode).sort((a, b) => {
+            // Newest first; fall back to alpha when timestamps tie or are missing.
+            const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
+            if (dt !== 0) return dt;
+            return (a.set_name || '').localeCompare(b.set_name || '');
+          });
           _jpSetsCache = { timestamp: now, sets };
         }
 
@@ -19132,34 +19338,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           });
         }
 
+        // Stash owned map on the cache block so filterCatalogSets can
+        // re-render rows without re-walking collectionItems on every keystroke.
+        _jpSetsCache.owned = jpOwned;
+
         const sets = _jpSetsCache.sets;
         const totalOwned = Object.values(jpOwned).reduce((a, b) => a + b, 0);
 
-        const rows = sets.map(s => {
-          const owned = jpOwned[s.set_code] || 0;
-          const pct   = s.total > 0 ? Math.min(100, Math.round(owned / s.total * 100)) : 0;
-          const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
-          return `<div onclick="loadJpSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}')"
-            style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
-            onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-            <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
-              <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.set_code} · ${s.total} cards</div>
-              <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
-              </div>
-            </div>
-            <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${owned}/${s.total}</div>
-          </div>`;
-        }).join('');
+        const rows = sets.map(s => _renderJpSetRow(s, jpOwned)).join('');
 
         el.innerHTML = `<div style="padding:16px 0 8px">
           ${_setsTabsHtml()}
           <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">
             ${currentUser ? totalOwned + ' JP cards owned' : 'Log in to track your collection'} · ${sets.length} sets
           </p>
-          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden">
+          ${_catalogSetsSearchHtml()}
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 360px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
             ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No JP sets found — run fetch_jp_pokedata.py to build the catalog</div>'}
           </div>
         </div>`;
@@ -19211,9 +19405,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const pct = cards.length > 0 ? Math.round(ownedCount / cards.length * 100) : 0;
         const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
 
-        // Store for card detail use
+        // Store for card detail use. Clear the TCG key so the JP detail
+        // sheet renders with its own labels even after a prior TCG visit.
         window._jpSetDetailCards = cards;
         window._jpSetOwnedMap    = ownedMap;
+        window._setDetailGameKey = null;
 
         const rows = cards.map((card, idx) => {
           const ci    = ownedMap[card.id];
@@ -19262,6 +19458,222 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
+    // ── Multi-TCG Sets (Magic, Yu-Gi-Oh, One Piece) ──────────────────────
+    // Generic catalog-driven sets browser. Mirrors the JP loader but
+    // parameterized by id prefix + display label per game. New sets appear
+    // automatically as pokedata_sync ingests them — no UI changes needed.
+    var _TCG_SETS_CONFIG = {
+      MTG: { prefix: 'mtg-', label: 'MTG', name: 'Magic'    },
+      YGO: { prefix: 'ygo-', label: 'YGO', name: 'Yu-Gi-Oh' },
+      OP:  { prefix: 'op-',  label: 'OP',  name: 'One Piece' }
+    };
+    var _tcgSetsCache       = {}; // { MTG: {timestamp, sets}, YGO: {...}, OP: {...} }
+    var _tcgSetsDetailCache = {}; // { 'MTG|setCode': {timestamp, cards}, ... }
+
+    async function loadTcgSetsPage(el, gameKey) {
+      const cfg = _TCG_SETS_CONFIG[gameKey];
+      if (!cfg) { el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Unknown TCG</div>'; return; }
+      el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading ' + cfg.name + ' sets…</div>';
+      try {
+        const now = Date.now();
+        let cachedBlock = _tcgSetsCache[gameKey];
+        if (!cachedBlock || (now - cachedBlock.timestamp > 600000)) {
+          // Paginate through catalog filtered by id prefix. We pull
+          // created_at so we can sort by recency (newest first) — same
+          // proxy used by the JP loader.
+          let allRows = [];
+          let offset = 0;
+          while (true) {
+            const { data } = await sb.from('catalog')
+              .select('set_name, set_code, created_at')
+              .like('id', cfg.prefix + '%')
+              .range(offset, offset + 999);
+            if (!data || data.length === 0) break;
+            allRows = allRows.concat(data);
+            if (data.length < 1000) break;
+            offset += 1000;
+          }
+          // Group by set_code, count cards, track max(created_at)
+          const byCode = {};
+          allRows.forEach(r => {
+            const key = r.set_code || r.set_name || '?';
+            if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0, max_created_at: 0 };
+            byCode[key].total++;
+            const t = r.created_at ? new Date(r.created_at).getTime() : 0;
+            if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
+          });
+          const sets = Object.values(byCode).sort((a, b) => {
+            const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
+            if (dt !== 0) return dt;
+            return (a.set_name || '').localeCompare(b.set_name || '');
+          });
+          _tcgSetsCache[gameKey] = { timestamp: now, sets };
+          cachedBlock = _tcgSetsCache[gameKey];
+        }
+
+        // Owned map: api_card_id starting with this prefix → count
+        const owned = {};
+        if (currentUser) {
+          collectionItems.filter(c => !c.is_ghost && !c.sold_offline && c.api_card_id &&
+            c.api_card_id.startsWith(cfg.prefix)
+          ).forEach(c => {
+            // api_card_id = "{prefix}{setCode}-{num}" — extract setCode
+            const rest = c.api_card_id.slice(cfg.prefix.length);
+            const lastDash = rest.lastIndexOf('-');
+            const setCode = lastDash > 0 ? rest.slice(0, lastDash) : rest;
+            owned[setCode] = (owned[setCode] || 0) + (c.quantity || 1);
+          });
+        }
+        // Stash owned map on the cache block so filterCatalogSets can
+        // re-render rows without re-walking collectionItems.
+        cachedBlock.owned = owned;
+
+        const sets = cachedBlock.sets;
+        const totalOwned = Object.values(owned).reduce((a, b) => a + b, 0);
+
+        const rows = sets.map(s => _renderTcgSetRow(s, gameKey, owned)).join('');
+
+        el.innerHTML = `<div style="padding:16px 0 8px">
+          ${_setsTabsHtml()}
+          <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">
+            ${currentUser ? totalOwned + ' ' + cfg.name + ' cards owned' : 'Log in to track your collection'} · ${sets.length} sets
+          </p>
+          ${_catalogSetsSearchHtml()}
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 360px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
+            ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No ' + cfg.name + ' sets yet — they\\'ll appear here as the catalog sync finishes.</div>'}
+          </div>
+        </div>`;
+      } catch(e) {
+        el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">Failed to load ${cfg.name} sets.<br><small>${e.message}</small></div>`;
+      }
+    }
+
+    async function loadTcgSetDetail(setCode, setName, gameKey) {
+      const cfg = _TCG_SETS_CONFIG[gameKey];
+      if (!cfg) return;
+      const el = document.getElementById('setsPageContent');
+      if (!el) return;
+      el.innerHTML = `<div style="padding:12px 0 8px">
+        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+        <div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>
+      </div>`;
+      try {
+        const cacheKey = gameKey + '|' + setCode;
+        const now = Date.now();
+        let cards;
+        if (_tcgSetsDetailCache[cacheKey] && (now - _tcgSetsDetailCache[cacheKey].timestamp < 300000)) {
+          cards = _tcgSetsDetailCache[cacheKey].cards;
+        } else {
+          let allCards = [];
+          let offset = 0;
+          while (true) {
+            const { data } = await sb.from('catalog')
+              .select('id, name, set_name, set_code, card_number, rarity, image_url')
+              .eq('set_code', setCode)
+              .like('id', cfg.prefix + '%')
+              .range(offset, offset + 999);
+            if (!data || data.length === 0) break;
+            allCards = allCards.concat(data);
+            if (data.length < 1000) break;
+            offset += 1000;
+          }
+          // Numeric-aware card number sort. Many TCGs have non-numeric or
+          // mixed formats (e.g. MTG's "T-1") so we fall back to localeCompare.
+          allCards.sort((a, b) => {
+            const an = parseInt(a.card_number);
+            const bn = parseInt(b.card_number);
+            if (!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+            return String(a.card_number || '').localeCompare(String(b.card_number || ''));
+          });
+          cards = allCards;
+          _tcgSetsDetailCache[cacheKey] = { timestamp: now, cards };
+        }
+
+        // Owned map (collection items in this set)
+        const ownedMap = {};
+        if (currentUser) {
+          collectionItems.filter(c => !c.is_ghost && !c.sold_offline && c.api_card_id &&
+            c.api_card_id.startsWith(cfg.prefix)
+          ).forEach(c => { ownedMap[c.api_card_id] = c; });
+        }
+
+        const ownedCount = cards.filter(c => ownedMap[c.id]).length;
+        const pct = cards.length > 0 ? Math.round(ownedCount / cards.length * 100) : 0;
+        const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+
+        // Store on window for the card-detail handler to read
+        window._tcgSetDetailCards = cards;
+        window._tcgSetOwnedMap    = ownedMap;
+        window._tcgSetDetailGame  = gameKey;
+
+        const rows = cards.map((card, idx) => {
+          const ci    = ownedMap[card.id];
+          const owned = !!ci;
+          const qty   = ci ? (ci.quantity || 1) : 0;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
+            onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
+            onclick="openTcgSetCardDetail(${idx})">
+            ${card.image_url
+              ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
+              : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
+              <div style="font-size:.62rem;color:var(--muted)">#${_escHtml(card.card_number||'?')}${card.rarity ? ' · '+_escHtml(card.rarity) : ''}</div>
+            </div>
+            ${owned
+              ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}</span>`
+              : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
+            <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
+          </div>`;
+        }).join('');
+
+        el.innerHTML = `<div style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <h2 style="font-size:1.05rem;margin-bottom:8px">
+            <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">${cfg.label}</span>${_escHtml(setName)}
+          </h2>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+            <div style="flex:1">
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
+              <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .5s"></div>
+              </div>
+            </div>
+            <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 340px);overflow-y:auto;overflow-x:hidden">
+            ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
+          </div>
+        </div>`;
+      } catch(e) {
+        el.innerHTML = `<div style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load. ${e.message}</div>
+        </div>`;
+      }
+    }
+
+    // Re-uses the JP card-detail sheet renderer since the data shape is
+    // identical (catalog row + collection item). The JP renderer reads from
+    // window._jpSetDetailCards / window._jpSetOwnedMap — point those at our
+    // arrays before delegating so we don't have to duplicate ~120 lines.
+    // Set _setDetailGameKey so the renderer + the add-to-collection helper
+    // know which game_type/language to write.
+    function openTcgSetCardDetail(idx) {
+      window._jpSetDetailCards = window._tcgSetDetailCards;
+      window._jpSetOwnedMap    = window._tcgSetOwnedMap;
+      window._setDetailGameKey = window._tcgSetDetailGame; // 'MTG' | 'YGO' | 'OP'
+      openJpSetCardDetail(idx);
+    }
+
+    // Map from sets-page game-key to (game_type, language) used by
+    // collection_items rows. Used by addJpSetCardToCollection's dispatch.
+    var _SETS_GAME_KEY_TO_FIELDS = {
+      MTG: { game_type: 'magic',    language: 'EN' },
+      YGO: { game_type: 'yugioh',   language: 'EN' },
+      OP:  { game_type: 'onepiece', language: 'EN' }
+    };
+
     function openJpSetCardDetail(idx) {
       const cards    = window._jpSetDetailCards || [];
       const ownedMap = window._jpSetOwnedMap    || {};
@@ -19277,11 +19689,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       overlay.className = 'modal-overlay';
       overlay.style.cssText = 'position:fixed;inset:0;z-index:10010;display:flex;align-items:center;justify-content:center;padding:16px';
 
+      // Game-aware header label. Falls back to "JP CARD DETAIL" when the
+      // sheet is opened from the original JP sets flow (no game key set).
+      var _gk = window._setDetailGameKey;
+      var _detailLabel = _gk === 'MTG' ? 'MAGIC CARD DETAIL'
+                       : _gk === 'YGO' ? 'YU-GI-OH CARD DETAIL'
+                       : _gk === 'OP'  ? 'ONE PIECE CARD DETAIL'
+                       : 'JP CARD DETAIL';
       overlay.innerHTML = `
         <div class="modal" style="width:100%;max-width:360px;padding:22px 20px;max-height:92vh;overflow-y:auto">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
             <div>
-              <span style="font-size:.52rem;letter-spacing:.12em;color:var(--copper)">JP CARD DETAIL</span>
+              <span style="font-size:.52rem;letter-spacing:.12em;color:var(--copper)">${_detailLabel}</span>
             </div>
             <button class="modal-close" onclick="document.getElementById('setCardDetailSheet').remove()"
               style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 2px">×</button>
@@ -19328,6 +19747,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const binderId = document.getElementById('jpSetCardBinderSelect')?.value || null;
       document.getElementById('setCardDetailSheet')?.remove();
 
+      // Dispatch by game key set by the TCG flow (MTG/YGO/OP). When unset
+      // we're in the original Pokemon JP flow → game_type 'pokemon', JA.
+      var _gameFields = _SETS_GAME_KEY_TO_FIELDS[window._setDetailGameKey] ||
+        { game_type: 'pokemon', language: 'JA' };
+
       const row = {
         user_id:        currentUser.id,
         api_card_id:    card.id,
@@ -19336,10 +19760,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         set_code:       card.set_code    || null,
         card_number:    card.card_number || null,
         card_image_url: card.image_url   || null,
-        game_type:      'pokemon',
+        game_type:      _gameFields.game_type,
         condition:      'raw',
         quantity:       1,
-        language:       'JA',
+        language:       _gameFields.language,
         binder_id:      binderId ? binderId : null,
         is_ghost:       false,
         rarity:         card.rarity || null,
@@ -19749,10 +20173,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       _loadCardOverrides();
 
       try {
-        // 1. Restore auth session + fetch listings — in parallel
+        // 1. Restore auth session + fetch listings + warm beta cache — in parallel
         const [sessionResult, listingsResult] = await Promise.all([
           sb.auth.getSession(),
-          sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false })
+          sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false }),
+          loadBetaUserCache()
         ]);
 
         // Restore session
@@ -19944,6 +20369,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           // If a pending email-grant just landed on this user (or they
           // refreshed mid-onboarding), fire the Discord prompt once.
           try { maybeShowBetaWelcome(); } catch(_) {}
+          // Refresh the nav chip so a beta tester's dot/badge appears
+          // the moment they sign in (the first updateAuthUI() call above
+          // ran with only the session user, before the profile arrived).
+          try { updateAuthUI(); } catch(_) {}
           if (listingsRes.data) {
             listings = listingsRes.data.map(mapListing);
           }
