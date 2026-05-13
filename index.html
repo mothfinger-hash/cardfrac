@@ -1749,7 +1749,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* Two-card halves — clip the single trade_cards.webp so each side is
        its own animatable element. JS triggers fly-apart by adding
-       .ft-fly-left / .ft-fly-right classes. */
+       .ft-fly-left / .ft-fly-right classes. The easing ramps slow → fast
+       like a hand sweeping everything off a desk. */
     .ft-mag-half{
       position:absolute;
       left:50%; top:50%;
@@ -1759,39 +1760,44 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       -webkit-user-drag:none;
       user-select:none;
       will-change:transform,opacity;
-      transition:transform .9s cubic-bezier(.5,.05,.6,1.2), opacity .9s ease;
+      transition:transform 1.1s cubic-bezier(.55,.02,.95,.1), opacity 1.1s cubic-bezier(.6,0,.95,.1);
     }
     .ft-mag-half-l{ clip-path:inset(0 50% 0 0); }
     .ft-mag-half-r{ clip-path:inset(0 0 0 50%); }
     .ft-mag-half.ft-fly-left {
-      transform:translate(-260%,-50%) rotate(-32deg);
+      transform:translate(-380%,-30%) rotate(-65deg) scale(.9);
       opacity:0;
     }
     .ft-mag-half.ft-fly-right{
-      transform:translate(160%,-50%) rotate(28deg);
+      transform:translate(260%,-25%) rotate(55deg) scale(.9);
       opacity:0;
     }
-    /* Mag lens exit — spin off opposite of its current x */
+    /* Mag lens exit — sweeps off-screen in the same ramp-up motion */
     .ft-mag-lens.ft-fly-out{
-      transition:transform 1s cubic-bezier(.5,.05,.6,1.2), opacity 1s ease;
+      transition:transform 1.1s cubic-bezier(.55,.02,.95,.1), opacity 1.1s cubic-bezier(.6,0,.95,.1);
       opacity:0 !important;
     }
 
-    /* Gauge zoom-in: starts very far away, snaps to full size */
+    /* Gauge zoom-in: starts very far away, slams to the screen and settles.
+       No tilt — just a hard incoming impact then a small overshoot bounce. */
     @keyframes ftGaugeWarpIn{
-      0%   { transform:scale(.04) rotateX(60deg); opacity:0; filter:blur(8px); }
-      55%  { transform:scale(.45) rotateX(20deg); opacity:.85; filter:blur(3px); }
-      82%  { transform:scale(1.08) rotateX(0deg); opacity:1; filter:blur(0); }
-      100% { transform:scale(1) rotateX(0deg);    opacity:1; filter:blur(0); }
+      0%   { transform:scale(.015); opacity:0;  filter:blur(10px); }
+      55%  { transform:scale(.55);  opacity:.85;filter:blur(3px);  }
+      78%  { transform:scale(1.22); opacity:1;  filter:blur(0);    }
+      90%  { transform:scale(.95);  opacity:1;  filter:blur(0);    }
+      100% { transform:scale(1);    opacity:1;  filter:blur(0);    }
     }
     .ft-gauge-warp{
       transform-origin:center 60%;
-      perspective:800px;
-      animation:ftGaugeWarpIn .95s cubic-bezier(.2,.7,.25,1.05) both;
+      animation:ftGaugeWarpIn 1.05s cubic-bezier(.22,.7,.3,1) both;
     }
 
-    /* Results cinema layout */
+    /* Results cinema layout — flow from the top with a comfortable
+       offset so the gauge isn't clipped above the fold and the
+       breakdown table can scroll naturally beneath it. */
     #ftResultsState.ft-cinema-active{
+      justify-content:flex-start !important;
+      padding-top:10vh !important;
       animation:ftCinemaFadeIn .25s ease-out both;
     }
     #ftResultsState.ft-cinema-active > div{
@@ -19245,30 +19251,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       // Lens exits in the direction it's currently sitting (right-hand
       // card at SCAN B). Add the fly classes — CSS transitions handle
-      // the rest. Halves throw to opposite sides; lens fades + drifts.
+      // the rest. Halves throw to opposite sides aggressively; lens
+      // gets hurled even further off-screen, like a hand sweeping a
+      // desk: slow start, hard ramp-up.
       if (lens) {
-        // Drift the lens off-screen (continue along its last vector
-        // toward the right, then fade out).
         lens.classList.add('ft-fly-out');
         var prevTransform = lens.style.transform || '';
-        lens.style.transform = prevTransform + ' translate(40vw,-20vh) rotate(40deg)';
+        lens.style.transform = prevTransform + ' translate(85vw,-45vh) rotate(160deg) scale(1.6)';
       }
       if (hL) hL.classList.add('ft-fly-left');
       if (hR) hR.classList.add('ft-fly-right');
 
-      // Hold on the empty stage for a beat, then transition to gauge.
-      await new Promise(function(r) { setTimeout(r, 850); });
+      // Hold for most of the throw, then transition to gauge while the
+      // last bit of opacity fades out — feels like the gauge slams in
+      // right as the cards finish clearing frame.
+      await new Promise(function(r) { setTimeout(r, 950); });
 
-      // Switch to results — CSS .ft-gauge-warp triggers the zoom-in.
-      // Defer the needle wobble until the gauge has mostly landed so
-      // the user actually sees the needle swing instead of having it
-      // baked into the scale-up.
+      // Switch to results — CSS .ft-gauge-warp triggers the slam-in.
+      // Defer the needle wobble until the gauge has fully landed so
+      // the user sees the needle swing on a settled gauge instead of
+      // it being baked into the scale-up.
       _ftWobbleOnNext = false; // we'll trigger manually below
       _ftShowState('results');
       _ftRenderBreakdown(fetched);
 
-      // Wait for gauge warp to mostly land, then play needle wobble.
-      await new Promise(function(r) { setTimeout(r, 720); });
+      // Wait for the gauge slam (1.05s) to mostly resolve, then play
+      // the needle wobble.
+      await new Promise(function(r) { setTimeout(r, 980); });
       _ftWobbleOnNext = true;
       ftRecalc();
 
