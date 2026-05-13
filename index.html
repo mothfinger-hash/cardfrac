@@ -1850,7 +1850,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-gauge-wrap::before{
       content:'';
       position:absolute;
-      inset:-1%;
+      /* Dial in gauge.webp occupies ~3.7% inside the wrap horizontally
+         and ~2% vertically. Setting inset to match shrinks the ring's
+         inner diameter so it hugs the dial's actual circular edge. */
+      inset:2% 3.7%;
       border-radius:50%;
       background:transparent;
       pointer-events:none;
@@ -1858,9 +1861,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       z-index:0;
       transition:opacity 1.1s ease-out;
       box-shadow:
-        0 0 14px 1px rgba(210,120,58,.55),
-        0 0 30px 5px rgba(210,120,58,.22),
-        inset 0 0 14px rgba(210,120,58,.32);
+        0 0 22px 3px rgba(210,120,58,.55),
+        0 0 48px 10px rgba(210,120,58,.22),
+        inset 0 0 22px rgba(210,120,58,.32);
     }
     .ft-gauge-wrap.ft-glow-on::before{
       opacity:1;
@@ -19307,15 +19310,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return fetched;
       });
 
-      // Wait for the price fetch. We previously also waited for one full
-      // mag-cycle, but on cached/fast fetches that introduced a 1-2s lag
-      // between scan-end and gauge-slam where nothing was happening.
-      // The slam now fires the moment fetch returns — the looping mag
-      // animation simply gets cut where it is when the transition starts.
-      // A short minimum (450ms) keeps a very fast fetch from feeling
-      // jarringly instant.
+      // Wait for the price fetch AND a minimum scan time so the user
+      // sees the mag-glass play through ~3/4 of one full cycle. Mag
+      // cycle total ≈ 7200ms; floor = 5400ms gets us through Side A,
+      // the cross-check slide, and into Side B's scan-down. If the
+      // fetch takes longer than the floor, we wait on the fetch.
       var fetched = {};
-      var minScanFloor = new Promise(function(r) { setTimeout(r, 450); });
+      var minScanFloor = new Promise(function(r) { setTimeout(r, 5400); });
       try {
         fetched = (await Promise.all([fetchPromise, minScanFloor]))[0] || {};
       } catch(_) {
