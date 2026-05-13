@@ -19330,11 +19330,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       });
 
       // Wait for the price fetch AND a minimum scan time. The mag cycle
-      // is now ~5040ms total; a 3500ms floor gets us through Side A,
-      // the cross-check slide, and Side B's scan-down — and the slam
-      // hits just before the end of the cycle for a tighter handoff.
+      // is now ~5040ms total; a 3100ms floor catches the lens mid-way
+      // through Side B's scan-down so the slam lands while the mag is
+      // still actively scanning — no perceptible idle frame.
       var fetched = {};
-      var minScanFloor = new Promise(function(r) { setTimeout(r, 3500); });
+      var minScanFloor = new Promise(function(r) { setTimeout(r, 3100); });
       try {
         fetched = (await Promise.all([fetchPromise, minScanFloor]))[0] || {};
       } catch(_) {
