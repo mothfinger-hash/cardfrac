@@ -1109,7 +1109,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-binder-btn{width:100%;padding:6px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.7rem;cursor:pointer;letter-spacing:.04em;text-align:left}
     .ft-cash-row{display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px}
     .ft-cash-label{font-size:.72rem;color:var(--muted)}
-    .ft-cash-input{width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit}
+    .ft-cash-input{width:80px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:inherit;-moz-appearance:textfield}
+    .ft-cash-input::-webkit-outer-spin-button,
+    .ft-cash-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 
     /* PathBinder gauge — gauge.webp + needle.webp overlay rotated by JS.
        Needle pivot is ~50% horizontal / ~59% vertical of the 1000×1000 image. */
@@ -1232,22 +1234,242 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       pointer-events:none;
       user-select:none;
     }
+    /* Default: desktop PNG visible, mobile PNG hidden. */
+    .ft-stage-art-mobile{ display:none; }
     /* Content layer is a plain absolute box — NO z-index of its own — so
        children's explicit z-indices participate in .ft-stage's stacking. */
     .ft-stage-content{
       position:absolute;
       inset:0;
     }
+    /* ── MOBILE: 9:16 portrait stage with trade_mobile.png ─────────
+       Source PNG is 7424×13312 (~9:16). We switch image, switch the
+       stage aspect-ratio, and keep absolute positioning so the
+       cyberpunk pipe frames in the PNG align with the side panels,
+       action buttons, etc. Per-element overrides for the mobile
+       slots live further down in their own block. */
     @media(max-width:780px){
-      .ft-stage{aspect-ratio:auto;padding:14px 10px 40px}
-      .ft-stage-art{display:none}
-      .ft-stage-content{position:static;inset:auto}
-      /* Mobile bails to normal flow — undo all the absolute positioning */
-      .ft-stage-content > *{position:static !important;inset:auto !important;
-        width:auto !important;height:auto !important;
-        left:auto !important;right:auto !important;
-        top:auto !important;bottom:auto !important;
+      .ft-stage{
+        aspect-ratio: 7424 / 13312;
+        max-width:100%;
+        margin:0;
+      }
+      .ft-stage-art-desktop{ display:none; }
+      .ft-stage-art-mobile { display:block; }
+      .ft-stage-content{ position:absolute; inset:0; }
+
+      /* ── Mobile element slots ──────────────────────────────────
+         First-pass percentages assume the PNG stacks the two side
+         panels vertically with action buttons + code row at the
+         bottom. Tune these against the actual artwork once you can
+         eyeball it. Hero is across the top, Side A in upper third,
+         Side B in middle, action buttons below, code row at bottom. */
+
+      /* Hero — compact two-row title plus a tucked-in Japanese
+         subtitle. Tagline still hidden. Nudged up to top:1% so it
+         clears the cat graffiti by a hair more. */
+      .ft-stage .ft-hero{
+        top:1%; left:5%; right:18%;
+        flex-direction:column; gap:0;
+      }
+      .ft-stage .ft-hero > div:first-child{ max-width:55%; }
+      .ft-stage .ft-hero-title{
+        font-size:.95rem !important;
+        line-height:1.05;
+        white-space:normal;
+        letter-spacing:.04em;
+      }
+      .ft-stage .ft-hero-jp{
+        display:block !important;
+        font-size:.5rem !important;
+        letter-spacing:.18em;
+        margin-top:1px;
+        opacity:.8;
+      }
+      .ft-stage .ft-hero-sub{ display:none !important; }
+      /* ? HOW IT WORKS — on mobile this collapses to a square low-
+         opacity cyan glyph button anchored to the top-right. */
+      .ft-stage .ft-hero-how{
+        position:absolute !important;
+        top:3% !important;
+        right:5% !important;
+        left:auto !important;
+        width:42px !important;
+        height:42px !important;
+        padding:0 !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        border-radius:10px !important;
+        background:rgba(0,229,255,.15) !important;
+        border:1px solid rgba(0,229,255,.45) !important;
+        color:var(--ft-cyan) !important;
+        font-size:0 !important; /* hide existing "? HOW IT WORKS" text */
+        white-space:nowrap;
+        cursor:pointer;
+        z-index:4;
+      }
+      .ft-stage .ft-hero-how::before{
+        content:'?';
+        font-family:'Orbitron','Space Mono',monospace;
+        font-size:1.4rem;
+        font-weight:800;
+        line-height:1;
+        color:var(--ft-cyan);
+      }
+      .ft-stage .ft-hero-how:active{ background:rgba(0,229,255,.28) !important; }
+
+      /* SIDE A + B — stretched another 6px downward from the previous
+         pass (≈1% on a ~640px stage). The inner card viewer +
+         SEARCH/SCAN/MY BINDER/+$ action row have full headroom and
+         the action row no longer clips. */
+      .ft-stage .ft-side-a.ft-pink{
+        left:7%; right:7%; top:12%; bottom:57%;
+        padding:8px 10px 32px;
+      }
+      .ft-stage .ft-side-b.ft-cyan{
+        /* Shifted ~10px (≈1.5%) downward from the previous pass so
+           the panel sits inside its own pipe-frame slot, not the
+           inter-frame gap. */
+        left:7%; right:7%; top:43.5%; bottom:25.5%;
+        padding:8px 10px 32px;
+      }
+
+      /* Lock-in buttons sit INSIDE their respective trade window,
+         pinned to the bottom of each panel above the SEARCH row.
+         Lock-in B follows Side B's downward shift. */
+      .ft-stage #ftLockBtnA{ left:14%; right:14%; top:34%; bottom:60%; }
+      .ft-stage #ftLockBtnB{ left:14%; right:14%; top:65.5%; bottom:28.5%; }
+
+      /* Action buttons — STACKED VERTICALLY at the bottom of the PNG.
+         Each is ~5% tall with 1% gap, all spanning ~80% of the stage
+         width. Transparent + opacity feedback inherited from desktop
+         (.ft-action-btn :hover / :active rules) so the PNG's colored
+         shapes provide the visible fill underneath. */
+      /* Action buttons — nudged +4px (~0.6%) down from previous pass. */
+      .ft-stage .ft-action-row .ft-action-analyze{
+        left:10%; right:10%; top:78.6%; bottom:16.4%;
+      }
+      .ft-stage .ft-action-row .ft-action-create{
+        left:10%; right:10%; top:84.6%; bottom:10.4%;
+      }
+      .ft-stage .ft-action-row .ft-action-reset{
+        left:10%; right:10%; top:90.6%; bottom:4.4%;
+      }
+
+      /* Code row — input + JOIN side-by-side, the "HAVE A TRADE
+         CODE?" label hidden. Sits just below the reset button.
+         Nudged down 2px from previous pass; both controls a couple
+         px shorter so they don't crowd the reset above. */
+      .ft-stage .ft-code-row{
+        position:absolute;
+        left:6%; right:6%; bottom:auto; top:96.3%;
+        display:flex !important;
+        flex-direction:row !important;
+        flex-wrap:nowrap !important;
+        gap:6px;
+        align-items:center;
+      }
+      .ft-stage .ft-code-row .ft-code-label{ display:none !important; }
+      .ft-stage .ft-code-row .ft-code-input{
+        flex:1 1 auto;
+        min-width:0;
+        font-size:.7rem;
+        padding:3px 8px;
+      }
+      .ft-stage .ft-code-row button{
+        flex:0 0 auto;
+        padding:4px 14px !important;
+        font-size:.65rem !important;
+      }
+
+      /* QR slam target — shrunk and positioned over the upper two
+         action buttons (analyze + create link). Sits at the top of
+         the action stack so it visually replaces those two buttons
+         while a session is hosting. */
+      .ft-stage #ftQrContainer{
+        width:90px !important;
+        height:90px !important;
+        padding:4px !important;
+        left:50% !important; top:78% !important;
+        transform:translate(-50%,0) rotate(-7deg) !important;
+      }
+
+      /* Full session banner is too dense for mobile — hide entirely.
+         A minimal #ftMobileSessionCode replaces it below the reset
+         button (rendered by _ftRenderSessionBanner). */
+      #ftSessionBanner{ display:none !important; }
+      .ft-stage #ftMobileSessionCode{
+        position:absolute;
+        left:6%; right:6%; top:94%; bottom:auto;
+        display:flex; flex-direction:row; align-items:center; justify-content:center;
+        gap:8px;
+        font-family:'Space Mono',monospace;
+        z-index:3;
+        pointer-events:none;
+      }
+      .ft-stage #ftMobileSessionCode .mlabel{
+        font-size:.55rem;
+        color:var(--muted);
+        letter-spacing:.1em;
+      }
+      .ft-stage #ftMobileSessionCode .mcode{
+        font-size:1rem;
+        font-weight:700;
+        letter-spacing:.2em;
+        color:var(--accent);
+      }
+
+      /* Hologram modals (SEARCH / SCAN / MY BINDER pickers) — each
+         modal vertically centers over its OWN side panel so the
+         picker appears anchored to the trade window it's filtering.
+         Modal A → Side A (12–43%). Modal B → Side B (43.5–74.5%). */
+      .ft-stage .ft-modal-A{
+        left:5% !important; right:5% !important;
+        width:auto !important;
         transform:none !important;
+        top:13% !important;
+        max-height:32% !important;
+      }
+      .ft-stage .ft-modal-B{
+        left:5% !important; right:5% !important;
+        width:auto !important;
+        transform:none !important;
+        top:45% !important;
+        max-height:32% !important;
+      }
+
+      /* Card viewer — flexible height so the SEARCH/SCAN/BINDER/+$
+         action row underneath actually renders inside each panel. */
+      .ft-stage .ft-card-viewer{
+        flex:1 1 auto !important;
+        min-height:0 !important;
+        width:auto !important;
+        max-width:155px !important;
+        padding:6px 8px !important;
+        align-self:center;
+      }
+      /* Side action row — pin to the bottom of each panel with a touch
+         less vertical padding, smaller font so the four pills fit on a
+         narrow phone. */
+      .ft-stage .ft-side-action-row{
+        flex:0 0 auto !important;
+        width:96% !important;
+        gap:4px !important;
+        flex-wrap:wrap !important;
+        font-size:.5rem !important;
+      }
+      .ft-stage .ft-side-btn{
+        padding:5px 6px !important;
+        font-size:.52rem !important;
+      }
+      .ft-stage .ft-cash-mini{
+        padding:1px 6px !important;
+      }
+      .ft-stage .ft-cash-input{
+        width:48px !important;
+        font-size:.55rem !important;
+        padding:3px 4px !important;
       }
     }
 
@@ -1427,13 +1649,18 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       flex-direction:column;
       overflow:hidden;
     }
+    /* Center each modal on its respective side panel's horizontal
+       center. Side A spans 4%–44% (center 24%); Side B spans 54%–97%
+       (center 75.5%). translateX(-50%) does the centering. */
     .ft-stage .ft-modal-A{
-      left:4%;top:14%;width:44%;
+      left:24%;top:14%;width:44%;
+      transform:translateX(-50%);
       border-color:var(--ft-pink);
       box-shadow:0 0 30px rgba(255,61,127,.4),0 0 80px rgba(255,61,127,.18);
     }
     .ft-stage .ft-modal-B{
-      right:4%;top:14%;width:44%;
+      left:75.5%;top:14%;width:44%;
+      transform:translateX(-50%);
       border-color:var(--ft-cyan);
     }
     .ft-modal-close{
@@ -1601,17 +1828,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-stage #ftLockBtnA:hover{background:var(--ft-pink-glow)}
     .ft-stage #ftLockBtnB:hover{background:var(--ft-cyan-glow)}
 
-    /* Mobile: bail to a normal flow, full-width colored pills.
-       PNG is hidden on mobile so the buttons need their own visual fills. */
-    @media(max-width:780px){
-      .ft-action-row{display:grid !important;grid-template-columns:2fr 2fr 1fr;gap:10px;margin:18px 0 14px}
-      .ft-action-btn{position:static;padding:12px 8px;border-radius:2px;box-shadow:0 4px 0 rgba(0,0,0,.35);color:#0a0a0a}
-      .ft-action-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.35);background:rgba(180,180,180,.28)}
-      .ft-action-analyze{background:var(--ft-yellow)}
-      .ft-action-create {background:var(--ft-cyan)}
-      .ft-action-reset  {background:var(--ft-pink)}
-    }
-    @media(max-width:600px){.ft-action-row{grid-template-columns:1fr !important}}
+    /* Mobile action buttons follow the desktop pattern — transparent,
+       absolutely positioned over the PNG's colored button shapes, with
+       opacity tints for hover/active feedback. The actual mobile
+       positions live in the @media(max-width:780px) block earlier in
+       this stylesheet (under "Mobile element slots"). */
 
     /* Trade-code join row — positioned over the PNG's bottom strip, on top */
     .ft-code-row{
@@ -3493,11 +3714,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       s.onload = () => { if (cb) cb(); };
       document.head.appendChild(s);
     }
-    // Pre-load both in the background after page is idle, so they're ready when needed
+    function _loadHowler(cb) {
+      if (window.Howl) { if (cb) cb(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js';
+      s.onload = () => { if (cb) cb(); };
+      s.onerror = () => console.warn('[howler] failed to load — synth fallback will be used');
+      document.head.appendChild(s);
+    }
+    // Pre-load in the background after page is idle, so they're ready when needed
     if ('requestIdleCallback' in window) {
-      requestIdleCallback(function() { _loadXLSX(); _loadQRCode(); }, { timeout: 4000 });
+      requestIdleCallback(function() { _loadXLSX(); _loadQRCode(); _loadHowler(); }, { timeout: 4000 });
     } else {
-      setTimeout(function() { _loadXLSX(); _loadQRCode(); }, 2500);
+      setTimeout(function() { _loadXLSX(); _loadQRCode(); _loadHowler(); }, 2500);
     }
   </script>
   <script>
@@ -5108,10 +5337,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
   <!-- ── FAIR TRADE CHECK ──────────────────────────────────────────────── -->
   <div id="fairTradePage" class="page">
-    <!-- Stage carries the cyberpunk artwork as a decorative backdrop on
-         desktop. Interactive UI is layered on top via .ft-stage-content. -->
+    <!-- Stage carries the cyberpunk artwork as a decorative backdrop.
+         Two PNGs: desktop (landscape) and mobile (portrait). CSS swaps
+         which one is visible based on viewport width. Interactive UI is
+         layered on top via .ft-stage-content. -->
     <div class="ft-stage">
-      <img class="ft-stage-art" src="trade_analyzer_bg.webp" alt="" aria-hidden="true">
+      <img class="ft-stage-art ft-stage-art-desktop" src="trade_analyzer_bg.webp" alt="" aria-hidden="true">
+      <img class="ft-stage-art ft-stage-art-mobile"  src="trade_mobile.webp"       alt="" aria-hidden="true">
+      <!-- Mobile-only minimal session code display — hidden on desktop,
+           visible at the bottom of the stage on mobile when a session
+           is active. Populated by _ftRenderSessionBanner. -->
+      <div id="ftMobileSessionCode" style="display:none"></div>
       <div class="ft-stage-content">
 
       <!-- Header: compact TRADE ANALYZER with JP subtitle + HOW IT WORKS link.
@@ -5279,8 +5515,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         <!-- Join by code (for guests / manual entry) -->
         <div class="ft-code-row">
-          <span style="color:var(--muted);letter-spacing:.08em">HAVE A TRADE CODE?</span>
-          <input id="ftJoinCodeInput" type="text" maxlength="8" placeholder="PB-XXXX-XXXX"
+          <span class="ft-code-label" style="color:var(--muted);letter-spacing:.08em">HAVE A TRADE CODE?</span>
+          <input id="ftJoinCodeInput" type="text" maxlength="8" placeholder="TRADE CODE"
             class="ft-code-input"
             oninput="this.value=this.value.toUpperCase()"/>
           <button onclick="ftJoinFromInput()"
@@ -5701,6 +5937,34 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
             <button onclick="adminInviteBetaTester('collector','code')"
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">Generate Code</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shop Beta (shop tier × 10) — 1-year membership, then auto-downgrades to vendor -->
+      <div id="betaSectionShop" style="border:1px solid rgba(255,233,74,.3);background:rgba(255,233,74,.03);margin-top:10px">
+        <div onclick="adminToggleBetaSection('shop')"
+          style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="betaCaretShop" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--gold,#FFE94A);transition:transform .15s">▾</span>
+            <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--gold,#FFE94A);text-transform:uppercase">Shop Beta</span>
+            <span id="betaCountShop" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 10</span>
+          </div>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Single-card shop access · 1-year free · auto-downgrades to vendor</span>
+        </div>
+        <div id="betaBodyShop" style="padding:0 14px 14px 14px">
+          <div id="betaListShop" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+            <div style="font-size:.6rem;color:rgba(255,233,74,.5);letter-spacing:.06em">Loading…</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px solid rgba(255,233,74,.2)">
+            <input type="text" id="betaInviteEmailShop" placeholder="email@example.com"
+              style="flex:1;min-width:170px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
+            <button onclick="adminInviteBetaTester('shop','email')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
+            <button onclick="adminInviteBetaTester('shop','code')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--gold,#FFE94A);background:transparent;color:var(--gold,#FFE94A);cursor:pointer;white-space:nowrap">Generate Code</button>
+            <button onclick="adminSweepExpiredShopBeta()" title="Downgrades any shop beta whose 1-year window has lapsed → vendor"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid rgba(255,100,100,.5);background:transparent;color:rgba(255,100,100,.85);cursor:pointer;white-space:nowrap">Sweep Expired</button>
           </div>
         </div>
       </div>
@@ -15465,12 +15729,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       // External fallback for non-Pokemon games when catalog has zero hits.
-      // Each game uses its own free public API — Scryfall (Magic),
-      // YGOPRODeck (Yu-Gi-Oh), apitcg.com (One Piece).
+      // Magic → Scryfall (free, keyless). Yu-Gi-Oh → YGOPRODeck (free,
+      // keyless). One Piece is intentionally CATALOG-ONLY: the apitcg
+      // proxy needs a key behind /api and doesn't work locally, and the
+      // catalog is the canonical OP store. If catalog returns 0 we
+      // show "no results" rather than firing a failing API call.
       if (cards.length === 0) {
         if (gameType === 'magic')    cards = await _fallbackMagic(query);
         if (gameType === 'yugioh')   cards = await _fallbackYugioh(query);
-        if (gameType === 'onepiece') cards = await _fallbackOnePiece(query);
         if (cards.length > 0) {
           source = (cards[0] && cards[0]._source) || 'external';
         }
@@ -17027,19 +17293,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '',
         '-- beta_testers: one row per invite (pending or claimed).',
         '-- A row is "active" when revoked_at IS NULL.',
+        '-- Tiers: founding (→ vendor permanently), collector (→ collector',
+        '-- permanently), shop (→ shop for 1 year, then auto-downgrades to',
+        '-- vendor unless the user has separately upgraded).',
         'create table if not exists beta_testers (',
         '  id uuid primary key default gen_random_uuid(),',
-        '  tier text not null check (tier in (\'founding\',\'collector\')),',
+        '  tier text not null check (tier in (\'founding\',\'collector\',\'shop\')),',
         '  invited_email text,',
         '  invite_code text unique,',
         '  user_id uuid references profiles(id) on delete cascade,',
         '  invited_by uuid references profiles(id),',
         '  invited_at timestamptz default now(),',
         '  claimed_at timestamptz,',
+        '  expires_at timestamptz,',
         '  revoked_at timestamptz,',
         '  notes text,',
         '  check (invited_email is not null or invite_code is not null)',
         ');',
+        '-- Bring older installs up to spec (idempotent).',
+        'alter table beta_testers drop constraint if exists beta_testers_tier_check;',
+        'alter table beta_testers add constraint beta_testers_tier_check',
+        '  check (tier in (\'founding\',\'collector\',\'shop\'));',
+        'alter table beta_testers add column if not exists expires_at timestamptz;',
+        'alter table profiles      add column if not exists subscription_expires_at timestamptz;',
         'create unique index if not exists beta_testers_user_active_idx',
         '  on beta_testers(user_id) where revoked_at is null and user_id is not null;',
         'create index if not exists beta_testers_tier_active_idx',
@@ -17096,10 +17372,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '  after update of email on profiles',
         '  for each row execute function log_beta_email_change();',
         '',
-        '-- Auto-claim pending invites when a matching email signs up',
+        '-- Auto-claim pending invites when a matching email signs up.',
+        '-- For shop-tier betas, set expires_at to now()+1yr on both the',
+        '-- beta row and the profile so we can downgrade when it lapses.',
         'create or replace function claim_beta_on_profile_create() returns trigger as $$',
         'declare',
         '  v_invite beta_testers;',
+        '  v_exp    timestamptz;',
         'begin',
         '  select * into v_invite from beta_testers',
         '    where lower(invited_email) = lower(new.email)',
@@ -17107,9 +17386,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '    order by invited_at asc',
         '    limit 1;',
         '  if found then',
-        '    update beta_testers set user_id = new.id, claimed_at = now() where id = v_invite.id;',
-        '    update profiles set subscription_tier =',
-        '      case when v_invite.tier = \'founding\' then \'vendor\' else \'collector\' end',
+        '    v_exp := case when v_invite.tier = \'shop\' then now() + interval \'1 year\' else null end;',
+        '    update beta_testers',
+        '      set user_id = new.id, claimed_at = now(), expires_at = v_exp',
+        '      where id = v_invite.id;',
+        '    update profiles set',
+        '      subscription_tier = case',
+        '        when v_invite.tier = \'founding\'  then \'vendor\'',
+        '        when v_invite.tier = \'shop\'      then \'shop\'',
+        '        else \'collector\' end,',
+        '      subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
         '    where id = new.id;',
         '  end if;',
         '  return new;',
@@ -17121,7 +17407,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '  after insert on profiles',
         '  for each row execute function claim_beta_on_profile_create();',
         '',
-        '-- RPC: admin invites a beta tester by email or with a generated code',
+        '-- RPC: admin invites a beta tester by email or with a generated code.',
+        '-- Caps: founding 10, collector 50, shop 10. Shop tier carries a',
+        '-- 1-year expires_at; auto-claim path applies the same expiry.',
         'create or replace function admin_invite_beta(',
         '  p_tier text,',
         '  p_email text default null,',
@@ -17132,11 +17420,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '  v_id uuid;',
         '  v_count int;',
         '  v_user_id uuid;',
+        '  v_exp timestamptz;',
         'begin',
         '  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then',
         '    raise exception \'Admin only\';',
         '  end if;',
-        '  if p_tier not in (\'founding\',\'collector\') then',
+        '  if p_tier not in (\'founding\',\'collector\',\'shop\') then',
         '    raise exception \'Invalid tier %\', p_tier;',
         '  end if;',
         '  if p_email is null and p_code is null then',
@@ -17144,24 +17433,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '  end if;',
         '  select count(*) into v_count from beta_testers',
         '    where tier = p_tier and revoked_at is null;',
-        '  if p_tier = \'founding\' and v_count >= 10 then',
-        '    raise exception \'Founding beta is full (10/10)\';',
-        '  end if;',
-        '  if p_tier = \'collector\' and v_count >= 50 then',
-        '    raise exception \'Collector beta is full (50/50)\';',
-        '  end if;',
+        '  if p_tier = \'founding\'  and v_count >= 10 then raise exception \'Founding beta is full (10/10)\';   end if;',
+        '  if p_tier = \'collector\' and v_count >= 50 then raise exception \'Collector beta is full (50/50)\'; end if;',
+        '  if p_tier = \'shop\'      and v_count >= 10 then raise exception \'Shop beta is full (10/10)\';      end if;',
         '  if p_email is not null then',
         '    select id into v_user_id from profiles where lower(email) = lower(p_email) limit 1;',
         '  end if;',
-        '  insert into beta_testers (tier, invited_email, invite_code, user_id, invited_by, claimed_at, notes)',
+        '  v_exp := case when p_tier = \'shop\' and v_user_id is not null then now() + interval \'1 year\' else null end;',
+        '  insert into beta_testers (tier, invited_email, invite_code, user_id, invited_by, claimed_at, expires_at, notes)',
         '  values (',
         '    p_tier, p_email, p_code, v_user_id, auth.uid(),',
         '    case when v_user_id is not null then now() else null end,',
+        '    v_exp,',
         '    p_notes',
         '  ) returning beta_testers.id into v_id;',
         '  if v_user_id is not null then',
-        '    update profiles set subscription_tier =',
-        '      case when p_tier = \'founding\' then \'vendor\' else \'collector\' end',
+        '    update profiles set',
+        '      subscription_tier = case',
+        '        when p_tier = \'founding\'  then \'vendor\'',
+        '        when p_tier = \'shop\'      then \'shop\'',
+        '        else \'collector\' end,',
+        '      subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
         '    where id = v_user_id;',
         '  end if;',
         '  return query select v_id, (v_user_id is not null), v_user_id;',
@@ -17174,6 +17466,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         'declare',
         '  v_invite beta_testers;',
         '  v_count int;',
+        '  v_exp timestamptz;',
+        '  v_msg text;',
         'begin',
         '  if auth.uid() is null then',
         '    return query select null::text, false, \'Must be signed in\'; return;',
@@ -17188,17 +17482,63 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '  end if;',
         '  select count(*) into v_count from beta_testers',
         '    where tier = v_invite.tier and user_id is not null and revoked_at is null;',
-        '  if v_invite.tier = \'founding\' and v_count >= 10 then',
-        '    return query select null::text, false, \'Founding beta is full\'; return;',
-        '  end if;',
-        '  if v_invite.tier = \'collector\' and v_count >= 50 then',
-        '    return query select null::text, false, \'Collector beta is full\'; return;',
-        '  end if;',
-        '  update beta_testers set user_id = auth.uid(), claimed_at = now() where id = v_invite.id;',
-        '  update profiles set subscription_tier =',
-        '    case when v_invite.tier = \'founding\' then \'vendor\' else \'collector\' end',
+        '  if v_invite.tier = \'founding\'  and v_count >= 10 then return query select null::text, false, \'Founding beta is full\';  return; end if;',
+        '  if v_invite.tier = \'collector\' and v_count >= 50 then return query select null::text, false, \'Collector beta is full\'; return; end if;',
+        '  if v_invite.tier = \'shop\'      and v_count >= 10 then return query select null::text, false, \'Shop beta is full\';      return; end if;',
+        '  v_exp := case when v_invite.tier = \'shop\' then now() + interval \'1 year\' else null end;',
+        '  update beta_testers',
+        '    set user_id = auth.uid(), claimed_at = now(), expires_at = v_exp',
+        '    where id = v_invite.id;',
+        '  update profiles set',
+        '    subscription_tier = case',
+        '      when v_invite.tier = \'founding\'  then \'vendor\'',
+        '      when v_invite.tier = \'shop\'      then \'shop\'',
+        '      else \'collector\' end,',
+        '    subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
         '  where id = auth.uid();',
-        '  return query select v_invite.tier, true, \'Welcome to the beta\';',
+        '  v_msg := case when v_invite.tier = \'shop\'',
+        '    then \'Welcome — Shop tier active for 1 year. Renew before expiry to keep shop perks; otherwise you\'\'ll drop to vendor.\'',
+        '    else \'Welcome to the beta\' end;',
+        '  return query select v_invite.tier, true, v_msg;',
+        'end;',
+        '$$ language plpgsql security definer;',
+        '',
+        '-- RPC: scan beta_testers for expired shop-tier rows and downgrade',
+        '-- those users from \'shop\' to \'vendor\'. Skips users who have',
+        '-- separately moved off \'shop\' (e.g. cancelled, downgraded already,',
+        '-- or paid for ongoing shop via Stripe — once that flow lands, set',
+        '-- subscription_tier=\'shop\' from a non-beta source and we won\'t',
+        '-- match here). Idempotent — safe to run repeatedly. Returns the',
+        '-- number of users downgraded this run.',
+        'create or replace function downgrade_expired_shop_beta() returns int as $$',
+        'declare',
+        '  v_count int := 0;',
+        'begin',
+        '  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then',
+        '    raise exception \'Admin only\';',
+        '  end if;',
+        '  -- Downgrade profiles still on shop whose beta row expired',
+        '  with expired as (',
+        '    select bt.user_id from beta_testers bt',
+        '    join profiles p on p.id = bt.user_id',
+        '    where bt.tier = \'shop\'',
+        '      and bt.expires_at is not null',
+        '      and bt.expires_at < now()',
+        '      and bt.revoked_at is null',
+        '      and p.subscription_tier = \'shop\'',
+        '  )',
+        '  update profiles p set',
+        '    subscription_tier = \'vendor\',',
+        '    subscription_expires_at = null',
+        '  from expired e where p.id = e.user_id;',
+        '  get diagnostics v_count = row_count;',
+        '  -- Close out the beta_tester rows so caps free up',
+        '  update beta_testers set revoked_at = now()',
+        '  where tier = \'shop\'',
+        '    and expires_at is not null',
+        '    and expires_at < now()',
+        '    and revoked_at is null;',
+        '  return v_count;',
         'end;',
         '$$ language plpgsql security definer;',
         '',
@@ -17222,6 +17562,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         'grant execute on function admin_invite_beta(text,text,text,text) to authenticated;',
         'grant execute on function claim_beta_code(text) to authenticated;',
         'grant execute on function admin_revoke_beta(uuid) to authenticated;',
+        'grant execute on function downgrade_expired_shop_beta() to authenticated;',
         '',
         '-- Public view exposing only (user_id, tier) so the marketplace UI',
         '-- can render beta badges next to seller names without leaking emails,',
@@ -17235,13 +17576,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       console.log(sql);
     }
 
-    // Collapse/expand cache (defaults: both expanded)
-    var _betaCollapsed = { founding: false, collector: false };
+    // Collapse/expand cache (defaults: all expanded)
+    var _betaCollapsed = { founding: false, collector: false, shop: false };
+    // Tier → suffix used in DOM ids (PascalCase) so toggling/rendering can
+    // resolve the right elements from a single tier string.
+    var _BETA_TIER_SUFFIX = { founding: 'Founding', collector: 'Collector', shop: 'Shop' };
+    var _BETA_TIER_CAPS   = { founding: 10,         collector: 50,           shop: 10  };
 
     function adminToggleBetaSection(tier) {
+      var suffix = _BETA_TIER_SUFFIX[tier]; if (!suffix) return;
       _betaCollapsed[tier] = !_betaCollapsed[tier];
-      var body  = document.getElementById('betaBody' + (tier === 'founding' ? 'Founding' : 'Collector'));
-      var caret = document.getElementById('betaCaret' + (tier === 'founding' ? 'Founding' : 'Collector'));
+      var body  = document.getElementById('betaBody'  + suffix);
+      var caret = document.getElementById('betaCaret' + suffix);
       if (body)  body.style.display = _betaCollapsed[tier] ? 'none' : '';
       if (caret) caret.style.transform = _betaCollapsed[tier] ? 'rotate(-90deg)' : 'rotate(0)';
     }
@@ -17263,35 +17609,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     async function renderAdminBetaTesters() {
       if (!currentUser?.is_admin) return;
-      // Pull both tiers in one query, then render each list independently
+      // Pull all tiers in one query, then render each list independently
       var res = await sb.from('beta_testers')
-        .select('id, tier, invited_email, invite_code, user_id, invited_at, claimed_at, notes, profile:user_id (id, username, email, subscription_tier)')
+        .select('id, tier, invited_email, invite_code, user_id, invited_at, claimed_at, expires_at, notes, profile:user_id (id, username, email, subscription_tier)')
         .is('revoked_at', null)
         .order('invited_at', { ascending: true });
 
       if (res.error) {
         var msg = (res.error.message || '').toLowerCase();
-        var listF = document.getElementById('betaListFounding');
-        var listC = document.getElementById('betaListCollector');
-        if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1 || msg.indexOf('schema') !== -1) {
+        var lF = document.getElementById('betaListFounding');
+        var lC = document.getElementById('betaListCollector');
+        var lS = document.getElementById('betaListShop');
+        if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1 || msg.indexOf('schema') !== -1 || msg.indexOf('column') !== -1) {
           var warn = '<div style="font-size:.6rem;color:var(--copper)">Run the beta SQL migration first — click "Print SQL" above and paste into Supabase.</div>';
-          if (listF) listF.innerHTML = warn;
-          if (listC) listC.innerHTML = warn;
+          if (lF) lF.innerHTML = warn;
+          if (lC) lC.innerHTML = warn;
+          if (lS) lS.innerHTML = warn;
           printBetaTesterSQL();
         } else {
           var err = '<div style="font-size:.6rem;color:var(--red)">Error: ' + res.error.message + '</div>';
-          if (listF) listF.innerHTML = err;
-          if (listC) listC.innerHTML = err;
+          if (lF) lF.innerHTML = err;
+          if (lC) lC.innerHTML = err;
+          if (lS) lS.innerHTML = err;
         }
         return;
       }
 
       var rows = res.data || [];
-      var founding  = rows.filter(function(r){ return r.tier === 'founding';  });
-      var collector = rows.filter(function(r){ return r.tier === 'collector'; });
-
-      _renderBetaList('Founding',  founding,  10);
-      _renderBetaList('Collector', collector, 50);
+      _renderBetaList('Founding',  rows.filter(function(r){ return r.tier === 'founding';  }), 10);
+      _renderBetaList('Collector', rows.filter(function(r){ return r.tier === 'collector'; }), 50);
+      _renderBetaList('Shop',      rows.filter(function(r){ return r.tier === 'shop';      }), 10);
     }
 
     function _renderBetaList(label, rows, cap) {
@@ -17312,6 +17659,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         var status = prof ? 'claimed' : (r.invite_code ? 'code pending' : 'email pending');
         var statusColor = prof ? 'var(--accent)' : 'var(--copper)';
         var sub    = prof ? (prof.subscription_tier || 'free') : '';
+        // Shop-tier rows carry a 1-year expires_at — render it inline so
+        // admins can spot which betas are about to lapse.
+        var expStr = '';
+        if (r.expires_at) {
+          var expDate = _fmtBetaDate(r.expires_at);
+          var lapsed  = (new Date(r.expires_at).getTime() < Date.now());
+          var expColor = lapsed ? 'rgba(255,100,100,.85)' : 'rgba(255,233,74,.85)';
+          expStr = '<span style="font-family:\'Space Mono\',monospace;font-size:.55rem;color:' + expColor + ';letter-spacing:.06em">' +
+                   (lapsed ? 'EXPIRED ' : 'expires ') + _escHtml(expDate) + '</span>';
+        }
 
         // Email change history line (lazy loaded on expand)
         var historyId = 'betaHist_' + r.id;
@@ -17328,6 +17685,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             '<span style="flex:1;font-family:\'Space Mono\',monospace;font-size:.65rem;color:var(--text);min-width:140px">' + _escHtml(who) + '</span>' +
             '<span style="font-family:\'Space Mono\',monospace;font-size:.55rem;color:' + statusColor + ';letter-spacing:.06em">' + status + (sub ? ' · ' + _escHtml(sub) : '') + '</span>' +
             '<span style="font-family:\'Space Mono\',monospace;font-size:.55rem;color:var(--muted)">' + _fmtBetaDate(r.invited_at) + '</span>' +
+            expStr +
             copyBtn +
             (prof ? '<button onclick="event.stopPropagation();adminToggleBetaHistory(\'' + safeId + '\')" style="font-family:\'Space Mono\',monospace;font-size:.5rem;letter-spacing:.04em;padding:2px 6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Log</button>' : '') +
             '<button onclick="event.stopPropagation();adminRevokeBetaTester(\'' + safeId + '\',\'' + safeWho + '\')" style="font-family:\'Space Mono\',monospace;font-size:.5rem;letter-spacing:.04em;padding:2px 6px;border:1px solid rgba(255,60,60,.5);background:transparent;color:rgba(255,100,100,.85);cursor:pointer">Revoke</button>' +
@@ -17370,7 +17728,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     async function adminInviteBetaTester(tier, mode) {
       if (!currentUser?.is_admin) return;
-      var emailInput = document.getElementById('betaInviteEmail' + (tier === 'founding' ? 'Founding' : 'Collector'));
+      var suffix = _BETA_TIER_SUFFIX[tier] || 'Founding';
+      var emailInput = document.getElementById('betaInviteEmail' + suffix);
       var email = (emailInput?.value || '').trim();
       var code  = null;
 
@@ -17410,6 +17769,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var res = await sb.rpc('admin_revoke_beta', { p_id: testerId });
       if (res.error) { showToast('Revoke failed: ' + res.error.message); return; }
       showToast('Beta access revoked');
+      renderAdminBetaTesters();
+      loadBetaUserCache().then(function() { try { renderBrowse(); } catch(_) {} updateAuthUI(); });
+    }
+
+    // Sweep expired shop-tier betas. Idempotent — safe to run repeatedly.
+    // Drops profiles still on 'shop' (i.e. still on the beta, not on a
+    // paid renewal) to 'vendor' and marks the beta_tester row revoked
+    // so the cap slot frees up for a new invite.
+    async function adminSweepExpiredShopBeta() {
+      if (!currentUser?.is_admin) return;
+      if (!confirm('Sweep all expired Shop-tier betas?\n\nAny user still on the free 1-year shop tier whose window has lapsed will be moved to vendor. Users on a paid shop subscription are not affected.')) return;
+      var res = await sb.rpc('downgrade_expired_shop_beta');
+      if (res.error) { showToast('Sweep failed: ' + res.error.message); return; }
+      var n = (res.data == null) ? 0 : res.data;
+      showToast(n === 0 ? 'No expired shop betas — nothing to sweep' : 'Downgraded ' + n + ' shop beta' + (n === 1 ? '' : 's') + ' to vendor');
       renderAdminBetaTesters();
       loadBetaUserCache().then(function() { try { renderBrowse(); } catch(_) {} updateAuthUI(); });
     }
@@ -17676,6 +18050,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Stop any active session polling
       if (_ftSession) { _ftStopPolling(); _ftSession = null; }
       clearTimeout(_ftSyncDebounce);
+      // Cancel any pending slam-audio timers so a Reset mid-scan doesn't
+      // play orphan thud/scratch after the user has bailed.
+      if (window._ftSlamTimer1) { clearTimeout(window._ftSlamTimer1); window._ftSlamTimer1 = null; }
+      if (window._ftSlamTimer2) { clearTimeout(window._ftSlamTimer2); window._ftSlamTimer2 = null; }
 
       // Reset to input state
       _ftCards = { A: [], B: [] };
@@ -17758,6 +18136,337 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (state === 'loading') _ftStartMagAnim();
       else                     _ftStopMagAnim();
     }
+
+    // ── Audio cues — Howler samples with synth fallback ─────────────
+    // Drop recorded samples in /sounds/<name>.{opus,mp3} and Howler will
+    // load + play them. Until then (or if a file 404s), the procedural
+    // _pbSynth* fallback runs. Each .opus is the preferred format
+    // (smaller, better quality on modern browsers); .mp3 is the
+    // universal fallback Howler picks automatically.
+    //
+    // Expected files:
+    //   /sounds/scratch.opus  (or .mp3)  — DJ vinyl scratch for slam impact
+    //   /sounds/flicker.opus           — CRT tube power-on click + static
+    //   /sounds/lockin.opus            — funky synth stab for lock-in
+    //   /sounds/slap.opus              — hand slap for QR slam landing
+    //   /sounds/swipe.opus             — short whoosh for card navigation
+    var _pbAudioCtx = null;
+    var _pbAudioMuted = false; // hook for a future user toggle
+    var _pbMasterVolume = 0.5; // applied to Howler samples AND synth bus
+    var _pbMasterGain = null;
+    function _pbAudio() {
+      if (_pbAudioMuted) return null;
+      if (!_pbAudioCtx) {
+        try {
+          _pbAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch(_) { return null; }
+      }
+      if (_pbAudioCtx.state === 'suspended') {
+        _pbAudioCtx.resume().catch(function(){});
+      }
+      return _pbAudioCtx;
+    }
+    // Master gain bus for synth fallbacks. All _pbSynth* functions connect
+    // to this instead of ctx.destination, so adjusting _pbMasterVolume
+    // shifts everything in sync.
+    function _pbMaster(ctx) {
+      if (!_pbMasterGain || _pbMasterGain.context !== ctx) {
+        _pbMasterGain = ctx.createGain();
+        _pbMasterGain.gain.value = _pbMasterVolume;
+        _pbMasterGain.connect(ctx.destination);
+      }
+      return _pbMasterGain;
+    }
+    // Shared white-noise buffer (re-used by scratch + flicker + transient
+    // click on the funky hit). 1s @ ctx.sampleRate is plenty since we
+    // only ever play 0.05–0.25s slices.
+    var _pbNoiseBuffer = null;
+    function _pbNoise(ctx) {
+      if (_pbNoiseBuffer && _pbNoiseBuffer.sampleRate === ctx.sampleRate) return _pbNoiseBuffer;
+      var len = ctx.sampleRate * 1.0;
+      _pbNoiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
+      var data = _pbNoiseBuffer.getChannelData(0);
+      for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      return _pbNoiseBuffer;
+    }
+
+    // ── Howler scaffolding ──────────────────────────────────────────
+    // Each cue is keyed by name. _pbHowlSrcs lists the file paths
+    // Howler tries (first format the browser supports wins).
+    // _pbHowls caches the Howl instance once loaded.
+    // _pbHowlFailed remembers cues whose files 404 so we don't retry.
+    // WAV is listed first (largest but universally supported and what's
+    // currently in /sounds/). Howler picks whichever format it can play —
+    // when you later convert to opus/mp3, those will be preferred for
+    // size since they're listed too.
+    var _pbHowlSrcs = {
+      scratch:  ['/sounds/scratch.wav',   '/sounds/scratch.opus',   '/sounds/scratch.mp3'],
+      flicker:  ['/sounds/flicker.wav',   '/sounds/flicker.opus',   '/sounds/flicker.mp3'],
+      lockin:   ['/sounds/lockin.wav',    '/sounds/lockin.opus',    '/sounds/lockin.mp3'],
+      slap:     ['/sounds/slap.wav',      '/sounds/slap.opus',      '/sounds/slap.mp3'],
+      swipe:    ['/sounds/swipe.wav',     '/sounds/swipe.opus',     '/sounds/swipe.mp3'],
+      thud:     ['/sounds/thud.wav',      '/sounds/thud.opus',      '/sounds/thud.mp3'],
+      coinflip: ['/sounds/coin_flip.wav', '/sounds/coin_flip.opus', '/sounds/coin_flip.mp3'],
+    };
+    // Per-cue start offset in SECONDS. After play(), the dispatcher
+    // seeks the sound to this position so the front of the file is
+    // skipped. Tweak `scratch` to cut however much of the first scratch
+    // you want skipped (0.5s is a starting point — bump up if more of
+    // the file needs trimming off the front).
+    var _pbHowlOffsets = {
+      scratch: 0.5,
+    };
+    var _pbHowls = {};
+    var _pbHowlFailed = {};
+    function _pbGetHowl(name) {
+      if (!window.Howl) return null;          // Howler not loaded yet
+      if (_pbHowlFailed[name]) return null;   // file 404'd; skip permanently
+      if (_pbHowls[name]) return _pbHowls[name];
+      try {
+        var h = new window.Howl({
+          src: _pbHowlSrcs[name],
+          volume: _pbMasterVolume,
+          preload: true,
+          html5: false, // Web Audio path — supports overlapping playback
+          onloaderror: function() { _pbHowlFailed[name] = true; _pbHowls[name] = null; },
+          onplayerror: function(id) {
+            // Browser may have suspended the context; resume and retry.
+            try { h.once('unlock', function() { h.play(); }); } catch(_) {}
+          },
+        });
+        _pbHowls[name] = h;
+        return h;
+      } catch(_) { _pbHowlFailed[name] = true; return null; }
+    }
+    // Plays the Howler sample if it's loaded; otherwise runs the synth
+    // fallback. If _pbHowlOffsets[name] is set, the sound is seeked to
+    // that position immediately after play, skipping the front of the
+    // file. Returns true if a sound was triggered, false otherwise.
+    function _pbPlayCue(name, synthFn) {
+      if (_pbAudioMuted) return false;
+      var h = _pbGetHowl(name);
+      if (h) {
+        var state = h.state();
+        if (state === 'loaded') {
+          var id = h.play();
+          var off = _pbHowlOffsets[name];
+          if (off) {
+            // Seek slightly after play() so the sound source actually exists
+            try { h.seek(off, id); } catch(_) {}
+          }
+          return true;
+        }
+        // Still loading on first call — fall back to synth this time;
+        // next call (likely seconds later) the file will be cached.
+      }
+      if (typeof synthFn === 'function') { synthFn(); return true; }
+      return false;
+    }
+
+    // ── Synth fallbacks (procedural, no external samples needed) ────
+    // DJ scratch — vinyl wikki for the gauge slam impact.
+    function _pbSynthScratch() {
+      var ctx = _pbAudio(); if (!ctx) return;
+      var t0 = ctx.currentTime;
+      var src = ctx.createBufferSource();
+      src.buffer = _pbNoise(ctx);
+      var filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.Q.value = 6;
+      filt.frequency.setValueAtTime(220, t0);
+      filt.frequency.linearRampToValueAtTime(1800, t0 + 0.08);
+      filt.frequency.linearRampToValueAtTime(420,  t0 + 0.22);
+      var gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.55, t0 + 0.01);
+      gain.gain.linearRampToValueAtTime(0.42, t0 + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.24);
+      src.connect(filt).connect(gain).connect(_pbMaster(ctx));
+      src.start(t0); src.stop(t0 + 0.26);
+    }
+    // CRT flicker — sub-bass relay click + bright static for the
+    // breakdown power-on. Layered so it reads as "tube TV waking up".
+    function _pbSynthCrtFlicker() {
+      var ctx = _pbAudio(); if (!ctx) return;
+      var t0 = ctx.currentTime;
+      // Layer 1 — low thump (relay click)
+      var osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(140, t0);
+      osc.frequency.exponentialRampToValueAtTime(40, t0 + 0.06);
+      var og = ctx.createGain();
+      og.gain.setValueAtTime(0.55, t0);
+      og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.09);
+      osc.connect(og).connect(_pbMaster(ctx));
+      osc.start(t0); osc.stop(t0 + 0.1);
+      // Layer 2 — crispy static burst
+      var src = ctx.createBufferSource();
+      src.buffer = _pbNoise(ctx);
+      var filt = ctx.createBiquadFilter();
+      filt.type = 'highpass';
+      filt.frequency.value = 3500;
+      var gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.34, t0 + 0.005);
+      gain.gain.linearRampToValueAtTime(0.18, t0 + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+      src.connect(filt).connect(gain).connect(_pbMaster(ctx));
+      src.start(t0); src.stop(t0 + 0.24);
+    }
+    // Thud — heavy low-end body hit for the gauge slam impact. Pairs
+    // with the DJ scratch (scratch = the falling whoosh, thud = the
+    // actual landing). Sub-bass sine + a low-passed transient.
+    function _pbSynthThud() {
+      var ctx = _pbAudio(); if (!ctx) return;
+      var t0 = ctx.currentTime;
+      // Layer 1 — sub-bass body
+      var osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(110, t0);
+      osc.frequency.exponentialRampToValueAtTime(35, t0 + 0.18);
+      var og = ctx.createGain();
+      og.gain.setValueAtTime(0.7, t0);
+      og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+      osc.connect(og).connect(_pbMaster(ctx));
+      osc.start(t0); osc.stop(t0 + 0.24);
+      // Layer 2 — low-passed click transient (the impact spike)
+      var src = ctx.createBufferSource();
+      src.buffer = _pbNoise(ctx);
+      var filt = ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 850;
+      var gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.5, t0 + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.06);
+      src.connect(filt).connect(gain).connect(_pbMaster(ctx));
+      src.start(t0); src.stop(t0 + 0.07);
+    }
+    // Slap — flat-palm "thwack" for the QR slam landing. Noise band-
+    // passed around the mid + a quick low-end thump. ~140ms.
+    function _pbSynthSlap() {
+      var ctx = _pbAudio(); if (!ctx) return;
+      var t0 = ctx.currentTime;
+      // Layer 1 — bandpassed noise transient (the smack)
+      var src = ctx.createBufferSource();
+      src.buffer = _pbNoise(ctx);
+      var filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.Q.value = 1.2;
+      filt.frequency.setValueAtTime(1500, t0);
+      filt.frequency.exponentialRampToValueAtTime(700, t0 + 0.09);
+      var gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.65, t0 + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.14);
+      src.connect(filt).connect(gain).connect(_pbMaster(ctx));
+      src.start(t0); src.stop(t0 + 0.16);
+      // Layer 2 — low thump (the palm's body)
+      var osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(220, t0);
+      osc.frequency.exponentialRampToValueAtTime(60, t0 + 0.08);
+      var og = ctx.createGain();
+      og.gain.setValueAtTime(0.5, t0);
+      og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.1);
+      osc.connect(og).connect(_pbMaster(ctx));
+      osc.start(t0); osc.stop(t0 + 0.12);
+    }
+    // Swipe — quick "fwip" for card navigation. Noise through a
+    // bandpass sweep, high → low (like air moving past you). ~120ms.
+    function _pbSynthSwipe() {
+      var ctx = _pbAudio(); if (!ctx) return;
+      var t0 = ctx.currentTime;
+      var src = ctx.createBufferSource();
+      src.buffer = _pbNoise(ctx);
+      var filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.Q.value = 2.5;
+      filt.frequency.setValueAtTime(4200, t0);
+      filt.frequency.exponentialRampToValueAtTime(900, t0 + 0.11);
+      var gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.28, t0 + 0.015);
+      gain.gain.linearRampToValueAtTime(0.18, t0 + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.14);
+      src.connect(filt).connect(gain).connect(_pbMaster(ctx));
+      src.start(t0); src.stop(t0 + 0.16);
+    }
+    // Coin flip — short metallic chime/ting. A trio of bell tones (440,
+    // 660, 880 Hz) with quick attack and slow decay, layered slightly
+    // detuned for a rotating-coin shimmer effect.
+    function _pbSynthCoinFlip() {
+      var ctx = _pbAudio(); if (!ctx) return;
+      var t0 = ctx.currentTime;
+      [440, 660, 880].forEach(function(f, i) {
+        var o = ctx.createOscillator();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(f * (1 + i * 0.002), t0);
+        var og = ctx.createGain();
+        og.gain.setValueAtTime(0, t0);
+        og.gain.linearRampToValueAtTime(0.22, t0 + 0.008);
+        og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
+        o.connect(og).connect(_pbMaster(ctx));
+        o.start(t0); o.stop(t0 + 0.6);
+      });
+    }
+    // Funky stab — Dm chord with a clicky transient for lock-in.
+    function _pbSynthFunkyHit() {
+      var ctx = _pbAudio(); if (!ctx) return;
+      var t0 = ctx.currentTime;
+      var freqs = [146.83, 174.61, 220.00, 293.66]; // D3 F3 A3 D4
+      var bus = ctx.createGain();
+      bus.connect(_pbMaster(ctx));
+      bus.gain.setValueAtTime(0, t0);
+      bus.gain.linearRampToValueAtTime(0.4, t0 + 0.008);
+      bus.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
+      freqs.forEach(function(f, i) {
+        var o = ctx.createOscillator();
+        o.type = i === 0 ? 'sawtooth' : 'triangle';
+        o.frequency.setValueAtTime(f * 0.985, t0);
+        o.frequency.exponentialRampToValueAtTime(f, t0 + 0.05);
+        var og = ctx.createGain();
+        og.gain.value = 0.18;
+        o.connect(og).connect(bus);
+        o.start(t0); o.stop(t0 + 0.6);
+      });
+      // Snappy transient
+      var click = ctx.createBufferSource();
+      click.buffer = _pbNoise(ctx);
+      var cf = ctx.createBiquadFilter();
+      cf.type = 'highpass'; cf.frequency.value = 1500;
+      var cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.55, t0);
+      cg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+      click.connect(cf).connect(cg).connect(_pbMaster(ctx));
+      click.start(t0); click.stop(t0 + 0.05);
+    }
+
+    // ── Public cue dispatchers ──────────────────────────────────────
+    // Each tries the Howler-loaded sample first and falls back to its
+    // synth twin if the file isn't available. Call sites elsewhere in
+    // the app use these — they're the stable API.
+    function _pbPlayScratch()    { _pbPlayCue('scratch',  _pbSynthScratch);    }
+    function _pbPlayCrtFlicker() { _pbPlayCue('flicker',  _pbSynthCrtFlicker); }
+    function _pbPlayFunkyHit()   { _pbPlayCue('lockin',   _pbSynthFunkyHit);   }
+    function _pbPlaySlap()       { _pbPlayCue('slap',     _pbSynthSlap);       }
+    function _pbPlaySwipe()      { _pbPlayCue('swipe',    _pbSynthSwipe);      }
+    function _pbPlayThud()       { _pbPlayCue('thud',     _pbSynthThud);       }
+    function _pbPlayCoinFlip()   { _pbPlayCue('coinflip', _pbSynthCoinFlip);   }
+
+    // Eager-preload all Howls as soon as the library is available, so
+    // their files start downloading in idle time before any user
+    // interaction triggers a cue. Without this, the FIRST play of each
+    // cue catches the file mid-download and falls back to synth — the
+    // user has to trigger the cue twice to hear the real sample.
+    (function _pbPreloadHowls() {
+      if (window.Howl) {
+        Object.keys(_pbHowlSrcs).forEach(function(name) { _pbGetHowl(name); });
+        return;
+      }
+      // Howler library hasn't loaded yet — poll lightly until it does.
+      setTimeout(_pbPreloadHowls, 250);
+    })();
 
     // ── PathBinder magnifying-glass animation ──────────────────────
     // Sweeps the magglass image down→up over each of the two cards in
@@ -18333,7 +19042,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     function _ftRenderSessionBanner() {
       var banner = document.getElementById('ftSessionBanner');
-      if (!banner || !_ftSession) { if (banner) banner.style.display = 'none'; return; }
+      var mobileCode = document.getElementById('ftMobileSessionCode');
+      if (!banner || !_ftSession) {
+        if (banner) banner.style.display = 'none';
+        if (mobileCode) mobileCode.style.display = 'none';
+        return;
+      }
 
       var id    = _ftSession.id;
       var role  = _ftSession.role;
@@ -18396,6 +19110,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           ) +
         '</div>';
 
+      // Mobile-only minimal session code display (CSS hides on desktop).
+      if (mobileCode) {
+        mobileCode.innerHTML =
+          '<span class="mlabel">CODE</span>' +
+          '<span class="mcode">' + _escHtml(id) + '</span>';
+        mobileCode.style.display = '';
+      }
+
       // Render QR code once (creator only) — check if already rendered
       if (role === 'a') {
         var qrEl = document.getElementById('ftQrContainer');
@@ -18418,6 +19140,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               if (stage && el.parentElement !== stage) {
                 stage.appendChild(el);
               }
+              // Slap sound — fires ~370ms after the slam animation
+              // begins (its 55% keyframe = visual landing moment).
+              setTimeout(_pbPlaySlap, 370);
             } catch(_) {}
           });
         }
@@ -18623,12 +19348,51 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       try {
         var cards = [];
 
-        if (game === 'magic' && typeof _fallbackMagic === 'function') {
-          cards = await _fallbackMagic(q);
-        } else if (game === 'yugioh' && typeof _fallbackYugioh === 'function') {
-          cards = await _fallbackYugioh(q);
-        } else if (game === 'onepiece' && typeof _fallbackOnePiece === 'function') {
-          cards = await _fallbackOnePiece(q);
+        if (game !== 'pokemon') {
+          // Non-Pokemon TCGs (magic / yugioh / onepiece): direct
+          // catalog table query first. The search_catalog_cards RPC
+          // was returning empty for OP even on simple queries like
+          // "luffy", so we hit the table directly using the id prefix
+          // (op- / mtg- / ygo-) and an ilike name match — this is
+          // reliable across game types regardless of how game_type is
+          // populated per row.
+          var idPrefix = { magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-' }[game];
+          try {
+            var directQuery = sb.from('catalog')
+              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+              .ilike('name', '%' + q + '%')
+              .limit(30);
+            if (idPrefix) directQuery = directQuery.ilike('id', idPrefix + '%');
+            var direct = await directQuery;
+            if (!direct.error && direct.data && direct.data.length) {
+              cards = direct.data.map(_catalogRowToApiShape);
+            }
+          } catch(_) { /* fall through */ }
+
+          // Secondary catalog path — the RPC may have richer matching
+          // (substring + JP romanization etc.) than our direct ilike.
+          if (!cards.length) {
+            try {
+              var rpc = await sb.rpc('search_catalog_cards', {
+                q: q, game: game, jp_mode: 'all', result_limit: 30
+              });
+              if (!rpc.error && rpc.data && rpc.data.length) {
+                cards = rpc.data.map(_catalogRowToApiShape);
+              }
+            } catch(_) {}
+          }
+
+          // External API fallback for Magic (Scryfall) and Yu-Gi-Oh
+          // (YGOPRODeck) — both free and keyless. One Piece is
+          // CATALOG-ONLY: the apitcg fallback would require the
+          // /api/apitcg-onepiece proxy plus a key.
+          if (!cards.length) {
+            if (game === 'magic' && typeof _fallbackMagic === 'function') {
+              cards = await _fallbackMagic(q);
+            } else if (game === 'yugioh' && typeof _fallbackYugioh === 'function') {
+              cards = await _fallbackYugioh(q);
+            }
+          }
         } else {
           // Default: Pokemon via pokemontcg.io. Lucene: wildcard only valid
           // on single tokens; multi-word queries need a quoted phrase.
@@ -18835,6 +19599,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       var newIdx = (_ftCardIndex[side] + dir + cards.length) % cards.length;
       _ftCardIndex[side] = newIdx;
+      _pbPlaySwipe();
 
       // ── Try smooth in-place update (no innerHTML wipe) ───────────────────
       var front = document.getElementById('ftCardFront' + side);
@@ -19036,6 +19801,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       _ftLocked[mine] = true;
       _ftUpdateSessionButtons();
+      _pbPlayFunkyHit();
 
       // Write lock to DB immediately
       var patch = {};
@@ -19224,6 +19990,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // parallel below. _ftMagAnimPromise resolves after the first
       // full cycle so we always show the user a complete scan.
       _ftShowState('loading');
+
+      // ── Slam-impact audio scheduling ────────────────────────────
+      // The visual slam-impact happens at minScanFloor (3300ms) + 370ms
+      // into the cinema = ~3670ms after this click. To make the audio
+      // LEAD the visual by 700ms, fire thud at ~2970ms. The scratch
+      // tails the thud at 75% of its duration. Both calls survive the
+      // await below because they're scheduled, not awaited.
+      window._ftSlamTimer1 = setTimeout(function() {
+        _pbPlayThud();
+        var thudH = _pbGetHowl('thud');
+        var thudMs = (thudH && thudH.state() === 'loaded' && thudH.duration())
+          ? thudH.duration() * 1000
+          : 220;
+        // Stash the inner timer on window too so Reset can cancel it.
+        window._ftSlamTimer2 = setTimeout(_pbPlayScratch, thudMs * 0.75);
+      }, 2970);
+
       var msgEl  = document.getElementById('ftLoadingMsg');
       var progEl = document.getElementById('ftLoadingProgress');
 
@@ -19412,7 +20195,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       // T=370ms — slam reaches its 55% keyframe (the gauge has just hit
       // the table at scale .88, translateY 6px). EXPLOSION: cards
-      // radiate down-and-outward, mag glass kicks up-and-outward.
+      // radiate down-and-outward, mag glass kicks up-and-outward. The
+      // thud + scratch audio was scheduled near the top of this
+      // function so it could lead the visual impact by ~700ms.
       setTimeout(function() {
         if (lens) {
           lens.classList.add('ft-fly-out');
@@ -19434,7 +20219,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // T=1500ms — cards + glass have cleared frame (370 + 1060ms throw
       // + small buffer). Hide loading state, drop the transparent
       // backdrop on results so it now owns the screen, and power the
-      // breakdown on with a CRT tube-television animation.
+      // breakdown on with a CRT tube-television animation. The flicker
+      // audio fires ~80ms ahead of the visual class-add so the relay
+      // click is heard just before the screen starts unfolding.
+      setTimeout(_pbPlayCrtFlicker, (1500 - 720) - 80);
       setTimeout(function() {
         if (loadingEl) {
           loadingEl.style.display = 'none';
@@ -19919,6 +20707,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function _ftAnimateCoin(result, onDone) {
       var res = document.getElementById('ftCoinResult');
       if (!res) return;
+      _pbPlayCoinFlip();
       res.innerHTML = `
         <svg id="ftCoinSvg" viewBox="0 0 80 80" width="80" height="80" style="overflow:visible">
           <defs>
