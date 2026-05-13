@@ -1749,9 +1749,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* Two-card halves — clip the single trade_cards.webp so each side is
        its own animatable element. JS triggers fly-apart by adding
-       .ft-fly-left / .ft-fly-right classes. The easing ramps slow → fast
-       like a hand sweeping everything off a desk. Heavy tumble + long
-       trajectory so the cards visibly spin while clearing frame. */
+       .ft-fly-left / .ft-fly-right classes. The cards fly OUTWARD and
+       TOWARD the viewer — scale grows past 1 as they exit, like cards
+       being swept toward you and off the edges of the table. */
     .ft-mag-half{
       position:absolute;
       left:50%; top:50%;
@@ -1761,43 +1761,60 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       -webkit-user-drag:none;
       user-select:none;
       will-change:transform,opacity;
-      transition:transform .85s cubic-bezier(.55,0,.95,.05), opacity .85s cubic-bezier(.7,0,.95,.05);
+      transition:transform .55s cubic-bezier(.5,0,.9,.05), opacity .55s cubic-bezier(.75,0,1,.1);
     }
     .ft-mag-half-l{ clip-path:inset(0 50% 0 0); }
     .ft-mag-half-r{ clip-path:inset(0 0 0 50%); }
+    /* Outward + toward-viewer: large translate AND scale > 1 (cards
+       grow as they approach the camera before leaving frame). */
     .ft-mag-half.ft-fly-left {
-      transform:translate(-480%,-15%) rotate(-540deg) scale(.8);
+      transform:translate(-360%, 25%) rotate(-560deg) scale(1.55);
       opacity:0;
     }
     .ft-mag-half.ft-fly-right{
-      transform:translate(360%,-10%) rotate(495deg) scale(.8);
+      transform:translate(280%, 30%) rotate(490deg) scale(1.55);
       opacity:0;
     }
-    /* Mag lens exit — sweeps off-screen in the same ramp-up motion. The
-       inner zoom layer fades fast so the magnifying glass doesn't carry
-       a sliver of card with it during the throw. */
+    /* Mag lens exit — sweeps off-screen with the same ramp-up timing.
+       The inner zoom layer fades fast so the magnifying glass doesn't
+       carry a sliver of card with it during the throw. */
     .ft-mag-lens.ft-fly-out{
-      transition:transform .85s cubic-bezier(.55,0,.95,.05), opacity .85s cubic-bezier(.7,0,.95,.05);
+      transition:transform .55s cubic-bezier(.5,0,.9,.05), opacity .55s cubic-bezier(.75,0,1,.1);
       opacity:0 !important;
     }
     .ft-mag-lens.ft-fly-out .ft-mag-lens-zoom{
       opacity:0;
-      transition:opacity .18s ease-out;
+      transition:opacity .14s ease-out;
     }
 
-    /* Gauge zoom-in: starts very far away, slams to the screen and settles.
-       No tilt — just a hard incoming impact then a small overshoot bounce.
-       ~2× faster than before so the slam reads as a snap, not a glide. */
+    /* Gauge zoom-in: structural mirror of #ftQrContainer's ftQrSlam — same
+       duration, same easing, same 0/55/78/100 keyframe structure — but
+       the scale axis is inverted (start tiny, overshoot, settle) and
+       the rotation is removed. Slamming AT the camera instead of from
+       above. */
     @keyframes ftGaugeWarpIn{
-      0%   { transform:scale(.015); opacity:0;  filter:blur(10px); }
-      55%  { transform:scale(.55);  opacity:.9; filter:blur(3px);  }
-      78%  { transform:scale(1.22); opacity:1;  filter:blur(0);    }
-      90%  { transform:scale(.95);  opacity:1;  filter:blur(0);    }
-      100% { transform:scale(1);    opacity:1;  filter:blur(0);    }
+      0%{
+        opacity:0;
+        transform:scale(.04);
+        filter:blur(5px);
+      }
+      55%{
+        opacity:1;
+        transform:scale(1.18);
+        filter:blur(0);
+      }
+      78%{
+        transform:scale(.92);
+      }
+      100%{
+        transform:scale(1);
+        opacity:1;
+        filter:blur(0);
+      }
     }
     .ft-gauge-warp{
-      transform-origin:center 60%;
-      animation:ftGaugeWarpIn .52s cubic-bezier(.22,.7,.3,1) both;
+      transform-origin:center 55%;
+      animation:ftGaugeWarpIn .68s cubic-bezier(0.34, 1.56, 0.64, 1) 1 forwards;
     }
 
     /* Results cinema layout — flow from the top with a comfortable
@@ -17678,8 +17695,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var lensImg = document.getElementById('ftMagLensImg');
       var status  = document.getElementById('ftMagStatus');
 
-      // Tunables (matched to trade-anim-preview.html)
-      var LENS_CX = 0.285, LENS_CY = 0.395, LENS_R = 0.190;
+      // Tunables — measured directly from mag_glass.webp's aperture
+      // (image is 1000×715; inner aperture is widest at row 275, spans
+      // x=149→497, so center = (323, 275), radius ≈ 174px).
+      var LENS_CX = 0.323, LENS_CY = 0.385, LENS_R = 0.175;
       var CARD1_X = 0.35,  CARD2_X = 0.65;
       var CARD_TOP_Y = 0.30, CARD_BOT_Y = 0.70;
       var MAG_W_PCT = 0.504, ZOOM = 2.0;
@@ -19272,33 +19291,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Stop the looping mag animation so it doesn't fight the exit.
       _ftStopMagAnim();
 
-      // Lens exits with the same slow→fast ramp as the cards, hurled
-      // way past the viewport edge with a multi-rotation tumble. The
-      // lens-zoom layer fades out almost immediately (CSS, 180ms) so
-      // the magnifying glass doesn't carry a sliver of card with it.
+      // Lens exits in the same slow→fast ramp as the cards, hurled past
+      // the viewport edge and scaling UP (toward the viewer) before it
+      // clears frame. The lens-zoom layer fades out almost immediately
+      // (CSS, 140ms) so the magnifying glass doesn't carry a sliver of
+      // card with it.
       if (lens) {
         lens.classList.add('ft-fly-out');
         var prevTransform = lens.style.transform || '';
-        lens.style.transform = prevTransform + ' translate(140vw,-55vh) rotate(720deg) scale(2)';
+        lens.style.transform = prevTransform + ' translate(110vw,35vh) rotate(680deg) scale(2.4)';
       }
       if (hL) hL.classList.add('ft-fly-left');
       if (hR) hR.classList.add('ft-fly-right');
 
-      // Hold for most of the throw (.85s CSS transition), then switch
-      // into the gauge slam so it lands as the cards clear frame.
-      await new Promise(function(r) { setTimeout(r, 720); });
+      // Hold ~80% of the .55s throw, then start the gauge slam so its
+      // peak overshoot lands right as the last sliver of cards clears.
+      await new Promise(function(r) { setTimeout(r, 440); });
 
-      // Switch to results — CSS .ft-gauge-warp triggers the slam-in.
-      // Defer the needle wobble until the gauge has fully landed so
-      // the user sees the needle swing on a settled gauge instead of
-      // it being baked into the scale-up.
-      _ftWobbleOnNext = false; // we'll trigger manually below
+      // Switch to results — CSS .ft-gauge-warp triggers the QR-style
+      // slam (in reverse, no tilt). Defer the needle wobble until the
+      // gauge has fully landed.
+      _ftWobbleOnNext = false; // triggered manually after the slam
       _ftShowState('results');
       _ftRenderBreakdown(fetched);
 
-      // Wait for the gauge slam (520ms) to fully resolve, then play
-      // the needle wobble.
-      await new Promise(function(r) { setTimeout(r, 540); });
+      // Wait for the gauge slam (.68s, same as QR) to fully resolve,
+      // then play the needle wobble on a settled dial.
+      await new Promise(function(r) { setTimeout(r, 700); });
       _ftWobbleOnNext = true;
       ftRecalc();
 
