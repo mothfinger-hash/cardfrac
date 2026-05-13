@@ -1749,9 +1749,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* Two-card halves — clip the single trade_cards.webp so each side is
        its own animatable element. JS triggers fly-apart by adding
-       .ft-fly-left / .ft-fly-right classes. The cards fly OUTWARD and
-       TOWARD the viewer — scale grows past 1 as they exit, like cards
-       being swept toward you and off the edges of the table. */
+       .ft-fly-left / .ft-fly-right classes. The cards now FLOAT outward
+       and toward the viewer in response to the gauge slam — soft ease,
+       moderate tumble, scale > 1 (toward camera). */
     .ft-mag-half{
       position:absolute;
       left:50%; top:50%;
@@ -1761,30 +1761,43 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       -webkit-user-drag:none;
       user-select:none;
       will-change:transform,opacity;
-      transition:transform .55s cubic-bezier(.5,0,.9,.05), opacity .55s cubic-bezier(.75,0,1,.1);
+      transition:transform .82s cubic-bezier(.25,.65,.35,1.05), opacity .82s ease-out;
     }
     .ft-mag-half-l{ clip-path:inset(0 50% 0 0); }
     .ft-mag-half-r{ clip-path:inset(0 0 0 50%); }
-    /* Outward + toward-viewer: large translate AND scale > 1 (cards
-       grow as they approach the camera before leaving frame). */
+    /* Float-off path: outward, downward, toward the viewer. Less spin
+       than a violent throw — feels like the slam's shockwave lifted
+       them off the table. */
     .ft-mag-half.ft-fly-left {
-      transform:translate(-360%, 25%) rotate(-560deg) scale(1.55);
+      transform:translate(-280%, 35%) rotate(-145deg) scale(1.45);
       opacity:0;
     }
     .ft-mag-half.ft-fly-right{
-      transform:translate(280%, 30%) rotate(490deg) scale(1.55);
+      transform:translate(220%, 40%) rotate(135deg) scale(1.45);
       opacity:0;
     }
-    /* Mag lens exit — sweeps off-screen with the same ramp-up timing.
-       The inner zoom layer fades fast so the magnifying glass doesn't
-       carry a sliver of card with it during the throw. */
+    /* Mag lens exit — sweeps off-screen with the same soft timing.
+       The inner zoom layer fades early so the magnifying glass doesn't
+       carry a sliver of card with it. */
     .ft-mag-lens.ft-fly-out{
-      transition:transform .55s cubic-bezier(.5,0,.9,.05), opacity .55s cubic-bezier(.75,0,1,.1);
+      transition:transform .82s cubic-bezier(.25,.65,.35,1.05), opacity .82s ease-out;
       opacity:0 !important;
     }
     .ft-mag-lens.ft-fly-out .ft-mag-lens-zoom{
       opacity:0;
-      transition:opacity .14s ease-out;
+      transition:opacity .22s ease-out;
+    }
+
+    /* Breakdown reveal — fades + lifts up from below after the cards
+       have floated off, so the user's attention lands on the gauge
+       first, then the data populates beneath it. */
+    #ftBreakdown{
+      transition:opacity .55s ease-out, transform .55s ease-out;
+    }
+    #ftBreakdown.ft-breakdown-hidden{
+      opacity:0;
+      transform:translateY(28px);
+      pointer-events:none;
     }
 
     /* Gauge zoom-in: structural mirror of #ftQrContainer's ftQrSlam — same
@@ -19280,44 +19293,77 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         });
       });
 
-      // ── Cinematic exit: cards + magnifying glass fly apart, gauge
-      // warps in from far away, then the needle wobble plays. ──
+      // ── Fluid cinematic transition: gauge slams in FIRST. The slam's
+      // arrival is what visibly "knocks" the cards + magnifying glass
+      // off-screen. Price breakdown stays hidden until the cards have
+      // floated off, then fades up underneath the gauge. ──
       var hL   = document.getElementById('ftMagHalfL');
       var hR   = document.getElementById('ftMagHalfR');
       var lens = document.getElementById('ftMagLens');
       var status = document.getElementById('ftMagStatus');
+      var loadingEl = document.getElementById('ftLoadingState');
+      var resultsEl = document.getElementById('ftResultsState');
+      var bd        = document.getElementById('ftBreakdown');
       if (status) status.textContent = '> VERDICT INCOMING';
 
-      // Stop the looping mag animation so it doesn't fight the exit.
+      // Freeze the mag-loop so the cards are stationary when the slam hits.
       _ftStopMagAnim();
 
-      // Lens exits in the same slow→fast ramp as the cards, hurled past
-      // the viewport edge and scaling UP (toward the viewer) before it
-      // clears frame. The lens-zoom layer fades out almost immediately
-      // (CSS, 140ms) so the magnifying glass doesn't carry a sliver of
-      // card with it.
-      if (lens) {
-        lens.classList.add('ft-fly-out');
-        var prevTransform = lens.style.transform || '';
-        lens.style.transform = prevTransform + ' translate(110vw,35vh) rotate(680deg) scale(2.4)';
-      }
-      if (hL) hL.classList.add('ft-fly-left');
-      if (hR) hR.classList.add('ft-fly-right');
+      // Hide the breakdown — it reveals after the float-off completes.
+      if (bd) bd.classList.add('ft-breakdown-hidden');
 
-      // Hold ~80% of the .55s throw, then start the gauge slam so its
-      // peak overshoot lands right as the last sliver of cards clears.
-      await new Promise(function(r) { setTimeout(r, 440); });
-
-      // Switch to results — CSS .ft-gauge-warp triggers the QR-style
-      // slam (in reverse, no tilt). Defer the needle wobble until the
-      // gauge has fully landed.
-      _ftWobbleOnNext = false; // triggered manually after the slam
-      _ftShowState('results');
+      // Populate breakdown data (still hidden via class).
       _ftRenderBreakdown(fetched);
 
-      // Wait for the gauge slam (.68s, same as QR) to fully resolve,
-      // then play the needle wobble on a settled dial.
-      await new Promise(function(r) { setTimeout(r, 700); });
+      // Bypass _ftShowState here: we want loading state to remain visible
+      // while the gauge slam plays, so the cards/glass can float off in
+      // the same frame as the slam. Loading element is hidden later.
+      _ftWobbleOnNext = false; // needle wobble triggered manually below
+      if (resultsEl) {
+        resultsEl.style.display = '';
+        resultsEl.classList.add('ft-cinema-active');
+      }
+      // Trigger the QR-style slam by reapplying .ft-gauge-warp.
+      var gw = document.querySelector('#ftResultsState .ft-gauge-wrap');
+      if (gw) {
+        gw.classList.remove('ft-gauge-warp');
+        void gw.offsetWidth;
+        gw.classList.add('ft-gauge-warp');
+      }
+      // Coin-flip UI handling normally done by _ftShowState.
+      _ftUpdateCoinFlipUI();
+      if (_ftPendingCoinFlip) {
+        var _pf = _ftPendingCoinFlip;
+        _ftPendingCoinFlip = null;
+        setTimeout(function() { _ftShowRemoteCoinFlip(_pf); }, 600);
+      }
+
+      // T=210ms — slam reaches peak overshoot (.68s × ~55% ≈ 370ms but
+      // the user perceives the impact a bit earlier). Cards + glass
+      // begin floating off in response to the "shockwave".
+      setTimeout(function() {
+        if (lens) {
+          lens.classList.add('ft-fly-out');
+          var prevTransform = lens.style.transform || '';
+          lens.style.transform = prevTransform + ' translate(85vw,40vh) rotate(380deg) scale(2)';
+        }
+        if (hL) hL.classList.add('ft-fly-left');
+        if (hR) hR.classList.add('ft-fly-right');
+      }, 210);
+
+      // T=1050ms — cards + glass have cleared frame (210 + 820ms float).
+      // Hide loading state and reveal the breakdown.
+      setTimeout(function() {
+        if (loadingEl) {
+          loadingEl.style.display = 'none';
+          loadingEl.classList.remove('ft-cinema-active');
+        }
+        if (bd) bd.classList.remove('ft-breakdown-hidden');
+      }, 1050);
+
+      // T=720ms — gauge slam has fully settled. Play the needle wobble
+      // on a stationary dial while the cards are still mid-float.
+      await new Promise(function(r) { setTimeout(r, 720); });
       _ftWobbleOnNext = true;
       ftRecalc();
 
