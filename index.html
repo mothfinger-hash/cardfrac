@@ -1918,12 +1918,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #ftResultsState.ft-cinema-active #ftBreakdown{
       margin-top:6px;
     }
-    /* Cinematic verdict pill */
+    /* Cinematic verdict pill — strip the global !important navy bg/
+       border (defined further down in section 10) so the empty verdict
+       doesn't paint as a dark bar between the gauge info and coin flip
+       during the transition. */
     #ftResultsState.ft-cinema-active #ftVerdict{
       font-family:'Orbitron','Space Mono',monospace;
       font-size:1rem;
       letter-spacing:.08em;
       text-transform:uppercase;
+      background:transparent !important;
+      border-color:transparent !important;
     }
 
     /* ── HOW IT WORKS modal ─────────────────────────────────────────
@@ -19330,11 +19335,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       });
 
       // Wait for the price fetch AND a minimum scan time. The mag cycle
-      // is now ~5040ms total; a 3100ms floor catches the lens mid-way
-      // through Side B's scan-down so the slam lands while the mag is
-      // still actively scanning — no perceptible idle frame.
+      // is now ~5040ms total; 3300ms catches the lens partway through
+      // Side B's scan-down so the slam lands while the mag is still
+      // actively scanning — no perceptible idle frame.
       var fetched = {};
-      var minScanFloor = new Promise(function(r) { setTimeout(r, 3100); });
+      var minScanFloor = new Promise(function(r) { setTimeout(r, 3300); });
       try {
         fetched = (await Promise.all([fetchPromise, minScanFloor]))[0] || {};
       } catch(_) {
