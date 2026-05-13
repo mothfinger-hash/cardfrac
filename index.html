@@ -1207,11 +1207,19 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        Interactive elements (SIDE A/B panels, action buttons, etc.) are
        layered ON TOP of the artwork — the PNG sits at z-index 1 and content
        at z-index 2. Mobile drops the artwork backdrop to a cleaner stack. */
+    /* The stage maintains the PNG's exact aspect ratio so absolute-positioned
+       overlays use percentages that map 1:1 to PNG coordinates we measured.
+       Three-layer stacking on desktop:
+         z-index 1: side panels (under the PNG)
+         z-index 2: PNG art (pipes + graffiti cover the panel edges)
+         z-index 3: hero text, action buttons, trade-code row (on top of PNG)
+       PNG has pointer-events:none so clicks pass through where elements
+       beneath need to be interactive. */
     .ft-stage{
       position:relative;
       max-width:1280px;
       margin:0 auto;
-      padding:30px 18px 80px;
+      aspect-ratio: 2400 / 1786;
       isolation:isolate;
     }
     .ft-stage-art{
@@ -1219,20 +1227,28 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       inset:0;
       width:100%;
       height:100%;
-      object-fit:contain;
-      object-position:center top;
-      opacity:.85;
-      z-index:1;
+      object-fit:fill;
+      z-index:2;
       pointer-events:none;
       user-select:none;
     }
+    /* Content layer is a plain absolute box — NO z-index of its own — so
+       children's explicit z-indices participate in .ft-stage's stacking. */
     .ft-stage-content{
-      position:relative;
-      z-index:2;
+      position:absolute;
+      inset:0;
     }
     @media(max-width:780px){
+      .ft-stage{aspect-ratio:auto;padding:14px 10px 40px}
       .ft-stage-art{display:none}
-      .ft-stage{padding:14px 10px 40px}
+      .ft-stage-content{position:static;inset:auto}
+      /* Mobile bails to normal flow — undo all the absolute positioning */
+      .ft-stage-content > *{position:static !important;inset:auto !important;
+        width:auto !important;height:auto !important;
+        left:auto !important;right:auto !important;
+        top:auto !important;bottom:auto !important;
+        transform:none !important;
+      }
     }
 
     /* Cyberpunk colors used by the mockup */
@@ -1244,108 +1260,377 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       --ft-cyan-glow:  rgba(0,229,255,.10);
     }
 
-    /* Header: huge "TRADE ANALYZER" with Japanese subtitle */
+    /* Header: positioned in the PNG's top-left negative space. */
     .ft-hero{
-      display:flex;align-items:flex-start;justify-content:space-between;
-      gap:24px;flex-wrap:wrap;margin-bottom:24px;
+      position:absolute;top:4%;left:5%;right:3%;
+      display:flex;align-items:flex-start;justify-content:space-between;gap:24px;
+      z-index:3;
     }
+    .ft-hero > div:first-child{max-width:45%}
     .ft-hero-title{
       font-family:'Orbitron','Space Mono',monospace;
-      font-size:clamp(1.6rem, 4vw, 2.6rem);
+      font-size:clamp(1.1rem, 2vw, 1.7rem);
       font-weight:800;letter-spacing:.04em;
       color:var(--text);line-height:1.05;text-transform:uppercase;
-      display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
-    }
-    .ft-hero-title .ft-beta{
-      font-family:'Space Mono','Share Tech Mono',monospace;
-      font-size:.78rem;color:var(--ft-pink);
-      letter-spacing:.12em;font-style:italic;
-      transform:rotate(-3deg);transform-origin:left bottom;
     }
     .ft-hero-jp{
       font-family:'Orbitron','Space Mono',monospace;
-      font-size:.95rem;color:var(--ft-cyan);letter-spacing:.16em;
+      font-size:clamp(.75rem, 1.3vw, 1.05rem);color:var(--ft-cyan);letter-spacing:.16em;
       margin-top:4px;opacity:.85;
     }
     .ft-hero-sub{
       font-family:'Space Mono','Share Tech Mono',monospace;
-      font-size:.78rem;color:var(--muted);margin-top:6px;
+      font-size:clamp(.5rem, .75vw, .62rem);color:var(--muted);margin-top:4px;
     }
     .ft-hero-how{
       align-self:flex-start;
       font-family:'Space Mono','Share Tech Mono',monospace;
-      font-size:.7rem;letter-spacing:.1em;
-      padding:8px 16px;border:1px solid var(--ft-cyan);
-      background:transparent;color:var(--ft-cyan);cursor:pointer;
+      font-size:.65rem;letter-spacing:.1em;
+      padding:6px 14px;border:1px solid var(--ft-cyan);
+      background:rgba(0,0,0,.5);color:var(--ft-cyan);cursor:pointer;
       white-space:nowrap;transition:all .15s;
     }
     .ft-hero-how:hover{background:var(--ft-cyan-glow)}
 
-    /* SIDE A (pink) / SIDE B (cyan) tinted panels */
-    .ft-side-a.ft-pink{border:1.5px solid var(--ft-pink);background:linear-gradient(180deg, var(--ft-pink-glow), transparent 40%)}
-    .ft-side-b.ft-cyan{border:1.5px solid var(--ft-cyan);background:linear-gradient(180deg, var(--ft-cyan-glow), transparent 40%)}
-    .ft-side-a .ft-side-label{color:var(--ft-pink)}
-    .ft-side-b .ft-side-label{color:var(--ft-cyan)}
+    /* SIDE A / SIDE B panels: recentered inside the visible pipe-frame
+       interiors. Pipe interiors measured at roughly x=12-43% and x=57-88%
+       from the PNG; panels narrowed to fit comfortably inside them. */
+    .ft-sides-grid{display:contents !important}
+    /* Trade windows — rounded corners + extra bottom padding so the action
+       row clears the PNG's bottom pipe artwork instead of getting clipped. */
+    .ft-side-a.ft-pink{
+      position:absolute;left:4%;right:56%;top:17%;bottom:29%;
+      border:none;background:transparent;padding:6px 10px 28px;
+      border-radius:14px;
+      display:flex;flex-direction:column;gap:4px;align-items:center;
+      z-index:1;overflow:hidden;
+    }
+    .ft-side-b.ft-cyan{
+      position:absolute;left:54%;right:3%;top:17%;bottom:29%;
+      border:none;background:transparent;padding:6px 10px 28px;
+      border-radius:14px;
+      display:flex;flex-direction:column;gap:4px;align-items:center;
+      z-index:1;overflow:hidden;
+    }
+    /* Action row floats to the bottom of each side panel */
+    .ft-stage .ft-side-action-row{margin-top:auto}
+    .ft-side-a .ft-side-label,
+    .ft-side-b .ft-side-label{display:none}
+    .ft-side-tag{display:none}
+    .ft-vs-mark{display:none}
 
-    /* The big graffiti-style "SIDE A" / "SIDE B" tags */
-    .ft-side-tag{
+    /* Card preview now 200% larger — gives the user a clear, readable look
+       at the card they've added. Bounding box (.ft-card-viewer) is 25%
+       wider than the card itself for a bit of framing breathing room, and
+       5% shorter so the controls below stay in view. */
+    .ft-stage .ft-card-viewer{
+      flex:0 0 205px;
+      min-height:0;
+      width:195px;             /* card width × 1.25 framing */
+      max-width:195px;
+      max-height:205px;
+      margin:0 auto;
+      padding:0;
+      position:relative;
+    }
+    /* Single front card only — back-stack hidden in the constrained stage */
+    .ft-stage .ft-stack-back-2,
+    .ft-stage .ft-stack-back-3{display:none}
+    .ft-stage .ft-stack-back-1,
+    .ft-stage .ft-stack-back{
+      position:absolute;inset:0;border-radius:8px;overflow:hidden;
+      transform:none !important;box-shadow:0 0 18px rgba(0,229,255,.18);
+    }
+    .ft-stage .ft-stack-back img{
+      width:100%;height:100%;object-fit:contain;display:block;
+    }
+    /* Empty placeholder fills the same box with hologram-styled text */
+    .ft-stage .ft-card-empty{
+      position:absolute;inset:0;
+      display:flex;align-items:center;justify-content:center;flex-direction:column;
+      font-size:.78rem;padding:14px;line-height:1.5;color:var(--text);
+      border:1px dashed rgba(255,255,255,.22);
+      background:rgba(0,0,0,.28);
+      border-radius:10px;
+      width:auto;
+    }
+    .ft-stage .ft-card-empty small{font-size:.62rem;margin-top:6px;color:var(--muted)}
+
+    /* Side panel action row: SEARCH / SCAN / BINDER + Cash all on one line.
+       Width set to 80% so each pill ends up 20% narrower than full-width;
+       parent's align-items:center keeps the row horizontally centered. */
+    .ft-stage .ft-side-action-row{
+      display:flex;align-items:stretch;gap:6px;width:80%;margin-top:auto;
+    }
+    .ft-stage .ft-side-btn{
+      flex:1 1 0;min-width:0;
+      display:flex;flex-direction:row;align-items:center;justify-content:center;
+      padding:1px 4px;cursor:pointer;
+      background:rgba(0,0,0,.5);
       font-family:'Orbitron','Space Mono',monospace;
-      font-size:clamp(1.4rem, 3vw, 2.1rem);font-weight:900;
-      letter-spacing:.04em;line-height:1;
-      transform:rotate(-2deg);margin-bottom:8px;
-      text-shadow:0 2px 0 rgba(0,0,0,.4);
+      font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+      font-size:.55rem;line-height:1;        /* fallback for when JS overrides span content */
+      transition:background .12s, transform .08s;
     }
-    .ft-side-a .ft-side-tag{color:var(--ft-pink);text-shadow:0 0 12px rgba(255,61,127,.4),0 2px 0 rgba(0,0,0,.4)}
-    .ft-side-b .ft-side-tag{color:var(--ft-cyan);text-shadow:0 0 12px rgba(0,229,255,.4),0 2px 0 rgba(0,0,0,.4)}
+    .ft-stage .ft-side-btn:hover{background:rgba(0,0,0,.7)}
+    .ft-stage .ft-side-btn:active{transform:translateY(1px)}
+    .ft-stage .ft-side-btn .ft-en{font-size:.55rem;line-height:1}
+    /* Hide JP labels on the compact side buttons — they'd double the
+       button height. JP still shows in the hologram modal titles. */
+    .ft-stage .ft-side-btn .ft-jp{display:none}
+    /* Color-coded buttons per side */
+    .ft-stage .ft-side-a .ft-side-btn{border:1px solid var(--ft-pink);color:var(--ft-pink)}
+    .ft-stage .ft-side-b .ft-side-btn{border:1px solid var(--ft-cyan);color:var(--ft-cyan)}
 
-    /* The VS centerpiece between panels */
-    .ft-vs-mark{
-      display:none;
-      align-items:center;justify-content:center;
-      font-family:'Orbitron',monospace;font-size:3.2rem;font-weight:900;
-      color:var(--ft-pink);text-shadow:0 0 18px rgba(255,61,127,.5),0 2px 0 #000;
-      transform:rotate(-6deg);
-      width:80px;flex-shrink:0;letter-spacing:.04em;
+    /* Cash input — same height as buttons (1px vertical padding + stretch) */
+    .ft-stage .ft-cash-mini{
+      flex:0 0 84px;
+      display:flex;align-items:center;gap:4px;
+      padding:1px 6px;background:rgba(0,0,0,.5);
+      border:1px solid rgba(255,255,255,.18);
     }
-    @media(min-width:780px){
-      .ft-vs-mark{display:flex}
-      .ft-sides-grid.ft-with-vs{
-        display:grid;grid-template-columns:1fr 80px 1fr;align-items:stretch;
+    .ft-stage .ft-cash-mini .ft-cash-label{
+      font-size:.7rem;font-family:'Space Mono','Share Tech Mono',monospace;
+      color:var(--muted);letter-spacing:.04em;
+    }
+    .ft-stage .ft-cash-mini .ft-cash-input{
+      flex:1;min-width:0;width:100%;
+      background:transparent;border:none;padding:2px 4px;
+      color:var(--text);font-family:inherit;font-size:.7rem;
+    }
+
+    /* Inner search row inside the hologram modal */
+    .ft-stage .ft-search-row{display:flex;gap:6px;margin-bottom:8px}
+    .ft-stage .ft-search-input{
+      flex:1;font-size:.85rem;padding:8px 12px;
+      background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);color:var(--text);
+    }
+    .ft-stage .ft-search-btn{
+      padding:8px 16px;font-size:.78rem;letter-spacing:.06em;
+      background:transparent;border:1px solid var(--ft-cyan);color:var(--ft-cyan);
+      cursor:pointer;font-family:inherit;
+    }
+    .ft-stage .ft-side-a + #ftHoloModalA .ft-search-btn,
+    .ft-stage #ftHoloModalA .ft-search-btn{
+      border-color:var(--ft-pink);color:var(--ft-pink);
+    }
+
+    /* HOLOGRAM MODAL — outer container per side */
+    .ft-hologram-modal{
+      position:absolute;
+      width:36%;max-height:60%;
+      background:rgba(8,12,20,.96);
+      border:1.5px solid var(--ft-cyan);
+      box-shadow:0 0 30px rgba(0,229,255,.4),0 0 80px rgba(0,229,255,.18);
+      padding:16px;border-radius:4px;
+      z-index:100;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    .ft-stage .ft-modal-A{
+      left:4%;top:14%;width:44%;
+      border-color:var(--ft-pink);
+      box-shadow:0 0 30px rgba(255,61,127,.4),0 0 80px rgba(255,61,127,.18);
+    }
+    .ft-stage .ft-modal-B{
+      right:4%;top:14%;width:44%;
+      border-color:var(--ft-cyan);
+    }
+    .ft-modal-close{
+      position:absolute;top:6px;right:8px;
+      background:transparent;border:none;color:var(--muted);
+      font-size:1.4rem;line-height:1;cursor:pointer;padding:2px 8px;
+      z-index:2;
+    }
+    .ft-modal-close:hover{color:var(--text)}
+    .ft-modal-title{
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:.78rem;letter-spacing:.1em;font-weight:700;
+      color:var(--ft-cyan);margin-bottom:10px;padding-right:30px;
+      text-transform:uppercase;
+    }
+    .ft-modal-A .ft-modal-title{color:var(--ft-pink)}
+    .ft-modal-mode{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+
+    /* Dropdown results inside the modal — flow naturally, no extra border */
+    .ft-stage .ft-dropdown-results{
+      position:static;left:auto;top:auto;right:auto;bottom:auto;
+      transform:none;
+      background:transparent;border:none;box-shadow:none;padding:0;
+      width:100%;max-height:none;overflow:visible;z-index:auto;
+    }
+    .ft-stage .ft-dropdown-results img{max-width:48px;max-height:66px}
+
+    /* Action buttons positioned ON TOP of the PNG (z-index 3). Transparent
+       backgrounds with visible black text — the PNG's colored button shapes
+       show through as the visual, and the labels read clearly on top.
+       Measured PNG slots:
+         YELLOW (ANALYZE):    x=11-35%
+         CYAN (CREATE):       x=38-62%
+         PINK (RESET):        x=68-83%
+         Y range:             y=77-89% */
+    .ft-action-row{display:contents !important}
+    .ft-action-btn{
+      position:absolute;
+      padding:6px 8px;border:none;cursor:pointer;
+      font-family:'Orbitron','Space Mono',monospace;
+      font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+      background:transparent;color:#000;
+      transition:background .12s;
+      z-index:3;
+    }
+    .ft-action-btn{border-radius:14px}
+    .ft-action-btn:hover{background:rgba(255,255,255,.08)}
+    .ft-action-btn:active{background:rgba(120,120,120,.32)}
+    /* Disabled state: greyed-out look during session so ANALYZE TRADE +
+       CREATE TRADE LINK aren't blank under the PNG colored shapes. */
+    .ft-action-btn.ft-disabled{
+      background:rgba(40,40,40,.6);
+      color:rgba(0,0,0,.45);
+      pointer-events:none;
+      cursor:not-allowed;
+      filter:grayscale(.5);
+    }
+    .ft-action-btn .ft-en{font-size:clamp(.6rem, 1.1vw, .9rem)}
+    .ft-action-btn .ft-jp{font-size:clamp(.45rem, .7vw, .6rem);opacity:.85;letter-spacing:.08em;font-weight:700}
+    /* Analyze + Create at the +50% width (24% each). Reset stretched again
+       +25% on top of previous (14% → 17.5%). All same y range. */
+    .ft-action-analyze{left:9%;right:64.9%;top:77.5%;bottom:14.5%}
+    .ft-action-create {left:37.8%;right:37%;top:77.5%;bottom:14.5%}
+    .ft-action-reset  {left:66%;right:15.6%;top:77.5%;bottom:14.5%}
+
+    /* Lock-in buttons appear when a trade session is active. JS uses the
+       pattern `el.style.display = inSession ? '' : 'none'` — clearing the
+       inline display falls back to this CSS rule (display:flex), showing
+       the button. HTML has inline display:none as the initial hidden state.
+       Positioned absolutely so they sit just above the action button row. */
+    .ft-stage #ftLockBtnA,
+    .ft-stage #ftLockBtnB{
+      position:absolute;
+      top:68%;bottom:23%;
+      padding:0 8px;
+      font-family:'Orbitron','Space Mono',monospace;font-weight:800;
+      font-size:.7rem;letter-spacing:.04em;text-transform:uppercase;
+      background:rgba(0,0,0,.6);
+      cursor:pointer;
+      z-index:3;
+      display:flex;
+      align-items:center;justify-content:center;
+    }
+    /* SESSION BANNER — positioned at the very BOTTOM of the stage, below
+       the action button row and above the social links footer. The trade
+       ID (PB-XXXX-XXXX) sits prominently inside, no longer obscured by the
+       PNG header artwork. z-index:4 keeps it above PNG but below modals. */
+    .ft-stage #ftSessionBanner{
+      position:absolute !important;
+      bottom:-6%;             /* pushed below the stage bottom for clear separation from action buttons */
+      top:auto;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:4;
+      width:64%;
+      max-width:760px;
+      padding:6px 14px !important;
+      background:rgba(8,12,20,.92) !important;
+      border:1.5px solid var(--ft-cyan) !important;
+      box-shadow:0 0 18px rgba(0,229,255,.32);
+      margin:0 !important;
+      font-size:.7rem;
+    }
+    /* When a session is active, hide the trade-code "join" input row —
+       the banner is showing the session state instead. */
+    .ft-stage.ft-in-session .ft-code-row{display:none}
+
+    /* QR CODE: when rendered for the trade-link host, the QR container is
+       repositioned to slam down ON TOP of the Create Trade Link button slot
+       at a crooked tilt. Hides the underlying button visually. */
+    .ft-stage #ftQrContainer{
+      position:absolute !important;
+      left:43.5%;
+      top:15%;
+      width:118px !important;
+      height:118px !important;
+      padding:6px !important;
+      background:#fff !important;
+      border:2px solid #0a0a0a;
+      box-shadow:0 8px 28px rgba(0,0,0,.7), 0 0 26px rgba(0,229,255,.45);
+      z-index:6;
+      transform:rotate(-7deg);
+      transform-origin:center;
+      animation:ftQrSlam .68s cubic-bezier(0.34, 1.56, 0.64, 1) 1 forwards;
+    }
+    .ft-stage #ftQrContainer img,
+    .ft-stage #ftQrContainer canvas{
+      width:100% !important;height:100% !important;display:block;
+    }
+    @keyframes ftQrSlam{
+      0%{
+        opacity:0;
+        transform:rotate(38deg) scale(2.6) translateY(-260px);
+        filter:blur(5px);
+      }
+      55%{
+        opacity:1;
+        transform:rotate(-4deg) scale(.88) translateY(6px);
+        filter:blur(0);
+      }
+      78%{
+        transform:rotate(-12deg) scale(1.1);
+      }
+      100%{
+        transform:rotate(-7deg) scale(1);
+        opacity:1;
+        filter:blur(0);
       }
     }
 
-    /* Action button row — filled pills with Japanese subtitle */
-    .ft-action-row{
-      display:grid;grid-template-columns:2fr 2fr 1fr;
-      gap:10px;margin:18px 0 14px;
+    /* Lock-in buttons sit ABOVE the side action row, inside the panel area.
+       y=53-60% places them just above the panel's bottom-anchored action
+       row (which lands around y=60-65% inside the shrunk panel). */
+    /* Lock-in buttons: width matches the action row below (80% of panel,
+       centered). Height shrunk ~30% from previous (was 7% tall, now ~5%). */
+    .ft-stage #ftLockBtnA{
+      left:8%;right:60%;top:57%;bottom:38%;
+      border:1px solid var(--ft-pink);color:var(--ft-pink);
     }
-    @media(max-width:600px){.ft-action-row{grid-template-columns:1fr;gap:8px}}
-    .ft-action-btn{
-      padding:12px 18px;border:none;cursor:pointer;
-      font-family:'Orbitron','Space Mono',monospace;
-      font-weight:800;letter-spacing:.06em;text-transform:uppercase;
-      display:flex;flex-direction:column;align-items:center;gap:2px;
-      color:#0a0a0a;border-radius:2px;
-      box-shadow:0 4px 0 rgba(0,0,0,.35);
-      transition:transform .1s, box-shadow .1s;
+    .ft-stage #ftLockBtnB{
+      left:58%;right:7%;top:57%;bottom:38%;
+      border:1px solid var(--ft-cyan);color:var(--ft-cyan);
     }
-    .ft-action-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.35)}
-    .ft-action-btn .ft-en{font-size:.92rem}
-    .ft-action-btn .ft-jp{font-size:.62rem;opacity:.78;letter-spacing:.08em;font-weight:700}
-    .ft-action-analyze{background:var(--ft-yellow);color:#1a1500}
-    .ft-action-create {background:var(--ft-cyan);  color:#001a1f}
-    .ft-action-reset  {background:var(--ft-pink);  color:#1a000a}
+    .ft-stage #ftLockBtnA:hover{background:var(--ft-pink-glow)}
+    .ft-stage #ftLockBtnB:hover{background:var(--ft-cyan-glow)}
 
-    /* Trade-code join row */
+    /* Mobile: bail to a normal flow, full-width colored pills.
+       PNG is hidden on mobile so the buttons need their own visual fills. */
+    @media(max-width:780px){
+      .ft-action-row{display:grid !important;grid-template-columns:2fr 2fr 1fr;gap:10px;margin:18px 0 14px}
+      .ft-action-btn{position:static;padding:12px 8px;border-radius:2px;box-shadow:0 4px 0 rgba(0,0,0,.35);color:#0a0a0a}
+      .ft-action-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.35);background:rgba(180,180,180,.28)}
+      .ft-action-analyze{background:var(--ft-yellow)}
+      .ft-action-create {background:var(--ft-cyan)}
+      .ft-action-reset  {background:var(--ft-pink)}
+    }
+    @media(max-width:600px){.ft-action-row{grid-template-columns:1fr !important}}
+
+    /* Trade-code join row — positioned over the PNG's bottom strip, on top */
     .ft-code-row{
+      position:absolute;
+      left:25%;right:25%;top:95%;
       display:flex;align-items:center;justify-content:center;gap:8px;
-      flex-wrap:wrap;margin-top:14px;
-      font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;
+      font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;
+      z-index:3;
     }
     .ft-code-input{
-      background:var(--surface2);border:1px solid var(--ft-cyan);color:var(--text);
-      padding:6px 12px;font-family:inherit;font-size:.78rem;
+      background:rgba(0,0,0,.5);border:1px solid var(--ft-cyan);color:var(--text);
+      padding:4px 10px;font-family:inherit;font-size:.72rem;
       letter-spacing:.12em;text-transform:uppercase;width:120px;text-align:center;
+    }
+
+    /* Mobile: trade-code row reverts to normal flow */
+    @media(max-width:780px){
+      .ft-code-row{position:static;left:auto;right:auto;top:auto;margin-top:14px;flex-wrap:wrap;font-size:.72rem}
+      .ft-code-input{font-size:.78rem;padding:6px 12px}
     }
 
     /* ── FAIR TRADE — mobile layout ─────────────────────── */
@@ -4500,12 +4785,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <img class="ft-stage-art" src="trade_analyzer_bg.webp" alt="" aria-hidden="true">
       <div class="ft-stage-content">
 
-      <!-- Header: huge TRADE ANALYZER with JP subtitle + HOW IT WORKS link -->
+      <!-- Header: compact TRADE ANALYZER with JP subtitle + HOW IT WORKS link.
+           The BETA badge / SIDE A. / SIDE B. / VS marks all live in the
+           background artwork so we don't render duplicates here. -->
       <div class="ft-hero">
         <div>
-          <div class="ft-hero-title">
-            TRADE ANALYZER <span class="ft-beta">BETA!</span>
-          </div>
+          <div class="ft-hero-title">TRADE ANALYZER</div>
           <h3 class="ft-hero-jp">トレード分析</h3>
           <div class="ft-hero-sub">Compare proposed trades side-by-side — for in-person evaluation only.</div>
         </div>
@@ -4521,73 +4806,118 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <!-- Two sides — pink SIDE A vs cyan SIDE B with VS centerpiece -->
         <div class="ft-sides-grid ft-with-vs">
 
-          <!-- SIDE A (pink/magenta) -->
+          <!-- SIDE A (pink/magenta) — card preview + action row inside the panel. -->
           <div class="ft-side-panel ft-side-a ft-pink">
-            <div class="ft-side-tag">SIDE A.</div>
-            <div class="ft-side-label">サイド A</div>
-
-            <!-- Card stack viewer -->
             <div id="ftCardsA" class="ft-card-viewer"></div>
 
-            <!-- Add controls (search / scan / binder) -->
-            <div class="ft-add-controls">
-              <div class="ft-search-row">
-                <input id="ftSearchA" type="text" placeholder="Search card…"
-                  class="ft-search-input"
-                  onkeydown="if(event.key==='Enter')ftSearch('A')" />
-                <button onclick="ftSearch('A')" class="ft-search-btn ft-btn-accent">Search</button>
+            <div class="ft-side-action-row">
+              <button onclick="ftOpenHoloModal('A','search')" class="ft-side-btn ft-pill-search">
+                <span class="ft-en">SEARCH</span><span class="ft-jp">検索</span>
+              </button>
+              <button onclick="ftSideScan('A')" class="ft-side-btn ft-pill-scan">
+                <span class="ft-en">SCAN</span><span class="ft-jp">スキャン</span>
+              </button>
+              <button onclick="ftOpenHoloModal('A','binder')" id="ftBinderBtnA" class="ft-side-btn ft-pill-binder">
+                <span class="ft-en">MY BINDER</span><span class="ft-jp">バインダー</span>
+              </button>
+              <div class="ft-cash-mini">
+                <span class="ft-cash-label">+$</span>
+                <input id="ftCashA" type="number" min="0" step="0.01" placeholder="0.00" class="ft-cash-input"/>
               </div>
-              <div class="ft-search-row">
-                <button onclick="ftScanTrigger('A')" class="ft-scan-btn ft-btn-teal">Scan Card</button>
-                <input id="ftScanInputA" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('A',this)"/>
-              </div>
-              <div id="ftScanStatusA" class="ft-scan-status"></div>
-              <div id="ftScanMatchesA" class="ft-dropdown-results"></div>
-              <button onclick="ftToggleBinder('A')" id="ftBinderBtnA" class="ft-binder-btn">⊞ Pick from My Binder</button>
-              <div id="ftBinderPickerA" class="ft-dropdown-results"></div>
-              <div id="ftResultsA" class="ft-dropdown-results"></div>
             </div>
-
-            <div class="ft-cash-row">
-              <span class="ft-cash-label">+ Cash</span>
-              <input id="ftCashA" type="number" min="0" step="0.01" placeholder="0.00" class="ft-cash-input"/>
-            </div>
+            <input id="ftScanInputA" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('A',this)"/>
           </div>
 
-          <!-- VS divider — only shows on desktop -->
-          <div class="ft-vs-mark">VS</div>
+          <!-- VS divider spacer — PNG art provides the visible VS -->
+          <div class="ft-vs-mark" aria-hidden="true"></div>
 
-          <!-- SIDE B (cyan) -->
+          <!-- SIDE B (cyan) — card preview + action row inside the panel. -->
           <div class="ft-side-panel ft-side-b ft-cyan">
-            <div class="ft-side-tag">SIDE B.</div>
-            <div class="ft-side-label">サイド B</div>
-
-            <!-- Card stack viewer -->
             <div id="ftCardsB" class="ft-card-viewer"></div>
 
-            <!-- Add controls -->
-            <div class="ft-add-controls">
-              <div class="ft-search-row">
-                <input id="ftSearchB" type="text" placeholder="Search card…"
-                  class="ft-search-input"
-                  onkeydown="if(event.key==='Enter')ftSearch('B')" />
-                <button onclick="ftSearch('B')" class="ft-search-btn ft-btn-gold">Search</button>
+            <div class="ft-side-action-row">
+              <button onclick="ftOpenHoloModal('B','search')" class="ft-side-btn ft-pill-search">
+                <span class="ft-en">SEARCH</span><span class="ft-jp">検索</span>
+              </button>
+              <button onclick="ftSideScan('B')" class="ft-side-btn ft-pill-scan">
+                <span class="ft-en">SCAN</span><span class="ft-jp">スキャン</span>
+              </button>
+              <button onclick="ftOpenHoloModal('B','binder')" id="ftBinderBtnB" class="ft-side-btn ft-pill-binder">
+                <span class="ft-en">MY BINDER</span><span class="ft-jp">バインダー</span>
+              </button>
+              <div class="ft-cash-mini">
+                <span class="ft-cash-label">+$</span>
+                <input id="ftCashB" type="number" min="0" step="0.01" placeholder="0.00" class="ft-cash-input"/>
               </div>
-              <div class="ft-search-row">
-                <button onclick="ftScanTrigger('B')" class="ft-scan-btn ft-btn-gold">Scan Card</button>
-                <input id="ftScanInputB" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('B',this)"/>
-              </div>
-              <div id="ftScanStatusB" class="ft-scan-status"></div>
-              <div id="ftScanMatchesB" class="ft-dropdown-results"></div>
-              <button onclick="ftToggleBinder('B')" id="ftBinderBtnB" class="ft-binder-btn">⊞ Pick from My Binder</button>
-              <div id="ftBinderPickerB" class="ft-dropdown-results"></div>
-              <div id="ftResultsB" class="ft-dropdown-results"></div>
             </div>
+            <input id="ftScanInputB" type="file" accept="image/*" capture="environment" style="display:none" onchange="ftHandleScan('B',this)"/>
+          </div>
+        </div>
 
-            <div class="ft-cash-row">
-              <span class="ft-cash-label">+ Cash</span>
-              <input id="ftCashB" type="number" min="0" step="0.01" placeholder="0.00" class="ft-cash-input"/>
+        <!-- ── HOLOGRAM MODALS ───────────────────────────────────────────────
+             One per side. Each contains three switchable modes (search /
+             scan / binder). Hidden by default; ftOpenHoloModal toggles
+             both visibility and which mode is active. -->
+        <div id="ftHoloModalA" class="ft-hologram-modal ft-modal-A" style="display:none">
+          <button class="ft-modal-close" onclick="ftCloseHoloModal('A')" aria-label="Close">×</button>
+          <div class="ft-modal-title" id="ftHoloTitleA">SEARCH SIDE A</div>
+
+          <!-- SEARCH mode -->
+          <div class="ft-modal-mode" data-mode="search">
+            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('A','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(0,229,255,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
+              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('A','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
+              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('A','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
+              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('A','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
             </div>
+            <div class="ft-search-row">
+              <input id="ftSearchA" type="text" placeholder="Search Pokemon card…"
+                class="ft-search-input"
+                onkeydown="if(event.key==='Enter')ftSearch('A')" />
+              <button onclick="ftSearch('A')" class="ft-search-btn">Search</button>
+            </div>
+            <div id="ftResultsA" class="ft-dropdown-results"></div>
+          </div>
+
+          <!-- SCAN mode -->
+          <div class="ft-modal-mode" data-mode="scan" style="display:none">
+            <div id="ftScanStatusA" class="ft-scan-status"></div>
+            <div id="ftScanMatchesA" class="ft-dropdown-results"></div>
+          </div>
+
+          <!-- BINDER mode -->
+          <div class="ft-modal-mode" data-mode="binder" style="display:none">
+            <div id="ftBinderPickerA" class="ft-dropdown-results"></div>
+          </div>
+        </div>
+
+        <div id="ftHoloModalB" class="ft-hologram-modal ft-modal-B" style="display:none">
+          <button class="ft-modal-close" onclick="ftCloseHoloModal('B')" aria-label="Close">×</button>
+          <div class="ft-modal-title" id="ftHoloTitleB">SEARCH SIDE B</div>
+
+          <div class="ft-modal-mode" data-mode="search">
+            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('B','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(0,229,255,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
+              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('B','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
+              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('B','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
+              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('B','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
+            </div>
+            <div class="ft-search-row">
+              <input id="ftSearchB" type="text" placeholder="Search Pokemon card…"
+                class="ft-search-input"
+                onkeydown="if(event.key==='Enter')ftSearch('B')" />
+              <button onclick="ftSearch('B')" class="ft-search-btn">Search</button>
+            </div>
+            <div id="ftResultsB" class="ft-dropdown-results"></div>
+          </div>
+
+          <div class="ft-modal-mode" data-mode="scan" style="display:none">
+            <div id="ftScanStatusB" class="ft-scan-status"></div>
+            <div id="ftScanMatchesB" class="ft-dropdown-results"></div>
+          </div>
+
+          <div class="ft-modal-mode" data-mode="binder" style="display:none">
+            <div id="ftBinderPickerB" class="ft-dropdown-results"></div>
           </div>
         </div>
 
@@ -4607,19 +4937,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </button>
         </div>
 
-        <!-- Session-mode lock-in buttons. Shown only when a session is active;
-             they replace the Analyze button per-side via JS. Kept inline-styled
-             since they're a different visual mode from the main pill row. -->
-        <div style="text-align:center;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
-          <button id="ftLockBtnA" onclick="ftLockIn('A')"
-            style="display:none;padding:11px 22px;border:1px solid var(--ft-pink);background:transparent;color:var(--ft-pink);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-            Lock In Side A
-          </button>
-          <button id="ftLockBtnB" onclick="ftLockIn('B')"
-            style="display:none;padding:11px 22px;border:1px solid var(--ft-cyan);background:transparent;color:var(--ft-cyan);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-            Lock In Side B
-          </button>
-        </div>
+        <!-- Session-mode lock-in buttons. CSS positions them absolutely
+             over each side panel on desktop; on mobile they fall back to
+             normal flow inside this container. Inline display:none is the
+             initial hidden state — JS clears it (style.display='') to show. -->
+        <button id="ftLockBtnA" onclick="ftLockIn('A')" style="display:none">
+          Lock In Side A
+        </button>
+        <button id="ftLockBtnB" onclick="ftLockIn('B')" style="display:none">
+          Lock In Side B
+        </button>
 
         <!-- Join by code (for guests / manual entry) -->
         <div class="ft-code-row">
@@ -16986,7 +17313,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; }
       });
       ['ftBinderBtnA','ftBinderBtnB'].forEach(function(id) {
-        var el = document.getElementById(id); if (el) el.textContent = '⊞ Pick from My Binder';
+        var el = document.getElementById(id); if (el) el.textContent = 'MY BINDER';
       });
       var v = document.getElementById('ftVerdict'); if (v) v.textContent = '';
       _ftUpdateSessionButtons();
@@ -17167,7 +17494,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         _ftRenderBinderPicker(side);
       } else {
         picker.style.display = 'none';
-        if (btn) btn.textContent = '⊞ Pick from My Binder';
+        if (btn) btn.textContent = 'MY BINDER';
       }
     }
 
@@ -17245,7 +17572,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           var p = document.getElementById('ftBinderPicker' + s);
           var b = document.getElementById('ftBinderBtn' + s);
           if (p) p.style.display = 'none';
-          if (b) b.textContent = '⊞ Pick from My Binder';
+          if (b) b.textContent = 'MY BINDER';
         });
       });
 
@@ -17663,6 +17990,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 correctLevel: window.QRCode.CorrectLevel.M
               });
               el.dataset.rendered = '1';
+              // Move the rendered QR out of the banner and into .ft-stage
+              // directly, so its CSS position:absolute resolves to the
+              // stage's coords (where the slam target is) instead of
+              // the banner's tiny box at the bottom of the page.
+              var stage = document.querySelector('.ft-stage');
+              if (stage && el.parentElement !== stage) {
+                stage.appendChild(el);
+              }
             } catch(_) {}
           });
         }
@@ -17824,6 +18159,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     // ── Card search (pokemontcg.io) ──────────────────────────────────────
+    // Per-side game-type selection for trade-window search. Defaults to
+    // Pokemon. ftSetSearchGame() switches it from the modal's pill row.
+    var _ftSearchGame = { A: 'pokemon', B: 'pokemon' };
+
+    function ftSetSearchGame(side, game) {
+      _ftSearchGame[side] = game;
+      // Update active state on the game pills inside this side's modal
+      var modal = document.getElementById('ftHoloModal' + side);
+      if (modal) {
+        modal.querySelectorAll('.ft-game-pill').forEach(function(p) {
+          var active = p.dataset.game === game;
+          p.style.borderColor = active ? 'var(--ft-cyan)' : 'var(--border)';
+          p.style.color       = active ? 'var(--ft-cyan)' : 'var(--muted)';
+          p.style.background  = active ? 'rgba(0,229,255,.1)' : 'transparent';
+        });
+      }
+      // Update placeholder hint
+      var input = document.getElementById('ftSearch' + side);
+      if (input) {
+        var label = game === 'magic'    ? 'Magic card…'
+                  : game === 'yugioh'   ? 'Yu-Gi-Oh card…'
+                  : game === 'onepiece' ? 'One Piece card…'
+                  : 'Pokemon card…';
+        input.placeholder = 'Search ' + label;
+      }
+    }
+
     async function ftSearch(side) {
       var inputId = 'ftSearch' + side;
       var resultsId = 'ftResults' + side;
@@ -17836,21 +18198,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       resultsEl.style.display = 'block';
       resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Searching…</div>';
 
+      var game = _ftSearchGame[side] || 'pokemon';
+
       try {
-        // pokemontcg.io Lucene: wildcard only valid on single tokens.
-        // Multi-word queries must use a quoted phrase (no wildcard).
-        var nameQuery = q.includes(' ')
-          ? 'name:"' + q + '"'
-          : 'name:' + q + '*';
-        var res = await fetch('https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(nameQuery) + '&pageSize=30&orderBy=name');
-        if (!res.ok) throw new Error('API error');
-        var data = await res.json();
-        var cards = data.data || [];
+        var cards = [];
+
+        if (game === 'magic' && typeof _fallbackMagic === 'function') {
+          cards = await _fallbackMagic(q);
+        } else if (game === 'yugioh' && typeof _fallbackYugioh === 'function') {
+          cards = await _fallbackYugioh(q);
+        } else if (game === 'onepiece' && typeof _fallbackOnePiece === 'function') {
+          cards = await _fallbackOnePiece(q);
+        } else {
+          // Default: Pokemon via pokemontcg.io. Lucene: wildcard only valid
+          // on single tokens; multi-word queries need a quoted phrase.
+          var nameQuery = q.includes(' ')
+            ? 'name:"' + q + '"'
+            : 'name:' + q + '*';
+          var res = await fetch('https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(nameQuery) + '&pageSize=30&orderBy=name');
+          if (!res.ok) throw new Error('API error');
+          var data = await res.json();
+          cards = data.data || [];
+        }
+
         if (!cards.length) {
           resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">No results — try a different name</div>';
           return;
         }
-        // Build result nodes and attach click handlers via dataset (safe for apostrophes)
+
+        // Build result nodes uniformly. Fallback APIs already shape cards
+        // to {id, name, number, set:{name}, images:{small,large}, rarity}.
         resultsEl.innerHTML = '';
         cards.forEach(function(c) {
           var setName = (c.set && c.set.name) || '';
@@ -17860,7 +18237,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           node.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s';
           node.addEventListener('mouseover', function() { this.style.background = 'var(--surface2)'; });
           node.addEventListener('mouseout',  function() { this.style.background = ''; });
-          node.dataset.ftCard = JSON.stringify({ id: c.id, name: c.name, set: setName, number: num, image: img });
+          node.dataset.ftCard = JSON.stringify({
+            id: c.id, name: c.name, set: setName, number: num, image: img,
+            rarity: c.rarity || null, _gameType: c._gameType || game
+          });
           node.dataset.ftSide = side;
           node.addEventListener('click', function() {
             ftAddCard(this.dataset.ftSide, JSON.parse(this.dataset.ftCard));
@@ -17933,11 +18313,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Build back layers using actual card images — up to 2 cards behind the front.
       // They share the same inset:0 footprint as the front card; CSS transforms make
       // them peek out at different angles so the stack looks physical.
-      function _backLayer(c, cls) {
+      // offsetN = position in the deck relative to the front card (1/2/3 for
+      // back-1/-2/-3) — used to open the right card's detail on click.
+      function _backLayer(c, cls, offsetN) {
         var face = c.image
           ? '<img src="' + _escHtml(c.image) + '" alt="" draggable="false">'
           : '<div class="ft-card-no-img"></div>';
-        return '<div class="ft-stack-back ' + cls + '">' + face + '</div>';
+        return '<div class="ft-stack-back ' + cls + '" onclick="event.stopPropagation();ftViewCardAt(\'' + side + '\',' + offsetN + ')" style="cursor:pointer">' + face + '</div>';
       }
 
       // Back cards show the NEXT cards in the deck (idx+1, idx+2, idx+3)
@@ -17947,14 +18329,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var backs = '';
       if (cards.length >= 2) {
         var _b1 = cards[(idx + 1) % cards.length];
-        backs = _backLayer(_b1, 'ft-stack-back-1');
+        backs = _backLayer(_b1, 'ft-stack-back-1', 1);
         if (cards.length >= 3) {
           var _b2 = cards[(idx + 2) % cards.length];
-          backs = _backLayer(_b2, 'ft-stack-back-2') + backs;
+          backs = _backLayer(_b2, 'ft-stack-back-2', 2) + backs;
         }
         if (cards.length >= 4) {
           var _b3 = cards[(idx + 3) % cards.length];
-          backs = _backLayer(_b3, 'ft-stack-back-3') + backs;
+          backs = _backLayer(_b3, 'ft-stack-back-3', 3) + backs;
         }
       }
 
@@ -17969,8 +18351,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       // Nav arrows — desktop only (swipe handles mobile)
       var navBtns = cards.length > 1
-        ? '<button class="ft-nav-btn ft-nav-prev" onclick="ftNavCard(\'' + side + '\',-1)" aria-label="Previous">‹</button>' +
-          '<button class="ft-nav-btn ft-nav-next" onclick="ftNavCard(\'' + side + '\',1)" aria-label="Next">›</button>'
+        ? '<button class="ft-nav-btn ft-nav-prev" onclick="event.stopPropagation();ftNavCard(\'' + side + '\',-1)" aria-label="Previous">‹</button>' +
+          '<button class="ft-nav-btn ft-nav-next" onclick="event.stopPropagation();ftNavCard(\'' + side + '\',1)" aria-label="Next">›</button>'
         : '';
 
       var counter = cards.length > 1
@@ -17982,9 +18364,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       container.innerHTML =
         '<div class="ft-stack-wrap" id="ftStack' + side + '">' +
           backs +
-          '<div class="ft-stack-front" id="ftCardFront' + side + '">' +
+          '<div class="ft-stack-front" id="ftCardFront' + side + '" onclick="ftViewCardAt(\'' + side + '\',0)" style="cursor:pointer">' +
             cardFace +
-            '<button class="ft-card-remove" onclick="ftRemoveCard(\'' + side + '\',\'' + card.id + '\')">×</button>' +
+            '<button class="ft-card-remove" onclick="event.stopPropagation();ftRemoveCard(\'' + side + '\',\'' + card.id + '\')">×</button>' +
             qtyBadge +
           '</div>' +
           navBtns +
@@ -18177,12 +18559,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function _ftUpdateSessionButtons() {
       var inSession  = !!_ftSession;
       var analyzeBtn = document.getElementById('ftAnalyzeBtn');
+      var createBtn  = document.getElementById('ftCreateSessionBtn');
       var lockBtnA   = document.getElementById('ftLockBtnA');
       var lockBtnB   = document.getElementById('ftLockBtnB');
 
-      if (analyzeBtn) analyzeBtn.style.display = inSession ? 'none' : '';
+      // Grey out (don't hide) Analyze + Create Trade Link during session.
+      // The text labels stay readable but show as disabled so the bottom
+      // button row doesn't look empty under the colored PNG artwork.
+      // The QR still slams on top of Create Trade Link via z-index:6.
+      if (analyzeBtn) analyzeBtn.classList.toggle('ft-disabled', inSession);
+      if (createBtn)  createBtn.classList.toggle('ft-disabled', inSession);
       if (lockBtnA)   lockBtnA.style.display   = inSession ? '' : 'none';
       if (lockBtnB)   lockBtnB.style.display   = inSession ? '' : 'none';
+
+      // Toggle .ft-in-session on .ft-stage so the trade-code "join" row
+      // hides while a session is active (banner takes that visual slot).
+      var stage = document.querySelector('.ft-stage');
+      if (stage) stage.classList.toggle('ft-in-session', inSession);
 
       if (!inSession) return;
 
@@ -18616,6 +19009,93 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     function ftReset() {
       ftInitPage();  // resets state to 'input' and clears all cards/fields
+    }
+
+    // Click handler for cards in either side's stack. offset=0 is the front
+    // (current) card; 1/2/3 are the peek layers showing the next cards in
+    // the deck. Opens the existing card-detail modal (same one used by
+    // binder + search) so the user gets rarity, prices, set info, etc.
+    function ftViewCardAt(side, offset) {
+      var cards = _ftCards[side];
+      if (!cards || !cards.length) return;
+      var idx = (_ftCardIndex[side] + offset + cards.length) % cards.length;
+      var card = cards[idx];
+      if (!card) return;
+
+      // Adapt the trade-card object shape into what openSearchCardDetail
+      // expects (PTCG-API shape: images.small/large, set.name, etc.).
+      var adapted = {
+        id:        card.id,
+        name:      card.name,
+        number:    card.number || '',
+        rarity:    card.rarity || null,
+        set:       { name: card.set || '', id: '' },
+        images:    { small: card.image || '', large: card.image || '' },
+        prices:    card.prices || null,
+        apiCardId: card.apiCardId || card.id,
+        _gameType: card._gameType || (
+          /^mtg-/.test(card.id || '') ? 'magic' :
+          /^ygo-/.test(card.id || '') ? 'yugioh' :
+          /^op-/.test(card.id || '')  ? 'onepiece' :
+          'pokemon'
+        ),
+      };
+
+      var isJp = /^(jp|pd)-/.test(card.id || '');
+      if (isJp) window._acLastJpCards     = [adapted];
+      else      window._acLastSearchCards = [adapted];
+
+      if (typeof openSearchCardDetail === 'function') {
+        openSearchCardDetail(0, isJp);
+      } else if (card.image && typeof openImageLightbox === 'function') {
+        openImageLightbox(card.image);
+      }
+    }
+
+    // ─── Hologram modal management ──────────────────────────────────────
+    // Each side has one modal with three switchable modes (search/scan/binder).
+    // ftOpenHoloModal shows the modal in the requested mode; the title and
+    // visible inner sub-panel update accordingly.
+    function ftOpenHoloModal(side, mode) {
+      var modal = document.getElementById('ftHoloModal' + side);
+      if (!modal) return;
+      modal.style.display = 'flex';
+      // Title text per mode
+      var titleEl = document.getElementById('ftHoloTitle' + side);
+      if (titleEl) {
+        titleEl.textContent = (mode === 'search' ? 'SEARCH SIDE ' :
+                              mode === 'scan'   ? 'SCAN — SIDE ' :
+                              'BINDER — SIDE ') + side;
+      }
+      // Toggle which sub-mode is visible
+      modal.querySelectorAll('.ft-modal-mode').forEach(function(el) {
+        el.style.display = (el.getAttribute('data-mode') === mode) ? '' : 'none';
+      });
+      // Mode-specific actions
+      if (mode === 'search') {
+        var input = document.getElementById('ftSearch' + side);
+        if (input) setTimeout(function() { input.focus(); }, 80);
+      } else if (mode === 'binder') {
+        // Trigger the existing binder render so #ftBinderPicker{Side} populates
+        if (typeof ftToggleBinder === 'function') {
+          var picker = document.getElementById('ftBinderPicker' + side);
+          if (picker) picker.style.display = 'none';   // force re-show via toggle
+          ftToggleBinder(side);
+        }
+      }
+    }
+
+    function ftCloseHoloModal(side) {
+      var modal = document.getElementById('ftHoloModal' + side);
+      if (modal) modal.style.display = 'none';
+    }
+
+    // Side-panel SCAN button — opens the scan modal AND triggers the file
+    // picker. When the user picks an image, ftHandleScan populates
+    // #ftScanMatches{Side} which is already inside the visible scan modal.
+    function ftSideScan(side) {
+      ftOpenHoloModal(side, 'scan');
+      if (typeof ftScanTrigger === 'function') ftScanTrigger(side);
     }
 
     // Stub for the "? HOW IT WORKS" button in the new trade analyzer hero.
