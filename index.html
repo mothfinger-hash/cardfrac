@@ -1762,8 +1762,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       -webkit-user-drag:none;
       user-select:none;
       will-change:transform,opacity;
-      transition:transform .85s cubic-bezier(.2,.6,.3,1),
-                 opacity .3s ease-out .55s;
+      transition:transform 1.06s cubic-bezier(.2,.6,.3,1),
+                 opacity .38s ease-out .68s;
     }
     .ft-mag-half-l{ clip-path:inset(0 50% 0 0); }
     .ft-mag-half-r{ clip-path:inset(0 0 0 50%); }
@@ -1783,8 +1783,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        Same delayed-opacity treatment so the lens stays solid until it
        reaches the edge. */
     .ft-mag-lens.ft-fly-out{
-      transition:transform .85s cubic-bezier(.2,.6,.3,1),
-                 opacity .3s ease-out .55s;
+      transition:transform 1.06s cubic-bezier(.2,.6,.3,1),
+                 opacity .38s ease-out .68s;
       opacity:0 !important;
     }
     .ft-mag-lens.ft-fly-out .ft-mag-lens-zoom{
@@ -1894,32 +1894,32 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       100% { width:150vw; height:150vw; opacity:0;   border-width:1px; }
     }
 
-    /* ── Copper glow halo behind the gauge ────────────────────────
-       Fades in after the slam settles. Subtle pulsing copper-tinted
-       radial gradient that sits behind the gauge dial. */
+    /* ── Copper glow ring AROUND the gauge border ────────────────
+       Sits right at the gauge's circular edge — outer + inner box
+       shadows give a soft copper rim. Fades in after the slam
+       settles and breathes gently. */
     .ft-gauge-wrap::before{
       content:'';
       position:absolute;
-      inset:-28%;
+      inset:-3%;
       border-radius:50%;
-      background:radial-gradient(circle,
-        rgba(210,120,58,.30) 0%,
-        rgba(210,120,58,.14) 35%,
-        rgba(210,120,58,.05) 60%,
-        transparent 80%);
-      filter:blur(28px);
+      background:transparent;
       pointer-events:none;
       opacity:0;
       z-index:0;
       transition:opacity 1.1s ease-out;
+      box-shadow:
+        0 0 22px 3px rgba(210,120,58,.55),
+        0 0 48px 10px rgba(210,120,58,.22),
+        inset 0 0 22px rgba(210,120,58,.32);
     }
     .ft-gauge-wrap.ft-glow-on::before{
       opacity:1;
       animation:ftCopperHaloPulse 4.5s ease-in-out infinite 1.1s;
     }
     @keyframes ftCopperHaloPulse{
-      0%,100%{ opacity:.6;  transform:scale(1);   }
-      50%    { opacity:1;   transform:scale(1.04);}
+      0%,100%{ opacity:.7; }
+      50%    { opacity:1;  }
     }
 
     /* Results cinema layout — flow from the top with a comfortable
@@ -19480,7 +19480,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       _ftWobbleOnNext = true;
       ftRecalc();
 
-      // T=1180ms — cards + glass have cleared frame (370 + 850ms throw
+      // T=1500ms — cards + glass have cleared frame (370 + 1060ms throw
       // + small buffer). Hide loading state, drop the transparent
       // backdrop on results so it now owns the screen, and reveal the
       // breakdown with its fade-and-lift.
@@ -19493,7 +19493,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           resultsEl.classList.remove('ft-cinema-transparent');
         }
         if (bd) bd.classList.remove('ft-breakdown-hidden');
-      }, 1180 - 720); // setTimeout is relative to NOW (post-await)
+      }, 1500 - 720); // setTimeout is relative to NOW (post-await)
 
       // Resume polling so the coin-flip handshake works on the results
       // screen. Polling was stopped at lock-in time so analyze had a
