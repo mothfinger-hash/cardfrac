@@ -1202,6 +1202,152 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-gauge-side-b{align-items:flex-end;text-align:right}
     .ft-gauge-side-b > span:last-child{color:var(--gold,#D2783A)}
 
+    /* ── TRADE ANALYZER — cyberpunk artwork stage ────────── */
+    /* Stage is the wrapper that carries the artwork background on desktop.
+       Interactive elements (SIDE A/B panels, action buttons, etc.) are
+       layered ON TOP of the artwork — the PNG sits at z-index 1 and content
+       at z-index 2. Mobile drops the artwork backdrop to a cleaner stack. */
+    .ft-stage{
+      position:relative;
+      max-width:1280px;
+      margin:0 auto;
+      padding:30px 18px 80px;
+      isolation:isolate;
+    }
+    .ft-stage-art{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      object-position:center top;
+      opacity:.85;
+      z-index:1;
+      pointer-events:none;
+      user-select:none;
+    }
+    .ft-stage-content{
+      position:relative;
+      z-index:2;
+    }
+    @media(max-width:780px){
+      .ft-stage-art{display:none}
+      .ft-stage{padding:14px 10px 40px}
+    }
+
+    /* Cyberpunk colors used by the mockup */
+    :root{
+      --ft-pink:    #FF3D7F;
+      --ft-cyan:    #00E5FF;
+      --ft-yellow:  #FFE94A;
+      --ft-pink-glow:  rgba(255,61,127,.14);
+      --ft-cyan-glow:  rgba(0,229,255,.10);
+    }
+
+    /* Header: huge "TRADE ANALYZER" with Japanese subtitle */
+    .ft-hero{
+      display:flex;align-items:flex-start;justify-content:space-between;
+      gap:24px;flex-wrap:wrap;margin-bottom:24px;
+    }
+    .ft-hero-title{
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:clamp(1.6rem, 4vw, 2.6rem);
+      font-weight:800;letter-spacing:.04em;
+      color:var(--text);line-height:1.05;text-transform:uppercase;
+      display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    }
+    .ft-hero-title .ft-beta{
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.78rem;color:var(--ft-pink);
+      letter-spacing:.12em;font-style:italic;
+      transform:rotate(-3deg);transform-origin:left bottom;
+    }
+    .ft-hero-jp{
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:.95rem;color:var(--ft-cyan);letter-spacing:.16em;
+      margin-top:4px;opacity:.85;
+    }
+    .ft-hero-sub{
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.78rem;color:var(--muted);margin-top:6px;
+    }
+    .ft-hero-how{
+      align-self:flex-start;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.7rem;letter-spacing:.1em;
+      padding:8px 16px;border:1px solid var(--ft-cyan);
+      background:transparent;color:var(--ft-cyan);cursor:pointer;
+      white-space:nowrap;transition:all .15s;
+    }
+    .ft-hero-how:hover{background:var(--ft-cyan-glow)}
+
+    /* SIDE A (pink) / SIDE B (cyan) tinted panels */
+    .ft-side-a.ft-pink{border:1.5px solid var(--ft-pink);background:linear-gradient(180deg, var(--ft-pink-glow), transparent 40%)}
+    .ft-side-b.ft-cyan{border:1.5px solid var(--ft-cyan);background:linear-gradient(180deg, var(--ft-cyan-glow), transparent 40%)}
+    .ft-side-a .ft-side-label{color:var(--ft-pink)}
+    .ft-side-b .ft-side-label{color:var(--ft-cyan)}
+
+    /* The big graffiti-style "SIDE A" / "SIDE B" tags */
+    .ft-side-tag{
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:clamp(1.4rem, 3vw, 2.1rem);font-weight:900;
+      letter-spacing:.04em;line-height:1;
+      transform:rotate(-2deg);margin-bottom:8px;
+      text-shadow:0 2px 0 rgba(0,0,0,.4);
+    }
+    .ft-side-a .ft-side-tag{color:var(--ft-pink);text-shadow:0 0 12px rgba(255,61,127,.4),0 2px 0 rgba(0,0,0,.4)}
+    .ft-side-b .ft-side-tag{color:var(--ft-cyan);text-shadow:0 0 12px rgba(0,229,255,.4),0 2px 0 rgba(0,0,0,.4)}
+
+    /* The VS centerpiece between panels */
+    .ft-vs-mark{
+      display:none;
+      align-items:center;justify-content:center;
+      font-family:'Orbitron',monospace;font-size:3.2rem;font-weight:900;
+      color:var(--ft-pink);text-shadow:0 0 18px rgba(255,61,127,.5),0 2px 0 #000;
+      transform:rotate(-6deg);
+      width:80px;flex-shrink:0;letter-spacing:.04em;
+    }
+    @media(min-width:780px){
+      .ft-vs-mark{display:flex}
+      .ft-sides-grid.ft-with-vs{
+        display:grid;grid-template-columns:1fr 80px 1fr;align-items:stretch;
+      }
+    }
+
+    /* Action button row — filled pills with Japanese subtitle */
+    .ft-action-row{
+      display:grid;grid-template-columns:2fr 2fr 1fr;
+      gap:10px;margin:18px 0 14px;
+    }
+    @media(max-width:600px){.ft-action-row{grid-template-columns:1fr;gap:8px}}
+    .ft-action-btn{
+      padding:12px 18px;border:none;cursor:pointer;
+      font-family:'Orbitron','Space Mono',monospace;
+      font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+      display:flex;flex-direction:column;align-items:center;gap:2px;
+      color:#0a0a0a;border-radius:2px;
+      box-shadow:0 4px 0 rgba(0,0,0,.35);
+      transition:transform .1s, box-shadow .1s;
+    }
+    .ft-action-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.35)}
+    .ft-action-btn .ft-en{font-size:.92rem}
+    .ft-action-btn .ft-jp{font-size:.62rem;opacity:.78;letter-spacing:.08em;font-weight:700}
+    .ft-action-analyze{background:var(--ft-yellow);color:#1a1500}
+    .ft-action-create {background:var(--ft-cyan);  color:#001a1f}
+    .ft-action-reset  {background:var(--ft-pink);  color:#1a000a}
+
+    /* Trade-code join row */
+    .ft-code-row{
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      flex-wrap:wrap;margin-top:14px;
+      font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;
+    }
+    .ft-code-input{
+      background:var(--surface2);border:1px solid var(--ft-cyan);color:var(--text);
+      padding:6px 12px;font-family:inherit;font-size:.78rem;
+      letter-spacing:.12em;text-transform:uppercase;width:120px;text-align:center;
+    }
+
     /* ── FAIR TRADE — mobile layout ─────────────────────── */
     /* Two-column sides stack to single column on small screens */
     .ft-sides-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
@@ -4348,15 +4494,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
   <!-- ── FAIR TRADE CHECK ──────────────────────────────────────────────── -->
   <div id="fairTradePage" class="page">
-    <div style="max-width:860px;margin:0 auto">
+    <!-- Stage carries the cyberpunk artwork as a decorative backdrop on
+         desktop. Interactive UI is layered on top via .ft-stage-content. -->
+    <div class="ft-stage">
+      <img class="ft-stage-art" src="trade_analyzer_bg.webp" alt="" aria-hidden="true">
+      <div class="ft-stage-content">
 
-      <!-- Header (always visible) -->
-      <div class="pb-page-hdr">
-        <div class="pb-page-hdr-main">
-          <div class="pb-page-hdr-title">⇌ Trade Analyzer <span class="beta-badge" style="font-size:7px;vertical-align:middle">BETA</span></div>
-          <div class="pb-page-hdr-sub">Compare proposed trades side-by-side — for in-person evaluation only.</div>
+      <!-- Header: huge TRADE ANALYZER with JP subtitle + HOW IT WORKS link -->
+      <div class="ft-hero">
+        <div>
+          <div class="ft-hero-title">
+            TRADE ANALYZER <span class="ft-beta">BETA!</span>
+          </div>
+          <h3 class="ft-hero-jp">トレード分析</h3>
+          <div class="ft-hero-sub">Compare proposed trades side-by-side — for in-person evaluation only.</div>
         </div>
-        <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted);flex-shrink:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">← Binder</button>
+        <button class="ft-hero-how" onclick="ftOpenHowItWorks()">? HOW IT WORKS</button>
       </div>
 
       <!-- ── STATE 1: Card input ─────────────────────────────────────────── -->
@@ -4365,12 +4518,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <!-- Session banner — hidden until a session is created/joined -->
         <div id="ftSessionBanner" style="display:none;background:var(--surface2);border:1px solid var(--accent);padding:12px 16px;margin-bottom:14px"></div>
 
-        <!-- Two sides -->
-        <div class="ft-sides-grid">
+        <!-- Two sides — pink SIDE A vs cyan SIDE B with VS centerpiece -->
+        <div class="ft-sides-grid ft-with-vs">
 
-          <!-- SIDE A -->
-          <div class="ft-side-panel ft-side-a">
-            <div class="ft-side-label" style="color:var(--teal)">SIDE A</div>
+          <!-- SIDE A (pink/magenta) -->
+          <div class="ft-side-panel ft-side-a ft-pink">
+            <div class="ft-side-tag">SIDE A.</div>
+            <div class="ft-side-label">サイド A</div>
 
             <!-- Card stack viewer -->
             <div id="ftCardsA" class="ft-card-viewer"></div>
@@ -4400,9 +4554,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             </div>
           </div>
 
-          <!-- SIDE B -->
-          <div class="ft-side-panel ft-side-b">
-            <div class="ft-side-label" style="color:var(--gold)">SIDE B</div>
+          <!-- VS divider — only shows on desktop -->
+          <div class="ft-vs-mark">VS</div>
+
+          <!-- SIDE B (cyan) -->
+          <div class="ft-side-panel ft-side-b ft-cyan">
+            <div class="ft-side-tag">SIDE B.</div>
+            <div class="ft-side-label">サイド B</div>
 
             <!-- Card stack viewer -->
             <div id="ftCardsB" class="ft-card-viewer"></div>
@@ -4433,41 +4591,45 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
         </div>
 
-        <!-- Analyze + session buttons -->
-        <div style="text-align:center;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
-          <!-- Solo mode: single analyze button -->
-          <button id="ftAnalyzeBtn" onclick="ftAnalyzeTrade()"
-            style="padding:11px 36px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.85rem;cursor:pointer;letter-spacing:.08em">
-            ⇌ Analyze Trade
+        <!-- Action buttons — filled cyberpunk pills with EN/JP labels -->
+        <div class="ft-action-row" id="ftActionRow">
+          <button id="ftAnalyzeBtn" class="ft-action-btn ft-action-analyze" onclick="ftAnalyzeTrade()">
+            <span class="ft-en">ANALYZE TRADE</span>
+            <span class="ft-jp">トレードを分析</span>
           </button>
-          <!-- Session mode: per-side lock-in buttons (shown instead of analyze) -->
+          <button id="ftCreateSessionBtn" class="ft-action-btn ft-action-create" onclick="ftCreateSession()">
+            <span class="ft-en">CREATE TRADE LINK</span>
+            <span class="ft-jp">トレードリンクを作成</span>
+          </button>
+          <button class="ft-action-btn ft-action-reset" onclick="ftReset()">
+            <span class="ft-en">RESET</span>
+            <span class="ft-jp">リセット</span>
+          </button>
+        </div>
+
+        <!-- Session-mode lock-in buttons. Shown only when a session is active;
+             they replace the Analyze button per-side via JS. Kept inline-styled
+             since they're a different visual mode from the main pill row. -->
+        <div style="text-align:center;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
           <button id="ftLockBtnA" onclick="ftLockIn('A')"
-            style="display:none;padding:11px 22px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            style="display:none;padding:11px 22px;border:1px solid var(--ft-pink);background:transparent;color:var(--ft-pink);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
             Lock In Side A
           </button>
           <button id="ftLockBtnB" onclick="ftLockIn('B')"
-            style="display:none;padding:11px 22px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
+            style="display:none;padding:11px 22px;border:1px solid var(--ft-cyan);background:transparent;color:var(--ft-cyan);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
             Lock In Side B
-          </button>
-          <button id="ftCreateSessionBtn" onclick="ftCreateSession()"
-            style="padding:11px 20px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-            Create Trade Link
-          </button>
-          <button onclick="ftReset()"
-            style="padding:11px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
-            Reset
           </button>
         </div>
 
         <!-- Join by code (for guests / manual entry) -->
-        <div style="text-align:center;margin-bottom:20px">
-          <span style="font-size:.7rem;color:var(--muted)">Have a trade code? </span>
-          <input id="ftJoinCodeInput" type="text" maxlength="8" placeholder="TR4K9X"
-            style="width:80px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:monospace;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase"
+        <div class="ft-code-row">
+          <span style="color:var(--muted);letter-spacing:.08em">HAVE A TRADE CODE?</span>
+          <input id="ftJoinCodeInput" type="text" maxlength="8" placeholder="PB-XXXX-XXXX"
+            class="ft-code-input"
             oninput="this.value=this.value.toUpperCase()"/>
           <button onclick="ftJoinFromInput()"
-            style="margin-left:6px;padding:5px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.75rem;cursor:pointer">
-            Join
+            style="padding:6px 16px;border:1px solid var(--ft-cyan);background:transparent;color:var(--ft-cyan);font-family:inherit;font-size:.72rem;letter-spacing:.1em;cursor:pointer">
+            JOIN
           </button>
         </div>
       </div>
@@ -4554,7 +4716,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         </div>
       </div>
 
-    </div>
+      </div><!-- /.ft-stage-content -->
+    </div><!-- /.ft-stage -->
   </div>
 
   <!-- ── PUBLIC BINDER VIEW ─────────────────────────────────────────────── -->
@@ -18453,6 +18616,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     function ftReset() {
       ftInitPage();  // resets state to 'input' and clears all cards/fields
+    }
+
+    // Stub for the "? HOW IT WORKS" button in the new trade analyzer hero.
+    // For now we show a toast pointing users at the existing in-person
+    // evaluation workflow. Wire this to a real modal/help page later.
+    function ftOpenHowItWorks() {
+      var msg = 'Trade Analyzer scores both sides of a proposed in-person trade. ' +
+                'Add cards via search, scan, or pick-from-binder — optionally tack on cash. ' +
+                'Hit Analyze to see who\'s ahead. Use Create Trade Link to share a live session with the other trader.';
+      if (typeof showToast === 'function') showToast(msg);
+      else alert(msg);
     }
 
     async function ftAcceptTrade() {
