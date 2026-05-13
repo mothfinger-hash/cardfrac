@@ -1843,57 +1843,6 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       -webkit-backdrop-filter:none !important;
     }
 
-    /* ── Slam impact: white flash + expanding shockwave ring ───────
-       Both elements live inside #ftResultsState, positioned absolutely
-       over the gauge area, and pop on at T=370ms when the gauge slam
-       hits its peak-impact keyframe. */
-    .ft-slam-flash{
-      position:absolute;
-      left:50%; top:25%;
-      transform:translate(-50%,-50%);
-      width:80vw; height:80vw;
-      max-width:900px; max-height:900px;
-      border-radius:50%;
-      pointer-events:none;
-      opacity:0;
-      background:radial-gradient(circle,
-        rgba(255,238,200,.55) 0%,
-        rgba(255,210,140,.18) 22%,
-        transparent 55%);
-      filter:blur(8px);
-      mix-blend-mode:screen;
-      z-index:5;
-    }
-    .ft-slam-flash.ft-slam-active{
-      animation:ftSlamFlash .5s cubic-bezier(.2,.7,.3,1) forwards;
-    }
-    @keyframes ftSlamFlash{
-      0%   { opacity:0;   transform:translate(-50%,-50%) scale(.5); }
-      18%  { opacity:1;   transform:translate(-50%,-50%) scale(1);  }
-      100% { opacity:0;   transform:translate(-50%,-50%) scale(1.4);}
-    }
-
-    .ft-slam-ring{
-      position:absolute;
-      left:50%; top:25%;
-      transform:translate(-50%,-50%);
-      width:120px; height:120px;
-      border-radius:50%;
-      border:3px solid rgba(210,120,58,.85);
-      box-shadow:0 0 24px rgba(210,120,58,.6), inset 0 0 18px rgba(210,120,58,.35);
-      pointer-events:none;
-      opacity:0;
-      z-index:5;
-    }
-    .ft-slam-ring.ft-slam-active{
-      animation:ftSlamRing .75s cubic-bezier(.18,.7,.3,1) forwards;
-    }
-    @keyframes ftSlamRing{
-      0%   { width:60px;  height:60px;  opacity:.95; border-width:5px;}
-      40%  {                                 opacity:.8;                }
-      100% { width:150vw; height:150vw; opacity:0;   border-width:1px; }
-    }
-
     /* ── Copper glow ring AROUND the gauge border ────────────────
        Sits right at the gauge's circular edge — outer + inner box
        shadows give a soft copper rim. Fades in after the slam
@@ -1901,7 +1850,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-gauge-wrap::before{
       content:'';
       position:absolute;
-      inset:-3%;
+      inset:-1%;
       border-radius:50%;
       background:transparent;
       pointer-events:none;
@@ -1909,9 +1858,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       z-index:0;
       transition:opacity 1.1s ease-out;
       box-shadow:
-        0 0 22px 3px rgba(210,120,58,.55),
-        0 0 48px 10px rgba(210,120,58,.22),
-        inset 0 0 22px rgba(210,120,58,.32);
+        0 0 14px 1px rgba(210,120,58,.55),
+        0 0 30px 5px rgba(210,120,58,.22),
+        inset 0 0 14px rgba(210,120,58,.32);
     }
     .ft-gauge-wrap.ft-glow-on::before{
       opacity:1;
@@ -5343,12 +5292,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       <!-- ── STATE 3: Results (scale + breakdown) ───────────────────────── -->
       <div id="ftResultsState" style="display:none">
-
-        <!-- Slam impact effects — white flash + expanding copper shockwave
-             ring. Pop on at T=370ms when the gauge lands. Positioned over
-             the gauge area; pointer-events:none so they don't block clicks. -->
-        <div class="ft-slam-flash" id="ftSlamFlash" aria-hidden="true"></div>
-        <div class="ft-slam-ring"  id="ftSlamRing"  aria-hidden="true"></div>
 
         <!-- PathBinder gauge — gauge.webp + needle.webp overlay rotated by JS -->
         <div style="text-align:center;margin:10px 0 14px;user-select:none">
@@ -17752,7 +17695,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       // Reset any in-flight exit-animation classes on the half-cards / lens
       // so a re-analyze (or coming back to loading) starts clean. Also
-      // clear results-side flourishes (copper halo + impact effects).
+      // clear the copper halo on the gauge so it fades in fresh next run.
       if (state === 'loading') {
         var hL = document.getElementById('ftMagHalfL');
         var hR = document.getElementById('ftMagHalfR');
@@ -17762,10 +17705,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (lens) lens.classList.remove('ft-fly-out');
         var gwReset = document.querySelector('#ftResultsState .ft-gauge-wrap');
         if (gwReset) gwReset.classList.remove('ft-glow-on');
-        ['ftSlamFlash','ftSlamRing'].forEach(function(id) {
-          var el = document.getElementById(id);
-          if (el) el.classList.remove('ft-slam-active');
-        });
       }
 
       // Results entrance: gauge zooms in from far away before the needle
@@ -19368,17 +19307,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return fetched;
       });
 
-      // Wait for BOTH the price fetch AND at least one full animation
-      // cycle. Whichever finishes last gates the transition, so the
-      // user always sees a complete scan and never waits on a frozen
-      // end-frame after fetch finishes.
+      // Wait for the price fetch. We previously also waited for one full
+      // mag-cycle, but on cached/fast fetches that introduced a 1-2s lag
+      // between scan-end and gauge-slam where nothing was happening.
+      // The slam now fires the moment fetch returns — the looping mag
+      // animation simply gets cut where it is when the transition starts.
+      // A short minimum (450ms) keeps a very fast fetch from feeling
+      // jarringly instant.
       var fetched = {};
+      var minScanFloor = new Promise(function(r) { setTimeout(r, 450); });
       try {
-        var both = await Promise.all([
-          fetchPromise,
-          _ftMagAnimPromise || Promise.resolve()
-        ]);
-        fetched = both[0] || {};
+        fetched = (await Promise.all([fetchPromise, minScanFloor]))[0] || {};
       } catch(_) {
         // If the fetch threw catastrophically, still try to render.
         try { fetched = await fetchPromise; } catch(__) { fetched = {}; }
@@ -19448,9 +19387,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       // T=370ms — slam reaches its 55% keyframe (the gauge has just hit
-      // the table at scale .88, translateY 6px). EXPLOSION + IMPACT:
-      // cards radiate down-and-outward, mag glass kicks up-and-outward,
-      // and a white flash + expanding copper shockwave ring punch.
+      // the table at scale .88, translateY 6px). EXPLOSION: cards
+      // radiate down-and-outward, mag glass kicks up-and-outward.
       setTimeout(function() {
         if (lens) {
           lens.classList.add('ft-fly-out');
@@ -19459,17 +19397,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         if (hL) hL.classList.add('ft-fly-left');
         if (hR) hR.classList.add('ft-fly-right');
-
-        // Impact effects — restart by toggling class so they replay on
-        // subsequent analyze runs.
-        var flashEl = document.getElementById('ftSlamFlash');
-        var ringEl  = document.getElementById('ftSlamRing');
-        [flashEl, ringEl].forEach(function(el) {
-          if (!el) return;
-          el.classList.remove('ft-slam-active');
-          void el.offsetWidth;
-          el.classList.add('ft-slam-active');
-        });
       }, 370);
 
       // T=720ms — gauge slam has fully settled. Light up the copper halo
