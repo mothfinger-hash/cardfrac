@@ -1792,16 +1792,33 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       transition:opacity .18s ease-out;
     }
 
-    /* Breakdown reveal — fades + lifts up from below after the cards
-       have floated off, so the user's attention lands on the gauge
-       first, then the data populates beneath it. */
+    /* Breakdown reveal — CRT tube-television power-on. Same keyframe
+       used by .ac-crt.ac-on and .crt-grid-wrap.crt-powered: starts as
+       a bright thin horizontal line, expands vertically with a flash,
+       overshoots, and settles. */
     #ftBreakdown{
-      transition:opacity .55s ease-out, transform .55s ease-out;
+      transform-origin:center center;
+      will-change:transform,filter;
     }
     #ftBreakdown.ft-breakdown-hidden{
+      transform:scaleY(.001);
+      filter:brightness(14) blur(5px) saturate(0);
       opacity:0;
-      transform:translateY(28px);
       pointer-events:none;
+    }
+    #ftBreakdown.ft-breakdown-power{
+      pointer-events:auto;
+      animation:ftBreakdownCrtOn .88s cubic-bezier(.4,0,.2,1) forwards;
+    }
+    @keyframes ftBreakdownCrtOn{
+      0%  {opacity:0;transform:scaleY(.001);filter:brightness(14) blur(5px) saturate(0)}
+      5%  {opacity:1;transform:scaleY(.005);filter:brightness(16) blur(3px) saturate(0)}
+      16% {transform:scaleY(.04); filter:brightness(8)  blur(1px) saturate(.12)}
+      40% {transform:scaleY(.42); filter:brightness(3.2)blur(0)   saturate(.4)}
+      62% {transform:scaleY(1.04);filter:brightness(1.4)          saturate(.9)}
+      76% {transform:scaleY(.97); filter:brightness(1.06)}
+      90% {transform:scaleY(1.01)}
+      100%{transform:scaleY(1);   filter:brightness(1) saturate(1);opacity:1}
     }
 
     /* Gauge slam — identical to #ftQrContainer's ftQrSlam (falls from
@@ -17762,8 +17779,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var CARD1_X = 0.35,  CARD2_X = 0.65;
       var CARD_TOP_Y = 0.30, CARD_BOT_Y = 0.70;
       var MAG_W_PCT = 0.504, ZOOM = 2.0;
-      var P_DOWN_1 = 1500, P_UP_1 = 1100, P_SLIDE = 1000;
-      var P_DOWN_2 = 1500, P_UP_2 = 1100, P_HOLD  = 1000;
+      // Phase durations scaled to 70% (30% faster) — full cycle is now
+      // ~5040ms instead of 7200ms.
+      var P_DOWN_1 = 1050, P_UP_1 =  770, P_SLIDE =  700;
+      var P_DOWN_2 = 1050, P_UP_2 =  770, P_HOLD  =  700;
       var TOTAL = P_DOWN_1 + P_UP_1 + P_SLIDE + P_DOWN_2 + P_UP_2 + P_HOLD;
 
       function easeInOutSine(t) { return -(Math.cos(Math.PI * t) - 1) / 2; }
@@ -19310,13 +19329,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         return fetched;
       });
 
-      // Wait for the price fetch AND a minimum scan time so the user
-      // sees the mag-glass play through ~3/4 of one full cycle. Mag
-      // cycle total ≈ 7200ms; floor = 5400ms gets us through Side A,
-      // the cross-check slide, and into Side B's scan-down. If the
-      // fetch takes longer than the floor, we wait on the fetch.
+      // Wait for the price fetch AND a minimum scan time. The mag cycle
+      // is now ~5040ms total; a 3500ms floor gets us through Side A,
+      // the cross-check slide, and Side B's scan-down — and the slam
+      // hits just before the end of the cycle for a tighter handoff.
       var fetched = {};
-      var minScanFloor = new Promise(function(r) { setTimeout(r, 5400); });
+      var minScanFloor = new Promise(function(r) { setTimeout(r, 3500); });
       try {
         fetched = (await Promise.all([fetchPromise, minScanFloor]))[0] || {};
       } catch(_) {
@@ -19410,8 +19428,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       // T=1500ms — cards + glass have cleared frame (370 + 1060ms throw
       // + small buffer). Hide loading state, drop the transparent
-      // backdrop on results so it now owns the screen, and reveal the
-      // breakdown with its fade-and-lift.
+      // backdrop on results so it now owns the screen, and power the
+      // breakdown on with a CRT tube-television animation.
       setTimeout(function() {
         if (loadingEl) {
           loadingEl.style.display = 'none';
@@ -19420,7 +19438,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (resultsEl) {
           resultsEl.classList.remove('ft-cinema-transparent');
         }
-        if (bd) bd.classList.remove('ft-breakdown-hidden');
+        if (bd) {
+          bd.classList.remove('ft-breakdown-hidden');
+          // Force reflow + re-add the power class so the CRT animation
+          // replays cleanly on every analyze run.
+          bd.classList.remove('ft-breakdown-power');
+          void bd.offsetWidth;
+          bd.classList.add('ft-breakdown-power');
+        }
       }, 1500 - 720); // setTimeout is relative to NOW (post-await)
 
       // Resume polling so the coin-flip handshake works on the results
