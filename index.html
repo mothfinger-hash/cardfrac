@@ -1699,8 +1699,212 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        that left the lens blank on mobile. */
     img.ft-mag-lens-img{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;will-change:transform,width,height;filter:saturate(1.15) contrast(1.05);max-width:none;max-height:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
     .ft-mag-lens-frame{position:absolute;left:0;top:0;width:var(--ftmg-w);height:var(--ftmg-h);background-image:url('/mag_glass.webp');background-size:100% 100%;pointer-events:none}
-    .ft-mag-label-top{position:absolute;top:12px;left:16px;font-size:10px;letter-spacing:.18em;font-weight:700;color:#06b6d4;text-shadow:1px 1px 0 #000}
-    .ft-mag-label-bot{position:absolute;bottom:12px;left:16px;font-size:11px;letter-spacing:.1em;color:#94a3b8}
+    .ft-mag-label-top{position:absolute;top:12px;left:16px;font-size:10px;letter-spacing:.18em;font-weight:700;color:#06b6d4;text-shadow:1px 1px 0 #000;z-index:5}
+    .ft-mag-label-bot{position:absolute;bottom:12px;left:16px;font-size:11px;letter-spacing:.1em;color:#94a3b8;z-index:5}
+
+    /* ── CINEMATIC ANALYZE OVERLAY ──────────────────────────────────
+       Loading + results states promote to fullscreen takeover when the
+       .ft-cinema-active class is applied by _ftShowState. !important
+       is required because the mobile media query at the top of the
+       trade analyzer aggressively resets positioning on every
+       .ft-stage-content child. */
+    #ftLoadingState.ft-cinema-active,
+    #ftResultsState.ft-cinema-active{
+      position:fixed !important;
+      inset:0 !important;
+      top:0 !important; left:0 !important; right:0 !important; bottom:0 !important;
+      width:auto !important; height:auto !important;
+      z-index:9999;
+      background:radial-gradient(ellipse at center,
+        rgba(8,12,28,.97) 0%, rgba(2,4,12,.99) 70%, #000 100%);
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      display:flex !important;
+      flex-direction:column !important;
+      align-items:center !important;
+      justify-content:center !important;
+      padding:24px !important;
+      overflow:auto;
+      animation:ftCinemaFadeIn .35s ease-out both;
+    }
+    @keyframes ftCinemaFadeIn{
+      from{opacity:0}
+      to  {opacity:1}
+    }
+    /* Cinema mode: blow the mag scene up bigger and recolor the chrome */
+    #ftLoadingState.ft-cinema-active .ft-mag-scene{
+      max-width:min(880px,94vw);
+      width:100%;
+      border:1px solid #22d3ee;
+      box-shadow:0 0 50px rgba(34,211,238,.18), inset 0 0 30px rgba(0,0,0,.6);
+    }
+    /* Hide the legacy fetch-status text — the scene already labels itself */
+    #ftLoadingState.ft-cinema-active #ftLoadingMsg,
+    #ftLoadingState.ft-cinema-active #ftLoadingProgress{
+      color:#7dd3fc;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+    }
+
+    /* Two-card halves — clip the single trade_cards.webp so each side is
+       its own animatable element. JS triggers fly-apart by adding
+       .ft-fly-left / .ft-fly-right classes. */
+    .ft-mag-half{
+      position:absolute;
+      left:50%; top:50%;
+      width:60%; height:auto;
+      transform:translate(-50%,-50%);
+      pointer-events:none;
+      -webkit-user-drag:none;
+      user-select:none;
+      will-change:transform,opacity;
+      transition:transform .9s cubic-bezier(.5,.05,.6,1.2), opacity .9s ease;
+    }
+    .ft-mag-half-l{ clip-path:inset(0 50% 0 0); }
+    .ft-mag-half-r{ clip-path:inset(0 0 0 50%); }
+    .ft-mag-half.ft-fly-left {
+      transform:translate(-260%,-50%) rotate(-32deg);
+      opacity:0;
+    }
+    .ft-mag-half.ft-fly-right{
+      transform:translate(160%,-50%) rotate(28deg);
+      opacity:0;
+    }
+    /* Mag lens exit — spin off opposite of its current x */
+    .ft-mag-lens.ft-fly-out{
+      transition:transform 1s cubic-bezier(.5,.05,.6,1.2), opacity 1s ease;
+      opacity:0 !important;
+    }
+
+    /* Gauge zoom-in: starts very far away, snaps to full size */
+    @keyframes ftGaugeWarpIn{
+      0%   { transform:scale(.04) rotateX(60deg); opacity:0; filter:blur(8px); }
+      55%  { transform:scale(.45) rotateX(20deg); opacity:.85; filter:blur(3px); }
+      82%  { transform:scale(1.08) rotateX(0deg); opacity:1; filter:blur(0); }
+      100% { transform:scale(1) rotateX(0deg);    opacity:1; filter:blur(0); }
+    }
+    .ft-gauge-warp{
+      transform-origin:center 60%;
+      perspective:800px;
+      animation:ftGaugeWarpIn .95s cubic-bezier(.2,.7,.25,1.05) both;
+    }
+
+    /* Results cinema layout */
+    #ftResultsState.ft-cinema-active{
+      animation:ftCinemaFadeIn .25s ease-out both;
+    }
+    #ftResultsState.ft-cinema-active > div{
+      width:100%;
+      max-width:min(680px,94vw);
+    }
+    /* Cinematic verdict pill */
+    #ftResultsState.ft-cinema-active #ftVerdict{
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:1rem;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    /* ── HOW IT WORKS modal ─────────────────────────────────────────
+       Persistent overlay (stays open until the user closes it). */
+    .ft-howto-overlay{
+      position:fixed; inset:0;
+      background:rgba(2,6,16,.78);
+      backdrop-filter:blur(6px);
+      -webkit-backdrop-filter:blur(6px);
+      z-index:10000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      animation:ftCinemaFadeIn .2s ease-out both;
+    }
+    .ft-howto-card{
+      position:relative;
+      width:min(560px,100%);
+      max-height:88vh;
+      overflow:auto;
+      background:linear-gradient(180deg, #0b1224 0%, #050811 100%);
+      border:1px solid var(--ft-cyan);
+      box-shadow:0 0 40px rgba(0,229,255,.25), inset 0 0 20px rgba(0,229,255,.05);
+      padding:28px 26px 22px;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      color:var(--text);
+      border-radius:6px;
+    }
+    .ft-howto-card::before{
+      content:'';
+      position:absolute; left:0; top:0; right:0; height:2px;
+      background:linear-gradient(90deg, transparent, var(--ft-cyan), transparent);
+    }
+    .ft-howto-title{
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:1.05rem;
+      letter-spacing:.14em;
+      color:var(--ft-cyan);
+      margin:0 0 4px;
+      text-transform:uppercase;
+    }
+    .ft-howto-jp{
+      font-size:.7rem;
+      color:var(--ft-cyan);
+      opacity:.75;
+      letter-spacing:.2em;
+      margin-bottom:18px;
+    }
+    .ft-howto-card h4{
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:.78rem;
+      letter-spacing:.12em;
+      color:var(--copper,#D2783A);
+      margin:14px 0 6px;
+      text-transform:uppercase;
+    }
+    .ft-howto-card p{
+      font-size:.78rem;
+      line-height:1.55;
+      color:var(--text);
+      margin:0 0 10px;
+    }
+    .ft-howto-card .ft-howto-tag{
+      display:inline-block;
+      padding:1px 7px;
+      border:1px solid var(--ft-cyan);
+      color:var(--ft-cyan);
+      font-size:.62rem;
+      letter-spacing:.1em;
+      margin-right:6px;
+      vertical-align:middle;
+    }
+    .ft-howto-close{
+      position:absolute; top:10px; right:10px;
+      width:32px; height:32px;
+      border:1px solid var(--ft-cyan);
+      background:transparent;
+      color:var(--ft-cyan);
+      font-family:inherit;
+      font-size:1.1rem;
+      cursor:pointer;
+      transition:background .15s,color .15s;
+      line-height:1;
+    }
+    .ft-howto-close:hover{ background:var(--ft-cyan); color:#000; }
+    .ft-howto-done{
+      margin-top:18px;
+      display:block;
+      width:100%;
+      padding:10px;
+      border:1px solid var(--ft-cyan);
+      background:transparent;
+      color:var(--ft-cyan);
+      font-family:inherit;
+      font-size:.78rem;
+      letter-spacing:.14em;
+      cursor:pointer;
+      transition:background .15s,color .15s;
+    }
+    .ft-howto-done:hover{ background:var(--ft-cyan); color:#000; }
 
     /* ── FAIR TRADE — session join notification ── */
     @keyframes ftJoinPulse{
@@ -4962,11 +5166,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>
 
       <!-- ── STATE 2: PathBinder magnifying-glass over both cards ── -->
+      <!-- Cinema mode: when _ftShowState('loading') runs, this gets the
+           .ft-cinema-active class which makes it a fullscreen takeover. -->
       <div id="ftLoadingState" style="display:none;text-align:center;padding:16px 0 12px">
         <div class="ft-mag-scene" id="ftMagScene">
-          <!-- Cards layer: real <img> instead of CSS background to dodge
-               iOS Safari's flaky background-size handling on mobile. -->
-          <img class="ft-mag-base" src="/trade_cards.webp" alt="" draggable="false"
+          <!-- Two card halves clipped from the same image so they can fly
+               apart independently after the mag-glass scan completes. -->
+          <img class="ft-mag-base ft-mag-half ft-mag-half-l" id="ftMagHalfL" src="/trade_cards.webp" alt="" draggable="false">
+          <img class="ft-mag-base ft-mag-half ft-mag-half-r" id="ftMagHalfR" src="/trade_cards.webp" alt="" draggable="false"
                onerror="console.error('[ftMag] trade_cards.webp failed:', this.src)">
           <div class="ft-mag-lens" id="ftMagLens">
             <div class="ft-mag-lens-zoom">
@@ -5045,6 +5252,58 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       </div><!-- /.ft-stage-content -->
     </div><!-- /.ft-stage -->
+  </div>
+
+  <!-- ── HOW IT WORKS modal (persistent) ──────────────────────────
+       Opens on the "? HOW IT WORKS" button. Stays open until the
+       user explicitly closes via the X, the DONE button, the ESC
+       key, or a backdrop click. -->
+  <div id="ftHowToModal" class="ft-howto-overlay" style="display:none" onclick="if(event.target===this)ftCloseHowItWorks()">
+    <div class="ft-howto-card" role="dialog" aria-modal="true" aria-labelledby="ftHowToTitle">
+      <button class="ft-howto-close" onclick="ftCloseHowItWorks()" aria-label="Close">×</button>
+      <div class="ft-howto-title" id="ftHowToTitle">◈ How It Works</div>
+      <div class="ft-howto-jp">使い方</div>
+
+      <h4>◇ Build Each Side</h4>
+      <p>
+        <span class="ft-howto-tag">SEARCH</span>
+        <span class="ft-howto-tag">SCAN</span>
+        <span class="ft-howto-tag">MY BINDER</span>
+        Use any combination to load cards into Side A and Side B.
+        Tack on cash with the <strong>+$</strong> field.
+      </p>
+
+      <h4>◇ Analyze Trade</h4>
+      <p>
+        Runs prices in parallel through TCGPlayer and PriceCharting,
+        then drops you on the verdict gauge. Use this for an offline
+        in-person valuation.
+      </p>
+
+      <h4>◇ Create Trade Link</h4>
+      <p>
+        Generates a live session and a QR code. Share it with the
+        other trader — they join, build their side, and you both
+        <strong>Lock In</strong>. Once both sides lock, the analyzer
+        fires automatically and you both see the same gauge.
+      </p>
+
+      <h4>◇ Coin Flip</h4>
+      <p>
+        On the results screen both traders can press
+        <strong>COIN FLIP</strong> for a tie-break or "who picks first"
+        decision. The result is synced — neither side can rig it.
+      </p>
+
+      <h4>◇ Accept Trade</h4>
+      <p>
+        Hitting <strong>Accept Trade</strong> moves the offered cards
+        out of your binder and brings the received cards in.
+        For in-person evaluation only — no money changes hands here.
+      </p>
+
+      <button class="ft-howto-done" onclick="ftCloseHowItWorks()">CLOSE</button>
+    </div>
   </div>
 
   <!-- ── PUBLIC BINDER VIEW ─────────────────────────────────────────────── -->
@@ -17328,6 +17587,35 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (loading) loading.style.display = state === 'loading' ? '' : 'none';
       if (results) results.style.display = state === 'results' ? '' : 'none';
 
+      // Cinema mode: loading + results take over the full viewport so the
+      // mag-glass scan and the gauge results blot out the analyzer behind
+      // them. Input state never goes cinematic.
+      if (loading) loading.classList.toggle('ft-cinema-active', state === 'loading');
+      if (results) results.classList.toggle('ft-cinema-active', state === 'results');
+
+      // Reset any in-flight exit-animation classes on the half-cards / lens
+      // so a re-analyze (or coming back to loading) starts clean.
+      if (state === 'loading') {
+        var hL = document.getElementById('ftMagHalfL');
+        var hR = document.getElementById('ftMagHalfR');
+        var lens = document.getElementById('ftMagLens');
+        if (hL) hL.classList.remove('ft-fly-left');
+        if (hR) hR.classList.remove('ft-fly-right');
+        if (lens) lens.classList.remove('ft-fly-out');
+      }
+
+      // Results entrance: gauge zooms in from far away before the needle
+      // animation plays. _ftWobbleOnNext is what kicks off the needle.
+      if (state === 'results') {
+        var gw = document.querySelector('#ftResultsState .ft-gauge-wrap');
+        if (gw) {
+          gw.classList.remove('ft-gauge-warp');
+          // Force reflow so the animation replays even if class re-applied.
+          void gw.offsetWidth;
+          gw.classList.add('ft-gauge-warp');
+        }
+      }
+
       // If results just became visible, apply any buffered remote coin flip
       if (state === 'results') {
         _ftUpdateCoinFlipUI(); // set button label based on session state
@@ -18944,11 +19232,45 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         });
       });
 
-      // Switch to results state — trigger wobble animation
-      _ftWobbleOnNext = true;
+      // ── Cinematic exit: cards + magnifying glass fly apart, gauge
+      // warps in from far away, then the needle wobble plays. ──
+      var hL   = document.getElementById('ftMagHalfL');
+      var hR   = document.getElementById('ftMagHalfR');
+      var lens = document.getElementById('ftMagLens');
+      var status = document.getElementById('ftMagStatus');
+      if (status) status.textContent = '> VERDICT INCOMING';
+
+      // Stop the looping mag animation so it doesn't fight the exit.
+      _ftStopMagAnim();
+
+      // Lens exits in the direction it's currently sitting (right-hand
+      // card at SCAN B). Add the fly classes — CSS transitions handle
+      // the rest. Halves throw to opposite sides; lens fades + drifts.
+      if (lens) {
+        // Drift the lens off-screen (continue along its last vector
+        // toward the right, then fade out).
+        lens.classList.add('ft-fly-out');
+        var prevTransform = lens.style.transform || '';
+        lens.style.transform = prevTransform + ' translate(40vw,-20vh) rotate(40deg)';
+      }
+      if (hL) hL.classList.add('ft-fly-left');
+      if (hR) hR.classList.add('ft-fly-right');
+
+      // Hold on the empty stage for a beat, then transition to gauge.
+      await new Promise(function(r) { setTimeout(r, 850); });
+
+      // Switch to results — CSS .ft-gauge-warp triggers the zoom-in.
+      // Defer the needle wobble until the gauge has mostly landed so
+      // the user actually sees the needle swing instead of having it
+      // baked into the scale-up.
+      _ftWobbleOnNext = false; // we'll trigger manually below
       _ftShowState('results');
-      ftRecalc();
       _ftRenderBreakdown(fetched);
+
+      // Wait for gauge warp to mostly land, then play needle wobble.
+      await new Promise(function(r) { setTimeout(r, 720); });
+      _ftWobbleOnNext = true;
+      ftRecalc();
 
       // Resume polling so the coin-flip handshake works on the results
       // screen. Polling was stopped at lock-in time so analyze had a
@@ -19098,15 +19420,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (typeof ftScanTrigger === 'function') ftScanTrigger(side);
     }
 
-    // Stub for the "? HOW IT WORKS" button in the new trade analyzer hero.
-    // For now we show a toast pointing users at the existing in-person
-    // evaluation workflow. Wire this to a real modal/help page later.
+    // "? HOW IT WORKS" button → persistent modal. Stays open until the
+    // user clicks the X, the CLOSE button, the backdrop, or hits ESC.
     function ftOpenHowItWorks() {
-      var msg = 'Trade Analyzer scores both sides of a proposed in-person trade. ' +
-                'Add cards via search, scan, or pick-from-binder — optionally tack on cash. ' +
-                'Hit Analyze to see who\'s ahead. Use Create Trade Link to share a live session with the other trader.';
-      if (typeof showToast === 'function') showToast(msg);
-      else alert(msg);
+      var modal = document.getElementById('ftHowToModal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      // Wire ESC handler once
+      if (!window._ftHowToEscBound) {
+        window._ftHowToEscBound = true;
+        document.addEventListener('keydown', function(e) {
+          if (e.key !== 'Escape') return;
+          var m = document.getElementById('ftHowToModal');
+          if (m && m.style.display !== 'none') ftCloseHowItWorks();
+        });
+      }
+    }
+    function ftCloseHowItWorks() {
+      var modal = document.getElementById('ftHowToModal');
+      if (modal) modal.style.display = 'none';
     }
 
     async function ftAcceptTrade() {
