@@ -2188,6 +2188,23 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #ftResultsState.ft-cinema-active #ftBreakdown{
       margin-top:6px;
     }
+    /* Mobile: center-justify the price breakdown so the SIDE A/B
+       section labels + side totals + footer note sit in the middle
+       of the screen. Card-name cells stay left-aligned for
+       readability; QTY column stays centered; price columns stay
+       right-aligned (their inline text-align beats the inherited
+       center via specificity). */
+    @media(max-width:780px){
+      #ftResultsState.ft-cinema-active #ftBreakdown{
+        text-align:center;
+      }
+      #ftBreakdownContent > div{
+        text-align:center !important;
+      }
+      #ftBreakdownContent td:first-child{
+        text-align:left !important;
+      }
+    }
     /* Cinematic verdict pill — strip the global !important navy bg/
        border (defined further down in section 10) so the empty verdict
        doesn't paint as a dark bar between the gauge info and coin flip
@@ -18768,12 +18785,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           var card = JSON.parse(this.dataset.ftbcard);
           var s    = this.dataset.ftbside;
           ftAddCard(s, card);
-          // Close the picker after selecting
+          // Close the picker + parent hologram modal so the user
+          // returns to the main trade view instead of staring at an
+          // empty binder pane after the card is added.
           _ftBinderOpen[s] = false;
           var p = document.getElementById('ftBinderPicker' + s);
           var b = document.getElementById('ftBinderBtn' + s);
           if (p) p.style.display = 'none';
           if (b) b.textContent = 'MY BINDER';
+          if (typeof ftCloseHoloModal === 'function') ftCloseHoloModal(s);
         });
       });
 
