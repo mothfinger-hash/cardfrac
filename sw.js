@@ -1,5 +1,5 @@
 // PathBinder Service Worker
-const CACHE = 'pathbinder-v126';
+const CACHE = 'pathbinder-v127';
 
 const PRECACHE = [
   '/offline.html',

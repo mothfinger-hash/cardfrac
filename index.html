@@ -2539,20 +2539,34 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #setsPage #setsSearch,
     #setsPage #setsAcList{
       background:var(--sets-overlay) !important;
+      border-color:var(--sets-border) !important;
       backdrop-filter:blur(2px);
       -webkit-backdrop-filter:blur(2px);
     }
-    /* Search input gets the same aubergine wash, plus a default border
-       in the overlay tone so the teal focus border lands as a clean
-       state change (not just a darker line on a lighter input). */
+    /* Container-level borders use the slightly stronger aubergine tone
+       so the frame reads as a deliberate edge, not a faint suggestion. */
+    #setsPage [id^="setsListInner"],
+    #setsPage #setsCardList,
+    #setsPage #setsDetailProgress{
+      border:1px solid var(--sets-border-strong) !important;
+    }
+    /* Search input shares the aubergine wash; default border in the
+       softer overlay tone so the teal focus border lands as a clean
+       state change instead of just a darker line on a lighter input. */
     #setsPage #setsSearch{
-      border:1px solid rgba(255,255,255,.08) !important;
+      border:1px solid var(--sets-border) !important;
       color:var(--text) !important;
       transition:border-color .15s, box-shadow .15s;
     }
     #setsPage #setsSearch:focus{
       border-color:var(--sets-teal) !important;
       box-shadow:0 0 12px var(--sets-teal-glow);
+    }
+    /* Autocomplete dropdown — match the search input's softer aubergine
+       frame, no top border (it tucks under the input). */
+    #setsPage #setsAcList{
+      border:1px solid var(--sets-border) !important;
+      border-top:none !important;
     }
     /* Mobile: swap to a portrait crop of the same artwork (right-side
        slice of sets_cards.png) so the cat + right-edge graffiti land in
@@ -2798,6 +2812,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
      this token is the bookmark for that future per-page tuning. */
   --sets-overlay:    rgba(14,8,20,.86);
   --sets-overlay-strong: rgba(14,8,20,.94);
+  /* Border tones that wrap the aubergine overlays — same hue family,
+     just lifted in luminosity so the frame reads against the darker
+     fill. Replaces the default --border (#182638) within the sets
+     page, which clashed as a bluish-grey against the aubergine fill. */
+  --sets-border:     rgba(72,42,88,.55);
+  --sets-border-strong: rgba(96,58,118,.75);
 
   --text:  #DCE8F5;     /* cool blue-white */
   --muted: #5A7090;     /* blue-gray */
