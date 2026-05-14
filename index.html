@@ -2431,7 +2431,28 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .bsb-add:hover{border-color:#00E5FF;color:#00E5FF}
     /* Sets autocomplete */
     .sets-ac-item{padding:8px 14px;cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;color:var(--text);transition:background .1s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .sets-ac-item:hover{background:var(--surface2);color:var(--accent)}
+    .sets-ac-item:hover{background:var(--surface2);color:var(--sets-teal)}
+
+    /* ── SETS PAGE backdrop ─────────────────────────────────────────
+       Uses sets_cards.webp as a stretched background. The image has
+       teal/seafoam graffiti on the edges (cat mascot top-right,
+       paint splatters left + bottom, JP characters right) with a
+       black center where content sits. background-size:100% 100%
+       stretches it — fine here since the graffiti is irregular
+       enough to mask any aspect distortion. */
+    #setsPage{
+      position:relative;
+      background-image:url('sets_cards.webp');
+      background-size:100% 100%;
+      background-repeat:no-repeat;
+      background-position:center top;
+      padding:36px 38px 40px !important;
+      min-height:calc(100svh - 60px);
+    }
+    /* Mobile: shrink the inner padding so content has room on a phone */
+    @media(max-width:780px){
+      #setsPage{ padding:24px 16px 32px !important; }
+    }
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
     .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
@@ -2558,6 +2579,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   --gold:    #FFD700;
   --orange:  #FF5722;
   --teal:    #00BFFF;
+  /* Seafoam — Sets page accent, matches sets_cards.webp graffiti */
+  --sets-teal:       #1AC7A0;
+  --sets-teal-dim:   rgba(26,199,160,.55);
+  --sets-teal-glow:  rgba(26,199,160,.18);
 
   --text:  #DCE8F5;     /* cool blue-white */
   --muted: #5A7090;     /* blue-gray */
@@ -21487,7 +21512,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const owned    = _setsOwnedBySet[s.name] || 0;
       const total    = s.total || s.printedTotal || 1;
       const pct      = Math.min(100, Math.round((owned / total) * 100));
-      const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+      // Seafoam-teal progression. Complete sets get green; partial sets
+      // stay teal so the page reads consistently against the backdrop.
+      const barColor = pct >= 100 ? 'var(--green)' : 'var(--sets-teal)';
       const logoHtml = s.images && s.images.logo
         ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
         : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
@@ -21637,9 +21664,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         _SETS_TABS.map(function(t) {
           var active = _setsLang === t.key;
           return '<button onclick="setSetsLang(\'' + t.key + '\')" style="' + tabBase +
-            ';border-color:' + (active ? 'var(--copper)' : 'var(--border)') +
-            ';color:' + (active ? 'var(--copper)' : 'var(--muted)') +
-            ';background:' + (active ? 'var(--copper-glow)' : 'transparent') + '">' +
+            ';border-color:' + (active ? 'var(--sets-teal)' : 'var(--sets-teal-dim)') +
+            ';color:' + (active ? 'var(--sets-teal)' : 'var(--muted)') +
+            ';background:' + (active ? 'var(--sets-teal-glow)' : 'transparent') + '">' +
             t.label + '</button>';
         }).join('') +
       '</div>';
