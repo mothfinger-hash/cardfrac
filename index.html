@@ -15527,12 +15527,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
       try {
         const q = query.trim();
-        const { data: rows, error } = await sb
-          .from('catalog')
-          .select('id, name, set_name, set_code, card_number, rarity, image_url')
-          .ilike('name', `%${q}%`)
-          .or('id.like.jp-%,id.like.pd-%')
-          .limit(100);
+        // Card-number queries (e.g. "063" or "063/182") route through
+        // a catalog.card_number lookup instead of name search.
+        const _jpCardNum = (typeof _pbDetectCardNumber === 'function') ? _pbDetectCardNumber(q) : null;
+        let rows = null, error = null;
+        if (_jpCardNum) {
+          const variants = (typeof _pbCardNumberVariants === 'function') ? _pbCardNumberVariants(_jpCardNum) : [_jpCardNum];
+          const r = await sb.from('catalog')
+            .select('id, name, set_name, set_code, card_number, rarity, image_url')
+            .or('id.like.jp-%,id.like.pd-%')
+            .in('card_number', variants)
+            .limit(1000);
+          rows = r.data; error = r.error;
+        } else {
+          const r = await sb
+            .from('catalog')
+            .select('id, name, set_name, set_code, card_number, rarity, image_url')
+            .ilike('name', `%${q}%`)
+            .or('id.like.jp-%,id.like.pd-%')
+            .limit(1000);
+          rows = r.data; error = r.error;
+        }
 
         if (error) throw new Error(error.message);
 
@@ -15793,12 +15808,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       let cards = [];
       let source = 'catalog';
 
-      try {
+      // Card-number queries (e.g. "063" or "063/182") route through a
+      // catalog.card_number lookup instead of name search.
+      const _otCardNum = (typeof _pbDetectCardNumber === 'function') ? _pbDetectCardNumber(query) : null;
+      const _otPrefix = { magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-' }[gameType];
+      if (_otCardNum) {
+        try {
+          const numRows = await _pbSearchCatalogByCardNumber(_otCardNum, _otPrefix, 1000);
+          if (numRows && numRows.length) {
+            cards = numRows.map(_catalogRowToApiShape);
+          }
+        } catch(_) {}
+      }
+
+      if (!cards.length) try {
         const { data: rows, error } = await sb.rpc('search_catalog_cards', {
           q: query,
           game: gameType,
           jp_mode: 'all',
-          result_limit: 250
+          result_limit: 1000
         });
         if (error) throw error;
         cards = (rows || []).map(_catalogRowToApiShape);
@@ -15873,7 +15901,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         let total = 0;
         let source = 'catalog';
 
-        try {
+        // Card-number queries (e.g. "063" or "063/182") route through a
+        // catalog.card_number lookup instead of name search. Works across
+        // every TCG — falls into the EN path below since this page is
+        // EN-Pokemon scoped.
+        const _acCardNum = (typeof _pbDetectCardNumber === 'function') ? _pbDetectCardNumber(query) : null;
+        if (_acCardNum) {
+          try {
+            const numRows = await _pbSearchCatalogByCardNumber(_acCardNum, 'en-', 1000);
+            if (numRows && numRows.length) {
+              cards = numRows.map(_catalogRowToApiShape);
+              total = cards.length;
+            }
+          } catch(_) {}
+        }
+
+        if (!cards.length) try {
           // RPC call uses the search_catalog_cards Postgres function for
           // trigram-similarity-ranked results — base cards surface above
           // their EX/VMAX/VSTAR variants because similarity scoring boosts
@@ -15882,18 +15925,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             q: query,
             game: 'pokemon',
             jp_mode: 'exclude',   // EN-only — leaves jp-/pd- rows out
-            result_limit: 250
+            result_limit: 1000
           });
           if (error) throw error;
           cards = (rows || []).map(_catalogRowToApiShape);
           total = cards.length;
         } catch (e) {
-          console.warn('[search] catalog query failed, falling through to API:', e);
+          console.warn('[search] catalog RPC failed, trying direct table query:', e);
         }
 
-        // Fall back to pokemontcg.io if catalog had nothing — covers
-        // brand-new cards we haven't synced yet, or weird typos that
-        // beat the catalog's ILIKE but the API can still resolve.
+        // Direct catalog query — RPC's trigram threshold can drop sets
+        // it hasn't indexed yet (Mega Evolution Promos and similar).
+        // ILIKE on name + id-prefix filter catches those.
+        if (cards.length === 0) {
+          try {
+            const { data: direct, error: directErr } = await sb.from('catalog')
+              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+              .ilike('id', 'en-%')
+              .ilike('name', '%' + query + '%')
+              .limit(1000);
+            if (!directErr && direct && direct.length) {
+              cards = direct.map(_catalogRowToApiShape);
+              total = cards.length;
+            }
+          } catch(_) {}
+        }
+
+        // Fall back to pokemontcg.io only after BOTH catalog paths come
+        // up empty — covers brand-new cards we haven't synced yet, or
+        // weird typos that beat the catalog's ILIKE but the API can
+        // still resolve.
         if (cards.length === 0) {
           source = 'pokemontcg';
           const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=250&orderBy=name`);
@@ -18277,19 +18338,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // currently in /sounds/). Howler picks whichever format it can play —
     // when you later convert to opus/mp3, those will be preferred for
     // size since they're listed too.
-    // Per-cue cache-buster — bump the `?v=N` query string on a specific
-    // cue when you replace its source file in /sounds/ so the browser
-    // re-fetches it instead of serving the stale cached copy. Howler
-    // treats /sounds/x.wav?v=2 as a different URL from /sounds/x.wav,
-    // so this avoids needing a hard refresh or service-worker bump.
+    // Howler picks the FIRST format the browser supports — so list the
+    // small formats first (Opus → MP3 → WAV). All cues now have all
+    // three formats in /sounds/, so most browsers will load just the
+    // Opus version (~30× smaller than WAV). If you replace a sound
+    // file, append a `?v=N` query string to bust the cache.
     var _pbHowlSrcs = {
-      scratch:  ['/sounds/scratch.wav',       '/sounds/scratch.opus',       '/sounds/scratch.mp3'],
-      flicker:  ['/sounds/flicker.wav?v=2',   '/sounds/flicker.opus?v=2',   '/sounds/flicker.mp3?v=2'],
-      lockin:   ['/sounds/lockin.wav',        '/sounds/lockin.opus',        '/sounds/lockin.mp3'],
-      slap:     ['/sounds/slap.wav',          '/sounds/slap.opus',          '/sounds/slap.mp3'],
-      swipe:    ['/sounds/swipe.wav',         '/sounds/swipe.opus',         '/sounds/swipe.mp3'],
-      thud:     ['/sounds/thud.wav',          '/sounds/thud.opus',          '/sounds/thud.mp3'],
-      coinflip: ['/sounds/coin_flip.wav',     '/sounds/coin_flip.opus',     '/sounds/coin_flip.mp3'],
+      scratch:  ['/sounds/scratch.opus',   '/sounds/scratch.mp3',   '/sounds/scratch.wav'],
+      flicker:  ['/sounds/flicker.opus',   '/sounds/flicker.mp3',   '/sounds/flicker.wav'],
+      lockin:   ['/sounds/lockin.opus',    '/sounds/lockin.mp3',    '/sounds/lockin.wav'],
+      slap:     ['/sounds/slap.opus',      '/sounds/slap.mp3',      '/sounds/slap.wav'],
+      swipe:    ['/sounds/swipe.opus',     '/sounds/swipe.mp3',     '/sounds/swipe.wav'],
+      thud:     ['/sounds/thud.opus?v=2',  '/sounds/thud.mp3?v=2',  '/sounds/thud.wav?v=2'],
+      coinflip: ['/sounds/coin_flip.opus', '/sounds/coin_flip.mp3', '/sounds/coin_flip.wav'],
     };
     // Per-cue start offset in SECONDS. After play(), the dispatcher
     // seeks the sound to this position so the front of the file is
@@ -18299,6 +18360,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     var _pbHowlOffsets = {
       scratch: 0.5,
     };
+    // Per-cue volume multiplier — applied on top of _pbMasterVolume.
+    // 1.0 = same as master. 0.75 = 25% quieter than master. 0.5 = half.
+    // Tweak here when an individual cue stands out as too loud / soft
+    // relative to the rest.
+    var _pbHowlScale = {
+      scratch: 0.75,  // -25% — the vinyl wikki was overpowering the thud
+    };
     var _pbHowls = {};
     var _pbHowlFailed = {};
     function _pbGetHowl(name) {
@@ -18306,9 +18374,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (_pbHowlFailed[name]) return null;   // file 404'd; skip permanently
       if (_pbHowls[name]) return _pbHowls[name];
       try {
+        var scale = _pbHowlScale[name] != null ? _pbHowlScale[name] : 1;
         var h = new window.Howl({
           src: _pbHowlSrcs[name],
-          volume: _pbMasterVolume,
+          volume: _pbMasterVolume * scale,
           preload: true,
           // HTML5 Audio mode is much more reliable on mobile (iOS Safari
           // in particular) — Web Audio's context-unlock dance breaks
@@ -19128,6 +19197,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       clearTimeout(_ftSyncDebounce);
       var banner = document.getElementById('ftSessionBanner');
       if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+      // Remove the reparented QR from .ft-stage so a fresh session
+      // can render a brand-new one with the slam animation.
+      document.querySelectorAll('.ft-stage > #ftQrContainer').forEach(function(el) {
+        el.remove();
+      });
+      var mobileCode = document.getElementById('ftMobileSessionCode');
+      if (mobileCode) { mobileCode.style.display = 'none'; mobileCode.innerHTML = ''; }
       _ftUpdateSessionButtons();
       showToast('Session ended');
     }
@@ -19214,8 +19290,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         mobileCode.style.display = '';
       }
 
-      // Render QR code once (creator only) — check if already rendered
+      // Render QR code once (creator only) — check if already rendered.
+      // _ftRenderSessionBanner runs on every sync (e.g. when Side B
+      // adds a card), and each call resets banner.innerHTML which
+      // makes a FRESH empty #ftQrContainer placeholder. If we didn't
+      // guard here, every sync would render a new QR, reparent it to
+      // .ft-stage, and re-fire the slam animation — leaving the old
+      // QR as an orphan. Detect the previously-rendered QR (now a
+      // direct child of .ft-stage) and short-circuit, removing the
+      // new placeholder so we don't end up with duplicate IDs.
       if (role === 'a') {
+        var existingQr = document.querySelector('.ft-stage > #ftQrContainer[data-rendered="1"]');
+        if (existingQr) {
+          var placeholderQr = banner.querySelector('#ftQrContainer');
+          if (placeholderQr && placeholderQr !== existingQr) placeholderQr.remove();
+          return;
+        }
         var qrEl = document.getElementById('ftQrContainer');
         if (qrEl && !qrEl.dataset.rendered) {
           _loadQRCode(function() {
@@ -19427,6 +19517,45 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
+    // ── Card-number search helpers — shared by trade analyzer + add
+    // card. Detects queries like "063" or "063/182" and routes them
+    // through a catalog.card_number lookup instead of name search.
+    // Works across every game since the catalog is keyed by id prefix
+    // (en-/jp-/pd-/mtg-/ygo-/op-) plus card_number. ──────────────
+    function _pbDetectCardNumber(q) {
+      // Match "63", "063", "63/182", "063/182" — capture the first
+      // numeric group (the card position). Returns the un-padded
+      // string ("63") or null if it isn't a card-number query.
+      var m = (q || '').trim().match(/^(\d+)\s*(?:\/\s*\d+)?$/);
+      if (!m) return null;
+      // Drop leading zeros — variants are generated downstream.
+      var n = m[1].replace(/^0+/, '');
+      return n === '' ? '0' : n;
+    }
+    function _pbCardNumberVariants(n) {
+      // Build the common zero-padded forms catalog tables use:
+      // 63 → ["63", "063", "0063"]. Catalogs that store "63" or "063"
+      // are both covered. 4-digit padding is the practical ceiling
+      // for any printed card number.
+      var out = new Set();
+      out.add(n);
+      var max = Math.max(4 - n.length, 0);
+      for (var pad = 1; pad <= max; pad++) {
+        out.add(n.padStart(n.length + pad, '0'));
+      }
+      return Array.from(out);
+    }
+    async function _pbSearchCatalogByCardNumber(num, idPrefix, limit) {
+      var variants = _pbCardNumberVariants(num);
+      var query = sb.from('catalog')
+        .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+        .in('card_number', variants)
+        .limit(limit || 1000);
+      if (idPrefix) query = query.ilike('id', idPrefix + '%');
+      var res = await query;
+      return (res.error || !res.data) ? [] : res.data;
+    }
+
     async function ftSearch(side) {
       var inputId = 'ftSearch' + side;
       var resultsId = 'ftResults' + side;
@@ -19440,11 +19569,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Searching…</div>';
 
       var game = _ftSearchGame[side] || 'pokemon';
+      var idPrefix = { pokemon: 'en-', magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-' }[game];
+      var cardNum = _pbDetectCardNumber(q);   // "063/182" / "63" → "63" or null
 
       try {
         var cards = [];
 
-        if (game !== 'pokemon') {
+        // ── Card-number search path ── If the query is a card number
+        // (e.g. "063" or "063/182"), look it up directly in the
+        // catalog. Works across every TCG via the id-prefix filter.
+        if (cardNum) {
+          var numRows = await _pbSearchCatalogByCardNumber(cardNum, idPrefix, 1000);
+          cards = numRows.map(_catalogRowToApiShape);
+        } else if (game !== 'pokemon') {
           // Non-Pokemon TCGs (magic / yugioh / onepiece): direct
           // catalog table query first. The search_catalog_cards RPC
           // was returning empty for OP even on simple queries like
@@ -19452,12 +19589,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           // (op- / mtg- / ygo-) and an ilike name match — this is
           // reliable across game types regardless of how game_type is
           // populated per row.
-          var idPrefix = { magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-' }[game];
           try {
             var directQuery = sb.from('catalog')
               .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
               .ilike('name', '%' + q + '%')
-              .limit(30);
+              .limit(1000);
             if (idPrefix) directQuery = directQuery.ilike('id', idPrefix + '%');
             var direct = await directQuery;
             if (!direct.error && direct.data && direct.data.length) {
@@ -19470,7 +19606,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           if (!cards.length) {
             try {
               var rpc = await sb.rpc('search_catalog_cards', {
-                q: q, game: game, jp_mode: 'all', result_limit: 30
+                q: q, game: game, jp_mode: 'all', result_limit: 1000
               });
               if (!rpc.error && rpc.data && rpc.data.length) {
                 cards = rpc.data.map(_catalogRowToApiShape);
@@ -19490,15 +19626,34 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             }
           }
         } else {
-          // Default: Pokemon via pokemontcg.io. Lucene: wildcard only valid
-          // on single tokens; multi-word queries need a quoted phrase.
-          var nameQuery = q.includes(' ')
-            ? 'name:"' + q + '"'
-            : 'name:' + q + '*';
-          var res = await fetch('https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(nameQuery) + '&pageSize=30&orderBy=name');
-          if (!res.ok) throw new Error('API error');
-          var data = await res.json();
-          cards = data.data || [];
+          // Pokemon EN: catalog-first (so cards synced via pokedata_sync
+          // — Mega Evolution Promos, tournament promos, etc. — show up
+          // even though pokemontcg.io doesn't have them). Only fall
+          // back to pokemontcg.io if the catalog returns nothing.
+          try {
+            var pkRpc = await sb.from('catalog')
+              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+              .ilike('id', 'en-%')
+              .ilike('name', '%' + q + '%')
+              .limit(1000);
+            if (!pkRpc.error && pkRpc.data && pkRpc.data.length) {
+              cards = pkRpc.data.map(_catalogRowToApiShape);
+            }
+          } catch(_) { /* fall through to API */ }
+
+          // API fallback — pokemontcg.io covers cards that haven't been
+          // synced yet (brand-new releases) and cards Pokedata is
+          // missing. Lucene quirks: wildcard only valid on single
+          // tokens; multi-word queries need a quoted phrase.
+          if (!cards.length) {
+            var nameQuery = q.includes(' ')
+              ? 'name:"' + q + '"'
+              : 'name:' + q + '*';
+            var res = await fetch('https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(nameQuery) + '&pageSize=30&orderBy=name');
+            if (!res.ok) throw new Error('API error');
+            var data = await res.json();
+            cards = data.data || [];
+          }
         }
 
         if (!cards.length) {
@@ -20087,21 +20242,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // full cycle so we always show the user a complete scan.
       _ftShowState('loading');
 
-      // ── Slam-impact audio scheduling ────────────────────────────
-      // The visual slam-impact happens at minScanFloor (3300ms) + 370ms
-      // into the cinema = ~3670ms after this click. To make the audio
-      // LEAD the visual by 700ms, fire thud at ~2970ms. The scratch
-      // tails the thud at 75% of its duration. Both calls survive the
-      // await below because they're scheduled, not awaited.
-      window._ftSlamTimer1 = setTimeout(function() {
-        _pbPlayThud();
-        var thudH = _pbGetHowl('thud');
-        var thudMs = (thudH && thudH.state() === 'loaded' && thudH.duration())
-          ? thudH.duration() * 1000
-          : 220;
-        // Stash the inner timer on window too so Reset can cancel it.
-        window._ftSlamTimer2 = setTimeout(_pbPlayScratch, thudMs * 0.75);
-      }, 2970);
+      // Slam-impact audio is now scheduled AFTER the fetch+scanFloor
+      // await resolves (further down), so it always lands a fixed
+      // distance before the visual impact — even when many cards take
+      // the fetch longer than the scan floor. The previous "fire at
+      // T=2970ms from click" approach assumed the scan floor was the
+      // gate, which broke when fetch was slow (audio fired seconds
+      // before the visual).
 
       var msgEl  = document.getElementById('ftLoadingMsg');
       var progEl = document.getElementById('ftLoadingProgress');
@@ -20230,6 +20377,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           window._ftLoadingTimer = null;
         }
       }
+
+      // ── Slam-impact audio (fires NOW so it leads the visual by
+      // ~370ms — visual slam-impact is at +370ms post-cinema-start
+      // inside the explosion setTimeout below). Scheduling here
+      // means the lead time is consistent regardless of how long
+      // the fetch took. */
+      window._ftSlamTimer1 = setTimeout(function() {
+        _pbPlayThud();
+        var thudH = _pbGetHowl('thud');
+        var thudMs = (thudH && thudH.state() === 'loaded' && thudH.duration())
+          ? thudH.duration() * 1000
+          : 220;
+        window._ftSlamTimer2 = setTimeout(_pbPlayScratch, thudMs * 0.75);
+      }, 0);
 
       // Apply prices back
       ['A','B'].forEach(function(side) {
@@ -21489,6 +21650,109 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       loadSetsPage();
     }
 
+    // Fetch catalog sets in the background and append any sets the
+    // pokemontcg.io list is missing. Tries the catalog_sets_summary
+    // RPC first (server-side GROUP BY, <100ms) and falls back to the
+    // slow client-side dedupe if the function isn't installed.
+    async function _appendCatalogSetsAsync(apiSets) {
+      try {
+        const seenCodes = new Set(apiSets.map(s => (s.id || s.ptcgoCode || '').toLowerCase()));
+        const seenNames = new Set(apiSets.map(s => (s.name || '').toLowerCase()));
+        let summary = null;
+
+        // Path A — fast RPC (preferred). Requires the catalog_sets_summary
+        // function from the migration printed below by printCatalogSetsRpcSQL().
+        try {
+          const r = await sb.rpc('catalog_sets_summary', { p_prefix: 'en-' });
+          if (!r.error && Array.isArray(r.data)) summary = r.data;
+        } catch(_) {}
+
+        // Path B — fallback: paginate the catalog client-side. Slow but
+        // works without admin action. Logs a console hint with the SQL
+        // to install the fast path.
+        if (!summary) {
+          console.warn('[sets] catalog_sets_summary RPC not installed — falling back to slow client-side dedupe. Run printCatalogSetsRpcSQL() in the console to see the migration SQL.');
+          const byCode = {};
+          let offset = 0;
+          while (offset < 50000) {  // safety ceiling
+            const { data, error } = await sb.from('catalog')
+              .select('set_code, set_name')
+              .ilike('id', 'en-%')
+              .range(offset, offset + 999);
+            if (error || !data || data.length === 0) break;
+            data.forEach(r => {
+              if (!r.set_code) return;
+              const k = r.set_code.toLowerCase();
+              if (!byCode[k]) byCode[k] = { set_code: r.set_code, set_name: r.set_name || r.set_code, total: 0 };
+              byCode[k].total++;
+            });
+            if (data.length < 1000) break;
+            offset += 1000;
+          }
+          summary = Object.values(byCode);
+        }
+
+        if (!summary || !summary.length) return;
+
+        // Build the new-set rows and append to the cache + DOM.
+        const newSets = [];
+        summary.forEach(r => {
+          const code = (r.set_code || '').toLowerCase();
+          const name = (r.set_name || '').trim();
+          if (!code || !name) return;
+          if (seenCodes.has(code) || seenNames.has(name.toLowerCase())) return;
+          newSets.push({
+            id: code,
+            name: name,
+            series: 'Catalog',
+            releaseDate: '0000/00/00',
+            total: r.total || 0,
+            images: { logo: '', symbol: '' },
+            _source: 'catalog',
+          });
+        });
+        if (!newSets.length) return;
+
+        // Update the in-memory cache so a re-render (or filter) sees them.
+        if (_setsCache) _setsCache.sets = (_setsCache.sets || []).concat(newSets);
+
+        // Append HTML rows to the existing list container (avoids a full
+        // re-render and preserves the user's scroll position).
+        const listInner = document.getElementById('setsListInner');
+        if (listInner) {
+          const fragHTML = newSets.map(s => _renderSetRow(s)).join('');
+          if (fragHTML) listInner.insertAdjacentHTML('beforeend', fragHTML);
+        }
+      } catch(e) {
+        console.warn('[sets] async catalog append failed:', e);
+      }
+    }
+
+    // Prints the migration SQL for catalog_sets_summary to the console
+    // so an admin can copy-paste into Supabase's SQL editor. Run this
+    // once and the slow client-side dedupe path disappears.
+    function printCatalogSetsRpcSQL() {
+      const sql = [
+        '-- PathBinder: fast Sets-page aggregate ─────────────────────',
+        '-- Returns one row per unique (set_code, set_name) in the',
+        '-- catalog for a given id prefix (en-/jp-/pd-), with card count.',
+        '-- Replaces a 20k+ row client-side dedupe with a single GROUP BY.',
+        'create or replace function catalog_sets_summary(p_prefix text)',
+        'returns table(set_code text, set_name text, total bigint)',
+        'language sql stable as $$',
+        '  select set_code, set_name, count(*) as total',
+        '  from catalog',
+        '  where id ilike p_prefix || \'%\'',
+        '    and set_code is not null',
+        '    and set_name is not null',
+        '  group by set_code, set_name;',
+        '$$;',
+        'grant execute on function catalog_sets_summary(text) to anon, authenticated;',
+      ].join('\n');
+      console.log('%cPathBinder catalog_sets_summary migration:', 'color:orange;font-weight:bold;font-size:14px');
+      console.log(sql);
+    }
+
     async function loadSetsPage() {
       const el = document.getElementById('setsPageContent');
       if (!el) return;
@@ -21502,17 +21766,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>';
 
       try {
-        // Fetch sets from pokemontcg.io (cache for 10 min)
+        // Sets list: render pokemontcg.io sets IMMEDIATELY (~2s typical),
+        // then fetch catalog sets ASYNC and append any pokemontcg.io
+        // doesn't have (Mega Evolution Promos and similar). Without
+        // the async pattern, a 20k-row catalog scan blocks the entire
+        // page for 100s+.
         let sets;
         const now = Date.now();
         if (_setsCache && (now - _setsCache.timestamp < 600000)) {
           sets = _setsCache.sets;
         } else {
-          const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250');
-          if (!res.ok) throw new Error('API error ' + res.status);
-          const data = await res.json();
-          sets = data.data || [];
+          // 1. API sets (primary — has release date, total, images)
+          let apiSets = [];
+          try {
+            const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250');
+            if (res.ok) {
+              const data = await res.json();
+              apiSets = data.data || [];
+            }
+          } catch(_) {}
+
+          sets = apiSets;   // render these now — catalog appends async below
           _setsCache = { timestamp: now, sets };
+
+          // 2. Catalog sets — non-blocking. Kicks off after the page
+          // has rendered the API sets so the user isn't waiting on
+          // a slow Supabase aggregate.
+          _appendCatalogSetsAsync(apiSets);
         }
 
         // Build a lookup: set_name → count of owned cards (non-ghost)
@@ -22103,15 +22383,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (_setsDetailCache[setId] && (now - _setsDetailCache[setId].timestamp < 600000)) {
           cards = _setsDetailCache[setId].cards;
         } else {
-          let allCards = [], page = 1, total = null;
-          do {
-            const r = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(setId)}&pageSize=250&page=${page}&orderBy=number`);
-            if (!r.ok) break;
-            const d = await r.json();
-            if (total === null) total = d.totalCount || 0;
-            allCards = allCards.concat(d.data || []);
-            page++;
-          } while (allCards.length < total && page <= 4);
+          // Catalog-first — query our synced rows by set_code. Covers
+          // sets pokemontcg.io doesn't index yet (Mega Evolution
+          // Promos and similar promo / event sets).
+          let allCards = [];
+          try {
+            const { data: catRows } = await sb.from('catalog')
+              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+              .ilike('id', 'en-%')
+              .ilike('set_code', setId)
+              .order('card_number', { ascending: true })
+              .limit(500);
+            if (catRows && catRows.length) {
+              allCards = catRows.map(_catalogRowToApiShape);
+            }
+          } catch(_) {}
+
+          // API fallback — pokemontcg.io for sets the catalog
+          // doesn't have, or to supplement catalog gaps. Skipped if
+          // catalog already returned a usable set's worth of cards.
+          if (allCards.length === 0) {
+            let page = 1, total = null;
+            do {
+              const r = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(setId)}&pageSize=250&page=${page}&orderBy=number`);
+              if (!r.ok) break;
+              const d = await r.json();
+              if (total === null) total = d.totalCount || 0;
+              allCards = allCards.concat(d.data || []);
+              page++;
+            } while (allCards.length < total && page <= 4);
+          }
           cards = allCards;
           _setsDetailCache[setId] = { timestamp: now, cards };
         }
