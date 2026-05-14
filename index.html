@@ -2568,6 +2568,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       border:1px solid var(--sets-border) !important;
       border-top:none !important;
     }
+    /* Card row dividers — .allcards-row is used app-wide with a navy
+       border-bottom by default; inside the sets page we want the row
+       separators to read as aubergine so they don't fight the overlay. */
+    #setsPage .allcards-row{
+      border-bottom-color:var(--sets-border) !important;
+    }
     /* Mobile: swap to a portrait crop of the same artwork (right-side
        slice of sets_cards.png) so the cat + right-edge graffiti land in
        the visible area instead of being stretched to oblivion. We flip
@@ -22683,10 +22689,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
         <h2 style="font-size:1.05rem;margin-bottom:2px">${_escHtml(setName)}</h2>
         <span class="sets-detail-jp" id="setsDetailJpSub">セット</span>
-        <div id="setsDetailProgress" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+        <div id="setsDetailProgress" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px">
           <div style="flex:1">
             <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Loading…</div>
-            <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden"></div>
+            <div style="height:7px;border-radius:4px;background:var(--sets-border-strong);overflow:hidden;border:1px solid var(--sets-border)"></div>
           </div>
           <div style="font-size:1.4rem;font-weight:700;color:var(--muted);flex-shrink:0">—</div>
         </div>
@@ -22768,7 +22774,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // ── Phase 3: swap ONLY the cards list + progress block ────
         const ownedCount = cards.filter(c => ownedMap[c.id]).length;
         const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
-        const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
+        // Bar fill: teal→magenta gradient at every percent < 100, solid
+        // green (with glow) at completion. Ties teal + magenta — the
+        // two anchors of the sets palette — into one continuous gauge.
+        const barFill = pct >= 100
+          ? 'var(--green)'
+          : 'linear-gradient(90deg, var(--sets-teal), var(--ft-pink))';
+        // Percent text color picks whichever anchor is "winning" — teal
+        // under 50%, magenta over 50%, green at 100%.
+        const pctColor = pct >= 100 ? 'var(--green)'
+                        : pct >= 50 ? 'var(--ft-pink)'
+                        : 'var(--sets-teal)';
+        const barShadow = pct >= 100 ? '0 0 12px rgba(58,237,127,.45)' : 'none';
 
         const jpSub = document.getElementById('setsDetailJpSub');
         if (jpSub) jpSub.textContent = `セット ・ ${cards.length} カード`;
@@ -22778,11 +22795,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           progEl.innerHTML = `
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
-              <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .5s"></div>
+              <div style="height:7px;border-radius:4px;background:var(--sets-border-strong);overflow:hidden;border:1px solid var(--sets-border)">
+                <div style="height:100%;width:${pct}%;background:${barFill};border-radius:4px;transition:width .5s;box-shadow:${barShadow}"></div>
               </div>
             </div>
-            <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>`;
+            <div style="font-size:1.4rem;font-weight:700;color:${pctColor};flex-shrink:0">${pct}%</div>`;
         }
 
         const listEl = document.getElementById('setsCardList');
