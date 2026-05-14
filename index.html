@@ -2535,10 +2535,24 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        backdrop flashed in then disappeared. */
     #setsPage [id^="setsListInner"],
     #setsPage #setsCardList,
-    #setsPage #setsDetailProgress{
+    #setsPage #setsDetailProgress,
+    #setsPage #setsSearch,
+    #setsPage #setsAcList{
       background:var(--sets-overlay) !important;
       backdrop-filter:blur(2px);
       -webkit-backdrop-filter:blur(2px);
+    }
+    /* Search input gets the same aubergine wash, plus a default border
+       in the overlay tone so the teal focus border lands as a clean
+       state change (not just a darker line on a lighter input). */
+    #setsPage #setsSearch{
+      border:1px solid rgba(255,255,255,.08) !important;
+      color:var(--text) !important;
+      transition:border-color .15s, box-shadow .15s;
+    }
+    #setsPage #setsSearch:focus{
+      border-color:var(--sets-teal) !important;
+      box-shadow:0 0 12px var(--sets-teal-glow);
     }
     /* Mobile: swap to a portrait crop of the same artwork (right-side
        slice of sets_cards.png) so the cat + right-edge graffiti land in
@@ -2782,8 +2796,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
      accents while staying dark enough to keep the graffiti backdrop
      legible underneath. Each page may eventually get its own tone;
      this token is the bookmark for that future per-page tuning. */
-  --sets-overlay:    rgba(22,8,32,.78);
-  --sets-overlay-strong: rgba(22,8,32,.9);
+  --sets-overlay:    rgba(14,8,20,.86);
+  --sets-overlay-strong: rgba(14,8,20,.94);
 
   --text:  #DCE8F5;     /* cool blue-white */
   --muted: #5A7090;     /* blue-gray */
