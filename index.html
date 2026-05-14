@@ -21889,8 +21889,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '  group by set_code, set_name;',
         '$$;',
         'grant execute on function catalog_sets_summary(text) to anon, authenticated;',
+        '',
+        '-- PathBinder: fast Set-detail card fetch ──────────────────',
+        '-- Returns every card for a given id-prefix + set_code,',
+        '-- pre-ordered by card_number server-side. Replaces a',
+        '-- client-side ILIKE + sort that was scanning the whole',
+        '-- catalog for each click.',
+        'create or replace function catalog_cards_in_set(p_prefix text, p_set_code text)',
+        'returns table(id text, name text, card_number text, rarity text,',
+        '              set_code text, set_name text, image_url text, game_type text)',
+        'language sql stable as $$',
+        '  select id, name, card_number, rarity, set_code, set_name, image_url, game_type',
+        '  from catalog',
+        '  where id ilike p_prefix || \'%\'',
+        '    and set_code ilike p_set_code',
+        '  order by card_number;',
+        '$$;',
+        'grant execute on function catalog_cards_in_set(text, text) to anon, authenticated;',
+        '',
+        '-- Recommended indexes (one-time, big speed-up for both RPCs):',
+        'create index if not exists catalog_set_code_lower_idx on catalog (lower(set_code));',
+        'create index if not exists catalog_id_prefix_idx on catalog (id text_pattern_ops);',
       ].join('\n');
-      console.log('%cPathBinder catalog_sets_summary migration:', 'color:orange;font-weight:bold;font-size:14px');
+      console.log('%cPathBinder catalog_sets_summary + catalog_cards_in_set migration:', 'color:orange;font-weight:bold;font-size:14px');
       console.log(sql);
     }
 
@@ -22515,37 +22536,68 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const el = document.getElementById('setsPageContent');
       if (!el) return;
 
+      // ── Phase 1: render the FULL page shell immediately ──────────
+      // Header, JP subline, progress placeholder, sort pills, and an
+      // empty list container with "Loading cards…". The user sees the
+      // chrome instantly while the cards fetch in the background.
+      const sortPillStyle = (s) => `class="sets-sort-pill" data-sort="${s}" onclick="sortSetCards('${s}')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort===s?'var(--accent)':'var(--border)'};color:${_setsDetailSort===s?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap"`;
       el.innerHTML = `<div style="padding:12px 0 8px">
         <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-        <h2 style="font-size:1.05rem;margin-bottom:4px">${_escHtml(setName)}</h2>
-        <div style="text-align:center;padding:40px;color:var(--muted)">Loading cards…</div>
+        <h2 style="font-size:1.05rem;margin-bottom:2px">${_escHtml(setName)}</h2>
+        <span class="sets-detail-jp" id="setsDetailJpSub">セット</span>
+        <div id="setsDetailProgress" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+          <div style="flex:1">
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Loading…</div>
+            <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden"></div>
+          </div>
+          <div style="font-size:1.4rem;font-weight:700;color:var(--muted);flex-shrink:0">—</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
+          <button ${sortPillStyle('number')}>#  NUMBER</button>
+          <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
+          <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
+        </div>
+        <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 340px);overflow-y:auto;overflow-x:hidden">
+          <div style="padding:32px;text-align:center;color:var(--muted)">Loading cards…</div>
+        </div>
       </div>`;
 
+      // ── Phase 2: fetch cards in the background ───────────────────
       try {
         const now = Date.now();
         let cards;
         if (_setsDetailCache[setId] && (now - _setsDetailCache[setId].timestamp < 600000)) {
           cards = _setsDetailCache[setId].cards;
         } else {
-          // Catalog-first — query our synced rows by set_code. Covers
-          // sets pokemontcg.io doesn't index yet (Mega Evolution
-          // Promos and similar promo / event sets).
           let allCards = [];
+
+          // Try the fast RPC first (server-side WHERE/ORDER). Falls
+          // back to a direct table query if the function isn't yet
+          // installed.
           try {
-            const { data: catRows } = await sb.from('catalog')
-              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
-              .ilike('id', 'en-%')
-              .ilike('set_code', setId)
-              .order('card_number', { ascending: true })
-              .limit(500);
-            if (catRows && catRows.length) {
-              allCards = catRows.map(_catalogRowToApiShape);
+            const rpc = await sb.rpc('catalog_cards_in_set', { p_prefix: 'en-', p_set_code: setId });
+            if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length) {
+              allCards = rpc.data.map(_catalogRowToApiShape);
             }
           } catch(_) {}
 
+          if (!allCards.length) {
+            try {
+              const { data: catRows } = await sb.from('catalog')
+                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                .ilike('id', 'en-%')
+                .ilike('set_code', setId)
+                .order('card_number', { ascending: true })
+                .limit(500);
+              if (catRows && catRows.length) {
+                allCards = catRows.map(_catalogRowToApiShape);
+              }
+            } catch(_) {}
+          }
+
           // API fallback — pokemontcg.io for sets the catalog
-          // doesn't have, or to supplement catalog gaps. Skipped if
-          // catalog already returned a usable set's worth of cards.
+          // doesn't have.
           if (allCards.length === 0) {
             let page = 1, total = null;
             do {
@@ -22561,7 +22613,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           _setsDetailCache[setId] = { timestamp: now, cards };
         }
 
-        // Build owned lookup: api_card_id → collectionItem
+        // Build owned lookup
         const ownedMap = {};
         if (currentUser) {
           collectionItems.filter(c => !c.is_ghost && !c.sold_offline).forEach(c => {
@@ -22569,48 +22621,41 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           });
         }
 
-        // Store for sort re-renders
+        // Stash for sort re-renders
         window._setsDetailCards = cards;
         _setsDetailOwnedMap = ownedMap;
         _setsDetailSort  = 'number';
         _setsOwnedFirst  = false;
 
+        // ── Phase 3: swap ONLY the cards list + progress block ────
         const ownedCount = cards.filter(c => ownedMap[c.id]).length;
         const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
         const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
 
-        const sortPillStyle = (s) => `class="sets-sort-pill" data-sort="${s}" onclick="sortSetCards('${s}')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort===s?'var(--accent)':'var(--border)'};color:${_setsDetailSort===s?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap"`;
+        const jpSub = document.getElementById('setsDetailJpSub');
+        if (jpSub) jpSub.textContent = `セット ・ ${cards.length} カード`;
 
-        el.innerHTML = `<div style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:2px">${_escHtml(setName)}</h2>
-          <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
-          <div style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+        const progEl = document.getElementById('setsDetailProgress');
+        if (progEl) {
+          progEl.innerHTML = `
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
               <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
                 <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .5s"></div>
               </div>
             </div>
-            <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-            <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
-            <button ${sortPillStyle('number')}>#  NUMBER</button>
-            <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
-            <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
-          </div>
-          <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 340px);overflow-y:auto;overflow-x:hidden">
-            ${_buildSetCardRows(cards, ownedMap, 'number', false) || '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>'}
-          </div>
-        </div>`;
-        // Attach lazy-load observer after DOM is updated
+            <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>`;
+        }
+
+        const listEl = document.getElementById('setsCardList');
+        if (listEl) {
+          listEl.innerHTML = _buildSetCardRows(cards, ownedMap, 'number', false) ||
+            '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>';
+        }
         requestAnimationFrame(_attachSetsObserver);
       } catch(e) {
-        el.innerHTML = `<div style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load set cards.</div>
-        </div>`;
+        const listEl = document.getElementById('setsCardList');
+        if (listEl) listEl.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted)">Failed to load set cards.</div>`;
       }
     }
     // ── End Sets Completion Tracker ────────────────────────────────────────
