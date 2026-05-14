@@ -2489,6 +2489,18 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       color:var(--sets-teal-dim) !important;
       margin-top:6px !important;
     }
+    /* Sets-page content containers are semi-transparent so the
+       graffiti backdrop reads through. Solid var(--surface) on these
+       boxes (set list, sort pills row, search input wrapper) covered
+       the whole bg after the initial render and made it look like the
+       backdrop flashed in then disappeared. */
+    #setsPage [id^="setsListInner"],
+    #setsPage #setsCardList,
+    #setsPage #setsDetailProgress{
+      background:rgba(8,12,28,.7) !important;
+      backdrop-filter:blur(2px);
+      -webkit-backdrop-filter:blur(2px);
+    }
     /* Mobile: swap to a portrait crop of the same artwork (right-side
        slice of sets_cards.png) so the cat + right-edge graffiti land in
        the visible area instead of being stretched to oblivion. */
