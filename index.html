@@ -1300,9 +1300,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         display:flex !important;
         align-items:center !important;
         justify-content:center !important;
-        border-radius:10px !important;
+        border-radius:0 !important;
         background:transparent !important;
-        border:1px solid rgba(0,229,255,.45) !important;
+        border:none !important;
         color:var(--ft-cyan) !important;
         font-size:0 !important; /* hide existing "? HOW IT WORKS" text */
         white-space:nowrap;
@@ -1339,10 +1339,18 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       }
 
       /* Lock-in buttons sit INSIDE their respective trade window,
-         pinned to the bottom of each panel above the SEARCH row.
-         Lock-in B follows Side B's downward shift. */
-      .ft-stage #ftLockBtnA{ left:14%; right:14%; top:34%; bottom:60%; }
-      .ft-stage #ftLockBtnB{ left:14%; right:14%; top:65.5%; bottom:28.5%; }
+         in the middle of each panel — ABOVE the SEARCH/SCAN/BINDER
+         action row at the panel's bottom. Previous positions
+         (top:34% / top:65.5%) overlapped the action rows and
+         blocked the joiner from tapping their own controls during
+         an active session — z-index:3 lock-in was covering the
+         action row buttons underneath.
+         Doubled #id selector below pushes specificity past the
+         identical desktop rule further down in this stylesheet —
+         without it, the desktop side-by-side layout wins on mobile
+         too because of source order. */
+      .ft-stage #ftLockBtnA#ftLockBtnA{ left:14%; right:14%; top:44%; bottom:52%; }
+      .ft-stage #ftLockBtnB#ftLockBtnB{ left:14%; right:14%; top:79%; bottom: 17%; }
 
       /* Action buttons — STACKED VERTICALLY at the bottom of the PNG.
          Each is ~5% tall with 1% gap, all spanning ~80% of the stage
@@ -1431,8 +1439,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          this column hugs its right edge. */
       .ft-stage #ftMobileSessionCode{
         position:absolute;
-        left:62%; right:3%;
-        top:74%; bottom:14%;
+        left:58%; right:10%;
+        top:84%; bottom:24%;
         display:flex; flex-direction:column;
         align-items:center; justify-content:center;
         gap:3px;
@@ -1445,7 +1453,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         font-size:.7rem;
         font-weight:700;
         letter-spacing:.15em;
-        color:var(--accent);
+        color:var(--ft-pink);
         line-height:1;
         white-space:nowrap;
       }
@@ -5487,6 +5495,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
           <!-- SCAN mode -->
           <div class="ft-modal-mode" data-mode="scan" style="display:none">
+            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('A','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(0,229,255,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
+              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('A','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
+              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('A','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
+              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('A','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
+            </div>
             <div id="ftScanStatusA" class="ft-scan-status"></div>
             <div id="ftScanMatchesA" class="ft-dropdown-results"></div>
           </div>
@@ -5518,6 +5532,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </div>
 
           <div class="ft-modal-mode" data-mode="scan" style="display:none">
+            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('B','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(0,229,255,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
+              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('B','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
+              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('B','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
+              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('B','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
+            </div>
             <div id="ftScanStatusB" class="ft-scan-status"></div>
             <div id="ftScanMatchesB" class="ft-dropdown-results"></div>
           </div>
@@ -18240,14 +18260,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // currently in /sounds/). Howler picks whichever format it can play —
     // when you later convert to opus/mp3, those will be preferred for
     // size since they're listed too.
+    // Per-cue cache-buster — bump the `?v=N` query string on a specific
+    // cue when you replace its source file in /sounds/ so the browser
+    // re-fetches it instead of serving the stale cached copy. Howler
+    // treats /sounds/x.wav?v=2 as a different URL from /sounds/x.wav,
+    // so this avoids needing a hard refresh or service-worker bump.
     var _pbHowlSrcs = {
-      scratch:  ['/sounds/scratch.wav',   '/sounds/scratch.opus',   '/sounds/scratch.mp3'],
-      flicker:  ['/sounds/flicker.wav',   '/sounds/flicker.opus',   '/sounds/flicker.mp3'],
-      lockin:   ['/sounds/lockin.wav',    '/sounds/lockin.opus',    '/sounds/lockin.mp3'],
-      slap:     ['/sounds/slap.wav',      '/sounds/slap.opus',      '/sounds/slap.mp3'],
-      swipe:    ['/sounds/swipe.wav',     '/sounds/swipe.opus',     '/sounds/swipe.mp3'],
-      thud:     ['/sounds/thud.wav',      '/sounds/thud.opus',      '/sounds/thud.mp3'],
-      coinflip: ['/sounds/coin_flip.wav', '/sounds/coin_flip.opus', '/sounds/coin_flip.mp3'],
+      scratch:  ['/sounds/scratch.wav',       '/sounds/scratch.opus',       '/sounds/scratch.mp3'],
+      flicker:  ['/sounds/flicker.wav?v=2',   '/sounds/flicker.opus?v=2',   '/sounds/flicker.mp3?v=2'],
+      lockin:   ['/sounds/lockin.wav',        '/sounds/lockin.opus',        '/sounds/lockin.mp3'],
+      slap:     ['/sounds/slap.wav',          '/sounds/slap.opus',          '/sounds/slap.mp3'],
+      swipe:    ['/sounds/swipe.wav',         '/sounds/swipe.opus',         '/sounds/swipe.mp3'],
+      thud:     ['/sounds/thud.wav',          '/sounds/thud.opus',          '/sounds/thud.mp3'],
+      coinflip: ['/sounds/coin_flip.wav',     '/sounds/coin_flip.opus',     '/sounds/coin_flip.mp3'],
     };
     // Per-cue start offset in SECONDS. After play(), the dispatcher
     // seeks the sound to this position so the front of the file is
