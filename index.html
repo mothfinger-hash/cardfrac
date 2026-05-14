@@ -2535,6 +2535,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        backdrop flashed in then disappeared. */
     #setsPage [id^="setsListInner"],
     #setsPage #setsCardList,
+    #setsPage #catalogSetCardList,
     #setsPage #setsDetailProgress,
     #setsPage #setsSearch,
     #setsPage #setsAcList{
@@ -2544,9 +2545,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       -webkit-backdrop-filter:blur(2px);
     }
     /* Container-level borders use the slightly stronger aubergine tone
-       so the frame reads as a deliberate edge, not a faint suggestion. */
+       so the frame reads as a deliberate edge, not a faint suggestion.
+       Both setsCardList (Pokemon EN) and catalogSetCardList (JP / MTG /
+       YGO / OP) get the same treatment. */
     #setsPage [id^="setsListInner"],
     #setsPage #setsCardList,
+    #setsPage #catalogSetCardList,
     #setsPage #setsDetailProgress{
       border:1px solid var(--sets-border-strong) !important;
     }
@@ -21081,6 +21085,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function _escAttr(str) {
       if (!str) return '';
       return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    // Escape a string for safe interpolation INSIDE a single-quoted JS
+    // string that itself lives inside a double-quoted HTML attribute
+    // (e.g. onclick="fn('${value}')"). _escAttr alone is NOT enough
+    // because the HTML attribute decoder turns &#39; back into ' before
+    // the JS parser runs, which then shatters the JS string literal
+    // (this is the bug McDonald's sets hit — set name contains an
+    // apostrophe). Escape backslashes first, then apostrophes with a
+    // backslash so they survive HTML decoding into a valid JS escape.
+    function _escJsAttr(str) {
+      if (str === null || str === undefined) return '';
+      // Order matters:
+      // 1. Backslash first so we don't re-escape escapes we add below.
+      // 2. Apostrophes become JS-escaped (\'), surviving HTML decoding
+      //    into a valid escape inside the single-quoted JS string.
+      // 3. Double quotes become HTML entities so they don't close the
+      //    surrounding double-quoted HTML attribute.
+      // 4. Ampersands last so we don't disturb the &quot; entity above
+      //    on the way through (would turn &quot; → &amp;quot;).
+      return String(str)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;');
+    }
 
     // ── Self-healing binder image fallback ──────────────────────────────────
     // Called when a stored card_image_url fails to load (onerror).
@@ -21130,7 +21158,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
       } catch (_) { el.style.display = 'none'; }
     };
-    }
 
     // ── Supabase image transform: serve smaller thumbnails for grid views ──
     // Converts storage URLs to the render/image endpoint with width + quality.
@@ -21530,7 +21557,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const qty = ci ? (ci.quantity || 1) : 0;
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--sets-border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
         ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
@@ -21647,7 +21674,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const ci    = ownedMap[card.id];
       const owned = !!ci;
       const qty   = ci ? (ci.quantity || 1) : 0;
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--sets-border);cursor:pointer;transition:background .12s"
         onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
         onclick="${openFn}(${idx})">
         ${card.image_url
@@ -21766,7 +21793,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const logoHtml = s.images && s.images.logo
         ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
         : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
-      return `<div onclick="loadSetDetail('${s.id}','${s.name.replace(/'/g,"&#39;")}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      return `<div onclick="loadSetDetail('${_escJsAttr(s.id)}','${_escJsAttr(s.name)}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         ${logoHtml}
         <div style="flex:1;min-width:0">
           <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.name)}</div>
@@ -21785,8 +21812,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const o   = owned[s.set_code] || 0;
       const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
       const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
-      return `<div onclick="loadJpSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}')"
-        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+      return `<div onclick="loadJpSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}')"
+        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
         <div style="flex:1;min-width:0">
@@ -21806,8 +21833,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const o   = owned[s.set_code] || 0;
       const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
       const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
-      return `<div onclick="loadTcgSetDetail('${_escAttr(s.set_code)}','${_escAttr(s.set_name)}','${gameKey}')"
-        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+      return `<div onclick="loadTcgSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}','${_escJsAttr(gameKey)}')"
+        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[${cfg.label}]</div>
         <div style="flex:1;min-width:0">
