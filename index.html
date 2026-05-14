@@ -2434,20 +2434,43 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .sets-ac-item:hover{background:var(--surface2);color:var(--sets-teal)}
 
     /* ── SETS PAGE backdrop ─────────────────────────────────────────
-       Uses sets_cards.webp as a stretched background. The image has
-       teal/seafoam graffiti on the edges (cat mascot top-right,
-       paint splatters left + bottom, JP characters right) with a
-       black center where content sits. background-size:100% 100%
-       stretches it — fine here since the graffiti is irregular
-       enough to mask any aspect distortion. */
+       Two real <img> elements (desktop + mobile) sit absolutely
+       positioned behind the page content. We switched to <img> from
+       CSS background-image because iOS Brave was silently failing to
+       render the CSS-loaded webp even though the file fetched fine
+       at its direct URL. <img> is bulletproof — every browser
+       renders it the same way. */
     #setsPage{
       position:relative;
-      background-image:url('sets_cards.webp?v=2');
-      background-size:100% 100%;
-      background-repeat:no-repeat;
-      background-position:center top;
       padding:36px 38px 40px !important;
       min-height:calc(100svh - 60px);
+    }
+    #setsPage > .sets-bg{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      /* cover (not fill) so the image keeps its native aspect ratio —
+         fill was width-squishing the artwork on narrow viewports. */
+      object-fit:cover;
+      /* desktop anchor — center the artwork; mobile override below
+         shifts the cat off-screen to the right for more negative space. */
+      object-position:center top;
+      pointer-events:none;
+      user-select:none;
+      -webkit-user-drag:none;
+      z-index:0;
+    }
+    /* Default: show desktop backdrop, hide mobile. Mobile media query
+       below flips them. */
+    #setsPage > .sets-bg.sets-bg-mobile{ display:none; }
+    #setsPage > .sets-bg.sets-bg-desktop{ display:block; }
+    /* Lift every child of #setsPage above the absolutely-positioned
+       <img> backdrop. The page content has stacking authority and the
+       backdrop sits behind it. */
+    #setsPage > *:not(.sets-bg){
+      position:relative;
+      z-index:1;
     }
     /* Re-map the accent palette WITHIN the sets page (and the card
        detail modal that opens from it). Every descendant rule that
@@ -2503,11 +2526,22 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
     /* Mobile: swap to a portrait crop of the same artwork (right-side
        slice of sets_cards.png) so the cat + right-edge graffiti land in
-       the visible area instead of being stretched to oblivion. */
+       the visible area instead of being stretched to oblivion. We flip
+       which <img> renders rather than swapping a background-image URL,
+       because Brave-on-iOS chokes on CSS background-image swaps for
+       reasons we never fully isolated — the <img> path is bulletproof. */
     @media(max-width:780px){
       #setsPage{
-        background-image:url('sets_cards_mobile.webp?v=2') !important;
         padding:24px 16px 32px !important;
+      }
+      #setsPage > .sets-bg.sets-bg-desktop{ display:none; }
+      #setsPage > .sets-bg.sets-bg-mobile{
+        display:block;
+        /* Push the cat slightly off the right edge of the viewport so
+           the left side opens up for the search input + sort pills.
+           object-position values >100% allow the image to extend past
+           the container; 115% trims roughly 15% of the right side. */
+        object-position:115% top;
       }
       #setsPage .pb-page-hdr-title{ font-size:20px !important; }
     }
@@ -5896,6 +5930,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
   <!-- ── SETS COMPLETION TRACKER ────────────────────────────────────────── -->
   <div id="setsPage" class="page">
+    <img class="sets-bg sets-bg-desktop" src="sets_cards.webp?v=2" alt="" aria-hidden="true">
+    <img class="sets-bg sets-bg-mobile"  src="sets_cards_mobile.webp?v=2" alt="" aria-hidden="true">
     <div class="pb-page-hdr">
       <div class="pb-page-hdr-main">
         <div class="pb-page-hdr-title">⊞ Sets</div>
