@@ -1324,14 +1324,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          SEARCH/SCAN/MY BINDER/+$ action row have full headroom and
          the action row no longer clips. */
       .ft-stage .ft-side-a.ft-pink{
-        left:7%; right:7%; top:12%; bottom:57%;
+        left:6%; right:6%; top:11%; bottom:52%;
         padding:8px 10px 32px;
       }
       .ft-stage .ft-side-b.ft-cyan{
         /* Shifted ~10px (≈1.5%) downward from the previous pass so
            the panel sits inside its own pipe-frame slot, not the
            inter-frame gap. */
-        left:7%; right:7%; top:43.5%; bottom:25.5%;
+        left:6%; right:6%; top:48%; bottom:17%;
         padding:8px 10px 32px;
       }
 
@@ -1346,15 +1346,25 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          width. Transparent + opacity feedback inherited from desktop
          (.ft-action-btn :hover / :active rules) so the PNG's colored
          shapes provide the visible fill underneath. */
+      /* Disabled state on mobile: drop the grey wash and grayscale —
+         the QR slam already covers the analyze + create-link slots
+         during an active session, so the "you can't use these"
+         message is already visually obvious. Keep them unclickable. */
+      .ft-stage .ft-action-btn.ft-disabled{
+        background:transparent !important;
+        color:#000 !important;
+        filter:none !important;
+      }
+
       /* Action buttons — nudged +4px (~0.6%) down from previous pass. */
       .ft-stage .ft-action-row .ft-action-analyze{
-        left:10%; right:10%; top:78.6%; bottom:16.4%;
+        left:10.7%; right:12.5%; top:81.6%; bottom:13%;
       }
       .ft-stage .ft-action-row .ft-action-create{
-        left:10%; right:10%; top:84.6%; bottom:10.4%;
+        left:10.7%; right:12.5%; top:88%; bottom:7%;
       }
       .ft-stage .ft-action-row .ft-action-reset{
-        left:10%; right:10%; top:90.6%; bottom:4.4%;
+        left:10.7%; right:12.5%; top:93.6%; bottom:1%;
       }
 
       /* Code row — input + JOIN side-by-side, the "HAVE A TRADE
@@ -1363,7 +1373,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          px shorter so they don't crowd the reset above. */
       .ft-stage .ft-code-row{
         position:absolute;
-        left:6%; right:6%; bottom:auto; top:96.3%;
+        left:6%; right:6%; bottom:auto; top:97%;
         display:flex !important;
         flex-direction:row !important;
         flex-wrap:nowrap !important;
@@ -1386,12 +1396,16 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       /* QR slam target — shrunk and positioned over the upper two
          action buttons (analyze + create link). Sits at the top of
          the action stack so it visually replaces those two buttons
-         while a session is hosting. */
-      .ft-stage #ftQrContainer{
-        width:90px !important;
-        height:90px !important;
+         while a session is hosting.
+         The doubled id selector below pushes specificity past the
+         identical desktop rule that sits LATER in this stylesheet —
+         without it the desktop's 118px wins on mobile too because
+         source order breaks specificity ties. */
+      .ft-stage #ftQrContainer#ftQrContainer{
+        width:69px !important;
+        height:69px !important;
         padding:4px !important;
-        left:50% !important; top:78% !important;
+        left:50% !important; top:82% !important;
         transform:translate(-50%,0) rotate(-7deg) !important;
       }
 
@@ -1399,26 +1413,33 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          A minimal #ftMobileSessionCode replaces it below the reset
          button (rendered by _ftRenderSessionBanner). */
       #ftSessionBanner{ display:none !important; }
+      /* Mobile session code — vertical column of 3 stacked code
+         repeats anchored to the right of the QR slam target. The
+         QR sits centered at left:50% top:75% with ~10% height, so
+         this column hugs its right edge. */
       .ft-stage #ftMobileSessionCode{
         position:absolute;
-        left:6%; right:6%; top:94%; bottom:auto;
-        display:flex; flex-direction:row; align-items:center; justify-content:center;
-        gap:8px;
+        left:62%; right:3%;
+        top:74%; bottom:14%;
+        display:flex; flex-direction:column;
+        align-items:center; justify-content:center;
+        gap:3px;
         font-family:'Space Mono',monospace;
         z-index:3;
         pointer-events:none;
       }
-      .ft-stage #ftMobileSessionCode .mlabel{
-        font-size:.55rem;
-        color:var(--muted);
-        letter-spacing:.1em;
-      }
+      .ft-stage #ftMobileSessionCode .mlabel{ display:none; }
       .ft-stage #ftMobileSessionCode .mcode{
-        font-size:1rem;
+        font-size:.7rem;
         font-weight:700;
-        letter-spacing:.2em;
+        letter-spacing:.15em;
         color:var(--accent);
+        line-height:1;
+        white-space:nowrap;
       }
+      .ft-stage #ftMobileSessionCode .mcode:nth-child(1){ opacity:.5; }
+      .ft-stage #ftMobileSessionCode .mcode:nth-child(2){ opacity:1;  }
+      .ft-stage #ftMobileSessionCode .mcode:nth-child(3){ opacity:.5; }
 
       /* Hologram modals (SEARCH / SCAN / MY BINDER pickers) — each
          modal vertically centers over its OWN side panel so the
@@ -19111,10 +19132,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         '</div>';
 
       // Mobile-only minimal session code display (CSS hides on desktop).
+      // Renders the code three times stacked vertically — sits to the
+      // right of the QR slam target as a cyberpunk-style accent column.
       if (mobileCode) {
+        var _code = _escHtml(id);
         mobileCode.innerHTML =
-          '<span class="mlabel">CODE</span>' +
-          '<span class="mcode">' + _escHtml(id) + '</span>';
+          '<span class="mcode">' + _code + '</span>' +
+          '<span class="mcode">' + _code + '</span>' +
+          '<span class="mcode">' + _code + '</span>';
         mobileCode.style.display = '';
       }
 
