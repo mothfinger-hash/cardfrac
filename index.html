@@ -2442,16 +2442,107 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        enough to mask any aspect distortion. */
     #setsPage{
       position:relative;
-      background-image:url('sets_cards.webp');
+      background-image:url('sets_cards.webp?v=2');
       background-size:100% 100%;
       background-repeat:no-repeat;
       background-position:center top;
       padding:36px 38px 40px !important;
       min-height:calc(100svh - 60px);
     }
+    /* Re-map the accent palette WITHIN the sets page (and the card
+       detail modal that opens from it). Every descendant rule that
+       uses var(--accent) / var(--copper) etc. automatically picks up
+       the seafoam teal without per-rule changes. */
+    #setsPage,
+    #setCardDetailSheet{
+      --accent: var(--sets-teal);
+      --accent2: var(--sets-teal);
+      --teal:    var(--sets-teal);
+      --copper:  var(--sets-teal);
+      --copper-dim:  var(--sets-teal-dim);
+      --copper-glow: var(--sets-teal-glow);
+    }
+    /* Card detail modal — explicit teal border + glow to match the
+       page's accent. */
+    #setCardDetailSheet .modal{
+      border:1.5px solid var(--sets-teal) !important;
+      box-shadow:0 0 32px var(--sets-teal-glow),
+                 0 0 80px var(--sets-teal-glow),
+                 inset 0 0 30px rgba(26,199,160,.06) !important;
+    }
+    /* Sets-page hero — kill the bottom-border underline and bump
+       the title size so the page reads more like a hero banner
+       without crowding the tab pills below. */
+    #setsPage .pb-page-hdr{
+      border-bottom:none !important;
+      padding-bottom:6px !important;
+      margin-bottom:14px !important;
+    }
+    #setsPage .pb-page-hdr-title{
+      font-size:26px !important;
+      letter-spacing:.08em !important;
+      border-bottom:none !important;
+      padding-bottom:0 !important;
+    }
+    #setsPage .pb-page-hdr-sub{
+      font-size:.74rem !important;
+      color:var(--sets-teal-dim) !important;
+      margin-top:6px !important;
+    }
     /* Mobile: shrink the inner padding so content has room on a phone */
     @media(max-width:780px){
       #setsPage{ padding:24px 16px 32px !important; }
+      #setsPage .pb-page-hdr-title{ font-size:20px !important; }
+    }
+
+    /* Set-detail page Japanese sub-heading — sits under the set name
+       (e.g. "Scarlet & Violet") and reads セット in muted teal. The
+       JS detail-render functions output this span when present. */
+    #setsPage .sets-detail-jp{
+      display:block;
+      font-family:'Orbitron','Space Mono',monospace;
+      font-size:.7rem;
+      letter-spacing:.18em;
+      color:var(--sets-teal);
+      opacity:.85;
+      margin-top:2px;
+    }
+    /* Pokemon EN/JP sub-toggle pills shown beside the title when the
+       POKEMON tab is active. EN uses teal (default), JP uses magenta
+       so the active language reads at a glance against the backdrop. */
+    #setsPage .sets-pkmn-sub{
+      display:inline-flex;
+      gap:4px;
+      margin-left:10px;
+      vertical-align:middle;
+    }
+    #setsPage .sets-pkmn-sub button{
+      padding:3px 9px;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.6rem;
+      letter-spacing:.08em;
+      cursor:pointer;
+      border:1px solid;
+      background:transparent;
+      transition:all .15s;
+    }
+    #setsPage .sets-pkmn-sub button.active-en{
+      border-color:var(--sets-teal);
+      color:var(--sets-teal);
+      background:var(--sets-teal-glow);
+    }
+    #setsPage .sets-pkmn-sub button.active-jp{
+      border-color:var(--ft-pink);
+      color:var(--ft-pink);
+      background:rgba(255,61,127,.14);
+    }
+    #setsPage .sets-pkmn-sub button.inactive{
+      border-color:rgba(255,255,255,.18);
+      color:var(--muted);
+    }
+    #setsPage .sets-pkmn-sub button.inactive:hover{
+      border-color:var(--ft-pink);
+      color:var(--ft-pink);
     }
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
@@ -21241,7 +21332,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ══════════════════════════════════════════════════════════════════════
     // SETS COMPLETION TRACKER
     // ══════════════════════════════════════════════════════════════════════
-    var _setsLang        = 'EN'; // 'EN' | 'JP'
+    // Sets tab state. Pokemon's two languages collapsed into one
+    // POKEMON tab — the EN/JP split is exposed as a sub-toggle that
+    // only shows while POKEMON is the active main tab. Default is
+    // English. Other TCGs (MTG/YGO/OP) stay as siblings of POKEMON.
+    var _setsLang        = 'POKEMON';     // 'POKEMON' | 'MTG' | 'YGO' | 'OP'
+    var _setsPokemonLang = 'EN';          // 'EN' | 'JP' — only consulted when _setsLang === 'POKEMON'
     var _setsCache       = null;  // { timestamp, sets }
     var _jpSetsCache     = null;  // { timestamp, sets: [{set_name, set_code, total}] }
     var _setsDetailCache = {};  // setId → { timestamp, cards }
@@ -21595,7 +21691,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (!wrap) return;
 
       let sets, renderRow;
-      if (_setsLang === 'JP') {
+      if (_setsLang === 'POKEMON' && _setsPokemonLang === 'JP') {
         if (!_jpSetsCache) return;
         sets = _jpSetsCache.sets || [];
         const owned = _jpSetsCache.owned || {};
@@ -21651,30 +21747,43 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // id-prefix filters, so new sets appear automatically as the syncs land.
     // No emojis or pictographic glyphs in labels — see CLAUDE.md.
     var _SETS_TABS = [
-      { key: 'EN',  label: 'ENGLISH'   },
-      { key: 'JP',  label: 'JAPANESE'  },
-      { key: 'MTG', label: 'MAGIC'     },
-      { key: 'YGO', label: 'YU-GI-OH'  },
-      { key: 'OP',  label: 'ONE PIECE' }
+      { key: 'POKEMON', label: 'POKEMON'   },
+      { key: 'MTG',     label: 'MAGIC'     },
+      { key: 'YGO',     label: 'YU-GI-OH'  },
+      { key: 'OP',      label: 'ONE PIECE' }
     ];
 
     function _setsTabsHtml() {
       const tabBase = 'padding:6px 14px;font-family:inherit;font-size:.66rem;letter-spacing:.07em;cursor:pointer;border:1px solid;transition:all .15s;background:transparent;white-space:nowrap';
-      return '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">' +
-        _SETS_TABS.map(function(t) {
-          var active = _setsLang === t.key;
-          return '<button onclick="setSetsLang(\'' + t.key + '\')" style="' + tabBase +
-            ';border-color:' + (active ? 'var(--sets-teal)' : 'var(--sets-teal-dim)') +
-            ';color:' + (active ? 'var(--sets-teal)' : 'var(--muted)') +
-            ';background:' + (active ? 'var(--sets-teal-glow)' : 'transparent') + '">' +
-            t.label + '</button>';
-        }).join('') +
-      '</div>';
+      var html = '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
+      _SETS_TABS.forEach(function(t) {
+        var active = _setsLang === t.key;
+        html += '<button onclick="setSetsLang(\'' + t.key + '\')" style="' + tabBase +
+          ';border-color:' + (active ? 'var(--sets-teal)' : 'var(--sets-teal-dim)') +
+          ';color:' + (active ? 'var(--sets-teal)' : 'var(--muted)') +
+          ';background:' + (active ? 'var(--sets-teal-glow)' : 'transparent') + '">' +
+          t.label + '</button>';
+      });
+      // EN/JP sub-toggle only renders when POKEMON is the active tab.
+      if (_setsLang === 'POKEMON') {
+        var enActive = _setsPokemonLang === 'EN';
+        var jpActive = _setsPokemonLang === 'JP';
+        html += '<span class="sets-pkmn-sub">';
+        html += '<button class="' + (enActive ? 'active-en' : 'inactive') + '" onclick="setSetsPokemonLang(\'EN\')">EN</button>';
+        html += '<button class="' + (jpActive ? 'active-jp' : 'inactive') + '" onclick="setSetsPokemonLang(\'JP\')">JP</button>';
+        html += '</span>';
+      }
+      html += '</div>';
+      return html;
     }
 
     function setSetsLang(lang) {
       _setsLang = lang;
       loadSetsPage();
+    }
+    function setSetsPokemonLang(lang) {
+      _setsPokemonLang = lang;
+      if (_setsLang === 'POKEMON') loadSetsPage();
     }
 
     // Fetch catalog sets in the background and append any sets the
@@ -21784,7 +21893,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const el = document.getElementById('setsPageContent');
       if (!el) return;
 
-      if (_setsLang === 'JP') { await loadJpSetsPage(el); return; }
+      // POKEMON tab dispatches to JP or EN flow based on _setsPokemonLang
+      if (_setsLang === 'POKEMON' && _setsPokemonLang === 'JP') { await loadJpSetsPage(el); return; }
       if (_setsLang === 'MTG' || _setsLang === 'YGO' || _setsLang === 'OP') {
         await loadTcgSetsPage(el, _setsLang);
         return;
@@ -22019,10 +22129,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:8px">
+          <h2 style="font-size:1.05rem;margin-bottom:2px">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">JP</span>${_escHtml(setName)}
           </h2>
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+          <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
+          <div style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
               <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
@@ -22224,10 +22335,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:8px">
+          <h2 style="font-size:1.05rem;margin-bottom:2px">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">${cfg.label}</span>${_escHtml(setName)}
           </h2>
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+          <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
+          <div style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
               <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
@@ -22466,8 +22578,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:8px">${_escHtml(setName)}</h2>
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+          <h2 style="font-size:1.05rem;margin-bottom:2px">${_escHtml(setName)}</h2>
+          <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
+          <div style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
               <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
