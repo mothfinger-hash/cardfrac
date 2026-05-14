@@ -2537,12 +2537,21 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       #setsPage > .sets-bg.sets-bg-desktop{ display:none; }
       #setsPage > .sets-bg.sets-bg-mobile{
         display:block;
-        /* Push the cat slightly off the right edge of the viewport so
-           the left side opens up for the search input + sort pills.
-           object-position values >100% allow the image to extend past
-           the container; 115% trims roughly 15% of the right side. */
-        object-position:115% top;
+        /* Push the cat's right side off the viewport so the left half
+           opens up as negative space for the tab pills + search input.
+           Using transform (not object-position past 100%) because Brave
+           on iOS appears to clamp object-position to the container,
+           while transform is a pure geometric translate it can't
+           ignore. 18% shifts noticeably without losing the cat. */
+        object-position:right top;
+        transform:translateX(18%);
+        /* The translate carries the inner image off the right edge;
+           the host <img> stays inside the page, but its painted pixels
+           overflow. We don't want a horizontal scroll bar, so clip at
+           the page level (already overflow:hidden via the .page class
+           in the base sheet — kept here as a safety net). */
       }
+      #setsPage{ overflow:hidden; }
       #setsPage .pb-page-hdr-title{ font-size:20px !important; }
     }
 
@@ -2594,6 +2603,33 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #setsPage .sets-pkmn-sub button.inactive:hover{
       border-color:var(--ft-pink);
       color:var(--ft-pink);
+    }
+    /* Main tab pills (POKEMON / MTG / YGO / OP) — all carry a teal
+       glow background; the active tab gets a magenta border + magenta
+       text so it pops against the backdrop. Replaces the old inline
+       styled gray inactive look. */
+    #setsPage .sets-tab{
+      padding:6px 14px;
+      font-family:inherit;
+      font-size:.66rem;
+      letter-spacing:.07em;
+      cursor:pointer;
+      border:1.5px solid var(--sets-teal);
+      background:var(--sets-teal-glow);
+      color:var(--sets-teal);
+      transition:all .15s;
+      white-space:nowrap;
+      border-radius:3px;
+    }
+    #setsPage .sets-tab:hover{
+      border-color:var(--ft-pink);
+      color:var(--ft-pink);
+    }
+    #setsPage .sets-tab.active{
+      border-color:var(--ft-pink);
+      color:var(--ft-pink);
+      background:rgba(255,61,127,.16);
+      box-shadow:0 0 12px rgba(255,61,127,.35);
     }
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
@@ -21813,14 +21849,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     ];
 
     function _setsTabsHtml() {
-      const tabBase = 'padding:6px 14px;font-family:inherit;font-size:.66rem;letter-spacing:.07em;cursor:pointer;border:1px solid;transition:all .15s;background:transparent;white-space:nowrap';
       var html = '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
       _SETS_TABS.forEach(function(t) {
         var active = _setsLang === t.key;
-        html += '<button onclick="setSetsLang(\'' + t.key + '\')" style="' + tabBase +
-          ';border-color:' + (active ? 'var(--sets-teal)' : 'var(--sets-teal-dim)') +
-          ';color:' + (active ? 'var(--sets-teal)' : 'var(--muted)') +
-          ';background:' + (active ? 'var(--sets-teal-glow)' : 'transparent') + '">' +
+        html += '<button class="sets-tab' + (active ? ' active' : '') +
+          '" onclick="setSetsLang(\'' + t.key + '\')">' +
           t.label + '</button>';
       });
       // EN/JP sub-toggle only renders when POKEMON is the active tab.
