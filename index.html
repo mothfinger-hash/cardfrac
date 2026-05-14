@@ -1291,17 +1291,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          opacity cyan glyph button anchored to the top-right. */
       .ft-stage .ft-hero-how{
         position:absolute !important;
-        top:3% !important;
-        right:5% !important;
+        top:10% !important;
+        right:-17.5% !important;
         left:auto !important;
-        width:42px !important;
-        height:42px !important;
+        width:25px !important;
+        height:25px !important;
         padding:0 !important;
         display:flex !important;
         align-items:center !important;
         justify-content:center !important;
         border-radius:10px !important;
-        background:rgba(0,229,255,.15) !important;
+        background:transparent !important;
         border:1px solid rgba(0,229,255,.45) !important;
         color:var(--ft-cyan) !important;
         font-size:0 !important; /* hide existing "? HOW IT WORKS" text */
@@ -1310,14 +1310,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         z-index:4;
       }
       .ft-stage .ft-hero-how::before{
-        content:'?';
+        content:'';
         font-family:'Orbitron','Space Mono',monospace;
         font-size:1.4rem;
         font-weight:800;
         line-height:1;
         color:var(--ft-cyan);
       }
-      .ft-stage .ft-hero-how:active{ background:rgba(0,229,255,.28) !important; }
+      /* Hover + active states match the analyze/create/reset buttons —
+         translucent white wash on hover, grey wash on press. */
+      .ft-stage .ft-hero-how:hover { background:rgba(255,255,255,.08) !important; }
+      .ft-stage .ft-hero-how:active{ background:rgba(120,120,120,.32) !important; }
 
       /* SIDE A + B — stretched another 6px downward from the previous
          pass (≈1% on a ~640px stage). The inner card viewer +
@@ -1346,6 +1349,15 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          width. Transparent + opacity feedback inherited from desktop
          (.ft-action-btn :hover / :active rules) so the PNG's colored
          shapes provide the visible fill underneath. */
+      /* Force black text on the mobile analyze / create / reset
+         buttons — overrides any inherited browser-default button text
+         color on iOS Safari + the disabled-state .45 alpha. */
+      .ft-stage .ft-action-btn,
+      .ft-stage .ft-action-btn .ft-en,
+      .ft-stage .ft-action-btn .ft-jp{
+        color:#000 !important;
+        -webkit-text-fill-color:#000 !important;
+      }
       /* Disabled state on mobile: drop the grey wash and grayscale —
          the QR slam already covers the analyze + create-link slots
          during an active session, so the "you can't use these"
@@ -1466,7 +1478,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         flex:1 1 auto !important;
         min-height:0 !important;
         width:auto !important;
-        max-width:155px !important;
+        max-width:140px !important; /* ~10% smaller than the previous 155 */
         padding:6px 8px !important;
         align-self:center;
       }
@@ -18248,7 +18260,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           src: _pbHowlSrcs[name],
           volume: _pbMasterVolume,
           preload: true,
-          html5: false, // Web Audio path — supports overlapping playback
+          // HTML5 Audio mode is much more reliable on mobile (iOS Safari
+          // in particular) — Web Audio's context-unlock dance breaks
+          // when the page is loaded without a user gesture, and silent-
+          // switch behavior also gates Web Audio differently. HTML5
+          // audio elements just work. Trade-off: a single Howl can't
+          // play twice simultaneously, but our cues never need to.
+          html5: true,
           onloaderror: function() { _pbHowlFailed[name] = true; _pbHowls[name] = null; },
           onplayerror: function(id) {
             // Browser may have suspended the context; resume and retry.
