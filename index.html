@@ -2509,8 +2509,24 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
     #setsPage .pb-page-hdr-sub{
       font-size:.74rem !important;
-      color:var(--sets-teal-dim) !important;
+      /* Teal-dim was washing out against the graffiti backdrop; white
+         reads cleanly over the busy artwork. */
+      color:rgba(255,255,255,.92) !important;
       margin-top:6px !important;
+    }
+    /* Japanese counterpart of the English subtitle — sits inline after
+       the English in magenta, separated by a middle-dot. Sourced from
+       the same --ft-pink token the tab actives use. */
+    #setsPage .pb-page-hdr-sub .sets-sub-jp{
+      color:var(--ft-pink);
+      margin-left:6px;
+      font-family:'Orbitron','Space Mono',monospace;
+      letter-spacing:.04em;
+    }
+    #setsPage .pb-page-hdr-sub .sets-sub-jp::before{
+      content:'・';
+      margin-right:4px;
+      color:rgba(255,255,255,.45);
     }
     /* Sets-page content containers are semi-transparent so the
        graffiti backdrop reads through. Solid var(--surface) on these
@@ -5971,7 +5987,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     <div class="pb-page-hdr">
       <div class="pb-page-hdr-main">
         <div class="pb-page-hdr-title">⊞ Sets</div>
-        <div class="pb-page-hdr-sub">Track your set completion across every expansion.</div>
+        <div class="pb-page-hdr-sub">Track your set completion across every expansion.<span class="sets-sub-jp">セット完成への道</span></div>
       </div>
     </div>
     <div id="setsPageContent">
