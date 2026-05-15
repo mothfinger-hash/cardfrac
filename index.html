@@ -1349,8 +1349,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          identical desktop rule further down in this stylesheet —
          without it, the desktop side-by-side layout wins on mobile
          too because of source order. */
-      .ft-stage #ftLockBtnA#ftLockBtnA{ left:14%; right:14%; top:44%; bottom:52%; }
-      .ft-stage #ftLockBtnB#ftLockBtnB{ left:14%; right:14%; top:79%; bottom: 17%; }
+      .ft-stage #ftLockBtnA#ftLockBtnA{ left:14%; right:14%; top:42%; bottom:55%; }
+      .ft-stage #ftLockBtnB#ftLockBtnB{ left:14%; right:14%; top:77%; bottom: 20%; }
 
       /* Action buttons — STACKED VERTICALLY at the bottom of the PNG.
          Each is ~5% tall with 1% gap, all spanning ~80% of the stage
@@ -1480,58 +1480,115 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         max-height:32% !important;
       }
 
-      /* Card viewer — flexible height so the SEARCH/SCAN/BINDER/+$
-         action row underneath actually renders inside each panel. */
-      .ft-stage .ft-card-viewer{
-        flex:1 1 auto !important;
-        min-height:0 !important;
-        width:auto !important;
-        max-width:140px !important; /* ~10% smaller than the previous 155 */
-        padding:6px 8px !important;
-        align-self:center;
-      }
-      /* Empty-state placeholder spills past the card-viewer's narrow
-         140px bounding box so the "No cards yet" message has room to
-         breathe. Card image (when present) stays at the normal size —
-         this only affects the absolutely-positioned empty state. */
-      .ft-stage .ft-card-empty{
-        left:-60px !important;
-        right:-60px !important;
-      }
-      /* Side action row — 2-column grid with column-major flow:
-         col 1 stacks SEARCH + SCAN, col 2 stacks MY BINDER + CASH.
-         A single wrapping flex row left orphaned pills + uneven widths.
-         grid-auto-flow:column fills col 1 top→bottom first, then col 2,
-         which is exactly the "left two stacked, right two stacked" the
-         user asked for. */
-      .ft-stage .ft-side-action-row{
-        flex:0 0 auto !important;
-        width:96% !important;
+      /* Mobile side-panel layout: 3-column grid framing the card image
+         with a slim button rail on each side. The action-row container
+         dissolves via display:contents so its four children sit as
+         direct grid items of the panel, each placed by row/column. */
+      .ft-stage .ft-side-panel.ft-side-a,
+      .ft-stage .ft-side-panel.ft-side-b{
         display:grid !important;
-        grid-template-columns:1fr 1fr !important;
-        grid-template-rows:auto auto !important;
-        grid-auto-flow:column !important;
-        gap:6px 8px !important;
-        font-size:.5rem !important;
+        grid-template-columns:18% 1fr 18% !important;
+        /* Four rows: rows 1 + 4 are 1fr spacers (equal top and bottom
+           padding), rows 2 + 3 hold the two button rows with a thin
+           gap. Equal 1fr above and below pins the button pair to the
+           vertical center of each rail. Card still spans all rows so
+           it occupies the full panel height. */
+        grid-template-rows:1fr auto auto 1fr !important;
+        column-gap:4px !important;
+        row-gap:4px !important;
+        justify-items:stretch !important;
       }
+      /* Card viewer fills column 2 across all rows. The kids
+         (.ft-stack-back, .ft-card-empty) are position:absolute inset:0
+         so they need the viewer to have an explicit height — without
+         one the box collapses, which is why shrinking the buttons
+         appeared to shrink the card (the 1fr spacers re-flowed and the
+         viewer had no intrinsic size of its own). Width fills the
+         middle column up to 175px; height set on card aspect ratio
+         (~0.72 W/H ≈ 240px for 175 wide) so the image renders crisp. */
+      .ft-stage .ft-card-viewer{
+        grid-column:2 !important;
+        grid-row:1 / -1 !important;
+        align-self:center !important;
+        justify-self:center !important;
+        width:100% !important;
+        max-width:175px !important;
+        height:240px !important;
+        max-height:240px !important;
+        min-height:0 !important;
+        padding:0 !important;
+      }
+      /* Empty-state spillover still needs to breathe past the narrow
+         center column. */
+      .ft-stage .ft-card-empty{
+        left:-50px !important;
+        right:-50px !important;
+      }
+      /* Dissolve the action-row wrapper so its 4 children become direct
+         children of the panel grid and can be placed individually. */
+      .ft-stage .ft-side-action-row{
+        display:contents !important;
+      }
+      /* Left rail — col 1. SEARCH on row 2, SCAN on row 3.
+         Rows 1 and 4 are equal-flex spacers above/below, which lands
+         this pair at the vertical center of the rail. */
+      .ft-stage .ft-side-action-row > .ft-side-btn:nth-of-type(1){
+        grid-column:1 !important;
+        grid-row:2 !important;
+      }
+      .ft-stage .ft-side-action-row > .ft-side-btn:nth-of-type(2){
+        grid-column:1 !important;
+        grid-row:3 !important;
+      }
+      /* Right rail — col 3. MY BINDER on row 2, CASH on row 3. */
+      .ft-stage .ft-side-action-row > .ft-side-btn:nth-of-type(3){
+        grid-column:3 !important;
+        grid-row:2 !important;
+      }
+      .ft-stage .ft-side-action-row > .ft-cash-mini{
+        grid-column:3 !important;
+        grid-row:3 !important;
+      }
+      /* Slim button styling — narrower targets sitting outside the card.
+         Half the previous height, smaller font, and no forced word-break
+         so single-word labels (SEARCH / SCAN / BINDER) stay on one line. */
       .ft-stage .ft-side-btn{
         width:100% !important;
-        padding:8px 6px !important;
-        font-size:.55rem !important;
+        padding:4px 4px !important;
+        font-size:.42rem !important;
+        line-height:1 !important;
+        white-space:nowrap !important;
+        overflow:hidden !important;
+        text-overflow:ellipsis !important;
       }
+      /* Cash mini matches the button pill dimensions: same horizontal
+         padding, same font, same line-height. We strip the wrapper's
+         own vertical padding and let the inner <input> contribute the
+         4px top/bottom that the buttons have — that's what gets the
+         heights to line up. */
       .ft-stage .ft-cash-mini{
         width:100% !important;
-        padding:4px 8px !important;
+        padding:0 4px !important;
         display:flex !important;
         align-items:center !important;
         justify-content:center !important;
         box-sizing:border-box !important;
+        gap:2px !important;
+        font-size:.42rem !important;
+        line-height:1 !important;
+        min-height:0 !important;
+      }
+      .ft-stage .ft-cash-mini .ft-cash-label{
+        font-size:.42rem !important;
+        line-height:1 !important;
+        padding:0 !important;
       }
       .ft-stage .ft-cash-input{
         width:100% !important;
         min-width:0 !important;
-        font-size:.6rem !important;
-        padding:4px 4px !important;
+        font-size:.42rem !important;
+        padding:4px 2px !important;
+        line-height:1 !important;
         text-align:center !important;
       }
     }
@@ -5733,7 +5790,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <span class="ft-en">SCAN</span><span class="ft-jp">スキャン</span>
               </button>
               <button onclick="ftOpenHoloModal('A','binder')" id="ftBinderBtnA" class="ft-side-btn ft-pill-binder">
-                <span class="ft-en">MY BINDER</span><span class="ft-jp">バインダー</span>
+                <span class="ft-en">BINDER</span><span class="ft-jp">バインダー</span>
               </button>
               <div class="ft-cash-mini">
                 <span class="ft-cash-label">+$</span>
@@ -5758,7 +5815,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <span class="ft-en">SCAN</span><span class="ft-jp">スキャン</span>
               </button>
               <button onclick="ftOpenHoloModal('B','binder')" id="ftBinderBtnB" class="ft-side-btn ft-pill-binder">
-                <span class="ft-en">MY BINDER</span><span class="ft-jp">バインダー</span>
+                <span class="ft-en">BINDER</span><span class="ft-jp">バインダー</span>
               </button>
               <div class="ft-cash-mini">
                 <span class="ft-cash-label">+$</span>
@@ -5991,7 +6048,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <p>
         <span class="ft-howto-tag">SEARCH</span>
         <span class="ft-howto-tag">SCAN</span>
-        <span class="ft-howto-tag">MY BINDER</span>
+        <span class="ft-howto-tag">BINDER</span>
         Use any combination to load cards into Side A and Side B.
         Tack on cash with the <strong>+$</strong> field.
       </p>
@@ -18500,7 +18557,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         var el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; }
       });
       ['ftBinderBtnA','ftBinderBtnB'].forEach(function(id) {
-        var el = document.getElementById(id); if (el) el.textContent = 'MY BINDER';
+        // Restore the bilingual span structure — using textContent here
+        // would replace the EN/JP spans with plain text and break the
+        // language toggle for this button.
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = '<span class="ft-en">BINDER</span><span class="ft-jp">バインダー</span>';
       });
       var v = document.getElementById('ftVerdict'); if (v) v.textContent = '';
       _ftUpdateSessionButtons();
@@ -19067,7 +19128,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         _ftRenderBinderPicker(side);
       } else {
         picker.style.display = 'none';
-        if (btn) btn.textContent = 'MY BINDER';
+        if (btn) btn.innerHTML = '<span class="ft-en">BINDER</span><span class="ft-jp">バインダー</span>';
       }
     }
 
@@ -19147,7 +19208,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           var p = document.getElementById('ftBinderPicker' + s);
           var b = document.getElementById('ftBinderBtn' + s);
           if (p) p.style.display = 'none';
-          if (b) b.textContent = 'MY BINDER';
+          if (b) b.innerHTML = '<span class="ft-en">BINDER</span><span class="ft-jp">バインダー</span>';
           if (typeof ftCloseHoloModal === 'function') ftCloseHoloModal(s);
         });
       });
