@@ -18486,8 +18486,45 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     async function deleteCollectionItem(id) {
       if (!confirm('Remove this card from your collection?')) return;
-      const { error } = await sb.from('collection_items').delete().eq('id', id);
-      if (error) { showToast('Error: ' + error.message); return; }
+
+      // Diagnostic logging — surfaces exactly where remove-card breaks.
+      // Three possible failure modes we want to distinguish:
+      //   1. Supabase returns an error  → auth, network, or syntax
+      //   2. .select() returns no rows  → RLS silently filtered the delete
+      //   3. Local state never refreshes → success but UI cache is stale
+      // Adding .select() forces Postgres to return the deleted rows; if
+      // the array is empty after a 200 OK, the row was protected by an
+      // RLS policy (likely after a recent migration tightened delete
+      // permissions on collection_items).
+      console.log('[deleteCollectionItem] attempting delete', {
+        cardId: id,
+        userId: currentUser ? currentUser.id : '(not logged in)',
+        sessionExists: !!(typeof sb !== 'undefined' && sb.auth)
+      });
+
+      const { data, error } = await sb
+        .from('collection_items')
+        .delete()
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        console.error('[deleteCollectionItem] supabase error', error);
+        showToast('Delete failed: ' + (error.message || error.code || 'unknown'));
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('[deleteCollectionItem] no rows deleted — RLS likely blocked the delete', {
+          cardId: id,
+          userId: currentUser ? currentUser.id : null,
+          hint: 'Check collection_items RLS policies in Supabase dashboard. Need: USING (auth.uid() = user_id) on DELETE.'
+        });
+        showToast('Delete blocked — see browser console for details.');
+        return;
+      }
+
+      console.log('[deleteCollectionItem] deleted row', data[0]);
       collectionItems = collectionItems.filter(c => c.id !== id);
       renderCollection();
       showToast('Card removed from collection');
