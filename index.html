@@ -7617,8 +7617,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ─── BADGE SYSTEM ───────────────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════
     const _BADGE_KEY       = 'pathbinder_badges_v1';
-    const _SCAN_TOTAL_KEY  = 'pathbinder_scan_total_v1';
+    const _SCAN_TOTAL_KEY  = 'pathbinder_scan_total_v1';  // legacy global key — kept for migration only
     const _GHOST_P1_KEY    = 'pathbinder_ghost_p1_v1';
+
+    // Per-user scan count key. The legacy _SCAN_TOTAL_KEY above was
+    // shared across every user on the same device — two accounts on
+    // one phone meant their scan counts merged. _scanKey() namespaces
+    // by user.id so each account has its own counter; guests share a
+    // single 'guest' slot until they log in (we migrate guest scans
+    // into their user slot on first login, see syncUserDataFromCloud).
+    function _scanKey() {
+      const uid = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : 'guest';
+      return 'pathbinder_scan_total_v1_' + uid;
+    }
 
     const BADGE_DEFS = [
       {
@@ -7752,7 +7763,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       {
         id: 'scanner', name: 'SCANNER.EXE', part: 1, maxPart: 1,
         desc: 'Scan 50 cards with the card scanner',
-        progressFn: function() { var n = parseInt(localStorage.getItem(_SCAN_TOTAL_KEY) || '0', 10); return {current: Math.min(n,50), max:50}; },
+        progressFn: function() { var n = parseInt(localStorage.getItem(_scanKey()) || '0', 10); return {current: Math.min(n,50), max:50}; },
         svg: `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
           <rect width="96" height="96" fill="#050505"/>
           <!-- card -->
@@ -7853,8 +7864,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     function checkBadge_archived() { if (!_hasBadge('archived')) _awardBadge('archived'); }
     function checkBadge_rendered() { if (!_hasBadge('rendered')) _awardBadge('rendered'); }
     function checkBadge_scanner() {
-      let total = parseInt(localStorage.getItem(_SCAN_TOTAL_KEY) || '0', 10) + 1;
-      localStorage.setItem(_SCAN_TOTAL_KEY, String(total));
+      const key = _scanKey();
+      let total = parseInt(localStorage.getItem(key) || '0', 10) + 1;
+      localStorage.setItem(key, String(total));
       if (!_hasBadge('scanner') && total >= 50) _awardBadge('scanner');
     }
     function unlockDiscordBadge(e) {
@@ -7901,10 +7913,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           const hintHtml = def.hint && isEarned
             ? `<div style="font-size:.5rem;color:#FF5722;text-align:center;font-family:'Press Start 2P',monospace;margin-top:2px">${def.hint}</div>` : '';
 
-          // SVG display: full color when earned, ghostly/dimmed when not
-          const svgStyle = isEarned
-            ? ''
-            : 'style="opacity:0.22;filter:grayscale(1) brightness(0.5)"';
+          // SVG display: full color when earned, gradually revealed when
+          // not. For badges with a progressFn (stacked, scanner), the
+          // SVG fades from locked baseline (22% opacity, full grayscale,
+          // dim) to fully colored as progress accumulates. Without this
+          // every locked badge looked identical, which is why STACKED
+          // appeared "complete" before actually being complete — the
+          // dim+gray state masked the difference between 0/50 and 49/50.
+          let svgStyle = '';
+          if (!isEarned) {
+            let opacity = 0.22;
+            let gray = 1;
+            let bright = 0.5;
+            if (def.progressFn) {
+              try {
+                const p = def.progressFn();
+                const ratio = Math.max(0, Math.min(1, p.current / p.max));
+                opacity = 0.22 + (ratio * 0.78);  // 0.22 → 1.00
+                gray    = 1 - ratio;              // 1 → 0
+                bright  = 0.5 + (ratio * 0.5);    // 0.5 → 1.0
+              } catch(e) {}
+            }
+            svgStyle = `style="opacity:${opacity.toFixed(2)};filter:grayscale(${gray.toFixed(2)}) brightness(${bright.toFixed(2)})"`;
+          }
 
           const displayName = isHidden ? '???' : def.name;
           const displayDesc = isHidden
@@ -7934,11 +7965,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       grid.innerHTML = BADGE_DEFS.map(def => {
         const isEarned = earned.includes(def.id);
         const isHidden = !!(def.hidden && !isEarned);
-        const hexClass = isEarned ? 'dd-hex' : 'dd-hex dd-locked';
         const nameClass = isEarned ? 'dd-bname earned' : 'dd-bname';
         const displayName = isHidden ? '???' : def.name;
+        // Match the full-grid behavior: gradual opacity reveal as a
+        // progressFn-driven badge accumulates progress. Inline style
+        // overrides the .dd-locked CSS class's hardcoded opacity.
+        let hexInlineStyle = '';
+        if (!isEarned) {
+          let opacity = 0.22, gray = 1, bright = 0.5;
+          if (def.progressFn) {
+            try {
+              const p = def.progressFn();
+              const ratio = Math.max(0, Math.min(1, p.current / p.max));
+              opacity = 0.22 + (ratio * 0.78);
+              gray    = 1 - ratio;
+              bright  = 0.5 + (ratio * 0.5);
+            } catch(e) {}
+          }
+          hexInlineStyle = ` style="opacity:${opacity.toFixed(2)};filter:grayscale(${gray.toFixed(2)}) brightness(${bright.toFixed(2)})"`;
+        }
         return `<div class="dd-badge-pip" title="${isHidden ? '???' : def.desc}" onclick="document.getElementById('avatarDropdown').classList.remove('open');showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('badges'),120)">
-          <div class="${hexClass}">${def.svg}</div>
+          <div class="dd-hex"${hexInlineStyle}>${def.svg}</div>
           <div class="${nameClass}">${displayName}</div>
         </div>`;
       }).join('');
@@ -14951,7 +14998,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer"
               onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
-            <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
+            <button onclick="deleteCollectionItem('${item.id}')"
               style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove</button>
             <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
           </div>
@@ -15075,7 +15122,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
               style="flex:1;padding:9px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap"
               onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
-            <button onclick="deleteCollectionItem('${item.id}');closeModal('binderDetailModal')"
+            <button onclick="deleteCollectionItem('${item.id}')"
               style="flex:1;padding:9px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
           </div>
           <div id="binderRefreshStatus_${item.id}" style="font-size:.72rem;color:var(--muted);display:none"></div>
@@ -18484,8 +18531,58 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
     // ── End PSA Cert Lookup ────────────────────────────────────────────────
 
+    // ── In-app confirm modal — replaces window.confirm() on mobile ──
+    // window.confirm() is silently blocked on iOS Brave (and Safari in
+    // some PWA contexts): it returns false immediately without showing
+    // a dialog, which makes any `if (!confirm(...)) return` early-bail
+    // even though the user hasn't actually cancelled. This in-app
+    // version uses a real DOM modal that works the same on every
+    // platform. Returns a Promise<boolean>. Drop-in replacement:
+    //   if (!await pbConfirm('message')) return;
+    // Optional opts: { confirmText, cancelText, danger:true }
+    function pbConfirm(message, opts) {
+      opts = opts || {};
+      const confirmText = opts.confirmText || 'CONFIRM';
+      const cancelText  = opts.cancelText  || 'CANCEL';
+      const confirmBg   = opts.danger ? '#e74c3c' : 'var(--accent)';
+      const confirmFg   = opts.danger ? '#fff'    : 'var(--surface)';
+      return new Promise(function(resolve) {
+        const overlay = document.createElement('div');
+        overlay.className = 'pb-confirm-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;animation:pbConfirmFade .15s ease-out';
+        const modal = document.createElement('div');
+        modal.style.cssText = 'background:var(--surface);border:2px solid var(--border);box-shadow:4px 4px 0 var(--shadow);padding:24px;max-width:340px;width:100%;text-align:center;font-family:"Space Mono","Share Tech Mono",monospace';
+        modal.innerHTML =
+          '<div style="font-size:.85rem;margin-bottom:18px;line-height:1.45;color:var(--text)">' +
+            _escHtml(message) +
+          '</div>' +
+          '<div style="display:flex;gap:8px;justify-content:center">' +
+            '<button data-pb-confirm-cancel style="flex:1;padding:10px 16px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.75rem;cursor:pointer;letter-spacing:.06em">' + cancelText + '</button>' +
+            '<button data-pb-confirm-ok style="flex:1;padding:10px 16px;background:' + confirmBg + ';border:none;color:' + confirmFg + ';font-family:inherit;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.06em">' + confirmText + '</button>' +
+          '</div>';
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        function cleanup(result) {
+          overlay.remove();
+          document.removeEventListener('keydown', onKey);
+          resolve(result);
+        }
+        function onKey(e) {
+          if (e.key === 'Escape') cleanup(false);
+          else if (e.key === 'Enter') cleanup(true);
+        }
+        modal.querySelector('[data-pb-confirm-cancel]').addEventListener('click', function(){ cleanup(false); });
+        modal.querySelector('[data-pb-confirm-ok]').addEventListener('click', function(){ cleanup(true); });
+        overlay.addEventListener('click', function(e){ if (e.target === overlay) cleanup(false); });
+        document.addEventListener('keydown', onKey);
+      });
+    }
+
     async function deleteCollectionItem(id) {
-      if (!confirm('Remove this card from your collection?')) return;
+      if (!(await pbConfirm('Remove this card from your collection?', {
+        confirmText: 'REMOVE',
+        danger: true
+      }))) return;
 
       // Diagnostic logging — surfaces exactly where remove-card breaks.
       // Three possible failure modes we want to distinguish:
@@ -18527,6 +18624,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       console.log('[deleteCollectionItem] deleted row', data[0]);
       collectionItems = collectionItems.filter(c => c.id !== id);
       renderCollection();
+      // Close the detail modal here, on success only. The inline onclick
+      // used to chain `closeModal()` unconditionally, which meant cancel
+      // and failure paths still dismissed the modal — confusing UX.
+      try { closeModal('binderDetailModal'); } catch(_) {}
       showToast('Card removed from collection');
     }
 
@@ -23236,7 +23337,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           } catch(_) {}
         }
         if (data.scan_total != null) {
-          try { localStorage.setItem('pathbinder_scan_total_v1', String(data.scan_total)); } catch(_) {}
+          try {
+            // Per-user key from now on. Migration: if any value lives
+            // in the legacy global key OR the guest key, take the max
+            // so existing scan progress isn't lost when a user logs in
+            // for the first time after this fix.
+            const userKey = _scanKey();
+            const cloudVal = parseInt(data.scan_total || 0, 10);
+            const legacyVal = parseInt(localStorage.getItem('pathbinder_scan_total_v1') || '0', 10);
+            const guestVal = parseInt(localStorage.getItem('pathbinder_scan_total_v1_guest') || '0', 10);
+            const merged = Math.max(cloudVal, legacyVal, guestVal);
+            localStorage.setItem(userKey, String(merged));
+            // Clear legacy keys so they don't keep migrating on every sync
+            try { localStorage.removeItem('pathbinder_scan_total_v1'); } catch(_) {}
+            try { localStorage.removeItem('pathbinder_scan_total_v1_guest'); } catch(_) {}
+            // If we discovered a higher count locally than cloud knows,
+            // push it back up so it's preserved across devices.
+            if (merged > cloudVal) {
+              setTimeout(function(){ try { syncUserDataToCloud(); } catch(_) {} }, 800);
+            }
+          } catch(_) {}
         }
       } catch(_) {}
     }
@@ -23246,7 +23366,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       try {
         const avatarRaw = localStorage.getItem('pathbinder_avatar_sf_v1');
         const badgesRaw = localStorage.getItem('pathbinder_badges_v1');
-        const scanTotal = parseInt(localStorage.getItem('pathbinder_scan_total_v1') || '0', 10);
+        const scanTotal = parseInt(localStorage.getItem(_scanKey()) || '0', 10);
         const avatarState = avatarRaw ? JSON.parse(avatarRaw) : null;
         const badgesEarned = badgesRaw ? JSON.parse(badgesRaw) : [];
         await sb.from('profiles').update({
