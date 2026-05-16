@@ -7813,6 +7813,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       badges.push(id);
       localStorage.setItem(_BADGE_KEY, JSON.stringify(badges));
       _showBadgeUnlock(id);
+      // Sound cue on unlock. _awardBadge is the single chokepoint for
+      // every badge unlock and the _hasBadge() guard above ensures it
+      // only runs once per badge. Multi-step badges (e.g. PHANTOM)
+      // are naturally gated: their p1 helper just toggles a localStorage
+      // flag and never calls _awardBadge, so no sound fires on partial
+      // progress — only when p2 completes the unlock.
+      try { _pbPlayScratch(); } catch(_) {}
       try { syncUserDataToCloud(); } catch(_) {}
       // Refresh badge grid if open
       const grid = document.getElementById('badgesGrid');
@@ -20884,19 +20891,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
       }
 
-      // ── Slam-impact audio (fires NOW so it leads the visual by
-      // ~370ms — visual slam-impact is at +370ms post-cinema-start
-      // inside the explosion setTimeout below). Scheduling here
-      // means the lead time is consistent regardless of how long
-      // the fetch took. */
+      // ── Slam-impact audio. Scratch was repurposed as the badge
+      // unlock cue (see _awardBadge); thud stays here to land the
+      // visual gauge slam. The visual slam keyframe fires at T=370ms
+      // (search for "T=370ms" below). The thud leads it by a small
+      // fixed offset so the ear hears the body hit just before the
+      // eye sees the gauge land — the right amount of anticipation
+      // for "this thing just slammed down" without feeling
+      // disconnected. setTimeout jitter on mobile is real but at this
+      // scale (±20ms on a 80ms lead) it stays in the pleasant zone.
+      // For sample-accurate timing we'd schedule via Howler.ctx
+      // currentTime; option 1 first, upgrade if needed.
+      const FT_VISUAL_SLAM_MS = 370;
+      const FT_THUD_LEAD_MS   = 80;
       window._ftSlamTimer1 = setTimeout(function() {
         _pbPlayThud();
-        var thudH = _pbGetHowl('thud');
-        var thudMs = (thudH && thudH.state() === 'loaded' && thudH.duration())
-          ? thudH.duration() * 1000
-          : 220;
-        window._ftSlamTimer2 = setTimeout(_pbPlayScratch, thudMs * 0.75);
-      }, 0);
+      }, FT_VISUAL_SLAM_MS - FT_THUD_LEAD_MS);
 
       // Apply prices back
       ['A','B'].forEach(function(side) {
