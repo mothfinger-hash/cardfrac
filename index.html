@@ -26486,11 +26486,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const d = id.data;
 
     // ── (optional) fill interior transparent pixels with white ─────
-    // Flood fill from canvas corners marks the exterior of the sprite.
-    // Any transparent pixel not reachable from corners is enclosed by
-    // sprite content — the artist's intentional transparent-as-white
-    // detail. Currently used for eye reflections.
+    // Two-pass flood fill: first marks exterior transparent pixels
+    // (reachable from canvas corners), then walks each remaining
+    // transparent component and ONLY fills it white if the component
+    // is small (≤ MAX_REFLECTION_PIXELS). This prevents the artist's
+    // stray transparent gaps elsewhere on the sprite (e.g. tiny holes
+    // above the eye) from getting filled — only the deliberately-tiny
+    // reflection dots inside the iris qualify.
     if (opts.fillInteriorWhite) {
+      const MAX_REFLECTION_PIXELS = 4;
       const visited = new Uint8Array(W * H);
       const stack = [];
       const seed = (idx) => {
@@ -26499,6 +26503,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           stack.push(idx);
         }
       };
+      // Pass 1 — mark exterior
       for (let x = 0; x < W; x++) { seed(x); seed((H - 1) * W + x); }
       for (let y = 0; y < H; y++) { seed(y * W); seed(y * W + W - 1); }
       while (stack.length) {
@@ -26510,12 +26515,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (y > 0)       seed(i - W);
         if (y < H - 1)   seed(i + W);
       }
+      // Pass 2 — for each unvisited transparent pixel, BFS its
+      // component. Fill white only if size is at-or-below the cap.
       for (let i = 0; i < W * H; i++) {
-        if (!visited[i] && d[i * 4 + 3] === 0) {
-          d[i * 4]     = 255;
-          d[i * 4 + 1] = 255;
-          d[i * 4 + 2] = 255;
-          d[i * 4 + 3] = 255;
+        if (visited[i] || d[i * 4 + 3] !== 0) continue;
+        const componentIdxs = [];
+        const componentStack = [i];
+        visited[i] = 1;
+        while (componentStack.length) {
+          const j = componentStack.pop();
+          componentIdxs.push(j);
+          if (componentIdxs.length > MAX_REFLECTION_PIXELS) break;
+          const x = j % W;
+          const y = (j / W) | 0;
+          const tryAdd = (k) => {
+            if (visited[k] || d[k * 4 + 3] !== 0) return;
+            visited[k] = 1;
+            componentStack.push(k);
+          };
+          if (x > 0)     tryAdd(j - 1);
+          if (x < W - 1) tryAdd(j + 1);
+          if (y > 0)     tryAdd(j - W);
+          if (y < H - 1) tryAdd(j + W);
+        }
+        if (componentIdxs.length <= MAX_REFLECTION_PIXELS) {
+          for (const idx of componentIdxs) {
+            d[idx * 4]     = 255;
+            d[idx * 4 + 1] = 255;
+            d[idx * 4 + 2] = 255;
+            d[idx * 4 + 3] = 255;
+          }
         }
       }
     }
@@ -26542,7 +26571,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (a === 0) continue;
       if (a < aCut) { d[i + 3] = 0; continue; }
       const g = d[i];
-      if (g < OUTLINE_THRESHOLD) {
+      if (g < OUTLINE_THRESHOLD && !opts.skipOutlines) {
         if (hasOutlineColor) {
           d[i]     = (g * or) >> 8;
           d[i + 1] = (g * og) >> 8;
@@ -26642,16 +26671,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // white so the reflection dots the artist drew as transparent
     // become bright highlights instead of letting skin show through.
     layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, fillInteriorWhite: true }));
-    if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true }));
-    if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true }));
-    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { softShade: true }));
+    if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true, skipOutlines: true }));
+    if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true, skipOutlines: true }));
+    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { softShade: true, skipOutlines: true }));
     // Hair: bumped alpha cutoff to 80 because the artist's soft-brush
     // hair strands fade out very gradually — default cutoff of 40
     // kept too much faint halo. Outline pixels get skin-color-tinted
     // so the ears (inside the hair sprite) read as line work
     // belonging to the body rather than detached dark shapes.
     if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 80 }));
-    if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true }));
+    if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
     if (myToken !== renderToken) return;
