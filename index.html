@@ -26571,10 +26571,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             bCount++;
           }
           const avgB = bCount > 0 ? bSum / bCount : 255;
-          // Threshold 150 — iris pixels are medium-gray after tinting,
-          // and we want most iris reflections to qualify. Stray dots
-          // surrounded by skin (avg ~200+) still fail.
-          if (avgB > 150) shouldFill = false;
+          // Threshold 200 — iris pixels after tinting can be quite
+          // light. Stray dots in skin (avg ~220+) still fail; reflections
+          // in lighter eye colors (cyan, gold, hazel) now pass.
+          if (avgB > 200) shouldFill = false;
         }
         if (shouldFill) {
           for (const idx of componentIdxs) {
@@ -26761,11 +26761,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const preserveTopOutlines = state.top === 6 || state.top === 7;
       layers.push(layer(`top${state.top}_${body}`, tintFor('top', state.top, state.topColor), { softShade: true, skipOutlines: !preserveTopOutlines }));
     }
-    // Hair: outline pixels (including ears) get tinted with skin color
-    // so the ears read as line work belonging to the body, not as
-    // detached hair-colored shapes. Alpha cutoff 130 clears the
-    // semi-transparent dots around the ears.
-    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 130 }));
+    // Hair: outline pixels (including ears) tinted skin so the ears
+    // blend in. Alpha cutoff bumped to 200 — pixels at alpha 130-200
+    // were getting hair-color-tinted as faint semi-transparent edges
+    // and reading as ghosted color around the silhouette. Above 200
+    // tints normally; below 200 gets cleared.
+    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 200 }));
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
@@ -26809,17 +26810,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // beyond its actual silhouette. Top: 6 rows above. Sides: 5 cols
       // either side. Gives a margin of safety so hair doesn't peek out
       // along the hat's curves.
-      const HAT_PAD_TOP  = 10;
-      const HAT_PAD_SIDE = 12;
+      const HAT_PAD_TOP    = 20;     // bumped: 10 → 20
+      const HAT_PAD_SIDE   = 16;     // bumped: 12 → 16
+      const HAT_ALPHA_MIN  = 10;     // lowered: 50 → 10 (catch anti-aliased edges)
       for (let y = 0; y < H; y++) {
         let l = -1, r = -1;
         for (let x = 0; x < W; x++) {
-          if (hd[(y * W + x) * 4 + 3] > 50) {
+          if (hd[(y * W + x) * 4 + 3] > HAT_ALPHA_MIN) {
             if (l < 0) l = x;
             r = x;
           }
         }
-        // Dilate horizontally: widen each row's hat region.
         if (l >= 0) {
           l = Math.max(0, l - HAT_PAD_SIDE);
           r = Math.min(W - 1, r + HAT_PAD_SIDE);
@@ -26828,6 +26829,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         rowRight[y] = r;
       }
       hatBottomCol = new Int16Array(W);
+      let _maskCols = 0;
       for (let x = 0; x < W; x++) {
         let top = H;
         for (let y = 0; y < H; y++) {
@@ -26836,8 +26838,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             break;
           }
         }
-        // Dilate vertically: extend top edge upward by HAT_PAD_TOP.
-        hatBottomCol[x] = top < H ? Math.max(0, top - HAT_PAD_TOP) : -1;
+        const finalTop = top < H ? Math.max(0, top - HAT_PAD_TOP) : -1;
+        hatBottomCol[x] = finalTop;
+        if (finalTop >= 0) _maskCols++;
+      }
+      // One-shot diagnostic so we can confirm the mask is alive on
+      // the user's machine. Remove the log once we trust it.
+      if (!window._hatMaskLogged) {
+        window._hatMaskLogged = true;
+        console.log('[hat-mask] active. masked-columns:', _maskCols, 'sample-tops:', [hatBottomCol[60], hatBottomCol[91], hatBottomCol[120]]);
       }
     }
 
