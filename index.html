@@ -26698,6 +26698,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         break;
       }
     }
+    // Hair styles that need EXTRA WIDE hat mask coverage — wide
+    // pigtails / buns / volume on the sides that would peek out past
+    // the hat without sideways dilation. Trade-off: a curved brim's
+    // lowest Y can propagate sideways and clip hair below the brim in
+    // side columns. These styles accept that for safer side coverage.
+    const HAIR_WIDE_HAT_MASK = new Set([3, 5, 8, 10, 11, 12, 13, 15, 17]);
+    const wideHatMask = state.hair && HAIR_WIDE_HAT_MASK.has(state.hair);
+
     if (hatLayerIdx >= 0) {
       // Hat mask construction — three combined passes:
       //   1. Mark hat opaque pixels.
@@ -26790,11 +26798,42 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           }
         }
       }
+
+      // Pass 6 — (optional) sideways dilation for wide-coverage hair
+      // styles. For pigtails/buns/wide hair, the mask grows N pixels
+      // left and right at every Y where the mask exists.
+      if (wideHatMask) {
+        const SIDE_DILATE_PX = 12;
+        for (let iter = 0; iter < SIDE_DILATE_PX; iter++) {
+          tmp.set(hatBottomCol);
+          for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+              const i = y * W + x;
+              if (hatBottomCol[i]) continue;
+              if (!exterior[i]) continue;     // never grow into interior holes
+              if ((x > 0     && hatBottomCol[i - 1]) ||
+                  (x < W - 1 && hatBottomCol[i + 1])) {
+                tmp[i] = 1;
+              }
+            }
+          }
+          hatBottomCol.set(tmp);
+        }
+      }
+
+      // Pass 7 — explicitly unmask interior hole pixels. Any
+      // transparent pixel that's NOT exterior (not reachable from
+      // canvas edges) is an interior hole in the hat (e.g. hat 2's
+      // cutout). Force those pixels off-mask so hair shows through.
+      for (let i = 0; i < N; i++) {
+        if (!exterior[i] && hd[i * 4 + 3] <= HAT_ALPHA_MIN) {
+          hatBottomCol[i] = 0;
+        }
+      }
     }
 
     // Hair styles that should NOT get clipped by the hat mask — long
-    // or flowy hair that intentionally extends past where the hat
-    // sits and should remain visible alongside it.
+    // or flowy hair that intentionally extends past where the hat sits.
     const HAIR_IGNORE_HAT_MASK = new Set([6, 9]);
 
     ctx.clearRect(0, 0, W, H);
