@@ -26559,8 +26559,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // isBody=true uses the opaque-pixel tint to keep skin from looking
     // see-through; everything else uses the soft-edge canvas blend so
     // hair/clothes/etc keep their anti-aliased outlines.
+    // Body file is named male.webp / female.webp (full word), while
+    // every other sprite uses _m / _f as a suffix. That mismatch was
+    // making the body 404 ("avatar/m.webp" instead of "avatar/male.webp")
+    // and is the reason skin never showed — there was no body sprite
+    // being loaded at all, just clothing layered onto nothing.
+    const bodyFile = body === 'm' ? 'male' : 'female';
     const layers = [];
-    layers.push([body, state.skin, true]);
+    layers.push([bodyFile, state.skin, true]);
     layers.push(['eyes_' + body, state.eye, false]);
     if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), false]);
     if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  false]);
