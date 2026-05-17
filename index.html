@@ -23244,10 +23244,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // 400 = columns not yet migrated; silently skip
         if (error) return;
         if (!data) return;
-        // Avatar state
+        // Avatar state — write to the v2 key (sprite engine) and push
+        // to AvatarCreator if it's available so the loaded state
+        // shows immediately.
         if (data.avatar_state) {
           try {
-            localStorage.setItem('pathbinder_avatar_sf_v1', JSON.stringify(data.avatar_state));
+            localStorage.setItem('pathbinder_avatar_v2', JSON.stringify(data.avatar_state));
             if (window.AvatarCreator && typeof window.AvatarCreator.setState === 'function') {
               window.AvatarCreator.setState(data.avatar_state);
             }
@@ -27176,21 +27178,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       });
     }
 
-    // SET AS PFP — saves the avatar's structured state to the profile
-    // via syncUserDataToCloud (already wired). The state is small JSON
-    // (~200 bytes), so it goes through without size constraints. The
-    // PFP can be rendered anywhere by re-running the sprite compositor
-    // on the saved state. (Previous version pushed a 50-200KB base64
-    // PNG into avatar_url which exceeded the column's limit → 400.)
-    // Guests get a PNG download instead.
+    // SET AS PFP — two writes:
+    //   1. Save the rendered PNG to localStorage at the legacy key
+    //      `pathbinder_avatar_pfp_v1` so the existing chips (sidebar,
+    //      top nav, mobile, dropdown) pick it up as a backgroundImage.
+    //   2. Sync the avatar_state JSON to Supabase via syncUserDataToCloud
+    //      so the same avatar can be re-rendered on any device.
+    // The earlier version tried to write the 50-200KB data URL into
+    // avatar_url which 400'd because of column length constraints.
+    // Guests get a download instead.
     const exportBtn = document.getElementById('av-exportBtn');
     if (exportBtn) {
       exportBtn.addEventListener('click', async () => {
         await new Promise(r => setTimeout(r, 80));   // wait for any in-flight render
+        const dataUrl = canvas.toDataURL('image/png');
         if (typeof currentUser !== 'undefined' && currentUser && typeof sb !== 'undefined') {
           try {
-            saveState();                                // localStorage commit
+            saveState();                                // state JSON to localStorage
+            try { localStorage.setItem('pathbinder_avatar_pfp_v1', dataUrl); } catch(_) {}
             await syncUserDataToCloud();                // push state to profile
+            // Refresh the on-screen PFP chips immediately
+            if (typeof updateAuthUI === 'function') updateAuthUI();
             if (typeof showToast === 'function') showToast('PFP updated');
           } catch (e) {
             console.error('[avatar] PFP save failed', e);
@@ -27198,7 +27206,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           }
         } else {
           const a = document.createElement('a');
-          a.href = canvas.toDataURL('image/png');
+          a.href = dataUrl;
           a.download = 'pathbinder-avatar.png';
           a.click();
         }
