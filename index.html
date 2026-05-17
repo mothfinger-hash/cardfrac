@@ -94,6 +94,31 @@
     nav.sb-collapsed .nav-group-label{height:0;padding:0;overflow:hidden}
     nav.sb-collapsed .nav-tab.active::before{width:2px}
     nav.sb-collapsed .nav-tab:hover::after{content:attr(data-label);position:fixed;left:calc(var(--sb-w-coll) + 6px);background:#000;border:1.5px solid var(--accent);color:var(--accent);padding:4px 9px;font-size:9.5px;letter-spacing:.1em;white-space:nowrap;box-shadow:3px 3px 0 #000;z-index:10001;pointer-events:none;font-family:'Space Mono',monospace;text-transform:uppercase}
+    /* Sidebar avatar — fills the dead space above the footer with the
+       user's full-body PFP. Desktop only; the mobile media query at
+       the bottom of this stylesheet hides it. flex:1 absorbs whatever
+       vertical room remains so the image visually grounds the column. */
+    .sidebar-avatar-wrap{
+      flex:1 1 auto;
+      min-height:0;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+      padding:4px 6px 0;
+      pointer-events:none;
+      overflow:hidden;
+    }
+    .sidebar-avatar-img{
+      max-width:100%;
+      max-height:100%;
+      width:auto;
+      height:auto;
+      object-fit:contain;
+      image-rendering:auto;
+      filter:drop-shadow(0 4px 12px rgba(0,229,255,.18));
+    }
+    nav.sb-collapsed .sidebar-avatar-wrap{ display:none !important; }
+    @media (max-width: 780px){ .sidebar-avatar-wrap{ display:none !important; } }
     .nav-foot{border-top:1.5px solid var(--border);padding:8px 8px 10px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
     .nav-foot-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     nav.sb-collapsed .nav-foot{padding:6px 4px 8px;align-items:center}
@@ -4234,6 +4259,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       </div>
     </div>
 
+    <!-- Sidebar avatar display — full-body PFP shown in the empty
+         space above the footer. Desktop only (hidden via CSS on mobile).
+         Image src is set by updateAuthUI() from the same localStorage
+         key the small chips read (pathbinder_avatar_pfp_v1). -->
+    <div id="sidebarAvatarWrap" class="sidebar-avatar-wrap" style="display:none">
+      <img id="sidebarAvatarImg" alt="" class="sidebar-avatar-img" />
+    </div>
+
     <!-- Footer: profile + controls -->
     <div class="nav-foot">
       <div id="authSection" class="auth-buttons">
@@ -6801,6 +6834,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         } else {
           chipEl.textContent = initials;
           chipEl.style.backgroundImage = '';
+        }
+        // Sidebar avatar — full-body PFP in the empty space above the
+        // footer. Desktop only (CSS hides it on mobile / collapsed nav).
+        const sidebarWrap = document.getElementById('sidebarAvatarWrap');
+        const sidebarImg  = document.getElementById('sidebarAvatarImg');
+        if (sidebarWrap && sidebarImg) {
+          if (savedPfp) {
+            sidebarImg.src = savedPfp;
+            sidebarWrap.style.display = '';
+          } else {
+            sidebarImg.removeAttribute('src');
+            sidebarWrap.style.display = 'none';
+          }
         }
         var _userNameEl = document.getElementById('userName');
         var _displayName = currentUser.username || currentUser.email?.split('@')[0] || 'User';
