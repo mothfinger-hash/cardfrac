@@ -26751,13 +26751,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const layer = (name, color, opts) => ({ name, color, opts: opts || {} });
     const layers = [];
     layers.push(layer(bodyFile,         state.skin,                                                          { isBody: true }));
-    // Eyes: preserve the whites of the eye, but with a TIGHTER
-    // threshold (235) than the default (200). The artist drew the iris
-    // at gray ~180-220, which falls under the default threshold and
-    // gets skipped from tinting → barely any color. Raising the
-    // threshold to 235 only spares the actual sclera (very light gray)
-    // and lets the iris range take the picked eye color.
-    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, whiteThreshold: 235 }));
+    // Eyes: preserveWhites with tight threshold (235) so the iris
+    // (gray ~180-220) tints with eye color; only true whites are
+    // spared. fillInteriorWhite re-enabled with the context-aware
+    // check (only fills enclosed transparent components surrounded
+    // by dark pixels, i.e. reflections inside the iris) so the
+    // hollow hole in the male eye becomes a white reflection.
+    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, whiteThreshold: 235, fillInteriorWhite: true }));
     if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true, skipOutlines: true }));
     if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true, skipOutlines: true }));
     // Top sprites 6 + 7 are the PathBinder graphic tees — they have
@@ -26773,7 +26773,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // the body line work and soft hair edges fade smoothly into skin
     // instead of carrying hair-color halo. Solid hair pixels (alpha
     // >= 200, gray >= 70) tint normally with the picked hair color.
-    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 60, alphaOutlineThreshold: 200 }));
+    // Bald (hair 7) gets a higher alphaCutoff because the semi-
+    // transparent ear cartilage detail rendered as noisy speckle.
+    if (state.hair) {
+      const hairOpts = state.hair === 7
+        ? { outlineColor: state.skin, alphaCutoff: 200 }
+        : { outlineColor: state.skin, alphaCutoff: 60, alphaOutlineThreshold: 200 };
+      layers.push(layer(`hair${state.hair}_${body}`, tintFor('hair', state.hair, state.hairColor), hairOpts));
+    }
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
@@ -26841,11 +26848,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (y < H - 1) seedExt(i + W);
       }
 
-      // Pass 3 — dilate hat mask into exterior pixels, top + sides only.
-      // The "above neighbor" check (hatBottomCol[i - W]) is OMITTED so
-      // the mask can't propagate downward — we don't want hair below
-      // the hat (sideburns, long hair, neck area) to be erased. Only
-      // sideways and upward expansion.
+      // Pass 3 — vertical-only dilation. Only check "is the pixel
+      // below me masked?" → grows mask upward N rows per column.
+      // No sideways propagation, so a curved brim doesn't carry its
+      // lowest Y into adjacent columns. The cut follows the actual
+      // hat silhouette per column instead of a horizontal line at
+      // the brim's deepest point.
       const tmp = new Uint8Array(N);
       for (let iter = 0; iter < DILATE_PX; iter++) {
         tmp.set(hatBottomCol);
@@ -26853,10 +26861,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           for (let x = 0; x < W; x++) {
             const i = y * W + x;
             if (hatBottomCol[i]) continue;
-            if (!exterior[i]) continue;     // interior hole — don't grow into it
-            if ((y < H - 1 && hatBottomCol[i + W]) ||   // pixel below me is masked → grow UP
-                (x > 0     && hatBottomCol[i - 1]) ||   // pixel left of me → grow RIGHT
-                (x < W - 1 && hatBottomCol[i + 1])) {   // pixel right of me → grow LEFT
+            if (!exterior[i]) continue;
+            if (y < H - 1 && hatBottomCol[i + W]) {   // pixel below me is masked → grow UP
               tmp[i] = 1;
             }
           }
@@ -26864,7 +26870,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         hatBottomCol.set(tmp);
       }
 
-      // Pass 4 — per-column "above hat top" → catches tall hair
+      // Pass 4 — per-column "above hat top" → catches tall hair that
+      // would otherwise poke out the top of the hat (hairstyles 3, 4,
+      // and any future style with vertical extension above the head).
       for (let x = 0; x < W; x++) {
         for (let y = 0; y < H; y++) {
           if (hd[(y * W + x) * 4 + 3] > HAT_ALPHA_MIN) {
