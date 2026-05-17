@@ -26665,17 +26665,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const preserveTopOutlines = state.top === 6 || state.top === 7;
       layers.push(layer(`top${state.top}_${body}`, tintFor('top', state.top, state.topColor), { softShade: true, skipOutlines: !preserveTopOutlines }));
     }
-    // Hair: outline pixels (gray < 70) AND semi-transparent pixels
-    // (alpha < 200) get tinted with skin color so the ears blend into
-    // the body line work and soft hair edges fade smoothly into skin
-    // instead of carrying hair-color halo. Solid hair pixels (alpha
-    // >= 200, gray >= 70) tint normally with the picked hair color.
-    // Bald (hair 7) gets a higher alphaCutoff because the semi-
-    // transparent ear cartilage detail rendered as noisy speckle.
+    // Hair: outline pixels (gray < 70) get tinted with skin color so
+    // the dark ear outlines blend into the body line work. Semi-
+    // transparent pixels now tint normally with hair color — the
+    // "skin-tinted soft pixels" trick made the hair itself look
+    // weird and there's no clean way to fix the ears without
+    // breaking the hair, so we accept the trade-off.
+    // Bald (hair 7) gets a higher alphaCutoff because its semi-
+    // transparent ear cartilage rendered as noisy speckle.
     if (state.hair) {
       const hairOpts = state.hair === 7
         ? { outlineColor: state.skin, alphaCutoff: 200 }
-        : { outlineColor: state.skin, alphaCutoff: 60, alphaOutlineThreshold: 200 };
+        : { outlineColor: state.skin, alphaCutoff: 60 };
       layers.push(layer(`hair${state.hair}_${body}`, tintFor('hair', state.hair, state.hairColor), hairOpts));
     }
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
