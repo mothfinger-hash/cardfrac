@@ -53,15 +53,15 @@
       --shadow:#1E1408;--premium:#C8002A;--premium-txt:#F2ECD8;
       --sb-w:198px;--sb-w-coll:54px;
     }
-    body{font-family:'Space Mono','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-left:var(--sb-w);transition:background .2s,color .2s,padding-left .25s}
-    body.nav-collapsed{padding-left:var(--sb-w-coll)}
+    body{font-family:'Space Mono','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-right:var(--sb-w);transition:background .2s,color .2s,padding-right .25s}
+    body.nav-collapsed{padding-right:var(--sb-w-coll)}
     /* Landing page: keep sidebar, hide binder top bar only */
     body.on-landing #binderSidebar{display:none!important}
 
     @keyframes scanlines{0%{transform:translateY(0)}100%{transform:translateY(10px)}}
 
     /* SIDEBAR NAV */
-    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
+    nav{background:var(--surface);border-left:2px solid var(--border);position:fixed;right:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
     nav.sb-collapsed{width:var(--sb-w-coll)}
     .nav-header{height:52px;display:flex;align-items:center;padding:0 8px 0 10px;border-bottom:2px solid var(--border);flex-shrink:0;gap:6px}
     .logo-img-btn{background:none!important;border:none!important;padding:0!important;cursor:pointer;line-height:0;box-shadow:none!important;min-width:0!important;letter-spacing:0;flex:1;overflow:hidden}
@@ -93,7 +93,7 @@
     nav.sb-collapsed .nav-tab .badge-count{display:none}
     nav.sb-collapsed .nav-group-label{height:0;padding:0;overflow:hidden}
     nav.sb-collapsed .nav-tab.active::before{width:2px}
-    nav.sb-collapsed .nav-tab:hover::after{content:attr(data-label);position:fixed;left:calc(var(--sb-w-coll) + 6px);background:#000;border:1.5px solid var(--accent);color:var(--accent);padding:4px 9px;font-size:9.5px;letter-spacing:.1em;white-space:nowrap;box-shadow:3px 3px 0 #000;z-index:10001;pointer-events:none;font-family:'Space Mono',monospace;text-transform:uppercase}
+    nav.sb-collapsed .nav-tab:hover::after{content:attr(data-label);position:fixed;right:calc(var(--sb-w-coll) + 6px);background:#000;border:1.5px solid var(--accent);color:var(--accent);padding:4px 9px;font-size:9.5px;letter-spacing:.1em;white-space:nowrap;box-shadow:3px 3px 0 #000;z-index:10001;pointer-events:none;font-family:'Space Mono',monospace;text-transform:uppercase}
     /* Sidebar avatar — fills the dead space above the footer with the
        user's full-body PFP. Desktop only; the mobile media query at
        the bottom of this stylesheet hides it. Capped via max-height
@@ -118,7 +118,6 @@
       object-fit:contain;
       image-rendering:auto;
       filter:drop-shadow(0 4px 12px rgba(0,229,255,.18));
-      transform:scaleX(-1);
     }
     nav.sb-collapsed .sidebar-avatar-wrap{ display:none !important; }
     @media (max-width: 780px){ .sidebar-avatar-wrap{ display:none !important; } }
@@ -138,7 +137,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     nav.sb-collapsed .user-avatar #userName{display:none}
     nav.sb-collapsed .user-avatar{padding:4px;justify-content:center;gap:0}
     .avatar-circle{width:26px;height:26px;border-radius:0;background:var(--accent);color:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6rem;border:1.5px solid var(--shadow)}
-    .avatar-dropdown{display:none;position:fixed;left:var(--sb-w);bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:8px 0;min-width:220px;max-width:92vw;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
+    .avatar-dropdown{display:none;position:fixed;right:var(--sb-w);bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:8px 0;min-width:220px;max-width:92vw;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
     .avatar-dropdown.open{display:block}
     .dd-badge-section{padding:10px 12px 6px;border-bottom:2px solid var(--border)}
     .dd-badge-label{font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase}
@@ -150,8 +149,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .dd-badge-pip .dd-bname{font-family:'Press Start 2P',monospace;font-size:4.5px;color:#444;text-align:center;line-height:1.3;max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .dd-badge-pip .dd-bname.earned{color:#00E5FF}
     .dd-badge-pip:hover .dd-hex{transform:scale(1.1)}
-    @media(max-width:480px){.avatar-dropdown{left:var(--sb-w-coll);bottom:72px}.dd-badge-grid{grid-template-columns:repeat(4,1fr);gap:4px}.dd-badge-pip .dd-hex{width:30px;height:30px}.dd-badge-pip .dd-hex svg{width:30px;height:30px}.dd-badge-pip .dd-bname{font-size:4px;max-width:38px}}
-    @media(max-width:900px){.avatar-dropdown{left:auto;right:8px;bottom:auto;top:92px}}
+    @media(max-width:480px){.avatar-dropdown{right:var(--sb-w-coll);bottom:72px}.dd-badge-grid{grid-template-columns:repeat(4,1fr);gap:4px}.dd-badge-pip .dd-hex{width:30px;height:30px}.dd-badge-pip .dd-hex svg{width:30px;height:30px}.dd-badge-pip .dd-bname{font-size:4px;max-width:38px}}
+    @media(max-width:900px){.avatar-dropdown{right:auto;left:8px;bottom:auto;top:92px}}
     .dropdown-item{padding:10px 16px;color:var(--text);cursor:pointer;font-size:.6rem;transition:background .1s;display:flex;align-items:center;gap:8px}
     .dropdown-item:hover{background:var(--surface2)}
     .dropdown-divider{height:2px;background:var(--border);margin:4px 0}
@@ -496,11 +495,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     @media(max-width:900px) {
       /* Sidebar collapses to icons only */
       nav{width:var(--sb-w-coll)}
-      body{padding-left:var(--sb-w-coll)}
+      body{padding-right:var(--sb-w-coll)}
       .nav-tab-lbl,.nav-group-label{display:none}
       .nav-tab{justify-content:center;padding:9px 0}
       .nav-collapse-btn{display:none}
-      #binderSidebar{left:var(--sb-w-coll)}
+      #binderSidebar{right:var(--sb-w-coll);left:0}
     }
     @media(max-width:768px) {
       .card-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
@@ -2506,7 +2505,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* ── BINDER TOP BAR (desktop) / LEFT STRIP (mobile) ── */
     #binderSidebar{
       position:fixed;display:none;
-      left:var(--sb-w);right:0;top:0;
+      left:0;right:var(--sb-w);top:0;
       height:52px;
       flex-direction:row;align-items:center;justify-content:center;
       gap:8px;padding:6px 12px;
@@ -2514,15 +2513,15 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       overflow-x:auto;overflow-y:hidden;
       scrollbar-width:none;
       z-index:900;
-      transition:left .25s;
+      transition:right .25s;
     }
     #binderSidebar::-webkit-scrollbar{display:none}
     body.on-binder #binderSidebar{display:flex}
-    body.nav-collapsed #binderSidebar{left:var(--sb-w-coll)}
+    body.nav-collapsed #binderSidebar{right:var(--sb-w-coll)}
     /* Push collection content down to clear the top bar */
     body.on-binder #collectionPage{padding-top:60px}
     @media(max-width:900px){
-      #binderSidebar{left:var(--sb-w-coll)}
+      #binderSidebar{right:var(--sb-w-coll);left:0}
     }
     /* Mobile: convert top bar → left vertical strip (binder page only) */
     @media(max-width:600px){
