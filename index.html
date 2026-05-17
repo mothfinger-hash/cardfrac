@@ -26520,37 +26520,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
 
-    // ── (optional) 3x3 box blur on grayscale ───────────────────────
-    // Averages each visible pixel with its 8 neighbors (skipping
-    // transparent ones). Smooths fine pixel-to-pixel noise before
-    // tinting, so dark colors don't show film-grain artifacts.
-    if (opts.smooth) {
-      const tmp = new Uint8ClampedArray(W * H);
-      for (let i = 0; i < W * H; i++) {
-        tmp[i] = d[i * 4 + 3] > 0 ? d[i * 4] : 0;
-      }
-      for (let y = 1; y < H - 1; y++) {
-        for (let x = 1; x < W - 1; x++) {
-          const ci = y * W + x;
-          if (d[ci * 4 + 3] === 0) continue;
-          let sum = 0, count = 0;
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              const ni = (y + dy) * W + (x + dx);
-              if (tmp[ni] > 0) { sum += tmp[ni]; count++; }
-            }
-          }
-          if (count > 0) {
-            const avg = (sum / count) | 0;
-            d[ci * 4]     = avg;
-            d[ci * 4 + 1] = avg;
-            d[ci * 4 + 2] = avg;
-          }
-        }
-      }
-    }
-
     // ── Tint pass ──────────────────────────────────────────────────
+    // Two tinting formulas:
+    //  - hard multiply (default): result = gray × color / 255
+    //      Works great for skin/hair/eyes where the artist's shading
+    //      matches what you'd expect from grayscale × color math.
+    //  - lifted multiply (opts.softShade=true): factor = 0.4 + 0.6×(gray/255)
+    //      Result = color × factor. Base color (gray 255) stays at
+    //      full color; shadows (gray 50) compress to ~46% of the
+    //      color instead of 20%. Used for clothing because the dark
+    //      end of standard multiply produced visible pixel-grain
+    //      "grit" — the human eye is more sensitive to brightness
+    //      changes in dark areas, so adjacent shadow pixels at
+    //      gray 70/80 showed harsh variation when tinted with dark
+    //      colors. Lifting the floor moves shadows out of that
+    //      sensitive perceptual band.
+    const softShade = !!opts.softShade;
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
@@ -26565,9 +26550,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         continue;
       }
       if (opts.preserveWhites && g >= WHITE_THRESHOLD) continue;
-      d[i]     = (g * cr) >> 8;
-      d[i + 1] = (g * cg) >> 8;
-      d[i + 2] = (g * cb) >> 8;
+      if (softShade) {
+        // factor in [0.4, 1.0] — preserves base color, lifts shadows
+        const f = 0.4 + 0.6 * (g / 255);
+        d[i]     = (cr * f) | 0;
+        d[i + 1] = (cg * f) | 0;
+        d[i + 2] = (cb * f) | 0;
+      } else {
+        d[i]     = (g * cr) >> 8;
+        d[i + 1] = (g * cg) >> 8;
+        d[i + 2] = (g * cb) >> 8;
+      }
     }
     tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
@@ -26645,16 +26638,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // white so the reflection dots the artist drew as transparent
     // become bright highlights instead of letting skin show through.
     layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, fillInteriorWhite: true }));
-    if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { smooth: true }));
-    if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { smooth: true }));
-    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { smooth: true }));
+    if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true }));
+    if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true }));
+    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { softShade: true }));
     // Hair: bumped alpha cutoff to 80 because the artist's soft-brush
     // hair strands fade out very gradually — default cutoff of 40
     // kept too much faint halo. Outline pixels get skin-color-tinted
     // so the ears (inside the hair sprite) read as line work
     // belonging to the body rather than detached dark shapes.
     if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 80 }));
-    if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { smooth: true }));
+    if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
     if (myToken !== renderToken) return;
