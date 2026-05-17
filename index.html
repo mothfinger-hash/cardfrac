@@ -26624,7 +26624,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         continue;
       }
-      if (opts.preserveWhites && g >= WHITE_THRESHOLD) continue;
+      if (opts.preserveWhites && g >= (opts.whiteThreshold || WHITE_THRESHOLD)) continue;
       // softShade uses lifted multiply: factor = 0.4 + 0.6×(gray/255).
       // Shadows compress to 40-60% of color brightness, base color
       // (gray 255) stays at full color. Smooth gradient, no hard
@@ -26751,11 +26751,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const layer = (name, color, opts) => ({ name, color, opts: opts || {} });
     const layers = [];
     layers.push(layer(bodyFile,         state.skin,                                                          { isBody: true }));
-    // Eyes: preserve the whites of the eye (gray ≥ 200 skips tint).
-    // No fillInteriorWhite — the artist needs to paint reflection dots
-    // as white pixels directly in the sprite; the flood-fill heuristic
-    // kept catching wrong things.
-    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true }));
+    // Eyes: preserve the whites of the eye, but with a TIGHTER
+    // threshold (235) than the default (200). The artist drew the iris
+    // at gray ~180-220, which falls under the default threshold and
+    // gets skipped from tinting → barely any color. Raising the
+    // threshold to 235 only spares the actual sclera (very light gray)
+    // and lets the iris range take the picked eye color.
+    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, whiteThreshold: 235 }));
     if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true, skipOutlines: true }));
     if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true, skipOutlines: true }));
     // Top sprites 6 + 7 are the PathBinder graphic tees — they have
@@ -26839,7 +26841,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (y < H - 1) seedExt(i + W);
       }
 
-      // Pass 3 — dilate hat mask into exterior pixels only
+      // Pass 3 — dilate hat mask into exterior pixels, top + sides only.
+      // The "above neighbor" check (hatBottomCol[i - W]) is OMITTED so
+      // the mask can't propagate downward — we don't want hair below
+      // the hat (sideburns, long hair, neck area) to be erased. Only
+      // sideways and upward expansion.
       const tmp = new Uint8Array(N);
       for (let iter = 0; iter < DILATE_PX; iter++) {
         tmp.set(hatBottomCol);
@@ -26848,10 +26854,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             const i = y * W + x;
             if (hatBottomCol[i]) continue;
             if (!exterior[i]) continue;     // interior hole — don't grow into it
-            if ((y > 0     && hatBottomCol[i - W]) ||
-                (y < H - 1 && hatBottomCol[i + W]) ||
-                (x > 0     && hatBottomCol[i - 1]) ||
-                (x < W - 1 && hatBottomCol[i + 1])) {
+            if ((y < H - 1 && hatBottomCol[i + W]) ||   // pixel below me is masked → grow UP
+                (x > 0     && hatBottomCol[i - 1]) ||   // pixel left of me → grow RIGHT
+                (x < W - 1 && hatBottomCol[i + 1])) {   // pixel right of me → grow LEFT
               tmp[i] = 1;
             }
           }
