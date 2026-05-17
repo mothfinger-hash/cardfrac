@@ -26445,25 +26445,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   const OUTLINE_THRESHOLD = 50;
   const WHITE_THRESHOLD   = 200;
   const DEFAULT_ALPHA_CUT = 40;
-  // drawTinted: configurable per-sprite tint passes.
-  //   - outlineColor unset    → preserve outline gray as artist drew
-  //   - outlineColor set      → tint outline pixels with this color
-  //   - preserveWhites=true   → don't tint near-white pixels (used for
-  //                             eyes so the whites of the eye stay
-  //                             white when picking an iris color)
-  //   - alphaCutoff           → pixels below this alpha get cleared.
-  //                             Hair uses a higher cutoff than clothes
-  //                             because the artist's soft-brush hair
-  //                             strands extend visibly past alpha 40.
-  //   - quantize=true         → snap grayscale to 32 levels before
-  //                             tinting. Smooths fine-grained pixel
-  //                             noise on dark tints (the "gritty" look
-  //                             that's specifically visible on dark
-  //                             clothing — adjacent pixels with gray
-  //                             values 130 vs 132 produced different
-  //                             multiplied RGB, looked like film grain).
-  function drawTinted(sprite, color, outlineColor, preserveWhites, alphaCutoff, quantize) {
+
+  // drawTinted — opts:
+  //   outlineColor          tint outline pixels with this (else preserve gray)
+  //   preserveWhites        skip tint for gray >= 200 (eye whites etc.)
+  //   alphaCutoff           clear pixels with alpha < this (default 40)
+  //   smooth                run 3x3 box blur on grayscale before tinting
+  //                         — kills the pixel-grain "grit" on dark colors
+  //                         that quantization alone couldn't smooth out
+  //   fillInteriorWhite     flood fill exterior from canvas corners, then
+  //                         paint any remaining transparent pixel white
+  //                         — used for eyes so the reflection dots the
+  //                         artist drew as transparent become bright
+  function drawTinted(sprite, color, opts) {
     if (!sprite) return;
+    opts = opts || {};
     tCtx.clearRect(0, 0, W, H);
     if (!color) {
       tCtx.globalCompositeOperation = 'source-over';
@@ -26476,27 +26472,90 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const cg = parseInt(hex.slice(2, 4), 16) || 0;
     const cb = parseInt(hex.slice(4, 6), 16) || 0;
     let or = 0, og = 0, ob = 0, hasOutlineColor = false;
-    if (outlineColor) {
-      const oh = outlineColor.charAt(0) === '#' ? outlineColor.slice(1) : outlineColor;
+    if (opts.outlineColor) {
+      const oh = opts.outlineColor.charAt(0) === '#' ? opts.outlineColor.slice(1) : opts.outlineColor;
       or = parseInt(oh.slice(0, 2), 16) || 0;
       og = parseInt(oh.slice(2, 4), 16) || 0;
       ob = parseInt(oh.slice(4, 6), 16) || 0;
       hasOutlineColor = true;
     }
-    const aCut = alphaCutoff || DEFAULT_ALPHA_CUT;
+    const aCut = opts.alphaCutoff || DEFAULT_ALPHA_CUT;
     tCtx.globalCompositeOperation = 'source-over';
     tCtx.drawImage(sprite, 0, 0);
     const id = tCtx.getImageData(0, 0, W, H);
     const d = id.data;
+
+    // ── (optional) fill interior transparent pixels with white ─────
+    // Flood fill from canvas corners marks the exterior of the sprite.
+    // Any transparent pixel not reachable from corners is enclosed by
+    // sprite content — the artist's intentional transparent-as-white
+    // detail. Currently used for eye reflections.
+    if (opts.fillInteriorWhite) {
+      const visited = new Uint8Array(W * H);
+      const stack = [];
+      const seed = (idx) => {
+        if (d[idx * 4 + 3] === 0 && !visited[idx]) {
+          visited[idx] = 1;
+          stack.push(idx);
+        }
+      };
+      for (let x = 0; x < W; x++) { seed(x); seed((H - 1) * W + x); }
+      for (let y = 0; y < H; y++) { seed(y * W); seed(y * W + W - 1); }
+      while (stack.length) {
+        const i = stack.pop();
+        const x = i % W;
+        const y = (i / W) | 0;
+        if (x > 0)       seed(i - 1);
+        if (x < W - 1)   seed(i + 1);
+        if (y > 0)       seed(i - W);
+        if (y < H - 1)   seed(i + W);
+      }
+      for (let i = 0; i < W * H; i++) {
+        if (!visited[i] && d[i * 4 + 3] === 0) {
+          d[i * 4]     = 255;
+          d[i * 4 + 1] = 255;
+          d[i * 4 + 2] = 255;
+          d[i * 4 + 3] = 255;
+        }
+      }
+    }
+
+    // ── (optional) 3x3 box blur on grayscale ───────────────────────
+    // Averages each visible pixel with its 8 neighbors (skipping
+    // transparent ones). Smooths fine pixel-to-pixel noise before
+    // tinting, so dark colors don't show film-grain artifacts.
+    if (opts.smooth) {
+      const tmp = new Uint8ClampedArray(W * H);
+      for (let i = 0; i < W * H; i++) {
+        tmp[i] = d[i * 4 + 3] > 0 ? d[i * 4] : 0;
+      }
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const ci = y * W + x;
+          if (d[ci * 4 + 3] === 0) continue;
+          let sum = 0, count = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const ni = (y + dy) * W + (x + dx);
+              if (tmp[ni] > 0) { sum += tmp[ni]; count++; }
+            }
+          }
+          if (count > 0) {
+            const avg = (sum / count) | 0;
+            d[ci * 4]     = avg;
+            d[ci * 4 + 1] = avg;
+            d[ci * 4 + 2] = avg;
+          }
+        }
+      }
+    }
+
+    // ── Tint pass ──────────────────────────────────────────────────
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
       if (a < aCut) { d[i + 3] = 0; continue; }
-      // Quantize grayscale to 32 levels (5-bit) for sprites flagged
-      // as gritty. Mask off the bottom 3 bits so adjacent pixels with
-      // similar gray values snap to the same band — kills pixel-grain
-      // noise on dark tints without affecting major shading.
-      const g = quantize ? (d[i] & 0xF8) : d[i];
+      const g = d[i];
       if (g < OUTLINE_THRESHOLD) {
         if (hasOutlineColor) {
           d[i]     = (g * or) >> 8;
@@ -26505,7 +26564,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
         continue;
       }
-      if (preserveWhites && g >= WHITE_THRESHOLD) continue;
+      if (opts.preserveWhites && g >= WHITE_THRESHOLD) continue;
       d[i]     = (g * cr) >> 8;
       d[i + 1] = (g * cg) >> 8;
       d[i + 2] = (g * cb) >> 8;
@@ -26582,17 +26641,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const layer = (name, color, opts) => ({ name, color, opts: opts || {} });
     const layers = [];
     layers.push(layer(bodyFile,         state.skin,                                                          { isBody: true }));
-    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true }));
-    if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { quantize: true }));
-    if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { quantize: true }));
-    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { quantize: true }));
+    // Eyes: preserve whites + fill interior transparent pixels with
+    // white so the reflection dots the artist drew as transparent
+    // become bright highlights instead of letting skin show through.
+    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, fillInteriorWhite: true }));
+    if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { smooth: true }));
+    if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { smooth: true }));
+    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { smooth: true }));
     // Hair: bumped alpha cutoff to 80 because the artist's soft-brush
     // hair strands fade out very gradually — default cutoff of 40
     // kept too much faint halo. Outline pixels get skin-color-tinted
     // so the ears (inside the hair sprite) read as line work
     // belonging to the body rather than detached dark shapes.
     if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 80 }));
-    if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { quantize: true }));
+    if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { smooth: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
     if (myToken !== renderToken) return;
@@ -26603,7 +26665,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (opts.isBody) {
         drawBodyTinted(sprites[i], color);
       } else {
-        drawTinted(sprites[i], color, opts.outlineColor, opts.preserveWhites, opts.alphaCutoff, opts.quantize);
+        drawTinted(sprites[i], color, opts);
       }
     }
   }
