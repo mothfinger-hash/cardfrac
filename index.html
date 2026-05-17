@@ -26538,7 +26538,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           if (y > 0)     tryAdd(j - W);
           if (y < H - 1) tryAdd(j + W);
         }
-        if (componentIdxs.length <= MAX_REFLECTION_PIXELS) {
+        // Skip 1-pixel components — those were the two stray dots above
+        // the male's eye. True reflection dots in the iris are at
+        // least 2 pixels wide.
+        if (componentIdxs.length >= 2 && componentIdxs.length <= MAX_REFLECTION_PIXELS) {
           for (const idx of componentIdxs) {
             d[idx * 4]     = 255;
             d[idx * 4 + 1] = 255;
@@ -26587,11 +26590,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // stopped preserving outlines (since outlines no longer provide
       // the dark anchor, shadows need to do the structural work).
       if (softShade) {
-        // Lifted multiply with floor 0.2 (deeper shadows than the
-        // previous 0.4 since clothing no longer has black outline
-        // anchors — shadow tones need to do the structural work).
-        // Shadow at gray 70 lands around 42% of color brightness.
-        const f = 0.2 + 0.8 * (g / 255);
+        // Lifted multiply, floor 0.1 (deeper still — each successive
+        // bump down adds about 25% more shadow depth at mid-gray).
+        // Shadow at gray 70 lands around 37% of color brightness.
+        const f = 0.1 + 0.9 * (g / 255);
         d[i]     = (cr * f) | 0;
         d[i + 1] = (cg * f) | 0;
         d[i + 2] = (cb * f) | 0;
@@ -26623,11 +26625,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     ctx.drawImage(tCanvas, 0, 0);
   }
 
-  // Body uses the same outline+alpha-preservation pipeline, plus one
-  // extra rule: pixels already mostly opaque (alpha > 200) get forced
-  // to 255 so interior skin stays solid against the dark stage. The
-  // anti-aliased silhouette edge (alpha 1-200) is preserved, so we
-  // get soft outer edges without a tinted halo.
+  // Gamma LUT (precomputed) — body tint applies gamma 1.4 to push
+  // shadow tones deeper. Pure multiply (gamma 1.0) was the previous
+  // behavior; gamma 1.4 darkens mid-grays (gray 100 maps to ~30%
+  // instead of 39%) without touching pure white. Built once at
+  // module init so the inner loop is just a table lookup.
+  const BODY_GAMMA_LUT = (() => {
+    const lut = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) {
+      lut[i] = Math.round(Math.pow(i / 255, 1.4) * 255);
+    }
+    return lut;
+  })();
+
+  // Body uses the same outline+alpha-preservation pipeline, plus two
+  // extra rules:
+  //   1. pixels already mostly opaque (alpha > 200) get forced to 255
+  //      so interior skin stays solid against the dark stage
+  //   2. fill pixels go through the gamma LUT before multiplying with
+  //      the skin color, deepening shadows beyond plain multiply
   function drawBodyTinted(sprite, color) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
@@ -26651,13 +26667,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (a < 40) { d[i + 3] = 0; continue; }
       const g = d[i];
       if (g >= OUTLINE_THRESHOLD) {
-        // Fill — tint with skin color
-        d[i]     = (g * cr) >> 8;
-        d[i + 1] = (g * cg) >> 8;
-        d[i + 2] = (g * cb) >> 8;
+        // Fill — apply gamma to push shadows deeper, then tint
+        const gg = BODY_GAMMA_LUT[g];
+        d[i]     = (gg * cr) >> 8;
+        d[i + 1] = (gg * cg) >> 8;
+        d[i + 2] = (gg * cb) >> 8;
       } else {
         // Outline — force pure black instead of preserving artist's gray.
-        // Crisp line work that "stands out" against the skin tint.
         d[i]     = 0;
         d[i + 1] = 0;
         d[i + 2] = 0;
@@ -26695,17 +26711,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     layers.push(layer(bodyFile,         state.skin,                                                          { isBody: true }));
     // Eyes: preserve whites + fill interior transparent pixels with
     // white so the reflection dots the artist drew as transparent
-    // become bright highlights instead of letting skin show through.
+    // become bright highlights. Size cap excludes 1-pixel components
+    // (those were rendering as stray dots above the male's eye); only
+    // 2-4 pixel transparent islands get filled as reflections.
     layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, fillInteriorWhite: true }));
     if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true, skipOutlines: true }));
     if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true, skipOutlines: true }));
-    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { softShade: true, skipOutlines: true }));
-    // Hair: bumped alpha cutoff to 80 because the artist's soft-brush
-    // hair strands fade out very gradually — default cutoff of 40
-    // kept too much faint halo. Outline pixels get skin-color-tinted
-    // so the ears (inside the hair sprite) read as line work
-    // belonging to the body rather than detached dark shapes.
-    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 80 }));
+    // Top sprites 6 + 7 are the PathBinder graphic tees — they have
+    // intentional dark line work that needs preserving (logo outlines,
+    // crest detail). Other tops are skipOutlines because their outlines
+    // were the source of the visual issue earlier.
+    if (state.top) {
+      const preserveTopOutlines = state.top === 6 || state.top === 7;
+      layers.push(layer(`top${state.top}_${body}`, tintFor('top', state.top, state.topColor), { softShade: true, skipOutlines: !preserveTopOutlines }));
+    }
+    // Hair: outline pixels (including ears) get tinted black for crisp
+    // line work. Alpha cutoff bumped to 80 because the artist's
+    // soft-brush hair strands fade out gradually — default 40 kept too
+    // much halo.
+    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: '#000000', alphaCutoff: 80 }));
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
@@ -26745,6 +26769,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const hd = tCtx.getImageData(0, 0, W, H).data;
       const rowLeft  = new Int16Array(H);
       const rowRight = new Int16Array(H);
+      // Dilation in pixels: how much further the hat's mask reaches
+      // beyond its actual silhouette. Top: 6 rows above. Sides: 5 cols
+      // either side. Gives a margin of safety so hair doesn't peek out
+      // along the hat's curves.
+      const HAT_PAD_TOP  = 6;
+      const HAT_PAD_SIDE = 5;
       for (let y = 0; y < H; y++) {
         let l = -1, r = -1;
         for (let x = 0; x < W; x++) {
@@ -26752,6 +26782,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             if (l < 0) l = x;
             r = x;
           }
+        }
+        // Dilate horizontally: widen each row's hat region.
+        if (l >= 0) {
+          l = Math.max(0, l - HAT_PAD_SIDE);
+          r = Math.min(W - 1, r + HAT_PAD_SIDE);
         }
         rowLeft[y]  = l;
         rowRight[y] = r;
@@ -26765,16 +26800,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             break;
           }
         }
-        hatBottomCol[x] = top < H ? top : -1;
+        // Dilate vertically: extend top edge upward by HAT_PAD_TOP.
+        hatBottomCol[x] = top < H ? Math.max(0, top - HAT_PAD_TOP) : -1;
       }
     }
+
+    // Hair styles that should NOT get clipped by the hat mask — long
+    // or flowy hair that intentionally extends past where the hat
+    // sits and should remain visible alongside it.
+    const HAIR_IGNORE_HAT_MASK = new Set([6]);
 
     ctx.clearRect(0, 0, W, H);
     for (let i = 0; i < layers.length; i++) {
       const { name, color, opts } = layers[i];
-      // Attach the hat-bottom mask to the hair layer so drawTinted
-      // can clear hair pixels above the hat per-column.
-      const renderOpts = (hatBottomCol && name.indexOf('hair') === 0)
+      // Attach the hat top-edge mask to the hair layer so drawTinted
+      // can clear hair pixels above the hat per-column. Skip when the
+      // active hairstyle is in HAIR_IGNORE_HAT_MASK.
+      const shouldMaskHair =
+        hatBottomCol &&
+        name.indexOf('hair') === 0 &&
+        !HAIR_IGNORE_HAT_MASK.has(state.hair);
+      const renderOpts = shouldMaskHair
         ? Object.assign({}, opts, { hatMask: hatBottomCol })
         : opts;
       if (renderOpts.isBody) {
