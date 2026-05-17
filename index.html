@@ -26580,21 +26580,40 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         continue;
       }
       if (opts.preserveWhites && g >= WHITE_THRESHOLD) continue;
-      // softShade cel-shades the shadow band only. Shadow pixels snap
-      // to one of two discrete grayscale tones (90 and 130) before
-      // multiplying with the color. Adjacent shadow pixels in the
-      // same band end up at identical RGB → zero variation → zero
-      // grit, but shadows stay visibly dark (not flattened to base
-      // color). Base/highlight (gray ≥ 150) keeps smooth multiply
-      // for the gradient region the user said already looks great.
-      let effG = g;
-      if (softShade && g < 150) {
-        effG = g < 110 ? 90 : 130;
+      // softShade uses lifted multiply: factor = 0.4 + 0.6×(gray/255).
+      // Shadows compress to 40-60% of color brightness, base color
+      // (gray 255) stays at full color. Smooth gradient, no hard
+      // cel-shade bands. Restores the depth that was lost when we
+      // stopped preserving outlines (since outlines no longer provide
+      // the dark anchor, shadows need to do the structural work).
+      if (softShade) {
+        const f = 0.4 + 0.6 * (g / 255);
+        d[i]     = (cr * f) | 0;
+        d[i + 1] = (cg * f) | 0;
+        d[i + 2] = (cb * f) | 0;
+      } else {
+        d[i]     = (g * cr) >> 8;
+        d[i + 1] = (g * cg) >> 8;
+        d[i + 2] = (g * cb) >> 8;
       }
-      d[i]     = (effG * cr) >> 8;
-      d[i + 1] = (effG * cg) >> 8;
-      d[i + 2] = (effG * cb) >> 8;
     }
+
+    // ── Hat mask (hair only) ───────────────────────────────────────
+    // For each column where the hat has opaque content, clear every
+    // pixel above the hat's bottom-most opaque row. Makes the hat
+    // appear to compress the hair underneath, regardless of any
+    // transparent gaps in the hat sprite.
+    if (opts.hatMask) {
+      const mask = opts.hatMask;
+      for (let x = 0; x < W; x++) {
+        const hatBot = mask[x];
+        if (hatBot < 0) continue;
+        for (let y = 0; y <= hatBot; y++) {
+          d[(y * W + x) * 4 + 3] = 0;
+        }
+      }
+    }
+
     tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
   }
@@ -26685,13 +26704,49 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
     if (myToken !== renderToken) return;
 
+    // Build a per-column "hat bottom" array so the hair layer can hide
+    // any pixel above where the hat sits. Without this, hair pokes
+    // through any transparent gaps in the hat sprite (and any hair
+    // sized too tall for the hat overhangs out the top). With this
+    // mask, the hat appears to "compress" the hair — hair above the
+    // hat's bottom edge is cleared per-column.
+    let hatBottomCol = null;
+    let hatLayerIdx = -1;
+    for (let i = 0; i < layers.length; i++) {
+      if (layers[i].name.indexOf('hat') === 0 && sprites[i]) {
+        hatLayerIdx = i;
+        break;
+      }
+    }
+    if (hatLayerIdx >= 0) {
+      // Probe the hat sprite's alpha to find the bottom-most opaque
+      // pixel in each column.
+      tCtx.clearRect(0, 0, W, H);
+      tCtx.globalCompositeOperation = 'source-over';
+      tCtx.drawImage(sprites[hatLayerIdx], 0, 0);
+      const hd = tCtx.getImageData(0, 0, W, H).data;
+      hatBottomCol = new Int16Array(W);
+      for (let x = 0; x < W; x++) {
+        let bot = -1;
+        for (let y = H - 1; y >= 0; y--) {
+          if (hd[(y * W + x) * 4 + 3] > 100) { bot = y; break; }
+        }
+        hatBottomCol[x] = bot;
+      }
+    }
+
     ctx.clearRect(0, 0, W, H);
     for (let i = 0; i < layers.length; i++) {
-      const { color, opts } = layers[i];
-      if (opts.isBody) {
+      const { name, color, opts } = layers[i];
+      // Attach the hat-bottom mask to the hair layer so drawTinted
+      // can clear hair pixels above the hat per-column.
+      const renderOpts = (hatBottomCol && name.indexOf('hair') === 0)
+        ? Object.assign({}, opts, { hatMask: hatBottomCol })
+        : opts;
+      if (renderOpts.isBody) {
         drawBodyTinted(sprites[i], color);
       } else {
-        drawTinted(sprites[i], color, opts);
+        drawTinted(sprites[i], color, renderOpts);
       }
     }
   }
