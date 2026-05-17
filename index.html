@@ -26442,7 +26442,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   // hair color, and the body's skin shows through their transparent
   // interior. Same trick keeps cel-shaded outlines on hats, clothes,
   // shoes from getting hair/cloth/shoe-color-tinted.
-  const OUTLINE_THRESHOLD = 50;
+  const OUTLINE_THRESHOLD = 70;   // bumped from 50 — artist's clothing outlines were drawn at ~gray 60 and weren't being caught
   const WHITE_THRESHOLD   = 200;
   const DEFAULT_ALPHA_CUT = 40;
 
@@ -26522,26 +26522,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
     // ── Tint pass ──────────────────────────────────────────────────
     // Two tinting formulas:
-    //  - hard multiply (default): result = gray × color / 255
+    //  - hard multiply (default): result = gray × color / 255.
     //      Used for skin/hair/eyes where standard multiply looks right.
-    //  - softShade (opts.softShade=true): adaptive lifted multiply.
-    //      Bright colors get a HIGH floor (heavy shadow compression)
-    //      because dark shadows on a bright base produce strong
-    //      contrast that amplifies pixel noise into visible grit.
-    //      Dark colors get a LOW floor (light compression) because
-    //      they're already low-contrast and don't need much help.
-    //      Insight from testing: "bright color / dark shading looks
-    //      awful, bright color / bright shading looks clean."
-    //      Adaptive formula: floor = 0.4 + 0.4 × brightness
-    //      → white      → floor 0.8 (almost flat — no harsh shadows)
-    //      → mid color  → floor 0.6
-    //      → dark navy  → floor 0.44 (close to standard multiply)
+    //  - softShade (opts.softShade=true): cel-shade the shadow band,
+    //      smooth-multiply everything else. The shadow range (gray 50
+    //      to 149) is the source of the visible "grit" — it lives in
+    //      dark RGB territory where the eye is sensitive to small
+    //      brightness changes, and any pixel-to-pixel variation in the
+    //      sprite's grayscale shows as noise after the multiply.
+    //      Snapping shadow pixels to a few discrete tones (75 and 125)
+    //      makes every shadow pixel within a band identical → zero
+    //      variation → zero grit, while keeping shadows clearly
+    //      visible. Base/highlight gradients (gray 150+) stay on
+    //      smooth multiply because the user said those already look
+    //      great.
     const softShade = !!opts.softShade;
-    let softFloor = 0;
-    if (softShade) {
-      const brightness = (cr + cg + cb) / (3 * 255);
-      softFloor = 0.4 + 0.4 * brightness;
-    }
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
@@ -26556,18 +26551,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         continue;
       }
       if (opts.preserveWhites && g >= WHITE_THRESHOLD) continue;
-      if (softShade) {
-        // factor scales from softFloor (at gray 0) to 1.0 (at gray 255).
-        // softFloor was precomputed per-layer based on color brightness.
-        const f = softFloor + (1 - softFloor) * (g / 255);
-        d[i]     = (cr * f) | 0;
-        d[i + 1] = (cg * f) | 0;
-        d[i + 2] = (cb * f) | 0;
-      } else {
-        d[i]     = (g * cr) >> 8;
-        d[i + 1] = (g * cg) >> 8;
-        d[i + 2] = (g * cb) >> 8;
+      // softShade cel-shades the shadow band only. Shadow pixels snap
+      // to one of two discrete grayscale tones (90 and 130) before
+      // multiplying with the color. Adjacent shadow pixels in the
+      // same band end up at identical RGB → zero variation → zero
+      // grit, but shadows stay visibly dark (not flattened to base
+      // color). Base/highlight (gray ≥ 150) keeps smooth multiply
+      // for the gradient region the user said already looks great.
+      let effG = g;
+      if (softShade && g < 150) {
+        effG = g < 110 ? 90 : 130;
       }
+      d[i]     = (effG * cr) >> 8;
+      d[i + 1] = (effG * cg) >> 8;
+      d[i + 2] = (effG * cb) >> 8;
     }
     tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
