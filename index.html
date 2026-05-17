@@ -26641,19 +26641,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     // ── Hat mask (hair only) ───────────────────────────────────────
-    // Per-column "hat top edge" map. Clear hair pixels strictly above
-    // that edge so no hair pokes out the top of the hat. Pixels within
-    // the hat's Y range (at or below the top edge) are NOT cleared —
-    // hat draws on top to cover where opaque, transparent areas of
-    // hat allow hair to show through (e.g. cutouts in the hat sprite).
+    // Per-pixel hat region mask. Where the mask is 1, clear the
+    // hair pixel's alpha — hat will draw over those positions. The
+    // mask was dilated outward in render() so it extends a few
+    // pixels past the hat's actual silhouette, catching hair that
+    // would otherwise peek out along the hat's anti-aliased edge.
+    // Hat's intentionally-transparent areas (cutouts, holes) never
+    // enter the mask, so hair beneath them still shows.
     if (opts.hatMask) {
       const mask = opts.hatMask;
-      for (let x = 0; x < W; x++) {
-        const top = mask[x];
-        if (top < 0) continue;
-        for (let y = 0; y < top; y++) {
-          d[(y * W + x) * 4 + 3] = 0;
-        }
+      const N = W * H;
+      for (let i = 0; i < N; i++) {
+        if (mask[i]) d[i * 4 + 3] = 0;
       }
     }
 
@@ -26745,12 +26744,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const layer = (name, color, opts) => ({ name, color, opts: opts || {} });
     const layers = [];
     layers.push(layer(bodyFile,         state.skin,                                                          { isBody: true }));
-    // Eyes: preserve whites + fill interior transparent pixels with
-    // white so the reflection dots the artist drew as transparent
-    // become bright highlights. Size cap excludes 1-pixel components
-    // (those were rendering as stray dots above the male's eye); only
-    // 2-4 pixel transparent islands get filled as reflections.
-    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, fillInteriorWhite: true }));
+    // Eyes: preserve the whites of the eye (gray ≥ 200 skips tint).
+    // No fillInteriorWhite — the artist needs to paint reflection dots
+    // as white pixels directly in the sprite; the flood-fill heuristic
+    // kept catching wrong things.
+    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true }));
     if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true, skipOutlines: true }));
     if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true, skipOutlines: true }));
     // Top sprites 6 + 7 are the PathBinder graphic tees — they have
@@ -26787,66 +26785,42 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
     if (hatLayerIdx >= 0) {
-      // Build a hat-region mask in two passes:
-      //   1. Per row, find the leftmost + rightmost opaque pixel of
-      //      the hat and treat everything in between as "hat region"
-      //      for that row. This fills any small horizontal gaps in
-      //      the sprite (anti-aliased edges, internal transparent
-      //      details) so the mask spans width-wise consistently.
-      //   2. Per column, find the topmost Y where the row range
-      //      covers it. That's the "top edge of the hat" in that
-      //      column. Hair pixels above this Y get cleared.
-      //
-      // Only the TOP edge clears hair — hair inside the hat region
-      // is left alone, so the hat draws on top normally (transparent
-      // holes in the hat sprite show hair through them).
+      // Per-pixel hat mask: 1 where hair should be cleared, 0 elsewhere.
+      // Process:
+      //   1. Mark every pixel where hat alpha > 10 as hat region.
+      //   2. Dilate the mask outward by DILATE_PX iterations (one
+      //      pixel of expansion per iteration via 4-neighbor lookup).
+      // The mask now covers the hat's actual opaque area PLUS a margin
+      // around it, so hair right at the hat's edge gets clipped too.
+      // Hair beneath the hat's transparent regions (like hat 2's hole)
+      // is preserved because those pixels never enter the mask.
       tCtx.clearRect(0, 0, W, H);
       tCtx.globalCompositeOperation = 'source-over';
       tCtx.drawImage(sprites[hatLayerIdx], 0, 0);
       const hd = tCtx.getImageData(0, 0, W, H).data;
-      const rowLeft  = new Int16Array(H);
-      const rowRight = new Int16Array(H);
-      // Dilation in pixels: how much further the hat's mask reaches
-      // beyond its actual silhouette. Top: 6 rows above. Sides: 5 cols
-      // either side. Gives a margin of safety so hair doesn't peek out
-      // along the hat's curves.
-      const HAT_PAD_TOP    = 20;     // bumped: 10 → 20
-      const HAT_PAD_SIDE   = 16;     // bumped: 12 → 16
-      const HAT_ALPHA_MIN  = 10;     // lowered: 50 → 10 (catch anti-aliased edges)
-      for (let y = 0; y < H; y++) {
-        let l = -1, r = -1;
-        for (let x = 0; x < W; x++) {
-          if (hd[(y * W + x) * 4 + 3] > HAT_ALPHA_MIN) {
-            if (l < 0) l = x;
-            r = x;
-          }
-        }
-        if (l >= 0) {
-          l = Math.max(0, l - HAT_PAD_SIDE);
-          r = Math.min(W - 1, r + HAT_PAD_SIDE);
-        }
-        rowLeft[y]  = l;
-        rowRight[y] = r;
+      const N = W * H;
+      const HAT_ALPHA_MIN = 10;
+      const DILATE_PX = 10;
+      hatBottomCol = new Uint8Array(N);
+      for (let i = 0; i < N; i++) {
+        if (hd[i * 4 + 3] > HAT_ALPHA_MIN) hatBottomCol[i] = 1;
       }
-      hatBottomCol = new Int16Array(W);
-      let _maskCols = 0;
-      for (let x = 0; x < W; x++) {
-        let top = H;
+      const tmp = new Uint8Array(N);
+      for (let iter = 0; iter < DILATE_PX; iter++) {
+        tmp.set(hatBottomCol);
         for (let y = 0; y < H; y++) {
-          if (rowLeft[y] >= 0 && x >= rowLeft[y] && x <= rowRight[y]) {
-            top = y;
-            break;
+          for (let x = 0; x < W; x++) {
+            const i = y * W + x;
+            if (hatBottomCol[i]) continue;
+            if ((y > 0     && hatBottomCol[i - W]) ||
+                (y < H - 1 && hatBottomCol[i + W]) ||
+                (x > 0     && hatBottomCol[i - 1]) ||
+                (x < W - 1 && hatBottomCol[i + 1])) {
+              tmp[i] = 1;
+            }
           }
         }
-        const finalTop = top < H ? Math.max(0, top - HAT_PAD_TOP) : -1;
-        hatBottomCol[x] = finalTop;
-        if (finalTop >= 0) _maskCols++;
-      }
-      // One-shot diagnostic so we can confirm the mask is alive on
-      // the user's machine. Remove the log once we trust it.
-      if (!window._hatMaskLogged) {
-        window._hatMaskLogged = true;
-        console.log('[hat-mask] active. masked-columns:', _maskCols, 'sample-tops:', [hatBottomCol[60], hatBottomCol[91], hatBottomCol[120]]);
+        hatBottomCol.set(tmp);
       }
     }
 
