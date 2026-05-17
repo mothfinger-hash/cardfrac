@@ -26427,18 +26427,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   function drawTinted(sprite, color) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
+    if (!color) {
+      tCtx.globalCompositeOperation = 'source-over';
+      tCtx.drawImage(sprite, 0, 0);
+      ctx.drawImage(tCanvas, 0, 0);
+      return;
+    }
+    // Three-pass tint that gives a SOLID color base + grayscale texture:
+    //   1. Draw sprite (gives silhouette + alpha mask).
+    //   2. source-in fills the silhouette with the solid color, so
+    //      partial-alpha pixels in the sprite art (anti-aliasing,
+    //      highlights, stylized translucency) become fully opaque.
+    //   3. multiply the sprite back on top — preserves shadows and
+    //      highlights without making the body translucent.
+    // Previous pipeline used multiply-then-destination-in which kept
+    // the sprite's original alpha, so the artist's partial-alpha pixels
+    // showed the stage background through — looked "see-through".
     tCtx.globalCompositeOperation = 'source-over';
     tCtx.drawImage(sprite, 0, 0);
-    if (color) {
-      // Multiply lays the color over the grayscale; the destination-in
-      // pass that follows re-clips to the sprite's original alpha so
-      // the color doesn't bleed into the transparent regions.
-      tCtx.globalCompositeOperation = 'multiply';
-      tCtx.fillStyle = color;
-      tCtx.fillRect(0, 0, W, H);
-      tCtx.globalCompositeOperation = 'destination-in';
-      tCtx.drawImage(sprite, 0, 0);
-    }
+    tCtx.globalCompositeOperation = 'source-in';
+    tCtx.fillStyle = color;
+    tCtx.fillRect(0, 0, W, H);
+    tCtx.globalCompositeOperation = 'multiply';
+    tCtx.drawImage(sprite, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
   }
 
@@ -26546,8 +26557,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   }
 
   function init() {
-    // Generate option buttons. Hair gets a BALD slot; hat gets NONE.
-    buildOpts('hair',   LIMITS.hair,   true, 'BALD');
+    // Generate option buttons. Hair must always have one selected
+    // because the ear silhouette is part of each hair sprite (the body
+    // sprite has no ears). Hair index 7 is the "bald with ears" variant
+    // — selecting it gives the bald look. Hat is genuinely optional.
+    buildOpts('hair',   LIMITS.hair,   false);
     buildOpts('hat',    LIMITS.hat,    true, 'NONE');
     buildOpts('top',    LIMITS.top,    false);
     buildOpts('bottom', LIMITS.bottom, false);
@@ -26602,7 +26616,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           body: pick(['m','f']),
           skin: pick(SKIN),
           eye:  pick(EYE),
-          hair: range(LIMITS.hair, true),
+          hair: range(LIMITS.hair, false),
           hairColor: pick(HAIR_C),
           hat: range(LIMITS.hat, true),
           hatColor: pick(HAT_C),
