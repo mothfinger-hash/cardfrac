@@ -26424,44 +26424,61 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     return p;
   }
 
-  // Per-pixel tint. Canvas blend modes were misbehaving on these
-  // sprites — multiply-with-fill kept the artist's partial-alpha
-  // pixels translucent; then source-in + multiply zeroed out skin
-  // where the sprite had alpha-0 regions intended to "let tint show".
-  // Pixel-level math sidesteps both problems entirely:
-  //   - For every pixel with alpha > 0: multiply grayscale by color
-  //     and force alpha to 255 (opaque, never translucent).
-  //   - For pixels with alpha = 0: leave them transparent.
-  // This is the "correct" tint algorithm and runs in ~1ms per 182×414
-  // layer on a phone — fine for an avatar that renders once at load.
+  // Standard soft-edge tint via canvas blend modes. Preserves the
+  // sprite's anti-aliased alpha so edges stay smooth on hair, clothes,
+  // hats, shoes. Multiply puts color over grayscale, destination-in
+  // clips to the sprite's alpha mask.
   function drawTinted(sprite, color) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
     if (!color) {
-      // No tint — show grayscale as-is (used for color-locked sprites
-      // like hair index 7 / bald, where tinting just colors the ears).
       tCtx.globalCompositeOperation = 'source-over';
       tCtx.drawImage(sprite, 0, 0);
       ctx.drawImage(tCanvas, 0, 0);
       return;
     }
-    // Parse hex color to RGB once
+    tCtx.globalCompositeOperation = 'source-over';
+    tCtx.drawImage(sprite, 0, 0);
+    tCtx.globalCompositeOperation = 'multiply';
+    tCtx.fillStyle = color;
+    tCtx.fillRect(0, 0, W, H);
+    tCtx.globalCompositeOperation = 'destination-in';
+    tCtx.drawImage(sprite, 0, 0);
+    ctx.drawImage(tCanvas, 0, 0);
+  }
+
+  // Body-only tint that forces the silhouette fully opaque. The body
+  // sprite has partial-alpha skin areas (the artist's stylistic choice
+  // or anti-aliased outlines), which makes the body look see-through
+  // against the dark stage. Forcing alpha to 255 for ANY pixel that
+  // has visible content gives a solid skin layer. The trade-off is
+  // slightly harsher edges on the body silhouette — fine because the
+  // edges are covered by clothing layers above anyway, except at the
+  // face/hands which are small enough that the harshness doesn't read.
+  function drawBodyTinted(sprite, color) {
+    if (!sprite) return;
+    tCtx.clearRect(0, 0, W, H);
+    if (!color) {
+      tCtx.globalCompositeOperation = 'source-over';
+      tCtx.drawImage(sprite, 0, 0);
+      ctx.drawImage(tCanvas, 0, 0);
+      return;
+    }
     const hex = color.charAt(0) === '#' ? color.slice(1) : color;
     const cr = parseInt(hex.slice(0, 2), 16) || 0;
     const cg = parseInt(hex.slice(2, 4), 16) || 0;
     const cb = parseInt(hex.slice(4, 6), 16) || 0;
-    // Draw sprite, then walk pixels
     tCtx.globalCompositeOperation = 'source-over';
     tCtx.drawImage(sprite, 0, 0);
     const id = tCtx.getImageData(0, 0, W, H);
     const d = id.data;
     for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] === 0) continue;     // transparent pixel — skip
-      const g = d[i];                    // grayscale value (r=g=b)
-      d[i]     = (g * cr) >> 8;          // multiply ≈ /256
+      if (d[i + 3] === 0) continue;
+      const g = d[i];
+      d[i]     = (g * cr) >> 8;
       d[i + 1] = (g * cg) >> 8;
       d[i + 2] = (g * cb) >> 8;
-      d[i + 3] = 255;                    // force opaque
+      d[i + 3] = 255;
     }
     tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
@@ -26485,21 +26502,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   async function render() {
     const myToken = ++renderToken;
     const body = state.body;
+    // Each layer: [spriteName, color, isBody]
+    // isBody=true uses the opaque-pixel tint to keep skin from looking
+    // see-through; everything else uses the soft-edge canvas blend so
+    // hair/clothes/etc keep their anti-aliased outlines.
     const layers = [];
-    layers.push([body, state.skin]);
-    layers.push(['eyes_' + body, state.eye]);
-    if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor)]);
-    if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor)]);
-    if (state.top)    layers.push([`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor)]);
-    if (state.hair)   layers.push([`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor)]);
-    if (state.hat)    layers.push([`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor)]);
+    layers.push([body, state.skin, true]);
+    layers.push(['eyes_' + body, state.eye, false]);
+    if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), false]);
+    if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  false]);
+    if (state.top)    layers.push([`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    false]);
+    if (state.hair)   layers.push([`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   false]);
+    if (state.hat)    layers.push([`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    false]);
 
     const sprites = await Promise.all(layers.map(([name]) => loadSprite(name)));
     if (myToken !== renderToken) return;        // newer render started; this one is stale
 
     ctx.clearRect(0, 0, W, H);
     for (let i = 0; i < layers.length; i++) {
-      drawTinted(sprites[i], layers[i][1]);
+      const [, color, isBody] = layers[i];
+      if (isBody) {
+        drawBodyTinted(sprites[i], color);
+      } else {
+        drawTinted(sprites[i], color);
+      }
     }
   }
 
@@ -26548,6 +26574,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       });
       c.appendChild(s);
     });
+    // Custom color picker — opens the platform-native color wheel.
+    // Lets users pick any hex value while keeping presets for quick
+    // common choices. Hidden <input type="color"> with a styled trigger
+    // so we can match the swatch aesthetic instead of showing the raw
+    // browser-chrome color rectangle.
+    const customWrap = document.createElement('div');
+    customWrap.className = 'av-sw av-sw-custom';
+    customWrap.title = 'Custom color';
+    customWrap.style.background = 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)';
+    customWrap.style.position = 'relative';
+    customWrap.dataset.stateKey = stateKey;
+    const picker = document.createElement('input');
+    picker.type = 'color';
+    picker.value = (state[stateKey] || '#ffffff').slice(0, 7);
+    picker.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0';
+    picker.addEventListener('input', (e) => {
+      state[stateKey] = e.target.value;
+      syncUI();
+      render();
+    });
+    picker.addEventListener('change', () => {
+      // Commit on change (when picker closes) — input fires constantly
+      // while user drags, but we only persist on the final value.
+      saveState();
+    });
+    customWrap.appendChild(picker);
+    c.appendChild(customWrap);
   }
 
   function syncUI() {
@@ -26576,7 +26629,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const c = document.getElementById(id);
       if (!c) return;
       c.querySelectorAll('.av-sw').forEach(s => {
-        s.classList.toggle('active', s.dataset.color === state[stateKey]);
+        // Custom-picker swatch doesn't get the active highlight (it
+        // represents "anything else"). It just gets its inner input
+        // value synced so opening it shows the current color.
+        if (s.classList.contains('av-sw-custom')) {
+          const picker = s.querySelector('input[type="color"]');
+          if (picker) picker.value = (state[stateKey] || '#ffffff').slice(0, 7);
+        } else {
+          s.classList.toggle('active', s.dataset.color === state[stateKey]);
+        }
       });
     });
     // Hide color row entirely for color-locked sprites (e.g. bald hair).
