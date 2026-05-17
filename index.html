@@ -26523,19 +26523,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // ── Tint pass ──────────────────────────────────────────────────
     // Two tinting formulas:
     //  - hard multiply (default): result = gray × color / 255
-    //      Works great for skin/hair/eyes where the artist's shading
-    //      matches what you'd expect from grayscale × color math.
-    //  - lifted multiply (opts.softShade=true): factor = 0.4 + 0.6×(gray/255)
-    //      Result = color × factor. Base color (gray 255) stays at
-    //      full color; shadows (gray 50) compress to ~46% of the
-    //      color instead of 20%. Used for clothing because the dark
-    //      end of standard multiply produced visible pixel-grain
-    //      "grit" — the human eye is more sensitive to brightness
-    //      changes in dark areas, so adjacent shadow pixels at
-    //      gray 70/80 showed harsh variation when tinted with dark
-    //      colors. Lifting the floor moves shadows out of that
-    //      sensitive perceptual band.
+    //      Used for skin/hair/eyes where standard multiply looks right.
+    //  - softShade (opts.softShade=true): adaptive lifted multiply.
+    //      Bright colors get a HIGH floor (heavy shadow compression)
+    //      because dark shadows on a bright base produce strong
+    //      contrast that amplifies pixel noise into visible grit.
+    //      Dark colors get a LOW floor (light compression) because
+    //      they're already low-contrast and don't need much help.
+    //      Insight from testing: "bright color / dark shading looks
+    //      awful, bright color / bright shading looks clean."
+    //      Adaptive formula: floor = 0.4 + 0.4 × brightness
+    //      → white      → floor 0.8 (almost flat — no harsh shadows)
+    //      → mid color  → floor 0.6
+    //      → dark navy  → floor 0.44 (close to standard multiply)
     const softShade = !!opts.softShade;
+    let softFloor = 0;
+    if (softShade) {
+      const brightness = (cr + cg + cb) / (3 * 255);
+      softFloor = 0.4 + 0.4 * brightness;
+    }
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
@@ -26551,10 +26557,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       if (opts.preserveWhites && g >= WHITE_THRESHOLD) continue;
       if (softShade) {
-        // factor in [0.8, 1.0] — preserves base color, heavily compresses
-        // shadow range. Currently overshooting to find the middle ground;
-        // try 0.5, 0.6, 0.7 to back off if shadows look too flat.
-        const f = 0.8 + 0.2 * (g / 255);
+        // factor scales from softFloor (at gray 0) to 1.0 (at gray 255).
+        // softFloor was precomputed per-layer based on color brightness.
+        const f = softFloor + (1 - softFloor) * (g / 255);
         d[i]     = (cr * f) | 0;
         d[i + 1] = (cg * f) | 0;
         d[i + 2] = (cb * f) | 0;
