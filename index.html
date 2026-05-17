@@ -26453,24 +26453,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   //   smooth                run 3x3 box blur on grayscale before tinting
   //                         — kills the pixel-grain "grit" on dark colors
   //                         that quantization alone couldn't smooth out
-  //   fillInteriorWhite     flood fill exterior from canvas corners, then
-  //                         paint any remaining transparent pixel white
-  //                         — used for eyes so the reflection dots the
-  //                         artist drew as transparent become bright
   function drawTinted(sprite, color, opts) {
     if (!sprite) return;
     opts = opts || {};
     tCtx.clearRect(0, 0, W, H);
-    if (!color) {
-      tCtx.globalCompositeOperation = 'source-over';
-      tCtx.drawImage(sprite, 0, 0);
-      ctx.drawImage(tCanvas, 0, 0);
-      return;
+    // When `color` is null (NO_TINT sprite like bald hair), we DON'T
+    // early-return — we still need to apply alphaCutoff, hat mask, etc.
+    // The tint loop below skips the multiply step when there's no color,
+    // leaving pixels at their original grayscale.
+    const hasColor = !!color;
+    let cr = 0, cg = 0, cb = 0;
+    if (hasColor) {
+      const hex = color.charAt(0) === '#' ? color.slice(1) : color;
+      cr = parseInt(hex.slice(0, 2), 16) || 0;
+      cg = parseInt(hex.slice(2, 4), 16) || 0;
+      cb = parseInt(hex.slice(4, 6), 16) || 0;
     }
-    const hex = color.charAt(0) === '#' ? color.slice(1) : color;
-    const cr = parseInt(hex.slice(0, 2), 16) || 0;
-    const cg = parseInt(hex.slice(2, 4), 16) || 0;
-    const cb = parseInt(hex.slice(4, 6), 16) || 0;
     let or = 0, og = 0, ob = 0, hasOutlineColor = false;
     if (opts.outlineColor) {
       const oh = opts.outlineColor.charAt(0) === '#' ? opts.outlineColor.slice(1) : opts.outlineColor;
@@ -26484,108 +26482,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     tCtx.drawImage(sprite, 0, 0);
     const id = tCtx.getImageData(0, 0, W, H);
     const d = id.data;
-
-    // ── (optional) fill interior transparent pixels with white ─────
-    // Two-pass flood fill: first marks exterior transparent pixels
-    // (reachable from canvas corners), then walks each remaining
-    // transparent component and ONLY fills it white if the component
-    // is small (≤ MAX_REFLECTION_PIXELS). This prevents the artist's
-    // stray transparent gaps elsewhere on the sprite (e.g. tiny holes
-    // above the eye) from getting filled — only the deliberately-tiny
-    // reflection dots inside the iris qualify.
-    if (opts.fillInteriorWhite) {
-      const MAX_REFLECTION_PIXELS = 4;
-      const visited = new Uint8Array(W * H);
-      const stack = [];
-      const seed = (idx) => {
-        if (d[idx * 4 + 3] === 0 && !visited[idx]) {
-          visited[idx] = 1;
-          stack.push(idx);
-        }
-      };
-      // Pass 1 — mark exterior
-      for (let x = 0; x < W; x++) { seed(x); seed((H - 1) * W + x); }
-      for (let y = 0; y < H; y++) { seed(y * W); seed(y * W + W - 1); }
-      while (stack.length) {
-        const i = stack.pop();
-        const x = i % W;
-        const y = (i / W) | 0;
-        if (x > 0)       seed(i - 1);
-        if (x < W - 1)   seed(i + 1);
-        if (y > 0)       seed(i - W);
-        if (y < H - 1)   seed(i + W);
-      }
-      // Pass 2 — for each unvisited transparent pixel, BFS its
-      // component. Fill white only if size is at-or-below the cap.
-      for (let i = 0; i < W * H; i++) {
-        if (visited[i] || d[i * 4 + 3] !== 0) continue;
-        const componentIdxs = [];
-        const componentStack = [i];
-        visited[i] = 1;
-        while (componentStack.length) {
-          const j = componentStack.pop();
-          componentIdxs.push(j);
-          if (componentIdxs.length > MAX_REFLECTION_PIXELS) break;
-          const x = j % W;
-          const y = (j / W) | 0;
-          const tryAdd = (k) => {
-            if (visited[k] || d[k * 4 + 3] !== 0) return;
-            visited[k] = 1;
-            componentStack.push(k);
-          };
-          if (x > 0)     tryAdd(j - 1);
-          if (x < W - 1) tryAdd(j + 1);
-          if (y > 0)     tryAdd(j - W);
-          if (y < H - 1) tryAdd(j + W);
-        }
-        // Fill only if (a) component is small enough to be a reflection
-        // AND (b) it's surrounded by DARK pixels (inside the iris).
-        // The stray dots above the male's eye are surrounded by skin
-        // (light pixels), so they fail the surroundings check and stay
-        // transparent. Real reflection dots inside the iris pass.
-        let shouldFill = componentIdxs.length <= MAX_REFLECTION_PIXELS;
-        if (shouldFill) {
-          let minX = W, maxX = -1, minY = H, maxY = -1;
-          for (const idx of componentIdxs) {
-            const x = idx % W;
-            const y = (idx / W) | 0;
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-          // Sample 6 pixels just outside the component's bounding box.
-          // Skip transparent/out-of-bounds (treat as "light" = skip).
-          const samplePoints = [
-            [minX - 1, minY], [maxX + 1, minY],
-            [minX - 1, maxY], [maxX + 1, maxY],
-            [((minX + maxX) >> 1), minY - 1],
-            [((minX + maxX) >> 1), maxY + 1]
-          ];
-          let bSum = 0, bCount = 0;
-          for (const [sx, sy] of samplePoints) {
-            if (sx < 0 || sx >= W || sy < 0 || sy >= H) continue;
-            const k = (sy * W + sx) * 4;
-            if (d[k + 3] === 0) continue;
-            bSum += (d[k] + d[k + 1] + d[k + 2]) / 3;
-            bCount++;
-          }
-          const avgB = bCount > 0 ? bSum / bCount : 255;
-          // Threshold 200 — iris pixels after tinting can be quite
-          // light. Stray dots in skin (avg ~220+) still fail; reflections
-          // in lighter eye colors (cyan, gold, hazel) now pass.
-          if (avgB > 200) shouldFill = false;
-        }
-        if (shouldFill) {
-          for (const idx of componentIdxs) {
-            d[idx * 4]     = 255;
-            d[idx * 4 + 1] = 255;
-            d[idx * 4 + 2] = 255;
-            d[idx * 4 + 3] = 255;
-          }
-        }
-      }
-    }
 
     // ── Tint pass ──────────────────────────────────────────────────
     // Two tinting formulas:
@@ -26631,12 +26527,15 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // cel-shade bands. Restores the depth that was lost when we
       // stopped preserving outlines (since outlines no longer provide
       // the dark anchor, shadows need to do the structural work).
+      if (!hasColor) continue;     // NO_TINT sprite — leave grayscale
       if (softShade) {
-        // Floor 0.0 — equivalent to pure multiply (g × color / 255),
-        // the darkest possible shadow with this linear formula. If
-        // shadows still need to go deeper, add a gamma curve like the
-        // body does (BODY_GAMMA_LUT) and apply it to g before multiply.
-        const f = g / 255;
+        // Lifted multiply: factor = floor + (1-floor) × (gray/255)
+        // floor=0 → pure multiply (darkest, used for clothing)
+        // floor=0.6 → bright/saturated (used for eyes — keeps iris
+        //             close to the picked color instead of multiplying
+        //             down into dim territory)
+        const sf = opts.softFloor || 0;
+        const f = sf + (1 - sf) * (g / 255);
         d[i]     = (cr * f) | 0;
         d[i + 1] = (cg * f) | 0;
         d[i + 2] = (cb * f) | 0;
@@ -26751,13 +26650,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const layer = (name, color, opts) => ({ name, color, opts: opts || {} });
     const layers = [];
     layers.push(layer(bodyFile,         state.skin,                                                          { isBody: true }));
-    // Eyes: preserveWhites with tight threshold (235) so the iris
-    // (gray ~180-220) tints with eye color; only true whites are
-    // spared. fillInteriorWhite re-enabled with the context-aware
-    // check (only fills enclosed transparent components surrounded
-    // by dark pixels, i.e. reflections inside the iris) so the
-    // hollow hole in the male eye becomes a white reflection.
-    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, whiteThreshold: 235, fillInteriorWhite: true }));
+    // Eyes (both m and f): preserveWhites with tight threshold (235)
+    // so the artist's true whites (sclera + reflection dots) stay
+    // bright. Soft-shade with floor 0.6 keeps the iris close to the
+    // picked color instead of multiplying down into dark territory.
+    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true, whiteThreshold: 235, softShade: true, softFloor: 0.6 }));
     if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { softShade: true, skipOutlines: true }));
     if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { softShade: true, skipOutlines: true }));
     // Top sprites 6 + 7 are the PathBinder graphic tees — they have
@@ -26871,12 +26768,23 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
 
       // Pass 4 — per-column "above hat top" → catches tall hair that
-      // would otherwise poke out the top of the hat (hairstyles 3, 4,
-      // and any future style with vertical extension above the head).
+      // would otherwise poke out the top of the hat.
       for (let x = 0; x < W; x++) {
         for (let y = 0; y < H; y++) {
           if (hd[(y * W + x) * 4 + 3] > HAT_ALPHA_MIN) {
             for (let yy = 0; yy < y; yy++) hatBottomCol[yy * W + x] = 1;
+            break;
+          }
+        }
+      }
+
+      // Pass 5 — shave 1 px off the bottom of the mask per column.
+      // Stops the hat's bottom edge from biting into hair right
+      // underneath it (forehead / hair-line area).
+      for (let x = 0; x < W; x++) {
+        for (let y = H - 1; y >= 0; y--) {
+          if (hatBottomCol[y * W + x]) {
+            hatBottomCol[y * W + x] = 0;
             break;
           }
         }
