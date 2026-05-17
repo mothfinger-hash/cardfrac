@@ -26443,14 +26443,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   // interior. Same trick keeps cel-shaded outlines on hats, clothes,
   // shoes from getting hair/cloth/shoe-color-tinted.
   const OUTLINE_THRESHOLD = 50;
-  const WHITE_THRESHOLD   = 240;
+  const WHITE_THRESHOLD   = 200;
+  const DEFAULT_ALPHA_CUT = 40;
   // drawTinted: configurable per-sprite tint passes.
   //   - outlineColor unset    → preserve outline gray as artist drew
   //   - outlineColor set      → tint outline pixels with this color
   //   - preserveWhites=true   → don't tint near-white pixels (used for
   //                             eyes so the whites of the eye stay
   //                             white when picking an iris color)
-  function drawTinted(sprite, color, outlineColor, preserveWhites) {
+  //   - alphaCutoff           → pixels below this alpha get cleared.
+  //                             Hair uses a higher cutoff than clothes
+  //                             because the artist's soft-brush hair
+  //                             strands extend visibly past alpha 40.
+  //   - quantize=true         → snap grayscale to 32 levels before
+  //                             tinting. Smooths fine-grained pixel
+  //                             noise on dark tints (the "gritty" look
+  //                             that's specifically visible on dark
+  //                             clothing — adjacent pixels with gray
+  //                             values 130 vs 132 produced different
+  //                             multiplied RGB, looked like film grain).
+  function drawTinted(sprite, color, outlineColor, preserveWhites, alphaCutoff, quantize) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
     if (!color) {
@@ -26471,6 +26483,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       ob = parseInt(oh.slice(4, 6), 16) || 0;
       hasOutlineColor = true;
     }
+    const aCut = alphaCutoff || DEFAULT_ALPHA_CUT;
     tCtx.globalCompositeOperation = 'source-over';
     tCtx.drawImage(sprite, 0, 0);
     const id = tCtx.getImageData(0, 0, W, H);
@@ -26478,13 +26491,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
-      // Clear very faint anti-aliased pixels (alpha < 40). Without
-      // this, faint edge pixels carry the tint color outside the
-      // visible silhouette and create a "glow" around hair/clothes.
-      // The body sprite has the same cutoff; matching it everywhere
-      // gives consistent silhouette sharpness across all layers.
-      if (a < 40) { d[i + 3] = 0; continue; }
-      const g = d[i];
+      if (a < aCut) { d[i + 3] = 0; continue; }
+      // Quantize grayscale to 32 levels (5-bit) for sprites flagged
+      // as gritty. Mask off the bottom 3 bits so adjacent pixels with
+      // similar gray values snap to the same band — kills pixel-grain
+      // noise on dark tints without affecting major shading.
+      const g = quantize ? (d[i] & 0xF8) : d[i];
       if (g < OUTLINE_THRESHOLD) {
         if (hasOutlineColor) {
           d[i]     = (g * or) >> 8;
@@ -26563,35 +26575,35 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   async function render() {
     const myToken = ++renderToken;
     const body = state.body;
-    // Each layer: [spriteName, color, isBody, outlineColor?, preserveWhites?]
-    //   isBody=true          → drawBodyTinted (alpha-forced interior)
-    //   outlineColor set     → drawTinted tints outline pixels with this
-    //   preserveWhites=true  → near-white pixels stay white (eye whites)
+    // Each layer carries an options object so per-sprite tweaks stay
+    // readable. Defaults shown in the helper below; only override what
+    // matters for that layer.
     const bodyFile = body === 'm' ? 'male' : 'female';
+    const layer = (name, color, opts) => ({ name, color, opts: opts || {} });
     const layers = [];
-    layers.push([bodyFile, state.skin, true, null, false]);
-    // Eyes: preserve the whites of the eye so they stay white regardless
-    // of iris color choice. Only the medium-grey iris pixels tint.
-    layers.push(['eyes_' + body, state.eye, false, null, true]);
-    if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), false, null, false]);
-    if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  false, null, false]);
-    if (state.top)    layers.push([`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    false, null, false]);
-    // Hair: outline pixels (including ears) get tinted with skin color
-    // so they read as part of the body's line work, not as detached
-    // dark spirals on the head.
-    if (state.hair)   layers.push([`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   false, state.skin, false]);
-    if (state.hat)    layers.push([`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    false, null, false]);
+    layers.push(layer(bodyFile,         state.skin,                                                          { isBody: true }));
+    layers.push(layer('eyes_' + body,   state.eye,                                                           { preserveWhites: true }));
+    if (state.bottom) layers.push(layer(`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), { quantize: true }));
+    if (state.shoes)  layers.push(layer(`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  { quantize: true }));
+    if (state.top)    layers.push(layer(`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    { quantize: true }));
+    // Hair: bumped alpha cutoff to 80 because the artist's soft-brush
+    // hair strands fade out very gradually — default cutoff of 40
+    // kept too much faint halo. Outline pixels get skin-color-tinted
+    // so the ears (inside the hair sprite) read as line work
+    // belonging to the body rather than detached dark shapes.
+    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 80 }));
+    if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { quantize: true }));
 
-    const sprites = await Promise.all(layers.map(([name]) => loadSprite(name)));
-    if (myToken !== renderToken) return;        // newer render started; this one is stale
+    const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
+    if (myToken !== renderToken) return;
 
     ctx.clearRect(0, 0, W, H);
     for (let i = 0; i < layers.length; i++) {
-      const [, color, isBody, outlineColor, preserveWhites] = layers[i];
-      if (isBody) {
+      const { color, opts } = layers[i];
+      if (opts.isBody) {
         drawBodyTinted(sprites[i], color);
       } else {
-        drawTinted(sprites[i], color, outlineColor, preserveWhites);
+        drawTinted(sprites[i], color, opts.outlineColor, opts.preserveWhites, opts.alphaCutoff, opts.quantize);
       }
     }
   }
