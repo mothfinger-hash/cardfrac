@@ -26571,7 +26571,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             bCount++;
           }
           const avgB = bCount > 0 ? bSum / bCount : 255;
-          if (avgB > 100) shouldFill = false;     // light surroundings — not iris
+          // Threshold 150 — iris pixels are medium-gray after tinting,
+          // and we want most iris reflections to qualify. Stray dots
+          // surrounded by skin (avg ~200+) still fail.
+          if (avgB > 150) shouldFill = false;
         }
         if (shouldFill) {
           for (const idx of componentIdxs) {
@@ -26758,11 +26761,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const preserveTopOutlines = state.top === 6 || state.top === 7;
       layers.push(layer(`top${state.top}_${body}`, tintFor('top', state.top, state.topColor), { softShade: true, skipOutlines: !preserveTopOutlines }));
     }
-    // Hair: outlines preserve as artist's grayscale (no forced tint).
-    // Alpha cutoff bumped to 130 because semi-transparent pixels
-    // around the ears (alpha 80-130) were rendering as muddy dots
-    // when tinted — cutting them off cleans up the silhouette.
-    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { alphaCutoff: 130 }));
+    // Hair: outline pixels (including ears) get tinted with skin color
+    // so the ears read as line work belonging to the body, not as
+    // detached hair-colored shapes. Alpha cutoff 130 clears the
+    // semi-transparent dots around the ears.
+    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 130 }));
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
@@ -26806,8 +26809,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // beyond its actual silhouette. Top: 6 rows above. Sides: 5 cols
       // either side. Gives a margin of safety so hair doesn't peek out
       // along the hat's curves.
-      const HAT_PAD_TOP  = 6;
-      const HAT_PAD_SIDE = 8;
+      const HAT_PAD_TOP  = 10;
+      const HAT_PAD_SIDE = 12;
       for (let y = 0; y < H; y++) {
         let l = -1, r = -1;
         for (let x = 0; x < W; x++) {
