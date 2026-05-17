@@ -26447,14 +26447,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     ctx.drawImage(tCanvas, 0, 0);
   }
 
-  // Body-only tint that forces the silhouette fully opaque. The body
-  // sprite has partial-alpha skin areas (the artist's stylistic choice
-  // or anti-aliased outlines), which makes the body look see-through
-  // against the dark stage. Forcing alpha to 255 for ANY pixel that
-  // has visible content gives a solid skin layer. The trade-off is
-  // slightly harsher edges on the body silhouette — fine because the
-  // edges are covered by clothing layers above anyway, except at the
-  // face/hands which are small enough that the harshness doesn't read.
+  // Body tint with row-silhouette fill. The body sprite is almost
+  // certainly drawn with transparent fill inside the skin areas (just
+  // outlines + facial features), expecting the tint to provide the
+  // body color. A simple pixel multiply skips those alpha-0 pixels,
+  // leaving everything inside the outline transparent.
+  //
+  // Fix: for each row of the sprite, find the leftmost and rightmost
+  // pixel with alpha > 0. Fill the gap between them with solid skin
+  // color. Then preserve the sprite's outlines and details on top by
+  // multiplying their grayscale by the same color.
+  //
+  // Diagnostic stats logged once on first body render to confirm the
+  // sprite structure — easy to remove once we know it's working.
+  let _bodyDiagLogged = false;
   function drawBodyTinted(sprite, color) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
@@ -26468,17 +26474,64 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const cr = parseInt(hex.slice(0, 2), 16) || 0;
     const cg = parseInt(hex.slice(2, 4), 16) || 0;
     const cb = parseInt(hex.slice(4, 6), 16) || 0;
+
     tCtx.globalCompositeOperation = 'source-over';
     tCtx.drawImage(sprite, 0, 0);
     const id = tCtx.getImageData(0, 0, W, H);
     const d = id.data;
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] === 0) continue;
-      const g = d[i];
-      d[i]     = (g * cr) >> 8;
-      d[i + 1] = (g * cg) >> 8;
-      d[i + 2] = (g * cb) >> 8;
-      d[i + 3] = 255;
+
+    // Pass 1 — find leftmost + rightmost visible pixel per row.
+    const leftX = new Int16Array(H);
+    const rightX = new Int16Array(H);
+    let totalVisible = 0, partialAlpha = 0;
+    for (let y = 0; y < H; y++) {
+      let l = -1, r = -1;
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        const a = d[i + 3];
+        if (a > 0) {
+          if (l < 0) l = x;
+          r = x;
+          totalVisible++;
+          if (a < 255) partialAlpha++;
+        }
+      }
+      leftX[y] = l;
+      rightX[y] = r;
+    }
+
+    if (!_bodyDiagLogged) {
+      _bodyDiagLogged = true;
+      console.log('[avatar/body]', {
+        totalPixels: W * H,
+        visiblePixels: totalVisible,
+        partialAlpha: partialAlpha,
+        firstFilledRow: leftX.findIndex(v => v >= 0),
+        lastFilledRow: H - 1 - [...leftX].reverse().findIndex(v => v >= 0)
+      });
+    }
+
+    // Pass 2 — fill gaps inside silhouette, multiply existing pixels.
+    for (let y = 0; y < H; y++) {
+      const l = leftX[y], r = rightX[y];
+      if (l < 0) continue;
+      for (let x = l; x <= r; x++) {
+        const i = (y * W + x) * 4;
+        if (d[i + 3] === 0) {
+          // Empty interior — paint with solid skin color
+          d[i]     = cr;
+          d[i + 1] = cg;
+          d[i + 2] = cb;
+          d[i + 3] = 255;
+        } else {
+          // Existing sprite content — multiply grayscale by skin color
+          const g = d[i];
+          d[i]     = (g * cr) >> 8;
+          d[i + 1] = (g * cg) >> 8;
+          d[i + 2] = (g * cb) >> 8;
+          d[i + 3] = 255;
+        }
+      }
     }
     tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
