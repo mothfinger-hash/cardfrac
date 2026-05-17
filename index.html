@@ -26538,10 +26538,42 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           if (y > 0)     tryAdd(j - W);
           if (y < H - 1) tryAdd(j + W);
         }
-        // Skip 1-pixel components — those were the two stray dots above
-        // the male's eye. True reflection dots in the iris are at
-        // least 2 pixels wide.
-        if (componentIdxs.length >= 2 && componentIdxs.length <= MAX_REFLECTION_PIXELS) {
+        // Fill only if (a) component is small enough to be a reflection
+        // AND (b) it's surrounded by DARK pixels (inside the iris).
+        // The stray dots above the male's eye are surrounded by skin
+        // (light pixels), so they fail the surroundings check and stay
+        // transparent. Real reflection dots inside the iris pass.
+        let shouldFill = componentIdxs.length <= MAX_REFLECTION_PIXELS;
+        if (shouldFill) {
+          let minX = W, maxX = -1, minY = H, maxY = -1;
+          for (const idx of componentIdxs) {
+            const x = idx % W;
+            const y = (idx / W) | 0;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+          // Sample 6 pixels just outside the component's bounding box.
+          // Skip transparent/out-of-bounds (treat as "light" = skip).
+          const samplePoints = [
+            [minX - 1, minY], [maxX + 1, minY],
+            [minX - 1, maxY], [maxX + 1, maxY],
+            [((minX + maxX) >> 1), minY - 1],
+            [((minX + maxX) >> 1), maxY + 1]
+          ];
+          let bSum = 0, bCount = 0;
+          for (const [sx, sy] of samplePoints) {
+            if (sx < 0 || sx >= W || sy < 0 || sy >= H) continue;
+            const k = (sy * W + sx) * 4;
+            if (d[k + 3] === 0) continue;
+            bSum += (d[k] + d[k + 1] + d[k + 2]) / 3;
+            bCount++;
+          }
+          const avgB = bCount > 0 ? bSum / bCount : 255;
+          if (avgB > 100) shouldFill = false;     // light surroundings — not iris
+        }
+        if (shouldFill) {
           for (const idx of componentIdxs) {
             d[idx * 4]     = 255;
             d[idx * 4 + 1] = 255;
@@ -26590,10 +26622,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // stopped preserving outlines (since outlines no longer provide
       // the dark anchor, shadows need to do the structural work).
       if (softShade) {
-        // Lifted multiply, floor 0.1 (deeper still — each successive
-        // bump down adds about 25% more shadow depth at mid-gray).
-        // Shadow at gray 70 lands around 37% of color brightness.
-        const f = 0.1 + 0.9 * (g / 255);
+        // Floor 0.0 — equivalent to pure multiply (g × color / 255),
+        // the darkest possible shadow with this linear formula. If
+        // shadows still need to go deeper, add a gamma curve like the
+        // body does (BODY_GAMMA_LUT) and apply it to g before multiply.
+        const f = g / 255;
         d[i]     = (cr * f) | 0;
         d[i + 1] = (cg * f) | 0;
         d[i + 2] = (cb * f) | 0;
@@ -26725,11 +26758,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const preserveTopOutlines = state.top === 6 || state.top === 7;
       layers.push(layer(`top${state.top}_${body}`, tintFor('top', state.top, state.topColor), { softShade: true, skipOutlines: !preserveTopOutlines }));
     }
-    // Hair: outline pixels (including ears) get tinted black for crisp
-    // line work. Alpha cutoff bumped to 80 because the artist's
-    // soft-brush hair strands fade out gradually — default 40 kept too
-    // much halo.
-    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: '#000000', alphaCutoff: 80 }));
+    // Hair: outlines preserve as artist's grayscale (no forced tint).
+    // Alpha cutoff bumped to 130 because semi-transparent pixels
+    // around the ears (alpha 80-130) were rendering as muddy dots
+    // when tinted — cutting them off cleans up the silhouette.
+    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { alphaCutoff: 130 }));
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
@@ -26774,7 +26807,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // either side. Gives a margin of safety so hair doesn't peek out
       // along the hat's curves.
       const HAT_PAD_TOP  = 6;
-      const HAT_PAD_SIDE = 5;
+      const HAT_PAD_SIDE = 8;
       for (let y = 0; y < H; y++) {
         let l = -1, r = -1;
         for (let x = 0; x < W; x++) {
@@ -26808,7 +26841,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Hair styles that should NOT get clipped by the hat mask — long
     // or flowy hair that intentionally extends past where the hat
     // sits and should remain visible alongside it.
-    const HAIR_IGNORE_HAT_MASK = new Set([6]);
+    const HAIR_IGNORE_HAT_MASK = new Set([6, 9]);
 
     ctx.clearRect(0, 0, W, H);
     for (let i = 0; i < layers.length; i++) {
