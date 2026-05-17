@@ -26443,14 +26443,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   // interior. Same trick keeps cel-shaded outlines on hats, clothes,
   // shoes from getting hair/cloth/shoe-color-tinted.
   const OUTLINE_THRESHOLD = 50;
-  // drawTinted: optional outlineColor controls what happens to outline
-  // pixels (gray < OUTLINE_THRESHOLD).
-  //   - outlineColor unset  → preserve outline as artist's grayscale
-  //   - outlineColor set    → tint outline with this color
-  // The hair sprite passes skin color as outlineColor so ear outlines
-  // (which live inside the hair sprite) get tinted as skin-shaded line
-  // work instead of leaving them as detached dark spirals.
-  function drawTinted(sprite, color, outlineColor) {
+  const WHITE_THRESHOLD   = 240;
+  // drawTinted: configurable per-sprite tint passes.
+  //   - outlineColor unset    → preserve outline gray as artist drew
+  //   - outlineColor set      → tint outline pixels with this color
+  //   - preserveWhites=true   → don't tint near-white pixels (used for
+  //                             eyes so the whites of the eye stay
+  //                             white when picking an iris color)
+  function drawTinted(sprite, color, outlineColor, preserveWhites) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
     if (!color) {
@@ -26480,8 +26480,6 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const g = d[i];
       if (g < OUTLINE_THRESHOLD) {
         if (hasOutlineColor) {
-          // Tint outlines with the explicit outline color (e.g. skin
-          // for ears inside the hair sprite)
           d[i]     = (g * or) >> 8;
           d[i + 1] = (g * og) >> 8;
           d[i + 2] = (g * ob) >> 8;
@@ -26489,6 +26487,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // else: leave outline grayscale (artist's choice)
         continue;
       }
+      // Near-white pixels (eye whites, highlights flagged for preservation)
+      // skip the tint pass entirely — they keep their bright value.
+      if (preserveWhites && g >= WHITE_THRESHOLD) continue;
       d[i]     = (g * cr) >> 8;
       d[i + 1] = (g * cg) >> 8;
       d[i + 2] = (g * cb) >> 8;
@@ -26558,33 +26559,35 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   async function render() {
     const myToken = ++renderToken;
     const body = state.body;
-    // Each layer: [spriteName, color, isBody, outlineColor?]
-    //   isBody=true        → drawBodyTinted (alpha-forced interior)
-    //   outlineColor set   → drawTinted tints outlines with that color
-    //                        (used for hair so ears get skin-tinted)
+    // Each layer: [spriteName, color, isBody, outlineColor?, preserveWhites?]
+    //   isBody=true          → drawBodyTinted (alpha-forced interior)
+    //   outlineColor set     → drawTinted tints outline pixels with this
+    //   preserveWhites=true  → near-white pixels stay white (eye whites)
     const bodyFile = body === 'm' ? 'male' : 'female';
     const layers = [];
-    layers.push([bodyFile, state.skin, true, null]);
-    layers.push(['eyes_' + body, state.eye, false, null]);
-    if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), false, null]);
-    if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  false, null]);
-    if (state.top)    layers.push([`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    false, null]);
+    layers.push([bodyFile, state.skin, true, null, false]);
+    // Eyes: preserve the whites of the eye so they stay white regardless
+    // of iris color choice. Only the medium-grey iris pixels tint.
+    layers.push(['eyes_' + body, state.eye, false, null, true]);
+    if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor), false, null, false]);
+    if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor),  false, null, false]);
+    if (state.top)    layers.push([`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor),    false, null, false]);
     // Hair: outline pixels (including ears) get tinted with skin color
     // so they read as part of the body's line work, not as detached
     // dark spirals on the head.
-    if (state.hair)   layers.push([`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   false, state.skin]);
-    if (state.hat)    layers.push([`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    false, null]);
+    if (state.hair)   layers.push([`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   false, state.skin, false]);
+    if (state.hat)    layers.push([`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    false, null, false]);
 
     const sprites = await Promise.all(layers.map(([name]) => loadSprite(name)));
     if (myToken !== renderToken) return;        // newer render started; this one is stale
 
     ctx.clearRect(0, 0, W, H);
     for (let i = 0; i < layers.length; i++) {
-      const [, color, isBody, outlineColor] = layers[i];
+      const [, color, isBody, outlineColor, preserveWhites] = layers[i];
       if (isBody) {
         drawBodyTinted(sprites[i], color);
       } else {
-        drawTinted(sprites[i], color, outlineColor);
+        drawTinted(sprites[i], color, outlineColor, preserveWhites);
       }
     }
   }
