@@ -26424,10 +26424,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     return p;
   }
 
-  // Standard soft-edge tint via canvas blend modes. Preserves the
-  // sprite's anti-aliased alpha so edges stay smooth on hair, clothes,
-  // hats, shoes. Multiply puts color over grayscale, destination-in
-  // clips to the sprite's alpha mask.
+  // Cel-shaded pixel tint. Single pipeline for every sprite type.
+  //
+  // Rules per pixel:
+  //   1. alpha == 0           → leave transparent (no-op)
+  //   2. grayscale < OUTLINE  → leave as-is (preserves dark line work)
+  //   3. else                 → multiply grayscale by color (tint fill)
+  //
+  // Alpha is never forced — partial-alpha pixels keep their natural
+  // value, so anti-aliased silhouette edges stay soft (no tinted halo
+  // around hands/feet/head) and the body interior stays opaque because
+  // the artist drew it as alpha=255 in skin areas.
+  //
+  // Outline preservation is the ears-stay-skin-color trick: ears
+  // inside the hair sprite are outline-only (dark pixels around a
+  // transparent interior). Their dark pixels stay dark regardless of
+  // hair color, and the body's skin shows through their transparent
+  // interior. Same trick keeps cel-shaded outlines on hats, clothes,
+  // shoes from getting hair/cloth/shoe-color-tinted.
+  const OUTLINE_THRESHOLD = 50;
   function drawTinted(sprite, color) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
@@ -26437,25 +26452,32 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       ctx.drawImage(tCanvas, 0, 0);
       return;
     }
+    const hex = color.charAt(0) === '#' ? color.slice(1) : color;
+    const cr = parseInt(hex.slice(0, 2), 16) || 0;
+    const cg = parseInt(hex.slice(2, 4), 16) || 0;
+    const cb = parseInt(hex.slice(4, 6), 16) || 0;
     tCtx.globalCompositeOperation = 'source-over';
     tCtx.drawImage(sprite, 0, 0);
-    tCtx.globalCompositeOperation = 'multiply';
-    tCtx.fillStyle = color;
-    tCtx.fillRect(0, 0, W, H);
-    tCtx.globalCompositeOperation = 'destination-in';
-    tCtx.drawImage(sprite, 0, 0);
+    const id = tCtx.getImageData(0, 0, W, H);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      const g = d[i];
+      if (g < OUTLINE_THRESHOLD) continue;   // outline pixel — keep as-is
+      d[i]     = (g * cr) >> 8;
+      d[i + 1] = (g * cg) >> 8;
+      d[i + 2] = (g * cb) >> 8;
+      // d[i+3] (alpha) left alone — preserves anti-aliasing
+    }
+    tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
   }
 
-  // Body tint — pixel-level multiply, only operates on pixels with
-  // visible content. Earlier we needed row-silhouette gap filling
-  // because we thought the sprite was outline-only, but the body
-  // sprite is actually fully painted with grayscale skin areas. So
-  // the gap-fill was over-filling: any horizontal gap (between legs,
-  // between arms and torso) got bridged with skin color, showing as
-  // tinted ghost-fill in the negative space. Stripping the fill out;
-  // just multiply each visible pixel by the skin color and force
-  // alpha to 255 so partial-alpha pixels don't show the stage through.
+  // Body uses the same outline+alpha-preservation pipeline, plus one
+  // extra rule: pixels already mostly opaque (alpha > 200) get forced
+  // to 255 so interior skin stays solid against the dark stage. The
+  // anti-aliased silhouette edge (alpha 1-200) is preserved, so we
+  // get soft outer edges without a tinted halo.
   function drawBodyTinted(sprite, color) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
@@ -26474,12 +26496,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const id = tCtx.getImageData(0, 0, W, H);
     const d = id.data;
     for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] === 0) continue;     // empty pixel — leave transparent
-      const g = d[i];                    // grayscale value
-      d[i]     = (g * cr) >> 8;
-      d[i + 1] = (g * cg) >> 8;
-      d[i + 2] = (g * cb) >> 8;
-      d[i + 3] = 255;                    // force opaque so skin doesn't read see-through
+      const a = d[i + 3];
+      if (a === 0) continue;
+      const g = d[i];
+      if (g >= OUTLINE_THRESHOLD) {
+        d[i]     = (g * cr) >> 8;
+        d[i + 1] = (g * cg) >> 8;
+        d[i + 2] = (g * cb) >> 8;
+      }
+      // Body-only: solidify the interior so skin doesn't read translucent.
+      if (a > 200) d[i + 3] = 255;
     }
     tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
