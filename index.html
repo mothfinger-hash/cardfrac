@@ -26604,12 +26604,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     //      smooth multiply because the user said those already look
     //      great.
     const softShade = !!opts.softShade;
+    const aOutThr = opts.alphaOutlineThreshold || 0;
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
       if (a < aCut) { d[i + 3] = 0; continue; }
       const g = d[i];
-      if (g < OUTLINE_THRESHOLD && !opts.skipOutlines) {
+      // Outline-style treatment if (a) grayscale is low OR (b) alpha
+      // is below the alphaOutlineThreshold. The second case catches
+      // semi-transparent pixels (anti-aliased hair edges, soft ear
+      // detail) so they get skin-tinted instead of hair-tinted —
+      // those pixels blend into the body instead of carrying garish
+      // hair color at low opacity.
+      if ((g < OUTLINE_THRESHOLD && !opts.skipOutlines) || (aOutThr && a < aOutThr)) {
         if (hasOutlineColor) {
           d[i]     = (g * or) >> 8;
           d[i + 1] = (g * og) >> 8;
@@ -26759,12 +26766,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const preserveTopOutlines = state.top === 6 || state.top === 7;
       layers.push(layer(`top${state.top}_${body}`, tintFor('top', state.top, state.topColor), { softShade: true, skipOutlines: !preserveTopOutlines }));
     }
-    // Hair: outline pixels (including ears) tinted skin so the ears
-    // blend in. Alpha cutoff bumped to 200 — pixels at alpha 130-200
-    // were getting hair-color-tinted as faint semi-transparent edges
-    // and reading as ghosted color around the silhouette. Above 200
-    // tints normally; below 200 gets cleared.
-    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 200 }));
+    // Hair: outline pixels (gray < 70) AND semi-transparent pixels
+    // (alpha < 200) get tinted with skin color so the ears blend into
+    // the body line work and soft hair edges fade smoothly into skin
+    // instead of carrying hair-color halo. Solid hair pixels (alpha
+    // >= 200, gray >= 70) tint normally with the picked hair color.
+    if (state.hair)   layers.push(layer(`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor),   { outlineColor: state.skin, alphaCutoff: 60, alphaOutlineThreshold: 200 }));
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
 
     const sprites = await Promise.all(layers.map(l => loadSprite(l.name)));
@@ -26785,15 +26792,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
     if (hatLayerIdx >= 0) {
-      // Per-pixel hat mask: 1 where hair should be cleared, 0 elsewhere.
-      // Process:
-      //   1. Mark every pixel where hat alpha > 10 as hat region.
-      //   2. Dilate the mask outward by DILATE_PX iterations (one
-      //      pixel of expansion per iteration via 4-neighbor lookup).
-      // The mask now covers the hat's actual opaque area PLUS a margin
-      // around it, so hair right at the hat's edge gets clipped too.
-      // Hair beneath the hat's transparent regions (like hat 2's hole)
-      // is preserved because those pixels never enter the mask.
+      // Hat mask construction — three combined passes:
+      //   1. Mark hat opaque pixels.
+      //   2. Flood-fill exterior from canvas corners (transparent
+      //      pixels reachable from the edge). Anything transparent
+      //      but NOT exterior is an interior hole in the hat (e.g.
+      //      hat 2's cutout) — leave those alone.
+      //   3. Dilate the opaque mask outward, BUT only into exterior
+      //      pixels. Interior holes stay un-masked → hair shows
+      //      through them.
+      //   4. Per-column "above hat top" pass — for each column with
+      //      hat content, mark every pixel above the topmost opaque
+      //      row. Catches tall hair sticking up past the hat that
+      //      dilation alone wouldn't reach.
       tCtx.clearRect(0, 0, W, H);
       tCtx.globalCompositeOperation = 'source-over';
       tCtx.drawImage(sprites[hatLayerIdx], 0, 0);
@@ -26801,10 +26812,34 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const N = W * H;
       const HAT_ALPHA_MIN = 10;
       const DILATE_PX = 10;
+
+      // Pass 1 — opaque mask
       hatBottomCol = new Uint8Array(N);
       for (let i = 0; i < N; i++) {
         if (hd[i * 4 + 3] > HAT_ALPHA_MIN) hatBottomCol[i] = 1;
       }
+
+      // Pass 2 — exterior via flood fill from canvas corners
+      const exterior = new Uint8Array(N);
+      const stack = [];
+      const seedExt = (idx) => {
+        if (!exterior[idx] && hd[idx * 4 + 3] <= HAT_ALPHA_MIN) {
+          exterior[idx] = 1;
+          stack.push(idx);
+        }
+      };
+      for (let x = 0; x < W; x++) { seedExt(x); seedExt((H - 1) * W + x); }
+      for (let y = 0; y < H; y++) { seedExt(y * W); seedExt(y * W + W - 1); }
+      while (stack.length) {
+        const i = stack.pop();
+        const x = i % W, y = (i / W) | 0;
+        if (x > 0)     seedExt(i - 1);
+        if (x < W - 1) seedExt(i + 1);
+        if (y > 0)     seedExt(i - W);
+        if (y < H - 1) seedExt(i + W);
+      }
+
+      // Pass 3 — dilate hat mask into exterior pixels only
       const tmp = new Uint8Array(N);
       for (let iter = 0; iter < DILATE_PX; iter++) {
         tmp.set(hatBottomCol);
@@ -26812,6 +26847,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           for (let x = 0; x < W; x++) {
             const i = y * W + x;
             if (hatBottomCol[i]) continue;
+            if (!exterior[i]) continue;     // interior hole — don't grow into it
             if ((y > 0     && hatBottomCol[i - W]) ||
                 (y < H - 1 && hatBottomCol[i + W]) ||
                 (x > 0     && hatBottomCol[i - 1]) ||
@@ -26821,6 +26857,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           }
         }
         hatBottomCol.set(tmp);
+      }
+
+      // Pass 4 — per-column "above hat top" → catches tall hair
+      for (let x = 0; x < W; x++) {
+        for (let y = 0; y < H; y++) {
+          if (hd[(y * W + x) * 4 + 3] > HAT_ALPHA_MIN) {
+            for (let yy = 0; yy < y; yy++) hatBottomCol[yy * W + x] = 1;
+            break;
+          }
+        }
       }
     }
 
