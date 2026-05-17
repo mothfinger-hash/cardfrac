@@ -96,11 +96,13 @@
     nav.sb-collapsed .nav-tab:hover::after{content:attr(data-label);position:fixed;left:calc(var(--sb-w-coll) + 6px);background:#000;border:1.5px solid var(--accent);color:var(--accent);padding:4px 9px;font-size:9.5px;letter-spacing:.1em;white-space:nowrap;box-shadow:3px 3px 0 #000;z-index:10001;pointer-events:none;font-family:'Space Mono',monospace;text-transform:uppercase}
     /* Sidebar avatar — fills the dead space above the footer with the
        user's full-body PFP. Desktop only; the mobile media query at
-       the bottom of this stylesheet hides it. flex:1 absorbs whatever
-       vertical room remains so the image visually grounds the column. */
+       the bottom of this stylesheet hides it. Capped via max-height
+       so it never pushes menu items (Marketplace, Dashboard, Trade
+       Analyzer) out of view on shorter viewports. */
     .sidebar-avatar-wrap{
-      flex:1 1 auto;
+      flex:0 1 auto;
       min-height:0;
+      max-height:clamp(80px, 22vh, 220px);
       display:flex;
       align-items:flex-end;
       justify-content:center;
@@ -26795,11 +26797,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // the hat without sideways dilation.
     const HAIR_WIDE_HAT_MASK = new Set([3, 4, 5, 8, 10, 11, 12, 13, 15, 17]);
     const wideHatMask = state.hair && HAIR_WIDE_HAT_MASK.has(state.hair);
-    // Subset that ALSO gets a 45° diagonal extension down-and-outward
-    // from the forehead — hair that flows down-and-out past the hat
-    // line on the sides (long, layered, sideswept styles).
-    const HAIR_DIAGONAL_HAT_MASK = new Set([4, 10, 11, 12, 13]);
-    const diagonalHatMask = state.hair && HAIR_DIAGONAL_HAT_MASK.has(state.hair);
+    // 45° diagonal extension down-and-outward from the forehead.
+    // Now keyed off the HAT (not the hair) — applied for any hat
+    // EXCEPT hat3 (the bucket hat), whose wide brim already covers
+    // the area naturally. Runs symmetrically on both halves of the
+    // canvas so hair on either side stays under the hat.
+    const BUCKET_HAT_IDX = 3;
+    const diagonalHatMask = state.hat && state.hat !== BUCKET_HAT_IDX;
 
     if (hatLayerIdx >= 0) {
       // Hat mask construction — three combined passes:
@@ -26916,29 +26920,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         }
       }
 
-      // Pass 6.5 — 45° diagonal extension for the diagonal-set hair
-      // styles. The mask grows down-and-outward at 45° from any
-      // existing masked pixel (left-half → down-left; right-half →
-      // down-right). Catches long sideswept/layered hair flowing
-      // from forehead past the cheek.
+      // Pass 6.5 — 45° diagonal extension. Runs symmetrically on
+      // both halves of the canvas: on the right half the mask grows
+      // down-and-right from any up-and-left neighbor; on the left
+      // half it grows down-and-left from any up-and-right neighbor.
+      // Result: hat mask widens at 45° as it descends, catching hair
+      // that would otherwise peek out from under the hat sides.
       if (diagonalHatMask) {
         const DIAG_ITER = 30;
         const CX = W >> 1;
         for (let iter = 0; iter < DIAG_ITER; iter++) {
           tmp.set(hatBottomCol);
-          for (let y = 0; y < H; y++) {
+          for (let y = 1; y < H; y++) {
             for (let x = 0; x < W; x++) {
               const i = y * W + x;
               if (hatBottomCol[i]) continue;
               if (!exterior[i]) continue;
-              // Left half: check up-and-right neighbor (means we grow down-left from it)
-              // Right half: check up-and-left neighbor (means we grow down-right)
-              if (x < CX) {
-                if (y > 0 && x < W - 1 && hatBottomCol[(y - 1) * W + (x + 1)]) {
+              if (x >= CX) {
+                // Right half — pull from up-and-left neighbor.
+                if (x > 0 && hatBottomCol[(y - 1) * W + (x - 1)]) {
                   tmp[i] = 1;
                 }
               } else {
-                if (y > 0 && x > 0 && hatBottomCol[(y - 1) * W + (x - 1)]) {
+                // Left half — pull from up-and-right neighbor.
+                if (x < W - 1 && hatBottomCol[(y - 1) * W + (x + 1)]) {
                   tmp[i] = 1;
                 }
               }
