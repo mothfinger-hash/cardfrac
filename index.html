@@ -26587,7 +26587,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // stopped preserving outlines (since outlines no longer provide
       // the dark anchor, shadows need to do the structural work).
       if (softShade) {
-        const f = 0.4 + 0.6 * (g / 255);
+        // Lifted multiply with floor 0.2 (deeper shadows than the
+        // previous 0.4 since clothing no longer has black outline
+        // anchors — shadow tones need to do the structural work).
+        // Shadow at gray 70 lands around 42% of color brightness.
+        const f = 0.2 + 0.8 * (g / 255);
         d[i]     = (cr * f) | 0;
         d[i + 1] = (cg * f) | 0;
         d[i + 2] = (cb * f) | 0;
@@ -26599,16 +26603,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
 
     // ── Hat mask (hair only) ───────────────────────────────────────
-    // For each column where the hat has opaque content, clear every
-    // pixel above the hat's bottom-most opaque row. Makes the hat
-    // appear to compress the hair underneath, regardless of any
-    // transparent gaps in the hat sprite.
+    // Per-column "hat top edge" map. Clear hair pixels strictly above
+    // that edge so no hair pokes out the top of the hat. Pixels within
+    // the hat's Y range (at or below the top edge) are NOT cleared —
+    // hat draws on top to cover where opaque, transparent areas of
+    // hat allow hair to show through (e.g. cutouts in the hat sprite).
     if (opts.hatMask) {
       const mask = opts.hatMask;
       for (let x = 0; x < W; x++) {
-        const hatBot = mask[x];
-        if (hatBot < 0) continue;
-        for (let y = 0; y <= hatBot; y++) {
+        const top = mask[x];
+        if (top < 0) continue;
+        for (let y = 0; y < top; y++) {
           d[(y * W + x) * 4 + 3] = 0;
         }
       }
@@ -26643,18 +26648,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
-      // Clear very faint anti-aliased pixels (alpha < 40). These would
-      // otherwise render as a partial-alpha skin halo around the body
-      // silhouette against the dark stage. The remaining edge pixels
-      // (alpha 40-200) keep their natural value for a soft transition.
       if (a < 40) { d[i + 3] = 0; continue; }
       const g = d[i];
       if (g >= OUTLINE_THRESHOLD) {
+        // Fill — tint with skin color
         d[i]     = (g * cr) >> 8;
         d[i + 1] = (g * cg) >> 8;
         d[i + 2] = (g * cb) >> 8;
+      } else {
+        // Outline — force pure black instead of preserving artist's gray.
+        // Crisp line work that "stands out" against the skin tint.
+        d[i]     = 0;
+        d[i + 1] = 0;
+        d[i + 2] = 0;
       }
-      // Body-only: solidify the interior so skin doesn't read translucent.
       if (a > 200) d[i + 3] = 255;
     }
     tCtx.putImageData(id, 0, 0);
@@ -26719,19 +26726,46 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
     }
     if (hatLayerIdx >= 0) {
-      // Probe the hat sprite's alpha to find the bottom-most opaque
-      // pixel in each column.
+      // Build a hat-region mask in two passes:
+      //   1. Per row, find the leftmost + rightmost opaque pixel of
+      //      the hat and treat everything in between as "hat region"
+      //      for that row. This fills any small horizontal gaps in
+      //      the sprite (anti-aliased edges, internal transparent
+      //      details) so the mask spans width-wise consistently.
+      //   2. Per column, find the topmost Y where the row range
+      //      covers it. That's the "top edge of the hat" in that
+      //      column. Hair pixels above this Y get cleared.
+      //
+      // Only the TOP edge clears hair — hair inside the hat region
+      // is left alone, so the hat draws on top normally (transparent
+      // holes in the hat sprite show hair through them).
       tCtx.clearRect(0, 0, W, H);
       tCtx.globalCompositeOperation = 'source-over';
       tCtx.drawImage(sprites[hatLayerIdx], 0, 0);
       const hd = tCtx.getImageData(0, 0, W, H).data;
+      const rowLeft  = new Int16Array(H);
+      const rowRight = new Int16Array(H);
+      for (let y = 0; y < H; y++) {
+        let l = -1, r = -1;
+        for (let x = 0; x < W; x++) {
+          if (hd[(y * W + x) * 4 + 3] > 50) {
+            if (l < 0) l = x;
+            r = x;
+          }
+        }
+        rowLeft[y]  = l;
+        rowRight[y] = r;
+      }
       hatBottomCol = new Int16Array(W);
       for (let x = 0; x < W; x++) {
-        let bot = -1;
-        for (let y = H - 1; y >= 0; y--) {
-          if (hd[(y * W + x) * 4 + 3] > 100) { bot = y; break; }
+        let top = H;
+        for (let y = 0; y < H; y++) {
+          if (rowLeft[y] >= 0 && x >= rowLeft[y] && x <= rowRight[y]) {
+            top = y;
+            break;
+          }
         }
-        hatBottomCol[x] = bot;
+        hatBottomCol[x] = top < H ? top : -1;
       }
     }
 
