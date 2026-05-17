@@ -26354,10 +26354,38 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   const SPRITE_PATH = '/avatar/';
   const W = 182, H = 414;                       // matches sprite dimensions; canvas attrs in HTML match
 
-  // ── Palettes (carried over from the procedural engine) ───────────────
-  const SKIN   = ['#FFE4C4','#F4C29B','#C68863','#8D5524','#5E3719'];
-  const EYE    = ['#3D2817','#5B89C7','#5BAA68','#9B59B6','#C77B59','#D4A017','#6FF7E0','#FF2A6D'];
-  const HAIR_C = ['#1A1530','#3D2817','#FFE38A','#FFB1CC','#C8FF5C','#B5E2FF','#C9B4FF','#FF2A6D','#D8D8E8','#FF6B35','#6FF7E0','#FFE94A'];
+  // ── Palettes — every category gets exactly 7 swatches so the UI is
+  // consistent (7 presets + 1 custom picker = 8 columns per row).
+  // Colors chosen to map clearly onto the avatar after tinting; brights
+  // are picked over pastels so the multiply pass still reads as the
+  // selected color rather than muddying out.
+  const SKIN   = [
+    '#FFE4C4',   // porcelain
+    '#F4C29B',   // light tan
+    '#D2956D',   // golden
+    '#A6724A',   // medium brown
+    '#7A4A28',   // warm brown
+    '#4A2812',   // deep brown
+    '#2A1408'    // very dark
+  ];
+  const EYE    = [
+    '#3D2817',   // brown
+    '#5B89C7',   // blue
+    '#5BAA68',   // green
+    '#9B59B6',   // violet
+    '#D4A017',   // gold
+    '#FF2A6D',   // cyber pink
+    '#00E5FF'    // electric cyan
+  ];
+  const HAIR_C = [
+    '#1A1530',   // black
+    '#3D2817',   // brown
+    '#FFE38A',   // blonde
+    '#FF2A6D',   // hot pink
+    '#00E5FF',   // electric cyan
+    '#C8FF5C',   // acid green
+    '#C9B4FF'    // lavender
+  ];
   // ── Unified cyberpunk garment palette ────────────────────────────
   // Single 7-color set applied to every clothing slot (top, bottom,
   // shoes, hat) plus the custom picker as the 8th. Cyberpunk Y2K
@@ -26898,6 +26926,34 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
   }
 
+  // Compute approx rendered color for a swatch — applies the same
+  // tint math the avatar uses, so the swatch visually matches what
+  // the user will see on the body. Without this, bright source
+  // colors looked very different on the avatar (the multiply pass
+  // darkens them) and users couldn't tell which swatch produces
+  // which result.
+  function _swatchPreviewColor(srcColor, stateKey) {
+    const hex = srcColor.charAt(0) === '#' ? srcColor.slice(1) : srcColor;
+    const r = parseInt(hex.slice(0, 2), 16) || 0;
+    const g = parseInt(hex.slice(2, 4), 16) || 0;
+    const b = parseInt(hex.slice(4, 6), 16) || 0;
+    const REF_GRAY = 220;     // typical "main color" pixel in sprites
+    let factor;
+    if (stateKey === 'skin') {
+      // Body uses gamma 1.4 curve
+      factor = Math.pow(REF_GRAY / 255, 1.4);
+    } else if (stateKey === 'eye') {
+      // Eye uses softFloor 0.6
+      factor = 0.6 + 0.4 * (REF_GRAY / 255);
+    } else {
+      // Hair / clothing — pure multiply
+      factor = REF_GRAY / 255;
+    }
+    const pr = Math.round(r * factor);
+    const pg = Math.round(g * factor);
+    const pb = Math.round(b * factor);
+    return 'rgb(' + pr + ',' + pg + ',' + pb + ')';
+  }
   function buildSwatches(containerId, palette, stateKey) {
     const c = document.getElementById(containerId);
     if (!c) return;
@@ -26905,7 +26961,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     palette.forEach(color => {
       const s = document.createElement('div');
       s.className = 'av-sw';
-      s.style.background = color;
+      s.style.background = _swatchPreviewColor(color, stateKey);
       s.dataset.color = color;
       s.addEventListener('click', () => {
         state[stateKey] = color;
