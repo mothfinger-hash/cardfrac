@@ -26424,33 +26424,58 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     return p;
   }
 
+  // Per-pixel tint. Canvas blend modes were misbehaving on these
+  // sprites — multiply-with-fill kept the artist's partial-alpha
+  // pixels translucent; then source-in + multiply zeroed out skin
+  // where the sprite had alpha-0 regions intended to "let tint show".
+  // Pixel-level math sidesteps both problems entirely:
+  //   - For every pixel with alpha > 0: multiply grayscale by color
+  //     and force alpha to 255 (opaque, never translucent).
+  //   - For pixels with alpha = 0: leave them transparent.
+  // This is the "correct" tint algorithm and runs in ~1ms per 182×414
+  // layer on a phone — fine for an avatar that renders once at load.
   function drawTinted(sprite, color) {
     if (!sprite) return;
     tCtx.clearRect(0, 0, W, H);
     if (!color) {
+      // No tint — show grayscale as-is (used for color-locked sprites
+      // like hair index 7 / bald, where tinting just colors the ears).
       tCtx.globalCompositeOperation = 'source-over';
       tCtx.drawImage(sprite, 0, 0);
       ctx.drawImage(tCanvas, 0, 0);
       return;
     }
-    // Three-pass tint that gives a SOLID color base + grayscale texture:
-    //   1. Draw sprite (gives silhouette + alpha mask).
-    //   2. source-in fills the silhouette with the solid color, so
-    //      partial-alpha pixels in the sprite art (anti-aliasing,
-    //      highlights, stylized translucency) become fully opaque.
-    //   3. multiply the sprite back on top — preserves shadows and
-    //      highlights without making the body translucent.
-    // Previous pipeline used multiply-then-destination-in which kept
-    // the sprite's original alpha, so the artist's partial-alpha pixels
-    // showed the stage background through — looked "see-through".
+    // Parse hex color to RGB once
+    const hex = color.charAt(0) === '#' ? color.slice(1) : color;
+    const cr = parseInt(hex.slice(0, 2), 16) || 0;
+    const cg = parseInt(hex.slice(2, 4), 16) || 0;
+    const cb = parseInt(hex.slice(4, 6), 16) || 0;
+    // Draw sprite, then walk pixels
     tCtx.globalCompositeOperation = 'source-over';
     tCtx.drawImage(sprite, 0, 0);
-    tCtx.globalCompositeOperation = 'source-in';
-    tCtx.fillStyle = color;
-    tCtx.fillRect(0, 0, W, H);
-    tCtx.globalCompositeOperation = 'multiply';
-    tCtx.drawImage(sprite, 0, 0);
+    const id = tCtx.getImageData(0, 0, W, H);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;     // transparent pixel — skip
+      const g = d[i];                    // grayscale value (r=g=b)
+      d[i]     = (g * cr) >> 8;          // multiply ≈ /256
+      d[i + 1] = (g * cg) >> 8;
+      d[i + 2] = (g * cb) >> 8;
+      d[i + 3] = 255;                    // force opaque
+    }
+    tCtx.putImageData(id, 0, 0);
     ctx.drawImage(tCanvas, 0, 0);
+  }
+
+  // Sprite indices that don't take a color tint. The bald-with-ears
+  // hair sprite (index 7) is grayscale-only — tinting paints the ears
+  // weird colors, which the user (rightly) doesn't want.
+  const NO_TINT = {
+    hair: new Set([7])
+  };
+  function tintFor(category, idx, color) {
+    if (NO_TINT[category] && NO_TINT[category].has(idx)) return null;
+    return color;
   }
 
   // Render order (back→front): body, eyes, bottom, shoes, top, hair, hat.
@@ -26463,11 +26488,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const layers = [];
     layers.push([body, state.skin]);
     layers.push(['eyes_' + body, state.eye]);
-    if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, state.bottomColor]);
-    if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,  state.shoesColor]);
-    if (state.top)    layers.push([`top${state.top}_${body}`,      state.topColor]);
-    if (state.hair)   layers.push([`hair${state.hair}_${body}`,    state.hairColor]);
-    if (state.hat)    layers.push([`hat${state.hat}_${body}`,      state.hatColor]);
+    if (state.bottom) layers.push([`bottom${state.bottom}_${body}`, tintFor('bottom', state.bottom, state.bottomColor)]);
+    if (state.shoes)  layers.push([`shoes${state.shoes}_${body}`,   tintFor('shoes',  state.shoes,  state.shoesColor)]);
+    if (state.top)    layers.push([`top${state.top}_${body}`,       tintFor('top',    state.top,    state.topColor)]);
+    if (state.hair)   layers.push([`hair${state.hair}_${body}`,     tintFor('hair',   state.hair,   state.hairColor)]);
+    if (state.hat)    layers.push([`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor)]);
 
     const sprites = await Promise.all(layers.map(([name]) => loadSprite(name)));
     if (myToken !== renderToken) return;        // newer render started; this one is stale
@@ -26553,6 +26578,28 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       c.querySelectorAll('.av-sw').forEach(s => {
         s.classList.toggle('active', s.dataset.color === state[stateKey]);
       });
+    });
+    // Hide color row entirely for color-locked sprites (e.g. bald hair).
+    // Walks each category's COLOR label + swatch container and toggles
+    // visibility based on NO_TINT membership of the current selection.
+    const colorRowMap = {
+      hair: 'av-sw-hair',
+      hat:  'av-sw-hat',
+      top:  'av-sw-top',
+      bottom: 'av-sw-bottom',
+      shoes: 'av-sw-shoes'
+    };
+    Object.keys(colorRowMap).forEach(category => {
+      const idx = state[category];
+      const isLocked = idx && NO_TINT[category] && NO_TINT[category].has(idx);
+      const swatchEl = document.getElementById(colorRowMap[category]);
+      if (!swatchEl) return;
+      // The COLOR mini-label is the previous sibling of the swatches.
+      const labelEl = swatchEl.previousElementSibling;
+      swatchEl.style.display = isLocked ? 'none' : '';
+      if (labelEl && labelEl.classList.contains('av-mini-lbl')) {
+        labelEl.style.display = isLocked ? 'none' : '';
+      }
     });
   }
 
