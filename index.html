@@ -26476,7 +26476,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     const id = tCtx.getImageData(0, 0, W, H);
     const d = id.data;
     for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] === 0) continue;
+      const a = d[i + 3];
+      if (a === 0) continue;
+      // Clear very faint anti-aliased pixels (alpha < 40). Without
+      // this, faint edge pixels carry the tint color outside the
+      // visible silhouette and create a "glow" around hair/clothes.
+      // The body sprite has the same cutoff; matching it everywhere
+      // gives consistent silhouette sharpness across all layers.
+      if (a < 40) { d[i + 3] = 0; continue; }
       const g = d[i];
       if (g < OUTLINE_THRESHOLD) {
         if (hasOutlineColor) {
@@ -26484,11 +26491,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           d[i + 1] = (g * og) >> 8;
           d[i + 2] = (g * ob) >> 8;
         }
-        // else: leave outline grayscale (artist's choice)
         continue;
       }
-      // Near-white pixels (eye whites, highlights flagged for preservation)
-      // skip the tint pass entirely — they keep their bright value.
       if (preserveWhites && g >= WHITE_THRESHOLD) continue;
       d[i]     = (g * cr) >> 8;
       d[i + 1] = (g * cg) >> 8;
