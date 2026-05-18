@@ -2481,6 +2481,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-view-toggle{display:flex;gap:6px}
     .binder-view-btn{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
     .binder-view-btn.active,.binder-view-btn:hover{border-color:var(--accent);color:var(--accent)}
+    /* ── Compact popover (view-toggle + overflow menu on binder page) ── */
+    .binder-pop{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:170px;background:var(--surface);border:2px solid var(--border);padding:6px 0;z-index:60;box-shadow:4px 4px 0 var(--shadow,rgba(0,0,0,.5))}
+    .binder-pop.binder-pop-right{left:auto;right:0}
+    .binder-pop.open{display:block}
+    .binder-pop-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 14px;border:none;background:transparent;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;letter-spacing:.04em;cursor:pointer;text-align:left;transition:background .1s,color .1s}
+    .binder-pop-item:hover{background:var(--surface2);color:var(--accent)}
+    .binder-pop-item.active{color:var(--accent);background:rgba(0,229,255,.06)}
+    .binder-pop-item.active::after{content:'●';margin-left:auto;font-size:.6rem;color:var(--accent)}
+    .binder-pop-ico{display:inline-block;width:16px;text-align:center;color:var(--muted);font-size:.85rem;line-height:1}
+    .binder-pop-item:hover .binder-pop-ico,.binder-pop-item.active .binder-pop-ico{color:inherit}
+    .binder-pop-empty{padding:10px 14px;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;text-align:center}
     /* ── BINDER GRIDS ── */
     .binder-grid-3x3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
     .binder-grid-2x2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
@@ -5540,39 +5551,48 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   <div id="collectionPage" class="page">
     <!-- Everything lives inside the centered binder-frame -->
     <div class="binder-frame">
-    <div class="pb-page-hdr" style="margin-bottom:14px">
-      <div class="pb-page-hdr-main">
-        <div class="pb-page-hdr-title">◧ My Binder</div>
-        <div class="pb-page-hdr-sub">Your complete card holdings at a glance.</div>
-      </div>
-    </div>
-
-    <!-- Binder shelf (visual covers) -->
+    <!-- Binder shelf (visual covers) — single binder switcher -->
     <div id="binderShelfWrap" style="display:none;margin-bottom:0">
       <div id="binderShelfRow" class="binder-shelf-row"></div>
-    </div>
-
-    <!-- Binder tabs (compact quick-switch, shown when a binder is open) -->
-    <div id="binderTabsWrap" style="display:none;margin-bottom:10px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch">
-      <div id="binderTabs" style="display:inline-flex;gap:6px;align-items:center;padding-bottom:2px"></div>
     </div>
 
     <!-- Binder controls panel -->
     <div class="pb-panel" style="margin-bottom:12px">
       <div class="pb-panel-h">
         <div class="pb-panel-title">
-          <div class="binder-view-toggle" id="binderViewToggle" style="gap:4px">
-            <button class="binder-view-btn active" onclick="setBinderView('3x3')" id="binderBtn3x3">3×3</button>
-            <button class="binder-view-btn" onclick="setBinderView('2x2')" id="binderBtn2x2">2×2</button>
-            <button class="binder-view-btn" onclick="setBinderView('1x1')" id="binderBtn1x1">1×1</button>
-            <button class="binder-view-btn" onclick="setBinderView('list')" id="binderBtnlist">List</button>
+          <!-- View toggle — collapsed into a single trigger that opens a popover with the four layout options (3×3/2×2/1×1/List). -->
+          <div id="binderViewToggle" style="position:relative">
+            <button id="binderViewBtn" class="binder-view-btn active" onclick="toggleBinderViewPop(event)"
+                    aria-haspopup="true" aria-expanded="false" title="Change layout"
+                    style="display:inline-flex;align-items:center;gap:8px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+              <span id="binderViewLbl">3×3</span>
+              <span style="font-size:9px;opacity:.7">▾</span>
+            </button>
+            <div id="binderViewPop" class="binder-pop" role="menu" aria-labelledby="binderViewBtn">
+              <button class="binder-pop-item active" id="binderBtn3x3" onclick="setBinderView('3x3')" role="menuitem"><span class="binder-pop-ico">▦</span><span>3×3 Grid</span></button>
+              <button class="binder-pop-item"        id="binderBtn2x2" onclick="setBinderView('2x2')" role="menuitem"><span class="binder-pop-ico">▤</span><span>2×2 Grid</span></button>
+              <button class="binder-pop-item"        id="binderBtn1x1" onclick="setBinderView('1x1')" role="menuitem"><span class="binder-pop-ico">□</span><span>Single Card</span></button>
+              <button class="binder-pop-item"        id="binderBtnlist" onclick="setBinderView('list')" role="menuitem"><span class="binder-pop-ico">≡</span><span>List</span></button>
+            </div>
           </div>
         </div>
         <div class="pb-panel-actions" style="align-items:stretch">
-          <button id="vendorBulkImportBtn" onclick="openVendorImportModal()" class="pb-panel-link" style="display:none;border-color:var(--gold);color:var(--gold)">Import</button>
-          <button onclick="copyShareLink()" id="shareBinderBtn" class="pb-panel-link" style="display:none;border-color:var(--teal);color:var(--teal)">Share</button>
-          <button onclick="showPage('fairTrade');setMobileNav('')" class="pb-panel-link" style="border-color:var(--teal);color:var(--teal)">Trade Analyzer <span class="beta-badge">BETA</span></button>
           <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
+          <!-- Overflow menu — Import + Share live here. Both items already toggle their own display via JS (vendor-only / logged-in only). -->
+          <div style="position:relative">
+            <button id="binderOverflowBtn" class="pb-panel-link"
+                    onclick="toggleBinderOverflowPop(event)"
+                    aria-haspopup="true" aria-expanded="false" title="More actions"
+                    style="border-color:var(--border);color:var(--muted);padding:3px 11px;letter-spacing:.05em;font-size:14px;line-height:1">⋯</button>
+            <div id="binderOverflowPop" class="binder-pop binder-pop-right" role="menu" aria-labelledby="binderOverflowBtn">
+              <button id="vendorBulkImportBtn" onclick="openVendorImportModal();closeBinderPops()" class="binder-pop-item" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
+              <button id="shareBinderBtn" onclick="copyShareLink();closeBinderPops()" class="binder-pop-item" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
+            </div>
+          </div>
         </div>
       </div>
       <!-- List view search — only visible in list mode -->
@@ -13462,8 +13482,60 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const btn = document.getElementById('binderBtn' + v);
         if (btn) btn.classList.toggle('active', v === view);
       });
+      // Sync the popover trigger button label so it reflects the current view
+      const lbl = document.getElementById('binderViewLbl');
+      if (lbl) {
+        lbl.textContent = view === '3x3' ? '3×3'
+                        : view === '2x2' ? '2×2'
+                        : view === '1x1' ? '1×1'
+                        : 'List';
+      }
+      // Close the popover after a selection
+      closeBinderPops();
       renderBinder();
     }
+
+    // ── Binder controls popovers (view-toggle + overflow ⋯ menu) ──
+    function toggleBinderViewPop(e){
+      if (e) e.stopPropagation();
+      const pop = document.getElementById('binderViewPop');
+      const btn = document.getElementById('binderViewBtn');
+      const other = document.getElementById('binderOverflowPop');
+      if (other) other.classList.remove('open');
+      if (!pop) return;
+      const willOpen = !pop.classList.contains('open');
+      pop.classList.toggle('open', willOpen);
+      if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    }
+    function toggleBinderOverflowPop(e){
+      if (e) e.stopPropagation();
+      const pop = document.getElementById('binderOverflowPop');
+      const btn = document.getElementById('binderOverflowBtn');
+      const other = document.getElementById('binderViewPop');
+      if (other) other.classList.remove('open');
+      if (!pop) return;
+      const willOpen = !pop.classList.contains('open');
+      pop.classList.toggle('open', willOpen);
+      if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    }
+    function closeBinderPops(){
+      ['binderViewPop','binderOverflowPop'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('open');
+      });
+      ['binderViewBtn','binderOverflowBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('aria-expanded','false');
+      });
+    }
+    // Dismiss popovers on outside click / Escape
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (t.closest && (t.closest('#binderViewPop') || t.closest('#binderViewBtn')
+                     || t.closest('#binderOverflowPop') || t.closest('#binderOverflowBtn'))) return;
+      closeBinderPops();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBinderPops(); });
 
     // ===== ALL CARDS SORT =====
     // Sort state only applies to the "All Cards" view — never bleeds into individual binders.
