@@ -53,15 +53,15 @@
       --shadow:#1E1408;--premium:#C8002A;--premium-txt:#F2ECD8;
       --sb-w:198px;--sb-w-coll:54px;
     }
-    body{font-family:'Space Mono','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-right:var(--sb-w);transition:background .2s,color .2s,padding-right .25s}
-    body.nav-collapsed{padding-right:var(--sb-w-coll)}
+    body{font-family:'Space Mono','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-left:var(--sb-w);transition:background .2s,color .2s,padding-left .25s,padding-right .25s}
+    body.nav-collapsed{padding-left:var(--sb-w-coll)}
     /* Landing page: keep sidebar, hide binder top bar only */
     body.on-landing #binderSidebar{display:none!important}
 
     @keyframes scanlines{0%{transform:translateY(0)}100%{transform:translateY(10px)}}
 
     /* SIDEBAR NAV */
-    nav{background:var(--surface);border-left:2px solid var(--border);position:fixed;right:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
+    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
     nav.sb-collapsed{width:var(--sb-w-coll)}
     .nav-header{height:52px;display:flex;align-items:center;padding:0 8px 0 10px;border-bottom:2px solid var(--border);flex-shrink:0;gap:6px}
     .logo-img-btn{background:none!important;border:none!important;padding:0!important;cursor:pointer;line-height:0;box-shadow:none!important;min-width:0!important;letter-spacing:0;flex:1;overflow:hidden}
@@ -93,7 +93,7 @@
     nav.sb-collapsed .nav-tab .badge-count{display:none}
     nav.sb-collapsed .nav-group-label{height:0;padding:0;overflow:hidden}
     nav.sb-collapsed .nav-tab.active::before{width:2px}
-    nav.sb-collapsed .nav-tab:hover::after{content:attr(data-label);position:fixed;right:calc(var(--sb-w-coll) + 6px);background:#000;border:1.5px solid var(--accent);color:var(--accent);padding:4px 9px;font-size:9.5px;letter-spacing:.1em;white-space:nowrap;box-shadow:3px 3px 0 #000;z-index:10001;pointer-events:none;font-family:'Space Mono',monospace;text-transform:uppercase}
+    nav.sb-collapsed .nav-tab:hover::after{content:attr(data-label);position:fixed;left:calc(var(--sb-w-coll) + 6px);background:#000;border:1.5px solid var(--accent);color:var(--accent);padding:4px 9px;font-size:9.5px;letter-spacing:.1em;white-space:nowrap;box-shadow:3px 3px 0 #000;z-index:10001;pointer-events:none;font-family:'Space Mono',monospace;text-transform:uppercase}
     /* Sidebar avatar — fills the dead space above the footer with the
        user's full-body PFP. Desktop only; the mobile media query at
        the bottom of this stylesheet hides it. Capped via max-height
@@ -121,6 +121,19 @@
     }
     nav.sb-collapsed .sidebar-avatar-wrap{ display:none !important; }
     @media (max-width: 780px){ .sidebar-avatar-wrap{ display:none !important; } }
+    /* DESKTOP-ONLY: flip the sidebar to the right edge. At ≤900px the
+       sidebar collapses to icons-only AND the bottom mobile-nav appears,
+       so we leave the original left-side layout intact for mobile to
+       avoid disrupting that compact layout. */
+    @media (min-width: 901px) {
+      body{padding-left:0;padding-right:var(--sb-w)}
+      body.nav-collapsed{padding-left:0;padding-right:var(--sb-w-coll)}
+      nav{left:auto;right:0;border-right:none;border-left:2px solid var(--border)}
+      nav.sb-collapsed .nav-tab:hover::after{left:auto;right:calc(var(--sb-w-coll) + 6px)}
+      .avatar-dropdown{left:auto;right:var(--sb-w)}
+      #binderSidebar{left:0;right:var(--sb-w)}
+      body.nav-collapsed #binderSidebar{left:0;right:var(--sb-w-coll)}
+    }
     .nav-foot{border-top:1.5px solid var(--border);padding:8px 8px 10px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
     .nav-foot-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     nav.sb-collapsed .nav-foot{padding:6px 4px 8px;align-items:center}
@@ -137,7 +150,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     nav.sb-collapsed .user-avatar #userName{display:none}
     nav.sb-collapsed .user-avatar{padding:4px;justify-content:center;gap:0}
     .avatar-circle{width:26px;height:26px;border-radius:0;background:var(--accent);color:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6rem;border:1.5px solid var(--shadow)}
-    .avatar-dropdown{display:none;position:fixed;right:var(--sb-w);bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:8px 0;min-width:220px;max-width:92vw;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
+    .avatar-dropdown{display:none;position:fixed;left:var(--sb-w);bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:8px 0;min-width:220px;max-width:92vw;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
     .avatar-dropdown.open{display:block}
     .dd-badge-section{padding:10px 12px 6px;border-bottom:2px solid var(--border)}
     .dd-badge-label{font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase}
@@ -149,8 +162,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .dd-badge-pip .dd-bname{font-family:'Press Start 2P',monospace;font-size:4.5px;color:#444;text-align:center;line-height:1.3;max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .dd-badge-pip .dd-bname.earned{color:#00E5FF}
     .dd-badge-pip:hover .dd-hex{transform:scale(1.1)}
-    @media(max-width:480px){.avatar-dropdown{right:var(--sb-w-coll);bottom:72px}.dd-badge-grid{grid-template-columns:repeat(4,1fr);gap:4px}.dd-badge-pip .dd-hex{width:30px;height:30px}.dd-badge-pip .dd-hex svg{width:30px;height:30px}.dd-badge-pip .dd-bname{font-size:4px;max-width:38px}}
-    @media(max-width:900px){.avatar-dropdown{right:auto;left:8px;bottom:auto;top:92px}}
+    @media(max-width:480px){.dd-badge-grid{grid-template-columns:repeat(4,1fr);gap:4px}.dd-badge-pip .dd-hex{width:30px;height:30px}.dd-badge-pip .dd-hex svg{width:30px;height:30px}.dd-badge-pip .dd-bname{font-size:4px;max-width:38px}}
+    /* Mobile: anchor dropdown under the top-bar user chip since the
+       sidebar is hidden. */
+    @media(max-width:900px){.avatar-dropdown{left:auto;right:8px;bottom:auto;top:92px}}
     .dropdown-item{padding:10px 16px;color:var(--text);cursor:pointer;font-size:.6rem;transition:background .1s;display:flex;align-items:center;gap:8px}
     .dropdown-item:hover{background:var(--surface2)}
     .dropdown-divider{height:2px;background:var(--border);margin:4px 0}
@@ -493,13 +508,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* MOBILE & RESPONSIVE */
     @media(max-width:900px) {
-      /* Sidebar collapses to icons only */
-      nav{width:var(--sb-w-coll)}
-      body{padding-right:var(--sb-w-coll)}
-      .nav-tab-lbl,.nav-group-label{display:none}
-      .nav-tab{justify-content:center;padding:9px 0}
-      .nav-collapse-btn{display:none}
-      #binderSidebar{right:var(--sb-w-coll);left:0}
+      /* Mobile: hide the main sidebar entirely. The mobile-nav at the
+         bottom handles primary navigation; only the binder page keeps
+         its own vertical strip (#binderSidebar) for switching binders. */
+      nav{display:none !important}
+      body{padding-left:0;padding-right:0}
+      #binderSidebar{left:0}
     }
     @media(max-width:768px) {
       .card-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
@@ -2505,7 +2519,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* ── BINDER TOP BAR (desktop) / LEFT STRIP (mobile) ── */
     #binderSidebar{
       position:fixed;display:none;
-      left:0;right:var(--sb-w);top:0;
+      left:var(--sb-w);right:0;top:0;
       height:52px;
       flex-direction:row;align-items:center;justify-content:center;
       gap:8px;padding:6px 12px;
@@ -2513,15 +2527,15 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       overflow-x:auto;overflow-y:hidden;
       scrollbar-width:none;
       z-index:900;
-      transition:right .25s;
+      transition:left .25s, right .25s;
     }
     #binderSidebar::-webkit-scrollbar{display:none}
     body.on-binder #binderSidebar{display:flex}
-    body.nav-collapsed #binderSidebar{right:var(--sb-w-coll)}
+    body.nav-collapsed #binderSidebar{left:var(--sb-w-coll)}
     /* Push collection content down to clear the top bar */
     body.on-binder #collectionPage{padding-top:60px}
     @media(max-width:900px){
-      #binderSidebar{right:var(--sb-w-coll);left:0}
+      #binderSidebar{left:var(--sb-w-coll)}
     }
     /* Mobile: convert top bar → left vertical strip (binder page only) */
     @media(max-width:600px){
@@ -4694,7 +4708,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <div style="flex:1;min-width:0">
               <div id="atcPhotoStatusText" style="font-size:.68rem;color:var(--muted);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button id="atcPhotoBgBtn" onclick="atcRemoveBg()"
+                <button type="button" id="atcPhotoBgBtn" onclick="atcRemoveBg()"
                   style="font-size:.63rem;padding:4px 9px;border:1px solid var(--teal);background:transparent;color:var(--teal);cursor:pointer;font-family:'Space Mono','Share Tech Mono',monospace;transition:background .12s,color .12s"
                   onmouseenter="this.style.background='var(--teal)';this.style.color='#000'"
                   onmouseleave="this.style.background='transparent';this.style.color='var(--teal)'">
@@ -5939,7 +5953,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <div class="ft-mag-lens-frame"></div>
           </div>
           <div class="ft-mag-label-top">⌬ TRADE LOCKED · INSPECTING</div>
-          <div class="ft-mag-label-bot" id="ftMagStatus">&gt; INITIALIZING</div>
+          <div class="ft-mag-label-bot" id="ftMagStatus">INITIALIZING</div>
         </div>
         <div id="ftLoadingMsg" style="font-size:.82rem;color:var(--muted);margin-top:12px;letter-spacing:.04em">Checking prices…</div>
         <div id="ftLoadingProgress" style="font-size:.72rem;color:var(--muted);margin-top:4px"></div>
@@ -7159,7 +7173,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       }
       if (pageId === 'fairTrade') { ftInitPage(); }
       if (pageId === 'sets') { loadSetsPage(); }
-      if (pageId === 'avatar') { /* avatar page ready */ }
+      if (pageId === 'avatar') {
+        // Every time the editor opens, reset to the last committed
+        // state (the saved PFP). Without this, the in-memory state
+        // from a previous edit session would persist and the user
+        // would see their unsaved tweaks instead of their saved avatar.
+        try {
+          if (window.AvatarCreator && typeof window.AvatarCreator.reloadFromCommitted === 'function') {
+            window.AvatarCreator.reloadFromCommitted();
+          }
+        } catch(_) {}
+      }
       // collection page is accessible directly via nav
 
     }
@@ -19144,25 +19168,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         if (t < (cur += P_DOWN_1)) {
           var p = (t - (cur - P_DOWN_1)) / P_DOWN_1;
           x = CARD1_X; y = CARD_TOP_Y + (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
-          msg = '> SCANNING SIDE A .>';
+          msg = 'SCANNING SIDE A .';
         } else if (t < (cur += P_UP_1)) {
           var p = (t - (cur - P_UP_1)) / P_UP_1;
           x = CARD1_X; y = CARD_BOT_Y - (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
-          msg = '> SCANNING SIDE A ..>';
+          msg = 'SCANNING SIDE A ..';
         } else if (t < (cur += P_SLIDE)) {
           var p = (t - (cur - P_SLIDE)) / P_SLIDE;
           x = CARD1_X + (CARD2_X - CARD1_X) * easeInOutSine(p); y = CARD_TOP_Y;
-          msg = '> CROSS-CHECK ...>';
+          msg = 'CROSS-CHECK ...';
         } else if (t < (cur += P_DOWN_2)) {
           var p = (t - (cur - P_DOWN_2)) / P_DOWN_2;
           x = CARD2_X; y = CARD_TOP_Y + (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
-          msg = '> SCANNING SIDE B .>';
+          msg = 'SCANNING SIDE B .';
         } else if (t < (cur += P_UP_2)) {
           var p = (t - (cur - P_UP_2)) / P_UP_2;
           x = CARD2_X; y = CARD_BOT_Y - (CARD_BOT_Y - CARD_TOP_Y) * easeInOutSine(p);
-          msg = '> SCANNING SIDE B ..>';
+          msg = 'SCANNING SIDE B ..';
         } else {
-          x = CARD2_X; y = CARD_TOP_Y; msg = '> VERIFIED .>';
+          x = CARD2_X; y = CARD_TOP_Y; msg = 'VERIFIED ..';
         }
         return { x: x, y: y, msg: msg };
       }
@@ -20896,7 +20920,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       var loadingEl = document.getElementById('ftLoadingState');
       var resultsEl = document.getElementById('ftResultsState');
       var bd        = document.getElementById('ftBreakdown');
-      if (status) status.textContent = '> VERDICT INCOMING';
+      if (status) status.textContent = 'VERDICT INCOMING';
 
       // Freeze the mag-loop so the cards are stationary when the slam hits.
       _ftStopMagAnim();
@@ -23292,14 +23316,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // 400 = columns not yet migrated; silently skip
         if (error) return;
         if (!data) return;
-        // Avatar state — write to the v2 key (sprite engine) and push
-        // to AvatarCreator if it's available so the loaded state
-        // shows immediately.
+        // Avatar state — write to the v2 key (sprite engine), push
+        // to AvatarCreator, then regenerate the PFP PNG from the
+        // loaded state and refresh the chips. Otherwise a fresh
+        // browser would keep showing initials (or a stale PFP) until
+        // the user re-opens the editor.
         if (data.avatar_state) {
           try {
             localStorage.setItem('pathbinder_avatar_v2', JSON.stringify(data.avatar_state));
             if (window.AvatarCreator && typeof window.AvatarCreator.setState === 'function') {
-              window.AvatarCreator.setState(data.avatar_state);
+              await window.AvatarCreator.setState(data.avatar_state);
+              if (typeof window.AvatarCreator.refreshPfp === 'function') {
+                await window.AvatarCreator.refreshPfp();
+              }
+              if (typeof updateAuthUI === 'function') {
+                try { updateAuthUI(); } catch(_) {}
+              }
             }
           } catch(_) {}
         }
@@ -23315,6 +23347,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             }
           } catch(_) {}
         }
+        // Now that badges are hydrated from cloud, award INIT for any
+        // signed-in user. If they already earned it, _hasBadge() short-
+        // circuits — no toast, no scratch sound. Without this gate the
+        // badge re-fired on every login to a fresh browser.
+        try { if (typeof checkBadge_init === 'function') checkBadge_init(); } catch(_) {}
         if (data.scan_total != null) {
           try {
             // Per-user key from now on. Migration: if any value lives
@@ -23553,8 +23590,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         updateAuthUI();
         renderAllContent();
         if (freshSignIn && !isPublicView) { freshSignIn = false; showPage('account'); setMobileNav('account'); }
-        // Award "INIT" badge — any logged-in user earns this (hints at easter egg)
-        try { if (typeof checkBadge_init === 'function') checkBadge_init(); } catch(_) {}
+        // INIT badge is awarded inside syncUserDataFromCloud AFTER the
+        // cloud badge list has been merged into localStorage. Awarding
+        // it here would re-fire the unlock (+ scratch sound) every
+        // time the user signed in on a fresh browser, because the
+        // localStorage badge list hadn't been hydrated yet.
 
         // Then enrich with profile + fresh data in background
         const uid = session.user.id;
@@ -24882,78 +24922,141 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       document.body.appendChild(sheet);
     }
 
-    async function confirmScanMatch(cardId, cardName) {
-      // Fetch full card data from catalog then open the standard add-to-collection modal
-      const { data: card } = await sb.from('catalog').select('*').eq('id', cardId).maybeSingle();
-      if (!card) { showToast('Card not found in catalog'); return; }
-
-      // Hide scanner modal but keep stream + results alive so cancel brings user back
-      _returnToScanner = true;
-      document.getElementById('scannerModal').style.display = 'none';
-
-      // Build a pendingCollectionCard compatible object and open the modal
-      // JP catalog cards have a 'jp-' id prefix — auto-tag them as JA
-      const isJpCard = card.id && card.id.startsWith('jp-');
-      if (isJpCard) window._pendingJpCard = true;
-
-      pendingCollectionCard = {
-        apiCardId:    card.id,
-        cardName:     card.name,
-        setName:      card.set_name  || '',
-        setCode:      card.set_code  || '',
-        cardNumber:   card.card_number || '',
-        cardImageUrl: card.image_url || '',
-        gameType:     'pokemon',
-        language:     isJpCard ? 'JA' : 'EN',
-      };
-
-      const nameEl = document.getElementById('atcCardName');
-      if (nameEl) nameEl.textContent = card.name + (card.set_name ? ' — ' + card.set_name : '');
-      const manualRow = document.getElementById('atcManualNameRow');
-      if (manualRow) manualRow.style.display = 'none';
-      document.getElementById('atcQuantity').value = '1';
-      document.getElementById('atcPurchasePrice').value = '';
-      document.getElementById('atcPurchaseDate').value = '';
-      document.getElementById('atcPriceUrl').value = '';
-      document.getElementById('atcNotes').value = '';
-      atcClearPhoto();
-      atcOfferScanPhoto(); // offer scan photo to keep/edit/discard
-
-      // ── Auto-fill slab data if scanner detected a graded card ──────────
-      const slab = window._detectedSlab;
-      if (slab) {
-        // Set condition dropdown to the grading company
-        const condEl = document.getElementById('atcCondition');
-        const validConds = ['psa', 'bgs', 'cgc', 'sgc', 'ace', 'tag'];
-        if (condEl && validConds.includes(slab.company)) condEl.value = slab.company;
-        else if (condEl) condEl.value = 'raw';
-
-        // Set grade
-        const gradeEl = document.getElementById('atcGrade');
-        const validGrades = ['10','9.5','9','8.5','8','7.5','7','6.5','6','5.5','5','4.5','4','3','2','1'];
-        if (gradeEl && slab.grade && validGrades.includes(slab.grade)) gradeEl.value = slab.grade;
-        else if (gradeEl) gradeEl.value = '10';
-
-        // Set cert number
-        const certEl = document.getElementById('atcCertNumber');
-        if (certEl) certEl.value = slab.certNumber || '';
-
-        toggleGradeField(); // show grade field + update cert button state
-        atcUpdateCertBtn();
-
-        // Auto-trigger PSA lookup if we have a cert number
-        if (slab.company === 'psa' && slab.certNumber) {
-          setTimeout(atcLookupPsaCert, 300); // slight delay so modal renders first
-        }
-      } else {
-        document.getElementById('atcCondition').value = 'raw';
-        document.getElementById('atcGrade').value = '10';
-        document.getElementById('atcCertNumber').value = '';
-        toggleGradeField();
+    // Quick-save a scanned card straight to the user's binder with
+    // sensible defaults. Skips the legacy add-to-binder modal entirely
+    // — the user edits photo / condition / price from the binder card
+    // detail instead. This sidesteps the iOS Safari + Brave bug where
+    // the bg-removal AI model loading caused the tab to reload and
+    // wipe out the in-flight modal state.
+    //
+    // Defaults: raw (or detected slab grade), qty 1, current binder,
+    // catalog image as the card photo. Slab data is auto-applied
+    // when window._detectedSlab is set.
+    async function quickAddScannedCard(card) {
+      if (!currentUser) { showToast('Sign in to add cards to your collection'); return; }
+      if (!canAddMoreCards()) {
+        showToast('Free plan limit: 200 cards reached');
+        if (typeof openPricingModal === 'function') openPricingModal('collector');
+        return;
       }
 
-      populateBinderDropdown('atcBinderId', currentBinderId);
-      openModal('addToCollectionModal');
+      const isJpCard = card.id && String(card.id).startsWith('jp-');
+      const language = isJpCard ? 'JA' : 'EN';
+
+      // Apply slab data if scanner detected a graded card
+      const slab = window._detectedSlab;
+      let condition = 'raw';
+      let gradeValue = null;
+      let certNumber = null;
+      if (slab) {
+        const validConds = ['psa', 'bgs', 'cgc', 'sgc', 'ace', 'tag'];
+        if (validConds.includes(slab.company)) condition = slab.company;
+        const validGrades = ['10','9.5','9','8.5','8','7.5','7','6.5','6','5.5','5','4.5','4','3','2','1'];
+        if (slab.grade && validGrades.includes(slab.grade)) gradeValue = parseFloat(slab.grade);
+        if (slab.certNumber) certNumber = slab.certNumber;
+      }
+
+      const _insertBase = {
+        user_id:          currentUser.id,
+        api_card_id:      card.id || null,
+        card_name:        card.name || '(unnamed)',
+        set_name:         card.set_name   || null,
+        set_code:         card.set_code   || null,
+        card_number:      card.card_number || null,
+        card_image_url:   card.image_url  || null,
+        game_type:        'pokemon',
+        condition,
+        grade_value:      gradeValue,
+        cert_number:      certNumber,
+        quantity:         1,
+        purchase_price:   null,
+        purchase_date:    null,
+        price_source_url: null,
+        notes:            null,
+        binder_id:        currentBinderId || null,
+        language,
+        rarity:           card.rarity || null,
+      };
+
+      try { applyOverrideToInsertRow(_insertBase); } catch(_) {}
+
+      // Insert with schema fallback (some older DBs lack language/rarity)
+      let { data: newRow, error } = await sb.from('collection_items')
+        .insert(_insertBase).select('id').single();
+      const _isSchemaErr = (e) => {
+        if (!e) return false;
+        const str = (e.message || '') + (e.details || '') + (e.hint || '') + (e.code || '');
+        return str.toLowerCase().includes('language') ||
+               str.toLowerCase().includes('schema cache') ||
+               str.toLowerCase().includes('column');
+      };
+      if (_isSchemaErr(error)) {
+        const { language: _l, ..._noLang } = _insertBase;
+        const r2 = await sb.from('collection_items').insert(_noLang).select('id').single();
+        if (!r2.error) { newRow = r2.data; error = null; }
+        else if (_isSchemaErr(r2.error)) {
+          const { language: _l2, rarity: _r2, ..._bare } = _insertBase;
+          const r3 = await sb.from('collection_items').insert(_bare).select('id').single();
+          newRow = r3.data; error = r3.error;
+        } else { newRow = r2.data; error = r2.error; }
+      }
+
+      if (error) {
+        showToast('Error saving card: ' + error.message);
+        return;
+      }
+
+      // Pre-warm price cache for non-English cards in the background
+      if (language !== 'EN') {
+        try {
+          fetchCardPriceForLanguage({
+            cardName:   card.name,
+            language,
+            setName:    card.set_name   || undefined,
+            cardNumber: card.card_number || undefined,
+            apiCardId:  card.id        || undefined,
+          }).catch(() => {});
+        } catch(_) {}
+      }
+
+      showToast((card.name || 'Card') + ' added — tap to edit photo');
+      _returnToScanner = false;
+      pendingCollectionCard = null;
+      try { window._detectedSlab = null; } catch(_) {}
+
+      // Tear down scanner UI so we land on the binder cleanly. The
+      // camera stream itself is left intact — the existing scanner
+      // teardown path runs whenever the modal is re-opened or the
+      // page navigates away.
+      const scannerModal = document.getElementById('scannerModal');
+      if (scannerModal) scannerModal.style.display = 'none';
+      document.getElementById('scanPreviewSheet')?.remove();
+
+      try { await loadCollection(); checkBadge_stacked(); checkBadge_phantom_p2(); } catch(_) {}
+      try { renderCollection(); } catch(_) {}
+
+      // Jump straight to the binder card detail so the user can edit
+      // photo / condition / price right away. The detail modal supports
+      // crop + bg removal via its own card-photo flow (which is the
+      // refresh-safe path — the card is already saved).
+      if (newRow?.id) {
+        try { showPage('collection'); setMobileNav('collection'); } catch(_) {}
+        setTimeout(() => {
+          try { openBinderCardDetail(newRow.id); } catch(_) {}
+        }, 220);
+      }
+
+      return newRow;
+    }
+
+    async function confirmScanMatch(cardId, cardName) {
+      // Fetch full card data from catalog then quick-save directly to
+      // the binder. The legacy "Add to Binder" modal is bypassed so the
+      // user doesn't lose progress if the page reloads under memory
+      // pressure (background-removal AI model on iOS Safari/Brave).
+      const { data: card } = await sb.from('catalog').select('*').eq('id', cardId).maybeSingle();
+      if (!card) { showToast('Card not found in catalog'); return; }
+      await quickAddScannedCard(card);
     }
 
     // Search catalog by name — shown in scanner when user wants to find exact version
@@ -27070,7 +27173,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         state[stateKey] = color;
         syncUI();
         render();
-        saveState();
+        // No auto-save — changes are kept in-memory until the user
+        // clicks "Set as PFP". Closing or refreshing the editor
+        // discards unsaved tweaks (which is what the user wants).
       });
       c.appendChild(s);
     });
@@ -27095,9 +27200,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       render();
     });
     picker.addEventListener('change', () => {
-      // Commit on change (when picker closes) — input fires constantly
-      // while user drags, but we only persist on the final value.
-      saveState();
+      // No-op — changes stay in-memory until Set as PFP is clicked.
     });
     customWrap.appendChild(picker);
     c.appendChild(customWrap);
@@ -27195,7 +27298,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         state[key] = val;
         syncUI();
         render();
-        saveState();
+        // No auto-save — Set as PFP is the only commit point.
       });
     });
 
@@ -27237,7 +27340,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         };
         syncUI();
         render();
-        saveState();
+        // Randomized result is in-memory until user commits with Set as PFP.
       });
     }
 
@@ -27296,15 +27399,49 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (s && typeof s === 'object' && (s.body === 'm' || s.body === 'f')) {
         state = { ...DEFAULT, ...s };
         syncUI();
-        render();
+        return render();
       }
+      return Promise.resolve();
+    },
+    render: () => render(),
+    // Re-read STORAGE_KEY (committed state) and reset the editor.
+    // Called when the user opens the avatar page so any unsaved
+    // tweaks from the previous session are discarded.
+    reloadFromCommitted: () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.body === 'm' || parsed.body === 'f')) {
+            state = { ...DEFAULT, ...parsed };
+          } else {
+            state = { ...DEFAULT };
+          }
+        } else {
+          state = { ...DEFAULT };
+        }
+        syncUI();
+        return render();
+      } catch(_) { return Promise.resolve(); }
     },
     getDataURL: () => canvas.toDataURL('image/png'),
+    // Render the current state and persist the result as the PFP PNG
+    // in localStorage. Called from syncUserDataFromCloud so a freshly
+    // signed-in browser regenerates the PFP from cloud state without
+    // requiring the user to re-open the editor.
+    refreshPfp: async () => {
+      try {
+        await render();
+        const dataUrl = canvas.toDataURL('image/png');
+        try { localStorage.setItem('pathbinder_avatar_pfp_v1', dataUrl); } catch(_) {}
+        return dataUrl;
+      } catch(_) { return null; }
+    },
     reset: () => {
       try { localStorage.removeItem(STORAGE_KEY); } catch(_) {}
       state = { ...DEFAULT };
       syncUI();
-      render();
+      return render();
     }
   };
 })();
