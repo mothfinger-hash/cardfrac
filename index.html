@@ -26595,6 +26595,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     //      great.
     const softShade = !!opts.softShade;
     const aOutThr = opts.alphaOutlineThreshold || 0;
+    // Per-layer outline gray threshold. Defaults to the global
+    // OUTLINE_THRESHOLD (70) but layers like hair pass a lower value
+    // (~20) because their dark fill pixels otherwise get mis-classified
+    // as outlines and tinted with skin instead of the hair color.
+    const oThr = opts.outlineThreshold != null ? opts.outlineThreshold : OUTLINE_THRESHOLD;
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (a === 0) continue;
@@ -26606,7 +26611,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // detail) so they get skin-tinted instead of hair-tinted —
       // those pixels blend into the body instead of carrying garish
       // hair color at low opacity.
-      if ((g < OUTLINE_THRESHOLD && !opts.skipOutlines) || (aOutThr && a < aOutThr)) {
+      if ((g < oThr && !opts.skipOutlines) || (aOutThr && a < aOutThr)) {
         if (hasOutlineColor) {
           d[i]     = (g * or) >> 8;
           d[i + 1] = (g * og) >> 8;
@@ -26768,9 +26773,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Bald (hair 7) gets a higher alphaCutoff because its semi-
     // transparent ear cartilage rendered as noisy speckle.
     if (state.hair) {
+      // outlineThreshold dropped to 20 (from default 70) — many of our
+      // hair sprites have most of their fill drawn at gray 30-60, which
+      // was being mis-classified as "outline" and tinted with skin
+      // instead of the picked hair color. Result: dark hairstyles only
+      // showed the new color on the lightest anti-aliased pixels. With
+      // threshold 20, only the artist's true near-black outline strokes
+      // get skin-tinted; the dark fill pixels now receive the hair tint.
       const hairOpts = state.hair === 7
-        ? { outlineColor: state.skin, alphaCutoff: 200 }
-        : { outlineColor: state.skin, alphaCutoff: 60 };
+        ? { outlineColor: state.skin, alphaCutoff: 200, outlineThreshold: 20 }
+        : { outlineColor: state.skin, alphaCutoff: 60,  outlineThreshold: 20 };
       layers.push(layer(`hair${state.hair}_${body}`, tintFor('hair', state.hair, state.hairColor), hairOpts));
     }
     if (state.hat)    layers.push(layer(`hat${state.hat}_${body}`,       tintFor('hat',    state.hat,    state.hatColor),    { softShade: true, skipOutlines: true }));
