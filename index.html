@@ -2481,8 +2481,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-view-toggle{display:flex;gap:6px}
     .binder-view-btn{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;transition:all .15s}
     .binder-view-btn.active,.binder-view-btn:hover{border-color:var(--accent);color:var(--accent)}
-    /* ── Compact popover (view-toggle + overflow menu on binder page) ── */
-    .binder-pop{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:170px;background:var(--surface);border:2px solid var(--border);padding:6px 0;z-index:60;box-shadow:4px 4px 0 var(--shadow,rgba(0,0,0,.5))}
+    /* ── Compact popover (view-toggle + overflow menu on binder page) ──
+       z-index intentionally large: the binder body below the controls strip
+       contains rendered cards / overlays that can reach the 50-100 range
+       and would otherwise stack over an absolutely-positioned popover. */
+    .binder-pop{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:170px;background:var(--surface);border:2px solid var(--border);padding:6px 0;z-index:9000;box-shadow:4px 4px 0 var(--shadow,rgba(0,0,0,.5))}
     .binder-pop.binder-pop-right{left:auto;right:0}
     .binder-pop.open{display:block}
     .binder-pop-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 14px;border:none;background:transparent;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;letter-spacing:.04em;cursor:pointer;text-align:left;transition:background .1s,color .1s}
@@ -2492,6 +2495,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-pop-ico{display:inline-block;width:16px;text-align:center;color:var(--muted);font-size:.85rem;line-height:1}
     .binder-pop-item:hover .binder-pop-ico,.binder-pop-item.active .binder-pop-ico{color:inherit}
     .binder-pop-empty{padding:10px 14px;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;text-align:center}
+    /* Trigger affordance — clearly reads as a dropdown. SVG inside the
+       trigger gets pointer-events:none so clicks always register on the
+       host <button>, not on a <rect> child that has no handler. */
+    #binderViewBtn svg, #binderOverflowBtn svg { pointer-events:none }
+    #binderViewBtn .pop-chev, #binderOverflowBtn .pop-chev{display:inline-block;font-size:9px;opacity:.7;transition:transform .15s}
+    #binderViewBtn[aria-expanded="true"], #binderOverflowBtn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.08)}
+    #binderViewBtn[aria-expanded="true"] .pop-chev, #binderOverflowBtn[aria-expanded="true"] .pop-chev{transform:rotate(180deg);opacity:1}
     /* ── BINDER GRIDS ── */
     .binder-grid-3x3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
     .binder-grid-2x2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
@@ -5569,8 +5579,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
                 <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
               </svg>
-              <span id="binderViewLbl">3×3</span>
-              <span style="font-size:9px;opacity:.7">▾</span>
+              <span>Layout:</span>
+              <span id="binderViewLbl" style="color:var(--accent)">3×3</span>
+              <span class="pop-chev" aria-hidden="true">▾</span>
             </button>
             <div id="binderViewPop" class="binder-pop" role="menu" aria-labelledby="binderViewBtn">
               <button class="binder-pop-item active" id="binderBtn3x3" onclick="setBinderView('3x3')" role="menuitem"><span class="binder-pop-ico">▦</span><span>3×3 Grid</span></button>
