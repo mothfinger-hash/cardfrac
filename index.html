@@ -7174,15 +7174,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (pageId === 'fairTrade') { ftInitPage(); }
       if (pageId === 'sets') { loadSetsPage(); }
       if (pageId === 'avatar') {
-        // Every time the editor opens, reset to the last committed
-        // state (the saved PFP). Without this, the in-memory state
-        // from a previous edit session would persist and the user
-        // would see their unsaved tweaks instead of their saved avatar.
-        try {
-          if (window.AvatarCreator && typeof window.AvatarCreator.reloadFromCommitted === 'function') {
-            window.AvatarCreator.reloadFromCommitted();
-          }
-        } catch(_) {}
+        // Editor opens to the user's working draft (auto-saved on
+        // every tweak) so unfinished edits aren't lost. The displayed
+        // PFP / cloud state are unaffected — those only update when
+        // the user hits "Set as PFP".
       }
       // collection page is accessible directly via nav
 
@@ -13757,10 +13752,41 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       renderBinder();
     }
 
-    function renderBinderSidebar() {
-      const sb = document.getElementById('binderSidebar');
-      if (!sb) return;
-      // Visibility is CSS-controlled via body.on-binder — just render the HTML
+    // Tracks the last-rendered signature so we can skip the wholesale
+    // innerHTML rewrite when nothing changed. updateAuthUI() calls
+    // renderBinderSidebar() and itself fires from many places (cloud
+    // sync, badge unlock, auth listener), so without this guard the
+    // mobile binder strip's <img> elements get torn down + reinserted
+    // on every refresh — producing a visible flicker on the user's
+    // cover images.
+    let _lastBinderSidebarSig = null;
+    function renderBinderSidebar(forceRebuild) {
+      const sbEl = document.getElementById('binderSidebar');
+      if (!sbEl) return;
+
+      // Signature covers the binder LIST (id/name/color/cover) and
+      // the max-binders cap. Active selection is intentionally NOT
+      // part of the signature — selection changes only need the
+      // .active class flipped, never a full innerHTML rewrite.
+      const sig = JSON.stringify({
+        max: getMaxBinders(),
+        binders: binders.map(b => [b.id, b.name, b.color || '', b.cover_image_url || '']),
+      });
+
+      if (!forceRebuild && sig === _lastBinderSidebarSig && sbEl.children.length > 0) {
+        // Same content — just refresh the .active class so selection
+        // updates without re-fetching images.
+        sbEl.querySelectorAll('.bsb-icon').forEach(el => el.classList.remove('active'));
+        if (currentBinderId === null) {
+          const first = sbEl.querySelector('.bsb-icon');
+          if (first) first.classList.add('active');
+        } else {
+          const el = document.getElementById('bsbIcon_' + currentBinderId);
+          if (el) el.classList.add('active');
+        }
+        return;
+      }
+      _lastBinderSidebarSig = sig;
 
       let html = '';
       // All Cards icon
@@ -13795,7 +13821,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         html += `<div class="bsb-icon bsb-add" title="New Binder" onclick="openNewBinder()">+</div>`;
       }
 
-      sb.innerHTML = html;
+      sbEl.innerHTML = html;
     }
 
     function bsbDragOver(e, binderId) {
@@ -23316,19 +23342,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         // 400 = columns not yet migrated; silently skip
         if (error) return;
         if (!data) return;
-        // Avatar state — write to the v2 key (sprite engine), push
-        // to AvatarCreator, then regenerate the PFP PNG from the
-        // loaded state and refresh the chips. Otherwise a fresh
-        // browser would keep showing initials (or a stale PFP) until
-        // the user re-opens the editor.
+        // Avatar — write the cloud's committed state to localStorage
+        // (so future editor opens fall back to it when no working
+        // draft exists) and render it to the PFP image. The
+        // renderCommittedToPfp path saves the canvas to localStorage
+        // WITHOUT clobbering whatever the editor currently has —
+        // important when the user has an unsaved working draft.
         if (data.avatar_state) {
           try {
             localStorage.setItem('pathbinder_avatar_v2', JSON.stringify(data.avatar_state));
-            if (window.AvatarCreator && typeof window.AvatarCreator.setState === 'function') {
-              await window.AvatarCreator.setState(data.avatar_state);
-              if (typeof window.AvatarCreator.refreshPfp === 'function') {
-                await window.AvatarCreator.refreshPfp();
-              }
+            if (window.AvatarCreator && typeof window.AvatarCreator.renderCommittedToPfp === 'function') {
+              await window.AvatarCreator.renderCommittedToPfp(data.avatar_state);
               if (typeof updateAuthUI === 'function') {
                 try { updateAuthUI(); } catch(_) {}
               }
@@ -26506,7 +26530,16 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   // assets which makes adding new sprites / unlockables a folder drop
   // instead of a code change.
 
-  const STORAGE_KEY = 'pathbinder_avatar_v2';   // v1 used the procedural schema; new shape ignores stale saves
+  // Two-key state model:
+  //   STORAGE_KEY  — the COMMITTED avatar (the one displayed as PFP /
+  //                  synced to cloud). Only written by "Set as PFP".
+  //   WORKING_KEY  — the in-editor working state, auto-saved on every
+  //                  tweak so the user can come back without losing
+  //                  progress. Never touched by cloud sync.
+  // On first load: prefer WORKING (resume) → fall back to COMMITTED →
+  // fall back to defaults.
+  const STORAGE_KEY = 'pathbinder_avatar_v2';        // committed
+  const WORKING_KEY = 'pathbinder_avatar_working_v1'; // in-editor draft
   const SPRITE_PATH = '/avatar/';
   const W = 182, H = 414;                       // matches sprite dimensions; canvas attrs in HTML match
 
@@ -26576,10 +26609,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     shoes: 1,        shoesColor:  '#FAF7E8'
   };
 
-  function loadState() {
+  function _parseValid(raw) {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { ...DEFAULT };
       const s = JSON.parse(raw);
       // Schema sanity-check: new shape uses body 'm'|'f'. Old procedural
       // saves used 'masc'|'femme' under the same v1 key — those get
@@ -26587,7 +26618,18 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (s && typeof s === 'object' && (s.body === 'm' || s.body === 'f')) {
         return { ...DEFAULT, ...s };
       }
-    } catch (_) {}
+    } catch(_) {}
+    return null;
+  }
+  function loadState() {
+    // Resume from in-editor working draft first, then committed PFP,
+    // then defaults. Working takes priority so a refresh mid-edit
+    // doesn't lose user changes; the committed state still drives
+    // the displayed PFP and cloud sync.
+    const w = localStorage.getItem(WORKING_KEY);
+    if (w) { const p = _parseValid(w); if (p) return p; }
+    const c = localStorage.getItem(STORAGE_KEY);
+    if (c) { const p = _parseValid(c); if (p) return p; }
     return { ...DEFAULT };
   }
 
@@ -27104,10 +27146,22 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     }
   }
 
-  function saveState() {
+  // saveWorking — local-only, fires on every tweak so the user's
+  // in-progress edits survive a refresh. Does NOT sync to cloud and
+  // does NOT update the committed PFP.
+  function saveWorking() {
+    try { localStorage.setItem(WORKING_KEY, JSON.stringify(state)); } catch(_) {}
+  }
+  // commitState — "Set as PFP" path. Promotes the working state to
+  // the committed slot, drops the working draft (so the editor
+  // re-opens to the freshly-committed avatar), and syncs to cloud.
+  function commitState() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(_) {}
+    try { localStorage.removeItem(WORKING_KEY); } catch(_) {}
     try { if (typeof syncUserDataToCloud === 'function') syncUserDataToCloud(); } catch(_) {}
   }
+  // Back-compat shim for any external caller that still references saveState
+  function saveState() { commitState(); }
 
   // ── UI construction ──────────────────────────────────────────────────
   // Sprite categories generate their own buttons from LIMITS. Body and
@@ -27173,9 +27227,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         state[stateKey] = color;
         syncUI();
         render();
-        // No auto-save — changes are kept in-memory until the user
-        // clicks "Set as PFP". Closing or refreshing the editor
-        // discards unsaved tweaks (which is what the user wants).
+        saveWorking();
       });
       c.appendChild(s);
     });
@@ -27200,7 +27252,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       render();
     });
     picker.addEventListener('change', () => {
-      // No-op — changes stay in-memory until Set as PFP is clicked.
+      // Commit on change (when picker closes) — input fires constantly
+      // while user drags, but we only persist on the final value.
+      saveWorking();
     });
     customWrap.appendChild(picker);
     c.appendChild(customWrap);
@@ -27298,7 +27352,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         state[key] = val;
         syncUI();
         render();
-        // No auto-save — Set as PFP is the only commit point.
+        saveWorking();
       });
     });
 
@@ -27340,7 +27394,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         };
         syncUI();
         render();
-        // Randomized result is in-memory until user commits with Set as PFP.
+        saveWorking();
       });
     }
 
@@ -27360,9 +27414,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         const dataUrl = canvas.toDataURL('image/png');
         if (typeof currentUser !== 'undefined' && currentUser && typeof sb !== 'undefined') {
           try {
-            saveState();                                // state JSON to localStorage
+            // commitState() copies working → committed, drops the
+            // working draft, and syncs the committed state to cloud.
+            commitState();
             try { localStorage.setItem('pathbinder_avatar_pfp_v1', dataUrl); } catch(_) {}
-            await syncUserDataToCloud();                // push state to profile
             // Refresh the on-screen PFP chips immediately
             if (typeof updateAuthUI === 'function') updateAuthUI();
             if (typeof showToast === 'function') showToast('PFP updated');
@@ -27404,31 +27459,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return Promise.resolve();
     },
     render: () => render(),
-    // Re-read STORAGE_KEY (committed state) and reset the editor.
-    // Called when the user opens the avatar page so any unsaved
-    // tweaks from the previous session are discarded.
+    // Force-reload from the COMMITTED PFP state and discard any
+    // in-progress working draft. Useful if we want to add a "Reset
+    // to current PFP" button later. Not called from showPage anymore
+    // — opening the editor now resumes from the working draft so
+    // user progress isn't lost.
     reloadFromCommitted: () => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && (parsed.body === 'm' || parsed.body === 'f')) {
-            state = { ...DEFAULT, ...parsed };
-          } else {
-            state = { ...DEFAULT };
-          }
-        } else {
-          state = { ...DEFAULT };
-        }
-        syncUI();
-        return render();
-      } catch(_) { return Promise.resolve(); }
+      try { localStorage.removeItem(WORKING_KEY); } catch(_) {}
+      const c = localStorage.getItem(STORAGE_KEY);
+      const parsed = c ? _parseValid(c) : null;
+      state = parsed || { ...DEFAULT };
+      syncUI();
+      return render();
     },
     getDataURL: () => canvas.toDataURL('image/png'),
-    // Render the current state and persist the result as the PFP PNG
-    // in localStorage. Called from syncUserDataFromCloud so a freshly
-    // signed-in browser regenerates the PFP from cloud state without
-    // requiring the user to re-open the editor.
+    // Render the current in-memory state and persist as the PFP PNG.
     refreshPfp: async () => {
       try {
         await render();
@@ -27436,6 +27481,30 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
         try { localStorage.setItem('pathbinder_avatar_pfp_v1', dataUrl); } catch(_) {}
         return dataUrl;
       } catch(_) { return null; }
+    },
+    // Render an arbitrary state (e.g. the cloud's committed avatar)
+    // to a PNG and save as the PFP, WITHOUT disturbing whatever the
+    // user has in the editor. Used by syncUserDataFromCloud so a
+    // fresh browser regenerates the PFP image without overwriting
+    // any in-progress working draft.
+    renderCommittedToPfp: async (s) => {
+      if (!s || typeof s !== 'object') return null;
+      if (s.body !== 'm' && s.body !== 'f') return null;
+      // Save current in-memory state, render committed, capture, restore.
+      const saved = { ...state };
+      state = { ...DEFAULT, ...s };
+      try {
+        await render();
+        const dataUrl = canvas.toDataURL('image/png');
+        try { localStorage.setItem('pathbinder_avatar_pfp_v1', dataUrl); } catch(_) {}
+        state = saved;
+        // Re-paint the canvas to whatever the editor was showing.
+        await render();
+        return dataUrl;
+      } catch(_) {
+        state = saved;
+        return null;
+      }
     },
     reset: () => {
       try { localStorage.removeItem(STORAGE_KEY); } catch(_) {}
