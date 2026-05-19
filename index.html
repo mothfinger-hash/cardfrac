@@ -2921,7 +2921,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        compact dropdown trigger instead. List/Grid icons stay visible
        on both since they're already tiny. */
     .ac-sort-mobile{display:none}
-    #acSortBtn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.08)}
+    #acSortBtn[aria-expanded="true"], #acOverflowBtn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.08)}
     #acSortBtn[aria-expanded="true"] .pop-chev{transform:rotate(180deg);opacity:1}
     .ac-sort-pop-item{display:flex;align-items:center;width:100%;padding:8px 14px;border:none;background:transparent;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;letter-spacing:.04em;cursor:pointer;text-align:left;transition:background .1s,color .1s}
     .ac-sort-pop-item:hover{background:var(--surface2);color:var(--accent)}
@@ -2930,6 +2930,25 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     @media(max-width:600px){
       .ac-sort-label, .ac-sort-pills{display:none !important}
       .ac-sort-mobile{display:block}
+      /* All Cards view on mobile: hide the original pb-panel-h (which only
+         holds Add Card + ⋯ on All Cards since the Layout dropdown is
+         already JS-hidden there). The mobile copies inside the sort bar
+         take over so search + controls become two clean rows. */
+      .binder-frame.all-cards-wide .pb-panel-h{display:none !important}
+      .binder-frame.all-cards-wide #binderListSearchWrap{border-top:none !important}
+      .binder-frame.all-cards-wide .ac-mob-actions{display:flex !important}
+      /* Visual grouping on mobile:
+           [Sort ▾] [List] [Grid] ........ [Add Card] [⋯]
+         List/Grid drops its desktop "margin-left:auto" (which would push
+         it to the far right) so it tucks in next to Sort. Add Card + ⋯
+         picks up the auto margin to claim the right edge — the gap
+         between the two groups becomes the visual separator. */
+      .binder-frame.all-cards-wide .ac-list-grid-icons{margin-left:0 !important}
+      .binder-frame.all-cards-wide .ac-mob-actions{margin-left:auto}
+      /* Tighten the sort row's gap and padding so all five controls fit
+         cleanly on a 360px viewport. */
+      .binder-frame.all-cards-wide #allCardsSortBar{gap:5px !important;padding:6px 8px !important}
+      .binder-frame.all-cards-wide .ac-mob-actions .pb-panel-link{padding:4px 7px;letter-spacing:.04em}
     }
     /* All-cards 4-col grid view */
     .acg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px}
@@ -5662,8 +5681,8 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
                     aria-haspopup="true" aria-expanded="false" title="More actions"
                     style="border-color:var(--border);color:var(--muted);padding:3px 11px;letter-spacing:.05em;font-size:14px;line-height:1">⋯</button>
             <div id="binderOverflowPop" class="binder-pop binder-pop-right" role="menu" aria-labelledby="binderOverflowBtn">
-              <button id="vendorBulkImportBtn" onclick="openVendorImportModal();closeBinderPops()" class="binder-pop-item" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
-              <button id="shareBinderBtn" onclick="copyShareLink();closeBinderPops()" class="binder-pop-item" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
+              <button id="vendorBulkImportBtn" onclick="openVendorImportModal();closeBinderPops()" class="binder-pop-item js-bulk-import-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
+              <button id="shareBinderBtn" onclick="copyShareLink();closeBinderPops()" class="binder-pop-item js-share-binder-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
             </div>
           </div>
         </div>
@@ -5699,16 +5718,39 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
             <span class="pop-chev" aria-hidden="true" style="margin-left:auto;font-size:9px;opacity:.7">▾</span>
           </button>
           <div id="acSortPop" class="binder-pop" role="menu" aria-labelledby="acSortBtn">
-            <button class="ac-sort-pop-item active" data-sort="name"   onclick="setAllCardsSort('name');closeBinderPops()"   role="menuitem">Name A→Z</button>
-            <button class="ac-sort-pop-item"        data-sort="rarity" onclick="setAllCardsSort('rarity');closeBinderPops()" role="menuitem">Rarity ↓</button>
-            <button class="ac-sort-pop-item"        data-sort="set"    onclick="setAllCardsSort('set');closeBinderPops()"    role="menuitem">Set A→Z</button>
-            <button class="ac-sort-pop-item"        data-sort="value"  onclick="setAllCardsSort('value');closeBinderPops()"  role="menuitem">Value ↓</button>
-            <button class="ac-sort-pop-item"        data-sort="lang"   onclick="setAllCardsSort('lang');closeBinderPops()"   role="menuitem">Language</button>
+            <button class="ac-sort-pop-item active" data-sort="name"                 onclick="setAllCardsSort('name');closeBinderPops()"        role="menuitem">Name A→Z</button>
+            <button class="ac-sort-pop-item"        data-sort="rarity" data-dir="1"  onclick="setAllCardsSort('rarity', 1);closeBinderPops()"   role="menuitem">Rarity ↓</button>
+            <button class="ac-sort-pop-item"        data-sort="rarity" data-dir="-1" onclick="setAllCardsSort('rarity', -1);closeBinderPops()"  role="menuitem">Rarity ↑</button>
+            <button class="ac-sort-pop-item"        data-sort="set"                  onclick="setAllCardsSort('set');closeBinderPops()"         role="menuitem">Set A→Z</button>
+            <button class="ac-sort-pop-item"        data-sort="value"  data-dir="1"  onclick="setAllCardsSort('value', 1);closeBinderPops()"    role="menuitem">Value ↓</button>
+            <button class="ac-sort-pop-item"        data-sort="value"  data-dir="-1" onclick="setAllCardsSort('value', -1);closeBinderPops()"   role="menuitem">Value ↑</button>
+            <button class="ac-sort-pop-item"        data-sort="lang"                 onclick="setAllCardsSort('lang');closeBinderPops()"        role="menuitem">Language</button>
           </div>
         </div>
-        <div style="display:flex;gap:3px;flex-shrink:0;margin-left:auto">
+        <!-- List/Grid view toggle — sits right after the Sort dropdown
+             on mobile (clustered as the "sort/view" group), and is the
+             only thing on the right on desktop (Add Card/⋯ live in
+             pb-panel-h on desktop). -->
+        <div class="ac-list-grid-icons" style="display:flex;gap:3px;flex-shrink:0;margin-left:auto">
           <button id="acViewBtnList" class="allcards-sort-btn active" onclick="setAllCardsView('list')"   title="List view"  style="padding:4px 8px;font-size:.7rem">☰</button>
           <button id="acViewBtnGrid" class="allcards-sort-btn"        onclick="setAllCardsView('acgrid')" title="Grid view"  style="padding:4px 8px;font-size:.7rem">⊞</button>
+        </div>
+        <!-- Mobile-only Add Card + ⋯ — visually separate group pushed to
+             the right edge so the row reads as two clusters:
+             [Sort ▾] [List] [Grid] ........ [Add Card] [⋯]. Hidden on
+             desktop; the originals in .pb-panel-h take over there. -->
+        <div class="ac-mob-actions" style="display:none;align-items:center;gap:4px;flex-shrink:0">
+          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
+          <div style="position:relative">
+            <button id="acOverflowBtn" class="pb-panel-link"
+                    onclick="toggleAcOverflowPop(event)"
+                    aria-haspopup="true" aria-expanded="false" title="More actions"
+                    style="border-color:var(--border);color:var(--muted);padding:3px 9px;letter-spacing:.05em;font-size:14px;line-height:1">⋯</button>
+            <div id="acOverflowPop" class="binder-pop binder-pop-right" role="menu" aria-labelledby="acOverflowBtn">
+              <button class="js-bulk-import-btn binder-pop-item" onclick="openVendorImportModal();closeBinderPops()" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
+              <button class="js-share-binder-btn binder-pop-item" onclick="copyShareLink();closeBinderPops()" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -13594,8 +13636,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (e) e.stopPropagation();
       const pop = document.getElementById('binderViewPop');
       const btn = document.getElementById('binderViewBtn');
-      const other = document.getElementById('binderOverflowPop');
-      if (other) other.classList.remove('open');
+      ['binderOverflowPop','acSortPop','acOverflowPop'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.classList.remove('open');
+      });
       if (!pop) return;
       const willOpen = !pop.classList.contains('open');
       pop.classList.toggle('open', willOpen);
@@ -13605,19 +13648,20 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (e) e.stopPropagation();
       const pop = document.getElementById('binderOverflowPop');
       const btn = document.getElementById('binderOverflowBtn');
-      const other = document.getElementById('binderViewPop');
-      if (other) other.classList.remove('open');
+      ['binderViewPop','acSortPop','acOverflowPop'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.classList.remove('open');
+      });
       if (!pop) return;
       const willOpen = !pop.classList.contains('open');
       pop.classList.toggle('open', willOpen);
       if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
     }
     function closeBinderPops(){
-      ['binderViewPop','binderOverflowPop','acSortPop'].forEach(id => {
+      ['binderViewPop','binderOverflowPop','acSortPop','acOverflowPop'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('open');
       });
-      ['binderViewBtn','binderOverflowBtn','acSortBtn'].forEach(id => {
+      ['binderViewBtn','binderOverflowBtn','acSortBtn','acOverflowBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.setAttribute('aria-expanded','false');
       });
@@ -13627,9 +13671,25 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const t = e.target;
       if (t.closest && (t.closest('#binderViewPop')   || t.closest('#binderViewBtn')
                      || t.closest('#binderOverflowPop') || t.closest('#binderOverflowBtn')
-                     || t.closest('#acSortPop')         || t.closest('#acSortBtn'))) return;
+                     || t.closest('#acSortPop')         || t.closest('#acSortBtn')
+                     || t.closest('#acOverflowPop')     || t.closest('#acOverflowBtn'))) return;
       closeBinderPops();
     });
+
+    // Mobile All-Cards overflow popover (duplicate of binderOverflowPop,
+    // lives inside the sort bar so the controls strip is one tight row).
+    function toggleAcOverflowPop(e){
+      if (e) e.stopPropagation();
+      const pop = document.getElementById('acOverflowPop');
+      const btn = document.getElementById('acOverflowBtn');
+      ['binderViewPop','binderOverflowPop','acSortPop'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.classList.remove('open');
+      });
+      if (!pop) return;
+      const willOpen = !pop.classList.contains('open');
+      pop.classList.toggle('open', willOpen);
+      if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    }
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBinderPops(); });
 
     // ===== ALL CARDS SORT =====
@@ -13657,8 +13717,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       return -1;
     };
 
-    function setAllCardsSort(key) {
-      if (allCardsSort === key) {
+    function setAllCardsSort(key, forceDir) {
+      // forceDir lets callers (e.g. the mobile popover's ↓/↑ rows) pick
+      // direction explicitly. Without it, clicking the same sort key
+      // again toggles direction — the desktop pill-row behaviour.
+      if (typeof forceDir === 'number') {
+        allCardsSort = key;
+        allCardsSortDir[key] = forceDir;
+      } else if (allCardsSort === key) {
         allCardsSortDir[key] = allCardsSortDir[key] * -1; // toggle direction
       } else {
         allCardsSort = key;
@@ -13676,8 +13742,19 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Mobile popover: sync trigger label + item active state
       const mLbl = document.getElementById('acSortLbl');
       if (mLbl) mLbl.textContent = currentLabel;
+      // Active state matches (sort key, direction). For items without an
+      // explicit data-dir (Name / Set / Language), the row is active any
+      // time its key is the current sort. For Rarity / Value, only the
+      // row whose data-dir matches the current direction lights up.
       document.querySelectorAll('.ac-sort-pop-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.sort === key);
+        const elKey = el.dataset.sort;
+        const elDir = el.dataset.dir;
+        if (elKey !== key) { el.classList.remove('active'); return; }
+        if (elDir === undefined || elDir === '') {
+          el.classList.add('active');
+        } else {
+          el.classList.toggle('active', parseInt(elDir, 10) === allCardsSortDir[key]);
+        }
       });
       binderPage = 0;
       renderBinder();
@@ -13689,7 +13766,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const pop = document.getElementById('acSortPop');
       const btn = document.getElementById('acSortBtn');
       // Close the other popovers if any are open
-      ['binderViewPop','binderOverflowPop'].forEach(id => {
+      ['binderViewPop','binderOverflowPop','acOverflowPop'].forEach(id => {
         const el = document.getElementById(id); if (el) el.classList.remove('open');
       });
       if (!pop) return;
@@ -14483,10 +14560,12 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       // Show/hide list search bar and vendor bulk import button
       const searchWrap = document.getElementById('binderListSearchWrap');
       if (searchWrap) searchWrap.style.display = (effectiveView === 'list' || isAllCards) ? 'block' : 'none';
-      const bulkBtn = document.getElementById('vendorBulkImportBtn');
-      if (bulkBtn) bulkBtn.style.display = hasBulkImport() ? 'block' : 'none';
-      const shareBtn = document.getElementById('shareBinderBtn');
-      if (shareBtn) shareBtn.style.display = currentUser ? 'block' : 'none';
+      // Toggle visibility for both the desktop pb-panel-h popover items
+      // AND the mobile All-Cards popover duplicates (same classes, same logic).
+      const bulkDisp  = hasBulkImport() ? 'block' : 'none';
+      const shareDisp = currentUser     ? 'block' : 'none';
+      document.querySelectorAll('.js-bulk-import-btn').forEach(b => b.style.display = bulkDisp);
+      document.querySelectorAll('.js-share-binder-btn').forEach(b => b.style.display = shareDisp);
 
       // Render binder tabs (Vendor+ multi-binder)
       renderBinderTabs();
@@ -24281,12 +24360,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       display: none !important;
     }
 
-    /* ─── BINDER CONTROLS — MOBILE WRAP ──────────────────────────────
-       In specific binders the Share/Import buttons appear alongside
-       Trade Analyzer + Add Card, plus the 4 view-toggle buttons. Eight
-       buttons in one flex row overflow a 360px mobile viewport, which
-       triggers horizontal page scroll and clips the header. Allowing
-       the row and the actions group to wrap fixes both. */
+    /* ─── BINDER CONTROLS — MOBILE ──────────────────────────────
+       The legacy version of this row used to hold 8 buttons (Share +
+       Import + Trade Analyzer + Add Card + four view-toggle pills), so
+       it had to wrap to avoid overflowing a 360px viewport. The current
+       version only has three: the Layout dropdown trigger, Add Card,
+       and the ⋯ overflow menu. We force them onto a single line on the
+       binder page, hide the "Layout:" prefix to save horizontal space,
+       and tighten paddings so the row fits cleanly even on iPhone SE. */
     @media (max-width: 600px) {
       .pb-panel-h {
         flex-wrap: wrap;
@@ -24295,6 +24376,29 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       .pb-panel-actions {
         flex-wrap: wrap;
         row-gap: 6px;
+      }
+      /* Binder page: force single line, drop the "Layout:" word, trim padding */
+      body.on-binder .pb-panel-h {
+        flex-wrap: nowrap !important;
+        padding: 6px 10px;
+      }
+      body.on-binder .pb-panel-actions {
+        flex-wrap: nowrap !important;
+        gap: 6px;
+      }
+      body.on-binder #binderViewBtn {
+        padding: 5px 9px;
+        gap: 6px;
+      }
+      body.on-binder #binderViewBtn > span:first-of-type {
+        display: none; /* "Layout:" prefix — desktop keeps it, mobile drops it */
+      }
+      body.on-binder .pb-panel-link {
+        padding: 4px 7px;
+        letter-spacing: .05em;
+      }
+      body.on-binder #binderOverflowBtn {
+        padding: 3px 9px;
       }
       /* Belt-and-suspenders: prevent any other horizontal page scroll
          while in the binder page on mobile. */
