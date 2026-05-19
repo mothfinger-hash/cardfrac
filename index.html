@@ -85,8 +85,12 @@
     .nav-tab .badge-count{background:var(--red);color:#fff;border-radius:0;width:15px;height:15px;display:flex;align-items:center;justify-content:center;font-size:.48rem;font-weight:700;border:1px solid var(--border);flex-shrink:0;margin-left:auto}
     .nav-tab[data-page="admin"]{display:none}
     .nav-tab[data-page="admin"].admin-visible{display:flex;align-items:center}
-    .nav-tab-ico{width:15px;height:15px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+    .nav-tab-ico{width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
     .nav-tab-ico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    /* Branded multicolor icons (copper + teal) live as separate files
+       under /icons. Use object-fit:contain so the slightly-wider viewBox
+       (14.95×13.5) centers inside the square container without crop. */
+    .nav-tab-ico img{width:18px;height:18px;object-fit:contain;display:block}
     .nav-tab-lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
     nav.sb-collapsed .nav-tab{justify-content:center;padding:9px 0}
     nav.sb-collapsed .nav-tab-lbl{display:none}
@@ -586,6 +590,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch;box-shadow:0 -3px 0 var(--shadow)}
     .mobile-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.42rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;transition:color .15s;padding:0 1px;position:relative;}
     .mobile-nav-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .mobile-nav-btn img{width:22px;height:22px;object-fit:contain;display:block}
     .mobile-nav-btn.active{color:var(--accent)}
     .mobile-nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700}
     @media(max-width:900px){.mobile-nav{display:flex}.page{padding-bottom:72px}#mobileUserChip{display:flex!important}}
@@ -2507,6 +2512,48 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-grid-2x2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
     .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
     @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
+
+    /* ── DESKTOP: binder pages fit vertically without scroll ──
+       On wide viewports the binder grid should feel like one physical
+       page — all 9 / 4 / 1 cards visible at once. We constrain the
+       implicit row height by viewport, and let the card image derive
+       its width from that height (aspect ratio 245:342). On mobile the
+       original behaviour is preserved (cards size by column width). */
+    @media (min-width: 901px) {
+      body.on-binder #collectionContent .binder-grid-3x3 {
+        grid-auto-rows: calc((100svh - 260px - 20px) / 3);
+      }
+      body.on-binder #collectionContent .binder-grid-2x2 {
+        grid-auto-rows: calc((100svh - 260px - 16px) / 2);
+      }
+      body.on-binder #collectionContent .binder-grid-1x1 {
+        grid-auto-rows: calc(100svh - 260px);
+      }
+      /* Card needs to allow shrinking + clip overflow so info doesn't push
+         the image past its row's allotted height. */
+      body.on-binder #collectionContent .binder-card {
+        min-height: 0;
+        overflow: hidden;
+      }
+      /* Image wrap derives width from height via aspect-ratio (already set
+         at 245/342 elsewhere). flex:1 1 0 + min-height:0 lets it scale
+         within the row; margin:0 auto centers the card image in the wider
+         grid column so wide screens don't leave the card pinned to the left. */
+      body.on-binder #collectionContent .binder-card-img-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        height: auto !important;
+        width: auto !important;
+        max-width: 100%;
+        margin: 0 auto;
+      }
+      /* Info row sits flush below the image with a tight max-height so it
+         never steals more than its fair share. */
+      body.on-binder #collectionContent .binder-card-info {
+        flex-shrink: 0;
+        padding: 4px 6px 2px;
+      }
+    }
     /* ── BINDER CARD ── */
     .binder-card{background:var(--surface);border:1px solid var(--border);cursor:grab;transition:border-color .15s,transform .1s,opacity .15s;border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
     .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
@@ -2869,6 +2916,21 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .allcards-sort-btn{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.56rem;letter-spacing:.06em;padding:4px 9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;border-radius:2px;transition:all .12s;white-space:nowrap}
     .allcards-sort-btn:hover{border-color:var(--accent);color:var(--accent)}
     .allcards-sort-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.07)}
+    /* All-Cards sort bar — responsive swap. Desktop shows the full pill
+       row + "SORT BY" label; mobile (<600px) hides those and shows the
+       compact dropdown trigger instead. List/Grid icons stay visible
+       on both since they're already tiny. */
+    .ac-sort-mobile{display:none}
+    #acSortBtn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.08)}
+    #acSortBtn[aria-expanded="true"] .pop-chev{transform:rotate(180deg);opacity:1}
+    .ac-sort-pop-item{display:flex;align-items:center;width:100%;padding:8px 14px;border:none;background:transparent;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;letter-spacing:.04em;cursor:pointer;text-align:left;transition:background .1s,color .1s}
+    .ac-sort-pop-item:hover{background:var(--surface2);color:var(--accent)}
+    .ac-sort-pop-item.active{color:var(--accent);background:rgba(0,229,255,.06)}
+    .ac-sort-pop-item.active::after{content:'●';margin-left:auto;font-size:.6rem;color:var(--accent)}
+    @media(max-width:600px){
+      .ac-sort-label, .ac-sort-pills{display:none !important}
+      .ac-sort-mobile{display:block}
+    }
     /* All-cards 4-col grid view */
     .acg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px}
     .acg-card{position:relative;cursor:pointer;border:1px solid var(--border);background:var(--surface);overflow:hidden;border-radius:2px;transition:border-color .12s,transform .1s;display:flex;flex-direction:column}
@@ -4259,33 +4321,33 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       <div class="nav-group-label">Collection</div>
       <div class="nav-tabs">
         <button class="nav-tab active" data-page="collection" data-label="My Binder" onclick="showPage('collection');setMobileNav('collection')">
-          <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+          <span class="nav-tab-ico"><img src="icons/my_binder.svg" alt="" aria-hidden="true"></span>
           <span class="nav-tab-lbl">My Binder</span>
         </button>
         <button class="nav-tab" data-page="addCard" data-label="Add Card" onclick="showPage('addCard');setMobileNav('addCard')">
-          <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+          <span class="nav-tab-ico"><img src="icons/add_card.svg" alt="" aria-hidden="true"></span>
           <span class="nav-tab-lbl">Add Card</span>
         </button>
         <button class="nav-tab" data-page="sets" data-label="Sets" onclick="showPage('sets');setMobileNav('sets')">
-          <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span>
+          <span class="nav-tab-ico"><img src="icons/sets.svg" alt="" aria-hidden="true"></span>
           <span class="nav-tab-lbl">Sets</span>
         </button>
       </div>
       <div class="nav-group-label">Market</div>
       <div class="nav-tabs">
         <button class="nav-tab" data-page="browse" data-label="Marketplace" onclick="showPage('browse');setMobileNav('browse')">
-          <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+          <span class="nav-tab-ico"><img src="icons/marketplace.svg" alt="" aria-hidden="true"></span>
           <span class="nav-tab-lbl">Marketplace</span>
         </button>
         <button class="nav-tab" data-page="fairTrade" data-label="Trade Analyzer" onclick="showPage('fairTrade');setMobileNav('fairTrade')">
-          <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+          <span class="nav-tab-ico"><img src="icons/trade_analyzer.svg" alt="" aria-hidden="true"></span>
           <span class="nav-tab-lbl">Trade Analyzer <span class="beta-badge" style="font-size:.42rem;padding:1px 5px;margin-left:4px">BETA</span></span>
         </button>
       </div>
       <div class="nav-group-label">Account</div>
       <div class="nav-tabs">
         <button class="nav-tab" data-page="account" data-label="Dashboard" onclick="showPage('account');setMobileNav('account')">
-          <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="9"/><rect x="14" y="14" width="7" height="9"/></svg></span>
+          <span class="nav-tab-ico"><img src="icons/dashboard.svg" alt="" aria-hidden="true"></span>
           <span class="nav-tab-lbl">Dashboard</span>
           <span class="badge-count" id="tradeNotification" style="display:none;">0</span>
         </button>
@@ -5613,15 +5675,36 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           style="width:100%;padding:9px 14px;background:transparent;border:none;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;box-sizing:border-box;outline:none"
           onfocus="this.style.background='var(--surface2)'" onblur="this.style.background='transparent'">
       </div>
-      <!-- Sort bar — All Cards only. Never shown inside individual binders. -->
+      <!-- Sort bar — All Cards only. Never shown inside individual binders.
+           Desktop: full pill row (Name / Rarity / Set / Value / Language).
+           Mobile (<600px): pills collapse into a single popover trigger
+           with the current sort label, matching the layout-toggle pattern. -->
       <div id="allCardsSortBar" style="display:none;border-top:1px solid var(--border);padding:6px 12px;display:none;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.08em;white-space:nowrap">SORT BY</span>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">
+        <span class="ac-sort-label" style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.08em;white-space:nowrap">SORT BY</span>
+        <!-- Desktop pill row -->
+        <div class="ac-sort-pills" style="display:flex;gap:4px;flex-wrap:wrap;flex:1">
           <button class="allcards-sort-btn active" id="sortBtn-name"    onclick="setAllCardsSort('name')"   >Name A→Z</button>
           <button class="allcards-sort-btn"         id="sortBtn-rarity"  onclick="setAllCardsSort('rarity')" >Rarity ↓</button>
           <button class="allcards-sort-btn"         id="sortBtn-set"     onclick="setAllCardsSort('set')"    >Set</button>
           <button class="allcards-sort-btn"         id="sortBtn-value"   onclick="setAllCardsSort('value')"  >Value ↓</button>
           <button class="allcards-sort-btn"         id="sortBtn-lang"    onclick="setAllCardsSort('lang')"   >Language</button>
+        </div>
+        <!-- Mobile compact trigger + popover -->
+        <div class="ac-sort-mobile" style="position:relative;flex:1;min-width:0">
+          <button id="acSortBtn" class="allcards-sort-btn" onclick="toggleAcSortPop(event)"
+                  aria-haspopup="true" aria-expanded="false" title="Change sort"
+                  style="display:flex;align-items:center;gap:8px;font-size:.7rem;padding:5px 12px;width:100%">
+            <span style="color:var(--muted);font-size:.55rem;letter-spacing:.1em;flex-shrink:0">SORT:</span>
+            <span id="acSortLbl" style="color:var(--accent)">Name A→Z</span>
+            <span class="pop-chev" aria-hidden="true" style="margin-left:auto;font-size:9px;opacity:.7">▾</span>
+          </button>
+          <div id="acSortPop" class="binder-pop" role="menu" aria-labelledby="acSortBtn">
+            <button class="ac-sort-pop-item active" data-sort="name"   onclick="setAllCardsSort('name');closeBinderPops()"   role="menuitem">Name A→Z</button>
+            <button class="ac-sort-pop-item"        data-sort="rarity" onclick="setAllCardsSort('rarity');closeBinderPops()" role="menuitem">Rarity ↓</button>
+            <button class="ac-sort-pop-item"        data-sort="set"    onclick="setAllCardsSort('set');closeBinderPops()"    role="menuitem">Set A→Z</button>
+            <button class="ac-sort-pop-item"        data-sort="value"  onclick="setAllCardsSort('value');closeBinderPops()"  role="menuitem">Value ↓</button>
+            <button class="ac-sort-pop-item"        data-sort="lang"   onclick="setAllCardsSort('lang');closeBinderPops()"   role="menuitem">Language</button>
+          </div>
         </div>
         <div style="display:flex;gap:3px;flex-shrink:0;margin-left:auto">
           <button id="acViewBtnList" class="allcards-sort-btn active" onclick="setAllCardsView('list')"   title="List view"  style="padding:4px 8px;font-size:.7rem">☰</button>
@@ -13530,11 +13613,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
     }
     function closeBinderPops(){
-      ['binderViewPop','binderOverflowPop'].forEach(id => {
+      ['binderViewPop','binderOverflowPop','acSortPop'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('open');
       });
-      ['binderViewBtn','binderOverflowBtn'].forEach(id => {
+      ['binderViewBtn','binderOverflowBtn','acSortBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.setAttribute('aria-expanded','false');
       });
@@ -13542,8 +13625,9 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
     // Dismiss popovers on outside click / Escape
     document.addEventListener('click', (e) => {
       const t = e.target;
-      if (t.closest && (t.closest('#binderViewPop') || t.closest('#binderViewBtn')
-                     || t.closest('#binderOverflowPop') || t.closest('#binderOverflowBtn'))) return;
+      if (t.closest && (t.closest('#binderViewPop')   || t.closest('#binderViewBtn')
+                     || t.closest('#binderOverflowPop') || t.closest('#binderOverflowBtn')
+                     || t.closest('#acSortPop')         || t.closest('#acSortBtn'))) return;
       closeBinderPops();
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBinderPops(); });
@@ -13583,13 +13667,35 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const dirSymbols = { name: ['Name A→Z','Name Z→A'], rarity: ['Rarity ↓','Rarity ↑'], set: ['Set A→Z','Set Z→A'], value: ['Value ↓','Value ↑'], lang: ['Language','Language'] };
       document.querySelectorAll('.allcards-sort-btn').forEach(b => b.classList.remove('active'));
       const btn = document.getElementById('sortBtn-' + key);
+      const syms = dirSymbols[key] || [key, key];
+      const currentLabel = allCardsSortDir[key] === 1 ? syms[0] : syms[1];
       if (btn) {
-        const syms = dirSymbols[key] || [key, key];
-        btn.textContent = allCardsSortDir[key] === 1 ? syms[0] : syms[1];
+        btn.textContent = currentLabel;
         btn.classList.add('active');
       }
+      // Mobile popover: sync trigger label + item active state
+      const mLbl = document.getElementById('acSortLbl');
+      if (mLbl) mLbl.textContent = currentLabel;
+      document.querySelectorAll('.ac-sort-pop-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.sort === key);
+      });
       binderPage = 0;
       renderBinder();
+    }
+
+    // Mobile sort popover (All-Cards view only)
+    function toggleAcSortPop(e){
+      if (e) e.stopPropagation();
+      const pop = document.getElementById('acSortPop');
+      const btn = document.getElementById('acSortBtn');
+      // Close the other popovers if any are open
+      ['binderViewPop','binderOverflowPop'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.classList.remove('open');
+      });
+      if (!pop) return;
+      const willOpen = !pop.classList.contains('open');
+      pop.classList.toggle('open', willOpen);
+      if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
     }
 
     function setAllCardsView(v) {
@@ -24219,27 +24325,27 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 
   <div class="mobile-nav" id="mobileNav">
     <button class="mobile-nav-btn active" id="mobileNavCollection" onclick="showPage('collection'); setMobileNav('collection')">
-      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <img src="icons/my_binder.svg" alt="" aria-hidden="true">
       Binder
     </button>
     <button class="mobile-nav-btn" id="mobileNavAddCard" onclick="showPage('addCard'); setMobileNav('addCard')">
-      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <img src="icons/add_card.svg" alt="" aria-hidden="true">
       Add Card
     </button>
     <button class="mobile-nav-btn" id="mobileNavSets" onclick="showPage('sets'); setMobileNav('sets')">
-      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <img src="icons/sets.svg" alt="" aria-hidden="true">
       Sets
     </button>
     <button class="mobile-nav-btn" id="mobileNavBrowse" onclick="showPage('browse'); setMobileNav('browse')">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <img src="icons/marketplace.svg" alt="" aria-hidden="true">
       Market
     </button>
     <button class="mobile-nav-btn" id="mobileNavFairTrade" onclick="showPage('fairTrade'); setMobileNav('fairTrade')">
-      <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      <img src="icons/trade_analyzer.svg" alt="" aria-hidden="true">
       Trade
     </button>
     <button class="mobile-nav-btn" id="mobileNavAccount" onclick="showPage('account'); setMobileNav('account')">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <img src="icons/dashboard.svg" alt="" aria-hidden="true">
       Account
       <span class="mobile-nav-badge" id="mobileTradeNotification" style="display:none">0</span>
     </button>

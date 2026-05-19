@@ -1,5 +1,8 @@
 // PathBinder Service Worker
-const CACHE = 'pathbinder-v206';
+// v208 — HTML is never cached. Static assets (icons/fonts/offline page)
+// keep cache-first behavior. Bumped from v207 so the new branded nav
+// icons are fetched fresh instead of served from the old cache.
+const CACHE = 'pathbinder-v208';
 
 const PRECACHE = [
   '/offline.html',
@@ -38,18 +41,13 @@ self.addEventListener('fetch', e => {
     return; // Let browser handle normally
   }
 
-  // For navigation requests (page loads): network first, fall back to cache, then offline page
+  // For navigation requests (page loads): network ONLY. Never cache the
+  // HTML and never serve stale HTML from cache — go straight to network.
+  // If the network is completely down, fall back to /offline.html. This
+  // is the dev-friendly mode: a deploy is visible on the very next load.
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request)
-        .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE).then(cache => cache.put(e.request, clone));
-          return res;
-        })
-        .catch(() =>
-          caches.match(e.request).then(cached => cached || caches.match('/offline.html'))
-        )
+      fetch(e.request).catch(() => caches.match('/offline.html'))
     );
     return;
   }
