@@ -1,8 +1,9 @@
 // PathBinder Service Worker
-// v208 — HTML is never cached. Static assets (icons/fonts/offline page)
-// keep cache-first behavior. Bumped from v207 so the new branded nav
-// icons are fetched fresh instead of served from the old cache.
-const CACHE = 'pathbinder-v208';
+// v209 — HTML is never cached. Bumped from v208 to flush any cached
+// stylesheets after the cyan→seafoam palette swap (--accent / --teal
+// + ~480 hex / rgba literals). Static assets (icons/fonts/offline page)
+// keep cache-first behavior.
+const CACHE = 'pathbinder-v209';
 
 const PRECACHE = [
   '/offline.html',
