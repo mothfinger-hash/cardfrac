@@ -2955,9 +2955,28 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          between the two groups becomes the visual separator. */
       .binder-frame.all-cards-wide .ac-list-grid-icons{margin-left:0 !important}
       .binder-frame.all-cards-wide .ac-mob-actions{margin-left:auto}
-      /* Tighten the sort row's gap and padding so all five controls fit
-         cleanly on a 360px viewport. */
-      .binder-frame.all-cards-wide #allCardsSortBar{gap:5px !important;padding:6px 8px !important}
+      /* Force the controls row to stay on one line on mobile. */
+      .binder-frame.all-cards-wide #allCardsSortBar{
+        flex-wrap:nowrap !important;
+        gap:5px !important;
+        padding:6px 8px !important;
+      }
+      /* Pin the sort trigger to a fixed width so longer labels (Name A→Z,
+         Rarity ↑, Language…) FILL the box instead of stretching it.
+         The label inside flex-grows to take available room and
+         ellipsizes if it would otherwise overflow. */
+      .binder-frame.all-cards-wide #acSortBtn{
+        width:130px;
+        max-width:130px;
+        flex-shrink:0;
+      }
+      .binder-frame.all-cards-wide #acSortLbl{
+        flex:1;
+        min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
       /* Unify heights and corners: Sort trigger, Add Card and ⋯ now all
          share a 28px-ish min-height, 2px border-radius and matching
          padding/font so they read as a row of pills, not a row of mixed
