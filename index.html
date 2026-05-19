@@ -2961,22 +2961,27 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         gap:5px !important;
         padding:6px 8px !important;
       }
-      /* Pin the sort trigger to a fixed width so longer labels (Name A→Z,
-         Rarity ↑, Language…) FILL the box instead of stretching it.
-         The label inside flex-grows to take available room and
-         ellipsizes if it would otherwise overflow. */
+      /* Sort trigger: content-width with a 140px safety cap. The label
+         takes its natural width — no flex:1, no margin auto on the
+         chevron — so there's no empty gap between "Language" / "Rarity ↑"
+         and the chevron, and short labels like "Sort" produce a small
+         pill instead of a half-empty wide box. Ellipsis only kicks in
+         if a label ever exceeds 140px. */
       .binder-frame.all-cards-wide #acSortBtn{
-        width:130px;
-        max-width:130px;
+        max-width:140px;
         flex-shrink:0;
+        overflow:hidden;
       }
       .binder-frame.all-cards-wide #acSortLbl{
-        flex:1;
         min-width:0;
         overflow:hidden;
         text-overflow:ellipsis;
         white-space:nowrap;
       }
+      /* Sort trigger's chevron should sit right after the label (no
+         margin-left:auto). The inline style still sets it on desktop,
+         but on mobile inside an All-Cards binder-frame we override. */
+      .binder-frame.all-cards-wide #acSortBtn .pop-chev{margin-left:0 !important}
       /* Unify heights and corners: Sort trigger, Add Card and ⋯ now all
          share a 28px-ish min-height, 2px border-radius and matching
          padding/font so they read as a row of pills, not a row of mixed
@@ -2992,13 +2997,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         box-sizing:border-box;
       }
       .binder-frame.all-cards-wide .ac-mob-actions > .pb-panel-link{
-        padding:4px 11px !important;
+        padding:4px 9px !important;
         font-size:.7rem !important;
         letter-spacing:.04em !important;
         text-transform:none !important;
       }
       .binder-frame.all-cards-wide .ac-mob-actions #acOverflowBtn{
-        padding:0 11px !important;
+        padding:0 8px !important;
         font-size:15px !important;
       }
     }
