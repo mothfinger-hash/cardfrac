@@ -2927,14 +2927,16 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-sort-pop-item:hover{background:var(--surface2);color:var(--accent)}
     .ac-sort-pop-item.active{color:var(--accent);background:rgba(0,229,255,.06)}
     .ac-sort-pop-item.active::after{content:'●';margin-left:auto;font-size:.6rem;color:var(--accent)}
-    /* Multi-arrow row (Rarity / Value): non-clickable row with a label
-       on the left and two small arrow buttons on the right. Each arrow
-       is its own click target; the row itself isn't interactive. */
-    .ac-sort-pop-row{display:flex;align-items:center;width:100%;padding:5px 14px;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;letter-spacing:.04em;gap:6px}
-    .ac-sort-pop-label{flex:1}
-    .ac-sort-pop-arrow{padding:2px 9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.85rem;cursor:pointer;border-radius:2px;transition:all .12s;line-height:1}
-    .ac-sort-pop-arrow:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.06)}
-    .ac-sort-pop-arrow.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.14)}
+    /* Rarity / Value rows: same .ac-sort-pop-item as the other rows,
+       but with two non-interactive arrow glyphs after the label to
+       indicate both directions are available. The row is the click
+       target — toggling re-uses the same-key direction-toggle behaviour
+       that the desktop pill row uses. Suppress the trailing ● dot here
+       since the highlighted arrow already conveys the active state. */
+    .ac-sort-pop-toggle.active::after{content:none !important}
+    .ac-sort-arrows{margin-left:auto;display:inline-flex;gap:2px;align-items:center;font-size:.85rem;line-height:1;color:var(--muted);pointer-events:none}
+    .ac-sort-arrow{padding:0 2px;transition:color .12s}
+    .ac-sort-pop-toggle.active .ac-sort-arrow.arrow-active{color:var(--accent)}
     @media(max-width:600px){
       .ac-sort-label, .ac-sort-pills{display:none !important}
       .ac-sort-mobile{display:block}
@@ -2956,7 +2958,30 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       /* Tighten the sort row's gap and padding so all five controls fit
          cleanly on a 360px viewport. */
       .binder-frame.all-cards-wide #allCardsSortBar{gap:5px !important;padding:6px 8px !important}
-      .binder-frame.all-cards-wide .ac-mob-actions .pb-panel-link{padding:4px 7px;letter-spacing:.04em}
+      /* Unify heights and corners: Sort trigger, Add Card and ⋯ now all
+         share a 28px-ish min-height, 2px border-radius and matching
+         padding/font so they read as a row of pills, not a row of mixed
+         sizes. */
+      .binder-frame.all-cards-wide #acSortBtn,
+      .binder-frame.all-cards-wide .ac-mob-actions > .pb-panel-link,
+      .binder-frame.all-cards-wide .ac-mob-actions #acOverflowBtn{
+        min-height:26px;
+        border-radius:2px;
+        display:inline-flex;
+        align-items:center;
+        line-height:1;
+        box-sizing:border-box;
+      }
+      .binder-frame.all-cards-wide .ac-mob-actions > .pb-panel-link{
+        padding:4px 11px !important;
+        font-size:.7rem !important;
+        letter-spacing:.04em !important;
+        text-transform:none !important;
+      }
+      .binder-frame.all-cards-wide .ac-mob-actions #acOverflowBtn{
+        padding:0 11px !important;
+        font-size:15px !important;
+      }
     }
     /* All-cards 4-col grid view */
     .acg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px}
@@ -5716,11 +5741,14 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           <button class="allcards-sort-btn"         id="sortBtn-value"   onclick="setAllCardsSort('value')"  >Value ↓</button>
           <button class="allcards-sort-btn"         id="sortBtn-lang"    onclick="setAllCardsSort('lang')"   >Language</button>
         </div>
-        <!-- Mobile compact trigger + popover -->
-        <div class="ac-sort-mobile" style="position:relative;flex:1;min-width:0">
+        <!-- Mobile compact trigger + popover. The wrapper is content-sized
+             (flex:0 0 auto) so the trigger never eats more horizontal
+             space than its label needs — leaves room for the other four
+             controls on the same row. -->
+        <div class="ac-sort-mobile" style="position:relative;flex:0 0 auto;min-width:0">
           <button id="acSortBtn" class="allcards-sort-btn" onclick="toggleAcSortPop(event)"
                   aria-haspopup="true" aria-expanded="false" title="Change sort"
-                  style="display:flex;align-items:center;gap:8px;font-size:.7rem;padding:5px 12px;width:100%">
+                  style="display:inline-flex;align-items:center;gap:8px;font-size:.7rem;padding:5px 12px">
             <!-- Label starts as the word "Sort" (placeholder). The first
                  time a user picks any option from the popover, the JS
                  swaps this for the chosen sort method (e.g. "Rarity ↓"). -->
@@ -5729,21 +5757,26 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
           </button>
           <div id="acSortPop" class="binder-pop" role="menu" aria-labelledby="acSortBtn">
             <button class="ac-sort-pop-item active" data-sort="name" onclick="setAllCardsSort('name');closeBinderPops()" role="menuitem">Name A→Z</button>
-            <!-- Rarity row: one option, two clickable arrows.
-                 Each arrow is independent — picking ↓ or ↑ sets the
-                 direction directly and the trigger label updates to
-                 reflect it (e.g. "Rarity ↓" / "Rarity ↑"). -->
-            <div class="ac-sort-pop-row" data-sort="rarity">
-              <span class="ac-sort-pop-label">Rarity</span>
-              <button class="ac-sort-pop-arrow" data-sort="rarity" data-dir="1"  onclick="setAllCardsSort('rarity', 1);closeBinderPops()"  title="High to Low" aria-label="Sort by rarity, high to low">↓</button>
-              <button class="ac-sort-pop-arrow" data-sort="rarity" data-dir="-1" onclick="setAllCardsSort('rarity', -1);closeBinderPops()" title="Low to High" aria-label="Sort by rarity, low to high">↑</button>
-            </div>
+            <!-- Rarity / Value: single clickable row with two static arrow
+                 glyphs to indicate both directions are available. Clicking
+                 the row sets that sort key; clicking it again toggles
+                 direction. The current-direction arrow stays cyan so the
+                 user can see which way it's sorting at a glance. -->
+            <button class="ac-sort-pop-item ac-sort-pop-toggle" data-sort="rarity" onclick="setAllCardsSort('rarity');closeBinderPops()" role="menuitem">
+              <span>Rarity</span>
+              <span class="ac-sort-arrows" aria-hidden="true">
+                <span class="ac-sort-arrow" data-dir="1">↓</span>
+                <span class="ac-sort-arrow" data-dir="-1">↑</span>
+              </span>
+            </button>
             <button class="ac-sort-pop-item" data-sort="set" onclick="setAllCardsSort('set');closeBinderPops()" role="menuitem">Set A→Z</button>
-            <div class="ac-sort-pop-row" data-sort="value">
-              <span class="ac-sort-pop-label">Value</span>
-              <button class="ac-sort-pop-arrow" data-sort="value" data-dir="1"  onclick="setAllCardsSort('value', 1);closeBinderPops()"  title="High to Low" aria-label="Sort by value, high to low">↓</button>
-              <button class="ac-sort-pop-arrow" data-sort="value" data-dir="-1" onclick="setAllCardsSort('value', -1);closeBinderPops()" title="Low to High" aria-label="Sort by value, low to high">↑</button>
-            </div>
+            <button class="ac-sort-pop-item ac-sort-pop-toggle" data-sort="value" onclick="setAllCardsSort('value');closeBinderPops()" role="menuitem">
+              <span>Value</span>
+              <span class="ac-sort-arrows" aria-hidden="true">
+                <span class="ac-sort-arrow" data-dir="1">↓</span>
+                <span class="ac-sort-arrow" data-dir="-1">↑</span>
+              </span>
+            </button>
             <button class="ac-sort-pop-item" data-sort="lang" onclick="setAllCardsSort('lang');closeBinderPops()" role="menuitem">Language</button>
           </div>
         </div>
@@ -13763,18 +13796,21 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
       const mLbl = document.getElementById('acSortLbl');
       if (mLbl) mLbl.textContent = currentLabel;
       // Active state for the popover:
-      //  • Simple rows (Name / Set / Language): row gets .active when its
-      //    data-sort matches the current sort key.
-      //  • Arrow buttons (Rarity ↓/↑, Value ↓/↑): the specific arrow gets
-      //    .active when both its data-sort AND data-dir match. The row
-      //    container itself never gets .active — only one of its arrows.
+      //  • All rows (.ac-sort-pop-item) get .active when their data-sort
+      //    matches the current sort key — this includes Rarity / Value
+      //    which use the same row class but also carry .ac-sort-pop-toggle.
+      //  • Inside Rarity / Value rows the two ↓/↑ glyphs (.ac-sort-arrow)
+      //    are static — we add .arrow-active to the one matching the
+      //    current direction so the user sees which way it's sorting.
       document.querySelectorAll('.ac-sort-pop-item').forEach(el => {
         el.classList.toggle('active', el.dataset.sort === key);
       });
-      document.querySelectorAll('.ac-sort-pop-arrow').forEach(el => {
-        const matches = el.dataset.sort === key
+      document.querySelectorAll('.ac-sort-arrow').forEach(el => {
+        const row = el.closest('[data-sort]');
+        const rowKey = row?.dataset?.sort;
+        const matches = rowKey === key
                      && parseInt(el.dataset.dir, 10) === allCardsSortDir[key];
-        el.classList.toggle('active', matches);
+        el.classList.toggle('arrow-active', matches);
       });
       binderPage = 0;
       renderBinder();
