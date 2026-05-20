@@ -1,10 +1,14 @@
 // PathBinder Service Worker
-// v211 — Sealed view now actually renders. Clicking a set with the
-// SEALED toggle on shows that set's sealed products (booster boxes,
-// ETBs, tins, etc.) with an Add-to-Binder button. First sealed add
-// auto-creates the user's Sealed binder. Edit-binder ✎ button is
-// more discoverable (cyan border + soft glow).
-const CACHE = 'pathbinder-v211';
+// v214 — Two bug fixes:
+//  1. Sealed-product set matching was too strict (missing wildcards
+//     on the ilike OR filter), so only sets whose pokemontcg.io id
+//     happened to align with our catalog set_code showed products.
+//     Now matches loosely on both set_code and set_name.
+//  2. The binder sidebar (renderBinderSidebar) had no edit affordance
+//     — the ✎ button that existed lived on the hidden binder shelf.
+//     Added: ✎ overlay on each sidebar icon + right-click + long-press
+//     handlers that all open the edit modal.
+const CACHE = 'pathbinder-v214';
 
 const PRECACHE = [
   '/offline.html',

@@ -2628,6 +2628,29 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* Drag-over: enlarge the hovered binder 1.5x with a snappy spring
        so the user clearly sees which binder is the drop target. */
     .bsb-icon.bsb-drag-over{transform:scale(1.5);border-color:#FF5722!important;box-shadow:0 0 0 3px rgba(255,87,34,.45),0 4px 12px rgba(0,0,0,.4)!important;outline:2px solid #FF5722;z-index:50}
+    /* Edit-binder button overlay on each sidebar icon. Always visible
+       (small pencil in the top-right corner), seafoam accent so it
+       reads as an interactive control. Right-click + long-press also
+       open the edit modal — wired in renderBinderSidebar. */
+    .bsb-icon{position:relative}
+    .bsb-edit-btn{
+      position:absolute;
+      top:-4px;right:-4px;
+      width:18px;height:18px;
+      padding:0;margin:0;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.82);
+      border:1.5px solid var(--accent);
+      color:var(--accent);
+      border-radius:3px;
+      font-size:.62rem;line-height:1;
+      cursor:pointer;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      box-shadow:0 0 5px rgba(26,199,160,.45);
+      z-index:10;
+      transition:transform .12s;
+    }
+    .bsb-edit-btn:hover{transform:scale(1.15)}
     .bsb-add{background:transparent;border:2px dashed rgba(255,255,255,.18);color:rgba(255,255,255,.3);font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .bsb-add:hover{border-color:#1AC7A0;color:#1AC7A0}
     /* Sets autocomplete */
@@ -14242,12 +14265,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const imgHtml = b.cover_image_url
           ? `<img src="${b.cover_image_url}" alt="${b.name}" loading="lazy"><div class="bsb-fallback" style="display:none;background:${bg}28;color:${bg}">${b.name.slice(0,4)}</div>`
           : `<div class="bsb-fallback" style="background:${bg}28;color:${bg}">${b.name.slice(0,6)}</div>`;
-        html += `<div class="bsb-icon${active?' active':''}" id="bsbIcon_${b.id}" title="${b.name}"
+        // Three ways to open the edit modal:
+        //   1. ✎ overlay button (always visible, top-right of the icon)
+        //   2. Right-click on the icon (desktop power users)
+        //   3. Long-press on the icon (mobile-friendly equivalent)
+        html += `<div class="bsb-icon${active?' active':''}" id="bsbIcon_${b.id}" title="${b.name} — click to open, ✎ to edit"
           onclick="selectBinder('${b.id}')"
+          oncontextmenu="event.preventDefault();openEditBinder('${b.id}')"
+          ontouchstart="_bsbTouchStart(event,'${b.id}')"
+          ontouchend="_bsbTouchEnd(event)"
+          ontouchcancel="_bsbTouchEnd(event)"
           ondragover="bsbDragOver(event,'${b.id}')"
           ondragleave="bsbDragLeave(event)"
           ondrop="bsbDrop(event,'${b.id}')"
-        >${imgHtml}</div>`;
+        >${imgHtml}<button class="bsb-edit-btn" onclick="event.stopPropagation();openEditBinder('${b.id}')" title="Edit binder">✎</button></div>`;
       }
 
       // Add new binder button
@@ -14256,6 +14287,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
 
       sbEl.innerHTML = html;
+    }
+
+    // Long-press to edit a binder on mobile. 500ms hold opens the
+    // edit modal. Cancelled by touchmove (so swipe/scroll doesn't trigger).
+    var _bsbLongPressTimer = null;
+    function _bsbTouchStart(e, binderId) {
+      if (_bsbLongPressTimer) clearTimeout(_bsbLongPressTimer);
+      _bsbLongPressTimer = setTimeout(function() {
+        _bsbLongPressTimer = null;
+        openEditBinder(binderId);
+      }, 500);
+    }
+    function _bsbTouchEnd(e) {
+      if (_bsbLongPressTimer) { clearTimeout(_bsbLongPressTimer); _bsbLongPressTimer = null; }
     }
 
     function bsbDragOver(e, binderId) {
@@ -23032,11 +23077,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '<div style="padding:32px;text-align:center;color:var(--muted)">Loading sealed products…</div>' +
         '</div></div>';
 
-      // Query catalog. Match by set_code OR set_name (case-insensitive)
-      // because the pokemontcg.io setId (e.g. "sv4") doesn't always
-      // line up with our catalog's set_code for sealed (e.g. "sv4"
-      // matches, but "mew" was set as the code for 151 in the sealed
-      // sync). Trying both gets us coverage either way.
+      // Query catalog. Match by set_code OR set_name (case-insensitive,
+      // with wildcards) because:
+      //   • The pokemontcg.io setId (e.g. "sv4") doesn't always line
+      //     up with our catalog's set_code for sealed — some rows have
+      //     short codes ("sv4"), some have slug-derived codes
+      //     ("paradox-rift"), some have "mew" for 151, etc.
+      //   • set_name in catalog might be "Pokemon Paldea Evolved" or
+      //     just "Paldea Evolved" depending on which sync wrote the row.
+      // Wildcards make the match lenient: either side can contain the
+      // other and we still match.
+      function _escPg(v) {
+        // PostgREST's or= parser treats comma + parens as separators,
+        // and * as wildcards. Strip those out of the user-supplied
+        // values so they can't break the filter expression.
+        return String(v || '').replace(/[,()*]/g, ' ').trim();
+      }
+      var safeId   = _escPg(setId);
+      var safeName = _escPg(setName);
       var rows = [];
       try {
         var q = sb.from('catalog')
@@ -23044,8 +23102,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           .neq('product_type', 'single')
           .like('id', idPrefix + '%')
           .limit(500);
-        // Match either set_code or set_name (case-insensitive)
-        q = q.or('set_code.ilike.' + setId + ',set_name.ilike.' + setName);
+        // Wildcards (*) are PostgREST's URL-friendly form of SQL %.
+        // The filter says: match if set_code contains setId OR set_name
+        // contains setName. Either side can have a prefix/suffix
+        // ("Pokemon …", trailing punctuation) and still match.
+        var orFilter = 'set_code.ilike.*' + safeId + '*,set_name.ilike.*' + safeName + '*';
+        q = q.or(orFilter);
         var resp = await q;
         if (resp.error) throw resp.error;
         rows = resp.data || [];
@@ -23079,19 +23141,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Render product cards. Product image is rectangular (boxes), not
       // the 245:342 card aspect — we use object-fit:contain so wide and
       // tall product photos both display cleanly.
+      // Whole card opens the detail modal on click; the inner Add button
+      // stops propagation so it can quick-add without opening the modal.
       var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">';
       rows.forEach(function(r) {
         var ptype = (r.product_type || '').toUpperCase().replace(/_/g,' ');
         var img   = r.image_url || '';
         var msrp  = (r.msrp_usd != null) ? '$' + Number(r.msrp_usd).toFixed(2) : '';
-        html += '<div class="sealed-card" style="background:var(--surface2);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column;gap:6px;border-radius:3px">' +
+        html += '<div class="sealed-card" onclick="openSealedProductDetail(\'' + _escJsAttr(r.id) + '\')" style="background:var(--surface2);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column;gap:6px;border-radius:3px;cursor:pointer;transition:border-color .12s,transform .12s" onmouseenter="this.style.borderColor=\'var(--sets-teal)\';this.style.transform=\'translateY(-1px)\'" onmouseleave="this.style.borderColor=\'var(--border)\';this.style.transform=\'\'">' +
           '<div style="aspect-ratio:1/1;background:var(--surface3, var(--surface));overflow:hidden;border-radius:2px;display:flex;align-items:center;justify-content:center">' +
             (img ? '<img src="' + _escHtml(img) + '" alt="" loading="lazy" style="max-width:100%;max-height:100%;object-fit:contain;display:block">' : '<span style="color:var(--muted);font-size:.65rem">no image</span>') +
           '</div>' +
           '<div style="font-size:.74rem;color:var(--text);line-height:1.3;min-height:36px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + _escHtml(r.name || '') + '</div>' +
           '<div style="font-size:.55rem;color:var(--sets-teal);letter-spacing:.08em;font-family:\'Space Mono\',monospace">' + _escHtml(ptype) + '</div>' +
           (msrp ? '<div style="font-size:.68rem;color:var(--muted)">MSRP ' + msrp + '</div>' : '') +
-          '<button onclick="addSealedToBinder(\'' + _escJsAttr(r.id) + '\')" ' +
+          '<button onclick="event.stopPropagation();addSealedToBinder(\'' + _escJsAttr(r.id) + '\')" ' +
             'style="margin-top:2px;padding:6px 8px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:inherit;font-size:.66rem;letter-spacing:.05em;cursor:pointer;border-radius:2px">+ Add to Binder</button>' +
           '</div>';
       });
@@ -23099,16 +23163,162 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       grid.innerHTML = html;
     }
 
+    // Open a detail modal for a sealed product. Same overlay/modal
+    // pattern as openSetCardDetail for cards, with product-specific
+    // fields: bigger image, name, set, product type, MSRP, link out to
+    // PriceCharting for live prices + Add to Binder primary CTA.
+    async function openSealedProductDetail(catalogId) {
+      // Remove any existing detail sheets first (cards or sealed)
+      document.getElementById('setCardDetailSheet')?.remove();
+
+      // Render the shell immediately with a loading state so the click
+      // feels responsive while we fetch the row from catalog.
+      var overlay = document.createElement('div');
+      overlay.id = 'setCardDetailSheet';
+      overlay.className = 'modal-overlay';
+      overlay.style.display = 'flex';
+      overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML =
+        '<div class="modal" style="max-width:520px;width:92vw;padding:24px;position:relative">' +
+          '<button class="modal-close" onclick="document.getElementById(\'setCardDetailSheet\').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">×</button>' +
+          '<div id="sealedDetailBody" style="padding:8px 0;text-align:center;color:var(--muted)">Loading…</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      // Fetch the catalog row
+      var prod;
+      try {
+        var resp = await sb.from('catalog')
+          .select('id,name,set_name,set_code,image_url,msrp_usd,product_type,price_source_url,pricecharting_id,game_type,supertype')
+          .eq('id', catalogId).maybeSingle();
+        prod = resp.data;
+      } catch(e) {
+        console.warn('[sealed detail] fetch failed', e);
+      }
+      if (!prod) {
+        var body = document.getElementById('sealedDetailBody');
+        if (body) body.innerHTML = '<div style="padding:24px;color:var(--red,#ff5757)">Could not load that product.</div>';
+        return;
+      }
+
+      var ptype = (prod.product_type || '').toUpperCase().replace(/_/g, ' ');
+      var msrp  = (prod.msrp_usd != null) ? '$' + Number(prod.msrp_usd).toFixed(2) : null;
+      var img   = prod.image_url || '';
+
+      // Modal body
+      var bodyHtml =
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:14px">' +
+          (img
+            ? '<img src="' + _escHtml(img) + '" alt="" style="max-width:280px;max-height:280px;object-fit:contain;display:block;border:1px solid var(--border);padding:8px;background:var(--surface2);border-radius:4px">'
+            : '<div style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:.7rem">no image</div>'
+          ) +
+          '<div style="text-align:center;width:100%">' +
+            '<h2 style="font-size:1.1rem;font-family:\'Orbitron\',monospace;margin-bottom:6px;color:var(--text)">' + _escHtml(prod.name || '') + '</h2>' +
+            '<div style="font-size:.68rem;color:var(--sets-teal);letter-spacing:.1em;font-family:\'Space Mono\',monospace;margin-bottom:2px">' + _escHtml(ptype) + '</div>' +
+            '<div style="font-size:.78rem;color:var(--muted)">' + _escHtml(prod.set_name || '') + '</div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:360px">' +
+            '<div style="background:var(--surface2);padding:10px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.1em;margin-bottom:4px">MSRP</div>' +
+              '<div style="font-size:.95rem;color:var(--text);font-family:\'Space Mono\',monospace">' + (msrp || '—') + '</div>' +
+            '</div>' +
+            '<div style="background:var(--surface2);padding:10px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.1em;margin-bottom:4px">MARKET</div>' +
+              '<div id="sealedMarketPrice" style="font-size:.95rem;color:var(--muted);font-family:\'Space Mono\',monospace">…</div>' +
+            '</div>' +
+          '</div>' +
+          // Quantity stepper — same UX as the Add Card modal's atcQuantity input
+          '<div style="display:flex;align-items:center;gap:10px;width:100%;max-width:360px">' +
+            '<label style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;font-family:\'Space Mono\',monospace;flex-shrink:0">QTY</label>' +
+            '<button type="button" onclick="_sealedQtyStep(-1)" style="width:34px;height:34px;background:transparent;border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:1.1rem;cursor:pointer;border-radius:2px">−</button>' +
+            '<input id="sealedQtyInput" type="number" min="1" value="1" style="flex:1;text-align:center;padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:\'Space Mono\',monospace;font-size:.9rem;outline:none">' +
+            '<button type="button" onclick="_sealedQtyStep(1)" style="width:34px;height:34px;background:transparent;border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:1.1rem;cursor:pointer;border-radius:2px">+</button>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;width:100%;max-width:360px">' +
+            '<button onclick="_sealedAddFromModal(\'' + _escJsAttr(prod.id) + '\')" ' +
+              'style="flex:1;padding:11px;background:var(--accent);color:#000;border:none;font-family:\'Space Mono\',monospace;font-weight:700;font-size:.78rem;letter-spacing:.04em;cursor:pointer;border-radius:2px">+ ADD TO BINDER</button>' +
+            (prod.price_source_url
+              ? '<a href="' + _escHtml(prod.price_source_url) + '" target="_blank" rel="noopener" ' +
+                'style="flex:0 0 auto;padding:11px 14px;border:1px solid var(--border);color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.7rem;letter-spacing:.04em;cursor:pointer;text-decoration:none;border-radius:2px;display:flex;align-items:center" ' +
+                'title="View on PriceCharting">↗ PC</a>'
+              : '') +
+          '</div>' +
+        '</div>';
+
+      var body = document.getElementById('sealedDetailBody');
+      if (body) body.innerHTML = bodyHtml;
+
+      // Best-effort live market price via /api/lookup-price.js (same
+      // endpoint singles use). Loose-condition for sealed = unopened
+      // market price. Falls back to '—' if API unavailable.
+      if (prod.price_source_url) {
+        try {
+          var pr = await fetch('/api/lookup-price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: prod.name,
+              condition: 'Sealed',
+              url:  prod.price_source_url,
+            }),
+          });
+          if (pr.ok) {
+            var pj = await pr.json();
+            if (pj && pj.price) {
+              var mEl = document.getElementById('sealedMarketPrice');
+              if (mEl) {
+                mEl.textContent = '$' + Number(pj.price).toFixed(2);
+                mEl.style.color = 'var(--accent)';
+              }
+            } else {
+              var mEl2 = document.getElementById('sealedMarketPrice');
+              if (mEl2) mEl2.textContent = '—';
+            }
+          }
+        } catch(e) {
+          var mEl3 = document.getElementById('sealedMarketPrice');
+          if (mEl3) mEl3.textContent = '—';
+        }
+      } else {
+        var mEl4 = document.getElementById('sealedMarketPrice');
+        if (mEl4) mEl4.textContent = '—';
+      }
+    }
+
+    // Quantity stepper for the sealed-product detail modal.
+    function _sealedQtyStep(delta) {
+      var el = document.getElementById('sealedQtyInput');
+      if (!el) return;
+      var n = parseInt(el.value, 10);
+      if (!Number.isFinite(n) || n < 1) n = 1;
+      n = Math.max(1, n + delta);
+      el.value = String(n);
+    }
+
+    // Modal "+ ADD TO BINDER" handler — reads the quantity input and
+    // calls addSealedToBinder with it, then closes the modal.
+    async function _sealedAddFromModal(catalogId) {
+      var qtyEl = document.getElementById('sealedQtyInput');
+      var qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
+      if (!Number.isFinite(qty) || qty < 1) qty = 1;
+      await addSealedToBinder(catalogId, qty);
+      document.getElementById('setCardDetailSheet')?.remove();
+    }
+
     // Add a sealed catalog row to the user's auto-created Sealed binder.
-    // Uses ensureSealedBinder() so the first sealed add a user makes
-    // creates the binder; subsequent adds drop in alongside.
-    async function addSealedToBinder(catalogId) {
+    // Smart-merge: if the user already owns this product in their Sealed
+    // binder, increment the existing row's quantity instead of inserting
+    // a duplicate. Inline card button passes quantity=1; modal passes
+    // whatever the user picked in the qty stepper.
+    async function addSealedToBinder(catalogId, quantity) {
       if (!currentUser) {
         showToast('Sign in to add sealed product to your binder');
         return;
       }
+      if (!Number.isFinite(quantity) || quantity < 1) quantity = 1;
       var binderId = await ensureSealedBinder();
       if (!binderId) return; // ensureSealedBinder already showed an error toast
+
       // Fetch the catalog row for display info
       var prod;
       try {
@@ -23118,28 +23328,53 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         prod = resp.data;
       } catch(_) {}
       if (!prod) { showToast('Could not load that product'); return; }
-      // Insert into collection_items
-      var insert = {
-        user_id:      currentUser.id,
-        api_card_id:  prod.id,
-        binder_id:    binderId,
-        card_name:    prod.name,
-        set_name:     prod.set_name,
-        card_image_url: prod.image_url,
-        condition:    'Sealed',
-        product_type: prod.product_type || 'other_sealed',
-        purchase_price: prod.msrp_usd || 0,
-        current_value:  prod.msrp_usd || 0,
-        quantity:     1,
-      };
+
+      // Smart-merge: look for an existing collection_items row for this
+      // user + product. If found, increment its quantity.
+      var existing = null;
       try {
-        var ins = await sb.from('collection_items').insert(insert).select('*').single();
-        if (ins.error) throw ins.error;
-        // Track in the in-memory list so binder render picks it up immediately
-        if (typeof collectionItems !== 'undefined' && Array.isArray(collectionItems)) {
-          collectionItems.push(ins.data);
+        var ex = await sb.from('collection_items')
+          .select('id,quantity')
+          .eq('user_id', currentUser.id)
+          .eq('api_card_id', prod.id)
+          .limit(1).maybeSingle();
+        existing = ex.data;
+      } catch(_) {}
+
+      try {
+        if (existing && existing.id) {
+          var newQty = (existing.quantity || 1) + quantity;
+          var upd = await sb.from('collection_items')
+            .update({ quantity: newQty }).eq('id', existing.id).select('*').single();
+          if (upd.error) throw upd.error;
+          // Sync in-memory list
+          if (typeof collectionItems !== 'undefined' && Array.isArray(collectionItems)) {
+            var match = collectionItems.find(c => String(c.id) === String(existing.id));
+            if (match) match.quantity = newQty;
+            else collectionItems.push(upd.data);
+          }
+          showToast('✓ Quantity now ×' + newQty + ' in Sealed binder');
+        } else {
+          var insert = {
+            user_id:      currentUser.id,
+            api_card_id:  prod.id,
+            binder_id:    binderId,
+            card_name:    prod.name,
+            set_name:     prod.set_name,
+            card_image_url: prod.image_url,
+            condition:    'Sealed',
+            product_type: prod.product_type || 'other_sealed',
+            purchase_price: prod.msrp_usd || 0,
+            current_value:  prod.msrp_usd || 0,
+            quantity:     quantity,
+          };
+          var ins = await sb.from('collection_items').insert(insert).select('*').single();
+          if (ins.error) throw ins.error;
+          if (typeof collectionItems !== 'undefined' && Array.isArray(collectionItems)) {
+            collectionItems.push(ins.data);
+          }
+          showToast('✓ Added ×' + quantity + ' to Sealed binder');
         }
-        showToast('✓ Added to Sealed binder');
       } catch(e) {
         console.warn('[sealed add] failed', e);
         showToast('Add failed: ' + (e.message || 'unknown error'));
