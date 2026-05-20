@@ -2628,29 +2628,6 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* Drag-over: enlarge the hovered binder 1.5x with a snappy spring
        so the user clearly sees which binder is the drop target. */
     .bsb-icon.bsb-drag-over{transform:scale(1.5);border-color:#FF5722!important;box-shadow:0 0 0 3px rgba(255,87,34,.45),0 4px 12px rgba(0,0,0,.4)!important;outline:2px solid #FF5722;z-index:50}
-    /* Edit-binder button overlay on each sidebar icon. Always visible
-       (small pencil in the top-right corner), seafoam accent so it
-       reads as an interactive control. Right-click + long-press also
-       open the edit modal — wired in renderBinderSidebar. */
-    .bsb-icon{position:relative}
-    .bsb-edit-btn{
-      position:absolute;
-      top:-4px;right:-4px;
-      width:18px;height:18px;
-      padding:0;margin:0;
-      display:flex;align-items:center;justify-content:center;
-      background:rgba(0,0,0,.82);
-      border:1.5px solid var(--accent);
-      color:var(--accent);
-      border-radius:3px;
-      font-size:.62rem;line-height:1;
-      cursor:pointer;
-      font-family:'Space Mono','Share Tech Mono',monospace;
-      box-shadow:0 0 5px rgba(26,199,160,.45);
-      z-index:10;
-      transition:transform .12s;
-    }
-    .bsb-edit-btn:hover{transform:scale(1.15)}
     .bsb-add{background:transparent;border:2px dashed rgba(255,255,255,.18);color:rgba(255,255,255,.3);font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .bsb-add:hover{border-color:#1AC7A0;color:#1AC7A0}
     /* Sets autocomplete */
@@ -2882,10 +2859,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       border-color:var(--ft-pink);
       color:var(--ft-pink);
     }
-    /* Pokémon language dropdown — replaces the two pill buttons so we
-       can support CN/KR/DE/FR/etc. without exploding tab strip width.
-       Styled to match the sub-toggle pills (seafoam border, dark fill,
-       monospace, compact). */
+    /* Pokémon language dropdown — magenta accent to match the Sets-page
+       Japanese-sub-toggle and graffiti-backdrop aesthetic. Semi-
+       transparent magenta fill on the select itself; on focus (which
+       fires when the user opens the dropdown), the glow blooms. */
     #setsPage .sets-lang-select{
       margin-left:10px;
       vertical-align:middle;
@@ -2894,26 +2871,40 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       font-size:.6rem;
       letter-spacing:.08em;
       cursor:pointer;
-      border:1px solid var(--sets-teal);
-      background:var(--sets-teal-glow);
-      color:var(--sets-teal);
-      transition:all .15s;
+      border:1.5px solid var(--ft-pink);
+      background-color:rgba(255,61,127,.14);
+      color:var(--ft-pink);
+      transition:all .15s, box-shadow .2s;
       appearance:none;
       -webkit-appearance:none;
       -moz-appearance:none;
-      /* tiny chevron drawn via SVG data-URI so we don't ship an asset */
-      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%231AC7A0' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+      /* SVG chevron in magenta to match border/text */
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23ff3d7f' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
       background-repeat:no-repeat;
       background-position:right 8px center;
       background-size:9px 5px;
     }
     #setsPage .sets-lang-select:hover{
-      border-color:var(--ft-pink);
-      color:var(--ft-pink);
+      background-color:rgba(255,61,127,.22);
+      box-shadow:0 0 10px rgba(255,61,127,.35);
+    }
+    #setsPage .sets-lang-select:focus{
+      /* Native select doesn't expose an "is-open" state, but :focus
+         fires the moment the user clicks/keyboard-opens it, so this
+         is our practical "glow while the popover is open" hook. */
+      outline:none;
+      background-color:rgba(255,61,127,.28);
+      box-shadow:0 0 16px rgba(255,61,127,.55), 0 0 0 1px var(--ft-pink) inset;
     }
     #setsPage .sets-lang-select option{
-      background:#0e1a14;
+      /* Aubergine-dark to match the sets-overlay aesthetic, magenta-tinted
+         text so options pop in the OS-native popup. */
+      background:#1a0d18;
       color:var(--text);
+    }
+    #setsPage .sets-lang-select option:checked{
+      color:var(--ft-pink);
+      background:rgba(255,61,127,.18);
     }
     /* Singles | Sealed view toggle — applies to every TCG. Same shape
        as the EN/JP sub-toggle but uses the seafoam accent regardless
@@ -5634,6 +5625,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
       </div>
       <div class="pb-panel-body">
+        <!-- Product-type filter: All / Cards / Sealed. Filters listings by
+             product_type — 'single' for cards, anything else for sealed
+             (booster_box, etb, utb, tin, deck, etc.) -->
+        <div id="browseProductTypePills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="ptype-pill active" data-ptype="all" onclick="setBrowseProductType('all')"
+            style="padding:5px 12px;font-size:.7rem;letter-spacing:.06em;border:1.5px solid var(--accent);background:var(--accent);color:#000;cursor:pointer;font-family:'Space Mono',monospace;text-transform:uppercase">All</button>
+          <button class="ptype-pill" data-ptype="single" onclick="setBrowseProductType('single')"
+            style="padding:5px 12px;font-size:.7rem;letter-spacing:.06em;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono',monospace;text-transform:uppercase">Cards</button>
+          <button class="ptype-pill" data-ptype="sealed" onclick="setBrowseProductType('sealed')"
+            style="padding:5px 12px;font-size:.7rem;letter-spacing:.06em;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono',monospace;text-transform:uppercase">Sealed</button>
+        </div>
         <div class="search-and-filters" style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center">
           <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;width:100%;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" />
           <select id="gameTypeFilter" onchange="applyBrowseFilters()" style="display:none">
@@ -6907,6 +6909,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     let buyoutOffers = [];
     let browseSearchQuery = '';
     let browseGameTypeFilter = 'all';
+    // Marketplace product-type filter — 'all' (default) | 'single' | 'sealed'
+    let browseProductTypeFilter = 'all';
     let browseSortFilter = 'newest';
     const POKEMON_ONLY = true; // flip to false when ready for other TCGs
     let binderView = '3x3';
@@ -7554,7 +7558,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (!matchesSearch) return false;
 
         const gameTypeMatch = browseGameTypeFilter === 'all' || listing.gameType === browseGameTypeFilter;
-        return gameTypeMatch;
+        if (!gameTypeMatch) return false;
+
+        // Product-type filter: 'single' matches singles only; 'sealed' matches
+        // anything that isn't a single (boxes, ETBs, UTBs, tins, decks…).
+        // Listings predate this filter — rows missing product_type are
+        // treated as singles, which matches the migration default.
+        const pt = listing.product_type || 'single';
+        if (browseProductTypeFilter === 'single' && pt !== 'single') return false;
+        if (browseProductTypeFilter === 'sealed' && pt === 'single')  return false;
+
+        return true;
       });
 
       filtered.sort((a, b) => {
@@ -7565,7 +7579,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return 0; // newest — keep DB order
       });
 
-      const showClearBtn = browseSearchQuery !== '' || browseGameTypeFilter !== 'all' || browseSortFilter !== 'newest';
+      const showClearBtn = browseSearchQuery !== '' || browseGameTypeFilter !== 'all' || browseSortFilter !== 'newest' || browseProductTypeFilter !== 'all';
       const clearBtn = document.getElementById('clearFiltersBtn');
       if (clearBtn) clearBtn.style.display = showClearBtn ? 'block' : 'none';
 
@@ -7594,6 +7608,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           ? `${listing.grade || 'PSA'} ${gradeVal || ''}`
           : cond;
         const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
+        // Sealed listings get a small copper "SEALED" chip next to the
+        // game-type label so the grid can be skimmed visually.
+        const _ptype = listing.product_type || 'single';
+        const sealedChip = _ptype !== 'single'
+          ? `<span style="background:var(--surface2);border:1.5px solid var(--copper);color:var(--copper);font-size:.55rem;padding:1px 5px;letter-spacing:.06em;vertical-align:middle;margin-left:4px">SEALED</span>`
+          : '';
         const sellerName = listing.sellerName || 'Seller';
         const sellerRating = listing.sellerRating ? `★ ${listing.sellerRating.toFixed(1)}` : '';
         const vendorBadge = listing.isVendorListing ? `<span style="background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent);font-size:.55rem;padding:1px 5px;letter-spacing:.06em;vertical-align:middle;margin-left:4px">VENDOR</span>` : '';
@@ -7625,6 +7645,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <div style="margin-bottom:4px">
               <span class="cond-badge ${condClass}">${condLabel}</span>
               ${listing.gameType ? `<span style="font-size:.72rem;color:var(--muted);margin-left:6px">${listing.gameType}</span>` : ''}
+              ${sealedChip}
             </div>
             <div class="card-stats">
               <span class="price-tag">${displayPrice}</span>
@@ -7662,11 +7683,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       browseSearchQuery = '';
       browseGameTypeFilter = 'all';
       browseSortFilter = 'newest';
+      browseProductTypeFilter = 'all';
       const si = document.getElementById('browseSearchInput'); if(si) si.value='';
       const gt = document.getElementById('gameTypeFilter'); if(gt) gt.value='all';
       const sf = document.getElementById('sortByFilter'); if(sf) sf.value='newest';
       document.querySelectorAll('.game-pill').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.game-pill')[0]?.classList.add('active');
+      // Reset product-type pills back to "All" active state.
+      document.querySelectorAll('#browseProductTypePills .ptype-pill').forEach(p => {
+        const isAll = p.dataset.ptype === 'all';
+        p.classList.toggle('active', isAll);
+        p.style.borderColor = isAll ? 'var(--accent)' : 'var(--border)';
+        p.style.background  = isAll ? 'var(--accent)' : 'transparent';
+        p.style.color       = isAll ? '#000'          : 'var(--muted)';
+      });
       renderBrowse();
     }
 
@@ -7676,6 +7706,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       event.target.classList.add('active');
       const dropdown = document.getElementById('gameTypeFilter');
       if (dropdown) dropdown.value = type;
+      renderBrowse();
+    }
+
+    // Product-type pill handler for the marketplace browse page.
+    // Visually swaps which pill is "active" and triggers a re-render.
+    function setBrowseProductType(type) {
+      browseProductTypeFilter = type;
+      document.querySelectorAll('#browseProductTypePills .ptype-pill').forEach(p => {
+        const isActive = p.dataset.ptype === type;
+        p.classList.toggle('active', isActive);
+        p.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
+        p.style.background  = isActive ? 'var(--accent)' : 'transparent';
+        p.style.color       = isActive ? '#000'          : 'var(--muted)';
+      });
       renderBrowse();
     }
 
@@ -11257,13 +11301,31 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     // ─── List Card Modal ───────────────────────────────────────────────
+    // Tracks whether the currently-open list modal is for a single card
+    // ('single', default) or a sealed product ('booster_box', 'etb', etc.).
+    // Drives photo count requirement, condition options, modal copy.
+    let lcProductType = 'single';
+
     function openListCardModal(prefill) {
       if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
-      if (!userIsVendor()) { openVendorApplicationModal(); return; }
+      // Selling on the marketplace is gated to the SHOP tier — vendor +
+      // collector accounts can still buy, manage their binders, etc., but
+      // can't publish new listings. Free / collector / vendor all bounce
+      // through the pricing modal so they can upgrade.
+      if (!tierAtLeast('shop')) {
+        if (typeof openPricingModalWithPromo === 'function') {
+          openPricingModalWithPromo('shop');
+        } else {
+          showToast('Shop plan required to list on the marketplace');
+        }
+        return;
+      }
       lcPhotos = [];
+      lcProductType = (prefill && prefill.productType) ? prefill.productType : 'single';
+      const isSealed = lcProductType !== 'single';
+
       document.getElementById('lcName').value = prefill?.cardName || '';
       document.getElementById('lcGame').value = prefill?.gameType || 'Pokémon';
-      document.getElementById('lcCondition').value = prefill?.condition || 'NM';
       document.getElementById('lcPrice').value = '';
       document.getElementById('lcShipping').value = '5.00';
       document.getElementById('lcDescription').value = '';
@@ -11271,6 +11333,45 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       document.getElementById('lcPhotoError').style.display = 'none';
       const _lcErr = document.getElementById('lcSaveError');
       if (_lcErr) _lcErr.style.display = 'none';
+
+      // Swap the Condition dropdown contents for sealed product. Sealed
+      // products don't have NM/LP/HP — they have packaging condition.
+      const condEl = document.getElementById('lcCondition');
+      if (condEl) {
+        if (isSealed) {
+          condEl.innerHTML = ''
+            + '<option value="Sealed">Sealed — Factory Fresh</option>'
+            + '<option value="Damaged Box">Damaged Box — Contents Sealed</option>'
+            + '<option value="Loose">Loose Items — No Outer Seal</option>';
+          condEl.value = prefill?.condition || 'Sealed';
+        } else {
+          condEl.innerHTML = ''
+            + '<option value="NM">NM — Near Mint</option>'
+            + '<option value="LP">LP — Lightly Played</option>'
+            + '<option value="HP">HP — Heavily Played</option>'
+            + '<option value="Graded">Graded / Slabbed</option>';
+          condEl.value = prefill?.condition || 'NM';
+        }
+      }
+
+      // Modal title + sub copy + photo label all shift for sealed.
+      const titleEl = document.querySelector('#listCardModal h3');
+      const subEl   = document.querySelector('#listCardModal .modal-sub');
+      const photoLabelEl = document.querySelector('#listCardModal label[for="lcPhotoInput"], #listCardModal .form-group label');
+      // Grab the photo-section label specifically (it's the one that
+      // wraps the dashed photo area).
+      const photoSection = document.getElementById('lcPhotoArea');
+      const photoSectionLabel = photoSection ? photoSection.parentElement.querySelector('label') : null;
+      if (titleEl) titleEl.textContent = isSealed ? 'List Sealed Product for Sale' : 'List Card for Sale';
+      if (subEl)   subEl.innerHTML = isSealed
+        ? 'Required: one photo of the product (box front with seal visible is best). Buyers see market price vs. your ask.'
+        : 'Required: front &amp; back photo. Buyers see market price vs. your ask.';
+      if (photoSectionLabel) {
+        photoSectionLabel.innerHTML = isSealed
+          ? 'Photo * <span style="color:var(--muted);font-size:.72rem">(Box front recommended · up to 8)</span>'
+          : 'Photos * <span style="color:var(--muted);font-size:.72rem">(Front &amp; back required · up to 8)</span>';
+      }
+
       renderLcPhotoPreview();
       toggleLcGrade();
       openModal('listCardModal');
@@ -11278,6 +11379,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     async function saveMarketplaceListing() {
       if (!currentUser) return;
+      // Belt-and-suspenders: openListCardModal already gates this, but
+      // someone could call save directly via dev tools. Don't trust the UI.
+      if (!tierAtLeast('shop')) {
+        showToast('Shop plan required to list on the marketplace');
+        return;
+      }
+      const productType = lcProductType || 'single';
+      const isSealed = productType !== 'single';
+
       const name = document.getElementById('lcName').value.trim();
       const game = document.getElementById('lcGame').value;
       const condition = document.getElementById('lcCondition').value;
@@ -11290,11 +11400,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const marketPrice = marketPriceEl?.dataset?.marketPrice ? parseFloat(marketPriceEl.dataset.marketPrice) : null;
 
       // Validation
-      if (!name) { showToast('Enter a card name'); return; }
+      if (!name) { showToast(isSealed ? 'Enter a product name' : 'Enter a card name'); return; }
       if (!price || price <= 0) { showToast('Enter a valid price'); return; }
       const errEl = document.getElementById('lcPhotoError');
-      if (lcPhotos.length < 2) {
-        errEl.textContent = 'At least 2 photos required (front + back)';
+      const minPhotos = isSealed ? 1 : 2;
+      if (lcPhotos.length < minPhotos) {
+        errEl.textContent = isSealed
+          ? 'At least 1 photo required (box front)'
+          : 'At least 2 photos required (front + back)';
         errEl.style.display = 'block';
         return;
       }
@@ -11333,7 +11446,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         seller_name: currentUser.shop_name || currentUser.username || currentUser.name || null,
         is_vendor_listing: true,
         total_slots: 1,
-        photos: photoUrls
+        photos: photoUrls,
+        product_type: productType
       }).select().single();
 
       if (saveBtn) { saveBtn.textContent = 'List Card'; saveBtn.disabled = false; }
@@ -11356,10 +11470,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           earlyAccessOnly: false, certNumber: '',
           photos: photoUrls, priceHistory: [], sellVotes: [],
           seller_id: data.seller_id, sellerName: currentUser.username || currentUser.name || 'You',
-          shipping_price: data.shipping_price || 0
+          shipping_price: data.shipping_price || 0,
+          product_type: data.product_type || productType
         });
       }
       lcPhotos = [];
+      // Reset product type back to single so the next open of the modal
+      // (without a prefill) defaults to a normal card listing.
+      lcProductType = 'single';
       closeModal('listCardModal');
       showToast(name + ' listed for sale!');
       renderBrowse();
@@ -14269,7 +14387,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         //   1. ✎ overlay button (always visible, top-right of the icon)
         //   2. Right-click on the icon (desktop power users)
         //   3. Long-press on the icon (mobile-friendly equivalent)
-        html += `<div class="bsb-icon${active?' active':''}" id="bsbIcon_${b.id}" title="${b.name} — click to open, ✎ to edit"
+        // Edit affordances (right-click, long-press) are unstyled so the
+        // sidebar icon stays clean — users discover them organically.
+        html += `<div class="bsb-icon${active?' active':''}" id="bsbIcon_${b.id}" title="${b.name} — long-press or right-click to edit"
           onclick="selectBinder('${b.id}')"
           oncontextmenu="event.preventDefault();openEditBinder('${b.id}')"
           ontouchstart="_bsbTouchStart(event,'${b.id}')"
@@ -14278,7 +14398,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           ondragover="bsbDragOver(event,'${b.id}')"
           ondragleave="bsbDragLeave(event)"
           ondrop="bsbDrop(event,'${b.id}')"
-        >${imgHtml}<button class="bsb-edit-btn" onclick="event.stopPropagation();openEditBinder('${b.id}')" title="Edit binder">✎</button></div>`;
+        >${imgHtml}</div>`;
       }
 
       // Add new binder button
@@ -14984,7 +15104,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           const saved= item.amount_saved || 0;
           const pct  = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
 
-          return `<div class="binder-card${isGhost ? ' ghost-card' : ''}"
+          // Sealed products keep the same card-shape slot as singles
+          // (so the grid stays uniform) but their image gets
+          // object-fit:contain (via the .is-sealed CSS branch) so the
+          // box/booster/etc. fits without crop. No SEALED badge —
+          // intentional per design choice.
+          const isSealed = (item.product_type && item.product_type !== 'single')
+                           || (typeof item.api_card_id === 'string' && item.api_card_id.startsWith('sealed-'));
+
+          return `<div class="binder-card${isGhost ? ' ghost-card' : ''}${isSealed ? ' is-sealed' : ''}"
             draggable="true"
             data-idx="${globalIdx}"
             data-id="${item.id}"
@@ -15000,7 +15128,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
-                : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`}
+                : (isSealed
+                    ? ''   // sealed: no badge per spec
+                    : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`)}
             </div>
             <div class="binder-card-info">
               <div class="binder-card-name">${item.card_name}</div>
@@ -15654,8 +15784,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               onmouseout="this.style.background='transparent'">✏ Edit Details</button>
           </div>
           <div style="display:flex;gap:8px">
-            <button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${item.condition === 'graded' ? 'Graded' : 'NM'}'})"
-              style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>
+            ${(() => {
+              // Sealed items route through openListCardModal with productType
+              // so the modal flips to sealed-specific labels + 1-photo rule.
+              const _isSealedItem = (item.product_type && item.product_type !== 'single')
+                || (typeof item.api_card_id === 'string' && item.api_card_id.startsWith('sealed-'));
+              const _cond = _isSealedItem
+                ? 'Sealed'
+                : (item.condition === 'graded' ? 'Graded' : 'NM');
+              const _pt = _isSealedItem ? (item.product_type || 'booster_box') : 'single';
+              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${_cond}',productType:'${_pt}'})"
+              style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>`;
+            })()}
             <button onclick="openSoldOfflineModal('${item.id}')"
               style="flex:1;padding:9px 12px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">$ Sold Offline</button>
           </div>
@@ -19208,6 +19348,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         priceHistory: l.price_history || [],
         sellVotes: l.sell_votes || [],
         description: l.description || '',
+        // Sealed / single discriminator — column was added in
+        // migration_sealed_products.sql and defaults to 'single' for every
+        // pre-existing row, so the fallback below is just defensive.
+        product_type: l.product_type || 'single',
         countdown: null
       };
     }
@@ -22960,16 +23104,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       // POKEMON tab dispatches to JP or EN flow based on _setsPokemonLang
       if (_setsLang === 'POKEMON' && _setsPokemonLang === 'JP') { await loadJpSetsPage(el); return; }
-      // CN / KR — catalog has the data (cn-pc-* and kr-pc-* prefixes
-      // populated by sync_pokemon_singles_by_lang.py), but the set-browse
-      // UI for these languages lands in a follow-up session. For now,
-      // show a tabs-only stub so the dropdown isn't a dead button.
+      // CN / KR — full browse via the generic PC-language renderer
+      // (data comes from sync_pokemon_singles_by_lang.py with
+      // {lang}-pc-{pcid} ids).
       if (_setsLang === 'POKEMON' && (_setsPokemonLang === 'CN' || _setsPokemonLang === 'KR')) {
-        var langLabel = _setsPokemonLang === 'CN' ? 'Chinese' : 'Korean';
-        el.innerHTML = '<div style="padding:16px 0 8px">' + _setsTabsHtml() +
-          '<div style="padding:60px 20px;text-align:center;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.78rem;line-height:1.7">' +
-          '<div style="font-family:\'Orbitron\',monospace;color:var(--sets-teal);font-size:1rem;letter-spacing:.06em;margin-bottom:14px">' + langLabel + ' Pokémon — Coming Soon</div>' +
-          'Singles are synced to the catalog (' + langLabel.toLowerCase() + '-pc- prefixed rows).<br>The browse UI for these languages ships next session.</div></div>';
+        await loadPcLangPokemonSetsPage(el, _setsPokemonLang.toLowerCase());
         return;
       }
       if (_setsLang === 'MTG' || _setsLang === 'YGO' || _setsLang === 'OP') {
@@ -23578,6 +23717,180 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     };
     var _tcgSetsCache       = {}; // { MTG: {timestamp, sets}, YGO: {...}, OP: {...} }
     var _tcgSetsDetailCache = {}; // { 'MTG|setCode': {timestamp, cards}, ... }
+
+    // ── PriceCharting-sourced language sets (CN / KR / etc.) ────────────
+    // Singles for these languages were synced via
+    // sync_pokemon_singles_by_lang.py with ids like cn-pc-{pcid} /
+    // kr-pc-{pcid}. This function lists their sets and the per-set
+    // detail function shows the cards. Generic over language so adding
+    // German / French / etc. later is just dropdown + render-routing.
+    var _pcLangSetsCache = {};    // lang → { timestamp, sets }
+    var _pcLangSetDetailCache = {};  // "lang|setCode" → { timestamp, cards }
+
+    async function loadPcLangPokemonSetsPage(el, lang) {
+      // lang is 'cn', 'kr', etc. — corresponds to the id prefix
+      // {lang}-pc-{pricecharting_id}.
+      var idPattern = lang + '-pc-%';
+      var langLabel = ({ cn:'Chinese', kr:'Korean', de:'German', fr:'French',
+                          it:'Italian', es:'Spanish', pt:'Portuguese' })[lang] || lang.toUpperCase();
+
+      el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading ' + langLabel + ' Pokémon sets…</div>';
+
+      try {
+        var now = Date.now();
+        if (!_pcLangSetsCache[lang] || (now - _pcLangSetsCache[lang].timestamp > 600000)) {
+          var allRows = [];
+          var offset = 0;
+          while (true) {
+            var res = await sb.from('catalog')
+              .select('set_name, set_code, image_url')
+              .like('id', idPattern)
+              .range(offset, offset + 999);
+            if (res.error) throw new Error(res.error.message);
+            var data = res.data || [];
+            if (data.length === 0) break;
+            allRows = allRows.concat(data);
+            if (data.length < 1000) break;
+            offset += 1000;
+          }
+
+          // Group by set_code (or fall back to set_name when set_code is null/empty)
+          var byCode = {};
+          allRows.forEach(function(r) {
+            var key = r.set_code || r.set_name || '?';
+            if (!byCode[key]) byCode[key] = {
+              set_name: r.set_name || r.set_code || '?',
+              set_code: r.set_code || '',
+              total:    0,
+              image_url: r.image_url || null,
+            };
+            byCode[key].total++;
+            // Keep the first image we see for the set as the cover
+            if (!byCode[key].image_url && r.image_url) byCode[key].image_url = r.image_url;
+          });
+          var sets = Object.values(byCode).sort(function(a, b) {
+            return (a.set_name || '').localeCompare(b.set_name || '');
+          });
+          _pcLangSetsCache[lang] = { timestamp: now, sets: sets, totalCards: allRows.length };
+        }
+
+        var cached = _pcLangSetsCache[lang];
+        var sets = cached.sets;
+
+        // Owned count for this language's id prefix
+        var owned = 0;
+        if (currentUser) {
+          collectionItems.forEach(function(c) {
+            if (c.is_ghost || c.sold_offline) return;
+            if (typeof c.api_card_id !== 'string') return;
+            if (c.api_card_id.startsWith(lang + '-pc-')) owned += (c.quantity || 1);
+          });
+        }
+
+        var rowsHtml = sets.map(function(s) {
+          var img = s.image_url
+            ? '<img src="' + _escHtml(s.image_url) + '" alt="" loading="lazy" style="width:42px;height:42px;object-fit:contain;background:var(--surface2);border-radius:2px;flex-shrink:0">'
+            : '<div style="width:42px;height:42px;background:var(--surface2);border-radius:2px;flex-shrink:0"></div>';
+          return '<div onclick="loadPcLangSetDetail(\'' + _escJsAttr(lang) + '\',\'' + _escJsAttr(s.set_code) + '\',\'' + _escJsAttr(s.set_name) + '\')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s" onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">' +
+            img +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:.85rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _escHtml(s.set_name) + '</div>' +
+              '<div style="font-size:.62rem;color:var(--muted);font-family:\'Space Mono\',monospace;letter-spacing:.06em">' + s.total + ' cards</div>' +
+            '</div></div>';
+        }).join('');
+
+        el.innerHTML = '<div style="padding:16px 0 8px">' +
+          _setsTabsHtml() +
+          '<p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">' +
+            (currentUser ? (owned + ' ' + langLabel + ' Pokémon cards owned') : ('Log in to track your collection')) +
+            ' · ' + sets.length + ' sets · ' + cached.totalCards + ' cards' +
+          '</p>' +
+          '<div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 360px);overflow-y:auto;overflow-x:hidden" id="setsListInner">' +
+            (rowsHtml || '<div style="padding:32px;text-align:center;color:var(--muted)">No ' + langLabel + ' sets in the catalog yet — run sync_pokemon_singles_by_lang.py --lang ' + lang + '</div>') +
+          '</div>' +
+          '</div>';
+      } catch(e) {
+        console.warn('[pc-lang sets] load failed', e);
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Failed to load ' + langLabel + ' sets.<br><small>' + _escHtml(e.message || 'unknown error') + '</small></div>';
+      }
+    }
+
+    async function loadPcLangSetDetail(lang, setCode, setName) {
+      var el = document.getElementById('setsPageContent');
+      if (!el) return;
+
+      // If user toggled to SEALED, defer to the existing sealed renderer
+      // — it already knows how to pick the right idPrefix per language.
+      if (_setsView === 'sealed') {
+        return _renderSealedProductsForSet(setCode, setName, el);
+      }
+
+      el.innerHTML = '<div style="padding:12px 0 8px">' +
+        '<button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>' +
+        '<h2 style="font-size:1.05rem;margin-bottom:6px">' + _escHtml(setName) + '</h2>' +
+        '<div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>' +
+        '</div>';
+
+      try {
+        var cacheKey = lang + '|' + setCode;
+        var now = Date.now();
+        var cards;
+        if (_pcLangSetDetailCache[cacheKey] && (now - _pcLangSetDetailCache[cacheKey].timestamp < 300000)) {
+          cards = _pcLangSetDetailCache[cacheKey].cards;
+        } else {
+          var allCards = [];
+          var offset = 0;
+          while (true) {
+            var res = await sb.from('catalog')
+              .select('id, name, set_name, set_code, card_number, rarity, image_url, pricecharting_id, price_source_url')
+              .eq('set_code', setCode)
+              .like('id', lang + '-pc-%')
+              .range(offset, offset + 999);
+            if (res.error) throw new Error(res.error.message);
+            var data = res.data || [];
+            if (data.length === 0) break;
+            allCards = allCards.concat(data);
+            if (data.length < 1000) break;
+            offset += 1000;
+          }
+          // Numeric card_number first, alpha fallback
+          allCards.sort(function(a, b) {
+            var an = parseInt(a.card_number, 10);
+            var bn = parseInt(b.card_number, 10);
+            if (!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+            return (a.card_number || a.name || '').localeCompare(b.card_number || b.name || '');
+          });
+          cards = allCards;
+          _pcLangSetDetailCache[cacheKey] = { timestamp: now, cards: cards };
+        }
+
+        // Build a simple grid render. Reuses the same card-shape look
+        // as the singles in other Sets pages — image + name + number.
+        var rowsHtml = cards.map(function(c) {
+          var img = c.image_url
+            ? '<img src="' + _escHtml(c.image_url) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">'
+            : '<div style="width:100%;height:100%;background:var(--surface2)"></div>';
+          var num = c.card_number ? ('#' + _escHtml(c.card_number)) : '';
+          return '<div style="background:var(--surface2);border:1px solid var(--border);padding:6px;display:flex;flex-direction:column;gap:6px;cursor:pointer" title="' + _escHtml(c.name) + '">' +
+            '<div style="aspect-ratio:245/342;background:var(--surface);overflow:hidden;border-radius:2px">' + img + '</div>' +
+            '<div style="font-size:.7rem;line-height:1.2;color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + _escHtml(c.name || '') + '</div>' +
+            (num ? '<div style="font-size:.55rem;color:var(--muted);font-family:\'Space Mono\',monospace">' + num + '</div>' : '') +
+            '</div>';
+        }).join('');
+
+        el.innerHTML = '<div style="padding:12px 0 8px">' +
+          '<button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>' +
+          '<h2 style="font-size:1.05rem;margin-bottom:4px">' + _escHtml(setName) + '</h2>' +
+          '<p style="font-size:.66rem;color:var(--muted);margin-bottom:14px;font-family:\'Space Mono\',monospace;letter-spacing:.06em">' + cards.length + ' cards</p>' +
+          '<div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 280px);overflow-y:auto;padding:10px">' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">' + (rowsHtml || '') + '</div>' +
+          '</div>' +
+          '</div>';
+      } catch(e) {
+        console.warn('[pc-lang set detail] failed', e);
+        el.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center">Failed to load set.<br><small>' + _escHtml(e.message || '') + '</small></div>';
+      }
+    }
 
     async function loadTcgSetsPage(el, gameKey) {
       const cfg = _TCG_SETS_CONFIG[gameKey];
@@ -24932,6 +25245,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       height: 100% !important;
       object-fit: cover !important;
       background: var(--surface2);
+    }
+    /* Sealed products use the same card-shape slot as singles so the
+       grid stays uniform, but with object-fit:contain so box / booster
+       photos aren't cropped. Small inset padding keeps the product from
+       butting against the slot border. */
+    #collectionContent .binder-card.is-sealed .binder-card-img,
+    #collectionContent .binder-card.is-sealed .binder-card-img-wrap > img {
+      object-fit: contain !important;
+      padding: 6px !important;
+      background: var(--surface) !important;
     }
 
     /* Binder LIST view row thumbnail — small fixed-size card-shape with

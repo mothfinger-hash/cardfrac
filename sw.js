@@ -1,14 +1,11 @@
 // PathBinder Service Worker
-// v214 — Two bug fixes:
-//  1. Sealed-product set matching was too strict (missing wildcards
-//     on the ilike OR filter), so only sets whose pokemontcg.io id
-//     happened to align with our catalog set_code showed products.
-//     Now matches loosely on both set_code and set_name.
-//  2. The binder sidebar (renderBinderSidebar) had no edit affordance
-//     — the ✎ button that existed lived on the hidden binder shelf.
-//     Added: ✎ overlay on each sidebar icon + right-click + long-press
-//     handlers that all open the edit modal.
-const CACHE = 'pathbinder-v214';
+// v218 — Marketplace product_type support:
+//  1. List Card modal now adapts to sealed product (1-photo requirement,
+//     sealed-specific condition options, copy change). Gated to SHOP tier.
+//  2. Marketplace browse adds All / Cards / Sealed pill row. Listings now
+//     carry a product_type column, with sealed listings showing a small
+//     copper SEALED chip on the browse card.
+const CACHE = 'pathbinder-v218';
 
 const PRECACHE = [
   '/offline.html',
