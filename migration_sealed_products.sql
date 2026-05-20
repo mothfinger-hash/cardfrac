@@ -78,6 +78,22 @@ WHERE product_type <> 'single'
 
 GRANT SELECT ON public.catalog_sealed_needs_review TO anon, authenticated;
 
+-- 9. binders.binder_type — distinguishes the auto-created "Sealed"
+--    binder from normal card binders. Sealed products bypass user-
+--    created binders (a booster box can't physically fit in a card
+--    binder) and route to the user's single binder_type='sealed' row.
+--    Default 'cards' keeps every existing binder unchanged.
+ALTER TABLE public.binders
+  ADD COLUMN IF NOT EXISTS binder_type TEXT NOT NULL DEFAULT 'cards';
+
+COMMENT ON COLUMN public.binders.binder_type IS
+  'cards | sealed — sealed type is auto-created by the app on first sealed-product add and named "Sealed" by default. Users may rename and customize cover.';
+
+-- Index for the find-or-create lookup the app does whenever a sealed
+-- product is added (one indexed read instead of scanning every binder).
+CREATE INDEX IF NOT EXISTS idx_binders_user_type
+  ON public.binders (user_id, binder_type);
+
 -- ============================================================
 -- Verify after running:
 --   select count(*) from catalog where product_type = 'single';   -- pre-existing rows

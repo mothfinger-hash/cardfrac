@@ -1,9 +1,10 @@
 // PathBinder Service Worker
-// v210 — Sets page now has a Singles | Sealed view toggle and the
-// EN/JP language pills became a compact dropdown (Pokemon — English /
-// Japanese / Chinese / Korean). Bump flushes the v209 cache so the
-// new tab-strip controls render on the next visit.
-const CACHE = 'pathbinder-v210';
+// v211 — Sealed view now actually renders. Clicking a set with the
+// SEALED toggle on shows that set's sealed products (booster boxes,
+// ETBs, tins, etc.) with an Add-to-Binder button. First sealed add
+// auto-creates the user's Sealed binder. Edit-binder ✎ button is
+// more discoverable (cyan border + soft glow).
+const CACHE = 'pathbinder-v211';
 
 const PRECACHE = [
   '/offline.html',
