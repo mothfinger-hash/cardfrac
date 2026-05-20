@@ -1,11 +1,13 @@
 // PathBinder Service Worker
-// v218 — Marketplace product_type support:
-//  1. List Card modal now adapts to sealed product (1-photo requirement,
-//     sealed-specific condition options, copy change). Gated to SHOP tier.
-//  2. Marketplace browse adds All / Cards / Sealed pill row. Listings now
-//     carry a product_type column, with sealed listings showing a small
-//     copper SEALED chip on the browse card.
-const CACHE = 'pathbinder-v218';
+// v220 — Global border-radius normalization:
+//  1. New radius scale (--r-pill 999px, --r-sm 6px, --r-md 8px,
+//     --r-lg 12px) applied consistently across buttons, inputs,
+//     selects, cards, panels, modals, sheets, popovers, lightbox,
+//     toasts. Loaded last in the cascade with !important to beat the
+//     ~45 inline `border-radius:0` overrides scattered through markup.
+//  2. Backdrop wash (.modal-overlay) stays square — only its inner
+//     panel rounds. Modal-close (×) stays a perfect circle.
+const CACHE = 'pathbinder-v220';
 
 const PRECACHE = [
   '/offline.html',

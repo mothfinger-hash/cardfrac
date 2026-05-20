@@ -2859,52 +2859,69 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       border-color:var(--ft-pink);
       color:var(--ft-pink);
     }
-    /* Pokémon language dropdown — magenta accent to match the Sets-page
-       Japanese-sub-toggle and graffiti-backdrop aesthetic. Semi-
-       transparent magenta fill on the select itself; on focus (which
-       fires when the user opens the dropdown), the glow blooms. */
-    #setsPage .sets-lang-select{
+    /* Pokémon language dropdown — magenta accent to match the active
+       Sets-tab (which is also magenta). Magenta border, magenta-tint
+       background, magenta text, magenta chevron. On :focus (which fires
+       the moment the user clicks to open the dropdown) the glow blooms
+       outward so the bloom is visible behind the OS-rendered popover.
+       Higher-specificity selectors + !important on the bits that the
+       OS / browser tries to override (option foreground color). */
+    #setsPage select.sets-lang-select{
       margin-left:10px;
       vertical-align:middle;
-      padding:3px 24px 3px 10px;
+      padding:4px 26px 4px 12px;
       font-family:'Space Mono','Share Tech Mono',monospace;
-      font-size:.6rem;
+      font-size:.62rem;
       letter-spacing:.08em;
+      font-weight:600;
       cursor:pointer;
-      border:1.5px solid var(--ft-pink);
-      background-color:rgba(255,61,127,.14);
-      color:var(--ft-pink);
-      transition:all .15s, box-shadow .2s;
+      border:1.5px solid var(--ft-pink) !important;
+      background-color:rgba(255,61,127,.18) !important;
+      color:var(--ft-pink) !important;
+      text-shadow:0 0 6px rgba(255,61,127,.45);
+      transition:background-color .15s, box-shadow .2s, transform .15s;
       appearance:none;
       -webkit-appearance:none;
       -moz-appearance:none;
+      border-radius:3px;
       /* SVG chevron in magenta to match border/text */
-      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23ff3d7f' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23ff3d7f' stroke-width='2' fill='none' stroke-linecap='round'/></svg>");
       background-repeat:no-repeat;
-      background-position:right 8px center;
-      background-size:9px 5px;
+      background-position:right 9px center;
+      background-size:10px 6px;
+      /* Subtle ambient glow even at rest so the box reads as "alive". */
+      box-shadow:0 0 8px rgba(255,61,127,.22);
     }
-    #setsPage .sets-lang-select:hover{
-      background-color:rgba(255,61,127,.22);
-      box-shadow:0 0 10px rgba(255,61,127,.35);
+    #setsPage select.sets-lang-select:hover{
+      background-color:rgba(255,61,127,.28) !important;
+      box-shadow:0 0 14px rgba(255,61,127,.45);
+      transform:translateY(-1px);
     }
-    #setsPage .sets-lang-select:focus{
-      /* Native select doesn't expose an "is-open" state, but :focus
-         fires the moment the user clicks/keyboard-opens it, so this
-         is our practical "glow while the popover is open" hook. */
+    #setsPage select.sets-lang-select:focus,
+    #setsPage select.sets-lang-select:focus-visible{
+      /* Native <select> doesn't expose an "open" state, but :focus
+         fires the instant the user clicks/keyboard-opens, so this is
+         our practical "glow while the popover is open" hook. The
+         dropdown opens over the select; the bloom radiates around it. */
       outline:none;
-      background-color:rgba(255,61,127,.28);
-      box-shadow:0 0 16px rgba(255,61,127,.55), 0 0 0 1px var(--ft-pink) inset;
+      background-color:rgba(255,61,127,.34) !important;
+      box-shadow:
+        0 0 22px rgba(255,61,127,.7),
+        0 0 44px rgba(255,61,127,.4),
+        0 0 0 1px var(--ft-pink) inset;
     }
-    #setsPage .sets-lang-select option{
-      /* Aubergine-dark to match the sets-overlay aesthetic, magenta-tinted
-         text so options pop in the OS-native popup. */
-      background:#1a0d18;
-      color:var(--text);
+    /* Options inside the popover. Browser support for option styling is
+       uneven (Safari ignores most of it, Firefox & Chromium honor
+       background + color). !important forces the magenta where allowed. */
+    #setsPage select.sets-lang-select option{
+      background:#1a0d18 !important;
+      color:var(--ft-pink) !important;
+      font-weight:600;
     }
-    #setsPage .sets-lang-select option:checked{
-      color:var(--ft-pink);
-      background:rgba(255,61,127,.18);
+    #setsPage select.sets-lang-select option:checked,
+    #setsPage select.sets-lang-select option:hover{
+      color:var(--ft-pink) !important;
+      background:rgba(255,61,127,.26) !important;
     }
     /* Singles | Sealed view toggle — applies to every TCG. Same shape
        as the EN/JP sub-toggle but uses the seafoam accent regardless
@@ -25420,6 +25437,112 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
          while in the binder page on mobile. */
       body.on-binder { overflow-x: hidden; }
     }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       GLOBAL RADIUS NORMALIZATION — v219
+       ----------------------------------------------------------------
+       Site-wide consistent border-radius across buttons, inputs, pills,
+       cards, panels, modals, and floating overlays. Loaded LAST in the
+       cascade so it wins over earlier rules; !important is used only
+       where inline `style="border-radius:..."` attributes need to be
+       beaten (there are ~45 of those scattered through the markup).
+
+       Scale, from smallest to largest:
+         --r-pill:  999px   chip-shape (full pill) — game pills, badges
+         --r-sm:    6px     buttons, inputs, selects, tabs
+         --r-md:    8px     cards, listing thumbnails, small panels
+         --r-lg:    12px    large panels, modals, sheets, popovers,
+                            lightbox containers
+       ─────────────────────────────────────────────────────────────── */
+    :root{
+      --r-pill: 999px;
+      --r-sm:   6px;
+      --r-md:   8px;
+      --r-lg:   12px;
+    }
+
+    /* — Buttons — every interactive button gets the small radius.
+         `.modal-close` (the × in modal corners) keeps a circle. */
+    button,
+    .section-tab,
+    .sets-tab,
+    .pb-panel-link,
+    .ndash-panel-link,
+    .lc-save-btn,
+    .buy-confirm-btn,
+    .mini-btn,
+    .ft-game-pill,
+    .ptype-pill,
+    .sealed-card,
+    .game-pill { border-radius: var(--r-sm) !important; }
+    .modal-close { border-radius: var(--r-pill) !important; }
+
+    /* — Pills & badges — fully rounded, chip-style. */
+    .game-pill,
+    .ptype-pill,
+    .cond-badge,
+    .badge,
+    .grade-badge,
+    .raw-badge,
+    .beta-badge { border-radius: var(--r-pill) !important; }
+
+    /* — Inputs / selects / textareas — same radius as buttons so a row
+         of "input + button" reads as one shape family. */
+    input[type="text"],
+    input[type="number"],
+    input[type="email"],
+    input[type="password"],
+    input[type="search"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="time"],
+    input[type="file"],
+    textarea,
+    select,
+    .atc-input { border-radius: var(--r-sm) !important; }
+
+    /* — Cards — the binder grid, marketplace browse cards, small stat
+         boxes. Slightly larger than buttons so cards feel like containers. */
+    .binder-card,
+    .listing-card,
+    .coll-stat-box,
+    .pb-stat-card,
+    .pb-detail-photo-slot { border-radius: var(--r-md) !important; }
+
+    /* — Panels & surfaces — the dashboard panels, sets-page panels,
+         filter panels. Even larger than cards. */
+    .pb-panel,
+    .ndash-panel,
+    .ft-modal,
+    .ft-stage { border-radius: var(--r-lg) !important; }
+
+    /* — Modals & floating overlays — anything that floats above the
+         page (modal dialogs, sheets, popovers, lightboxes, toast). The
+         backdrop itself (.modal-overlay) stays square because it's a
+         full-bleed wash; only its inner .modal panel is rounded.
+         Any element with `id="...Sheet"` or `id="...Popover"` is
+         covered by the attribute selectors below. */
+    .modal-overlay > .modal,
+    .modal,
+    .lightbox-inner,
+    .lightbox-img,
+    .toast,
+    #setCardDetailSheet,
+    [id$="Sheet"],
+    [id$="Popover"],
+    [id$="Dropdown"] { border-radius: var(--r-lg) !important; }
+
+    /* — Sticky notification footers / floating chips — small radius so
+         they read as buttons-with-a-tail, not full bars. */
+    .lock-overlay { border-radius: var(--r-sm) !important; }
+
+    /* — Modal-overlay BACKDROP stays square (full-bleed wash) — but
+         force it explicitly so an inline override can't accidentally
+         set a radius on the wash. */
+    .modal-overlay { border-radius: 0 !important; }
   </style>
 
   <!-- MOBILE BOTTOM NAV (only visible on small screens via CSS) -->
