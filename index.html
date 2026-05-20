@@ -6644,6 +6644,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <div id="adminRefundStatus" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);min-height:16px;line-height:1.6"></div>
     </div>
 
+    <!-- Sealed Products Migration + Sync -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Sealed Products</div>
+        <button onclick="printSealedProductsMigration();showToast('Sealed products migration printed to console')"
+          style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Print SQL</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Adds <code>product_type</code> + sealed metadata to <code>catalog</code> and <code>listings</code>. Idempotent &mdash; safe to re-run. After the migration applies, run
+        <code>python pokedata_sync.py --tcg pokemon-en --product-type sealed</code> to populate the catalog with ETBs, UTBs, booster boxes, etc. from PriceCharting.
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--copper);line-height:1.5">
+        Verify: <code>select count(*) from catalog where product_type &lt;&gt; 'single';</code>
+      </div>
+    </div>
+
     <!-- Image Backfill Tool -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">◈ Image Backfill</div>
@@ -22699,6 +22715,56 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         'create index if not exists catalog_id_prefix_idx on catalog (id text_pattern_ops);',
       ].join('\n');
       console.log('%cPathBinder catalog_sets_summary + catalog_cards_in_set migration:', 'color:orange;font-weight:bold;font-size:14px');
+      console.log(sql);
+    }
+
+    // Sealed-product migration — adds product_type / release_date /
+    // msrp_usd / pricecharting_id to catalog, product_type to listings
+    // and collection_items, plus an index for the Sets-page toggle.
+    // Idempotent; safe to re-run.
+    function printSealedProductsMigration() {
+      const sql = [
+        '-- PathBinder: Sealed Product Tracking migration ────────────',
+        '-- Adds sealed-product support to catalog, listings, collection_items.',
+        '-- Idempotent — safe to re-run.',
+        '',
+        '-- 1. catalog: product_type discriminator',
+        "alter table public.catalog",
+        "  add column if not exists product_type text not null default 'single';",
+        "comment on column public.catalog.product_type is",
+        "  'single | booster_pack | booster_box | etb | utb | premium_collection | tin | other_sealed';",
+        '',
+        '-- 2. catalog: release_date + msrp_usd (sealed-only in practice)',
+        'alter table public.catalog add column if not exists release_date date;',
+        'alter table public.catalog add column if not exists msrp_usd numeric(10,2);',
+        '',
+        '-- 3. catalog: pricecharting_id cross-reference',
+        'alter table public.catalog add column if not exists pricecharting_id text;',
+        '',
+        '-- 4. Index for fast Sets-page browse filtering',
+        'create index if not exists idx_catalog_game_product_set',
+        '  on public.catalog (game_type, product_type, set_name);',
+        '',
+        '-- 5. listings: product_type mirror (default single for existing rows)',
+        "alter table public.listings",
+        "  add column if not exists product_type text not null default 'single';",
+        'create index if not exists idx_listings_product_type',
+        '  on public.listings (product_type, status);',
+        '',
+        '-- 6. collection_items: product_type mirror for binder render branching',
+        "alter table public.collection_items",
+        "  add column if not exists product_type text not null default 'single';",
+        '',
+        '-- 7. Convenience view for sealed admin "needs review" queue',
+        'create or replace view public.catalog_sealed_needs_review as',
+        '  select id, name, set_name, set_code, product_type,',
+        '         release_date, msrp_usd, image_url',
+        '  from public.catalog',
+        "  where product_type <> 'single'",
+        '    and (release_date is null or msrp_usd is null);',
+        'grant select on public.catalog_sealed_needs_review to anon, authenticated;',
+      ].join('\n');
+      console.log('%cPathBinder Sealed Products migration:', 'color:#1AC7A0;font-weight:bold;font-size:14px');
       console.log(sql);
     }
 
