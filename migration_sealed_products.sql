@@ -14,7 +14,7 @@ ALTER TABLE public.catalog
   ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'single';
 
 COMMENT ON COLUMN public.catalog.product_type IS
-  'Product category: single | booster_pack | booster_box | etb | utb | premium_collection | tin | other_sealed';
+  'Product category: single | booster_pack | booster_box | booster_bundle | etb | utb | premium_collection | tin | mini_tin | build_and_battle | bundle | gift_bundle | deck | battle_deck | theme_deck | toolkit | binder_collection | other_sealed';
 
 -- 2. catalog: release_date — meaningful for sealed (lets us sort by
 --    release, show "Released March 2023", etc.). Nullable; populated
@@ -34,6 +34,14 @@ ALTER TABLE public.catalog
 ALTER TABLE public.catalog
   ADD COLUMN IF NOT EXISTS pricecharting_id TEXT;
 
+-- 4b. catalog: price_source_url — the full URL to a product's
+--     PriceCharting page. The existing api/lookup-price.js endpoint
+--     accepts a URL and parses live prices off it, so storing this
+--     here lets the per-product "refresh price" flow work for sealed
+--     items the same way it works for singles.
+ALTER TABLE public.catalog
+  ADD COLUMN IF NOT EXISTS price_source_url TEXT;
+
 -- 5. Index for fast Sets-page browse filtering: when the user toggles
 --    Singles → Sealed inside a set, we filter by (game_type, product_type,
 --    set_name). The default catalog index on (id) covers individual
@@ -48,7 +56,7 @@ ALTER TABLE public.listings
   ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'single';
 
 COMMENT ON COLUMN public.listings.product_type IS
-  'Mirror of catalog.product_type — single | booster_pack | booster_box | etb | utb | premium_collection | tin | other_sealed';
+  'Mirror of catalog.product_type — see catalog comment for full list (single | booster_pack | booster_box | etb | utb | bundle | deck | toolkit | binder_collection | …)';
 
 CREATE INDEX IF NOT EXISTS idx_listings_product_type
   ON public.listings (product_type, status);

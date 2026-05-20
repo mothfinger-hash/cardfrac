@@ -1,9 +1,9 @@
 // PathBinder Service Worker
-// v209 — HTML is never cached. Bumped from v208 to flush any cached
-// stylesheets after the cyan→seafoam palette swap (--accent / --teal
-// + ~480 hex / rgba literals). Static assets (icons/fonts/offline page)
-// keep cache-first behavior.
-const CACHE = 'pathbinder-v209';
+// v210 — Sets page now has a Singles | Sealed view toggle and the
+// EN/JP language pills became a compact dropdown (Pokemon — English /
+// Japanese / Chinese / Korean). Bump flushes the v209 cache so the
+// new tab-strip controls render on the next visit.
+const CACHE = 'pathbinder-v210';
 
 const PRECACHE = [
   '/offline.html',

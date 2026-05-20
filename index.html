@@ -2859,6 +2859,71 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       border-color:var(--ft-pink);
       color:var(--ft-pink);
     }
+    /* Pokémon language dropdown — replaces the two pill buttons so we
+       can support CN/KR/DE/FR/etc. without exploding tab strip width.
+       Styled to match the sub-toggle pills (seafoam border, dark fill,
+       monospace, compact). */
+    #setsPage .sets-lang-select{
+      margin-left:10px;
+      vertical-align:middle;
+      padding:3px 24px 3px 10px;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.6rem;
+      letter-spacing:.08em;
+      cursor:pointer;
+      border:1px solid var(--sets-teal);
+      background:var(--sets-teal-glow);
+      color:var(--sets-teal);
+      transition:all .15s;
+      appearance:none;
+      -webkit-appearance:none;
+      -moz-appearance:none;
+      /* tiny chevron drawn via SVG data-URI so we don't ship an asset */
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%231AC7A0' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+      background-repeat:no-repeat;
+      background-position:right 8px center;
+      background-size:9px 5px;
+    }
+    #setsPage .sets-lang-select:hover{
+      border-color:var(--ft-pink);
+      color:var(--ft-pink);
+    }
+    #setsPage .sets-lang-select option{
+      background:#0e1a14;
+      color:var(--text);
+    }
+    /* Singles | Sealed view toggle — applies to every TCG. Same shape
+       as the EN/JP sub-toggle but uses the seafoam accent regardless
+       of which TCG is active so it reads as a separate axis. */
+    #setsPage .sets-view-sub{
+      display:inline-flex;
+      gap:4px;
+      margin-left:10px;
+      vertical-align:middle;
+    }
+    #setsPage .sets-view-sub button{
+      padding:3px 10px;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.6rem;
+      letter-spacing:.08em;
+      cursor:pointer;
+      border:1px solid;
+      background:transparent;
+      transition:all .15s;
+    }
+    #setsPage .sets-view-sub button.active-view{
+      border-color:var(--sets-teal);
+      color:var(--sets-teal);
+      background:var(--sets-teal-glow);
+    }
+    #setsPage .sets-view-sub button.inactive{
+      border-color:rgba(255,255,255,.18);
+      color:var(--muted);
+    }
+    #setsPage .sets-view-sub button.inactive:hover{
+      border-color:var(--sets-teal);
+      color:var(--sets-teal);
+    }
     /* Main tab pills (POKEMON / MTG / YGO / OP) — all carry a teal
        glow background; the active tab gets a magenta border + magenta
        text so it pops against the backdrop. Replaces the old inline
@@ -22149,6 +22214,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // English. Other TCGs (MTG/YGO/OP) stay as siblings of POKEMON.
     var _setsLang        = 'POKEMON';     // 'POKEMON' | 'MTG' | 'YGO' | 'OP'
     var _setsPokemonLang = 'EN';          // 'EN' | 'JP' — only consulted when _setsLang === 'POKEMON'
+    // Singles | Sealed view toggle — applies to every TCG. Defaults to
+    // singles so existing card-browsing flow is unchanged on first visit.
+    var _setsView        = 'singles';     // 'singles' | 'sealed'
     var _setsCache       = null;  // { timestamp, sets }
     var _jpSetsCache     = null;  // { timestamp, sets: [{set_name, set_code, total}] }
     var _setsDetailCache = {};  // setId → { timestamp, cards }
@@ -22572,15 +22640,32 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           '" onclick="setSetsLang(\'' + t.key + '\')">' +
           t.label + '</button>';
       });
-      // EN/JP sub-toggle only renders when POKEMON is the active tab.
+      // Pokémon language dropdown — only renders when POKEMON is active.
+      // Compact select so we can add CN / KR / DE / FR / etc. without
+      // exploding the width of the tab strip. Render-path support for
+      // each option is added incrementally; languages without their own
+      // route fall through to the catalog-driven path.
       if (_setsLang === 'POKEMON') {
-        var enActive = _setsPokemonLang === 'EN';
-        var jpActive = _setsPokemonLang === 'JP';
-        html += '<span class="sets-pkmn-sub">';
-        html += '<button class="' + (enActive ? 'active-en' : 'inactive') + '" onclick="setSetsPokemonLang(\'EN\')">EN</button>';
-        html += '<button class="' + (jpActive ? 'active-jp' : 'inactive') + '" onclick="setSetsPokemonLang(\'JP\')">JP</button>';
-        html += '</span>';
+        html += '<select class="sets-lang-select" onchange="setSetsPokemonLang(this.value)">';
+        var langs = [
+          { code: 'EN', label: 'English'    },
+          { code: 'JP', label: 'Japanese'   },
+          { code: 'CN', label: 'Chinese'    },
+          { code: 'KR', label: 'Korean'     },
+        ];
+        langs.forEach(function(L) {
+          var sel = _setsPokemonLang === L.code ? ' selected' : '';
+          html += '<option value="' + L.code + '"' + sel + '>' + L.label + '</option>';
+        });
+        html += '</select>';
       }
+      // Singles | Sealed view toggle — applies to every TCG.
+      var singlesActive = _setsView === 'singles';
+      var sealedActive  = _setsView === 'sealed';
+      html += '<span class="sets-view-sub">';
+      html += '<button class="' + (singlesActive ? 'active-view' : 'inactive') + '" onclick="setSetsView(\'singles\')">SINGLES</button>';
+      html += '<button class="' + (sealedActive  ? 'active-view' : 'inactive') + '" onclick="setSetsView(\'sealed\')">SEALED</button>';
+      html += '</span>';
       html += '</div>';
       return html;
     }
@@ -22592,6 +22677,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function setSetsPokemonLang(lang) {
       _setsPokemonLang = lang;
       if (_setsLang === 'POKEMON') loadSetsPage();
+    }
+    function setSetsView(view) {
+      _setsView = view;
+      loadSetsPage();
     }
 
     // Fetch catalog sets in the background and append any sets the
@@ -22732,7 +22821,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         "alter table public.catalog",
         "  add column if not exists product_type text not null default 'single';",
         "comment on column public.catalog.product_type is",
-        "  'single | booster_pack | booster_box | etb | utb | premium_collection | tin | other_sealed';",
+        "  'single | booster_pack | booster_box | booster_bundle | etb | utb | premium_collection | tin | mini_tin | build_and_battle | bundle | gift_bundle | deck | battle_deck | theme_deck | toolkit | binder_collection | other_sealed';",
         '',
         '-- 2. catalog: release_date + msrp_usd (sealed-only in practice)',
         'alter table public.catalog add column if not exists release_date date;',
@@ -22740,6 +22829,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '',
         '-- 3. catalog: pricecharting_id cross-reference',
         'alter table public.catalog add column if not exists pricecharting_id text;',
+        '',
+        '-- 3b. catalog: price_source_url — used by /api/lookup-price.js',
+        'alter table public.catalog add column if not exists price_source_url text;',
         '',
         '-- 4. Index for fast Sets-page browse filtering',
         'create index if not exists idx_catalog_game_product_set',
@@ -22774,6 +22866,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       // POKEMON tab dispatches to JP or EN flow based on _setsPokemonLang
       if (_setsLang === 'POKEMON' && _setsPokemonLang === 'JP') { await loadJpSetsPage(el); return; }
+      // CN / KR — catalog has the data (cn-pc-* and kr-pc-* prefixes
+      // populated by sync_pokemon_singles_by_lang.py), but the set-browse
+      // UI for these languages lands in a follow-up session. For now,
+      // show a tabs-only stub so the dropdown isn't a dead button.
+      if (_setsLang === 'POKEMON' && (_setsPokemonLang === 'CN' || _setsPokemonLang === 'KR')) {
+        var langLabel = _setsPokemonLang === 'CN' ? 'Chinese' : 'Korean';
+        el.innerHTML = '<div style="padding:16px 0 8px">' + _setsTabsHtml() +
+          '<div style="padding:60px 20px;text-align:center;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.78rem;line-height:1.7">' +
+          '<div style="font-family:\'Orbitron\',monospace;color:var(--sets-teal);font-size:1rem;letter-spacing:.06em;margin-bottom:14px">' + langLabel + ' Pokémon — Coming Soon</div>' +
+          'Singles are synced to the catalog (' + langLabel.toLowerCase() + '-pc- prefixed rows).<br>The browse UI for these languages ships next session.</div></div>';
+        return;
+      }
       if (_setsLang === 'MTG' || _setsLang === 'YGO' || _setsLang === 'OP') {
         await loadTcgSetsPage(el, _setsLang);
         return;
