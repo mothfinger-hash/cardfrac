@@ -23311,6 +23311,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
     function setSetsView(view) {
       _setsView = view;
+      // Bust the per-TCG sets cache so the next render re-fetches with
+      // product_type. Old cached entries don't have has_sealed/has_singles
+      // flags and would render the same regardless of toggle.
+      _tcgSetsCache = {};
       loadSetsPage();
     }
 
@@ -24041,6 +24045,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               .select('id, name, set_name, set_code, card_number, rarity, image_url')
               .eq('set_code', setCode)
               .or('id.like.jp-%,id.like.pd-%')
+              // Singles only — keeps sealed booster boxes / packs out
+              // of the JP card grid even when they share a set_code.
+              .eq('product_type', 'single')
               .range(offset, offset + 999);
             if (!data || data.length === 0) break;
             allCards = allCards.concat(data);
@@ -24307,12 +24314,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           // created_at so we can sort by recency. If the column doesn't
           // exist on this DB, fall back to a basic SELECT and alpha sort —
           // we don't want a missing column to silently produce empty results.
+          // product_type is always selected so we can flag sets that have
+          // sealed products and filter the list when _setsView === 'sealed'.
           let allRows = [];
           let offset = 0;
           let useCreatedAt = true;
           let firstErr = null;
           while (true) {
-            const cols = useCreatedAt ? 'set_name, set_code, created_at' : 'set_name, set_code';
+            const cols = useCreatedAt
+              ? 'set_name, set_code, product_type, created_at'
+              : 'set_name, set_code, product_type';
             const res = await sb.from('catalog')
               .select(cols)
               .like('id', cfg.prefix + '%')
@@ -24336,12 +24347,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           }
           if (firstErr) throw new Error(firstErr.message || 'catalog query failed');
 
-          // Group by set_code, count cards, track max(created_at) if available
+          // Group by set_code, count cards, track max(created_at) if available.
+          // has_sealed / has_singles let the Singles ↔ Sealed toggle filter
+          // the list down to sets with rows of the active type.
           const byCode = {};
           allRows.forEach(r => {
             const key = r.set_code || r.set_name || '?';
-            if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0, max_created_at: 0 };
+            if (!byCode[key]) byCode[key] = {
+              set_name: r.set_name || r.set_code || '?',
+              set_code: r.set_code || '',
+              total: 0, max_created_at: 0,
+              has_sealed: false, has_singles: false,
+            };
             byCode[key].total++;
+            const pt = r.product_type || 'single';
+            if (pt === 'single') byCode[key].has_singles = true;
+            else                 byCode[key].has_sealed  = true;
             if (useCreatedAt && r.created_at) {
               const t = new Date(r.created_at).getTime();
               if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
@@ -24375,7 +24396,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // re-render rows without re-walking collectionItems.
         cachedBlock.owned = owned;
 
-        const sets = cachedBlock.sets;
+        // Filter the set list based on the active Singles ↔ Sealed
+        // toggle. When in 'sealed' view, only show sets that actually
+        // have sealed rows so the user doesn't click into a set with
+        // no sealed products. Cached entries written before the flags
+        // existed have undefined has_sealed/has_singles — treat those
+        // as "show in both views" so we don't accidentally empty the
+        // list until the cache refreshes (10-minute TTL).
+        const allSets    = cachedBlock.sets;
+        const wantSealed = (_setsView === 'sealed');
+        const sets = allSets.filter(s => {
+          if (s.has_sealed === undefined && s.has_singles === undefined) return true;
+          return wantSealed ? !!s.has_sealed : (s.has_singles !== false);
+        });
         const totalOwned = Object.values(owned).reduce((a, b) => a + b, 0);
 
         const rows = sets.map(s => _renderTcgSetRow(s, gameKey, owned)).join('');
@@ -24418,6 +24451,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               .select('id, name, set_name, set_code, card_number, rarity, image_url')
               .eq('set_code', setCode)
               .like('id', cfg.prefix + '%')
+              // Singles view — explicitly exclude sealed (booster boxes,
+              // packs, etc.) which would otherwise sneak into the card
+              // grid when they share a set_code with the singles.
+              .eq('product_type', 'single')
               .range(offset, offset + 999);
             if (!data || data.length === 0) break;
             allCards = allCards.concat(data);

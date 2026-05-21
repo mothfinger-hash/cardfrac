@@ -227,6 +227,47 @@ def discover_sets_for_tcg(cfg):
     return sorted(found)
 
 
+# Names that PriceCharting lists alongside singles on a /console/{slug}
+# page but are actually sealed product. The singles enrich script must
+# skip these — otherwise --create-missing inserts them as
+# product_type='single' and they bleed into the Sets-page Singles view.
+_SEALED_NAME_PATTERNS = (
+    re.compile(r'\bbooster\s+box\b',              re.IGNORECASE),
+    re.compile(r'\bbooster\s+pack\b',             re.IGNORECASE),
+    re.compile(r'\bbooster\s+bundle\b',           re.IGNORECASE),
+    re.compile(r'\bsleeved\s+booster\s+pack\b',   re.IGNORECASE),
+    re.compile(r'\belite\s+trainer\s+box\b',      re.IGNORECASE),
+    re.compile(r'\bultra\s+premium\s+collection\b', re.IGNORECASE),
+    re.compile(r'\bpremium\s+collection\b',       re.IGNORECASE),
+    re.compile(r'\bcollection\s+box\b',           re.IGNORECASE),
+    re.compile(r'\bstarter\s+deck\b',             re.IGNORECASE),
+    re.compile(r'\bstructure\s+deck\b',           re.IGNORECASE),
+    re.compile(r'\btheme\s+deck\b',               re.IGNORECASE),
+    re.compile(r'\bbattle\s+deck\b',              re.IGNORECASE),
+    re.compile(r'\bcommander\s+deck\b',           re.IGNORECASE),
+    re.compile(r'\bbuild\s*[&+]?\s*battle\b',     re.IGNORECASE),
+    re.compile(r'\bgift\s+bundle\b',              re.IGNORECASE),
+    re.compile(r'\bfat\s+pack\b',                 re.IGNORECASE),
+    re.compile(r'\bmini\s+tin\b',                 re.IGNORECASE),
+    re.compile(r'\b(?:^|\s)tin\b',                re.IGNORECASE),
+    re.compile(r'\bdisplay\s+box\b',              re.IGNORECASE),
+    re.compile(r'\bwax\s+box\b',                  re.IGNORECASE),
+    re.compile(r'\bbinder\s+collection\b',        re.IGNORECASE),
+    re.compile(r'\bjumbo\s+box\b',                re.IGNORECASE),
+    re.compile(r'\bcase\s*$',                     re.IGNORECASE),
+    re.compile(r'\b\d+[- ]?pack\s+mini\s+tin\b',  re.IGNORECASE),
+)
+
+def _looks_like_sealed_product(name):
+    """Quick guard for sync_pc_singles_enrich.py --create-missing: returns
+    True when the PC listing's name reads as a sealed product. We use
+    word-boundary regexes to avoid false positives like 'Cutting' or
+    'Hunting' matching the bare token 'tin'."""
+    if not name:
+        return False
+    return any(rx.search(name) for rx in _SEALED_NAME_PATTERNS)
+
+
 def _clean_pc_name(name_raw):
     """Strip every annotation PC layers on top of a card title:
       - [Bracket tags]      → rarity, foil status ('[LR++ Holo]', '[Foil]', '[SPR]')
@@ -555,6 +596,11 @@ def main():
                         f"clean='{pc['name_clean'][:35]}'  num={pc.get('card_number')}"
                     )
                 if args.create_missing:
+                    # Skip rows that look like sealed product — they live
+                    # in the catalog under sealed-{tcg}-pc-{id} via
+                    # sync_sealed_products.py, NOT as singles.
+                    if _looks_like_sealed_product(pc["name"]):
+                        continue
                     new_id = f"{cfg['id_prefix']}-pc-{pc['pricecharting_id']}"
                     payload = {
                         "id":               new_id,
