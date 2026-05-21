@@ -2513,47 +2513,42 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
     @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
 
-    /* ── DESKTOP: binder pages constrain CELL WIDTH instead of row height ──
-       Previous version capped row height to fit all 9/4/1 cards on
-       one screen, which back-computed the wrap width and left cards
-       sitting tiny inside wider grid cells. New approach: cap the
-       grid COLUMN width to card-aspect-times-row-height so each cell
-       is naturally card-shaped, all 9 still fit vertically when the
-       viewport allows, and cards fill their cells fully on retina.
-       Grid is justify-content:center so the row is balanced. */
+    /* ── DESKTOP: binder pages fit vertically without scroll ──
+       On wide viewports the binder grid should feel like one physical
+       page — all 9 / 4 / 1 cards visible at once. We constrain the
+       implicit row height by viewport, and let the card image derive
+       its width from that height (aspect ratio 245:342). On mobile the
+       original behaviour is preserved (cards size by column width). */
     @media (min-width: 901px) {
       body.on-binder #collectionContent .binder-grid-3x3 {
-        /* Each column = (row height) × (245/342 card aspect).
-           Row height = (viewport - chrome) / 3 rows. */
-        grid-template-columns:
-          repeat(3, minmax(0, calc(((100svh - 260px - 20px) / 3) * 0.716)));
-        justify-content: center;
+        grid-auto-rows: calc((100svh - 260px - 20px) / 3);
       }
       body.on-binder #collectionContent .binder-grid-2x2 {
-        grid-template-columns:
-          repeat(2, minmax(0, calc(((100svh - 260px - 16px) / 2) * 0.716)));
-        justify-content: center;
+        grid-auto-rows: calc((100svh - 260px - 16px) / 2);
       }
       body.on-binder #collectionContent .binder-grid-1x1 {
-        grid-template-columns:
-          minmax(0, calc((100svh - 260px) * 0.716));
-        justify-content: center;
+        grid-auto-rows: calc(100svh - 260px);
       }
-      /* Card still allows shrinking + clips overflow so info doesn't push
-         the image past the cell's allotted height. */
+      /* Card needs to allow shrinking + clip overflow so info doesn't push
+         the image past its row's allotted height. */
       body.on-binder #collectionContent .binder-card {
         min-height: 0;
         overflow: hidden;
       }
-      /* Wrap fills the (now correctly-sized) cell width, aspect-ratio
-         keeps it card-shaped, IMG covers it fully. No more width:auto
-         shrinking the wrap relative to the cell. */
+      /* Image wrap derives width from height via aspect-ratio (already set
+         at 245/342 elsewhere). flex:1 1 0 + min-height:0 lets it scale
+         within the row; margin:0 auto centers the card image in the wider
+         grid column so wide screens don't leave the card pinned to the left. */
       body.on-binder #collectionContent .binder-card-img-wrap {
         flex: 1 1 0;
         min-height: 0;
-        width: 100%;
+        height: auto !important;
+        width: auto !important;
         max-width: 100%;
+        margin: 0 auto;
       }
+      /* Info row sits flush below the image with a tight max-height so it
+         never steals more than its fair share. */
       body.on-binder #collectionContent .binder-card-info {
         flex-shrink: 0;
         padding: 4px 6px 2px;
