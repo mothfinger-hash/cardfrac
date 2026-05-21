@@ -22375,6 +22375,33 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // ── Supabase image transform: serve smaller thumbnails for grid views ──
     // Converts storage URLs to the render/image endpoint with width + quality.
     // Non-Supabase URLs (pokemontcg.io etc.) are returned unchanged.
+    // Aspect-aware fit for user-uploaded card photos. Default CSS is
+    // object-fit:cover (great for catalog images cropped to card aspect,
+    // bad for landscape phone shots which get aggressively side-cropped).
+    // Pure object-fit:contain is also bad — landscape photos render as
+    // thin slivers inside the card slot.
+    //
+    // This handler runs onload, reads the photo's natural aspect, and
+    // flips to contain ONLY if the photo is significantly wider than
+    // the card slot (>1.15x card aspect). Card-aspect-or-narrower
+    // photos stay on cover and fill naturally.
+    function _userPhotoAspectFit(imgEl) {
+      try {
+        var w = imgEl.naturalWidth, h = imgEl.naturalHeight;
+        if (!w || !h) return;
+        var photoAspect = w / h;
+        var cardAspect  = 245 / 342;   // ≈ 0.716
+        if (photoAspect > cardAspect * 1.15) {
+          // Landscape / much wider than card — contain prevents crop
+          imgEl.style.objectFit       = 'contain';
+          imgEl.style.backgroundColor = 'var(--surface)';
+        } else {
+          // Portrait / card-aspect — cover fills with minimal crop
+          imgEl.style.objectFit = 'cover';
+        }
+      } catch(_) { /* best-effort */ }
+    }
+
     function _thumbUrl(url, width = 200, quality = 80) {
       if (!url) return url;
       const STORAGE = '/storage/v1/object/public/';
@@ -25602,37 +25629,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       background: var(--surface) !important;
     }
 
-    /* User-uploaded card photos (from card-photos bucket) have arbitrary
-       phone-camera aspect ratios — applying the default cover-crop would
-       chop off the card edges. Use contain so the full photo is visible
-       inside the 245/342 slot. Catalog images (pre-cropped to card
-       aspect) keep cover and read perfectly without this override.
-
-       Multi-selector to defeat the earlier !important rule on every
-       known render path: body.on-binder prefix matches the mobile/
-       full-page binder, plain prefix matches dashboard/explore views.
-       Both attribute-selector and class-selector fallbacks cover JS
-       rendering quirks. */
-    body.on-binder #collectionContent .binder-card.has-user-photo .binder-card-img,
-    body.on-binder #collectionContent .binder-card.has-user-photo .binder-card-img-wrap > img,
-    #collectionContent .binder-card.has-user-photo .binder-card-img,
-    #collectionContent .binder-card.has-user-photo .binder-card-img-wrap > img,
-    .binder-card.has-user-photo .binder-card-img,
-    .binder-card.has-user-photo .binder-card-img-wrap > img {
-      object-fit: contain !important;
-      background: var(--surface) !important;
-      padding: 0 !important;
+    /* User-uploaded card photos — aspect-aware fit. CSS provides the
+       base styling (background + cover crop for narrow / card-aspect
+       photos); JS onload handler _userPhotoAspectFit flips object-fit
+       to contain on photos significantly wider than card aspect so
+       landscape phone shots don't get aggressively side-cropped.
+       Class signal lets us style the slot background regardless of
+       which mode the IMG ends up in. */
+    .binder-card.has-user-photo,
+    .acg-card.has-user-photo {
+      background: var(--surface);
     }
-    /* Belt-and-suspenders: any IMG whose src points at the card-photos
-       bucket gets contain regardless of class state. CSS attribute
-       selector matches the URL directly — survives JS render-path
-       drift. */
-    .binder-card .binder-card-img[src*="/card-photos/"],
-    .binder-card-img-wrap > img[src*="/card-photos/"],
-    .binder-card .binder-card-img[src*="card-photos%2F"],
-    .binder-card-img-wrap > img[src*="card-photos%2F"] {
-      object-fit: contain !important;
-      background: var(--surface) !important;
+    .binder-card.has-user-photo .binder-card-img-wrap,
+    .acg-card.has-user-photo .acg-card-art {
+      background: var(--surface);
     }
 
     /* Binder LIST view row thumbnail — small fixed-size card-shape with
