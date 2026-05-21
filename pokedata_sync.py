@@ -1431,18 +1431,20 @@ def mode_mirror_images():
     # the source) — if other CDNs need mirroring later, broaden the filter.
     # If --tcg is set, scope the mirror to that game so parallel terminals
     # (one per TCG) don't race on the same rows. Use id-prefix matching
-    # because game_type isn't populated on every legacy row.
+    # because game_type isn't populated on every legacy row. Generic —
+    # delegates to get_id_prefix() which knows every TCG pokedata covers
+    # (pokemon, magic, ygo, onepiece, digimon, lorcana, fab, union arena,
+    # dragon ball z, dragon ball fusion, grand archive, metazoo, star wars,
+    # gundam, sorcery).
     tcg_prefix = None
     if args.tcg:
         canon = canonical_tcg(args.tcg).lower()
         if canon in ("pokemon", "pokémon"):
             tcg_prefix = "POKEMON"   # sentinel — handled below
-        elif canon in ("magic", "mtg", "magic the gathering"):
-            tcg_prefix = "mtg-"
-        elif canon in ("yugioh", "yu-gi-oh", "yu-gi-oh!", "ygo"):
-            tcg_prefix = "ygo-"
-        elif canon in ("one piece", "onepiece", "op"):
-            tcg_prefix = "op-"
+        else:
+            prefix = get_id_prefix(canon)
+            if prefix and prefix not in ("en", "jp"):
+                tcg_prefix = f"{prefix}-"
         if tcg_prefix:
             print(f"  Scoping mirror to --tcg '{args.tcg}' (id prefix: {tcg_prefix})")
 

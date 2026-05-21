@@ -113,17 +113,24 @@ def download_image(url):
     """Download a PriceCharting product image at the largest available
     size. PriceCharting's CDN exposes multiple variants per hash:
         /60.jpg /160.jpg /240.jpg /320.jpg /480.jpg /640.jpg /1600.jpg
-    Not every product has every size pre-generated (older / less-popular
-    products often max out at 240 or 320). We try largest → smallest
-    until one returns 200, then return that.
+    Not every product has every size pre-generated. Brand-new products
+    (e.g. fresh Gundam set releases) often have ONLY /1600 available
+    until PC's background job pre-generates the smaller sizes —
+    older products may max out at /240. We start at the size that
+    was in the source URL, then fall back through every size in
+    decreasing-then-ascending order so we hit whichever PC actually
+    serves first. convert_to_webp downsizes anything bigger than
+    480px wide so the catalog stays uniform.
     """
-    # Strip whatever size suffix was passed in, then try our preferred order.
-    base = _SIZE_RE.sub('', url)  # e.g. ".../hash" without /XXX.jpg
-    # Detect the original extension so we keep .png products as .png etc.
+    base = _SIZE_RE.sub('', url)
     m = _SIZE_RE.search(url)
     ext = m.group(2) if m else "jpg"
+    # Try /1600 first (newest products only have this), then standard
+    # downsized ladder. /640 and /1600 added since some Gundam product
+    # rows are only published at those sizes.
+    sizes_to_try = (1600, 640, 480, 320, 240, 160, 60)
     last_err = None
-    for size in (480, 320, 240, 160, 60):
+    for size in sizes_to_try:
         candidate = f"{base}/{size}.{ext}"
         try:
             r = _session.get(candidate, timeout=REQUEST_TIMEOUT)
@@ -135,12 +142,23 @@ def download_image(url):
     raise RuntimeError(f"no PriceCharting size worked for {url} — last error: {last_err}")
 
 
+# Downscale source images bigger than this width before WebP-encoding,
+# so /1600 originals don't bloat Supabase Storage. 480 is the size the
+# rest of the catalog standardizes on.
+_MAX_WEBP_WIDTH = 480
+
 def convert_to_webp(raw_bytes, quality=82):
-    """Convert any PIL-supported source format to WebP."""
+    """Convert any PIL-supported source format to WebP, downscaled
+    to _MAX_WEBP_WIDTH if the source is wider (e.g. when we had to
+    fall back to /1600 because PC hadn't published /480 yet)."""
     im = Image.open(io.BytesIO(raw_bytes))
     # WebP doesn't love palette-mode PNGs, normalise to RGB(A).
     if im.mode not in ("RGB", "RGBA"):
         im = im.convert("RGBA" if im.mode in ("LA", "P") else "RGB")
+    # Downscale if needed — preserves aspect ratio.
+    if im.width > _MAX_WEBP_WIDTH:
+        new_h = round(im.height * _MAX_WEBP_WIDTH / im.width)
+        im = im.resize((_MAX_WEBP_WIDTH, new_h), Image.LANCZOS)
     out = io.BytesIO()
     im.save(out, format="WEBP", quality=quality, method=6)
     return out.getvalue()
@@ -156,7 +174,46 @@ def main():
                     help="Stop after N rows (debugging).")
     ap.add_argument("--workers", type=int, default=5,
                     help="Parallel download/upload workers (default 5).")
+    ap.add_argument("--tcg", type=str, default=None,
+                    help="Scope to a single TCG. Matches catalog ids by "
+                         "prefix: pokemon=sealed-en-/sealed-jp-/sealed-kr-/sealed-cn-, "
+                         "magic=sealed-mtg-, yugioh=sealed-ygo-, onepiece=sealed-op-, "
+                         "gundam=sealed-gun-, dbz=sealed-dbz-.")
     args = ap.parse_args()
+
+    # Map --tcg to the catalog-id prefix(es) the mirror should consider.
+    # Pokemon is the only multi-prefix TCG (per-language). Others are 1:1.
+    tcg_id_prefixes = None
+    if args.tcg:
+        tcg = args.tcg.lower().strip()
+        # Prefix map covers BOTH sealed product (sealed-{tcg}-) AND
+        # PriceCharting-sourced singles ({tcg}-pc-) for Gundam/DBZ.
+        # Earlier TCGs (Pokemon EN/JP, MTG, YGO, OP) have their singles
+        # mirrored via pokedata_sync's --mirror-images flow so they're
+        # not duplicated here.
+        prefix_map = {
+            "pokemon":   ["sealed-en-", "sealed-jp-", "sealed-kr-", "sealed-cn-",
+                          "sealed-de-", "sealed-fr-", "sealed-it-", "sealed-es-",
+                          "sealed-pt-", "sealed-nl-", "sealed-ru-",
+                          # CN/KR singles from PC
+                          "cn-pc-", "kr-pc-"],
+            "magic":     ["sealed-mtg-"],
+            "mtg":       ["sealed-mtg-"],
+            "yugioh":    ["sealed-ygo-"],
+            "ygo":       ["sealed-ygo-"],
+            "onepiece":  ["sealed-op-"],
+            "op":        ["sealed-op-"],
+            "gundam":    ["sealed-gun-", "gun-pc-"],
+            "dbz":       ["sealed-dbz-", "dbz-pc-"],
+            # Vintage Topps Pokemon — distinct game_type ('pokemon_topps')
+            # so frontend can silo, but mirror still by id prefix.
+            "pokemon_topps": ["sealed-topps-", "topps-pc-"],
+            "topps":         ["sealed-topps-", "topps-pc-"],   # alias
+        }
+        tcg_id_prefixes = prefix_map.get(tcg)
+        if not tcg_id_prefixes:
+            sys.exit(f"  Unknown --tcg '{args.tcg}'. Known: {sorted(prefix_map)}")
+        print(f"  Scoping mirror to --tcg '{args.tcg}' (id prefixes: {tcg_id_prefixes})")
 
     # Fetch ALL catalog rows whose image_url is still on PriceCharting's CDN.
     # `pricecharting` in URL covers both googleapis.com hosts (with hash IDs)
@@ -168,13 +225,22 @@ def main():
     rows = []
     page = 0
     PAGE_SIZE = 1000
+    # Build PostgREST `or` filter for tcg id-prefix scoping. Format:
+    # or=(id.like.sealed-mtg-*,id.like.sealed-en-*) — single param, no
+    # spaces. Empty if --tcg not set.
+    or_filter = None
+    if tcg_id_prefixes:
+        or_filter = "(" + ",".join(f"id.like.{p}*" for p in tcg_id_prefixes) + ")"
     while True:
-        chunk = pg_get("catalog", params={
+        params = {
             "select": "id,image_url,set_code,pricecharting_id,product_type",
             "image_url": "ilike.*pricecharting*",
             "limit":   str(PAGE_SIZE),
             "offset":  str(page * PAGE_SIZE),
-        })
+        }
+        if or_filter:
+            params["or"] = or_filter
+        chunk = pg_get("catalog", params=params)
         rows.extend(chunk)
         if len(chunk) < PAGE_SIZE:
             break

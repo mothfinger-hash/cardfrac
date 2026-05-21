@@ -5348,6 +5348,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <option value="Pokémon">Pokémon</option>
             <option value="Magic: The Gathering">Magic: The Gathering</option>
             <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+            <option value="One Piece">One Piece</option>
+            <option value="Gundam">Gundam</option>
+            <option value="Dragon Ball Z">Dragon Ball Z</option>
+            <option value="Pokemon Topps">Pokemon Topps</option>
             <option value="Sports">Sports</option>
             <option value="Other">Other</option>
           </select>
@@ -6554,6 +6558,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <option value="Pokémon">Pokémon</option>
             <option value="Magic: The Gathering">Magic: The Gathering</option>
             <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+            <option value="One Piece">One Piece</option>
+            <option value="Gundam">Gundam</option>
+            <option value="Dragon Ball Z">Dragon Ball Z</option>
+            <option value="Pokemon Topps">Pokemon Topps</option>
             <option value="Sports">Sports</option>
           </select>
         </div>
@@ -12691,11 +12699,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         var sub = [r.set_name, r.set_code, (r.product_type || '').replace(/_/g, ' ').toUpperCase()]
           .filter(Boolean).join(' · ');
         return '<div id="bgrev_' + _escJsAttr(r.id) + '" style="display:flex;gap:12px;border:1px solid var(--border);background:var(--surface2);padding:10px;align-items:flex-start">' +
-          '<div style="width:96px;height:96px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">' +
-            (r.image_url
-              ? '<img src="' + _escHtml(_thumbUrl(r.image_url, 200)) + '" alt="" loading="lazy" decoding="async" style="max-width:100%;max-height:100%;object-fit:contain">'
-              : '<span style="color:var(--muted);font-size:.55rem">no img</span>') +
-          '</div>' +
+          // Clickable thumbnail — opens the full-size image in a new
+          // tab so the admin can preview the actual artwork at native
+          // size. Box is portrait (96x140) so vertical products like
+          // sleeved booster packs render at usable size; wide products
+          // (booster boxes) still fit via object-fit:contain. Click
+          // opens full-size in case the thumbnail itself doesn't tell
+          // the whole story.
+          (r.image_url
+            ? '<a href="' + _escHtml(r.image_url) + '" target="_blank" rel="noopener" ' +
+              'title="Click to view full-size image" ' +
+              'style="width:96px;height:140px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in;text-decoration:none">' +
+                '<img src="' + _escHtml(_thumbUrl(r.image_url, 240)) + '" alt="" loading="lazy" decoding="async" ' +
+                  'style="max-width:100%;max-height:100%;object-fit:contain">' +
+              '</a>'
+            : '<div style="width:96px;height:140px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">' +
+                '<span style="color:var(--muted);font-size:.55rem">no img</span>' +
+              '</div>') +
           '<div style="flex:1;min-width:0">' +
             '<div style="font-family:\'Space Mono\',monospace;font-size:.74rem;color:var(--text);font-weight:700;line-height:1.3">' + _escHtml(r.name || '—') + '</div>' +
             '<div style="font-family:\'Space Mono\',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.04em;margin-top:2px">' + _escHtml(sub) + '</div>' +
@@ -13350,6 +13370,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <option value="Pokémon" ${listing.gameType==='Pokémon'?'selected':''}>Pokémon</option>
               <option value="Magic: The Gathering" ${listing.gameType==='Magic: The Gathering'?'selected':''}>Magic: The Gathering</option>
               <option value="Yu-Gi-Oh!" ${listing.gameType==='Yu-Gi-Oh!'?'selected':''}>Yu-Gi-Oh!</option>
+              <option value="One Piece" ${listing.gameType==='One Piece'?'selected':''}>One Piece</option>
+              <option value="Gundam" ${listing.gameType==='Gundam'?'selected':''}>Gundam</option>
+              <option value="Dragon Ball Z" ${listing.gameType==='Dragon Ball Z'?'selected':''}>Dragon Ball Z</option>
               <option value="Sports" ${listing.gameType==='Sports'?'selected':''}>Sports</option>
               <option value="Other" ${listing.gameType==='Other'?'selected':''}>Other</option>
             </select>
@@ -23173,7 +23196,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       { key: 'POKEMON', label: 'POKEMON'   },
       { key: 'MTG',     label: 'MAGIC'     },
       { key: 'YGO',     label: 'YU-GI-OH'  },
-      { key: 'OP',      label: 'ONE PIECE' }
+      { key: 'OP',      label: 'ONE PIECE' },
+      { key: 'GUN',     label: 'GUNDAM'    },
+      { key: 'DBZ',     label: 'DRAGON BALL Z' },
+      { key: 'TOPPS',   label: 'POKEMON TOPPS' }
     ];
 
     function _setsTabsHtml() {
@@ -23484,7 +23510,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         await loadPcLangPokemonSetsPage(el, _setsPokemonLang.toLowerCase());
         return;
       }
-      if (_setsLang === 'MTG' || _setsLang === 'YGO' || _setsLang === 'OP') {
+      if (_setsLang === 'MTG' || _setsLang === 'YGO' || _setsLang === 'OP'
+          || _setsLang === 'GUN' || _setsLang === 'DBZ' || _setsLang === 'TOPPS') {
         await loadTcgSetsPage(el, _setsLang);
         return;
       }
@@ -24084,9 +24111,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // parameterized by id prefix + display label per game. New sets appear
     // automatically as pokedata_sync ingests them — no UI changes needed.
     var _TCG_SETS_CONFIG = {
-      MTG: { prefix: 'mtg-', label: 'MTG', name: 'Magic'    },
-      YGO: { prefix: 'ygo-', label: 'YGO', name: 'Yu-Gi-Oh' },
-      OP:  { prefix: 'op-',  label: 'OP',  name: 'One Piece' }
+      MTG:   { prefix: 'mtg-',   label: 'MTG',   name: 'Magic'    },
+      YGO:   { prefix: 'ygo-',   label: 'YGO',   name: 'Yu-Gi-Oh' },
+      OP:    { prefix: 'op-',    label: 'OP',    name: 'One Piece' },
+      GUN:   { prefix: 'gun-',   label: 'GUN',   name: 'Gundam'    },
+      DBZ:   { prefix: 'dbz-',   label: 'DBZ',   name: 'Dragon Ball Z' },
+      TOPPS: { prefix: 'topps-', label: 'TOPPS', name: 'Pokemon Topps' }
     };
     var _tcgSetsCache       = {}; // { MTG: {timestamp, sets}, YGO: {...}, OP: {...} }
     var _tcgSetsDetailCache = {}; // { 'MTG|setCode': {timestamp, cards}, ... }

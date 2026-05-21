@@ -95,6 +95,77 @@ TCG_CONFIG = {
         "id_segment":    "op",
         "lang_aware":    False,
     },
+    # ── Gundam Card Game (Bandai, 2024+) ───────────────────────────────
+    # PriceCharting has no /category/ index page for this TCG, so we
+    # supply the set slugs explicitly. discover_set_slugs() picks these
+    # up via the explicit_slugs key when category_path is absent.
+    "gundam": {
+        "category_path": None,
+        "game_type":     "Gundam",
+        "slug_prefix":   "gundam-",
+        "id_segment":    "gun",
+        "lang_aware":    False,
+        "explicit_slugs": [
+            "gundam-dual-impact",
+            "gundam-edition-beta",
+            "gundam-newtype-rising",
+            "gundam-phantom-aria",
+            "gundam-promo",
+            "gundam-starter-deck-01-heroic-beginnings",
+            "gundam-steel-requiem",
+        ],
+    },
+    # ── Pokemon Topps (Topps Co., 1999–2000 wax / sealed) ──────────────
+    # Same explicit_slugs pattern as Gundam/DBZ — PC has no category
+    # page. Vintage Topps wax boxes / packs / factory sets where they
+    # exist on PC. game_type "Pokemon Topps" matches the singles config.
+    "pokemon_topps": {
+        "category_path": None,
+        "game_type":     "Pokemon Topps",
+        "slug_prefix":   "pokemon-",
+        "id_segment":    "topps",
+        "lang_aware":    False,
+        "explicit_slugs": [
+            "pokemon-1999-topps-movie",
+            "pokemon-1999-topps-movie-die-cut",
+            "pokemon-1999-topps-movie-evolution",
+            "pokemon-1999-topps-tv",
+            "pokemon-2000-topps-chrome",
+            "pokemon-2000-topps-movie",
+            "pokemon-2000-topps-movie-first-appearance",
+            "pokemon-2000-topps-tv",
+            "pokemon-2000-topps-tv-clear",
+            "pokemon-2000-topps-tv-sticker",
+        ],
+    },
+    # ── Dragon Ball Z TCG (Score / Panini, 2000s–mid-2010s) ────────────
+    # Same as Gundam — no category index. Note: PriceCharting has a typo
+    # on "Heroes and Villians" (not Villains). Slugged as-published.
+    "dbz": {
+        "category_path": None,
+        "game_type":     "Dragon Ball Z",
+        "slug_prefix":   "dragon-ball-z-",
+        "id_segment":    "dbz",
+        "lang_aware":    False,
+        "explicit_slugs": [
+            "dragon-ball-z-awakening",
+            "dragon-ball-z-babidi-saga",
+            "dragon-ball-z-buu-saga",
+            "dragon-ball-z-cell-saga",
+            "dragon-ball-z-evolution",
+            "dragon-ball-z-frieza-saga",
+            "dragon-ball-z-fusion-saga",
+            "dragon-ball-z-heroes-and-villians",   # PC typo, intentional
+            "dragon-ball-z-kid-buu-saga",
+            "dragon-ball-z-movie-collection",
+            "dragon-ball-z-perfection",
+            "dragon-ball-z-saiyan-saga",
+            "dragon-ball-z-super-17-saga",
+            "dragon-ball-z-trunks-saga",
+            "dragon-ball-z-vengeance",
+            "dragon-ball-z-world-games-saga",
+        ],
+    },
 }
 
 # Patterns covering every TCG's sealed product naming. Specific → generic;
@@ -314,7 +385,30 @@ IMG_RE    = re.compile(r'<img[^>]*(?:data-src|src)="([^"]+\.(?:jpg|jpeg|png|webp
 
 
 def discover_set_slugs(tcg_cfg):
-    """Returns list of (display_name, console_slug) for the TCG."""
+    """Returns list of (display_name, console_slug) for the TCG.
+
+    Two discovery paths:
+      1. Category page scrape (Pokemon/MTG/YGO/OP — these all have a
+         /category/<game>-cards index page that lists every set).
+      2. Explicit slug list (Gundam, DBZ — PC has no category page for
+         these TCGs; the slugs are hand-verified in TCG_CONFIG).
+
+    Either path returns the (display_name, slug) tuples downstream
+    code expects. For explicit lists we synthesize the display name
+    by titlecasing the slug tail."""
+    # Path 2: explicit slug list (no category page)
+    if not tcg_cfg.get("category_path") and tcg_cfg.get("explicit_slugs"):
+        slug_prefix = tcg_cfg["slug_prefix"]
+        found = []
+        for slug in tcg_cfg["explicit_slugs"]:
+            tail = slug
+            if slug.startswith(slug_prefix):
+                tail = slug[len(slug_prefix):]
+            name = tail.replace("-", " ").title()
+            found.append((name, slug))
+        return found
+
+    # Path 1: scrape the category index page
     page_html = fetch(f"{PC_BASE}{tcg_cfg['category_path']}")
     if not page_html:
         return []
