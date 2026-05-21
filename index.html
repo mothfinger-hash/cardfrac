@@ -5885,20 +5885,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             </div>
           </div>
         </div>
-        <div class="pb-panel-actions" style="align-items:stretch">
-          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
-          <!-- Overflow menu — Import + Share live here. Both items already toggle their own display via JS (vendor-only / logged-in only). -->
-          <div style="position:relative">
-            <button id="binderOverflowBtn" class="pb-panel-link"
-                    onclick="toggleBinderOverflowPop(event)"
-                    aria-haspopup="true" aria-expanded="false" title="More actions"
-                    style="border-color:var(--border);color:var(--muted);padding:3px 11px;letter-spacing:.05em;font-size:14px;line-height:1">⋯</button>
-            <div id="binderOverflowPop" class="binder-pop binder-pop-right" role="menu" aria-labelledby="binderOverflowBtn">
-              <button id="vendorBulkImportBtn" onclick="openVendorImportModal();closeBinderPops()" class="binder-pop-item js-bulk-import-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
-              <button id="shareBinderBtn" onclick="copyShareLink();closeBinderPops()" class="binder-pop-item js-share-binder-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
-            </div>
-          </div>
-        </div>
       </div>
       <!-- List view search — only visible in list mode -->
       <div id="binderListSearchWrap" style="display:none;border-top:1px solid var(--border)">
@@ -5906,6 +5892,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           oninput="renderBinder()"
           style="width:100%;padding:9px 14px;background:transparent;border:none;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;box-sizing:border-box;outline:none"
           onfocus="this.style.background='var(--surface2)'" onblur="this.style.background='transparent'">
+      </div>
+      <!-- ADD CARD + ⋯ actions row — moved out of pb-panel-h so it sits
+           below the search bar on desktop (matching the mobile layout).
+           When the search bar isn't visible (specific-binder grid view),
+           this row naturally floats up under the Layout selector. -->
+      <div class="binder-actions-row" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:8px 12px;border-top:1px solid var(--border)">
+        <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
+        <!-- Overflow menu — Import + Share live here. Both items already toggle their own display via JS (vendor-only / logged-in only). -->
+        <div style="position:relative">
+          <button id="binderOverflowBtn" class="pb-panel-link"
+                  onclick="toggleBinderOverflowPop(event)"
+                  aria-haspopup="true" aria-expanded="false" title="More actions"
+                  style="border-color:var(--border);color:var(--muted);padding:3px 11px;letter-spacing:.05em;font-size:14px;line-height:1">⋯</button>
+          <div id="binderOverflowPop" class="binder-pop binder-pop-right" role="menu" aria-labelledby="binderOverflowBtn">
+            <button id="vendorBulkImportBtn" onclick="openVendorImportModal();closeBinderPops()" class="binder-pop-item js-bulk-import-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
+            <button id="shareBinderBtn" onclick="copyShareLink();closeBinderPops()" class="binder-pop-item js-share-binder-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
+          </div>
+        </div>
       </div>
       <!-- Sort bar — All Cards only. Never shown inside individual binders.
            Desktop: full pill row (Name / Rarity / Set / Value / Language).
@@ -7717,7 +7721,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
           <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event,'${listing.id}')"></button>
           <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
-            <img src="${_thumbUrl(photoSrc, 400)}" alt="${listing.name}" class="card-thumb" loading="lazy" decoding="async" onerror="this.src='${PLACEHOLDER_IMG}'" />
+            <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" loading="lazy" decoding="async" onerror="this.src='${PLACEHOLDER_IMG}'" />
             ${photoCount > 1 ? `<div class="photo-count">${photoCount} photos</div>` : ''}
           </div>
           <div class="card-info" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
@@ -9400,7 +9404,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return '<div class="ndash-tcard" onclick="openBinderCardDetail(\'' + item.id + '\')">' +
           '<div class="ndash-tcard-art">' +
             (item.card_image_url
-              ? '<img src="' + _thumbUrl(item.card_image_url, 400) + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="_binderImgFail(this,\'' + item.id + '\')">'
+              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="_binderImgFail(this,\'' + item.id + '\')">'
               : '<div class="ndash-tcard-art-ph">' + _escHtml(item.card_name.slice(0,12)) + '</div>') +
             (i<3 ? '<div class="ndash-tcard-rank">#' + (i+1) + '</div>' : '') +
           '</div>' +
@@ -9889,8 +9893,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ? `PSA ${c.grade_value}`
             : (c.condition||'').toUpperCase();
           // Use 'data:,' to trigger onerror catalog fallback when url is missing but api_card_id exists
-          const _pbSrcRaw = c.card_image_url || (c.api_card_id ? 'data:,' : '');
-          const _pbSrc = _pbSrcRaw && _pbSrcRaw !== 'data:,' ? _thumbUrl(_pbSrcRaw, 320) : _pbSrcRaw;
+          const _pbSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
           const img = _pbSrc
             ? `<img src="${_pbSrc}" alt="${_escHtml(c.card_name)}" loading="lazy" decoding="async" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`+
               `<div class="pub-no-img" style="display:none;width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`
@@ -10283,8 +10286,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             : (c.condition || '').toUpperCase();
           // Use 'data:,' as a deliberate invalid-image src so onerror fires and
           // _binderImgFail can look the image up from the catalog (self-heal).
-          const _imgSrcRaw = c.card_image_url || (c.api_card_id ? 'data:,' : '');
-          const _imgSrc = _imgSrcRaw && _imgSrcRaw !== 'data:,' ? _thumbUrl(_imgSrcRaw, 320) : _imgSrcRaw;
+          const _imgSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
           const img = _imgSrc
             ? `<img src="${_imgSrc}" alt="${c.card_name}" loading="lazy" decoding="async"
                  style="width:100%;height:160px;object-fit:contain;background:var(--surface2);border-radius:4px 4px 0 0;display:block"
@@ -14409,7 +14411,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
         <div class="acg-card-art">
           ${item.card_image_url
-            ? `<img src="${_thumbUrl(item.card_image_url, 300)}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" draggable="false">`
+            ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" draggable="false">`
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">${isGhost ? '♡' : '?'}</div>`}
           ${isGhost
             ? `<span class="want-badge" style="position:absolute;top:3px;right:3px;font-size:.44rem;padding:1px 4px">WANT</span>`
@@ -15406,7 +15408,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             style="cursor:grab">
             <div class="binder-card-img-wrap">
               ${item.card_image_url
-                ? `<img src="${_thumbUrl(item.card_image_url, 400)}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
+                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
@@ -23632,7 +23634,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         var msrp  = (r.msrp_usd != null) ? '$' + Number(r.msrp_usd).toFixed(2) : '';
         html += '<div class="sealed-card" onclick="openSealedProductDetail(\'' + _escJsAttr(r.id) + '\')" style="background:var(--surface2);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column;gap:6px;border-radius:3px;cursor:pointer;transition:border-color .12s,transform .12s" onmouseenter="this.style.borderColor=\'var(--sets-teal)\';this.style.transform=\'translateY(-1px)\'" onmouseleave="this.style.borderColor=\'var(--border)\';this.style.transform=\'\'">' +
           '<div style="aspect-ratio:1/1;background:var(--surface3, var(--surface));overflow:hidden;border-radius:2px;display:flex;align-items:center;justify-content:center">' +
-            (img ? '<img src="' + _escHtml(_thumbUrl(img, 300)) + '" alt="" loading="lazy" decoding="async" style="max-width:100%;max-height:100%;object-fit:contain;display:block">' : '<span style="color:var(--muted);font-size:.65rem">no image</span>') +
+            (img ? '<img src="' + _escHtml(img) + '" alt="" loading="lazy" decoding="async" style="max-width:100%;max-height:100%;object-fit:contain;display:block">' : '<span style="color:var(--muted);font-size:.65rem">no image</span>') +
           '</div>' +
           '<div style="font-size:.74rem;color:var(--text);line-height:1.3;min-height:36px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + _escHtml(r.name || '') + '</div>' +
           '<div style="font-size:.55rem;color:var(--sets-teal);letter-spacing:.08em;font-family:\'Space Mono\',monospace">' + _escHtml(ptype) + '</div>' +
@@ -25604,9 +25606,31 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
        phone-camera aspect ratios — applying the default cover-crop would
        chop off the card edges. Use contain so the full photo is visible
        inside the 245/342 slot. Catalog images (pre-cropped to card
-       aspect) keep cover and read perfectly without this override. */
+       aspect) keep cover and read perfectly without this override.
+
+       Multi-selector to defeat the earlier !important rule on every
+       known render path: body.on-binder prefix matches the mobile/
+       full-page binder, plain prefix matches dashboard/explore views.
+       Both attribute-selector and class-selector fallbacks cover JS
+       rendering quirks. */
+    body.on-binder #collectionContent .binder-card.has-user-photo .binder-card-img,
+    body.on-binder #collectionContent .binder-card.has-user-photo .binder-card-img-wrap > img,
     #collectionContent .binder-card.has-user-photo .binder-card-img,
-    #collectionContent .binder-card.has-user-photo .binder-card-img-wrap > img {
+    #collectionContent .binder-card.has-user-photo .binder-card-img-wrap > img,
+    .binder-card.has-user-photo .binder-card-img,
+    .binder-card.has-user-photo .binder-card-img-wrap > img {
+      object-fit: contain !important;
+      background: var(--surface) !important;
+      padding: 0 !important;
+    }
+    /* Belt-and-suspenders: any IMG whose src points at the card-photos
+       bucket gets contain regardless of class state. CSS attribute
+       selector matches the URL directly — survives JS render-path
+       drift. */
+    .binder-card .binder-card-img[src*="/card-photos/"],
+    .binder-card-img-wrap > img[src*="/card-photos/"],
+    .binder-card .binder-card-img[src*="card-photos%2F"],
+    .binder-card-img-wrap > img[src*="card-photos%2F"] {
       object-fit: contain !important;
       background: var(--surface) !important;
     }
