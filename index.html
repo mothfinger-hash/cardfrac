@@ -15384,7 +15384,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           const isSealed = (item.product_type && item.product_type !== 'single')
                            || (typeof item.api_card_id === 'string' && item.api_card_id.startsWith('sealed-'));
 
-          return `<div class="binder-card${isGhost ? ' ghost-card' : ''}${isSealed ? ' is-sealed' : ''}"
+          // User-uploaded photos live in the card-photos bucket; their
+          // aspect ratio is arbitrary (phone camera 3:4 / 4:3 / 16:9).
+          // Default .binder-card-img is object-fit:cover (great for
+          // catalog images which are pre-cropped to 245/342), but on
+          // a user photo cover crops the card edges so we flip to
+          // contain for these rows. has-user-photo CSS at bottom of
+          // styles handles the override.
+          const isUserPhoto = typeof item.card_image_url === 'string'
+                              && item.card_image_url.indexOf('/card-photos/') !== -1;
+
+          return `<div class="binder-card${isGhost ? ' ghost-card' : ''}${isSealed ? ' is-sealed' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
             draggable="true"
             data-idx="${globalIdx}"
             data-id="${item.id}"
@@ -25587,6 +25597,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     #collectionContent .binder-card.is-sealed .binder-card-img-wrap > img {
       object-fit: contain !important;
       padding: 6px !important;
+      background: var(--surface) !important;
+    }
+
+    /* User-uploaded card photos (from card-photos bucket) have arbitrary
+       phone-camera aspect ratios — applying the default cover-crop would
+       chop off the card edges. Use contain so the full photo is visible
+       inside the 245/342 slot. Catalog images (pre-cropped to card
+       aspect) keep cover and read perfectly without this override. */
+    #collectionContent .binder-card.has-user-photo .binder-card-img,
+    #collectionContent .binder-card.has-user-photo .binder-card-img-wrap > img {
+      object-fit: contain !important;
       background: var(--surface) !important;
     }
 
