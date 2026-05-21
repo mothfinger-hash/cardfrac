@@ -1,0 +1,67 @@
+name: Refresh Catalog Prices (Pokemon)
+
+# Nightly global Pokemon price refresh — fetches ungraded market prices
+# from PriceCharting for every catalog row with a price_source_url,
+# updates catalog.current_value, and writes a daily snapshot to
+# catalog_price_history (powers the dashboard Price Movers panel).
+#
+# Schedule: 10:00 UTC = 3am PDT / 2am PST (West Coast).
+# To change the time, edit the cron expression below (UTC).
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL          — your project URL
+#   SUPABASE_SERVICE_KEY  — service-role key (bypasses RLS)
+#
+# Manual trigger: Actions tab → this workflow → Run workflow.
+
+on:
+  schedule:
+    - cron: '0 10 * * *'   # 3am PDT / 2am PST. Change to '0 11 * * *' if you'd
+                           # rather always run at 3am PST (and 4am PDT).
+  workflow_dispatch:
+    inputs:
+      tcg:
+        description: 'TCG to refresh (default: pokemon)'
+        required: false
+        default: 'pokemon'
+      workers:
+        description: 'Parallel HTTP workers (3-5 safe; higher → 429s)'
+        required: false
+        default: '4'
+      limit:
+        description: 'Cap rows for a smoke test (0 = no cap)'
+        required: false
+        default: '0'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    # GitHub Actions hard-caps a job at 6h. The script estimates ~4-5h for
+    # 50K Pokemon rows at workers=4. If it tops out, --resume on the next
+    # run picks up only the rows that didn't get a snapshot today.
+    timeout-minutes: 350
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run catalog price refresh
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python refresh_catalog_prices.py \
+            --tcg "${{ github.event.inputs.tcg || 'pokemon' }}" \
+            --workers "${{ github.event.inputs.workers || '4' }}" \
+            --limit "${{ github.event.inputs.limit || '0' }}" \
+            --resume
