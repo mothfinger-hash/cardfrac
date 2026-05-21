@@ -1,13 +1,20 @@
 // PathBinder Service Worker
-// v220 — Global border-radius normalization:
-//  1. New radius scale (--r-pill 999px, --r-sm 6px, --r-md 8px,
-//     --r-lg 12px) applied consistently across buttons, inputs,
-//     selects, cards, panels, modals, sheets, popovers, lightbox,
-//     toasts. Loaded last in the cascade with !important to beat the
-//     ~45 inline `border-radius:0` overrides scattered through markup.
-//  2. Backdrop wash (.modal-overlay) stays square — only its inner
-//     panel rounds. Modal-close (×) stays a perfect circle.
-const CACHE = 'pathbinder-v220';
+// v222 — Image loading optimization:
+//  Wired up the existing _thumbUrl() helper that was defined but
+//  never called. Adds Supabase Storage render/image transforms
+//  (?width=N&quality=80) on every grid thumbnail render site. Saves
+//  ~70-90% bytes on thumbnails vs. shipping the full 480px WebP.
+//   Sets singles row:        width=80   (36px element)
+//   Marketplace browse:      width=400  (200px card)
+//   Binder card grid:        width=400  (150-300px element)
+//   Public binder:           width=320
+//   All-cards list:          width=100
+//   All-cards grid:          width=300
+//   Sealed product grid:     width=300
+//   Dashboard mini thumbs:   width=160-200
+//  Lightbox + binder detail modal keep full resolution for zoom.
+//  Plus missing decoding="async" added to several sites for consistency.
+const CACHE = 'pathbinder-v223';
 
 const PRECACHE = [
   '/offline.html',

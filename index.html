@@ -2859,69 +2859,111 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       border-color:var(--ft-pink);
       color:var(--ft-pink);
     }
-    /* Pokémon language dropdown — magenta accent to match the active
-       Sets-tab (which is also magenta). Magenta border, magenta-tint
-       background, magenta text, magenta chevron. On :focus (which fires
-       the moment the user clicks to open the dropdown) the glow blooms
-       outward so the bloom is visible behind the OS-rendered popover.
-       Higher-specificity selectors + !important on the bits that the
-       OS / browser tries to override (option foreground color). */
-    #setsPage select.sets-lang-select{
-      margin-left:10px;
-      vertical-align:middle;
-      padding:4px 26px 4px 12px;
-      font-family:'Space Mono','Share Tech Mono',monospace;
-      font-size:.62rem;
-      letter-spacing:.08em;
-      font-weight:600;
+    /* Pokémon language dropdown — custom button + popover (replaces the
+       native <select> so the popover itself can carry the hologram
+       teal+teal-glow look from .ft-hologram-modal). Trigger button is
+       sized identically to .sets-tab so the row reads as one chip
+       family. Teal box base, magenta text on top. Popover paints a
+       teal-bordered hologram surface; option labels are magenta. */
+    #setsPage .sets-lang-trigger{
+      /* match .sets-tab dimensions: 6px 14px padding, same font size */
+      padding:6px 14px;
+      font-family:inherit;
+      font-size:.66rem;
+      letter-spacing:.07em;
       cursor:pointer;
-      border:1.5px solid var(--ft-pink) !important;
-      background-color:rgba(255,61,127,.18) !important;
+      border:1.5px solid var(--sets-teal);
+      background:var(--sets-teal-glow);
       color:var(--ft-pink) !important;
-      text-shadow:0 0 6px rgba(255,61,127,.45);
-      transition:background-color .15s, box-shadow .2s, transform .15s;
-      appearance:none;
-      -webkit-appearance:none;
-      -moz-appearance:none;
-      border-radius:3px;
-      /* SVG chevron in magenta to match border/text */
-      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23ff3d7f' stroke-width='2' fill='none' stroke-linecap='round'/></svg>");
-      background-repeat:no-repeat;
-      background-position:right 9px center;
-      background-size:10px 6px;
-      /* Subtle ambient glow even at rest so the box reads as "alive". */
-      box-shadow:0 0 8px rgba(255,61,127,.22);
+      text-shadow:0 0 6px rgba(255,61,127,.4);
+      transition:background-color .15s, box-shadow .2s, transform .12s;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      vertical-align:middle;
+      white-space:nowrap;
+      /* leave a subtle ambient teal glow so it reads as live */
+      box-shadow:0 0 10px rgba(26,199,160,.18);
+      /* border-radius normalization handled by the global override */
     }
-    #setsPage select.sets-lang-select:hover{
-      background-color:rgba(255,61,127,.28) !important;
-      box-shadow:0 0 14px rgba(255,61,127,.45);
+    #setsPage .sets-lang-trigger:hover{
+      background:rgba(26,199,160,.18);
+      box-shadow:0 0 14px rgba(26,199,160,.35);
       transform:translateY(-1px);
     }
-    #setsPage select.sets-lang-select:focus,
-    #setsPage select.sets-lang-select:focus-visible{
-      /* Native <select> doesn't expose an "open" state, but :focus
-         fires the instant the user clicks/keyboard-opens, so this is
-         our practical "glow while the popover is open" hook. The
-         dropdown opens over the select; the bloom radiates around it. */
-      outline:none;
-      background-color:rgba(255,61,127,.34) !important;
+    #setsPage .sets-lang-trigger.is-open{
+      background:rgba(26,199,160,.22);
       box-shadow:
-        0 0 22px rgba(255,61,127,.7),
-        0 0 44px rgba(255,61,127,.4),
-        0 0 0 1px var(--ft-pink) inset;
+        0 0 18px rgba(26,199,160,.5),
+        0 0 36px rgba(26,199,160,.25);
     }
-    /* Options inside the popover. Browser support for option styling is
-       uneven (Safari ignores most of it, Firefox & Chromium honor
-       background + color). !important forces the magenta where allowed. */
-    #setsPage select.sets-lang-select option{
-      background:#1a0d18 !important;
-      color:var(--ft-pink) !important;
+    #setsPage .sets-lang-trigger-label{
+      color:var(--ft-pink);
       font-weight:600;
     }
-    #setsPage select.sets-lang-select option:checked,
-    #setsPage select.sets-lang-select option:hover{
-      color:var(--ft-pink) !important;
-      background:rgba(255,61,127,.26) !important;
+    #setsPage .sets-lang-trigger-caret{
+      color:var(--ft-pink);
+      font-size:.55rem;
+      line-height:1;
+      transition:transform .15s;
+    }
+    #setsPage .sets-lang-trigger.is-open .sets-lang-trigger-caret{
+      transform:rotate(180deg);
+    }
+
+    /* Popover panel — hologram-modal aesthetic: dark surface, teal
+       border, double-layer teal glow. Magenta option text floats on top. */
+    #setsPage .sets-lang-popover{
+      position:absolute;
+      top:calc(100% + 6px);
+      left:0;
+      min-width:160px;
+      background:rgba(8,12,20,.96);
+      border:1.5px solid var(--sets-teal);
+      box-shadow:
+        0 0 22px rgba(26,199,160,.45),
+        0 0 60px rgba(26,199,160,.22);
+      padding:4px;
+      z-index:1000;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      animation:setsLangPopoverIn .14s ease-out;
+    }
+    @keyframes setsLangPopoverIn{
+      from{ opacity:0; transform:translateY(-4px); }
+      to  { opacity:1; transform:translateY(0); }
+    }
+    #setsPage .sets-lang-opt{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:7px 12px 7px 8px;
+      background:transparent;
+      border:1px solid transparent;
+      color:var(--ft-pink);
+      font-family:inherit;
+      font-size:.7rem;
+      letter-spacing:.04em;
+      cursor:pointer;
+      text-align:left;
+      transition:background-color .12s, border-color .12s;
+      text-shadow:0 0 5px rgba(255,61,127,.35);
+    }
+    #setsPage .sets-lang-opt:hover{
+      background:rgba(26,199,160,.16);
+      border-color:rgba(26,199,160,.45);
+    }
+    #setsPage .sets-lang-opt.is-selected{
+      background:rgba(26,199,160,.1);
+    }
+    #setsPage .sets-lang-opt-check{
+      width:12px;
+      flex-shrink:0;
+      color:var(--sets-teal);
+      font-size:.75rem;
+      line-height:1;
+      text-align:center;
     }
     /* Singles | Sealed view toggle — applies to every TCG. Same shape
        as the EN/JP sub-toggle but uses the seafoam accent regardless
@@ -6635,6 +6677,27 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       </div>
     </div>
 
+    <!-- Sealed BG Review Queue — flagged products whose automated bg
+         removal couldn't strip the background (cream / yellow / photo
+         backgrounds). Admins replace the image with a hand-cleaned
+         version, which clears the needs_manual_bg flag. -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Sealed BG Review</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="adminLoadBgReviewQueue()" id="adminBgReviewLoadBtn"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);cursor:pointer">Load Queue</button>
+          <span id="adminBgReviewCount" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);align-self:center"></span>
+        </div>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Products auto-flagged by restore_sealed_bg.py when bg removal couldn't strip the background (cream / yellow / gradient / photo bg). Upload a hand-cleaned PNG/WebP to replace the image — clears the flag.
+      </div>
+      <div id="adminBgReviewList" style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:.62rem;color:rgba(184,115,51,.5);letter-spacing:.08em">Click "Load Queue" to fetch flagged products.</div>
+      </div>
+    </div>
+
     <!-- Beta Tester Manager — invite-only access for pre-launch testers -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -7654,7 +7717,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
           <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event,'${listing.id}')"></button>
           <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
-            <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" onerror="this.src='${PLACEHOLDER_IMG}'" />
+            <img src="${_thumbUrl(photoSrc, 400)}" alt="${listing.name}" class="card-thumb" loading="lazy" decoding="async" onerror="this.src='${PLACEHOLDER_IMG}'" />
             ${photoCount > 1 ? `<div class="photo-count">${photoCount} photos</div>` : ''}
           </div>
           <div class="card-info" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
@@ -8710,7 +8773,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                     return `<div class="ndash-tcard" onclick="openBinderCardDetail('${item.id}')">
                       <div class="ndash-tcard-art">
                         ${item.card_image_url
-                          ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${item.id}')">`
+                          ? `<img src="${_thumbUrl(item.card_image_url, 200)}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${item.id}')">`
                           : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
                         ${i<3?`<div class="ndash-tcard-rank">#${i+1}</div>`:''}
                       </div>
@@ -8738,7 +8801,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                   const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
                   const up = Number(d)>=0;
                   return `<div class="ndash-market-row" onclick="openBinderCardDetail('${c.id}')">
-                    <div class="ndash-market-thumb">${c.card_image_url?`<img src="${c.card_image_url}" alt="" onerror="_binderImgFail(this,'${c.id}')">`:''}</div>
+                    <div class="ndash-market-thumb">${c.card_image_url?`<img src="${_thumbUrl(c.card_image_url, 160)}" alt="" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${c.id}')">`:''}</div>
                     <div class="ndash-market-info">
                       <div class="ndash-market-name">${_escHtml(c.card_name.slice(0,20))}</div>
                       <div class="ndash-market-sub">$${(c.purchase_price||0).toFixed(2)} → $${(c.current_value||0).toFixed(2)}</div>
@@ -9337,7 +9400,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return '<div class="ndash-tcard" onclick="openBinderCardDetail(\'' + item.id + '\')">' +
           '<div class="ndash-tcard-art">' +
             (item.card_image_url
-              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="_binderImgFail(this,\'' + item.id + '\')">'
+              ? '<img src="' + _thumbUrl(item.card_image_url, 400) + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="_binderImgFail(this,\'' + item.id + '\')">'
               : '<div class="ndash-tcard-art-ph">' + _escHtml(item.card_name.slice(0,12)) + '</div>') +
             (i<3 ? '<div class="ndash-tcard-rank">#' + (i+1) + '</div>' : '') +
           '</div>' +
@@ -9361,7 +9424,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       var pct   = goal > 0 ? Math.min(100, (saved / goal) * 100) : 0;
       var pctStr = pct.toFixed(0);
       var img = c.card_image_url
-        ? '<img src="' + c.card_image_url + '" alt="" loading="lazy" decoding="async">'
+        ? '<img src="' + _thumbUrl(c.card_image_url, 200) + '" alt="" loading="lazy" decoding="async">'
         : '<div class="ndash-fund-mini-ph">♡</div>';
       var progress = goal > 0
         ? '<div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:' + pctStr + '%"></div></div>' +
@@ -9826,9 +9889,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ? `PSA ${c.grade_value}`
             : (c.condition||'').toUpperCase();
           // Use 'data:,' to trigger onerror catalog fallback when url is missing but api_card_id exists
-          const _pbSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+          const _pbSrcRaw = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+          const _pbSrc = _pbSrcRaw && _pbSrcRaw !== 'data:,' ? _thumbUrl(_pbSrcRaw, 320) : _pbSrcRaw;
           const img = _pbSrc
-            ? `<img src="${_pbSrc}" alt="${_escHtml(c.card_name)}" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`+
+            ? `<img src="${_pbSrc}" alt="${_escHtml(c.card_name)}" loading="lazy" decoding="async" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`+
               `<div class="pub-no-img" style="display:none;width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`
             : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`;
           const qtyBadge = c.quantity > 1
@@ -10219,9 +10283,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             : (c.condition || '').toUpperCase();
           // Use 'data:,' as a deliberate invalid-image src so onerror fires and
           // _binderImgFail can look the image up from the catalog (self-heal).
-          const _imgSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+          const _imgSrcRaw = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+          const _imgSrc = _imgSrcRaw && _imgSrcRaw !== 'data:,' ? _thumbUrl(_imgSrcRaw, 320) : _imgSrcRaw;
           const img = _imgSrc
-            ? `<img src="${_imgSrc}" alt="${c.card_name}" loading="lazy"
+            ? `<img src="${_imgSrc}" alt="${c.card_name}" loading="lazy" decoding="async"
                  style="width:100%;height:160px;object-fit:contain;background:var(--surface2);border-radius:4px 4px 0 0;display:block"
                  onerror="_binderImgFail(this,'${c.id}')">`
             : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.68rem">NO IMAGE</div>`;
@@ -12576,6 +12641,196 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
     // ── End Card Overrides ────────────────────────────────────────────────
 
+    // ── Sealed BG Review Queue ────────────────────────────────────────────
+    // Admin queue for sealed products whose automated bg removal couldn't
+    // strip the background (cream / yellow / gradient / photo bg). The
+    // restore_sealed_bg.py --redo flow flags them via PATCH to catalog,
+    // setting needs_manual_bg=true. This queue lets the admin upload a
+    // hand-cleaned image to replace the flagged one in Supabase Storage.
+    // The upload writes to the same storage path so the existing
+    // catalog.image_url keeps pointing to the right file; on success we
+    // PATCH the row to clear needs_manual_bg.
+    async function adminLoadBgReviewQueue() {
+      if (!currentUser?.is_admin) return;
+      var list = document.getElementById('adminBgReviewList');
+      var countEl = document.getElementById('adminBgReviewCount');
+      if (!list) return;
+      list.innerHTML = '<div style="font-size:.62rem;color:var(--muted)">Loading queue…</div>';
+      if (countEl) countEl.textContent = '';
+
+      var rows = [];
+      try {
+        var res = await sb
+          .from('catalog')
+          .select('id,name,set_name,set_code,product_type,image_url,price_source_url,bg_failure_reason,bg_flagged_at')
+          .eq('needs_manual_bg', true)
+          .order('bg_flagged_at', { ascending: false, nullsFirst: false })
+          .limit(500);
+        if (res.error) throw res.error;
+        rows = res.data || [];
+      } catch (e) {
+        list.innerHTML = '<div style="font-size:.62rem;color:var(--red)">// Error loading queue: ' + _escHtml(e.message || String(e)) + '</div>' +
+                         '<div style="font-size:.6rem;color:var(--muted);margin-top:4px">Has the migration_needs_manual_bg.sql been run? It adds the needs_manual_bg column.</div>';
+        return;
+      }
+
+      if (countEl) countEl.textContent = rows.length ? (rows.length + ' flagged') : '0 flagged — queue empty';
+
+      if (!rows.length) {
+        list.innerHTML = '<div style="font-size:.65rem;color:var(--green);letter-spacing:.06em">// No products flagged for manual review. Run restore_sealed_bg.py --redo to populate.</div>';
+        return;
+      }
+
+      list.innerHTML = rows.map(function(r) {
+        var when = r.bg_flagged_at
+          ? new Date(r.bg_flagged_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+          : '—';
+        var sub = [r.set_name, r.set_code, (r.product_type || '').replace(/_/g, ' ').toUpperCase()]
+          .filter(Boolean).join(' · ');
+        return '<div id="bgrev_' + _escJsAttr(r.id) + '" style="display:flex;gap:12px;border:1px solid var(--border);background:var(--surface2);padding:10px;align-items:flex-start">' +
+          '<div style="width:96px;height:96px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">' +
+            (r.image_url
+              ? '<img src="' + _escHtml(_thumbUrl(r.image_url, 200)) + '" alt="" loading="lazy" decoding="async" style="max-width:100%;max-height:100%;object-fit:contain">'
+              : '<span style="color:var(--muted);font-size:.55rem">no img</span>') +
+          '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-family:\'Space Mono\',monospace;font-size:.74rem;color:var(--text);font-weight:700;line-height:1.3">' + _escHtml(r.name || '—') + '</div>' +
+            '<div style="font-family:\'Space Mono\',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.04em;margin-top:2px">' + _escHtml(sub) + '</div>' +
+            '<div style="font-family:\'Space Mono\',monospace;font-size:.55rem;color:rgba(184,115,51,.8);letter-spacing:.05em;margin-top:4px">FLAGGED ' + when + ' · ' + _escHtml((r.bg_failure_reason || 'no reason recorded').slice(0, 120)) + '</div>' +
+            '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">' +
+              '<input type="file" id="bgrevFile_' + _escJsAttr(r.id) + '" accept="image/*" style="display:none" onchange="adminBgReviewUpload(\'' + _escJsAttr(r.id) + '\', this.files[0])">' +
+              '<button onclick="document.getElementById(\'bgrevFile_' + _escJsAttr(r.id) + '\').click()" style="font-family:\'Space Mono\',monospace;font-size:.58rem;letter-spacing:.05em;padding:5px 10px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">Upload Cleaned Image</button>' +
+              (r.price_source_url
+                ? '<a href="' + _escHtml(r.price_source_url) + '" target="_blank" rel="noopener" style="font-family:\'Space Mono\',monospace;font-size:.58rem;letter-spacing:.05em;padding:5px 10px;border:1px solid var(--border);color:var(--muted);text-decoration:none">↗ PC Page</a>'
+                : '') +
+              '<button onclick="adminBgReviewApproveAsIs(\'' + _escJsAttr(r.id) + '\')" style="font-family:\'Space Mono\',monospace;font-size:.58rem;letter-spacing:.05em;padding:5px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer" title="Mark this product as OK with its current image — clears the flag without uploading a new image">Approve As-Is</button>' +
+              '<span id="bgrevStatus_' + _escJsAttr(r.id) + '" style="font-family:\'Space Mono\',monospace;font-size:.55rem;color:var(--muted);margin-left:4px"></span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    // Replace the flagged product's image in Supabase Storage with the
+    // admin's hand-cleaned upload, then clear the needs_manual_bg flag.
+    // Re-encodes to webp via _imgToWebpBlob so file sizes stay small.
+    async function adminBgReviewUpload(rowId, file) {
+      if (!currentUser?.is_admin) return;
+      if (!file) return;
+      var statusEl = document.getElementById('bgrevStatus_' + rowId);
+      var setStat = function(msg, color) {
+        if (statusEl) { statusEl.style.color = color || 'var(--muted)'; statusEl.textContent = '// ' + msg; }
+      };
+      setStat('reading file…');
+
+      // Look up the row so we know the current storage path.
+      var row;
+      try {
+        var res = await sb.from('catalog').select('id,image_url').eq('id', rowId).maybeSingle();
+        if (res.error) throw res.error;
+        row = res.data;
+      } catch (e) {
+        setStat('lookup error: ' + (e.message || e), 'var(--red)');
+        return;
+      }
+      if (!row || !row.image_url) {
+        setStat('row has no image_url', 'var(--red)');
+        return;
+      }
+
+      // Parse storage path from public URL.
+      var marker = '/storage/v1/object/public/card-images/';
+      var i = row.image_url.indexOf(marker);
+      if (i < 0) {
+        setStat('image_url is not a Supabase Storage URL', 'var(--red)');
+        return;
+      }
+      var storagePath = row.image_url.substring(i + marker.length).split('?')[0];
+
+      // Re-encode upload to webp (smaller, faster). Fallback to original
+      // bytes if webp encoding fails (some PNGs with weird color profiles).
+      var conv;
+      try {
+        conv = await _imgToWebpBlob(file);
+      } catch (e) {
+        conv = { blob: file, ext: (file.name || '').split('.').pop() || 'png',
+                 contentType: file.type || 'image/png' };
+      }
+
+      setStat('uploading ' + Math.round(conv.blob.size / 1024) + 'KB…');
+
+      try {
+        var up = await sb.storage.from('card-images').upload(storagePath, conv.blob, {
+          upsert: true, contentType: 'image/webp'
+        });
+        if (up.error) throw up.error;
+      } catch (e) {
+        setStat('upload error: ' + (e.message || e), 'var(--red)');
+        return;
+      }
+
+      // Clear the flag now that a fresh image is in place.
+      try {
+        var clear = await sb.from('catalog').update({
+          needs_manual_bg:   false,
+          bg_failure_reason: null,
+          bg_flagged_at:     null,
+        }).eq('id', rowId);
+        if (clear.error) throw clear.error;
+      } catch (e) {
+        setStat('uploaded but flag-clear failed: ' + (e.message || e), 'var(--red)');
+        return;
+      }
+
+      setStat('done · row removed from queue', 'var(--green)');
+      // Remove the card from the UI after a beat so the admin sees the
+      // confirmation before it disappears.
+      setTimeout(function() {
+        var el = document.getElementById('bgrev_' + rowId);
+        if (el) el.remove();
+        var countEl = document.getElementById('adminBgReviewCount');
+        if (countEl) {
+          var m = (countEl.textContent || '').match(/^(\d+)/);
+          if (m) countEl.textContent = (parseInt(m[1], 10) - 1) + ' flagged';
+        }
+      }, 900);
+    }
+
+    // Clears needs_manual_bg without uploading a new image — useful when
+    // the admin reviews the current image and decides it's acceptable
+    // as-is (e.g. the off-white bg actually looks fine on the binder
+    // surface).
+    async function adminBgReviewApproveAsIs(rowId) {
+      if (!currentUser?.is_admin) return;
+      if (!confirm('Mark this product as OK with its current image and clear the manual-review flag?')) return;
+      var statusEl = document.getElementById('bgrevStatus_' + rowId);
+      var setStat = function(msg, color) {
+        if (statusEl) { statusEl.style.color = color || 'var(--muted)'; statusEl.textContent = '// ' + msg; }
+      };
+      try {
+        var clear = await sb.from('catalog').update({
+          needs_manual_bg:   false,
+          bg_failure_reason: null,
+          bg_flagged_at:     null,
+        }).eq('id', rowId);
+        if (clear.error) throw clear.error;
+      } catch (e) {
+        setStat('flag-clear error: ' + (e.message || e), 'var(--red)');
+        return;
+      }
+      setStat('approved as-is', 'var(--green)');
+      setTimeout(function() {
+        var el = document.getElementById('bgrev_' + rowId);
+        if (el) el.remove();
+        var countEl = document.getElementById('adminBgReviewCount');
+        if (countEl) {
+          var m = (countEl.textContent || '').match(/^(\d+)/);
+          if (m) countEl.textContent = (parseInt(m[1], 10) - 1) + ' flagged';
+        }
+      }, 700);
+    }
+    // ── End Sealed BG Review Queue ────────────────────────────────────────
+
     // Admin: refund a marketplace order via the Stripe refund API.
     // Calls /api/refund-order with the current user's auth token; the
     // backend re-verifies admin status before issuing the Stripe refund.
@@ -14126,7 +14381,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         ondragend="allCardsDragEnd(event)"
         ${isGhost ? 'style="opacity:.52"' : ''}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
-        <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+        <img src="${item.card_image_url ? _thumbUrl(item.card_image_url, 100) : ''}" alt="" loading="lazy" decoding="async" draggable="false"
           style="width:44px;height:60px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
           onerror="this.style.visibility='hidden'">
         <div style="flex:1;min-width:0">
@@ -14154,7 +14409,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
         <div class="acg-card-art">
           ${item.card_image_url
-            ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" draggable="false">`
+            ? `<img src="${_thumbUrl(item.card_image_url, 300)}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" draggable="false">`
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">${isGhost ? '♡' : '?'}</div>`}
           ${isGhost
             ? `<span class="want-badge" style="position:absolute;top:3px;right:3px;font-size:.44rem;padding:1px 4px">WANT</span>`
@@ -15141,7 +15396,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             style="cursor:grab">
             <div class="binder-card-img-wrap">
               ${item.card_image_url
-                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
+                ? `<img src="${_thumbUrl(item.card_image_url, 400)}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
@@ -22507,7 +22762,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--sets-border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        ${img ? `<img src="${_thumbUrl(img, 80)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -22895,18 +23150,34 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // each option is added incrementally; languages without their own
       // route fall through to the catalog-driven path.
       if (_setsLang === 'POKEMON') {
-        html += '<select class="sets-lang-select" onchange="setSetsPokemonLang(this.value)">';
+        // Custom dropdown — native <select> doesn't let us style the
+        // popover (background, glow, option color), and we need the
+        // popover itself to read as teal+teal-glow hologram, with
+        // magenta option text. Built as a button + absolutely-positioned
+        // panel, toggled by _toggleSetsLangPopover.
         var langs = [
-          { code: 'EN', label: 'English'    },
-          { code: 'JP', label: 'Japanese'   },
-          { code: 'CN', label: 'Chinese'    },
-          { code: 'KR', label: 'Korean'     },
+          { code: 'EN', label: 'English'  },
+          { code: 'JP', label: 'Japanese' },
+          { code: 'CN', label: 'Chinese'  },
+          { code: 'KR', label: 'Korean'   },
         ];
+        var curLabel = (langs.find(function(L){ return L.code === _setsPokemonLang; }) || langs[0]).label;
+        html += '<span class="sets-lang-wrap" style="position:relative;display:inline-block;vertical-align:middle">';
+        html +=   '<button type="button" class="sets-lang-trigger" onclick="_toggleSetsLangPopover(event)">' +
+                    '<span class="sets-lang-trigger-label">' + curLabel + '</span>' +
+                    '<span class="sets-lang-trigger-caret">▾</span>' +
+                  '</button>';
+        html +=   '<div class="sets-lang-popover" id="setsLangPopover" role="listbox" style="display:none">';
         langs.forEach(function(L) {
-          var sel = _setsPokemonLang === L.code ? ' selected' : '';
-          html += '<option value="' + L.code + '"' + sel + '>' + L.label + '</option>';
+          var sel = _setsPokemonLang === L.code;
+          html +=   '<button type="button" role="option" class="sets-lang-opt' + (sel ? ' is-selected' : '') +
+                      '" onclick="setSetsPokemonLang(\'' + L.code + '\')">' +
+                      (sel ? '<span class="sets-lang-opt-check">✓</span>' : '<span class="sets-lang-opt-check" style="visibility:hidden">✓</span>') +
+                      '<span>' + L.label + '</span>' +
+                    '</button>';
         });
-        html += '</select>';
+        html +=   '</div>';
+        html += '</span>';
       }
       // Singles | Sealed view toggle — applies to every TCG.
       var singlesActive = _setsView === 'singles';
@@ -22925,7 +23196,52 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
     function setSetsPokemonLang(lang) {
       _setsPokemonLang = lang;
+      _closeSetsLangPopover();
       if (_setsLang === 'POKEMON') loadSetsPage();
+    }
+
+    // ── Custom language-popover toggle/close ───────────────────────────
+    // Native <select> can't carry the teal hologram styling we want, so
+    // the dropdown is a button + absolutely-positioned panel. These two
+    // helpers manage the open/close state, including outside-click and
+    // Escape-key dismissal.
+    function _toggleSetsLangPopover(ev) {
+      if (ev) ev.stopPropagation();
+      var pop = document.getElementById('setsLangPopover');
+      if (!pop) return;
+      var isOpen = pop.style.display !== 'none';
+      if (isOpen) {
+        _closeSetsLangPopover();
+      } else {
+        pop.style.display = 'block';
+        // Mark the trigger as "open" so CSS can paint the magenta active
+        // state (teal box -> magenta-tinted on open).
+        var trig = pop.parentElement && pop.parentElement.querySelector('.sets-lang-trigger');
+        if (trig) trig.classList.add('is-open');
+        // Outside-click + Escape close. Attach next tick so the click
+        // that opened doesn't immediately close it.
+        setTimeout(function(){
+          document.addEventListener('click', _setsLangOutsideClick);
+          document.addEventListener('keydown', _setsLangKeydown);
+        }, 0);
+      }
+    }
+    function _closeSetsLangPopover() {
+      var pop = document.getElementById('setsLangPopover');
+      if (!pop) return;
+      pop.style.display = 'none';
+      var trig = pop.parentElement && pop.parentElement.querySelector('.sets-lang-trigger');
+      if (trig) trig.classList.remove('is-open');
+      document.removeEventListener('click', _setsLangOutsideClick);
+      document.removeEventListener('keydown', _setsLangKeydown);
+    }
+    function _setsLangOutsideClick(ev) {
+      var wrap = document.querySelector('.sets-lang-wrap');
+      if (wrap && wrap.contains(ev.target)) return;
+      _closeSetsLangPopover();
+    }
+    function _setsLangKeydown(ev) {
+      if (ev.key === 'Escape') _closeSetsLangPopover();
     }
     function setSetsView(view) {
       _setsView = view;
@@ -23306,7 +23622,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         var msrp  = (r.msrp_usd != null) ? '$' + Number(r.msrp_usd).toFixed(2) : '';
         html += '<div class="sealed-card" onclick="openSealedProductDetail(\'' + _escJsAttr(r.id) + '\')" style="background:var(--surface2);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column;gap:6px;border-radius:3px;cursor:pointer;transition:border-color .12s,transform .12s" onmouseenter="this.style.borderColor=\'var(--sets-teal)\';this.style.transform=\'translateY(-1px)\'" onmouseleave="this.style.borderColor=\'var(--border)\';this.style.transform=\'\'">' +
           '<div style="aspect-ratio:1/1;background:var(--surface3, var(--surface));overflow:hidden;border-radius:2px;display:flex;align-items:center;justify-content:center">' +
-            (img ? '<img src="' + _escHtml(img) + '" alt="" loading="lazy" style="max-width:100%;max-height:100%;object-fit:contain;display:block">' : '<span style="color:var(--muted);font-size:.65rem">no image</span>') +
+            (img ? '<img src="' + _escHtml(_thumbUrl(img, 300)) + '" alt="" loading="lazy" decoding="async" style="max-width:100%;max-height:100%;object-fit:contain;display:block">' : '<span style="color:var(--muted);font-size:.65rem">no image</span>') +
           '</div>' +
           '<div style="font-size:.74rem;color:var(--text);line-height:1.3;min-height:36px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + _escHtml(r.name || '') + '</div>' +
           '<div style="font-size:.55rem;color:var(--sets-teal);letter-spacing:.08em;font-family:\'Space Mono\',monospace">' + _escHtml(ptype) + '</div>' +
