@@ -4108,14 +4108,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-tcard:hover{border-color:var(--accent);transform:translate(-1px,-2px);box-shadow:0 8px 20px rgba(26,199,160,.25),3px 3px 0 #000}
 .ndash-tcard-art{flex:1;position:relative;overflow:hidden;background:repeating-linear-gradient(135deg,rgba(0,0,0,.45) 0 10px,rgba(0,0,0,.2) 10px 20px),var(--surface2)}
 .ndash-tcard-art img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
-/* User-uploaded photos in the dashboard binder widget — same fix as
-   the main binder grid: arbitrary phone-camera aspects get cropped
-   weirdly by cover, contain prevents that. */
-.ndash-tcard-art img[src*="/card-photos/"],
-.ndash-tcard-art img[src*="card-photos%2F"]{
-  object-fit:contain !important;
-  background:var(--surface);
-}
+/* User-uploaded photos in the dashboard binder widget — match the
+   All Cards grid behavior (see #collectionContent .acg-card-art img
+   below): use object-fit:cover for everything. The photos are OF
+   cards held upright, so cover crops them to card-shape exactly
+   like catalog images. Earlier attempt to use object-fit:contain
+   for user photos caused them to render as thin centered slivers
+   because phone-camera photos are often wider than card aspect. */
 .ndash-tcard-art-ph{width:100%;height:100%;display:grid;place-items:center;font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);padding:8px;text-align:center;line-height:1.6}
 .ndash-tcard-rank{position:absolute;top:5px;left:5px;background:rgba(0,0,0,.9);color:var(--accent);font-family:'Press Start 2P',monospace;font-size:7px;padding:3px 5px;border:1px solid var(--accent);z-index:3}
 .ndash-tcard-foot{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,.97),rgba(0,0,0,0));padding:18px 6px 5px;z-index:2}
@@ -8817,7 +8816,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                     return `<div class="ndash-tcard" onclick="openBinderCardDetail('${item.id}')">
                       <div class="ndash-tcard-art">
                         ${item.card_image_url
-                          ? `<img src="${_thumbUrl(item.card_image_url, 200)}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onload="_userPhotoAspectFit(this)" onerror="_binderImgFail(this,'${item.id}')">`
+                          ? `<img src="${_thumbUrl(item.card_image_url, 200)}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${item.id}')">`
                           : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
                         ${i<3?`<div class="ndash-tcard-rank">#${i+1}</div>`:''}
                       </div>
