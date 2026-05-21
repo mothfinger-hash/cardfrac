@@ -83,7 +83,10 @@ LANG_CONFIG = {
     },
     "jp": {
         "id_prefix":     ["jp-"],
-        "category_path": "/category/pokemon-japanese-cards",
+        # PC doesn't separate Japanese into its own category page —
+        # Japanese sets live on /category/pokemon-cards alongside EN,
+        # distinguished only by the 'pokemon-japanese-' slug prefix.
+        "category_path": "/category/pokemon-cards",
         "slug_must_have":     "pokemon-japanese-",
         "slug_must_not_have": [],
         "desc":           "Japanese Pokemon (jp- prefix)",
@@ -478,18 +481,30 @@ def main():
     for sc, (slug, _) in mapped.items():
         slug_users.setdefault(slug, []).append(sc)
     ambiguous = {slug: users for slug, users in slug_users.items() if len(users) > 1}
+    n_ambiguous_sets = 0
+    n_ambiguous_cards = 0
     if ambiguous:
-        print(f"\n  ⚠ Ambiguous matches dropped (one PC slug claimed by multiple pokedata sets):")
+        print(f"\n  ============================================================")
+        print(f"  AMBIGUOUS MATCHES DROPPED (one PC slug claimed by 2+ pokedata sets):")
+        print(f"  ============================================================")
         rejected = set()
         for slug, users in ambiguous.items():
-            print(f"     {slug}  ← {', '.join(users)}")
+            users_with_counts = [f"{sc}({len(by_set[sc]['rows'])})" for sc in users]
+            print(f"     {slug:<40}  <- {', '.join(users_with_counts)}")
             for sc in users:
                 rejected.add(sc)
+                n_ambiguous_cards += len(by_set[sc]['rows'])
                 unmapped.append((sc, by_set[sc]['set_name'], len(by_set[sc]['rows'])))
+        n_ambiguous_sets = len(rejected)
         # Remove rejected from mapped so we don't enrich with bad data
         mapped = {sc: v for sc, v in mapped.items() if sc not in rejected}
+        print(f"  ============================================================")
+        print(f"  Skipped {n_ambiguous_sets} sets ({n_ambiguous_cards:,} cards) to prevent mismatched data.")
+        print(f"  ============================================================")
 
-    print(f"\n  Final: matched {len(mapped)}/{len(by_set)} sets cleanly.")
+    print(f"\n  Final: matched {len(mapped)}/{len(by_set)} sets cleanly"
+          + (f" (after dropping {n_ambiguous_sets} ambiguous)" if n_ambiguous_sets else "")
+          + ".")
     if unmapped:
         print(f"  Unmatched ({len(unmapped)}) — first 15:")
         for sc, sn, n in unmapped[:15]:
@@ -544,7 +559,10 @@ def main():
                 stats["unmatched_cards"] += n_unm
                 print(f"  {set_code:<18} /console/{slug}  enriched={n_enr} unmatched={n_unm}")
 
-    print(f"\n  Done. {' '.join(f'{k}={v}' for k,v in stats.items())}")
+    summary = ' '.join(f'{k}={v}' for k,v in stats.items())
+    if n_ambiguous_sets:
+        summary += f" ambiguous_skipped={n_ambiguous_sets}sets/{n_ambiguous_cards}cards"
+    print(f"\n  Done. {summary}")
     if args.dry_run:
         print(f"  --dry-run: no writes. Re-run without --dry-run to commit.")
 
