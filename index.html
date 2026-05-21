@@ -2513,42 +2513,47 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
     @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
 
-    /* ── DESKTOP: binder pages fit vertically without scroll ──
-       On wide viewports the binder grid should feel like one physical
-       page — all 9 / 4 / 1 cards visible at once. We constrain the
-       implicit row height by viewport, and let the card image derive
-       its width from that height (aspect ratio 245:342). On mobile the
-       original behaviour is preserved (cards size by column width). */
+    /* ── DESKTOP: binder pages constrain CELL WIDTH instead of row height ──
+       Previous version capped row height to fit all 9/4/1 cards on
+       one screen, which back-computed the wrap width and left cards
+       sitting tiny inside wider grid cells. New approach: cap the
+       grid COLUMN width to card-aspect-times-row-height so each cell
+       is naturally card-shaped, all 9 still fit vertically when the
+       viewport allows, and cards fill their cells fully on retina.
+       Grid is justify-content:center so the row is balanced. */
     @media (min-width: 901px) {
       body.on-binder #collectionContent .binder-grid-3x3 {
-        grid-auto-rows: calc((100svh - 260px - 20px) / 3);
+        /* Each column = (row height) × (245/342 card aspect).
+           Row height = (viewport - chrome) / 3 rows. */
+        grid-template-columns:
+          repeat(3, minmax(0, calc(((100svh - 260px - 20px) / 3) * 0.716)));
+        justify-content: center;
       }
       body.on-binder #collectionContent .binder-grid-2x2 {
-        grid-auto-rows: calc((100svh - 260px - 16px) / 2);
+        grid-template-columns:
+          repeat(2, minmax(0, calc(((100svh - 260px - 16px) / 2) * 0.716)));
+        justify-content: center;
       }
       body.on-binder #collectionContent .binder-grid-1x1 {
-        grid-auto-rows: calc(100svh - 260px);
+        grid-template-columns:
+          minmax(0, calc((100svh - 260px) * 0.716));
+        justify-content: center;
       }
-      /* Card needs to allow shrinking + clip overflow so info doesn't push
-         the image past its row's allotted height. */
+      /* Card still allows shrinking + clips overflow so info doesn't push
+         the image past the cell's allotted height. */
       body.on-binder #collectionContent .binder-card {
         min-height: 0;
         overflow: hidden;
       }
-      /* Image wrap derives width from height via aspect-ratio (already set
-         at 245/342 elsewhere). flex:1 1 0 + min-height:0 lets it scale
-         within the row; margin:0 auto centers the card image in the wider
-         grid column so wide screens don't leave the card pinned to the left. */
+      /* Wrap fills the (now correctly-sized) cell width, aspect-ratio
+         keeps it card-shaped, IMG covers it fully. No more width:auto
+         shrinking the wrap relative to the cell. */
       body.on-binder #collectionContent .binder-card-img-wrap {
         flex: 1 1 0;
         min-height: 0;
-        height: auto !important;
-        width: auto !important;
+        width: 100%;
         max-width: 100%;
-        margin: 0 auto;
       }
-      /* Info row sits flush below the image with a tight max-height so it
-         never steals more than its fair share. */
       body.on-binder #collectionContent .binder-card-info {
         flex-shrink: 0;
         padding: 4px 6px 2px;
@@ -3075,16 +3080,18 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ac-sort-arrows{margin-left:auto;display:inline-flex;gap:2px;align-items:center;font-size:.85rem;line-height:1;color:var(--muted);pointer-events:none}
     .ac-sort-arrow{padding:0 2px;transition:color .12s}
     .ac-sort-pop-toggle.active .ac-sort-arrow.arrow-active{color:var(--accent)}
+    /* All Cards view (ANY viewport): hide the original pb-panel-h (which
+       only holds Add Card + ⋯ on All Cards since the Layout dropdown is
+       already JS-hidden there). The .ac-mob-actions copies inside the
+       sort bar take over so the sort row reads as one clean row:
+       [SORT BY pills + List/Grid toggle + Add Card + ⋯]. */
+    .binder-frame.all-cards-wide .pb-panel-h{display:none !important}
+    .binder-frame.all-cards-wide #binderListSearchWrap{border-top:none !important}
+    .binder-frame.all-cards-wide .ac-mob-actions{display:flex !important}
+
     @media(max-width:600px){
       .ac-sort-label, .ac-sort-pills{display:none !important}
       .ac-sort-mobile{display:block}
-      /* All Cards view on mobile: hide the original pb-panel-h (which only
-         holds Add Card + ⋯ on All Cards since the Layout dropdown is
-         already JS-hidden there). The mobile copies inside the sort bar
-         take over so search + controls become two clean rows. */
-      .binder-frame.all-cards-wide .pb-panel-h{display:none !important}
-      .binder-frame.all-cards-wide #binderListSearchWrap{border-top:none !important}
-      .binder-frame.all-cards-wide .ac-mob-actions{display:flex !important}
       /* Visual grouping on mobile:
            [Sort ▾] [List] [Grid] ........ [Add Card] [⋯]
          List/Grid drops its desktop "margin-left:auto" (which would push
@@ -5885,6 +5892,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             </div>
           </div>
         </div>
+        <!-- ADD CARD + ⋯ live in pb-panel-h so they share a row with the
+             Layout selector in specific-binder view. In All Cards view
+             the entire pb-panel-h is hidden via CSS (the .ac-mob-actions
+             copies inside #allCardsSortBar take over). -->
+        <div class="pb-panel-actions" style="align-items:stretch">
+          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
+          <div style="position:relative">
+            <button id="binderOverflowBtn" class="pb-panel-link"
+                    onclick="toggleBinderOverflowPop(event)"
+                    aria-haspopup="true" aria-expanded="false" title="More actions"
+                    style="border-color:var(--border);color:var(--muted);padding:3px 11px;letter-spacing:.05em;font-size:14px;line-height:1">⋯</button>
+            <div id="binderOverflowPop" class="binder-pop binder-pop-right" role="menu" aria-labelledby="binderOverflowBtn">
+              <button id="vendorBulkImportBtn" onclick="openVendorImportModal();closeBinderPops()" class="binder-pop-item js-bulk-import-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
+              <button id="shareBinderBtn" onclick="copyShareLink();closeBinderPops()" class="binder-pop-item js-share-binder-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- List view search — only visible in list mode -->
       <div id="binderListSearchWrap" style="display:none;border-top:1px solid var(--border)">
@@ -5892,24 +5916,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           oninput="renderBinder()"
           style="width:100%;padding:9px 14px;background:transparent;border:none;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;box-sizing:border-box;outline:none"
           onfocus="this.style.background='var(--surface2)'" onblur="this.style.background='transparent'">
-      </div>
-      <!-- ADD CARD + ⋯ actions row — moved out of pb-panel-h so it sits
-           below the search bar on desktop (matching the mobile layout).
-           When the search bar isn't visible (specific-binder grid view),
-           this row naturally floats up under the Layout selector. -->
-      <div class="binder-actions-row" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:8px 12px;border-top:1px solid var(--border)">
-        <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
-        <!-- Overflow menu — Import + Share live here. Both items already toggle their own display via JS (vendor-only / logged-in only). -->
-        <div style="position:relative">
-          <button id="binderOverflowBtn" class="pb-panel-link"
-                  onclick="toggleBinderOverflowPop(event)"
-                  aria-haspopup="true" aria-expanded="false" title="More actions"
-                  style="border-color:var(--border);color:var(--muted);padding:3px 11px;letter-spacing:.05em;font-size:14px;line-height:1">⋯</button>
-          <div id="binderOverflowPop" class="binder-pop binder-pop-right" role="menu" aria-labelledby="binderOverflowBtn">
-            <button id="vendorBulkImportBtn" onclick="openVendorImportModal();closeBinderPops()" class="binder-pop-item js-bulk-import-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--gold)">↧</span><span>Import</span></button>
-            <button id="shareBinderBtn" onclick="copyShareLink();closeBinderPops()" class="binder-pop-item js-share-binder-btn" style="display:none" role="menuitem"><span class="binder-pop-ico" style="color:var(--teal)">⇗</span><span>Share Binder</span></button>
-          </div>
-        </div>
       </div>
       <!-- Sort bar — All Cards only. Never shown inside individual binders.
            Desktop: full pill row (Name / Rarity / Set / Value / Language).
