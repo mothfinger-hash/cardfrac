@@ -27267,16 +27267,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       try { await loadCollection(); checkBadge_stacked(); checkBadge_phantom_p2(); } catch(_) {}
       try { renderCollection(); } catch(_) {}
 
-      // Jump straight to the binder card detail so the user can edit
-      // photo / condition / price right away. The detail modal supports
-      // crop + bg removal via its own card-photo flow (which is the
-      // refresh-safe path — the card is already saved).
-      if (newRow?.id) {
-        try { showPage('collection'); setMobileNav('collection'); } catch(_) {}
-        setTimeout(() => {
-          try { openBinderCardDetail(newRow.id); } catch(_) {}
-        }, 220);
-      }
+      // Stay on the Add Card page after save — the toast confirms the
+      // add and the user can scan their next card immediately. The
+      // binder card detail (edit photo / condition / price) is one tap
+      // away from the binder if they want it. Removed the auto-jump to
+      // openBinderCardDetail per UX feedback — felt like an unwanted
+      // second modal popping up mid-flow.
 
       return newRow;
     }
