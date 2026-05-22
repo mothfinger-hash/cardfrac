@@ -27656,15 +27656,70 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return null;
     }
 
+    // ── Extract card name from Chinese OCR text ──────────────────────────────
+    // Chinese cards have a different layout from Japanese: no furigana, no
+    // kana, and card names are often very short (e.g. 喵喵 = Meowth, 2 chars).
+    // The JP parser rejects ≤2-char lines, which would skip valid CN names.
+    // Stage labels and other skip-list items in Chinese ("基础" = Basic,
+    // "1阶进化" = Stage 1, etc.) need their own list.
+    function parseChineseCardName(lines) {
+      // Stage labels, attribute names, mechanical keywords. Anything that's
+      // ON a card but isn't the card name. Plain stage label "基础" (Basic)
+      // is the most common one to skip past.
+      const ZH_SKIP = /^(基础|基础宝可梦|1阶进化|2阶进化|阶进化|进化|特性|招式|弱点|抵抗力|抗性|撤退|草|火|水|雷|超|斗|恶|钢|龙|妖精|无色|HP\s*\d+|\d+|Illus|©|www\.|GAME\s*FREAK|Pok[eé]mon|Nintendo|Creatures)$/i;
+
+      for (let i = 0; i < Math.min(15, lines.length); i++) {
+        const line = lines[i];
+        if (ZH_SKIP.test(line)) continue;
+        // "从X进化" / "由X进化而来" (evolves-from text) — usually appears below
+        // the name and isn't the name itself
+        if (/从.+进化/.test(line) || /由.+进化/.test(line)) continue;
+        // Lines must contain Han ideographs (CN names are always Chinese chars)
+        if (!/[一-鿿]/.test(line)) continue;
+        // Accept lines that are 2-30 chars and look like a name. The 2-char
+        // minimum is the key difference vs the JP parser — 喵喵, 皮卡丘
+        // (Pikachu), 杰尼龟 (Squirtle) all fit.
+        if (line.length >= 2 && line.length <= 30) {
+          // Strip trailing ASCII noise (e.g. "喵喵 CX3500" → "喵喵")
+          const hanPrefix = line.match(/^([一-鿿·・\s]+)/);
+          if (hanPrefix && hanPrefix[1].trim().length >= 2) return hanPrefix[1].trim();
+          return line;
+        }
+      }
+      return null;
+    }
+
+    // ── Extract card name from Korean OCR text ───────────────────────────────
+    // Korean cards use Hangul + occasional Hanja. Card names are typically
+    // 2-6 syllable blocks (피카츄 = Pikachu, 꼬부기 = Squirtle). Same general
+    // shape as the JP parser but with Hangul instead of kana, and Korean
+    // skip terms.
+    function parseKoreanCardName(lines) {
+      const KO_SKIP = /^(기본|1단진화|2단진화|진화|특성|기술|약점|저항력|후퇴|풀|불|물|번개|초|격투|악|강철|드래곤|페어리|무색|HP\s*\d+|\d+|Illus|©|www\.|GAME\s*FREAK|Pok[eé]mon|Nintendo|Creatures)$/i;
+      for (let i = 0; i < Math.min(15, lines.length); i++) {
+        const line = lines[i];
+        if (KO_SKIP.test(line)) continue;
+        // Lines must contain Hangul
+        if (!/[가-힯]/.test(line)) continue;
+        if (line.length >= 2 && line.length <= 30) {
+          const hangulPrefix = line.match(/^([가-힯·\s]+)/);
+          if (hangulPrefix && hangulPrefix[1].trim().length >= 2) return hangulPrefix[1].trim();
+          return line;
+        }
+      }
+      return null;
+    }
+
     function parseCardName(text) {
       if (!text) return null;
       text = normalizeOcr(text);  // normalise smart quotes/dashes before parsing
       const lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
 
-      // ── Japanese card — use CJK-aware name extractor ─────────────────────
-      if (isJapaneseOcr(text)) {
-        return parseJapaneseCardName(lines);
-      }
+      // ── Non-English card — dispatch to language-specific parser ──────────
+      var lang = detectOcrLanguage(text);
+      if (lang === 'JA') return parseJapaneseCardName(lines);
+      if (lang === 'ZH') return parseChineseCardName(lines);
+      if (lang === 'KO') return parseKoreanCardName(lines);
 
       const SUFFIX    = /^(VSTAR|VMAX|GX|EX|V|VUNION|TAG\s*TEAM)$/i;
       const STAGE_PRE = /^(Basic|Stage\s*[12])\s+/i;  // stage as prefix on same line
