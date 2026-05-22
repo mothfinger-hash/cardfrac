@@ -9867,6 +9867,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           delta: Number(r.delta), deltaPct: Number(r.delta_pct),
         }));
 
+        // PostgREST returns UNION ALL rows in arbitrary order — the
+        // RPC's inner ORDER BY clauses don't survive the HTTP wire.
+        // Re-sort here so the panel is strictly ranked by the active
+        // metric (biggest gain first for ↑, biggest loss first for ↓).
+        var _sortKeyFn = srt === 'dollar'
+          ? (m => Math.abs(m.delta))
+          : (m => Math.abs(m.deltaPct));
+        up.sort((a, b)   => _sortKeyFn(b) - _sortKeyFn(a));
+        down.sort((a, b) => _sortKeyFn(b) - _sortKeyFn(a));
+
         _globalMovers = { up, down, game_type, period: days, sort: srt };
         _globalMoversCache[cacheKey] = _globalMovers;
         _globalMoversLoading = false;
