@@ -8943,12 +8943,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                   ${_dh}
                 </div>
               </div>
-              <!-- Toggle row: scope / period / sort. Wraps on mobile so
-                   each pair gets a clean line if width is tight. -->
+              <!-- Toggle row: scope / direction / period / sort.
+                   Wraps on mobile so each pair drops to its own line if
+                   width is tight. Direction = ↑/↓ swap, shows only the
+                   selected list (top up-movers OR top down-movers). -->
               <div class="movers-toggles">
                 <div class="movers-toggle-pair">
                   <button class="movers-toggle ${_moversScope==='global'?'active':''}"   onclick="setMoversScope('global')">Global</button>
                   <button class="movers-toggle ${_moversScope==='personal'?'active':''}" onclick="setMoversScope('personal')">Yours</button>
+                </div>
+                <div class="movers-toggle-pair">
+                  <button class="movers-toggle ${_moversDirection==='up'?'active':''}"   onclick="setMoversDirection('up')"   title="Top gainers">↑</button>
+                  <button class="movers-toggle ${_moversDirection==='down'?'active':''}" onclick="setMoversDirection('down')" title="Top losers">↓</button>
                 </div>
                 <div class="movers-toggle-pair">
                   <button class="movers-toggle ${_moversPeriod===1?'active':''}" onclick="setMoversPeriod(1)">24h</button>
@@ -9734,17 +9740,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     let _globalMoversLoading = false;
     let _globalMoversCache = {};     // { 'p1-pct': {...}, 'p7-dollar': {...} }
 
-    // Price Movers panel state — three independent toggles.
-    let _moversScope  = 'global';    // 'global' (market) | 'personal' (your collection)
-    let _moversPeriod = 1;           // 1 day | 7 days
-    let _moversSort   = 'pct';       // 'pct' | 'dollar'
+    // Price Movers panel state. Four independent toggles, all binary.
+    // Direction is now its own toggle so the panel shows just ONE list
+    // (up OR down) per render — easier to scan than two stacked.
+    // TODO (multi-TCG): when other TCGs get their own daily price
+    // refresh, expose game_type as a 5th selector (currently hardcoded
+    // to 'pokemon' since that's the only TCG with active history).
+    let _moversScope     = 'global';   // 'global' (market) | 'personal' (your collection)
+    let _moversDirection = 'up';       // 'up' | 'down'
+    let _moversPeriod    = 1;          // 1 day | 7 days
+    let _moversSort      = 'pct';      // 'pct' | 'dollar'
 
     // Setters used by the toggle pills in the Price Movers panel.
-    // Each just updates the in-memory state, triggers a re-render so
-    // the toggle's active class swaps + the body re-evaluates from
-    // _globalMoversCache (loader will fetch the right combo if missing).
     window.setMoversScope = function(scope) {
       _moversScope = scope;
+      try { renderDashboard(); } catch(_) {}
+    };
+    window.setMoversDirection = function(dir) {
+      _moversDirection = dir;
       try { renderDashboard(); } catch(_) {}
     };
     window.setMoversPeriod = function(days) {
@@ -9940,17 +9953,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const tcgLabel    = (g.game_type || 'pokemon').replace(/^./, c => c.toUpperCase());
       const periodLabel = (g.period === 1) ? '24h' : (g.period + 'd');
       const sortLabel   = sortByDollar ? 'by $' : 'by %';
+      // Show only the direction the user picked (up OR down). The
+      // direction toggle in the panel header swaps between them.
+      var list = (_moversDirection === 'down') ? g.down : g.up;
+      var arrow = (_moversDirection === 'down') ? '↓' : '↑';
+      var arrowColor = (_moversDirection === 'down') ? 'var(--red)' : 'var(--green)';
       return `<div class="dash-chart-section" style="margin-bottom:16px">
         <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · ${tcgLabel} · ${periodLabel} · ${sortLabel}</div>
-        ${g.up.length ? `
-          <div style="font-size:.75rem;color:var(--green);margin-bottom:6px;letter-spacing:.08em">↑ Top Movers</div>
-          ${g.up.map(row).join('')}
-          <div style="margin-bottom:14px"></div>
-        ` : ''}
-        ${g.down.length ? `
-          <div style="font-size:.75rem;color:var(--red);margin-bottom:6px;letter-spacing:.08em">↓ Top Movers</div>
-          ${g.down.map(row).join('')}
-        ` : ''}
+        <div style="font-size:.75rem;color:${arrowColor};margin-bottom:6px;letter-spacing:.08em">${arrow} Top Movers</div>
+        ${list.length ? list.map(row).join('') : `<div style="font-size:.7rem;color:var(--muted);padding:6px 0">No ${_moversDirection === 'down' ? 'declines' : 'gains'} at this threshold.</div>`}
       </div>`;
     }
 
@@ -10103,18 +10114,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>`;
       }
 
-      // Personal section (only reached when _moversScope === 'personal')
+      // Personal section — show only the direction the user picked.
+      var personalList  = (_moversDirection === 'down') ? downMovers : upMovers;
+      var personalArrow = (_moversDirection === 'down') ? '↓' : '↑';
+      var personalColor = (_moversDirection === 'down') ? 'var(--red)' : 'var(--green)';
       return `<div class="dash-chart-section" style="margin-bottom:16px">
         <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">YOUR COLLECTION · last 7d</div>
-        ${upMovers.length ? `
-          <div style="font-size:.75rem;color:var(--green);margin-bottom:8px;letter-spacing:.08em">↑ Movers</div>
-          ${upMovers.map(_moverRow).join('')}
-          <div style="margin-bottom:16px"></div>
-        ` : ''}
-        ${downMovers.length ? `
-          <div style="font-size:.75rem;color:var(--red);margin-bottom:8px;letter-spacing:.08em">↓ Movers</div>
-          ${downMovers.map(_moverRow).join('')}
-        ` : ''}
+        <div style="font-size:.75rem;color:${personalColor};margin-bottom:8px;letter-spacing:.08em">${personalArrow} Movers</div>
+        ${personalList.length ? personalList.map(_moverRow).join('') : `<div style="font-size:.7rem;color:var(--muted);padding:6px 0">No ${_moversDirection === 'down' ? 'declines' : 'gains'} in your collection at this threshold.</div>`}
       </div>`;
     }
 
