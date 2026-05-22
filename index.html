@@ -27603,6 +27603,31 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return matches !== null && matches.length >= 4;
     }
 
+    // ── OCR language detection — distinguishes JA from ZH and KO ─────────────
+    // The legacy isJapaneseOcr() above triggers on ANY CJK character because
+    // Japanese kanji shares the same Unicode block (U+4E00–U+9FFF) as Chinese
+    // Han ideographs and Korean Hanja. That falsely flagged Chinese cards as
+    // Japanese and sent them down the jp-/pd- search path, skipping the
+    // cn-pc-/kr-pc- catalog rows entirely.
+    //
+    // Script-exclusive Unicode ranges:
+    //   JA  — must contain Hiragana (U+3041–U+3096) or Katakana (U+30A1–U+30F6)
+    //   KO  — must contain Hangul syllables (U+AC00–U+D7AF)
+    //   ZH  — Han ideographs (U+4E00–U+9FFF) with NO kana and NO Hangul
+    //   EN  — none of the above
+    // Threshold: ≥4 script-specific chars (matches legacy policy of ignoring
+    // stray CJK glyphs that bleed onto English-card OCR).
+    function detectOcrLanguage(text) {
+      if (!text) return 'EN';
+      var kana   = text.match(/[ぁ-ゖァ-ヶ]/g);  // JA-exclusive
+      if (kana && kana.length >= 4) return 'JA';
+      var hangul = text.match(/[가-힯]/g);                 // KO-exclusive
+      if (hangul && hangul.length >= 4) return 'KO';
+      var han    = text.match(/[一-鿿]/g);                 // Han → ZH (kana ruled out)
+      if (han && han.length >= 4) return 'ZH';
+      return 'EN';
+    }
+
     // ── Extract card name from Japanese OCR text ──────────────────────────────
     // JP layout: card type (グッズ), furigana fragments (1-3 kana), then the actual name
     function parseJapaneseCardName(lines) {
@@ -27793,7 +27818,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const numRaw      = parsed ? parsed.numRaw : null;  // "094"
         const numTotal    = parsed ? parsed.total  : null;  // "165" — set base size fingerprint
         const cardName    = parseCardName(fullText);
-        const isJpOcr     = isJapaneseOcr(fullText);
+        const ocrLang     = detectOcrLanguage(fullText);    // 'JA' | 'ZH' | 'KO' | 'EN'
+        const isJpOcr     = ocrLang === 'JA';                // back-compat alias
 
         // Derive extra name variants for trainer-card mismatches:
         //   "N'Zekrom" → expandedName="N's Zekrom", pokemonBase="Zekrom"
@@ -27801,7 +27827,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const { expandedName, pokemonBase: trainerPokemon } = deriveSearchNames(cardName);
 
         console.log('[Scanner] OCR raw:', JSON.stringify(rawFullText.slice(0,120)));
-        console.log('[Scanner] parsed → number:', parsed?.full, '| num:', numStripped, '| total:', numTotal, '| name:', cardName, '| expanded:', expandedName, '| pokemon:', trainerPokemon);
+        console.log('[Scanner] parsed → number:', parsed?.full, '| num:', numStripped, '| total:', numTotal, '| name:', cardName, '| expanded:', expandedName, '| pokemon:', trainerPokemon, '| lang:', ocrLang);
 
         if (!silent) setScanStatus('Searching catalog…');
 
@@ -27874,15 +27900,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           trainerPokemon
             ? q().ilike('name', '%' + trainerPokemon + '%').limit(12)
             : Promise.resolve({ data: [] }),
-          // K — JP-specific: search jp- catalog cards by card number when JP OCR detected
-          //     Try multiple formats: '69', '069', '69/80', '069/080' (TCGdex varies by set)
-          (isJpOcr && numStripped)
+          // K — non-English: search the language-specific catalog by card number.
+          //     JA → jp-/pd- prefixes (pokedata); ZH → cn-* (PriceCharting CN
+          //     singles); KO → kr-* (PC KR singles). Without this scoping a
+          //     Chinese card would falsely land on the JP branch via the
+          //     legacy isJapaneseOcr() catch-all and miss its actual catalog
+          //     rows entirely. Multiple number formats handle TCGdex variation
+          //     across sets ('69', '069', '69/80', '069/080').
+          (ocrLang !== 'EN' && numStripped)
             ? (() => {
                 const numFmts = [numStripped];
                 if (numRaw && numRaw !== numStripped) numFmts.push(numRaw);
                 if (numTotal) { numFmts.push(numStripped + '/' + numTotal); if (numRaw) numFmts.push(numRaw + '/' + numTotal); }
                 const orFilter = numFmts.filter((v,i,a) => a.indexOf(v) === i).map(n => 'card_number.eq.' + n).join(',');
-                return q().or(`id.like.jp-%,id.like.pd-%`).or(orFilter).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }));
+                const prefixFilter = ocrLang === 'JA' ? 'id.like.jp-%,id.like.pd-%'
+                                   : ocrLang === 'ZH' ? 'id.like.cn-%'
+                                   : ocrLang === 'KO' ? 'id.like.kr-%'
+                                   : '';
+                return q().or(prefixFilter).or(orFilter).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }));
               })()
             : Promise.resolve({ data: [] })
         ]);
@@ -27911,7 +27946,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         console.log('[Scanner] name+num hits:', nameNumHits.map(function(m){return m.name+'/'+m.set_code;}).join(', '));
         console.log('[Scanner] num-only hits:', numHits.length, '| name-only hits:', nameHits.length);
         console.log('[Scanner] expanded/trainer hits:', expandedHits.map(function(m){return m.name+'/'+m.set_code;}).join(', ') || 'none');
-        console.log('[Scanner] JP num hits:', jpNumHits.map(function(m){return m.name+'/'+m.set_code+'/cn:'+m.card_number;}).join(', ') || 'none');
+        console.log('[Scanner] lang-scoped num hits ('+ocrLang+'):', jpNumHits.map(function(m){return m.name+'/'+m.set_code+'/cn:'+m.card_number;}).join(', ') || 'none');
         console.log('[Scanner] confirmed sets (contain card #'+numTotal+'):', [...confirmedSets].join(', ') || 'none');
         console.log('[Scanner] CLIP top3:', clipMatches.slice(0,3).map(function(m){return m.name+'('+(m.similarity*100).toFixed(0)+'%)';}).join(' '));
 
@@ -27931,7 +27966,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // CLIP similarity is added as a ×0.12 tiebreaker within each tier.
         // JP CLIP matches get ×0.27 boost when JP OCR was detected.
         function scoreOcr(m, source) {
-          var isJpCard = m.id && (m.id.startsWith('jp-') || m.id.startsWith('pd-'));
+          // Derive the catalog row's language from its id prefix:
+          //   jp-/pd-  → JA   |  cn-* → ZH   |  kr-* → KO   |  en-/raw → EN
+          var cardLang = !m.id                    ? 'EN'
+                       : m.id.startsWith('jp-')   ? 'JA'
+                       : m.id.startsWith('pd-')   ? 'JA'
+                       : m.id.startsWith('cn-')   ? 'ZH'
+                       : m.id.startsWith('kr-')   ? 'KO'
+                       :                            'EN';
+          var langMatch    = (ocrLang !== 'EN' && cardLang === ocrLang);
+          var langMismatch = (ocrLang !== 'EN' && cardLang !== ocrLang);
           var base = source === 'setTotal'   ? 1.15
                    : source === 'nameNum'    ? 1.0
                    : source === 'expanded'   ? 1.05
@@ -27942,12 +27986,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           // +0.22 when name+number match AND the card's set contains card #numTotal
           var setConfirmedBoost = (source === 'nameNum' && numTotal && confirmedSets.has(m.set_code)) ? 0.22 : 0;
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
-          // JP OCR: boost CLIP similarity for jp- prefixed cards
-          var clipMult = (isJpOcr && isJpCard) ? 0.27 : 0.12;
+          // Boost CLIP similarity when the card's language matches the OCR
+          var clipMult = langMatch ? 0.27 : 0.12;
           var clipBoost = clipEntry ? clipEntry.similarity * clipMult : 0;
-          // When JP OCR detected, penalise English cards so jp- hits always win
-          var jpPenalty = (isJpOcr && !isJpCard) ? 0.35 : 0;
-          return base + setConfirmedBoost + clipBoost - jpPenalty;
+          // Penalise wrong-language cards so language-matched hits always win
+          var langPenalty = langMismatch ? 0.35 : 0;
+          return base + setConfirmedBoost + clipBoost - langPenalty;
         }
 
         const merged = [];
