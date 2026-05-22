@@ -8890,7 +8890,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               </div>
             </div>
 
-            <!-- Price Movers -->
+            <!-- Price Movers — wired to buildMovers() which prepends GLOBAL
+                 market movers (from catalog_price_history) followed by YOUR
+                 COLLECTION movers (from per-user price_history). Previous
+                 wiring only looked at ownedCards × purchase_price, which
+                 meant the panel sat empty for anyone who hadn't set cost
+                 basis on every card. -->
             <div class="ndash-panel" data-panel-id="price-movers">
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Price Movers</div>
@@ -8900,18 +8905,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 </div>
               </div>
               <div class="ndash-panel-body">
-                ${movers.length>0 ? movers.map(c => {
-                  const d = ((c.current_value-c.purchase_price)/c.purchase_price*100).toFixed(1);
-                  const up = Number(d)>=0;
-                  return `<div class="ndash-market-row" onclick="openBinderCardDetail('${c.id}')">
-                    <div class="ndash-market-thumb">${c.card_image_url?`<img src="${_thumbUrl(c.card_image_url, 160)}" alt="" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${c.id}')">`:''}</div>
-                    <div class="ndash-market-info">
-                      <div class="ndash-market-name">${_escHtml(c.card_name.slice(0,20))}</div>
-                      <div class="ndash-market-sub">$${(c.purchase_price||0).toFixed(2)} → $${(c.current_value||0).toFixed(2)}</div>
-                    </div>
-                    <div class="ndash-market-delta ${up?'up':'dn'}">${up?'+':''}${d}%</div>
-                  </div>`;
-                }).join('') : `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">Price data builds as cards are refreshed</div>`}
+                ${moversHtml || `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">Price data builds as cards are refreshed</div>`}
               </div>
             </div>
 
@@ -9685,20 +9679,70 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (_globalMovers)        return _globalMovers;
       if (_globalMoversLoading) return null;
       _globalMoversLoading = true;
-      // Debug: expose state to window so we can inspect from devtools
-      window._globalMovers        = _globalMovers;
-      window._globalMoversLoading = _globalMoversLoading;
+      window._globalMoversLoading = true;
       console.log('[movers] loading start for game_type=' + game_type);
       try {
-        // Pull the trailing 8-day window. We pick the OLDEST entry per
-        // catalog_id for the "vs 7 days ago" comparison; current value
-        // comes from the catalog's live current_value column.
+        // Server-side computation via SQL RPC — returns just the top 10
+        // up-movers + top 10 down-movers (max 20 rows) instead of pulling
+        // all 30K+ history rows + 30K+ catalog rows to the client. The
+        // RPC does the DISTINCT-ON-oldest + delta math in one query.
         //
-        // PostgREST caps any single response at max_rows (1000 by default
-        // on hosted Supabase), so the original .limit(200000) was only
-        // returning the first 1000 rows. With 30K+ history rows that
-        // meant most catalog_ids were never seen → empty movers panel.
-        // Paginate through `.range()` in 1000-row chunks instead.
+        // Migration: migration_global_price_movers_rpc.sql must be applied.
+        // If the function isn't installed yet, falls back to client-side
+        // pagination as a safety net.
+        const { data, error } = await sb.rpc('get_global_price_movers', {
+          p_game_type: game_type,
+          p_days_back: 8,
+          p_top_n:     10,
+          p_min_pct:   0.5,
+        });
+
+        if (error) {
+          // PGRST202 = RPC function not found (migration not applied yet)
+          if (error.code === 'PGRST202' || (error.message || '').includes('function')) {
+            console.warn('[movers] RPC not installed yet — apply migration_global_price_movers_rpc.sql. Falling back to client-side.');
+            return await _loadGlobalMoversClientFallback(game_type);
+          }
+          console.error('[movers] RPC error:', error);
+          _globalMoversLoading = false;
+          window._globalMoversLoading = false;
+          return null;
+        }
+
+        const rows = data || [];
+        const up   = rows.filter(r => r.direction === 'up').map(r => ({
+          id: r.catalog_id, name: r.name, set_name: r.set_name,
+          image_url: r.image_url,
+          currentVal: Number(r.current_value), oldVal: Number(r.old_value),
+          delta: Number(r.delta), deltaPct: Number(r.delta_pct),
+        }));
+        const down = rows.filter(r => r.direction === 'down').map(r => ({
+          id: r.catalog_id, name: r.name, set_name: r.set_name,
+          image_url: r.image_url,
+          currentVal: Number(r.current_value), oldVal: Number(r.old_value),
+          delta: Number(r.delta), deltaPct: Number(r.delta_pct),
+        }));
+
+        _globalMovers = { up, down, game_type };
+        _globalMoversLoading = false;
+        console.log('[movers] loaded via RPC: ' + up.length + ' up, ' + down.length + ' down');
+        window._globalMovers = _globalMovers;
+        window._globalMoversLoading = false;
+        return _globalMovers;
+      } catch (e) {
+        _globalMoversLoading = false;
+        console.error('[movers] load failed:', e);
+        window._globalMoversLoading = false;
+        return null;
+      }
+    }
+
+    // Fallback for users where the RPC migration hasn't been applied —
+    // does the same logic client-side. Slower (paginates all history +
+    // catalog) but works without the function installed. Once the
+    // migration runs in Supabase this path is never hit.
+    async function _loadGlobalMoversClientFallback(game_type = 'pokemon') {
+      try {
         const cutoff = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
           .toISOString().slice(0, 10);
         const PAGE = 1000;
@@ -9714,27 +9758,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             .range(offset, offset + PAGE - 1);
           if (histErr || !chunk) { _globalMoversLoading = false; return null; }
           hist.push(...chunk);
-          if (chunk.length < PAGE) break;        // last page
+          if (chunk.length < PAGE) break;
           offset += PAGE;
-          // Hard safety stop — should never hit on a sane catalog
           if (offset > 500000) break;
         }
-
-        console.log('[movers] fetched ' + hist.length + ' history rows');
-
-        // Earliest entry per catalog_id wins (ascending order ⇒ oldest first)
         const oldByCatalog = new Map();
         for (const row of hist) {
           if (!oldByCatalog.has(row.catalog_id)) {
             oldByCatalog.set(row.catalog_id, Number(row.recorded_value));
           }
         }
-        console.log('[movers] unique catalog_ids with history: ' + oldByCatalog.size);
         if (!oldByCatalog.size) { _globalMoversLoading = false; return null; }
-
-        // Fetch the matching catalog rows for the joined view (name +
-        // image + current_value + set). Chunk in 200-id batches because
-        // PostgREST .in() has URL-length limits.
         const ids = [...oldByCatalog.keys()];
         const cards = [];
         const CHUNK = 200;
@@ -9745,7 +9779,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             .in('id', slice);
           if (data) cards.push(...data);
         }
-
         const movers = [];
         for (const c of cards) {
           const cur = Number(c.current_value || 0);
@@ -9753,33 +9786,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           if (!cur || !old || Math.abs(cur - old) < 0.01) continue;
           const delta    = cur - old;
           const deltaPct = (delta / old) * 100;
-          if (Math.abs(deltaPct) < 0.5) continue;   // 0.5% noise floor
+          if (Math.abs(deltaPct) < 0.5) continue;
           movers.push({
             id: c.id, name: c.name, set_name: c.set_name,
             image_url: c.image_url,
-            currentVal: cur, oldVal: old,
-            delta, deltaPct,
+            currentVal: cur, oldVal: old, delta, deltaPct,
           });
         }
-
         const up   = movers.filter(m => m.delta >= 0)
-                           .sort((a, b) => b.deltaPct - a.deltaPct)
-                           .slice(0, 10);
+                           .sort((a, b) => b.deltaPct - a.deltaPct).slice(0, 10);
         const down = movers.filter(m => m.delta < 0)
-                           .sort((a, b) => a.deltaPct - b.deltaPct)
-                           .slice(0, 10);
+                           .sort((a, b) => a.deltaPct - b.deltaPct).slice(0, 10);
         _globalMovers = { up, down, game_type };
         _globalMoversLoading = false;
-        console.log('[movers] loaded: ' + cards.length + ' catalog rows, ' +
-                    movers.length + ' movers (' + up.length + ' up, ' + down.length + ' down)');
-        // Expose final state to window for devtools inspection
+        console.log('[movers] fallback loaded: ' + up.length + ' up, ' + down.length + ' down');
         window._globalMovers = _globalMovers;
         window._globalMoversLoading = false;
         return _globalMovers;
       } catch (e) {
         _globalMoversLoading = false;
-        console.error('[movers] load failed:', e);
-        window._globalMoversLoading = false;
+        console.error('[movers] fallback failed:', e);
         return null;
       }
     }
