@@ -6,18 +6,18 @@ name: Refresh Catalog Prices (Pokemon)
 # catalog_price_history (powers the dashboard Price Movers panel).
 #
 # Schedule: 10:00 UTC = 3am PDT / 2am PST (West Coast).
-# To change the time, edit the cron expression below (UTC).
+#
+# Runs on a self-hosted runner (your work Mac), so the 6-hour timeout
+# that kills hosted runners doesn't apply — the full ~10h run can
+# complete in one shot.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL          — your project URL
 #   SUPABASE_SERVICE_KEY  — service-role key (bypasses RLS)
-#
-# Manual trigger: Actions tab → this workflow → Run workflow.
 
 on:
   schedule:
-    - cron: '0 10 * * *'   # 3am PDT / 2am PST. Change to '0 11 * * *' if you'd
-                           # rather always run at 3am PST (and 4am PDT).
+    - cron: '0 10 * * *'   # 3am PDT / 2am PST
   workflow_dispatch:
     inputs:
       tcg:
@@ -35,11 +35,8 @@ on:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
-    # GitHub Actions hard-caps a job at 6h. The script estimates ~4-5h for
-    # 50K Pokemon rows at workers=4. If it tops out, --resume on the next
-    # run picks up only the rows that didn't get a snapshot today.
-    timeout-minutes: 350
+    runs-on: self-hosted           # uses your work Mac
+    timeout-minutes: 1440          # 24h — effectively no cap
 
     steps:
       - name: Checkout repo
