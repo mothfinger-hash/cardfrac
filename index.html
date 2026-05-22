@@ -9925,6 +9925,77 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
     }
 
+    // Smart click-handler for Price Movers rows. Behavior:
+    //   - If the user owns the card (matching api_card_id in their
+    //     collection_items), open the regular binder card detail.
+    //   - If not, fetch the catalog row and pop a lightweight preview
+    //     sheet showing image / name / set / current price plus an
+    //     "add to wishlist" CTA. Mirrors the previewScanMatch sheet
+    //     styling so the UX feels consistent with the scanner picker.
+    window.openMoversCardDetail = async function(catalogId) {
+      if (!catalogId) return;
+
+      // Owned? Open the existing binder detail modal directly.
+      var owned = (typeof collectionItems !== 'undefined' && collectionItems)
+        ? collectionItems.find(function(c) { return c.api_card_id === catalogId; })
+        : null;
+      if (owned) {
+        try { openBinderCardDetail(owned.id); } catch(_) {}
+        return;
+      }
+
+      // Not owned — fetch catalog row, show a quick preview sheet.
+      var card;
+      try {
+        var res = await sb.from('catalog').select('*').eq('id', catalogId).maybeSingle();
+        card = res && res.data;
+      } catch (_) {}
+      if (!card) {
+        try { showToast('Card not found in catalog'); } catch(_) {}
+        return;
+      }
+
+      document.getElementById('moversCardSheet')?.remove();
+      var setInfo = [card.set_name, card.card_number ? '#' + card.card_number : '', card.rarity].filter(Boolean).join(' · ');
+      var curVal  = Number(card.current_value || 0);
+      var priceLine = curVal > 0
+        ? '<div style="font-size:1.1rem;font-weight:700;color:var(--green);margin-top:6px">$' + curVal.toFixed(2) + '</div>'
+        : '';
+      var safeName = (card.name || '').replace(/'/g, "\\'");
+      var safeSet  = (card.set_name || '').replace(/'/g, "\\'");
+      var safeNum  = card.card_number || '';
+      var safeImg  = (card.image_url || '').replace(/'/g, "\\'");
+      var safeRar  = (card.rarity || '').replace(/'/g, "\\'");
+
+      var sheet = document.createElement('div');
+      sheet.id = 'moversCardSheet';
+      sheet.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:flex-end;justify-content:center';
+      sheet.innerHTML = '' +
+        '<div onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>' +
+        '<div style="position:relative;width:100%;max-width:480px;background:var(--surface);border-top:2px solid var(--copper-dim);border-left:2px solid var(--copper-dim);border-right:2px solid var(--copper-dim);border-radius:6px 6px 0 0;padding:20px 18px 28px;max-height:85svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
+          '<button onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>' +
+          '<div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);margin-bottom:14px">◈ CARD DETAIL</div>' +
+          (card.image_url
+            ? '<div style="display:flex;justify-content:center;margin-bottom:14px">' +
+                '<img src="' + card.image_url + '" alt="' + _escHtml(card.name || '') + '" onclick="openImageLightbox(\'' + safeImg + '\')" style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;cursor:zoom-in;box-shadow:0 0 20px var(--copper-glow)">' +
+              '</div>'
+            : '') +
+          '<div style="text-align:center;margin-bottom:14px">' +
+            '<div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:4px">' + _escHtml(card.name || 'Unknown Card') + '</div>' +
+            (setInfo ? '<div style="font-size:.65rem;color:var(--muted)">' + _escHtml(setInfo) + '</div>' : '') +
+            priceLine +
+          '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:8px">' +
+            '<button onclick="document.getElementById(\'moversCardSheet\').remove();openAddToWishlistModal({cardName:\'' + safeName + '\',setName:\'' + safeSet + '\',cardNumber:\'' + safeNum + '\',cardImageUrl:\'' + safeImg + '\',rarity:\'' + safeRar + '\',apiCardId:\'' + catalogId + '\'})" style="width:100%;padding:11px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.06em">♡ ADD TO WISHLIST</button>' +
+            (card.price_source_url
+              ? '<a href="' + card.price_source_url + '" target="_blank" rel="noopener" style="display:block;text-align:center;width:100%;padding:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer;text-decoration:none;letter-spacing:.04em">↗ View on PriceCharting</a>'
+              : '') +
+            '<button onclick="document.getElementById(\'moversCardSheet\').remove()" style="width:100%;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">CLOSE</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(sheet);
+    };
+
     function _renderGlobalMovers(g) {
       if (!g || (!g.up.length && !g.down.length)) return '';
       // Headline metric depends on the sort: when sorted by $, show
@@ -9942,7 +10013,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const secondary = sortByDollar
           ? '(' + sign + c.deltaPct.toFixed(1) + '%)'
           : '(' + sign + '$' + Math.abs(c.delta).toFixed(2) + ')';
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+        // Escape the catalog_id for safe inline onclick attribute use.
+        const safeId = String(c.id || '').replace(/'/g, "\\'");
+        return `<div onclick="openMoversCardDetail('${safeId}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background-color .12s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
           <div style="overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">
             <span style="font-size:.75rem;color:var(--text)">${name}</span>
             ${setBit}
