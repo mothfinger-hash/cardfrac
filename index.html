@@ -27247,10 +27247,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         } catch(_) {}
       }
 
-      showToast((card.name || 'Card') + ' added — tap to edit photo');
+      var savedToast = card._userPhotoApplied
+        ? (card.name || 'Card') + ' added with your photo'
+        : (card.name || 'Card') + ' added — tap to edit photo';
+      showToast(savedToast);
       _returnToScanner = false;
       pendingCollectionCard = null;
       try { window._detectedSlab = null; } catch(_) {}
+      try { window._scanCapturedDataUrl = null; } catch(_) {}
 
       // Tear down scanner UI so we land on the binder cleanly. The
       // camera stream itself is left intact — the existing scanner
@@ -27284,7 +27288,53 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // pressure (background-removal AI model on iOS Safari/Brave).
       const { data: card } = await sb.from('catalog').select('*').eq('id', cardId).maybeSingle();
       if (!card) { showToast('Card not found in catalog'); return; }
+
+      // Upload the user's scan photo as the binder card image. Without
+      // this, collection_items.card_image_url would be set to the catalog
+      // stock photo (which is the same image every user sees). Using
+      // their own capture means each user's binder shows what they
+      // actually own — wear, holo, signed, custom slabs etc. Falls back
+      // silently to the catalog stock image if upload fails (network
+      // error, storage RLS, etc.) so a hiccup doesn't block the save.
+      const userPhotoUrl = await _uploadScanCaptureAsUserPhoto();
+      if (userPhotoUrl) {
+        card.image_url = userPhotoUrl;
+        card._userPhotoApplied = true;
+      }
+
       await quickAddScannedCard(card);
+    }
+
+    // ── Upload the captured scan photo to card-photos storage ─────────────────
+    // Reads window._scanCapturedDataUrl (set by runMatch at scan start),
+    // converts the data: URL → Blob → webp via _imgToWebpBlob, uploads to
+    // the same collection/<user-id>/<timestamp>.webp path the binder
+    // detail uses for manual photo edits. Returns the public URL or null
+    // on any failure (caller falls back to the catalog stock photo).
+    async function _uploadScanCaptureAsUserPhoto() {
+      try {
+        if (!currentUser) return null;
+        var dataUrl = window._scanCapturedDataUrl;
+        if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+
+        // dataURL → Blob (same trick the binder detail uses)
+        var res  = await fetch(dataUrl);
+        var blob = await res.blob();
+        if (!blob || !blob.size) return null;
+
+        // webp re-encode (smaller / faster downloads on next visit)
+        var conv = await _imgToWebpBlob(blob);
+        var path = 'collection/' + currentUser.id + '/' + Date.now() + '_' +
+                   Math.random().toString(36).slice(2, 7) + '.' + conv.ext;
+        var up = await sb.storage.from('card-photos').upload(path, conv.blob, {
+          upsert: false, contentType: conv.contentType
+        });
+        if (up && up.error) return null;
+        var publicData = sb.storage.from('card-photos').getPublicUrl(path);
+        return (publicData && publicData.data && publicData.data.publicUrl) || null;
+      } catch (_) {
+        return null;
+      }
     }
 
     // Search catalog by name — shown in scanner when user wants to find exact version
@@ -27802,6 +27852,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // opts.silent=true → skip all UI updates, return match array (used by multi-scan)
     async function runMatch(dataURL, opts) {
       const silent = !!(opts && opts.silent);
+
+      // Stash the user's scan photo so that when they confirm a match,
+      // we can upload it as the binder card's image instead of using the
+      // catalog stock photo. Silent (multi-scan / batch) calls don't
+      // overwrite the single-scan capture — they're not the user-facing
+      // path. _scanCapturedDataUrl is consumed by confirmScanMatch and
+      // cleared on save / scanner close.
+      if (!silent && dataURL && typeof dataURL === 'string' && dataURL.startsWith('data:')) {
+        window._scanCapturedDataUrl = dataURL;
+      }
 
       // ── Per-tier monthly scanner usage gate (non-silent scans only) ─────────
       if (!silent && currentUser) {
