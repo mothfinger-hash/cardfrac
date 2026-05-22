@@ -1,23 +1,27 @@
 -- ============================================================
--- PathBinder — Global Price Movers RPC
+-- PathBinder — Global Price Movers RPC (v2)
 -- Run in: Supabase Dashboard → SQL Editor → New query
 --
 -- Returns the top N up-movers + top N down-movers across a TCG's
 -- catalog, computed entirely server-side. The dashboard widget calls
 -- this instead of pulling all history + catalog rows to the client.
 --
--- Performance: returns ~20 rows in <500ms regardless of catalog size.
--- The previous client-side approach pulled 30K+ history rows + 30K+
--- catalog rows across ~180 paginated requests.
+-- v2 changes:
+--   - Default window shrunk from 8 to 1 day (24h moves are more useful
+--     than 7d for live trading; 7d is still an option via p_days_back)
+--   - Added p_sort: 'pct' (default) sorts by % change; 'dollar' sorts
+--     by absolute $ change so cheap cards with huge % don't dominate
 --
--- Idempotent — safe to re-run.
+-- Performance: returns ~20 rows in <500ms regardless of catalog size.
+-- Idempotent — safe to re-run; CREATE OR REPLACE drops the old version.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_global_price_movers(
   p_game_type TEXT    DEFAULT 'pokemon',
-  p_days_back INT     DEFAULT 8,
+  p_days_back INT     DEFAULT 1,
   p_top_n     INT     DEFAULT 10,
-  p_min_pct   NUMERIC DEFAULT 0.5
+  p_min_pct   NUMERIC DEFAULT 0.5,
+  p_sort      TEXT    DEFAULT 'pct'   -- 'pct' or 'dollar'
 )
 RETURNS TABLE (
   catalog_id    TEXT,
@@ -31,9 +35,6 @@ RETURNS TABLE (
   direction     TEXT
 ) LANGUAGE SQL STABLE SECURITY INVOKER AS $$
   WITH oldest_per_card AS (
-    -- Pick the EARLIEST recorded_value per catalog_id in the trailing
-    -- window. DISTINCT ON keeps just the first row per partition by
-    -- the ORDER BY clause inside.
     SELECT DISTINCT ON (catalog_id)
       catalog_id,
       recorded_value AS old_value
@@ -61,18 +62,27 @@ RETURNS TABLE (
   )
   (SELECT catalog_id, name, set_name, image_url, old_value, current_value,
           delta, delta_pct, 'up'::TEXT AS direction
-   FROM moves WHERE delta > 0 ORDER BY delta_pct DESC LIMIT p_top_n)
+   FROM moves
+   WHERE delta > 0
+   ORDER BY
+     CASE WHEN p_sort = 'dollar' THEN ABS(delta)    ELSE NULL END DESC NULLS LAST,
+     CASE WHEN p_sort = 'pct'    THEN ABS(delta_pct) ELSE NULL END DESC NULLS LAST
+   LIMIT p_top_n)
   UNION ALL
   (SELECT catalog_id, name, set_name, image_url, old_value, current_value,
           delta, delta_pct, 'down'::TEXT AS direction
-   FROM moves WHERE delta < 0 ORDER BY delta_pct ASC  LIMIT p_top_n);
+   FROM moves
+   WHERE delta < 0
+   ORDER BY
+     CASE WHEN p_sort = 'dollar' THEN ABS(delta)    ELSE NULL END DESC NULLS LAST,
+     CASE WHEN p_sort = 'pct'    THEN ABS(delta_pct) ELSE NULL END DESC NULLS LAST
+   LIMIT p_top_n);
 $$;
 
--- Allow anon + authenticated to call it (read-only function)
 GRANT EXECUTE ON FUNCTION public.get_global_price_movers TO anon, authenticated;
 
 -- ============================================================
--- Verify after running:
---   SELECT * FROM get_global_price_movers('pokemon', 8, 10, 0.5);
--- Should return up to 20 rows (10 up + 10 down) of Pokemon movers.
+-- Verify:
+--   SELECT * FROM get_global_price_movers('pokemon', 1, 10, 0.5, 'pct');
+--   SELECT * FROM get_global_price_movers('pokemon', 7, 10, 0.5, 'dollar');
 -- ============================================================

@@ -4153,6 +4153,48 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 /* ── Panel ── */
 .ndash-panel{background:var(--surface);border:1.5px solid var(--border);box-shadow:3px 3px 0 #000;overflow:hidden;display:flex;flex-direction:column}
 .ndash-panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 12px;border-bottom:1.5px solid var(--border);background:linear-gradient(180deg,var(--surface3,var(--surface2)),var(--surface));flex-shrink:0}
+
+/* Price Movers toggle row — three 2-state pill pairs (Global/Yours,
+   24h/7d, %/$). Each pair sits in a compact bordered container so the
+   active button reads as the "selected" half. Wraps on mobile so each
+   pair can drop to its own line when width is tight. */
+.movers-toggles{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:6px 12px 0;
+  align-items:center;
+}
+.movers-toggle-pair{
+  display:inline-flex;
+  border:1px solid var(--border);
+  border-radius:3px;
+  overflow:hidden;
+}
+.movers-toggle{
+  font-family:'Space Mono','Share Tech Mono',monospace;
+  font-size:.6rem;
+  letter-spacing:.06em;
+  padding:3px 9px;
+  background:transparent;
+  color:var(--muted);
+  border:none;
+  cursor:pointer;
+  transition:background .12s,color .12s;
+}
+.movers-toggle:hover{ color:var(--text); }
+.movers-toggle.active{
+  background:var(--accent);
+  color:#000;
+  font-weight:700;
+}
+@media(max-width:600px){
+  .movers-toggles{
+    justify-content:center;
+    padding:8px 10px 0;
+  }
+  .movers-toggle{ padding:4px 11px; font-size:.62rem; }
+}
 .ndash-panel-title{font-family:'Orbitron',monospace;font-weight:800;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
 .ndash-panel-title-ico{width:22px;height:22px;background:var(--surface3,var(--surface2));color:var(--accent);display:grid;place-items:center;flex-shrink:0}
 .ndash-panel-title-ico svg{width:14px;height:14px}
@@ -8890,18 +8932,31 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               </div>
             </div>
 
-            <!-- Price Movers — wired to buildMovers() which prepends GLOBAL
-                 market movers (from catalog_price_history) followed by YOUR
-                 COLLECTION movers (from per-user price_history). Previous
-                 wiring only looked at ownedCards × purchase_price, which
-                 meant the panel sat empty for anyone who hadn't set cost
-                 basis on every card. -->
+            <!-- Price Movers — toggle between GLOBAL market and YOUR
+                 collection, swap period (24h / 7d) and sort (% / $).
+                 Mobile-friendly: three 2-state pill toggles that wrap. -->
             <div class="ndash-panel" data-panel-id="price-movers">
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Price Movers</div>
                 <div style="display:flex;align-items:center;gap:6px">
                   <button class="ndash-panel-link" onclick="showPage('browse');setMobileNav('browse')">BROWSE →</button>
                   ${_dh}
+                </div>
+              </div>
+              <!-- Toggle row: scope / period / sort. Wraps on mobile so
+                   each pair gets a clean line if width is tight. -->
+              <div class="movers-toggles">
+                <div class="movers-toggle-pair">
+                  <button class="movers-toggle ${_moversScope==='global'?'active':''}"   onclick="setMoversScope('global')">Global</button>
+                  <button class="movers-toggle ${_moversScope==='personal'?'active':''}" onclick="setMoversScope('personal')">Yours</button>
+                </div>
+                <div class="movers-toggle-pair">
+                  <button class="movers-toggle ${_moversPeriod===1?'active':''}" onclick="setMoversPeriod(1)">24h</button>
+                  <button class="movers-toggle ${_moversPeriod===7?'active':''}" onclick="setMoversPeriod(7)">7d</button>
+                </div>
+                <div class="movers-toggle-pair">
+                  <button class="movers-toggle ${_moversSort==='pct'?'active':''}"    onclick="setMoversSort('pct')">%</button>
+                  <button class="movers-toggle ${_moversSort==='dollar'?'active':''}" onclick="setMoversSort('dollar')">$</button>
                 </div>
               </div>
               <div class="ndash-panel-body">
@@ -9672,29 +9727,57 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // GLOBAL movers — sourced from catalog_price_history (written by
     // refresh_catalog_prices.py at ~3am). Lets the dashboard surface
     // market-wide moves across each TCG, not just the user's collection.
+    // Cached per (period, sort) key so toggling 1d ↔ 7d ↔ % ↔ $ doesn't
+    // re-hit the RPC every time. _globalMovers always points at the
+    // currently-active cache entry for the convenience of legacy code.
     let _globalMovers = null;        // { up: [...], down: [...] }
     let _globalMoversLoading = false;
+    let _globalMoversCache = {};     // { 'p1-pct': {...}, 'p7-dollar': {...} }
 
-    async function _loadGlobalMovers(game_type = 'pokemon') {
-      if (_globalMovers)        return _globalMovers;
+    // Price Movers panel state — three independent toggles.
+    let _moversScope  = 'global';    // 'global' (market) | 'personal' (your collection)
+    let _moversPeriod = 1;           // 1 day | 7 days
+    let _moversSort   = 'pct';       // 'pct' | 'dollar'
+
+    // Setters used by the toggle pills in the Price Movers panel.
+    // Each just updates the in-memory state, triggers a re-render so
+    // the toggle's active class swaps + the body re-evaluates from
+    // _globalMoversCache (loader will fetch the right combo if missing).
+    window.setMoversScope = function(scope) {
+      _moversScope = scope;
+      try { renderDashboard(); } catch(_) {}
+    };
+    window.setMoversPeriod = function(days) {
+      _moversPeriod = days;
+      try { renderDashboard(); } catch(_) {}
+    };
+    window.setMoversSort = function(sort) {
+      _moversSort = sort;
+      try { renderDashboard(); } catch(_) {}
+    };
+
+    async function _loadGlobalMovers(game_type = 'pokemon', period = null, sort = null) {
+      var days = period || _moversPeriod;
+      var srt  = sort   || _moversSort;
+      var cacheKey = 'p' + days + '-' + srt + '-' + game_type;
+      if (_globalMoversCache[cacheKey]) {
+        _globalMovers = _globalMoversCache[cacheKey];
+        return _globalMovers;
+      }
       if (_globalMoversLoading) return null;
       _globalMoversLoading = true;
       window._globalMoversLoading = true;
-      console.log('[movers] loading start for game_type=' + game_type);
+      console.log('[movers] loading start: game_type=' + game_type + ' period=' + days + 'd sort=' + srt);
       try {
-        // Server-side computation via SQL RPC — returns just the top 10
-        // up-movers + top 10 down-movers (max 20 rows) instead of pulling
-        // all 30K+ history rows + 30K+ catalog rows to the client. The
-        // RPC does the DISTINCT-ON-oldest + delta math in one query.
-        //
-        // Migration: migration_global_price_movers_rpc.sql must be applied.
-        // If the function isn't installed yet, falls back to client-side
-        // pagination as a safety net.
+        // Server-side computation via SQL RPC. The RPC does the
+        // DISTINCT-ON-oldest + delta math + sort + top-N in one query.
+        // Migration: migration_global_price_movers_rpc.sql (v2).
         const { data, error } = await sb.rpc('get_global_price_movers', {
           p_game_type: game_type,
-          p_days_back: 8,
+          p_days_back: days,
           p_top_n:     10,
           p_min_pct:   0.5,
+          p_sort:      srt,
         });
 
         if (error) {
@@ -9723,9 +9806,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           delta: Number(r.delta), deltaPct: Number(r.delta_pct),
         }));
 
-        _globalMovers = { up, down, game_type };
+        _globalMovers = { up, down, game_type, period: days, sort: srt };
+        _globalMoversCache[cacheKey] = _globalMovers;
         _globalMoversLoading = false;
-        console.log('[movers] loaded via RPC: ' + up.length + ' up, ' + down.length + ' down');
+        console.log('[movers] loaded via RPC: ' + up.length + ' up, ' + down.length + ' down (key=' + cacheKey + ')');
         window._globalMovers = _globalMovers;
         window._globalMoversLoading = false;
         return _globalMovers;
@@ -9812,22 +9896,34 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     function _renderGlobalMovers(g) {
       if (!g || (!g.up.length && !g.down.length)) return '';
+      // Headline metric depends on the sort: when sorted by $, show
+      // the dollar amount prominently and put % in parens (the
+      // opposite of the pct sort, which leads with %).
+      var sortByDollar = g.sort === 'dollar';
       function row(c) {
         const sign  = c.delta >= 0 ? '+' : '';
         const color = c.delta >= 0 ? 'var(--green)' : 'var(--red)';
         const name  = (c.name || '').length > 24 ? c.name.slice(0, 23) + '…' : (c.name || '');
         const setBit = c.set_name ? `<span style="font-size:.6rem;color:var(--muted);margin-left:5px">${c.set_name}</span>` : '';
+        const primary   = sortByDollar
+          ? sign + '$' + Math.abs(c.delta).toFixed(2)
+          : sign + c.deltaPct.toFixed(1) + '%';
+        const secondary = sortByDollar
+          ? '(' + sign + c.deltaPct.toFixed(1) + '%)'
+          : '(' + sign + '$' + Math.abs(c.delta).toFixed(2) + ')';
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
           <div style="overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">
             <span style="font-size:.75rem;color:var(--text)">${name}</span>
             ${setBit}
           </div>
-          <span style="font-size:.78rem;color:${color};font-weight:700;white-space:nowrap;margin-left:8px">${sign}${c.deltaPct.toFixed(1)}% (${sign}$${Math.abs(c.delta).toFixed(2)})</span>
+          <span style="font-size:.78rem;color:${color};font-weight:700;white-space:nowrap;margin-left:8px">${primary} ${secondary}</span>
         </div>`;
       }
-      const tcgLabel = (g.game_type || 'pokemon').replace(/^./, c => c.toUpperCase());
+      const tcgLabel    = (g.game_type || 'pokemon').replace(/^./, c => c.toUpperCase());
+      const periodLabel = (g.period === 1) ? '24h' : (g.period + 'd');
+      const sortLabel   = sortByDollar ? 'by $' : 'by %';
       return `<div class="dash-chart-section" style="margin-bottom:16px">
-        <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · ${tcgLabel} · last 7d</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · ${tcgLabel} · ${periodLabel} · ${sortLabel}</div>
         ${g.up.length ? `
           <div style="font-size:.75rem;color:var(--green);margin-bottom:6px;letter-spacing:.08em">↑ Top Movers</div>
           ${g.up.map(row).join('')}
@@ -9886,16 +9982,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           if (snap && snap.size) renderDashboard();
         });
       }
-      if (!_globalMovers && !_globalMoversLoading) {
-        _loadGlobalMovers('pokemon').then(g => {
-          // Re-render whenever the load completes — even with empty
-          // up/down. That way if there are no movers we still trigger
-          // a final pass through buildMovers so the "Loading…" state
-          // resolves into the "No price movement yet" state.
+      // Re-load the global movers for the currently-selected period+sort
+      // if we don't already have that combo cached.
+      var _cacheKey = 'p' + _moversPeriod + '-' + _moversSort + '-pokemon';
+      if (!_globalMoversCache[_cacheKey] && !_globalMoversLoading) {
+        _loadGlobalMovers('pokemon', _moversPeriod, _moversSort).then(g => {
           if (g) renderDashboard();
         });
       }
-      const globalHtml = _globalMovers ? _renderGlobalMovers(_globalMovers) : '';
+      var _activeGlobal = _globalMoversCache[_cacheKey] || null;
+      // Honor scope toggle: when user selected "Personal", suppress the
+      // global market section so the panel only shows their collection.
+      const globalHtml = (_moversScope === 'global' && _activeGlobal)
+        ? _renderGlobalMovers(_activeGlobal) : '';
       const snap = _priceHistorySnapshot;
       const movers = [];
 
@@ -9938,19 +10037,28 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         movers.push({ ...c, delta, deltaPct, oldVal, currentVal, periodLabel });
       }
 
-      // Loader-state messaging — show "Tracking…" instead of nothing while
-      // the first price_history query resolves. ALWAYS prepend the
-      // global market movers so even users with no collection price
-      // history still see something useful.
+      // Loader-state messaging. When scope = 'global', we ONLY render
+      // the global market section (no personal collection section).
+      // When scope = 'personal', we render only the user collection.
+      if (_moversScope === 'global') {
+        // Global-only view. If we have global data, show it. Otherwise
+        // show a "loading" or "no data" placeholder.
+        if (globalHtml) return globalHtml;
+        return `<div class="dash-chart-section" style="margin-bottom:16px">
+          <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · last ${_moversPeriod}d</div>
+          <div style="font-size:.72rem;color:var(--muted);padding:8px 0">${_globalMoversLoading ? 'Loading market data…' : 'No market movement at this threshold — try a wider period.'}</div>
+        </div>`;
+      }
+      // Personal scope: omit globalHtml entirely.
       if (!movers.length) {
         const yourHeader = `<div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">YOUR COLLECTION · last 7d</div>`;
         if (_priceHistoryLoading) {
-          return globalHtml + `<div class="dash-chart-section" style="margin-bottom:16px">
+          return `<div class="dash-chart-section" style="margin-bottom:16px">
             ${yourHeader}
             <div style="font-size:.72rem;color:var(--muted);padding:8px 0">Loading price history…</div>
           </div>`;
         }
-        return globalHtml + `<div class="dash-chart-section" style="margin-bottom:16px">
+        return `<div class="dash-chart-section" style="margin-bottom:16px">
           ${yourHeader}
           <div style="font-size:.72rem;color:var(--muted);padding:8px 0">No price movement yet — refreshing daily.</div>
         </div>`;
@@ -9977,7 +10085,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>`;
       }
 
-      return globalHtml + `<div class="dash-chart-section" style="margin-bottom:16px">
+      // Personal section (only reached when _moversScope === 'personal')
+      return `<div class="dash-chart-section" style="margin-bottom:16px">
         <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">YOUR COLLECTION · last 7d</div>
         ${upMovers.length ? `
           <div style="font-size:.75rem;color:var(--green);margin-bottom:8px;letter-spacing:.08em">↑ Movers</div>
