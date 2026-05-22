@@ -5445,6 +5445,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <h3>List Card for Sale</h3>
       <p class="modal-sub">Required: front &amp; back photo. Buyers see market price vs. your ask.</p>
 
+      <!-- Scan Product to Autofill — shop tier only. Surfaces the
+           non-TCG scanner (Funko Pop pilot) so shops can OCR a box
+           and have the listing fields pre-filled. Hidden client-side
+           via JS when user isn't shop tier (openProductScanner gates
+           server-side too). -->
+      <div id="lcScanProductRow" style="margin-bottom:14px;display:none">
+        <button type="button" onclick="openProductScanner()" style="width:100%;padding:10px 14px;border:1.5px dashed var(--copper-dim);background:rgba(184,115,51,.05);color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;font-weight:700;letter-spacing:.08em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18l-2 14H5L3 6z"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          SCAN PRODUCT TO AUTOFILL
+        </button>
+        <div style="font-size:.6rem;color:var(--muted);text-align:center;margin-top:5px">For Funko Pops, manga, posters and other non-TCG items</div>
+      </div>
+
       <div class="atc-grid" style="margin-bottom:14px">
         <div class="form-group" style="grid-column:1/-1">
           <label>Card Name *</label>
@@ -6968,6 +6981,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </button>
       </div>
       <div id="adminBackfillStatus" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);min-height:16px;line-height:1.6"></div>
+    </div>
+
+    <!-- Shop Tier Metrics -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Shop Tier Metrics</div>
+        <button onclick="adminLoadShopMetrics()"
+          style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:6px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">Refresh</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Platform GMV + per-shop breakdown. Reads from <code>shop_tier_platform_metrics</code> and <code>shop_seller_metrics</code> views. Apply <code>migration_shop_seller_metrics.sql</code> first.
+      </div>
+      <div id="adminShopMetricsPanel" style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted)">Click Refresh to load.</div>
     </div>
 
     <!-- Danger Zone -->
@@ -8987,6 +9013,28 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 </button>
               </div>
             </div>
+
+            <!-- Scan Product CTA — shop tier only. Hidden for free /
+                 collector / vendor users via inline style decision below.
+                 Routes to the SEPARATE product scanner (not the card
+                 scanner) so shops can OCR Funko Pops + other non-TCG
+                 products to autofill their listings. -->
+            ${(() => {
+              var _tier = (currentUserProfile && currentUserProfile.subscription_tier) || '';
+              var _isShop = _tier === 'shop' || (currentUser && currentUser.is_admin);
+              if (!_isShop) return '';
+              return `<div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-product-cta" style="position:relative;margin-top:10px">
+                <div style="position:absolute;top:7px;right:8px;z-index:3;display:flex;align-items:center">
+                  <span class="ndash-drag-handle" title="Drag to move" style="color:rgba(0,0,0,0.45);font-size:13px">⠿</span>
+                </div>
+                <div class="ndash-panel-body" style="padding:0">
+                  <button class="ndash-scan-cta" onclick="openProductScanner()" style="background:var(--copper);color:#1a0a00;box-shadow:4px 4px 0 #000,0 0 24px rgba(184,115,51,.35)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18l-2 14H5L3 6z"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    SCAN PRODUCT
+                  </button>
+                </div>
+              </div>`;
+            })()}
 
             <!-- Alerts -->
             <div class="ndash-panel" data-panel-id="alerts">
@@ -12041,6 +12089,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       renderLcPhotoPreview();
       toggleLcGrade();
+
+      // Reveal the "Scan Product to Autofill" row only for shop-tier
+      // users (since they're the ones with non-TCG inventory to list).
+      // openListCardModal already requires shop tier to reach this
+      // point, so we can show it unconditionally here — but the tier
+      // check is cheap and defensive.
+      var _scanRow = document.getElementById('lcScanProductRow');
+      if (_scanRow) {
+        var _tier = (currentUserProfile && currentUserProfile.subscription_tier) || '';
+        var _isShop = _tier === 'shop' || (currentUser && currentUser.is_admin);
+        _scanRow.style.display = _isShop ? 'block' : 'none';
+      }
+
       openModal('listCardModal');
     }
 
@@ -13472,6 +13533,188 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       } catch (e) {
         if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '// Network error: ' + e.message; }
       }
+    }
+
+    // ── Shop tier sales metrics ─────────────────────────────────────────────
+    // Pulls aggregated marketplace numbers from the two SQL views:
+    //   shop_tier_platform_metrics  — single-row rollup (platform-wide)
+    //   shop_seller_metrics         — per-shop breakdown
+    // Used by:
+    //   #1 admin panel section (full table, this function)
+    //   #2 per-shop "My Business" dashboard widget (own row only)
+    //   #3 public marketing snippet — gated by _FEATURE_SHOP_MARKETING flag
+    //      (hidden for now per product decision; flip flag when ready)
+    window._FEATURE_SHOP_MARKETING = false;
+
+    async function _fetchShopTierPlatformMetrics() {
+      try {
+        var res = await sb.from('shop_tier_platform_metrics').select('*').maybeSingle();
+        if (res.error) {
+          if (String(res.error.message || '').toLowerCase().includes('does not exist')) {
+            return { _missing: true };
+          }
+          throw res.error;
+        }
+        return res.data || {};
+      } catch (e) {
+        return { _error: e.message || String(e) };
+      }
+    }
+    async function _fetchShopSellerMetrics(sellerId) {
+      try {
+        var q = sb.from('shop_seller_metrics').select('*');
+        if (sellerId) q = q.eq('seller_id', sellerId).maybeSingle();
+        else          q = q.order('gross_gmv', { ascending: false }).limit(50);
+        var res = await q;
+        if (res.error) {
+          if (String(res.error.message || '').toLowerCase().includes('does not exist')) {
+            return { _missing: true };
+          }
+          throw res.error;
+        }
+        return res.data || (sellerId ? null : []);
+      } catch (e) {
+        return { _error: e.message || String(e) };
+      }
+    }
+
+    function _fmtMoney(n) {
+      var num = Number(n || 0);
+      if (num >= 1000) return '$' + (num / 1000).toFixed(1) + 'k';
+      return '$' + num.toFixed(2);
+    }
+    function _fmtDate(s) {
+      if (!s) return '—';
+      try { return new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
+      catch(_) { return s; }
+    }
+
+    async function adminLoadShopMetrics() {
+      if (!currentUser?.is_admin) return;
+      var panel = document.getElementById('adminShopMetricsPanel');
+      if (!panel) return;
+      panel.innerHTML = '<div style="color:var(--muted)">Loading metrics…</div>';
+
+      var [platform, sellers] = await Promise.all([
+        _fetchShopTierPlatformMetrics(),
+        _fetchShopSellerMetrics(),
+      ]);
+
+      if (platform && platform._missing) {
+        panel.innerHTML = '<div style="color:var(--red)">SQL views not installed. Run <code>migration_shop_seller_metrics.sql</code> first.</div>';
+        return;
+      }
+      if (platform && platform._error) {
+        panel.innerHTML = '<div style="color:var(--red)">Load error: ' + _escHtml(platform._error) + '</div>';
+        return;
+      }
+
+      // Platform rollup tiles
+      var p = platform || {};
+      var rollupHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">' +
+        '<div style="border:1px solid var(--border);padding:10px 12px;background:var(--surface2)">' +
+          '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">ACTIVE SHOPS</div>' +
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--text)">' + (p.active_shops || 0) + '</div>' +
+        '</div>' +
+        '<div style="border:1px solid var(--border);padding:10px 12px;background:var(--surface2)">' +
+          '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">TOTAL GMV</div>' +
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--green)">' + _fmtMoney(p.total_platform_gmv) + '</div>' +
+        '</div>' +
+        '<div style="border:1px solid var(--border);padding:10px 12px;background:var(--surface2)">' +
+          '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">GMV · LAST 30D</div>' +
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--accent)">' + _fmtMoney(p.gmv_last_30d) + '</div>' +
+        '</div>' +
+        '<div style="border:1px solid var(--border);padding:10px 12px;background:var(--surface2)">' +
+          '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">SALES · LAST 30D</div>' +
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--text)">' + (p.sales_last_30d || 0) + '</div>' +
+        '</div>' +
+      '</div>';
+
+      // Per-shop table
+      var rows = Array.isArray(sellers) ? sellers : [];
+      var tableHtml;
+      if (!rows.length) {
+        tableHtml = '<div style="color:var(--muted);padding:10px 0">No shop sellers with sales yet.</div>';
+      } else {
+        tableHtml = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.6rem">' +
+          '<thead><tr style="text-align:left;color:var(--muted);letter-spacing:.08em">' +
+            '<th style="padding:6px 8px;border-bottom:1px solid var(--border)">SHOP</th>' +
+            '<th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">GMV</th>' +
+            '<th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">SALES</th>' +
+            '<th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">30D GMV</th>' +
+            '<th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">30D SALES</th>' +
+            '<th style="padding:6px 8px;border-bottom:1px solid var(--border)">LAST SALE</th>' +
+          '</tr></thead><tbody>' +
+          rows.map(function(r) {
+            var label = r.username ? '@' + r.username : (r.name || r.seller_id);
+            return '<tr style="border-bottom:1px solid var(--border)">' +
+              '<td style="padding:6px 8px;color:var(--text)">' + _escHtml(label) + '</td>' +
+              '<td style="padding:6px 8px;color:var(--green);text-align:right">' + _fmtMoney(r.gross_gmv) + '</td>' +
+              '<td style="padding:6px 8px;text-align:right">' + (r.confirmed_sales || 0) + '</td>' +
+              '<td style="padding:6px 8px;color:var(--accent);text-align:right">' + _fmtMoney(r.gmv_last_30d) + '</td>' +
+              '<td style="padding:6px 8px;text-align:right">' + (r.sales_last_30d || 0) + '</td>' +
+              '<td style="padding:6px 8px;color:var(--muted)">' + _fmtDate(r.last_sale_at) + '</td>' +
+            '</tr>';
+          }).join('') +
+          '</tbody></table></div>';
+      }
+
+      panel.innerHTML = rollupHtml + tableHtml;
+    }
+
+    // Per-shop "My Business" dashboard widget HTML. Returns '' when the
+    // current user isn't shop-tier or the views aren't installed yet —
+    // dashboard render gracefully skips an empty string.
+    async function buildShopBusinessWidget() {
+      if (!currentUser) return '';
+      var tier = (currentUserProfile && currentUserProfile.subscription_tier) ||
+                 (typeof currentTier === 'string' ? currentTier : '');
+      if (tier !== 'shop') return '';
+      var me = await _fetchShopSellerMetrics(currentUser.id);
+      if (!me || me._missing || me._error) return '';
+      var stats = me || {};
+      return '<div class="ndash-panel" data-panel-id="my-business" style="margin-bottom:14px">' +
+        '<div class="ndash-panel-h">' +
+          '<div class="ndash-panel-title">My Business</div>' +
+        '</div>' +
+        '<div class="ndash-panel-body" style="padding:12px">' +
+          '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">' +
+            '<div style="border:1px solid var(--border);padding:8px 10px;background:var(--surface2)">' +
+              '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.08em">LIFETIME GMV</div>' +
+              '<div style="font-size:1rem;font-weight:700;color:var(--green)">' + _fmtMoney(stats.gross_gmv) + '</div>' +
+            '</div>' +
+            '<div style="border:1px solid var(--border);padding:8px 10px;background:var(--surface2)">' +
+              '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.08em">SALES</div>' +
+              '<div style="font-size:1rem;font-weight:700;color:var(--text)">' + (stats.confirmed_sales || 0) + '</div>' +
+            '</div>' +
+            '<div style="border:1px solid var(--border);padding:8px 10px;background:var(--surface2)">' +
+              '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.08em">30D GMV</div>' +
+              '<div style="font-size:1rem;font-weight:700;color:var(--accent)">' + _fmtMoney(stats.gmv_last_30d) + '</div>' +
+            '</div>' +
+            '<div style="border:1px solid var(--border);padding:8px 10px;background:var(--surface2)">' +
+              '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.08em">UNIQUE BUYERS</div>' +
+              '<div style="font-size:1rem;font-weight:700;color:var(--text)">' + (stats.unique_buyers || 0) + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Marketing snippet — hidden by default per product decision. Flip
+    // window._FEATURE_SHOP_MARKETING to true to render on the Shop card
+    // of the pricing modal. Numbers come from the platform rollup view.
+    async function buildShopMarketingSnippet() {
+      if (!window._FEATURE_SHOP_MARKETING) return '';
+      var p = await _fetchShopTierPlatformMetrics();
+      if (!p || p._missing || p._error) return '';
+      return '<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(26,199,160,.3);background:rgba(26,199,160,.05);border-radius:4px">' +
+        '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">SHOPS ON PATHBINDER</div>' +
+        '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.68rem">' +
+          '<span><strong style="color:var(--green)">' + _fmtMoney(p.total_platform_gmv) + '</strong> <span style="color:var(--muted)">moved</span></span>' +
+          '<span><strong style="color:var(--text)">' + (p.total_confirmed_sales || 0) + '</strong> <span style="color:var(--muted)">sales</span></span>' +
+          '<span><strong style="color:var(--accent)">' + (p.active_shops || 0) + '</strong> <span style="color:var(--muted)">active shops</span></span>' +
+        '</div>' +
+      '</div>';
     }
 
     async function adminBackfillUserImages() {
@@ -27462,6 +27705,206 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     // Store for detail preview
     window._scanMatches = [];
+
+    // ── Product Category config (multi-category marketplace) ───────────
+    // Each category defines:
+    //   key           — matches product_categories.key in Supabase
+    //   display       — human label
+    //   photoAspect   — preferred photo aspect ratio (informational)
+    //   fields        — listing-form schema (label, type, key, placeholder)
+    //   scannerType   — extractor used by the shop product scanner
+    //                   'tcg' (existing card scanner — never touched)
+    //                   'funko' (Funko Pop OCR heuristics, see _extractFunkoFromOcr)
+    //                   null    (no scanner support yet — manual entry only)
+    //
+    // To add a category: drop a new key into this object + flip is_active=true
+    // in product_categories. The listing UI / browse filter / scanner all
+    // read from this single source of truth.
+    // ── Funko Pop OCR extractor ────────────────────────────────────────
+    // Parses raw GCV text from a Funko box. Looks for:
+    //   - Pop number ("#NN" or just digits near "POP!"/"FUNKO" branding)
+    //   - Character name (the largest text line, usually all-caps)
+    //   - Series hints ("MARVEL", "DC", "STAR WARS", "POKEMON", common franchises)
+    //   - Exclusivity markers ("HOT TOPIC", "GAMESTOP", "TARGET EXCLUSIVE", etc.)
+    //   - Chase variant indicator
+    // Returns a best-effort partial { character, series, pop_number, exclusive,
+    // is_chase } — caller fills in what's confident and leaves blanks for the
+    // shop to complete in the autofill form.
+    function _extractFunkoFromOcr(text) {
+      if (!text) return {};
+      var out = {};
+      var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+
+      // Pop number — usually "#NN" but sometimes just a number near POP! branding
+      var numMatch = text.match(/#\s*(\d{1,5})/);
+      if (numMatch) out.pop_number = '#' + numMatch[1];
+
+      // Series hints from common franchise keywords
+      var SERIES_KEYWORDS = [
+        ['MARVEL', 'Marvel'], ['DC COMICS', 'DC Comics'], ['DC', 'DC'],
+        ['STAR WARS', 'Star Wars'], ['POKEMON', 'Pokemon'], ['POKÉMON', 'Pokemon'],
+        ['HARRY POTTER', 'Harry Potter'], ['DISNEY', 'Disney'],
+        ['GAME OF THRONES', 'Game of Thrones'], ['STRANGER THINGS', 'Stranger Things'],
+        ['NARUTO', 'Naruto'], ['DRAGON BALL', 'Dragon Ball'],
+        ['MY HERO ACADEMIA', 'My Hero Academia'], ['ONE PIECE', 'One Piece'],
+        ['ANIMATION', 'Animation'], ['TELEVISION', 'TV'], ['MOVIES', 'Movies'],
+        ['ROCKS', 'Rocks'], ['GAMES', 'Games'], ['HEROES', 'Heroes'],
+      ];
+      for (var i = 0; i < SERIES_KEYWORDS.length; i++) {
+        var k = SERIES_KEYWORDS[i];
+        if (text.toUpperCase().indexOf(k[0]) >= 0) { out.series = k[1]; break; }
+      }
+
+      // Exclusivity — common store-exclusive markers
+      var EXCLUSIVE_RE = /(HOT\s*TOPIC|GAMESTOP|TARGET|WALMART|BOX\s*LUNCH|FYE|AMAZON|FUNKO\.?COM)[^\\n]*EXCLUSIVE/i;
+      var excMatch = text.match(EXCLUSIVE_RE);
+      if (excMatch) {
+        out.exclusive = excMatch[0].replace(/\s+/g, ' ').trim();
+      } else if (/EXCLUSIVE/i.test(text)) {
+        // Found EXCLUSIVE without a known retailer — flag it for the user
+        out.exclusive = 'Exclusive (specify retailer)';
+      }
+
+      // Chase variant
+      if (/CHASE(?!\s*POP)/i.test(text)) out.is_chase = true;
+
+      // Character name — heuristic: the largest visually prominent line is
+      // usually the character. GCV returns lines in order; the LONGEST
+      // all-caps line that isn't a known skip pattern is a good guess.
+      var SKIP_RE = /^(POP!?|FUNKO|VINYL\s*FIGURE|EXCLUSIVE|HOT\s*TOPIC|GAMESTOP|TARGET|WALMART|BOX\s*LUNCH|FYE|AMAZON|MARVEL|DC|STAR\s*WARS|DISNEY|ANIMATION|TELEVISION|MOVIES|HEROES|GAMES|©.*|\d+|#\d+)$/i;
+      var bestName = null;
+      for (var i2 = 0; i2 < lines.length; i2++) {
+        var ln = lines[i2];
+        if (ln.length < 3 || ln.length > 40) continue;
+        if (SKIP_RE.test(ln)) continue;
+        // Prefer lines that contain letters (not just numbers/punctuation)
+        if (!/[A-Za-z]/.test(ln)) continue;
+        // Prefer the longest plausible line
+        if (!bestName || ln.length > bestName.length) bestName = ln;
+      }
+      if (bestName) out.character = bestName;
+
+      return out;
+    }
+
+    // ── Shop Product Scanner — completely separate from card scanner ──
+    // Tier-gated to 'shop'. Reuses the existing camera capture + GCV OCR
+    // helpers but routes results through category-specific extractors.
+    // For the Funko pilot it shows the OCR text and the parsed Funko fields
+    // so the shop can paste them into the listing form (autofill wiring
+    // comes in the next step once the extractor is dialed in).
+    //
+    // CRITICAL: this never touches runMatch, parseCardName, or any of the
+    // card-scanner code paths. They share only the low-level ocrCardText
+    // helper, which is a pure function with no side effects.
+    window.openProductScanner = async function() {
+      // Tier gate — only shop tier and above
+      var tier = (currentUserProfile && currentUserProfile.subscription_tier) || '';
+      var isAdmin = currentUser && currentUser.is_admin;
+      if (tier !== 'shop' && !isAdmin) {
+        showToast('Product scanner is a Shop tier feature.');
+        return;
+      }
+
+      // Build a fresh modal each call (simpler than maintaining state)
+      document.getElementById('productScannerModal')?.remove();
+      var modal = document.createElement('div');
+      modal.id = 'productScannerModal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:100020;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px';
+      modal.innerHTML = '' +
+        '<div style="position:relative;width:100%;max-width:520px;background:var(--surface);border:2px solid var(--copper-dim);border-radius:6px;padding:18px 18px 22px;max-height:92svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
+          '<button onclick="document.getElementById(\'productScannerModal\').remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>' +
+          '<div style="font-size:.55rem;letter-spacing:.14em;color:var(--copper);margin-bottom:6px">◈ PRODUCT SCANNER · SHOP TIER</div>' +
+          '<div style="font-size:.8rem;color:var(--text);font-weight:700;margin-bottom:14px">Scan a Funko Pop box</div>' +
+          '<div style="font-size:.65rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Take a photo of the box front. We&apos;ll OCR the text and auto-extract character / series / Pop # for your listing.</div>' +
+          '<input type="file" accept="image/*" capture="environment" id="productScannerFile" style="display:none" onchange="_runProductScan(this)">' +
+          '<button onclick="document.getElementById(\'productScannerFile\').click()" style="width:100%;padding:14px;border:1.5px solid var(--accent);background:rgba(26,199,160,.08);color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.06em">TAKE PHOTO</button>' +
+          '<div id="productScanResult" style="margin-top:14px"></div>' +
+        '</div>';
+      document.body.appendChild(modal);
+    };
+
+    window._runProductScan = async function(fileInput) {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      var resultEl = document.getElementById('productScanResult');
+      if (resultEl) resultEl.innerHTML = '<div style="font-size:.7rem;color:var(--muted);padding:8px 0">// Reading box…</div>';
+
+      // Convert file to data URL and pass to the existing GCV helper.
+      // ocrCardText() is pure — it doesn't trigger any card-scanner code paths.
+      var reader = new FileReader();
+      reader.onload = async function(e) {
+        var dataURL = e.target.result;
+        var text = await ocrCardText(dataURL);
+        if (!text) {
+          if (resultEl) resultEl.innerHTML = '<div style="font-size:.7rem;color:var(--red);padding:8px 0">No text detected. Try a clearer photo of the box front.</div>';
+          return;
+        }
+
+        var extracted = _extractFunkoFromOcr(text);
+        var hasAny = Object.keys(extracted).length > 0;
+
+        var html = '';
+        if (hasAny) {
+          html += '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">EXTRACTED</div>';
+          html += '<div style="border:1px solid var(--border);background:var(--surface2);padding:10px 12px;margin-bottom:12px">';
+          if (extracted.character)  html += '<div style="font-size:.75rem;color:var(--text)"><strong>Character:</strong> ' + _escHtml(extracted.character) + '</div>';
+          if (extracted.series)     html += '<div style="font-size:.7rem;color:var(--muted);margin-top:3px"><strong>Series:</strong> ' + _escHtml(extracted.series) + '</div>';
+          if (extracted.pop_number) html += '<div style="font-size:.7rem;color:var(--muted);margin-top:3px"><strong>Pop #:</strong> ' + _escHtml(extracted.pop_number) + '</div>';
+          if (extracted.exclusive)  html += '<div style="font-size:.7rem;color:var(--muted);margin-top:3px"><strong>Exclusive:</strong> ' + _escHtml(extracted.exclusive) + '</div>';
+          if (extracted.is_chase)   html += '<div style="font-size:.7rem;color:var(--copper);margin-top:3px"><strong>◆ Chase variant detected</strong></div>';
+          html += '</div>';
+        } else {
+          html += '<div style="font-size:.7rem;color:var(--muted);margin-bottom:12px">No Funko fields recognized — see raw OCR below to copy manually.</div>';
+        }
+
+        // Raw OCR for fallback / debugging
+        html += '<details style="margin-bottom:12px"><summary style="font-size:.6rem;color:var(--muted);cursor:pointer;letter-spacing:.06em">RAW OCR TEXT</summary>';
+        html += '<pre style="margin-top:6px;background:var(--surface2);border:1px solid var(--border);padding:8px 10px;font-size:.6rem;color:var(--text);white-space:pre-wrap;max-height:200px;overflow-y:auto">' + _escHtml(text) + '</pre>';
+        html += '</details>';
+
+        html += '<div style="display:flex;gap:8px">';
+        html += '<button onclick="document.getElementById(\'productScannerFile\').click()" style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">↻ RETAKE</button>';
+        html += '<button onclick="document.getElementById(\'productScannerModal\').remove()" style="flex:1;padding:10px;border:1px solid var(--accent);background:rgba(26,199,160,.1);color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">DONE</button>';
+        html += '</div>';
+
+        if (resultEl) resultEl.innerHTML = html;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    window.PRODUCT_CATEGORIES = {
+      tcg_single: {
+        display:     'TCG Singles',
+        photoAspect: '245:342',
+        scannerType: 'tcg',
+        fields: [
+          // TCG schema lives in collection_items + catalog already.
+          // Listing flow uses existing add-card UI, not this fields list.
+        ],
+      },
+      tcg_sealed: {
+        display:     'TCG Sealed',
+        photoAspect: '1:1',
+        scannerType: 'tcg',
+        fields: [],
+      },
+      funko_pop: {
+        display:     'Funko Pop',
+        photoAspect: '4:5',
+        scannerType: 'funko',
+        fields: [
+          { key: 'character',   label: 'Character',   type: 'text',   placeholder: 'e.g. Pikachu' },
+          { key: 'series',      label: 'Series / Line', type: 'text', placeholder: 'e.g. Pokemon, Marvel, Disney' },
+          { key: 'pop_number',  label: 'Pop #',       type: 'text',   placeholder: 'e.g. #353' },
+          { key: 'exclusive',   label: 'Exclusivity', type: 'text',   placeholder: 'e.g. Hot Topic Exclusive (or leave blank)' },
+          { key: 'condition',   label: 'Box Condition', type: 'select', options: ['Mint','Near Mint','Very Good','Damaged','Loose (no box)'] },
+          { key: 'is_chase',    label: 'Chase variant?', type: 'checkbox' },
+          { key: 'is_grail',    label: 'Vaulted / Grail?', type: 'checkbox' },
+          { key: 'year',        label: 'Release Year', type: 'text',   placeholder: 'e.g. 2018' },
+        ],
+      },
+    };
 
     function showScanResults(matches) {
       window._scanMatches = matches;

@@ -35,6 +35,21 @@ the surrounding UI clearly establishes the pattern (e.g., adding a new
 admin section that sits next to "◈ Card Editor" can also use `◈`).
 Never introduce new pictographic glyphs from outside that small palette.
 
+Especially common temptations to resist:
+- Camera / scanner UI: NO 📷, NO 📸, NO 🔍. Use an inline SVG icon if
+  you want a visual cue, or just plain text "Take Photo" / "Scan".
+- Product / packaging UI: NO 📦, NO 🎁, NO 🛒. Plain text.
+- Status / alerts: NO ⚡, NO 🔥, NO 🚨, NO ✨, NO 🎯. Use `⚠` (existing
+  palette) or color + plain text.
+- Money / sales: NO 💰, NO 💵, NO 📈, NO 📊. Plain text + green/red.
+- Reactions / feedback: NO 👍, NO ❤, NO ✅, NO ❌. Use `✓` (existing
+  palette) for success, or just text.
+
+Use the project's own SVG iconography when an icon is genuinely needed.
+The Add Card / Sets / Market / Trade / Account nav row in index.html
+contains canonical SVG icons for the common verbs — extend that pattern
+rather than reach for emoji.
+
 ### Color palette
 
 PathBinder uses a cyan + copper hologram theme. Key CSS variables:
