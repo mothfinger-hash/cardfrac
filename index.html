@@ -9020,7 +9020,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                  scanner) so shops can OCR Funko Pops + other non-TCG
                  products to autofill their listings. -->
             ${(() => {
-              var _tier = (currentUserProfile && currentUserProfile.subscription_tier) || '';
+              var _tier = (currentUser && currentUser.subscription_tier) || '';
               var _isShop = _tier === 'shop' || (currentUser && currentUser.is_admin);
               if (!_isShop) return '';
               return `<div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-product-cta" style="position:relative;margin-top:10px">
@@ -12107,7 +12107,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // check is cheap and defensive.
       var _scanRow = document.getElementById('lcScanProductRow');
       if (_scanRow) {
-        var _tier = (currentUserProfile && currentUserProfile.subscription_tier) || '';
+        var _tier = (currentUser && currentUser.subscription_tier) || '';
         var _isShop = _tier === 'shop' || (currentUser && currentUser.is_admin);
         _scanRow.style.display = _isShop ? 'block' : 'none';
       }
@@ -13677,7 +13677,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // dashboard render gracefully skips an empty string.
     async function buildShopBusinessWidget() {
       if (!currentUser) return '';
-      var tier = (currentUserProfile && currentUserProfile.subscription_tier) ||
+      var tier = (currentUser && currentUser.subscription_tier) ||
                  (typeof currentTier === 'string' ? currentTier : '');
       if (tier !== 'shop') return '';
       var me = await _fetchShopSellerMetrics(currentUser.id);
@@ -27809,7 +27809,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // helper, which is a pure function with no side effects.
     window.openProductScanner = async function() {
       // Tier gate — only shop tier and above
-      var tier = (currentUserProfile && currentUserProfile.subscription_tier) || '';
+      var tier = (currentUser && currentUser.subscription_tier) || '';
       var isAdmin = currentUser && currentUser.is_admin;
       if (tier !== 'shop' && !isAdmin) {
         showToast('Product scanner is a Shop tier feature.');
