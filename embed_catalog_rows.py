@@ -37,6 +37,7 @@ ENVIRONMENT:
 """
 
 import os, sys, io, time, argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     import requests
@@ -65,6 +66,7 @@ ap.add_argument("--limit",   type=int, default=0, help="Stop after N rows (debug
 ap.add_argument("--dry-run", action="store_true", help="Fetch+embed but don't write back to Supabase.")
 ap.add_argument("--reembed", action="store_true", help="Re-embed rows that already have an embedding. Default skips them.")
 ap.add_argument("--batch-size", type=int, default=32, help="CLIP batch size (default 32). Lower if VRAM-bound.")
+ap.add_argument("--download-workers", type=int, default=8, help="Parallel image-fetch threads (default 8). Lower if your bandwidth is constrained.")
 args = ap.parse_args()
 
 
@@ -78,9 +80,23 @@ REQUEST_TIMEOUT = 12
 
 # ── Model ───────────────────────────────────────────────────────────────
 print("Loading CLIP model (openai/clip-vit-base-patch32)...")
-device    = "cuda" if torch.cuda.is_available() else "cpu"
+# Device picking: NVIDIA CUDA > Apple Silicon MPS > CPU. MPS gives a
+# 5-10x speedup over CPU on M1/M2/M3 Macs without any extra setup.
+if torch.cuda.is_available():
+    device = "cuda"
+elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    device = "mps"
+else:
+    device = "cpu"
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-model     = CLIPVisionModelWithProjection.from_pretrained("openai/clip-vit-base-patch32").to(device)
+# use_safetensors=True avoids CVE-2025-32434 in torch.load() that
+# affects torch < 2.6. The safetensors format is safe regardless of
+# torch version. Transformers will auto-download model.safetensors
+# the first time this runs; subsequent runs use the local cache.
+model     = CLIPVisionModelWithProjection.from_pretrained(
+    "openai/clip-vit-base-patch32",
+    use_safetensors=True,
+).to(device)
 model.eval()
 print(f"  Running on: {device}")
 
@@ -125,14 +141,49 @@ if not candidates:
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
-def fetch_image(url):
-    try:
-        r = requests.get(url, timeout=REQUEST_TIMEOUT)
-        r.raise_for_status()
-        return Image.open(io.BytesIO(r.content)).convert("RGB")
-    except Exception as e:
-        print(f"\n  ! {url[:70]} — {e}")
-        return None
+def fetch_image(url, retries=2):
+    """Download + decode a card image. Retries on transient network
+    errors (connection refused, timeout, DNS hiccup) which are common
+    during long unattended runs. HTTP 4xx / 5xx are NOT retried — the
+    image is just missing or banned."""
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(url, timeout=REQUEST_TIMEOUT)
+            r.raise_for_status()
+            return Image.open(io.BytesIO(r.content)).convert("RGB")
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(1 + attempt * 2)  # 1s, 3s back-off
+                continue
+        except Exception as e:
+            last_err = e
+            break
+    print(f"\n  ! {url[:70]} — {last_err}")
+    return None
+
+
+def fetch_batch_parallel(batch, workers):
+    """Fetch every image in `batch` concurrently. Returns a list of
+    (card, image) tuples in original order, plus a count of failures.
+    Parallel I/O is the biggest single speedup for this script — going
+    from 1 worker (~300ms/card) to 8 workers (~50ms/card) shrinks an
+    overnight 100K-row run from ~12h to ~2-3h."""
+    loaded_by_idx = [None] * len(batch)
+    failed = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(fetch_image, c["image_url"]): i
+                   for i, c in enumerate(batch)}
+        for fut in as_completed(futures):
+            idx = futures[fut]
+            img = fut.result()
+            if img is not None:
+                loaded_by_idx[idx] = (batch[idx], img)
+            else:
+                failed += 1
+    loaded = [pair for pair in loaded_by_idx if pair is not None]
+    return loaded, failed
 
 def embed_batch(pil_images):
     inputs = processor(images=pil_images, return_tensors="pt", padding=True).to(device)
@@ -143,22 +194,70 @@ def embed_batch(pil_images):
     return embeds.cpu().tolist()
 
 _upsert_errors = 0
+_abort_threshold = 500  # high tolerance for overnight runs. Transient
+                        # 'Server disconnected' errors auto-retry now,
+                        # so most won't reach this counter at all.
+_UPDATE_WORKERS  = 8    # parallel UPDATEs per batch. Reduced from 12 —
+                        # 12 was tripping Supabase's connection pool
+                        # ('Server disconnected'). 8 + retries is more
+                        # stable for long unattended runs.
+
+def _is_transient_error(err_str):
+    """Errors that should be retried (network/connection blips)."""
+    s = str(err_str).lower()
+    return any(token in s for token in [
+        "server disconnected",
+        "connection reset",
+        "connection aborted",
+        "remote end closed",
+        "timed out",
+        "timeout",
+        "broken pipe",
+        "max retries exceeded",
+    ])
+
 def upsert(rows):
-    """Write embeddings back to catalog. Uses UPDATE per row (not upsert)
-    so we never disturb any other columns — supabase-py's upsert defaults
-    to nulling unspecified fields, which violated NOT NULL on `name` and
-    killed entire batches at a time."""
+    """Write embeddings back to catalog. Parallel per-row UPDATE with
+    auto-retry on transient connection errors.
+
+    Why not batched upsert? supabase-py's default_to_null=False kwarg
+    didn't reliably suppress NULL clobbering on the UPDATE side, so
+    batched upserts tripped NOT NULL constraints when any row in the
+    batch had a quirky id. UPDATE has no INSERT path, so phantom ids
+    no-op silently.
+
+    Why retries? Supabase's REST endpoint occasionally drops in-flight
+    connections (pool churn, keep-alive timeout). A 200-500ms retry
+    almost always succeeds. Without retries, we lose embeddings that
+    were already computed."""
     global _upsert_errors
-    if args.dry_run:
+    if args.dry_run or not rows:
         return
-    for row in rows:
-        try:
-            sb.table("catalog").update({"embedding": row["embedding"]}).eq("id", row["id"]).execute()
-        except Exception as e:
-            _upsert_errors += 1
-            print(f"\n  Update error #{_upsert_errors} on {row['id']}: {e}")
-            if _upsert_errors >= 10:
-                sys.exit("\n  Too many update errors — aborting.")
+
+    def do_update(row):
+        last_err = None
+        for attempt in range(3):  # 1 initial + 2 retries
+            try:
+                sb.table("catalog").update({"embedding": row["embedding"]}).eq("id", row["id"]).execute()
+                return None
+            except Exception as e:
+                last_err = e
+                if _is_transient_error(e) and attempt < 2:
+                    time.sleep(0.2 + attempt * 0.3)  # 0.2s, 0.5s back-off
+                    continue
+                break
+        return (row.get("id", "?"), str(last_err))
+
+    with ThreadPoolExecutor(max_workers=_UPDATE_WORKERS) as pool:
+        futures = [pool.submit(do_update, row) for row in rows]
+        for fut in as_completed(futures):
+            err = fut.result()
+            if err is not None:
+                _upsert_errors += 1
+                if _upsert_errors <= 5 or _upsert_errors % 50 == 0:
+                    print(f"\n  Update error #{_upsert_errors} on {err[0]}: {err[1]}")
+                if _upsert_errors >= _abort_threshold:
+                    sys.exit(f"\n  {_abort_threshold} update errors — aborting (check connection).")
 
 
 # ── Main loop ───────────────────────────────────────────────────────────
@@ -173,10 +272,13 @@ for i in range(0, total, BATCH_SIZE):
     elapsed = time.time() - t0
     per     = elapsed / max(succeeded + failed, 1)
     eta     = int((total - i) * per)
-    print(f"  [{i+1:>6}/{total}]  ETA {eta//60}m {eta%60}s", end="\r", flush=True)
+    rate    = (succeeded + failed) / elapsed if elapsed else 0
+    print(f"  [{i+1:>6}/{total}]  ETA {eta//3600}h {(eta%3600)//60}m  ({rate:.1f}/s)", end="\r", flush=True)
 
-    loaded = [(c, img) for c in batch if (img := fetch_image(c["image_url"])) is not None]
-    failed += len(batch) - len(loaded)
+    # Parallel image downloads — was the slowest part of the previous
+    # loop. 8 workers default; tunable via --download-workers.
+    loaded, batch_failed = fetch_batch_parallel(batch, args.download_workers)
+    failed += batch_failed
     if not loaded:
         continue
 

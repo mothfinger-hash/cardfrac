@@ -3024,6 +3024,46 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       background:rgba(255,61,127,.16);
       box-shadow:0 0 12px rgba(255,61,127,.35);
     }
+
+    /* Sets tabs row — outer container for the TCG pills (desktop) /
+       TCG dropdown (mobile), the Pokemon language dropdown, and the
+       Singles/Sealed toggle. On desktop it's a normal left-aligned
+       wrapping flex row. On mobile we center everything and swap
+       the wide pill row for the compact dropdown so the 7-TCG list
+       stops eating three rows of vertical space. */
+    #setsPage .sets-tabs-row{
+      display:flex;
+      gap:6px;
+      margin-bottom:14px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    #setsPage .sets-tcg-pills{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    /* .sets-tcg-wrap is rendered with inline style="display:none" by
+       default so it stays hidden on desktop. The media query below
+       flips it to inline-flex on mobile and hides the pill row. */
+    @media (max-width:600px){
+      #setsPage .sets-tabs-row{
+        justify-content:center;
+        gap:8px;
+      }
+      #setsPage .sets-tcg-pills{
+        display:none !important;
+      }
+      #setsPage .sets-tcg-wrap{
+        display:inline-flex !important;
+      }
+      /* Sub-row controls — language dropdown + Singles/Sealed toggle —
+         can wrap to their own line on narrow viewports so the TCG
+         dropdown gets a clean line of its own. */
+      #setsPage .sets-view-sub{
+        margin-left:0;
+      }
+    }
     .binder-book-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
     .binder-book{position:relative;width:90px;height:118px;transition:transform .22s ease,filter .22s ease;transform:perspective(520px) rotateY(-14deg);filter:drop-shadow(4px 8px 16px rgba(0,0,0,.75))}
     .binder-book:hover{transform:perspective(520px) rotateY(-7deg) translateY(-5px);filter:drop-shadow(6px 12px 22px rgba(0,0,0,.9))}
@@ -16116,13 +16156,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const H = 80;
       const PAD_L = 46, PAD_R = 8, PAD_T = 8, PAD_B = 20;
 
-      const vals   = points.map(p => p.value);
-      const minV   = Math.min(...vals);
-      const maxV   = Math.max(...vals);
-      const range  = maxV - minV || (minV * 0.02) || 1;
+      const vals     = points.map(p => p.value);
+      const minV     = Math.min(...vals);
+      const maxV     = Math.max(...vals);
+      const dataSpan = maxV - minV;
+      // Y-axis padding: 20% of the data range on each side (or fallback to
+      // 10% of the max when the data is flat/near-flat). Bottom is clamped
+      // at $0 so we never show negative prices. Without this padding the
+      // line touched the top + bottom edges and looked "bottomed out" even
+      // when there was meaningful absolute price movement.
+      const pad        = Math.max(dataSpan * 0.20, maxV * 0.10) || 1;
+      const yAxisMax   = maxV + pad;
+      const yAxisMin   = Math.max(0, minV - pad);
+      const range      = yAxisMax - yAxisMin || 1;
 
       const xScale = i => PAD_L + (i / (points.length - 1)) * (W - PAD_L - PAD_R);
-      const yScale = v => PAD_T + (1 - (v - minV) / range) * (H - PAD_T - PAD_B);
+      const yScale = v => PAD_T + (1 - (v - yAxisMin) / range) * (H - PAD_T - PAD_B);
 
       const polyPts = points.map((p, i) => `${xScale(i).toFixed(1)},${yScale(p.value).toFixed(1)}`).join(' ');
       const areaPts = `${xScale(0).toFixed(1)},${H - PAD_B} ${polyPts} ${xScale(points.length - 1).toFixed(1)},${H - PAD_B}`;
@@ -16131,8 +16180,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const lineClr  = isUp ? 'var(--green)' : 'var(--red)';
       const fillClr  = isUp ? 'rgba(210,120,40,.06)' : 'rgba(255,68,85,.06)';
 
-      // Y labels: min, max
-      const yLabels = [minV, maxV].map(v => {
+      // Y labels: show the padded axis range bounds (yAxisMin / yAxisMax),
+      // NOT the raw min / max — otherwise the labels would suggest the
+      // line is at the edge of the chart when it actually isn't.
+      const yLabels = [yAxisMin, yAxisMax].map(v => {
         const y = yScale(v);
         return `<text x="${PAD_L - 3}" y="${y.toFixed(1)}" text-anchor="end" font-size="8" fill="var(--muted)" font-family="Share Tech Mono,monospace" dominant-baseline="middle">$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(v < 10 ? 2 : 0)}</text>`;
       }).join('');
@@ -23532,13 +23583,41 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     ];
 
     function _setsTabsHtml() {
-      var html = '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
+      // Outer container — uses a class instead of inline styles so the
+      // mobile media query can re-center the whole row and swap the TCG
+      // pills for a compact dropdown.
+      var html = '<div class="sets-tabs-row">';
+
+      // TCG pill row (visible on desktop only; CSS hides on mobile).
+      html += '<div class="sets-tcg-pills">';
       _SETS_TABS.forEach(function(t) {
         var active = _setsLang === t.key;
         html += '<button class="sets-tab' + (active ? ' active' : '') +
           '" onclick="setSetsLang(\'' + t.key + '\')">' +
           t.label + '</button>';
       });
+      html += '</div>';
+
+      // TCG compact dropdown (visible on mobile only; CSS hides on desktop).
+      // Mirrors the language-dropdown popover styling so the controls
+      // read as one chip family at small viewports.
+      var curTcg = (_SETS_TABS.find(function(t){ return t.key === _setsLang; }) || _SETS_TABS[0]).label;
+      html += '<span class="sets-tcg-wrap" style="position:relative;display:none;vertical-align:middle">';
+      html +=   '<button type="button" class="sets-lang-trigger" onclick="_toggleSetsTcgPopover(event)">' +
+                  '<span class="sets-lang-trigger-label">' + curTcg + '</span>' +
+                  '<span class="sets-lang-trigger-caret">▾</span>' +
+                '</button>';
+      html +=   '<div class="sets-lang-popover" id="setsTcgPopover" role="listbox" style="display:none">';
+      _SETS_TABS.forEach(function(t) {
+        var sel = _setsLang === t.key;
+        html +=   '<button type="button" role="option" class="sets-lang-opt' + (sel ? ' is-selected' : '') +
+                    '" onclick="setSetsLangFromDropdown(\'' + t.key + '\')">' +
+                    (sel ? '<span class="sets-lang-opt-check">✓</span>' : '<span class="sets-lang-opt-check" style="visibility:hidden">✓</span>') +
+                    '<span>' + t.label + '</span>' +
+                  '</button>';
+      });
+      html +=   '</div>';
+      html += '</span>';
       // Pokémon language dropdown — only renders when POKEMON is active.
       // Compact select so we can add CN / KR / DE / FR / etc. without
       // exploding the width of the tab strip. Render-path support for
@@ -23638,6 +23717,50 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function _setsLangKeydown(ev) {
       if (ev.key === 'Escape') _closeSetsLangPopover();
     }
+
+    // ── TCG dropdown (mobile only) — mirrors the language-dropdown ────
+    // open/close mechanics. Same popover styling, just a different
+    // anchor element + option list. Desktop ignores this entirely
+    // because the CSS hides .sets-tcg-wrap above 600px.
+    function _toggleSetsTcgPopover(ev) {
+      if (ev) ev.stopPropagation();
+      var pop = document.getElementById('setsTcgPopover');
+      if (!pop) return;
+      var isOpen = pop.style.display !== 'none';
+      if (isOpen) {
+        _closeSetsTcgPopover();
+      } else {
+        pop.style.display = 'block';
+        var trig = pop.parentElement && pop.parentElement.querySelector('.sets-lang-trigger');
+        if (trig) trig.classList.add('is-open');
+        setTimeout(function(){
+          document.addEventListener('click', _setsTcgOutsideClick);
+          document.addEventListener('keydown', _setsTcgKeydown);
+        }, 0);
+      }
+    }
+    function _closeSetsTcgPopover() {
+      var pop = document.getElementById('setsTcgPopover');
+      if (!pop) return;
+      pop.style.display = 'none';
+      var trig = pop.parentElement && pop.parentElement.querySelector('.sets-lang-trigger');
+      if (trig) trig.classList.remove('is-open');
+      document.removeEventListener('click', _setsTcgOutsideClick);
+      document.removeEventListener('keydown', _setsTcgKeydown);
+    }
+    function _setsTcgOutsideClick(ev) {
+      var wrap = document.querySelector('.sets-tcg-wrap');
+      if (wrap && wrap.contains(ev.target)) return;
+      _closeSetsTcgPopover();
+    }
+    function _setsTcgKeydown(ev) {
+      if (ev.key === 'Escape') _closeSetsTcgPopover();
+    }
+    function setSetsLangFromDropdown(lang) {
+      _closeSetsTcgPopover();
+      setSetsLang(lang);
+    }
+
     function setSetsView(view) {
       _setsView = view;
       // Bust the per-TCG sets cache so the next render re-fetches with
