@@ -9689,16 +9689,32 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // Pull the trailing 8-day window. We pick the OLDEST entry per
         // catalog_id for the "vs 7 days ago" comparison; current value
         // comes from the catalog's live current_value column.
+        //
+        // PostgREST caps any single response at max_rows (1000 by default
+        // on hosted Supabase), so the original .limit(200000) was only
+        // returning the first 1000 rows. With 30K+ history rows that
+        // meant most catalog_ids were never seen → empty movers panel.
+        // Paginate through `.range()` in 1000-row chunks instead.
         const cutoff = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
           .toISOString().slice(0, 10);
-        const { data: hist, error: histErr } = await sb
-          .from('catalog_price_history')
-          .select('catalog_id, recorded_value, recorded_at')
-          .eq('game_type', game_type)
-          .gte('recorded_at', cutoff)
-          .order('recorded_at', { ascending: true })
-          .limit(200000);
-        if (histErr || !hist) { _globalMoversLoading = false; return null; }
+        const PAGE = 1000;
+        let offset = 0;
+        const hist = [];
+        while (true) {
+          const { data: chunk, error: histErr } = await sb
+            .from('catalog_price_history')
+            .select('catalog_id, recorded_value, recorded_at')
+            .eq('game_type', game_type)
+            .gte('recorded_at', cutoff)
+            .order('recorded_at', { ascending: true })
+            .range(offset, offset + PAGE - 1);
+          if (histErr || !chunk) { _globalMoversLoading = false; return null; }
+          hist.push(...chunk);
+          if (chunk.length < PAGE) break;        // last page
+          offset += PAGE;
+          // Hard safety stop — should never hit on a sane catalog
+          if (offset > 500000) break;
+        }
 
         // Earliest entry per catalog_id wins (ascending order ⇒ oldest first)
         const oldByCatalog = new Map();
