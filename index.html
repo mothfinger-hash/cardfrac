@@ -9969,10 +9969,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       var sheet = document.createElement('div');
       sheet.id = 'moversCardSheet';
-      sheet.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:flex-end;justify-content:center';
+      // Centered modal (vertically + horizontally) — not a bottom sheet.
+      // Padding gives breathing room from viewport edges on small screens.
+      sheet.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;padding:16px';
       sheet.innerHTML = '' +
         '<div onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>' +
-        '<div style="position:relative;width:100%;max-width:480px;background:var(--surface);border-top:2px solid var(--copper-dim);border-left:2px solid var(--copper-dim);border-right:2px solid var(--copper-dim);border-radius:6px 6px 0 0;padding:20px 18px 28px;max-height:85svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
+        '<div style="position:relative;width:100%;max-width:480px;background:var(--surface);border:2px solid var(--copper-dim);border-radius:6px;padding:20px 18px 24px;max-height:90svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
           '<button onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>' +
           '<div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);margin-bottom:14px">◈ CARD DETAIL</div>' +
           (card.image_url
