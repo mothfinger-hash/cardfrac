@@ -9825,9 +9825,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // does the same logic client-side. Slower (paginates all history +
     // catalog) but works without the function installed. Once the
     // migration runs in Supabase this path is never hit.
+    // Honors _moversPeriod + _moversSort so the fallback returns
+    // results consistent with the user's toggle selection.
     async function _loadGlobalMoversClientFallback(game_type = 'pokemon') {
       try {
-        const cutoff = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+        var days = _moversPeriod;
+        var srt  = _moversSort;
+        var cacheKey = 'p' + days + '-' + srt + '-' + game_type;
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
           .toISOString().slice(0, 10);
         const PAGE = 1000;
         let offset = 0;
@@ -9852,7 +9857,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             oldByCatalog.set(row.catalog_id, Number(row.recorded_value));
           }
         }
-        if (!oldByCatalog.size) { _globalMoversLoading = false; return null; }
+        if (!oldByCatalog.size) {
+          // Cache empty result too, so we don't spam the network.
+          var emptyResult = { up: [], down: [], game_type, period: days, sort: srt };
+          _globalMovers = emptyResult;
+          _globalMoversCache[cacheKey] = emptyResult;
+          _globalMoversLoading = false;
+          return emptyResult;
+        }
         const ids = [...oldByCatalog.keys()];
         const cards = [];
         const CHUNK = 200;
@@ -9877,13 +9889,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             currentVal: cur, oldVal: old, delta, deltaPct,
           });
         }
+        // Honor the user's sort choice (% or $) in the fallback too.
+        var sortKeyFn = srt === 'dollar'
+          ? (m => Math.abs(m.delta))
+          : (m => Math.abs(m.deltaPct));
         const up   = movers.filter(m => m.delta >= 0)
-                           .sort((a, b) => b.deltaPct - a.deltaPct).slice(0, 10);
+                           .sort((a, b) => sortKeyFn(b) - sortKeyFn(a)).slice(0, 10);
         const down = movers.filter(m => m.delta < 0)
-                           .sort((a, b) => a.deltaPct - b.deltaPct).slice(0, 10);
-        _globalMovers = { up, down, game_type };
+                           .sort((a, b) => sortKeyFn(b) - sortKeyFn(a)).slice(0, 10);
+        var result = { up, down, game_type, period: days, sort: srt };
+        _globalMovers = result;
+        _globalMoversCache[cacheKey] = result;  // ← critical: prevents re-fire loop
         _globalMoversLoading = false;
-        console.log('[movers] fallback loaded: ' + up.length + ' up, ' + down.length + ' down');
+        console.log('[movers] fallback loaded: ' + up.length + ' up, ' + down.length + ' down (key=' + cacheKey + ')');
         window._globalMovers = _globalMovers;
         window._globalMoversLoading = false;
         return _globalMovers;
