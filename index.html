@@ -9685,6 +9685,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (_globalMovers)        return _globalMovers;
       if (_globalMoversLoading) return null;
       _globalMoversLoading = true;
+      // Debug: expose state to window so we can inspect from devtools
+      window._globalMovers        = _globalMovers;
+      window._globalMoversLoading = _globalMoversLoading;
+      console.log('[movers] loading start for game_type=' + game_type);
       try {
         // Pull the trailing 8-day window. We pick the OLDEST entry per
         // catalog_id for the "vs 7 days ago" comparison; current value
@@ -9716,6 +9720,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           if (offset > 500000) break;
         }
 
+        console.log('[movers] fetched ' + hist.length + ' history rows');
+
         // Earliest entry per catalog_id wins (ascending order ⇒ oldest first)
         const oldByCatalog = new Map();
         for (const row of hist) {
@@ -9723,6 +9729,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             oldByCatalog.set(row.catalog_id, Number(row.recorded_value));
           }
         }
+        console.log('[movers] unique catalog_ids with history: ' + oldByCatalog.size);
         if (!oldByCatalog.size) { _globalMoversLoading = false; return null; }
 
         // Fetch the matching catalog rows for the joined view (name +
@@ -9763,9 +9770,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                            .slice(0, 10);
         _globalMovers = { up, down, game_type };
         _globalMoversLoading = false;
+        console.log('[movers] loaded: ' + cards.length + ' catalog rows, ' +
+                    movers.length + ' movers (' + up.length + ' up, ' + down.length + ' down)');
+        // Expose final state to window for devtools inspection
+        window._globalMovers = _globalMovers;
+        window._globalMoversLoading = false;
         return _globalMovers;
-      } catch (_) {
+      } catch (e) {
         _globalMoversLoading = false;
+        console.error('[movers] load failed:', e);
+        window._globalMoversLoading = false;
         return null;
       }
     }
@@ -9848,7 +9862,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       if (!_globalMovers && !_globalMoversLoading) {
         _loadGlobalMovers('pokemon').then(g => {
-          if (g && (g.up.length || g.down.length)) renderDashboard();
+          // Re-render whenever the load completes — even with empty
+          // up/down. That way if there are no movers we still trigger
+          // a final pass through buildMovers so the "Loading…" state
+          // resolves into the "No price movement yet" state.
+          if (g) renderDashboard();
         });
       }
       const globalHtml = _globalMovers ? _renderGlobalMovers(_globalMovers) : '';
