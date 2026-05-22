@@ -27744,32 +27744,35 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           if (namePart.endsWith('&') && i + 1 < lines.length) {
             namePart = namePart + ' ' + lines[i + 1].trim();
           }
-          if (namePart.length > 1) return namePart;
+          if (namePart.length > 1) return _cleanCardName(namePart);
         }
 
         // Pattern: "VSTAR Lugia" — type suffix before name, flip to "Lugia VSTAR"
         const prefixMatch = line.match(/^(VSTAR|VMAX|GX|EX|V)\s+([A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+)$/);
         if (prefixMatch) {
-          return prefixMatch[2].trim() + ' ' + prefixMatch[1].toUpperCase();
+          return _cleanCardName(prefixMatch[2].trim()) + ' ' + prefixMatch[1].toUpperCase();
         }
 
         // Pattern: "Lugia\nVSTAR" — name then suffix on next line
         if (i + 1 < lines.length && SUFFIX.test(lines[i + 1])) {
           if (NAME_RE.test(line) && !SKIP.test(line) && line.length > 1 && line.length < 35) {
-            return line + ' ' + lines[i + 1].replace(/\s+/g, ' ').toUpperCase();
+            return _cleanCardName(line) + ' ' + lines[i + 1].replace(/\s+/g, ' ').toUpperCase();
           }
         }
 
         // Pattern: "Reshiram&\nCharizard" — name split across lines by ampersand
         if (line.endsWith('&') && i + 1 < lines.length) {
           const joined = line + ' ' + lines[i + 1].trim();
-          if (NAME_RE.test(joined) && joined.length < 50) return joined;
+          if (NAME_RE.test(joined) && joined.length < 50) return _cleanCardName(joined);
         }
 
-        // Pattern: "Basic\nDucklett" — stage alone, name follows
+        // Pattern: "Basic\nDucklett" — stage alone, name follows.
+        // The next line is where HP often glues onto the name in OCR
+        // ("Mega Pyroar ex340", "Mega Floette ex 250") — _cleanCardName
+        // strips trailing digit runs so the search query stays clean.
         if (STAGE.test(line) && i + 1 < lines.length) {
           const next = lines[i + 1].trim();
-          if (NAME_RE.test(next) && next.length > 1 && next.length < 40) return next;
+          if (NAME_RE.test(next) && next.length > 1 && next.length < 40) return _cleanCardName(next);
         }
 
         // Fallback: first valid title-case line that isn't a keyword
@@ -27905,13 +27908,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         // Run all searches in parallel:
         // A: name + number   B: name + padded number
+        // A2: baseName + number     B2: baseName + padded number
+        //    (handles "Mega Pyroar ex" / "Lugia VSTAR" / TAG TEAMs where pokedata
+        //    strips the suffix from `name` — search the stripped form too so
+        //    name+number lands in the strong-score tier, not the weak fallback)
         // C: number only     D: padded number only
         // E: full name       F: base name (VSTAR/TAG suffix stripped)
         // G: set fingerprint RPC     H: set confirmation (which set_codes contain card #numTotal?)
         // I: expanded trainer name   J: Pokémon-only name from trainer card
         //    I+J handle trainer cards where OCR drops the 's (N'Zekrom → N's Zekrom → Zekrom)
         //    H is the set-size fingerprint: sv3pt5 has card #165, hgss4 doesn't
-        const [clipRes, nameNumRes, nameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes] = await Promise.all([
+        const [clipRes, nameNumRes, nameNumRawRes, baseNameNumRes, baseNameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes] = await Promise.all([
           sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 15 }),
           // A
           (numStripped && cardName)
@@ -27920,6 +27927,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           // B
           (numRaw && numRaw !== numStripped && cardName)
             ? q().ilike('name', '%' + cardName + '%').eq('card_number', numRaw).limit(5)
+            : Promise.resolve({ data: [] }),
+          // A2 — same as A but with the suffix-stripped baseName. Pokedata stores
+          // ex/V/VSTAR cards under the bare Pokémon name (e.g. catalog has
+          // "Mega Pyroar", card prints "Mega Pyroar ex"). Without this query,
+          // the OCR'd name never matches a strong-tier row.
+          (numStripped && baseName)
+            ? q().ilike('name', '%' + baseName + '%').eq('card_number', numStripped).limit(5)
+            : Promise.resolve({ data: [] }),
+          // B2 — baseName + padded number
+          (numRaw && numRaw !== numStripped && baseName)
+            ? q().ilike('name', '%' + baseName + '%').eq('card_number', numRaw).limit(5)
             : Promise.resolve({ data: [] }),
           // C
           numStripped
@@ -27986,7 +28004,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         const clipMatches    = clipRes.data         || [];
         const setTotalHits   = setTotalRes.data     || [];  // most precise — number + set fingerprint
-        const nameNumHits    = [...(nameNumRes.data || []), ...(nameNumRawRes.data || [])];
+        const nameNumHits    = [
+          ...(nameNumRes.data       || []),
+          ...(nameNumRawRes.data    || []),
+          ...(baseNameNumRes.data   || []),  // A2: baseName + number
+          ...(baseNameNumRawRes.data|| []),  // B2: baseName + padded number
+        ];
         const numHits        = [...(numRes.data || []), ...(numRawRes.data || [])];
         const nameHits       = [...(nameRes.data || []), ...(baseNameRes.data || [])];
         const expandedHits   = expandedRes.data     || [];  // trainer name expanded (N's Zekrom)
