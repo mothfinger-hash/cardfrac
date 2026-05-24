@@ -2556,6 +2556,20 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
     /* ── BINDER CARD ── */
     .binder-card{background:var(--surface);border:1px solid var(--border);cursor:grab;transition:border-color .15s,transform .1s,opacity .15s;border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+    /* First-render slide-in animation for newly-added cards. Triggered
+       by the .just-added class which renderBinder applies once, on the
+       render immediately following a successful add — then it's cleared
+       so subsequent re-renders (pagination, sort, drag-drop) don't
+       re-trigger the animation. Slides in from above + scales up + fades. */
+    @keyframes pbCardSlideIn {
+      0%   { opacity: 0; transform: translateY(-26px) scale(.85); }
+      60%  { opacity: 1; transform: translateY(2px)   scale(1.04); }
+      100% { opacity: 1; transform: translateY(0)     scale(1);    }
+    }
+    .binder-card.just-added {
+      animation: pbCardSlideIn 520ms cubic-bezier(.2,.85,.3,1.1) both;
+      box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255,92,0,.35);
+    }
     .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
     .binder-card.drag-over{border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow);transform:scale(1.03)}
     .binder-card.ghost-card{opacity:.52;border:1px dashed var(--muted);position:relative}
@@ -15365,8 +15379,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
       const binderName = binders.find(b => String(b.id) === String(item.binder_id))?.name || 'Unsorted';
       const tagStyle = binderName !== 'Unsorted' ? 'border-color:var(--teal);color:var(--teal)' : '';
+      // User photos (card-photos bucket) have arbitrary aspect ratios —
+      // a 16:9 phone shot cover-cropped into a 44×60 slot shows only a
+      // tiny center slice. Flag the row so the CSS override swaps to
+      // contain-fit with a letterbox background.
+      const isUserPhoto = typeof item.card_image_url === 'string'
+                          && item.card_image_url.indexOf('/card-photos/') !== -1;
       return `<div
-        class="allcards-row${isGhost ? ' ghost-card' : ''}"
+        class="allcards-row${isGhost ? ' ghost-card' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
         draggable="true"
         ondragstart="allCardsDragStart(event,'${item.id}')"
         ondragend="allCardsDragEnd(event)"
@@ -16334,8 +16354,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
               : 'Raw';
             const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+            // See sibling list template above — user photos need contain
+            // sizing so wide phone shots don't render as a tiny center crop.
+            const isUserPhoto = typeof item.card_image_url === 'string'
+                                && item.card_image_url.indexOf('/card-photos/') !== -1;
             return `<div
-              class="allcards-row${isGhost ? ' ghost-card' : ''}"
+              class="allcards-row${isGhost ? ' ghost-card' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
               style="cursor:pointer${isGhost ? ';opacity:.52' : ''}"
               onclick="openBinderCardDetail('${item.id}')">
               <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
@@ -16385,7 +16409,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           const isUserPhoto = typeof item.card_image_url === 'string'
                               && item.card_image_url.indexOf('/card-photos/') !== -1;
 
-          return `<div class="binder-card${isGhost ? ' ghost-card' : ''}${isSealed ? ' is-sealed' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
+          // Slide-in animation: triggered once when this card was just
+          // added (saveToCollection / saveToWishlist stash its id in
+          // window._justAddedCardId). The class is applied to a single
+          // render — _justAddedCardId is cleared in a microtask after the
+          // map() finishes so pagination / sort / scroll re-renders never
+          // re-trigger the animation. See pbCardSlideIn @keyframes above.
+          const isJustAdded = (window._justAddedCardId != null) &&
+                              (String(window._justAddedCardId) === String(item.id));
+          return `<div class="binder-card${isGhost ? ' ghost-card' : ''}${isSealed ? ' is-sealed' : ''}${isUserPhoto ? ' has-user-photo' : ''}${isJustAdded ? ' just-added' : ''}"
             draggable="true"
             data-idx="${globalIdx}"
             data-id="${item.id}"
@@ -16413,19 +16445,25 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                     ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
                        <div style="font-size:.6rem;color:var(--teal)">${pct}% — $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>`
                     : `<div class="binder-card-value" style="color:var(--teal)">Wishlist</div>`)
-                : `<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
-                    <div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
-                    ${(()=>{
-                      if (!hasPriceTracking() || !item.price_history_log?.length || !item.current_value) return '';
-                      const hist = item.price_history_log;
-                      const oldest = hist[0]?.value;
-                      if (!oldest || oldest === item.current_value) return '';
-                      const chg = ((item.current_value - oldest) / oldest * 100);
-                      const sign = chg >= 0 ? '+' : '';
-                      const color = chg >= 0 ? 'var(--green)' : 'var(--red)';
-                      return `<span style="font-size:.56rem;color:${color};white-space:nowrap;font-weight:700">${sign}${chg.toFixed(1)}%</span>`;
-                    })()}
-                  </div>`}
+                : (isAllCards
+                    ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+                        <div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
+                        ${(()=>{
+                          if (!hasPriceTracking() || !item.price_history_log?.length || !item.current_value) return '';
+                          const hist = item.price_history_log;
+                          const oldest = hist[0]?.value;
+                          if (!oldest || oldest === item.current_value) return '';
+                          const chg = ((item.current_value - oldest) / oldest * 100);
+                          const sign = chg >= 0 ? '+' : '';
+                          const color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+                          return `<span style="font-size:.56rem;color:${color};white-space:nowrap;font-weight:700">${sign}${chg.toFixed(1)}%</span>`;
+                        })()}
+                      </div>`
+                    : '' /* Per-binder view: hide the price chip + trend
+                            so the binder reads like an actual binder.
+                            Card-detail modal still surfaces the price
+                            when the user taps in for full detail.       */
+                  )}
             </div>
           </div>`;
         }).join('')}</div>`;
@@ -16453,6 +16491,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const nextArrow = document.getElementById('binderArrowNext');
       if (prevArrow) prevArrow.disabled = (binderPage === 0);
       if (nextArrow) nextArrow.disabled = (binderPage >= totalPages - 1 || totalPages <= 1);
+
+      // Clear the just-added flag AFTER the DOM is in place. The
+      // animation runs from the CSS class already painted onto the
+      // freshly-inserted card; clearing the global here means the
+      // NEXT renderBinder (pagination, sort, drag-drop, search, etc.)
+      // won't re-apply the class and the animation won't replay.
+      if (window._justAddedCardId != null) window._justAddedCardId = null;
     }
 
     // ── Dramatic page-turn: clone current page, render next underneath, pivot clone away ──
@@ -17586,6 +17631,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       closeModal('addToWishlistModal');
       pendingCollectionCard = null;
       await loadCollection();
+      // Same slide-in animation as owned cards — wishlist items still
+      // live in a binder slot, so the new ghost-card cell animates in.
+      if (newRow?.id) window._justAddedCardId = newRow.id;
       renderBinder();
       renderDashboard();
       // Auto-refresh price so the ghost card shows a current value immediately
@@ -19183,6 +19231,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       closeModal('addToCollectionModal');
       pendingCollectionCard = null;
       await loadCollection();
+      // Stash the new row id so the upcoming renderBinder applies the
+      // slide-in animation to just this card. renderBinder clears the
+      // global at the end of its run so subsequent re-renders don't
+      // replay the animation.
+      if (newRow?.id) window._justAddedCardId = newRow.id;
       renderCollection();
       // Auto-refresh price immediately if a price URL was set
       if (newRow?.id && priceSourceUrl) {
@@ -26954,6 +27007,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       min-width: 44px !important;
       object-fit: cover !important;
       background: var(--surface2);
+    }
+    /* User-uploaded photos in the list view — arbitrary aspect ratios
+       (phone shots are usually 16:9 or 4:3 landscape, not card-shape).
+       Cover-cropping a 16:9 photo into a 60px-tall card slot leaves you
+       staring at a tiny center sliver. Override to contain so the whole
+       photo fits inside the slot with a thin letterbox; pair with a
+       slightly darker surface so the letterbox is visually intentional. */
+    #collectionContent .allcards-row.has-user-photo > img {
+      object-fit: contain !important;
+      background: var(--surface3, var(--surface2));
     }
 
     /* All Cards 4-col grid view — same cover behavior as dashboard. */
