@@ -12,7 +12,12 @@ name: Refresh Catalog Prices (Pokemon)
 
 on:
   schedule:
-    - cron: '0 10 * * *'   # 3am PDT / 2am PST
+    # 05:00 UTC = 1 AM EDT / 12 AM EST. Off-peak UTC window — GitHub
+    # Actions scheduled cron is notoriously laggy at top-of-hour during
+    # the EU morning (08-10 UTC), where the previous schedule sat. This
+    # window is pre-dawn in Europe, so dispatch should fire close to the
+    # nominal time. If you want strict 1 AM EST in winter, bump to '0 6 * * *'.
+    - cron: '0 5 * * *'
   workflow_dispatch:
     inputs:
       tcg:
@@ -20,9 +25,9 @@ on:
         required: false
         default: 'pokemon'
       workers:
-        description: 'Parallel HTTP workers (3-5 safe; higher → 429s)'
+        description: 'Parallel HTTP workers (3 is the sweet spot; 4+ trips PC rate limits)'
         required: false
-        default: '4'
+        default: '3'
       limit:
         description: 'Cap rows for a smoke test (0 = no cap)'
         required: false
@@ -52,6 +57,6 @@ jobs:
         run: |
           python3 refresh_catalog_prices.py \
             --tcg "${{ github.event.inputs.tcg || 'pokemon' }}" \
-            --workers "${{ github.event.inputs.workers || '4' }}" \
+            --workers "${{ github.event.inputs.workers || '3' }}" \
             --limit "${{ github.event.inputs.limit || '0' }}" \
             --resume

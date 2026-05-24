@@ -5143,6 +5143,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <div class="form-group" style="margin-bottom:14px">
         <label>Price Source URL (optional)</label>
         <input type="text" class="atc-input" id="atcPriceUrl" placeholder="PriceCharting or eBay URL for auto-price tracking" style="width:100%" />
+        <!-- Populated from catalog.current_value at modal-open time when an
+             api_card_id is attached. Shows the live daily-refreshed market
+             price so the user knows what the card is worth right now. -->
+        <div id="atcMarketPrice" style="display:none;margin-top:6px;font-size:.7rem;color:var(--muted);letter-spacing:.04em"></div>
       </div>
       <div class="form-group" style="margin-bottom:14px">
         <label>Add to Binder</label>
@@ -5194,6 +5198,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <div class="form-group" style="margin-bottom:14px">
         <label>Price Source URL (optional)</label>
         <input type="text" class="atc-input" id="wishlistPriceUrl" placeholder="PriceCharting URL for tracking" style="width:100%" />
+        <!-- Populated from catalog.current_value at modal-open time when an
+             api_card_id is attached. Shows the live daily-refreshed market
+             price so the user can sanity-check their target. -->
+        <div id="wishlistMarketPrice" style="display:none;margin-top:6px;font-size:.7rem;color:var(--muted);letter-spacing:.04em"></div>
       </div>
       <div class="form-group" style="margin-bottom:18px">
         <label>Add to Binder</label>
@@ -8472,11 +8480,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function checkBadge_init()     { if (!_hasBadge('init'))     _awardBadge('init');     }
     function checkBadge_archived() { if (!_hasBadge('archived')) _awardBadge('archived'); }
     function checkBadge_rendered() { if (!_hasBadge('rendered')) _awardBadge('rendered'); }
+    // Debounce slot for scan-counter cloud syncs. Without this, a burst of
+    // 20 scans would fire 20 cloud writes. With it, multiple scans within
+    // 4 seconds collapse to a single PATCH that captures the final total.
+    let _scanSyncTimer = null;
     function checkBadge_scanner() {
       const key = _scanKey();
       let total = parseInt(localStorage.getItem(key) || '0', 10) + 1;
       localStorage.setItem(key, String(total));
       if (!_hasBadge('scanner') && total >= 50) _awardBadge('scanner');
+      // Debounced cloud sync. Previously this counter only synced to
+      // profiles.scan_total when a badge was awarded — meaning users who
+      // never crossed the 50-scan threshold had their counts wiped on
+      // every fresh-browser login. Sync after every scan (debounced) so
+      // the cloud copy stays close to local truth.
+      if (typeof syncUserDataToCloud === 'function' && typeof currentUser !== 'undefined' && currentUser) {
+        if (_scanSyncTimer) clearTimeout(_scanSyncTimer);
+        _scanSyncTimer = setTimeout(function() {
+          try { syncUserDataToCloud(); } catch(_) {}
+        }, 4000);
+      }
     }
     function unlockDiscordBadge(e) {
       e.preventDefault();
@@ -8985,10 +9008,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 <div class="movers-toggle-pair">
                   <button class="movers-toggle ${_moversPeriod===1?'active':''}" onclick="setMoversPeriod(1)">24h</button>
                   <button class="movers-toggle ${_moversPeriod===7?'active':''}" onclick="setMoversPeriod(7)">7d</button>
-                </div>
-                <div class="movers-toggle-pair">
-                  <button class="movers-toggle ${_moversSort==='pct'?'active':''}"    onclick="setMoversSort('pct')">%</button>
-                  <button class="movers-toggle ${_moversSort==='dollar'?'active':''}" onclick="setMoversSort('dollar')">$</button>
                 </div>
               </div>
               <div class="ndash-panel-body">
@@ -9618,6 +9637,55 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }).join('');
     }
 
+    // JIT-enrich ghost cards (wishlist items) with live catalog prices.
+    // The daily price refresh updates catalog.current_value but never writes
+    // to collection_items.current_value for ghost rows (refreshBinderCardPrice
+    // only fires on explicit user action). Without this enrichment, a card
+    // added to the wishlist months ago would still show the snapshot value
+    // captured at add-time, ignoring every subsequent daily refresh.
+    //
+    // Strategy: batch-fetch catalog.current_value for every ghost row that
+    // has an api_card_id, then overwrite the in-memory current_value. No DB
+    // writes — purely in-memory, so it's cheap to run on every collection
+    // load. Catalog is the source of truth for ghost cards; user-owned cards
+    // are left alone (their current_value reflects their condition/grade).
+    async function _enrichGhostsFromCatalog(items) {
+      try {
+        if (!items || !items.length) return;
+        var ids = [];
+        var seen = new Set();
+        for (var i = 0; i < items.length; i++) {
+          var c = items[i];
+          if (c.is_ghost && c.api_card_id && !seen.has(c.api_card_id)) {
+            ids.push(c.api_card_id);
+            seen.add(c.api_card_id);
+          }
+        }
+        if (!ids.length) return;
+        var priceMap = {};
+        var CHUNK = 200;
+        for (var j = 0; j < ids.length; j += CHUNK) {
+          var slice = ids.slice(j, j + CHUNK);
+          var res = await sb.from('catalog')
+            .select('id, current_value')
+            .in('id', slice);
+          if (res && res.data) {
+            for (var k = 0; k < res.data.length; k++) {
+              var row = res.data[k];
+              var v = Number(row.current_value) || 0;
+              if (v > 0) priceMap[row.id] = v;
+            }
+          }
+        }
+        for (var n = 0; n < items.length; n++) {
+          var item = items[n];
+          if (item.is_ghost && item.api_card_id && priceMap[item.api_card_id]) {
+            item.current_value = priceMap[item.api_card_id];
+          }
+        }
+      } catch (_) { /* network blip — fall back to whatever was stored */ }
+    }
+
     // ── Ghost Card Fund — render one row + dynamic list refresh ─────────────
     // Renders a single fund row (mini-card thumb + name + progress bar
     // + saved/goal text). Number() coercion guards against Supabase
@@ -9797,7 +9865,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     let _moversScope     = 'global';   // 'global' (market) | 'personal' (your collection)
     let _moversDirection = 'up';       // 'up' | 'down'
     let _moversPeriod    = 1;          // 1 day | 7 days
-    let _moversSort      = 'pct';      // 'pct' | 'dollar'
+    // The %/$ toggle was removed — the dollar amount and % are shown
+    // together on every row, so toggling the sort axis was redundant.
+    // Sorting always by absolute $ change keeps cheap-card-big-% rows
+    // (e.g. $0.08 → $0.16 = "+100%") from dominating the list.
+    // The setter `setMoversSort` is kept for backwards-compat in case a
+    // future toggle wants to flip it again.
+    let _moversSort      = 'dollar';   // 'pct' | 'dollar'
 
     // Setters used by the toggle pills in the Price Movers panel.
     window.setMoversScope = function(scope) {
@@ -10029,7 +10103,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       sheet.id = 'moversCardSheet';
       // Centered modal (vertically + horizontally) — not a bottom sheet.
       // Padding gives breathing room from viewport edges on small screens.
-      sheet.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;padding:16px';
+      // z-index sits below the image lightbox (z-index 30000) so when the
+      // user taps the card image to enlarge it, the lightbox cleanly covers
+      // this modal instead of being trapped beneath it.
+      sheet.style.cssText = 'position:fixed;inset:0;z-index:20000;display:flex;align-items:center;justify-content:center;padding:16px';
       sheet.innerHTML = '' +
         '<div onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>' +
         '<div style="position:relative;width:100%;max-width:480px;background:var(--surface);border:2px solid var(--copper-dim);border-radius:6px;padding:20px 18px 24px;max-height:90svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
@@ -10085,14 +10162,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       const tcgLabel    = (g.game_type || 'pokemon').replace(/^./, c => c.toUpperCase());
       const periodLabel = (g.period === 1) ? '24h' : (g.period + 'd');
-      const sortLabel   = sortByDollar ? 'by $' : 'by %';
+      // Sort label dropped from the header — the %/$ toggle is gone and
+      // every row shows both metrics, so an explicit "by $" label is noise.
       // Show only the direction the user picked (up OR down). The
       // direction toggle in the panel header swaps between them.
       var list = (_moversDirection === 'down') ? g.down : g.up;
       var arrow = (_moversDirection === 'down') ? '↓' : '↑';
       var arrowColor = (_moversDirection === 'down') ? 'var(--red)' : 'var(--green)';
       return `<div class="dash-chart-section" style="margin-bottom:16px">
-        <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · ${tcgLabel} · ${periodLabel} · ${sortLabel}</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · ${tcgLabel} · ${periodLabel}</div>
         <div style="font-size:.75rem;color:${arrowColor};margin-bottom:6px;letter-spacing:.08em">${arrow} Top Movers</div>
         ${list.length ? list.map(row).join('') : `<div style="font-size:.7rem;color:var(--muted);padding:6px 0">No ${_moversDirection === 'down' ? 'declines' : 'gains'} at this threshold.</div>`}
       </div>`;
@@ -10226,11 +10304,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>`;
       }
 
-      // Split into up-movers + down-movers, top 10 each.
+      // Split into up-movers + down-movers, top 10 each. Sort metric
+      // follows the user's $/% toggle so the personal list ranks by the
+      // same axis as the global Market list.
+      var _personalSortKeyFn = _moversSort === 'dollar'
+        ? (m => Math.abs(m.delta))
+        : (m => Math.abs(m.deltaPct));
       const upMovers   = movers.filter(m => m.delta >= 0)
-                               .sort((a, b) => b.deltaPct - a.deltaPct).slice(0, 10);
+                               .sort((a, b) => _personalSortKeyFn(b) - _personalSortKeyFn(a))
+                               .slice(0, 10);
       const downMovers = movers.filter(m => m.delta < 0)
-                               .sort((a, b) => a.deltaPct - b.deltaPct).slice(0, 10);
+                               .sort((a, b) => _personalSortKeyFn(b) - _personalSortKeyFn(a))
+                               .slice(0, 10);
 
       function _moverRow(c) {
         const sign  = c.delta >= 0 ? '+' : '';
@@ -10259,8 +10344,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     // ── Price Alerts for Ghost Cards ─────────────────────────────────────────
+    // Triggers two alert types per wishlist row:
+    //   - price_hit:   the live market price is at or below the user's target
+    //   - listing_hit: a marketplace listing exists within 5% above target
+    //
+    // The 5% buffer on listing_hit is the spirit of "if it's listed for
+    // ~roughly~ what you wanted to pay, ping me" — a strict <= would silently
+    // skip a listing that's $1 over target on a $50 card.
     function buildPriceAlerts(ghostCards) {
       const alerts = [];
+      const LISTING_WITHIN_PCT = 0.05; // 5%
 
       for (const c of ghostCards) {
         const goal = c.savings_goal || 0;
@@ -10272,11 +10365,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           alerts.push({ type: 'price_hit', card: c, marketVal, goal });
         }
 
-        // Alert: a marketplace listing exists at or below target
+        // Alert: a marketplace listing exists within 5% of target
+        const ceiling = goal * (1 + LISTING_WITHIN_PCT);
         const matchingListing = listings.find(l =>
           l.name.toLowerCase().includes(c.card_name.toLowerCase().slice(0, 8)) &&
           (l.status === 'active' || l.status === 'available') &&
-          (l.value || 0) <= goal
+          (l.value || 0) > 0 &&
+          (l.value || 0) <= ceiling
         );
         if (matchingListing) {
           alerts.push({ type: 'listing_hit', card: c, listing: matchingListing, goal });
@@ -10297,11 +10392,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <span style="font-size:.7rem;color:var(--green)">→</span>
             </div>`;
           } else {
+            // ±5% window — copy reflects "near target" not "at target"
+            // since the listing might be slightly over the user's number.
+            var _lv = a.listing.value || 0;
+            var _diffPct = a.goal > 0 ? ((_lv - a.goal) / a.goal * 100) : 0;
+            var _diffNote = _lv <= a.goal
+              ? 'at or below your target'
+              : '+' + _diffPct.toFixed(1) + '% over your target (within 5%)';
             return `<div style="background:rgba(210,120,40,.07);border:1px solid rgba(210,120,40,.35);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
               onclick="showPage('browse');setMobileNav('browse')">
               <div>
-                <div style="font-size:.75rem;color:var(--green);font-weight:700">LISTED AT TARGET — ${a.card.card_name}</div>
-                <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${a.listing.name} is on the marketplace for $${(a.listing.value||0).toFixed(0)} (target: $${a.goal.toFixed(0)})</div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">LISTED NEAR TARGET — ${a.card.card_name}</div>
+                <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${a.listing.name} is on the marketplace for $${_lv.toFixed(0)} — ${_diffNote} (target $${a.goal.toFixed(0)})</div>
               </div>
               <span style="font-size:.7rem;color:var(--green)">→ Marketplace</span>
             </div>`;
@@ -14943,6 +15045,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           ...c,
           price_history_log: histMap[String(c.id)] || []
         }));
+        // Pull live catalog.current_value into in-memory ghost rows so
+        // wishlist progress + alerts reflect today's market price even
+        // when the row was added long before the most recent daily refresh.
+        // No DB writes — strictly in-memory enrichment.
+        try { await _enrichGhostsFromCatalog(collectionItems); } catch(_) {}
         // Safety net — every collection refresh re-checks size-based badges
         // so any add-card path that calls loadCollection picks up the
         // STACKED + PHANTOM badge progress, even if it skipped a direct
@@ -17266,6 +17373,34 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     // ── Wishlist / Ghost Card Functions ──────────────────────────────────────
 
+    // Session-level cache for catalog price/URL lookups so opening the
+    // same add-modal twice doesn't re-hit Supabase. Reset on page reload.
+    window._catalogPriceInfoCache = window._catalogPriceInfoCache || {};
+
+    // Shared helper: fetch price_source_url + current_value (live daily
+    // refresh value) from the catalog row for an api_card_id. Used by both
+    // add-to-binder and add-to-wishlist modals so they prefill the URL,
+    // display the market price, and store current_value at insert time.
+    // Returns { price_source_url, current_value, name, image_url } or null.
+    async function _lookupCatalogPriceInfo(apiCardId) {
+      if (!apiCardId) return null;
+      if (window._catalogPriceInfoCache[apiCardId] !== undefined) {
+        return window._catalogPriceInfoCache[apiCardId];
+      }
+      try {
+        var res = await sb.from('catalog')
+          .select('id, price_source_url, current_value, name, image_url')
+          .eq('id', apiCardId)
+          .maybeSingle();
+        var row = (res && res.data) || null;
+        window._catalogPriceInfoCache[apiCardId] = row;
+        return row;
+      } catch (_) {
+        window._catalogPriceInfoCache[apiCardId] = null;
+        return null;
+      }
+    }
+
     function openAddToWishlistModal(cardData) {
       if (!currentUser) { showToast('Sign in to add cards to your wishlist'); return; }
       if (!canAddGhostCard()) {
@@ -17287,18 +17422,46 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       document.getElementById('wishlistGoal').value = '';
       document.getElementById('wishlistSaved').value = '';
       document.getElementById('wishlistPriceUrl').value = '';
+      // Reset prefetched market price stash + display row so a stale value
+      // from a previous open doesn't leak into the next save.
+      pendingCollectionCard._catalogCurrentValue = null;
+      var _wmp = document.getElementById('wishlistMarketPrice');
+      if (_wmp) { _wmp.style.display = 'none'; _wmp.textContent = ''; }
       populateBinderDropdown('wishlistBinderId', currentBinderId);
       openModal('addToWishlistModal');
-      // Auto-populate price URL from pre-mapped lookup table
+      // Auto-populate price URL + show current market price. Two-tier:
+      //   1. card_price_urls — legacy hand-curated mapping table (URL only)
+      //   2. catalog row — has both URL and live daily-refreshed value
       if (cardData.apiCardId) {
         const urlField = document.getElementById('wishlistPriceUrl');
+        const mpField  = document.getElementById('wishlistMarketPrice');
         urlField.placeholder = 'Looking up price URL…';
-        sb.from('card_price_urls').select('price_source_url').eq('api_card_id', cardData.apiCardId).maybeSingle()
-          .then(({ data }) => {
-            if (data?.price_source_url && !urlField.value) urlField.value = data.price_source_url;
-            urlField.placeholder = 'PriceCharting URL for tracking';
-          })
-          .catch(() => { urlField.placeholder = 'PriceCharting URL for tracking'; });
+        (async () => {
+          try {
+            // Tier 1 — legacy mapping table for URL only
+            var legacy = await sb.from('card_price_urls')
+              .select('price_source_url')
+              .eq('api_card_id', cardData.apiCardId)
+              .maybeSingle();
+            if (legacy && legacy.data && legacy.data.price_source_url && !urlField.value) {
+              urlField.value = legacy.data.price_source_url;
+            }
+            // Tier 2 — catalog has both URL and current_value
+            var cat = await _lookupCatalogPriceInfo(cardData.apiCardId);
+            if (cat) {
+              if (cat.price_source_url && !urlField.value) urlField.value = cat.price_source_url;
+              var cv = Number(cat.current_value) || 0;
+              if (cv > 0) {
+                pendingCollectionCard._catalogCurrentValue = cv;
+                if (mpField) {
+                  mpField.innerHTML = 'Current market: <span style="color:var(--green);font-weight:700">$' + cv.toFixed(2) + '</span> <span style="color:var(--muted);font-size:.62rem">(refreshed daily)</span>';
+                  mpField.style.display = 'block';
+                }
+              }
+            }
+          } catch(_) { /* fail silent — user can still save without prefetch */ }
+          urlField.placeholder = 'PriceCharting URL for tracking';
+        })();
       }
     }
 
@@ -17345,6 +17508,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const btn = document.querySelector('#addToWishlistModal button[onclick="saveToWishlist()"]');
       if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
 
+      // Prefetched live market price from the catalog row, captured at
+      // modal-open time. Stored at insert so the wishlist row has a real
+      // current_value immediately — without this, _renderGhostFundRow
+      // shows "No market price or goal set" until a manual refresh.
+      var _catalogCV = Number(pendingCollectionCard._catalogCurrentValue) || null;
+
       const { data: newRow, error } = await sb.from('collection_items').insert({
         user_id:          currentUser.id,
         api_card_id:      pendingCollectionCard.apiCardId   || null,
@@ -17360,6 +17529,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         savings_goal:     savingsGoal,
         amount_saved:     amountSaved,
         price_source_url: priceUrl,
+        current_value:    _catalogCV,
         binder_id:        binderId || null
       }).select('id').single();
 
@@ -18563,38 +18733,45 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       document.getElementById('atcCertNumber').value = '';
       document.getElementById('atcPriceUrl').value = '';
       document.getElementById('atcNotes').value = '';
+      // Reset prefetched market price stash + display row so a stale value
+      // from a previous open doesn't leak into the next save.
+      pendingCollectionCard._catalogCurrentValue = null;
+      var _amp = document.getElementById('atcMarketPrice');
+      if (_amp) { _amp.style.display = 'none'; _amp.textContent = ''; }
       atcCertReset();
       atcClearPhoto();
       populateBinderDropdown('atcBinderId', currentBinderId);
       toggleGradeField();
       openModal('addToCollectionModal');
-      // Auto-populate price URL. Two-tier lookup:
-      //   1. card_price_urls — legacy hand-curated mapping table
-      //   2. catalog.price_source_url — populated by sync_pc_singles_enrich
-      //      and sync_sealed_products, so newly-synced TCGs (Gundam/DBZ/
-      //      Topps) have URLs without needing the mapping table populated.
+      // Auto-populate price URL + show current market price. Two-tier:
+      //   1. card_price_urls — legacy hand-curated mapping table (URL only)
+      //   2. catalog row — has both URL and live daily-refreshed value
       if (cardData.apiCardId) {
         const urlField = document.getElementById('atcPriceUrl');
+        const mpField  = document.getElementById('atcMarketPrice');
         urlField.placeholder = 'Looking up price URL…';
         (async () => {
           try {
-            // Tier 1 — fast path for the legacy mapped IDs
+            // Tier 1 — legacy mapping table for URL only
             const { data: legacy } = await sb.from('card_price_urls')
               .select('price_source_url')
               .eq('api_card_id', cardData.apiCardId)
               .maybeSingle();
-            if (legacy?.price_source_url && !urlField.value) {
+            if (legacy && legacy.price_source_url && !urlField.value) {
               urlField.value = legacy.price_source_url;
-              urlField.placeholder = 'PriceCharting or eBay URL for auto-price tracking';
-              return;
             }
-            // Tier 2 — catalog row's own price_source_url
-            const { data: cat } = await sb.from('catalog')
-              .select('price_source_url')
-              .eq('id', cardData.apiCardId)
-              .maybeSingle();
-            if (cat?.price_source_url && !urlField.value) {
-              urlField.value = cat.price_source_url;
+            // Tier 2 — catalog has both URL and current_value
+            var cat = await _lookupCatalogPriceInfo(cardData.apiCardId);
+            if (cat) {
+              if (cat.price_source_url && !urlField.value) urlField.value = cat.price_source_url;
+              var cv = Number(cat.current_value) || 0;
+              if (cv > 0) {
+                pendingCollectionCard._catalogCurrentValue = cv;
+                if (mpField) {
+                  mpField.innerHTML = 'Current market: <span style="color:var(--green);font-weight:700">$' + cv.toFixed(2) + '</span> <span style="color:var(--muted);font-size:.62rem">(refreshed daily)</span>';
+                  mpField.style.display = 'block';
+                }
+              }
             }
           } catch(_) { /* fail silent, user can paste manually */ }
           urlField.placeholder = 'PriceCharting or eBay URL for auto-price tracking';
@@ -18887,6 +19064,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       const language = document.getElementById('atcLanguage')?.value || 'EN';
 
+      // Prefetched live market price from the catalog row, captured at
+      // modal-open time. Stored at insert so the binder shows a current
+      // value immediately for newly-added cards — without it, the row
+      // would only get a value after the next manual / scheduled refresh.
+      var _catalogCV = Number(pendingCollectionCard._catalogCurrentValue) || null;
+
       const _insertBase = {
         user_id:         currentUser.id,
         api_card_id:     pendingCollectionCard.apiCardId  || null,
@@ -18903,6 +19086,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         purchase_price:  purchasePrice,
         purchase_date:   purchaseDate,
         price_source_url: priceSourceUrl,
+        current_value:   _catalogCV,
         notes,
         binder_id:       binderId || null,
         language,
@@ -26087,14 +26271,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (data.scan_total != null) {
           try {
             // Per-user key from now on. Migration: if any value lives
-            // in the legacy global key OR the guest key, take the max
-            // so existing scan progress isn't lost when a user logs in
-            // for the first time after this fix.
+            // in the legacy global key, the guest key, OR the user's own
+            // per-user key, take the max so existing scan progress isn't
+            // lost when this hydration runs. The own-key inclusion is
+            // critical: without it, a fresh-browser login where the user
+            // never synced their accumulated scans to cloud would wipe
+            // localStorage back to whatever cloud thinks (often 0).
             const userKey = _scanKey();
-            const cloudVal = parseInt(data.scan_total || 0, 10);
+            const cloudVal  = parseInt(data.scan_total || 0, 10);
             const legacyVal = parseInt(localStorage.getItem('pathbinder_scan_total_v1') || '0', 10);
-            const guestVal = parseInt(localStorage.getItem('pathbinder_scan_total_v1_guest') || '0', 10);
-            const merged = Math.max(cloudVal, legacyVal, guestVal);
+            const guestVal  = parseInt(localStorage.getItem('pathbinder_scan_total_v1_guest') || '0', 10);
+            const ownVal    = parseInt(localStorage.getItem(userKey) || '0', 10);
+            const merged    = Math.max(cloudVal, legacyVal, guestVal, ownVal);
             localStorage.setItem(userKey, String(merged));
             // Clear legacy keys so they don't keep migrating on every sync
             try { localStorage.removeItem('pathbinder_scan_total_v1'); } catch(_) {}
@@ -28539,6 +28727,104 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return 'EN';
     }
 
+    // ── TCG detector for the scanner ─────────────────────────────────────────
+    // Returns 'pokemon' | 'magic' | 'yugioh' | 'onepiece' based on signals in
+    // the OCR text. The catalog now spans four games; without this routing,
+    // a Magic card scan would search Pokemon rows for matching card numbers
+    // and surface noise. Each game has a few high-confidence keyword/format
+    // signals that rarely cross-appear:
+    //   - Pokemon:    HP value, Weakness/Resistance/Retreat, Pokémon word
+    //   - Magic:      mana symbols + creature/instant/sorcery type lines
+    //   - Yu-Gi-Oh:   ATK/ + DEF/ format, attribute words (LIGHT/DARK/etc.)
+    //   - One Piece:  Leader/Character/Event/Stage type + 'Don!!' icons
+    //
+    // Scoring approach: count keyword hits per game; highest scorer wins.
+    // Pokemon is the default tiebreaker since it's the majority use case.
+    // Threshold = 2 hits to claim a game; below that we stay on Pokemon
+    // (which is also where non-EN languages route, since only Pokemon has
+    // multi-language catalog coverage).
+    function detectScanTcg(text) {
+      if (!text) return 'pokemon';
+      var t = text.toLowerCase();
+      var scores = { pokemon: 0, magic: 0, yugioh: 0, onepiece: 0, gundam: 0, dbz: 0 };
+
+      // Pokemon signals
+      if (/\bhp\s*\d{2,3}\b/i.test(text))      scores.pokemon += 2;
+      if (/\bweakness\b/i.test(t))             scores.pokemon += 1;
+      if (/\bresistance\b/i.test(t))           scores.pokemon += 1;
+      if (/\bretreat\s*cost\b/i.test(t))       scores.pokemon += 2;
+      if (/pok[eé]mon/i.test(t))               scores.pokemon += 1;
+      if (/\b(trainer|supporter|stadium)\b/i.test(t)) scores.pokemon += 1;
+      if (/\b(basic|stage\s*[12])\b/i.test(t)) scores.pokemon += 1;
+
+      // Magic signals (mana symbols, type line keywords)
+      if (/\{[wubrgcx0-9\/]+\}/i.test(text))   scores.magic += 2;
+      if (/\b(creature|instant|sorcery|enchantment|artifact|planeswalker)\b/i.test(t)) scores.magic += 2;
+      if (/\blegendary\b/i.test(t))            scores.magic += 1;
+      if (/\b(equipment|saga|aura)\b/i.test(t)) scores.magic += 1;
+      if (/\b\d+\s*\/\s*\d+\b/.test(text) && /\bcreature\b/i.test(t)) scores.magic += 1; // P/T
+      // "Mana Value" or older "Converted Mana Cost"
+      if (/(mana\s*value|converted\s*mana\s*cost)/i.test(t)) scores.magic += 1;
+
+      // Yu-Gi-Oh signals (ATK/DEF format, attribute words, level stars)
+      if (/\batk\s*\/?\s*\d/i.test(text))      scores.yugioh += 2;
+      if (/\bdef\s*\/?\s*\d/i.test(text))      scores.yugioh += 2;
+      if (/\b(light|dark|earth|water|fire|wind|divine)\b/i.test(t) &&
+          /\b(monster|spell|trap)\b/i.test(t)) scores.yugioh += 2;
+      if (/\beffect\s*monster\b/i.test(t))     scores.yugioh += 1;
+      if (/\b(fusion|synchro|xyz|link|ritual|pendulum)\b/i.test(t)) scores.yugioh += 1;
+      if (/\bspell\s*card\b/i.test(t) || /\btrap\s*card\b/i.test(t)) scores.yugioh += 1;
+
+      // One Piece signals
+      if (/\bdon\s*!!?/i.test(t))              scores.onepiece += 2;
+      if (/\b(leader|character|event|stage)\b/i.test(t) &&
+          /\bcost\b/i.test(t))                 scores.onepiece += 2;
+      if (/\b(slash|strike|special|ranged)\b/i.test(t)) scores.onepiece += 1;
+      if (/\b(op|st|eb|pr)\d+-\d+/i.test(text)) scores.onepiece += 2; // OP01-001 / ST01-001 set codes
+      if (/\bstraw\s*hat|navy|alabasta|wano\b/i.test(t)) scores.onepiece += 1;
+
+      // Gundam Card Game signals
+      // Card types: Unit, Pilot, Command, Base, Resource (Resource is the
+      // most distinctive — almost never appears on other TCGs in this set).
+      if (/\b(unit|pilot|command|base|resource)\b/i.test(t) &&
+          /\b(ap|hp|cost|lv)\b/i.test(t))      scores.gundam += 2;
+      if (/\bmobile\s*suit\b/i.test(t))        scores.gundam += 2;
+      if (/\bpilot\s*skill\b/i.test(t))        scores.gundam += 2;
+      // Set codes — Gundam pokedata sync uses GD/ST/EB prefixes (e.g. GD01-001).
+      // ST overlaps with One Piece starter decks, so we don't double-count
+      // ST hits — those are scored under One Piece if other OP signals fire,
+      // and here only when paired with a Gundam-only word.
+      if (/\bgd\d+-\d+/i.test(text))           scores.gundam += 2;
+      if (/\b(earth\s*federation|zeon|principality|colony)\b/i.test(t)) scores.gundam += 1;
+      // "AP" + "HP" together (Gundam's stat pair) is a strong signal
+      if (/\bap\s*\d+/i.test(text) && /\bhp\s*\d+/i.test(text) &&
+          /\b(unit|pilot)\b/i.test(t))         scores.gundam += 1;
+
+      // Dragon Ball Z TCG signals (Panini/Score era)
+      // Style is the bedrock signal: every personality + non-Z card has a
+      // Style line (Red/Blue/Orange/Black/Saiyan/Namekian/Freestyle).
+      if (/\bstyle\s*[:=]?\s*(red|blue|orange|black|saiyan|namekian|freestyle)\b/i.test(t)) scores.dbz += 2;
+      if (/\bpower\s*level\b/i.test(t) || /\bpwr\b/i.test(t)) scores.dbz += 2;
+      if (/\b(combat|non[-\s]?combat)\b/i.test(t) && /\bcard\b/i.test(t)) scores.dbz += 2;
+      // Personality cards: "Goku Level 1", "Vegeta Lv 3", etc. Pair Lv with
+      // a known DBZ name to avoid matching Pokemon's level system.
+      if (/\b(goku|vegeta|gohan|piccolo|frieza|cell|trunks|krillin|tien)\b/i.test(t) &&
+          /\b(lv\.?|level)\s*\d/i.test(t))     scores.dbz += 2;
+      // Set codes — DBZ pokedata sync uses DBZ/DB prefixes (e.g. DB1-001)
+      if (/\b(dbz|db)\d+-\d+/i.test(text))     scores.dbz += 2;
+      if (/\b(saiyan|namekian|frieza\s*saga|cell\s*saga|buu\s*saga)\b/i.test(t)) scores.dbz += 1;
+
+      // Pick highest. Threshold = 2 to claim non-Pokemon (avoids stray
+      // single-word hits dragging a Pokemon card into another search).
+      var best  = 'pokemon';
+      var bestN = scores.pokemon;
+      ['magic','yugioh','onepiece','gundam','dbz'].forEach(function(g) {
+        if (scores[g] > bestN && scores[g] >= 2) { best = g; bestN = scores[g]; }
+      });
+      try { console.log('[Scanner] TCG detect:', JSON.stringify(scores), '→', best); } catch(_) {}
+      return best;
+    }
+
     // ── Extract card name from Japanese OCR text ──────────────────────────────
     // JP layout: card type (グッズ), furigana fragments (1-3 kana), then the actual name
     function parseJapaneseCardName(lines) {
@@ -28799,6 +29085,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const cardName    = parseCardName(fullText);
         const ocrLang     = detectOcrLanguage(fullText);    // 'JA' | 'ZH' | 'KO' | 'EN'
         const isJpOcr     = ocrLang === 'JA';                // back-compat alias
+        // Detect the TCG so the search scopes to the right game. Non-EN
+        // languages always route to Pokemon — only Pokemon has multi-lang
+        // catalog coverage; a JP MTG card scan is exceedingly rare and
+        // would still benefit from the Pokemon JP catalog as a fallback
+        // rather than searching the empty MTG-JP set.
+        const scanTcg = (ocrLang === 'EN') ? detectScanTcg(fullText) : 'pokemon';
 
         // Derive extra name variants for trainer-card mismatches:
         //   "N'Zekrom" → expandedName="N's Zekrom", pokemonBase="Zekrom"
@@ -28810,8 +29102,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         if (!silent) setScanStatus('Searching catalog…');
 
-        // Factory — Supabase query builders are mutable, so create a fresh one each time
-        const q = () => sb.from('catalog').select('id,name,set_name,set_code,card_number,rarity,image_url');
+        // Factory — Supabase query builders are mutable, so create a fresh one each time.
+        // Scope to the DETECTED TCG: `detectScanTcg` reads the OCR text and
+        // picks pokemon/magic/yugioh/onepiece based on game-specific keywords
+        // (HP+Retreat for Pokemon, mana symbols + creature/instant for Magic,
+        // ATK/DEF + attribute words for Yu-Gi-Oh, Don!! + Leader/Character
+        // for One Piece). Without this routing, a Magic card scan would
+        // hit Pokemon rows whose card_number happens to match and surface
+        // 100+ false positives. Defaults to pokemon when uncertain — the
+        // majority use case + matches the Pokemon-specific OCR parser.
+        const q = () => sb.from('catalog')
+          .select('id,name,set_name,set_code,card_number,rarity,image_url')
+          .eq('game_type', scanTcg);
 
         // Derive a shorter base name for broader fallback searching:
         //   "Lugia VSTAR"            → "Lugia"
