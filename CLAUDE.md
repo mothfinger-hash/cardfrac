@@ -156,6 +156,41 @@ Received" action just flips paid→completed for UX, not for money flow.
 - Beta testers have their own table `beta_testers` with a public-read
   view `public_beta_testers` that exposes only `(user_id, tier)`.
 
+## Adding a new TCG
+
+When a new game (e.g. Flesh and Blood, Lorcana, Digimon) gets added to the
+catalog, several places need a matching update or the app silently degrades.
+Treat this list as the required checklist for any TCG addition:
+
+1. **`pokedata_sync.py`** — add the game to `get_game_type()` and
+   `get_id_prefix()`. The `game_type` column value (lowercase, no spaces)
+   and the id prefix (e.g. `gun-`, `dbz-`) must match what gets used
+   everywhere else.
+
+2. **Scanner TCG detector** (`detectScanTcg` in `index.html`, near
+   `detectOcrLanguage`). Add a signal block scoring keywords / format
+   patterns unique to that game. Add the new game key to the `scores`
+   object initialiser AND to the `forEach(['magic','yugioh',…])` loop
+   that picks the winner. Without this, scans of the new game will
+   route to Pokemon search and surface nothing.
+
+3. **Sets page CFG** (`{ key, prefix, label, name }` block in the
+   sets-detail view) — controls the TCG tab + browse filter.
+
+4. **Game dropdowns** — listing modal, marketplace browse filter, and
+   anywhere else a `<option value="…">` enumerates games.
+
+5. **PriceCharting URL enrichment** — extend
+   `sync_pc_singles_enrich.py` / `sync_sealed_products.py` with the
+   game's PC category slug so price refresh can include those rows.
+
+6. **Add to nightly refresh** — verify `refresh_catalog_prices.py`
+   picks up the new game_type (it does by default if the rows have
+   `price_source_url` set, but confirm the workflow's `--tcg` arg).
+
+Forgetting #2 is the most common silent failure — scans for the new
+game return Pokemon false positives instead of relevant cards.
+
 ## Background workers / sync scripts
 
 - `pokedata_sync.py` is the consolidated multi-TCG sync. Use

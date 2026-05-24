@@ -19,13 +19,13 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://pokemoncardimages.pokedata.io">
   <link rel="preconnect" href="https://images.pokemontcg.io">
-  <!-- Preload above-the-fold assets -->
+  <!-- Preload above-the-fold assets used on landing / dashboard. Trade
+       analyzer assets (mag_glass.webp + trade_cards.webp) used to be
+       preloaded here, but they're only consumed on the fairTrade page —
+       JIT-preloaded by showPage('fairTrade') so they don't generate
+       "preloaded but not used" warnings on every other route. -->
   <link rel="preload" href="weblogo.webp" as="image">
   <link rel="preload" href="phondex.webp" as="image">
-  <!-- Trade analyzer animation assets — preloaded so the magglass scene
-       paints fully on first show, no missing-image flash on slow mobile -->
-  <link rel="preload" href="/mag_glass.webp" as="image">
-  <link rel="preload" href="/trade_cards.webp" as="image">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Space+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
   <script>
@@ -7684,6 +7684,34 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       } catch(e) {}
     })();
 
+    // Per-page asset preloader. Some pages have heavy hero-image assets
+    // (trade analyzer's magglass + cards) that were originally <link
+    // rel="preload"> in the document head — they fired on every page
+    // load and emitted "preloaded but not used" warnings dozens of times
+    // per session. Now we inject the preload tag lazily the first time
+    // the relevant page is shown, scoped to where the asset is actually
+    // consumed. _preloadedPages tracks what's already been injected so
+    // we don't add duplicates on repeat navigations.
+    var _preloadedPages = {};
+    function _preloadPageAssets(pageId) {
+      if (_preloadedPages[pageId]) return;
+      _preloadedPages[pageId] = true;
+      var assets = [];
+      if (pageId === 'fairTrade') {
+        // Trade Analyzer — the magglass scene needs both images visible
+        // immediately on first reveal so the lens animation doesn't
+        // flash a missing background.
+        assets = ['/mag_glass.webp', '/trade_cards.webp'];
+      }
+      assets.forEach(function(href) {
+        var link = document.createElement('link');
+        link.rel  = 'preload';
+        link.as   = 'image';
+        link.href = href;
+        document.head.appendChild(link);
+      });
+    }
+
     function showPage(pageId) {
       // Guard admin page access
       if (pageId === 'admin' || pageId === 'editListing') {
@@ -7693,6 +7721,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           return;
         }
       }
+      // Kick page-scoped asset preload BEFORE the page is shown so the
+      // network fetch can race the DOM swap.
+      try { _preloadPageAssets(pageId); } catch(_) {}
 
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(pageId + 'Page').classList.add('active');
@@ -20959,7 +20990,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       scratch:  ['/sounds/scratch.opus',   '/sounds/scratch.mp3',   '/sounds/scratch.wav'],
       flicker:  ['/sounds/flicker.opus',   '/sounds/flicker.mp3',   '/sounds/flicker.wav'],
       lockin:   ['/sounds/lockin.opus',    '/sounds/lockin.mp3',    '/sounds/lockin.wav'],
-      slap:     ['/sounds/slap.opus',      '/sounds/slap.mp3',      '/sounds/slap.wav'],
+      // slap intentionally only lists .mp3 — .opus and .wav variants
+      // don't exist on disk, and Howler's 404-then-fallback emits a
+      // browser error toast that's noisy and feeds audio-pool churn.
+      slap:     ['/sounds/slap.mp3'],
       swipe:    ['/sounds/swipe.opus',     '/sounds/swipe.mp3',     '/sounds/swipe.wav'],
       thud:     ['/sounds/thud.opus?v=2',  '/sounds/thud.mp3?v=2',  '/sounds/thud.wav?v=2'],
       coinflip: ['/sounds/coin_flip.opus', '/sounds/coin_flip.mp3', '/sounds/coin_flip.wav'],
@@ -23491,11 +23525,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           .select('image_url').eq('id', apiCardId).maybeSingle();
         if (catRow?.image_url) {
           el.src = catRow.image_url;
-          // Patch the DB so next load works without the fallback
-          sb.from('collection_items')
-            .update({ card_image_url: catRow.image_url })
-            .eq('id', itemId)
-            .then(() => { if (item) item.card_image_url = catRow.image_url; });
+          // PRESERVE user-uploaded photos. The previous version of this
+          // handler unconditionally patched collection_items.card_image_url
+          // with the stock catalog image — meaning a single transient
+          // network blip, CORS hiccup, or Storage 5xx would permanently
+          // destroy the user's photo URL. Now we only persist the swap
+          // when the broken URL is NOT a user photo (the user-photo
+          // bucket is `card-photos`; its public URL always contains
+          // "/card-photos/"). Stock URLs get repaired, user uploads
+          // stay intact so they re-attempt on next load and recover
+          // when the storage hiccup passes.
+          var existing = (item && item.card_image_url) || '';
+          var isUserPhoto = existing.indexOf('/card-photos/') !== -1;
+          if (!isUserPhoto) {
+            sb.from('collection_items')
+              .update({ card_image_url: catRow.image_url })
+              .eq('id', itemId)
+              .then(() => { if (item) item.card_image_url = catRow.image_url; });
+          }
         } else {
           el.style.display = 'none';
         }

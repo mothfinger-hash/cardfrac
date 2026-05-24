@@ -14,7 +14,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v268';
+const CACHE = 'pathbinder-v269';
 
 const PRECACHE = [
   '/offline.html',
@@ -64,14 +64,20 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // For static assets: cache first, then network
+  // For static assets: cache first, then network.
+  // Only cache fully-formed 200 responses. `res.ok` is true for the whole
+  // 200-299 range, which includes 206 Partial Content — the response type
+  // browsers return for ranged audio/video requests. cache.put rejects 206
+  // with "Partial response (status code 206) is unsupported", surfacing as
+  // an uncaught TypeError in the console. Filtering to status === 200 also
+  // skips redirects (3xx) and opaque cross-origin responses.
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(res => {
-        if (res.ok) {
+        if (res.status === 200 && res.type !== 'opaque') {
           const clone = res.clone();
-          caches.open(CACHE).then(cache => cache.put(e.request, clone));
+          caches.open(CACHE).then(cache => cache.put(e.request, clone)).catch(() => {});
         }
         return res;
       }).catch(() => new Response('', { status: 408, statusText: 'Network unavailable' }));
