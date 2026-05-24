@@ -16438,8 +16438,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                     : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`)}
             </div>
             <div class="binder-card-info">
-              <div class="binder-card-name">${item.card_name}</div>
-              ${effectiveView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
+              ${isAllCards
+                ? `<div class="binder-card-name">${item.card_name}</div>
+                   ${effectiveView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}`
+                : '' /* Per-binder view: hide the name + set so the cell
+                        reads like a real binder page — just the card
+                        image (and the wishlist progress bar / condition
+                        badge that lives outside this block). Card-detail
+                        modal still surfaces name + set on tap.            */
+              }
               ${isGhost
                 ? (goal > 0
                     ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
@@ -27008,15 +27015,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       object-fit: cover !important;
       background: var(--surface2);
     }
-    /* User-uploaded photos in the list view — arbitrary aspect ratios
-       (phone shots are usually 16:9 or 4:3 landscape, not card-shape).
-       Cover-cropping a 16:9 photo into a 60px-tall card slot leaves you
-       staring at a tiny center sliver. Override to contain so the whole
-       photo fits inside the slot with a thin letterbox; pair with a
-       slightly darker surface so the letterbox is visually intentional. */
+    /* User-uploaded photos in the list view — KEEP cover. Earlier this
+       block had `object-fit: contain` to show the whole photo letterboxed
+       inside the 44×60 portrait slot, but landscape phone shots (16:9)
+       become a thin sliver in a portrait box (44 wide × ~25 tall with
+       large empty bars top/bottom). Same regression #77 hit in the
+       dashboard widget; same fix here — back to cover. Bias the crop
+       slightly above center via object-position so users tend to see the
+       top of the card (name/art) rather than the dead-center stripe. */
     #collectionContent .allcards-row.has-user-photo > img {
-      object-fit: contain !important;
-      background: var(--surface3, var(--surface2));
+      object-position: 50% 35% !important;
     }
 
     /* All Cards 4-col grid view — same cover behavior as dashboard. */
