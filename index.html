@@ -2560,10 +2560,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        by the .just-added class which renderBinder applies once, on the
        render immediately following a successful add — then it's cleared
        so subsequent re-renders (pagination, sort, drag-drop) don't
-       re-trigger the animation. Slides in from above + scales up + fades. */
+       re-trigger the animation. Slides in from well above the slot
+       (translateY -110px lets you actually see the card travelling
+       toward its slot in the 3×3 preview) with a slight overshoot at
+       65% so it lands with a confident snap rather than easing in. */
     @keyframes pbCardSlideIn {
-      0%   { opacity: 0; transform: translateY(-26px) scale(.85); }
-      60%  { opacity: 1; transform: translateY(2px)   scale(1.04); }
+      0%   { opacity: 0; transform: translateY(-110px) scale(.85); }
+      65%  { opacity: 1; transform: translateY(4px)   scale(1.05); }
       100% { opacity: 1; transform: translateY(0)     scale(1);    }
     }
     .binder-card.just-added {
@@ -2651,12 +2654,22 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       font-size:1rem; color:var(--muted); font-family:inherit;
     }
     .pb-cin-slot.ghost{ opacity:.7 }
-    /* The new card's slot — slide-in + accent glow. Reuses pbCardSlideIn. */
+    /* The new card's slot — slide-in + accent glow. Reuses pbCardSlideIn.
+       overflow:visible !important overrides the base .pb-cin-slot rule so
+       the keyframe's translateY(-26px) start position (above the slot
+       frame) is actually visible during the slide — without this the
+       card was being clipped invisible until the final few frames where
+       it had already reached the slot. The image inside still respects
+       the slot's rounded corners via the img element's own clipping. */
     .pb-cin-slot.just-added{
-      animation: pbCardSlideIn 540ms cubic-bezier(.2,.85,.3,1.1) both;
+      animation: pbCardSlideIn 600ms cubic-bezier(.2,.85,.3,1.1) both;
       box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255,92,0,.45);
-      z-index:1;
+      overflow: visible !important;
+      z-index: 2;
     }
+    /* The img inside the just-added slot needs its own border-radius +
+       clip since the parent's overflow is no longer hiding the corners. */
+    .pb-cin-slot.just-added img{ border-radius: 3px; }
     .pb-cin-footer{
       display:flex; align-items:center; justify-content:space-between; gap:10px;
       flex-wrap:wrap;
@@ -19237,9 +19250,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       if (error) { showToast('Error: ' + error.message); return; }
 
-      // Update local cache
+      // Update local cache. Append (push) — NOT unshift — so the local
+      // ordering matches what loadCollection() returns next time
+      // (sort_order ASC nulls-last, then created_at ASC). Otherwise the
+      // cinematic shows the card landing in slot 1 of page 1 when it
+      // will actually land at the END of the binder.
       const fresh = { id: newRow.id, ...row, current_value: null, purchase_price: null, price_history_log: [] };
-      collectionItems.unshift(fresh);
+      collectionItems.push(fresh);
       try { checkBadge_stacked(); } catch(_) {}
 
       const binderLabel = b ? (binders.find(bb => String(bb.id) === String(b))?.name || 'binder') : 'your binder';
