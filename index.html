@@ -4575,7 +4575,13 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .pb-panel-link{font-size:9.5px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;border:1px solid transparent;padding:3px 8px;transition:border-color .1s;cursor:pointer;background:none;font-family:'Space Mono','Share Tech Mono',monospace}
 .pb-panel-link:hover{border-color:var(--accent)}
 .pb-panel-actions{display:flex;align-items:center;gap:6px}
-/* Ancient card corner brackets */
+/* Ancient card corner brackets + elemental rails — DISABLED globally.
+   The decorator IIFE no longer injects new ones (see comment above
+   the decoratePanel function), and this rule hides any leftover
+   instances that may have shipped via cached service-worker bundles.
+   Remove these two rules if the decoration aesthetic comes back. */
+.ac-corner,
+.ac-rail { display: none !important; }
 .ac-corner{position:absolute;width:32px;height:32px;pointer-events:none;z-index:2;display:block}
 .ac-tl{top:-8px;left:-8px}
 .ac-tr{top:-8px;right:-8px}
@@ -31344,10 +31350,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 })();
 
 /* ── ANCIENT CARD DECORATION ──────────────────────────────────────────────────
-   Injects corner brackets and elemental glyph rails into every .pb-panel.
-   Called once on load, then observed via MutationObserver for dynamic panels.
+   ⚠ DISABLED — the corner brackets + elemental rails created visual
+   clutter that competed with the actual panel content. The IIFE is
+   short-circuited below; CSS at the bottom of this file hides any
+   instances that may have already been injected before the disable
+   landed (or any future re-enable that slips through review).
+   Original decoration code is preserved below the early-return for
+   easy revival if the aesthetic ever comes back into favor.
    ─────────────────────────────────────────────────────────────────────────── */
 (function () {
+  return; // panel decoration disabled — see notes above
+  /* eslint-disable */
   const C = '#1AC7A0'; // accent cyan
 
   const cornerSVGs = {
