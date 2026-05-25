@@ -73,6 +73,46 @@ gates non-multiples and on some browsers blocks integer entry; use
 `step="any" inputmode="decimal"` for money fields, which still keeps the
 numeric keyboard on mobile while accepting `5`, `5.5`, `5.99` all fine.
 
+### Card image fit — the canonical solution
+
+Card slots in lists, grids, and dashboard widgets render images from a
+mix of sources with different aspect ratios:
+
+- Catalog stock images pre-cropped to card aspect (245×342)
+- Catalog stock images that were NOT pre-cropped (some sealed/product
+  rows, some non-EN catalog imports come through wide or landscape)
+- User-uploaded photos (`/card-photos/` Supabase bucket — arbitrary aspect)
+
+We've fought this problem several times. The repeated mistake is
+applying a one-size-fits-all rule (always `cover`, always `contain`, or
+a static `object-position`). Each of those breaks at least one source:
+
+- Always-cover with default center: wide images show a dead-center
+  horizontal slice that's unrecognizable.
+- Always-cover with top-bias `object-position: 50% 30%`: card-aspect
+  images get their bottom clipped, hiding the card art.
+- Always-contain: a 16:9 phone shot in a 44×60 portrait slot becomes a
+  thin sliver letterboxed with huge empty bars.
+
+**The right answer is the JS helper `_userPhotoAspectFit(imgEl)`.** It
+reads `naturalWidth`/`naturalHeight` onload, compares against card
+aspect (245/342 ≈ 0.716), and:
+
+- If the image is &gt;1.15× wider than card aspect → switch to `contain`
+  (the whole subject fits, smaller but recognizable).
+- Otherwise (card-aspect or narrower) → keep `cover` (fills the slot
+  cleanly without distortion).
+
+To use it: add `onload="_userPhotoAspectFit(this)"` to any `<img>` in a
+fixed-size slot. The slot CSS keeps the base behavior (`object-fit:
+cover` centered) so card-aspect images render correctly even before the
+onload fires. Don't add a global `object-position` bias — it
+disproportionately hurts the card-aspect majority to slightly help the
+wide-image minority.
+
+Same helper is appropriate for any new slot type — list rows, grid
+cells, dashboard binder widget, scanner preview, etc.
+
 ### Fonts
 
 - `'Orbitron', monospace` — display headers (panel titles, hologram callouts)

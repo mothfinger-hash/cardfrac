@@ -15676,6 +15676,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
         <img src="${item.card_image_url ? _thumbUrl(item.card_image_url, 100) : ''}" alt="" loading="lazy" decoding="async" draggable="false"
           style="width:44px;height:60px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
+          onload="_userPhotoAspectFit(this)"
           onerror="this.style.visibility='hidden'">
         <div style="flex:1;min-width:0">
           <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
@@ -27635,28 +27636,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       background: var(--surface);
     }
 
-    /* Binder LIST view row thumbnail — small fixed-size card-shape with
-       cover. The 50% 30% object-position biases the crop toward the top
-       of the image so wide / landscape source images (booster boxes,
-       phone shots, oddly-cropped catalog rows) show the main subject
-       (card name + top of art) instead of a dead-center horizontal
-       slice. Applies universally — used to be gated on .has-user-photo
-       but stock catalog images suffer the same issue when they're not
-       pre-cropped to card aspect. */
+    /* Binder LIST view row thumbnail — 44×60 portrait card-shape slot.
+       Default: object-fit:cover, centered (50% 50%). For card-aspect
+       images (most catalog stock) this shows the card's middle (art)
+       cleanly. For wide / landscape images, the inline onload handler
+       `_userPhotoAspectFit` flips object-fit to `contain` so the whole
+       subject is visible (small but recognizable) instead of a
+       dead-center horizontal slice.
+       Do NOT add object-position bias here — it breaks card-aspect
+       stock images by clipping the card art at the bottom. The aspect
+       handler is the canonical solution; see CLAUDE.md. */
     #collectionContent .allcards-row > img {
       width: 44px !important;
       height: 60px !important;
       min-width: 44px !important;
-      object-fit: cover !important;
-      object-position: 50% 30% !important;
+      object-fit: cover;
       background: var(--surface2);
-    }
-    /* User photos get a slightly softer bias — phone shots usually have
-       the card centered vertically, so 35% (a tad lower than the
-       universal 30%) tends to frame the card name + top of art better
-       without cutting off the bottom of the card. */
-    #collectionContent .allcards-row.has-user-photo > img {
-      object-position: 50% 35% !important;
     }
 
     /* All Cards 4-col grid view — same cover behavior as dashboard. */
