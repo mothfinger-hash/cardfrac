@@ -227,6 +227,24 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #accountPage[data-tab="watchlist"],
     #accountPage[data-tab="history"],
     #accountPage[data-tab="tradeHistory"] { background-image: url('dash2.webp'); }
+    /* Constrain the content on the tabs that have a background so the
+       artwork reads as a deliberate frame around it instead of getting
+       buried under wall-to-wall panels. Caps at 1280px and centers via
+       auto margins; on viewports narrower than the cap the content
+       fills available width as before. The Account header, tab strip,
+       and Badges tab are left full-width — only the panel-heavy tabs
+       get the centered treatment. */
+    #accountPage[data-tab="dashboard"]    #dashboard,
+    #accountPage[data-tab="myListings"]   #myListings,
+    #accountPage[data-tab="myOrders"]     #myOrders,
+    #accountPage[data-tab="salesArchive"] #salesArchive,
+    #accountPage[data-tab="watchlist"]    #watchlist,
+    #accountPage[data-tab="history"]      #history,
+    #accountPage[data-tab="tradeHistory"] #tradeHistory {
+      max-width: 1280px;
+      margin-left: auto;
+      margin-right: auto;
+    }
 
     .account-tabs{display:flex;gap:6px;margin-bottom:20px}
     .account-tab{padding:7px 14px;border-radius:0;border:2px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:.6rem;font-weight:400;transition:all .1s;letter-spacing:.04em}
