@@ -1057,9 +1057,25 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .beta-dot.collector{background:var(--accent);box-shadow:0 0 5px rgba(26,199,160,.7)}
 
     /* ── MARKET PRICE DIFF ─────────────────────────────── */
-    .price-diff-pos{color:var(--green);font-size:.72rem}
-    .price-diff-neg{color:var(--red);font-size:.72rem}
-    .market-price-line{font-size:.72rem;color:var(--muted);margin-top:3px}
+    /* Market price strip — focal point on listing cards. Sits between
+       the ask price and the seller line so buyers see the comp value +
+       above/below indicator immediately. Boxed treatment makes it read
+       as a deliberate panel rather than a muted footnote. Was 0.72rem
+       muted text; now mono numerals + colored % diff badge. */
+    .market-price-line{
+      font-size:.85rem;
+      color:var(--text);
+      margin-top:8px;
+      padding:6px 10px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-left:3px solid var(--accent);
+      letter-spacing:.02em;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    }
+    .price-diff-pos{color:var(--green);font-size:.92rem;font-weight:800;letter-spacing:.04em}
+    .price-diff-neg{color:var(--red);  font-size:.92rem;font-weight:800;letter-spacing:.04em}
 
     /* ── STAR RATING ────────────────────────────────────── */
     .star-btn{background:transparent;border:none;font-size:1.8rem;color:var(--border);cursor:pointer;transition:color .1s;padding:0 2px}
@@ -8167,11 +8183,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           const diff = price - marketPrice;
           const diffPct = ((diff / marketPrice) * 100).toFixed(0);
           const isAbove = diff > 0;
-          marketPriceHtml = `<div class="market-price-line">
-            Market: $${Number(marketPrice).toLocaleString()}
-            <span class="${isAbove ? 'price-diff-neg' : 'price-diff-pos'}">
-              (${isAbove ? '+' : ''}${diffPct}%)
-            </span>
+          // Color the left-border accent based on deal sentiment so the
+          // strip itself reads as good-deal / fair / over-market at a
+          // glance without parsing the percent. Within ±2% counts as
+          // "at market" and keeps the neutral accent color.
+          const _atMarket = Math.abs(diff / marketPrice) < 0.02;
+          const _stripAccent = _atMarket   ? 'var(--accent)'
+                              : isAbove    ? 'var(--red)'
+                              :              'var(--green)';
+          marketPriceHtml = `<div class="market-price-line" style="border-left-color:${_stripAccent}">
+            <span>Market: <strong style="color:var(--text)">$${Number(marketPrice).toLocaleString()}</strong></span>
+            <span class="${isAbove ? 'price-diff-neg' : 'price-diff-pos'}">${isAbove ? '+' : ''}${diffPct}%</span>
           </div>`;
         }
 
