@@ -12617,7 +12617,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         product_type: productType
       }).select().single();
 
-      if (saveBtn) { saveBtn.textContent = 'List Card'; saveBtn.disabled = false; }
+      // Restore the mode-appropriate label — was hard-coded to 'List Card'
+      // before, which silently flipped the button back to card mode after
+      // a failed save even when the modal was opened in product/sealed
+      // mode.
+      var _restoreBtnLabel = isSealed || (lcProductType !== 'single' && lcProductType !== 'tcg_single' && lcProductType !== 'sealed' && lcProductType !== 'tcg_sealed')
+        ? 'List Product'
+        : 'List Card';
+      if (saveBtn) { saveBtn.textContent = _restoreBtnLabel; saveBtn.disabled = false; }
       const lcErr = document.getElementById('lcSaveError');
       if (error) {
         if (lcErr) { lcErr.textContent = '// Error: ' + error.message; lcErr.style.display = 'block'; }
