@@ -2570,6 +2570,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       animation: pbCardSlideIn 520ms cubic-bezier(.2,.85,.3,1.1) both;
       box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255,92,0,.35);
     }
+    /* Add-another prompt slides up from the bottom on appearance. */
+    @keyframes pbPromptSlideUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(28px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
     .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
     .binder-card.drag-over{border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow);transform:scale(1.03)}
     .binder-card.ghost-card{opacity:.52;border:1px dashed var(--muted);position:relative}
@@ -6031,7 +6036,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <button class="binder-pop-item active" id="binderBtn3x3" onclick="setBinderView('3x3')" role="menuitem"><span class="binder-pop-ico">▦</span><span>3×3 Grid</span></button>
               <button class="binder-pop-item"        id="binderBtn2x2" onclick="setBinderView('2x2')" role="menuitem"><span class="binder-pop-ico">▤</span><span>2×2 Grid</span></button>
               <button class="binder-pop-item"        id="binderBtn1x1" onclick="setBinderView('1x1')" role="menuitem"><span class="binder-pop-ico">□</span><span>Single Card</span></button>
-              <button class="binder-pop-item"        id="binderBtnlist" onclick="setBinderView('list')" role="menuitem"><span class="binder-pop-ico">≡</span><span>List</span></button>
+              <button class="binder-pop-item"        id="binderBtnlist" onclick="setBinderView('list')" role="menuitem"><span class="binder-pop-ico">⇅</span><span>Organize</span></button>
             </div>
           </div>
         </div>
@@ -15207,7 +15212,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         lbl.textContent = view === '3x3' ? '3×3'
                         : view === '2x2' ? '2×2'
                         : view === '1x1' ? '1×1'
-                        : 'List';
+                        : 'Organize';
       }
       // Close the popover after a selection
       closeBinderPops();
@@ -16168,6 +16173,122 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     let binderSaveTimer = null;
     let _dragPageFlipTimer = null; // cross-page flip debounce
 
+    // ── Add-card cinematic ─────────────────────────────────────────────────
+    // Triggered by saveToCollection / saveToWishlist when a card was added
+    // to a SPECIFIC binder (not Unsorted / All Cards). Sequence:
+    //   1. Switch to that binder + the page containing the new card
+    //   2. Render (the existing pbCardSlideIn keyframe fires on the cell
+    //      via the .just-added class baked in by the template)
+    //   3. Zoom the binder grid to ~2.4x with transform-origin centered
+    //      on the new card's slot so the slide-in is dramatic
+    //   4. Pause briefly while the slide-in plays at zoom
+    //   5. Ease back out to full page view so the user sees the binder
+    //   6. Show "Add another card?" prompt (Yes → addCard page, Done → dismiss)
+    // If the card is wishlist-only AND on a different page, we still
+    // teleport so the animation is visible.
+    async function _playAddCardCinematic(cardId, binderId) {
+      if (!cardId || !binderId) return;
+      try {
+        // Make sure we're on the collection page
+        if (typeof showPage === 'function') showPage('collection');
+        if (typeof setMobileNav === 'function') setMobileNav('collection');
+        // Switch binder if needed — selectBinder already resets page + renders
+        if (String(currentBinderId) !== String(binderId)) {
+          if (typeof selectBinder === 'function') {
+            selectBinder(binderId);
+          } else {
+            currentBinderId = binderId;
+            binderPage = 0;
+          }
+        }
+        // Compute which page the new card lives on. collectionItems is
+        // pre-sorted by loadCollection (sort_order ASC, created_at ASC),
+        // so a filter preserves that order.
+        var binderItems = collectionItems.filter(function(c) {
+          return !c.sold_offline && String(c.binder_id) === String(binderId);
+        });
+        var idx = binderItems.findIndex(function(c) { return String(c.id) === String(cardId); });
+        var perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : binderView === '1x1' ? 1 : 9;
+        binderPage = idx >= 0 ? Math.floor(idx / perPage) : 0;
+        // Set the just-added marker so the template applies .just-added
+        window._justAddedCardId = cardId;
+        renderBinder();
+        // Wait two paint frames so the DOM + initial layout are in place
+        await new Promise(function(r) {
+          requestAnimationFrame(function() { requestAnimationFrame(r); });
+        });
+        var cardEl = document.querySelector('#binderGrid [data-id="' + cardId + '"]');
+        var grid   = document.getElementById('binderGrid');
+        if (!cardEl || !grid) {
+          // No grid (e.g. user is in list view) — just show the prompt
+          _showAddAnotherPrompt();
+          return;
+        }
+        // Compute transform-origin so the zoom is anchored on the new slot.
+        var gridRect = grid.getBoundingClientRect();
+        var cardRect = cardEl.getBoundingClientRect();
+        var originX = ((cardRect.left + cardRect.width  / 2 - gridRect.left) / gridRect.width)  * 100;
+        var originY = ((cardRect.top  + cardRect.height / 2 - gridRect.top)  / gridRect.height) * 100;
+        // Clamp so an edge-of-page card doesn't push the zoom off-screen
+        originX = Math.max(0, Math.min(100, originX));
+        originY = Math.max(0, Math.min(100, originY));
+        grid.style.transformOrigin = originX + '% ' + originY + '%';
+        grid.style.transition      = 'transform 550ms cubic-bezier(.2,.85,.3,1)';
+        grid.style.transform       = 'scale(2.4)';
+        // Hold the zoom while the card's slide-in plays (its animation is
+        // 520ms; give it the full duration plus a beat to settle)
+        setTimeout(function() {
+          grid.style.transform = 'scale(1)';
+          setTimeout(function() {
+            // Clean up so the grid isn't stuck with inline styles that
+            // could interfere with future renders (drag-drop transforms etc.)
+            grid.style.transition = '';
+            grid.style.transform = '';
+            grid.style.transformOrigin = '';
+            _showAddAnotherPrompt();
+          }, 600);
+        }, 1050);
+      } catch (_) { /* fail silent — just skip the cinematic */ }
+    }
+
+    // Small toast-style prompt offering to add another card. Auto-dismisses
+    // after 10s; "Yes" routes to the addCard page so the user can scan or
+    // search for the next card.
+    function _showAddAnotherPrompt() {
+      var existing = document.getElementById('pbAddAnotherPrompt');
+      if (existing) existing.remove();
+      var div = document.createElement('div');
+      div.id = 'pbAddAnotherPrompt';
+      div.style.cssText = [
+        'position:fixed',
+        'bottom:26px',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'z-index:10005',
+        'background:var(--surface)',
+        'border:2px solid var(--accent)',
+        'border-radius:6px',
+        'padding:12px 16px',
+        'box-shadow:0 8px 32px rgba(0,0,0,.55), 0 0 24px rgba(255,92,0,.25)',
+        'display:flex',
+        'align-items:center',
+        'gap:12px',
+        'font-family:Space Mono, Share Tech Mono, monospace',
+        'animation:pbPromptSlideUp .28s ease-out'
+      ].join(';');
+      div.innerHTML =
+        '<span style="font-size:.82rem;color:var(--text);letter-spacing:.04em">Card added — add another?</span>' +
+        '<button onclick="this.closest(&quot;#pbAddAnotherPrompt&quot;).remove();showPage(&quot;addCard&quot;);setMobileNav(&quot;addCard&quot;)" ' +
+          'style="padding:7px 14px;background:var(--accent);color:var(--surface);border:none;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer;letter-spacing:.05em">YES</button>' +
+        '<button onclick="this.closest(&quot;#pbAddAnotherPrompt&quot;).remove()" ' +
+          'style="padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.74rem;cursor:pointer;letter-spacing:.05em">DONE</button>';
+      document.body.appendChild(div);
+      setTimeout(function() {
+        var el = document.getElementById('pbAddAnotherPrompt');
+        if (el) el.remove();
+      }, 10000);
+    }
+
     function renderBinder() {
       const content = document.getElementById('collectionContent');
       const summary = document.getElementById('collectionSummary');
@@ -16344,38 +16465,53 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             </div>`;
           if (hasMore) _acAttachObserver(false);
         } else {
-        // ── Binder list view (paginated) ──────────────────────────────────────
+        // ── Binder ORGANIZE view ──────────────────────────────────────────────
+        // Numbered, drag-to-reorder, all-on-one-page compact list. Designed
+        // for bulk reordering across multi-page 3x3 binders — instead of
+        // dragging cards across pages 1→4 in grid mode, drop them in their
+        // target slot here and switch back to 3×3 to see the result.
+        // Reuses binderDragStart/Over/Drop/End from the grid views, which
+        // mutate collectionItems + persist sort_order via saveBinderOrder.
+        // No pagination — show ALL items in the binder so cross-page moves
+        // are a single drag instead of a page-flip-and-redrop dance.
         content.innerHTML = `
+          <div style="font-size:.63rem;color:var(--muted);letter-spacing:.06em;padding:7px 10px 6px;border-bottom:1px solid var(--border)">Drag the handle (⇅) to reorder · changes save automatically</div>
           <div id="binderGrid" style="display:flex;flex-direction:column">
-          ${pageItems.map(item => {
+          ${activeItems.map((item, idx) => {
             const isGhost  = item.is_ghost;
             const isGraded = !isGhost && item.condition && item.condition !== 'raw';
             const condLabel = isGraded
               ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
               : 'Raw';
-            const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
-            // See sibling list template above — user photos need contain
-            // sizing so wide phone shots don't render as a tiny center crop.
+            // Page-slot label so the user knows which 3×3 page this lands
+            // on once they switch back. 9 cards per page in 3×3.
+            const pageNum = Math.floor(idx / 9) + 1;
+            const slotInPage = (idx % 9) + 1;
             const isUserPhoto = typeof item.card_image_url === 'string'
                                 && item.card_image_url.indexOf('/card-photos/') !== -1;
             return `<div
-              class="allcards-row${isGhost ? ' ghost-card' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
-              style="cursor:pointer${isGhost ? ';opacity:.52' : ''}"
-              onclick="openBinderCardDetail('${item.id}')">
+              class="organize-row binder-card${isGhost ? ' ghost-card' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
+              draggable="true"
+              data-id="${item.id}"
+              ondragstart="binderDragStart(event,'${item.id}')"
+              ondragover="binderDragOver(event)"
+              ondrop="binderDrop(event,'${item.id}')"
+              ondragend="binderDragEnd(event)"
+              style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;border-bottom:1px solid var(--border);background:var(--surface);cursor:grab;border-radius:0${isGhost ? ';opacity:.55' : ''}">
+              <span style="font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted);min-width:36px;text-align:right;letter-spacing:.04em">${String(idx+1).padStart(3,'0')}</span>
+              <span class="organize-handle" title="Drag to reorder" style="font-size:1rem;color:var(--copper);cursor:grab;user-select:none;padding:0 4px">⇅</span>
               <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-                style="width:44px;height:60px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
+                style="width:38px;height:52px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ';border:1px solid var(--border)'}"
                 onerror="this.style.visibility='hidden'">
-              <div style="flex:1;min-width:0">
+              <div style="flex:1;min-width:0;cursor:pointer" onclick="openBinderCardDetail('${item.id}')">
                 <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
-                <div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
+                <div style="font-size:.62rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
               </div>
-              <div style="flex-shrink:0;text-align:right">
-                <div style="margin-bottom:2px">${isGhost ? `<span style="color:var(--teal);font-size:.62rem">Wishlist</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.58rem;padding:1px 4px">${condLabel}</span>`}</div>
-                <div style="font-size:.8rem;color:${isGhost ? 'var(--teal)' : 'var(--accent)'};font-weight:700">${isGhost ? '—' : (val > 0 ? '$' + val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—')}</div>
-              </div>
+              <span style="font-size:.58rem;color:var(--copper);letter-spacing:.06em;flex-shrink:0;padding:2px 6px;border:1px solid var(--copper-dim);border-radius:2px" title="Page ${pageNum}, slot ${slotInPage} in 3×3 layout">P${pageNum} · ${slotInPage}</span>
+              ${isGhost ? `<span style="color:var(--teal);font-size:.6rem;flex-shrink:0">WISH</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.56rem;padding:1px 4px;flex-shrink:0">${condLabel}</span>`}
             </div>`;
           }).join('')}
-        </div>`;
+          </div>`;
         }
       } else {
         const gridClass = effectiveView === '3x3' ? 'binder-grid-3x3' : effectiveView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
@@ -17641,7 +17777,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Same slide-in animation as owned cards — wishlist items still
       // live in a binder slot, so the new ghost-card cell animates in.
       if (newRow?.id) window._justAddedCardId = newRow.id;
-      renderBinder();
+      // Cinematic add for wishlist too when targeted at a real binder.
+      if (newRow?.id && binderId) {
+        _playAddCardCinematic(newRow.id, binderId);
+      } else {
+        renderBinder();
+      }
       renderDashboard();
       // Auto-refresh price so the ghost card shows a current value immediately
       if (newRow?.id && priceUrl) {
@@ -19243,7 +19384,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // global at the end of its run so subsequent re-renders don't
       // replay the animation.
       if (newRow?.id) window._justAddedCardId = newRow.id;
-      renderCollection();
+      // Cinematic add: when the card landed in a real binder (not the
+      // Unsorted / All Cards bucket), teleport to that binder's page,
+      // zoom into the new slot for the slide-in, then zoom out and ask
+      // the user if they want to add another. Falls back to the plain
+      // renderCollection re-render if there's no target binder.
+      if (newRow?.id && binderId) {
+        _playAddCardCinematic(newRow.id, binderId);
+      } else {
+        renderCollection();
+      }
       // Auto-refresh price immediately if a price URL was set
       if (newRow?.id && priceSourceUrl) {
         const item = collectionItems.find(c => String(c.id) === String(newRow.id));
