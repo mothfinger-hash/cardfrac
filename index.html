@@ -2570,7 +2570,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       100% { opacity: 1; transform: translateY(0)     scale(1);    }
     }
     .binder-card.just-added {
-      animation: pbCardSlideIn 520ms cubic-bezier(.2,.85,.3,1.1) both;
+      animation: pbCardSlideIn 700ms cubic-bezier(.2,.85,.3,1.1) both;
       box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255,92,0,.35);
     }
     /* Add-another prompt slides up from the bottom on appearance. */
@@ -2656,13 +2656,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .pb-cin-slot.ghost{ opacity:.7 }
     /* The new card's slot — slide-in + accent glow. Reuses pbCardSlideIn.
        overflow:visible !important overrides the base .pb-cin-slot rule so
-       the keyframe's translateY(-26px) start position (above the slot
-       frame) is actually visible during the slide — without this the
-       card was being clipped invisible until the final few frames where
-       it had already reached the slot. The image inside still respects
-       the slot's rounded corners via the img element's own clipping. */
+       the keyframe's translateY start position (above the slot frame)
+       is actually visible during the slide. The 810ms duration gives
+       the user time to track the card travelling toward its slot —
+       at 600ms it felt jumpy, especially when images were still loading. */
     .pb-cin-slot.just-added{
-      animation: pbCardSlideIn 600ms cubic-bezier(.2,.85,.3,1.1) both;
+      animation: pbCardSlideIn 810ms cubic-bezier(.2,.85,.3,1.1) both;
       box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255,92,0,.45);
       overflow: visible !important;
       z-index: 2;
@@ -16409,12 +16408,31 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // which silently failed in some flows — switching pages mid-save left
     // the user wondering whether the add even worked. With the modal the
     // user stays put, sees the slot the card landed in, and continues.
-    function _playAddCardCinematic(cardId, binderId) {
+    async function _playAddCardCinematic(cardId, binderId) {
       console.log('[cinematic] called', { cardId: cardId, binderId: binderId });
       if (!cardId || !binderId) {
         console.log('[cinematic] skip — missing cardId or binderId');
         return;
       }
+      // Preload the new card's image so the slide-in shows the actual
+      // art instead of an empty slot still waiting for the network. Race
+      // against a 600ms cap so a slow/unreachable URL doesn't gate the
+      // animation forever — the cinematic still fires on timeout, just
+      // with the image filling in mid-slide instead of pre-loaded.
+      try {
+        var _newItem = collectionItems.find(function(c) { return String(c.id) === String(cardId); });
+        var _newImg  = _newItem && _newItem.card_image_url;
+        if (_newImg) {
+          await new Promise(function(resolve) {
+            var done = false;
+            var t = setTimeout(function() { if (!done) { done = true; resolve(); } }, 600);
+            var img = new Image();
+            img.onload  = function() { if (!done) { done = true; clearTimeout(t); resolve(); } };
+            img.onerror = function() { if (!done) { done = true; clearTimeout(t); resolve(); } };
+            img.src = _newImg;
+          });
+        }
+      } catch (_) { /* preload best-effort */ }
       try {
         // Build the within-binder ordered list to find the new card's index.
         // collectionItems is pre-sorted by loadCollection (sort_order ASC,
