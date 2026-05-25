@@ -8399,14 +8399,112 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ${listing.notes ? `<div style="margin:16px 0;padding:14px;background:var(--surface2);border-left:2px solid var(--border);font-size:.85rem;color:var(--muted);line-height:1.6">${listing.notes}</div>` : ''}
 
             <div class="price-history-panel" style="background:var(--surface2);padding:16px;margin:20px 0">
-              <h3 style="margin-bottom:16px;font-size:.9rem">Price History</h3>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+                <h3 style="font-size:.9rem">Price History</h3>
+                <div id="priceHistoryStatus_${listingId}" style="font-size:.65rem;color:var(--muted);letter-spacing:.06em">Loading…</div>
+              </div>
               <svg id="priceChart_${listingId}" width="100%" height="200"></svg>
               <div id="priceChangeIndicator_${listingId}" style="font-size:.85rem;margin-top:8px"></div>
+            </div>
+
+            <!-- Comp Prices — external links so buyers can sanity-check
+                 the ask against marketplaces we don't index ourselves.
+                 PriceCharting URL is the canonical comp; TCGplayer is
+                 a generic search URL since we don't have a per-card
+                 TCGplayer product mapping. -->
+            <div style="background:var(--surface2);padding:14px 16px;margin:20px 0;border:1px solid var(--border)">
+              <div style="font-size:.75rem;color:var(--muted);margin-bottom:10px;letter-spacing:.06em">◇ COMPARE PRICES</div>
+              <div id="priceComps_${listingId}" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+              <div style="font-size:.62rem;color:var(--muted);margin-top:8px;line-height:1.5">External links open in a new tab — use them to verify the asking price against other marketplaces.</div>
             </div>
           </div>
         </div>
       `;
-      setTimeout(() => drawPriceChart(listingId, listing.priceHistory), 80);
+      // Real price history + comps load asynchronously after the modal
+      // is in the DOM. _loadListingPriceHistory hits the catalog for
+      // the listing name → catalog_id, then pulls the last 30 days of
+      // recorded_value from catalog_price_history. Falls back to the
+      // listing's own stored priceHistory array if no catalog match.
+      setTimeout(() => _loadListingPriceHistory(listing), 80);
+      setTimeout(() => _renderListingPriceComps(listing), 80);
+    }
+
+    // ── Marketplace listing: real price history loader ───────────────────
+    // Finds the catalog row by name (fuzzy ilike + game_type=pokemon),
+    // pulls 30 days of catalog_price_history, formats the data into the
+    // {date, price} shape drawPriceChart already understands, calls it.
+    async function _loadListingPriceHistory(listing) {
+      var statusEl = document.getElementById('priceHistoryStatus_' + listing.id);
+      try {
+        // Step 1: catalog lookup by name. Take the highest-priced hit
+        // when multiple variants share the name — same heuristic as
+        // openTradeCardDetail since "Charizard" might match dozens.
+        var cat = await sb.from('catalog')
+          .select('id, name, set_name, price_source_url, current_value')
+          .ilike('name', '%' + String(listing.name || '').replace(/[%_]/g, '') + '%')
+          .eq('game_type', 'pokemon')
+          .order('current_value', { ascending: false, nullsFirst: false })
+          .limit(1);
+        if (cat.error || !cat.data || !cat.data.length) {
+          if (statusEl) statusEl.textContent = 'No catalog match — chart unavailable';
+          // Fall back to whatever the listing has stored locally
+          if (listing.priceHistory && listing.priceHistory.length >= 2) {
+            drawPriceChart(listing.id, listing.priceHistory);
+          }
+          return;
+        }
+        var catalogId = cat.data[0].id;
+        // Stash the URL on the listing so the comps renderer can use it
+        listing._catalogPriceSourceUrl = cat.data[0].price_source_url || null;
+        listing._catalogId = catalogId;
+
+        // Step 2: pull the last 30 days of history snapshots
+        var cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          .toISOString().slice(0, 10);
+        var hist = await sb.from('catalog_price_history')
+          .select('recorded_at, recorded_value')
+          .eq('catalog_id', catalogId)
+          .gte('recorded_at', cutoff)
+          .order('recorded_at', { ascending: true });
+        if (hist.error || !hist.data || hist.data.length < 2) {
+          if (statusEl) statusEl.textContent = 'Building history — need at least 2 daily snapshots';
+          return;
+        }
+        // Step 3: feed drawPriceChart with {date, price} pairs
+        var formatted = hist.data.map(function(r) {
+          return { date: String(r.recorded_at).slice(0, 10), price: Number(r.recorded_value) || 0 };
+        });
+        if (statusEl) statusEl.textContent = formatted.length + ' days · ' + cat.data[0].set_name;
+        drawPriceChart(listing.id, formatted);
+        // Refresh comps now that we have the catalog URL
+        _renderListingPriceComps(listing);
+      } catch (e) {
+        if (statusEl) statusEl.textContent = 'Load failed: ' + (e.message || 'unknown');
+      }
+    }
+
+    // ── Marketplace listing: render comp-price external links ───────────
+    // Prefers PriceCharting URL from the catalog row (set by the price
+    // refresh enrichment script). Falls back to the listing's own
+    // priceSourceUrl if the catalog lookup hasn't completed yet.
+    // TCGplayer always uses a search URL since we don't store product
+    // IDs for them — works across game types.
+    function _renderListingPriceComps(listing) {
+      var compsEl = document.getElementById('priceComps_' + listing.id);
+      if (!compsEl) return;
+      var pcUrl = listing._catalogPriceSourceUrl || listing.priceSourceUrl || '';
+      var name = String(listing.name || '').trim();
+      var tcgUrl = 'https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(name);
+      var ebayUrl = 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(name) + '&_sacat=183454'; // Trading Card Singles category
+
+      var btnStyle = 'padding:8px 12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:Space Mono,monospace;font-size:.7rem;text-decoration:none;letter-spacing:.05em;display:inline-flex;align-items:center;gap:6px;transition:border-color .12s,color .12s';
+      var pcBtn = pcUrl
+        ? '<a href="' + pcUrl + '" target="_blank" rel="noopener" style="' + btnStyle + ';border-color:var(--copper-dim);color:var(--copper)" onmouseover="this.style.borderColor=\'var(--copper)\'" onmouseout="this.style.borderColor=\'var(--copper-dim)\'">PriceCharting ↗</a>'
+        : '<span style="' + btnStyle + ';opacity:.4">PriceCharting (no link)</span>';
+      var tcgBtn = '<a href="' + tcgUrl + '" target="_blank" rel="noopener" style="' + btnStyle + ';border-color:var(--accent);color:var(--accent)" onmouseover="this.style.borderColor=\'var(--accent2)\';this.style.color=\'var(--accent2)\'" onmouseout="this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'">TCGplayer ↗</a>';
+      var ebayBtn = '<a href="' + ebayUrl + '" target="_blank" rel="noopener" style="' + btnStyle + '" onmouseover="this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--text)\'">eBay ↗</a>';
+
+      compsEl.innerHTML = pcBtn + tcgBtn + ebayBtn;
     }
 
     function drawPriceChart(listingId, priceHistory) {
