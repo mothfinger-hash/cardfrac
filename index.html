@@ -154,23 +154,29 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     nav.sb-collapsed .user-avatar #userName{display:none}
     nav.sb-collapsed .user-avatar{padding:4px;justify-content:center;gap:0}
     .avatar-circle{width:26px;height:26px;border-radius:0;background:var(--accent);color:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6rem;border:1.5px solid var(--shadow)}
-    .avatar-dropdown{display:none;position:fixed;left:var(--sb-w);bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:8px 0;min-width:220px;max-width:92vw;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
+    /* Avatar dropdown — shrunk ~30% from its prior footprint. Was
+       min-width:220px / max-width:92vw with 36px badge tiles + 10px
+       padding which on wide desktops looked oversized. New shape:
+       fixed 170px wide, 4×4 mini badge grid at 24px tiles, tighter
+       padding. Pops out of the sidebar like a sticker rather than
+       a sub-page. */
+    .avatar-dropdown{display:none;position:fixed;left:var(--sb-w);bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:5px 0;width:170px;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
     .avatar-dropdown.open{display:block}
-    .dd-badge-section{padding:10px 12px 6px;border-bottom:2px solid var(--border)}
-    .dd-badge-label{font-family:'Press Start 2P',monospace;font-size:6px;color:var(--muted);letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase}
-    .dd-badge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-    .dd-badge-pip{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
-    .dd-badge-pip .dd-hex{width:36px;height:36px;clip-path:polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%);background:#0a0a0a;border:none;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:transform .15s}
-    .dd-badge-pip .dd-hex svg{width:36px;height:36px}
+    .dd-badge-section{padding:7px 9px 4px;border-bottom:2px solid var(--border)}
+    .dd-badge-label{font-family:'Press Start 2P',monospace;font-size:5.5px;color:var(--muted);letter-spacing:.08em;margin-bottom:5px;text-transform:uppercase}
+    .dd-badge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+    .dd-badge-pip{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+    .dd-badge-pip .dd-hex{width:24px;height:24px;clip-path:polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%);background:#0a0a0a;border:none;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:transform .15s}
+    .dd-badge-pip .dd-hex svg{width:24px;height:24px}
     .dd-badge-pip .dd-hex.dd-locked{opacity:.22;filter:grayscale(1) brightness(.5)}
-    .dd-badge-pip .dd-bname{font-family:'Press Start 2P',monospace;font-size:4.5px;color:#444;text-align:center;line-height:1.3;max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dd-badge-pip .dd-bname{font-family:'Press Start 2P',monospace;font-size:3.5px;color:#444;text-align:center;line-height:1.3;max-width:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .dd-badge-pip .dd-bname.earned{color:#1AC7A0}
     .dd-badge-pip:hover .dd-hex{transform:scale(1.1)}
-    @media(max-width:480px){.dd-badge-grid{grid-template-columns:repeat(4,1fr);gap:4px}.dd-badge-pip .dd-hex{width:30px;height:30px}.dd-badge-pip .dd-hex svg{width:30px;height:30px}.dd-badge-pip .dd-bname{font-size:4px;max-width:38px}}
+    @media(max-width:480px){.dd-badge-grid{grid-template-columns:repeat(4,1fr);gap:3px}.dd-badge-pip .dd-hex{width:22px;height:22px}.dd-badge-pip .dd-hex svg{width:22px;height:22px}.dd-badge-pip .dd-bname{font-size:3px;max-width:30px}}
     /* Mobile: anchor dropdown under the top-bar user chip since the
        sidebar is hidden. */
     @media(max-width:900px){.avatar-dropdown{left:auto;right:8px;bottom:auto;top:92px}}
-    .dropdown-item{padding:10px 16px;color:var(--text);cursor:pointer;font-size:.6rem;transition:background .1s;display:flex;align-items:center;gap:8px}
+    .dropdown-item{padding:6px 12px;color:var(--text);cursor:pointer;font-size:.55rem;transition:background .1s;display:flex;align-items:center;gap:6px;letter-spacing:.04em}
     .dropdown-item:hover{background:var(--surface2)}
     .dropdown-divider{height:2px;background:var(--border);margin:4px 0}
     .member-chip{display:inline-flex;align-items:center;gap:5px;background:var(--premium);border:2px solid var(--border);border-radius:0;padding:4px 8px;font-size:.56rem;font-weight:700;color:var(--premium-txt);cursor:pointer;transition:all .1s;letter-spacing:.04em;box-shadow:2px 2px 0 var(--shadow);width:100%;justify-content:center}
@@ -4295,17 +4301,10 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 /* ─── 22. BADGE SYSTEM ──────────────────────────────────────────── */
 .badges-grid {
   display: grid;
-  /* auto-fill so tiles pack at their natural ~110px width instead of
-     stretching each to 25% of a wide-desktop container. max-width caps
-     the section so it sits tight at the top-left of the account page
-     rather than spanning full width. Was repeat(4, 1fr) with no max,
-     which stretched each tile to ~250-300px on wide displays. */
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 14px;
-  padding: 4px 0 24px;
-  max-width: 540px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px; padding: 4px 0 24px;
 }
-@media(max-width:600px){.badges-grid{grid-template-columns:repeat(2,1fr);gap:12px;max-width:none}}
+@media(max-width:600px){.badges-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
 .badge-tile {
   display: flex; flex-direction: column; align-items: center;
   gap: 10px; cursor: default;
