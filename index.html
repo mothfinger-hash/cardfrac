@@ -6053,9 +6053,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
       </div>
       <div class="pb-panel-body">
-        <!-- Product-type filter: All / Cards / Sealed. Filters listings by
-             product_type — 'single' for cards, anything else for sealed
-             (booster_box, etb, utb, tin, deck, etc.) -->
+        <!-- Product-type filter: All / Cards / Sealed / Products. Filters
+             listings by product_type. 'single' = TCG singles; 'sealed' =
+             TCG sealed (booster_box, etb, tin, deck, etc.); 'product' =
+             non-TCG items (Funko, manga, posters, plush, statues, etc.). -->
         <div id="browseProductTypePills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
           <button class="ptype-pill active" data-ptype="all" onclick="setBrowseProductType('all')"
             style="padding:5px 12px;font-size:.7rem;letter-spacing:.06em;border:1.5px solid var(--accent);background:var(--accent);color:#000;cursor:pointer;font-family:'Space Mono',monospace;text-transform:uppercase">All</button>
@@ -6063,6 +6064,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             style="padding:5px 12px;font-size:.7rem;letter-spacing:.06em;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono',monospace;text-transform:uppercase">Cards</button>
           <button class="ptype-pill" data-ptype="sealed" onclick="setBrowseProductType('sealed')"
             style="padding:5px 12px;font-size:.7rem;letter-spacing:.06em;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'Space Mono',monospace;text-transform:uppercase">Sealed</button>
+          <button class="ptype-pill" data-ptype="product" onclick="setBrowseProductType('product')"
+            style="padding:5px 12px;font-size:.7rem;letter-spacing:.06em;border:1.5px solid var(--copper-dim);background:transparent;color:var(--copper);cursor:pointer;font-family:'Space Mono',monospace;text-transform:uppercase">Products</button>
         </div>
         <div class="search-and-filters" style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center">
           <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;width:100%;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" />
@@ -8060,13 +8063,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const gameTypeMatch = browseGameTypeFilter === 'all' || listing.gameType === browseGameTypeFilter;
         if (!gameTypeMatch) return false;
 
-        // Product-type filter: 'single' matches singles only; 'sealed' matches
-        // anything that isn't a single (boxes, ETBs, UTBs, tins, decks…).
+        // Product-type filter. Four buckets:
+        //   'single'  — TCG singles
+        //   'sealed'  — TCG sealed (booster_box, etb, utb, tin, deck, etc.)
+        //   'product' — non-TCG (funko_pop, manga, poster, plush, etc.)
+        //   'all'     — everything
         // Listings predate this filter — rows missing product_type are
         // treated as singles, which matches the migration default.
         const pt = listing.product_type || 'single';
-        if (browseProductTypeFilter === 'single' && pt !== 'single') return false;
-        if (browseProductTypeFilter === 'sealed' && pt === 'single')  return false;
+        // Non-TCG product types (kept in sync with PRODUCT_CATEGORIES
+        // + the product-mode listing dropdown). Any future category
+        // added to either should be added here too.
+        const PRODUCT_TYPES = [
+          'funko_pop', 'manga', 'poster', 'art_print',
+          'plush', 'figure', 'statue', 'apparel',
+          'pin', 'accessory', 'other_product'
+        ];
+        const isProduct = PRODUCT_TYPES.indexOf(pt) !== -1;
+        if (browseProductTypeFilter === 'single'  && pt !== 'single') return false;
+        if (browseProductTypeFilter === 'sealed'  && (pt === 'single' || isProduct)) return false;
+        if (browseProductTypeFilter === 'product' && !isProduct) return false;
 
         return true;
       });
@@ -8211,14 +8227,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     // Product-type pill handler for the marketplace browse page.
     // Visually swaps which pill is "active" and triggers a re-render.
+    // Products pill gets a copper accent (active + inactive) so it
+    // reads as a distinct mode from the TCG-focused Cards/Sealed pills.
     function setBrowseProductType(type) {
       browseProductTypeFilter = type;
       document.querySelectorAll('#browseProductTypePills .ptype-pill').forEach(p => {
         const isActive = p.dataset.ptype === type;
+        const isProductPill = p.dataset.ptype === 'product';
         p.classList.toggle('active', isActive);
-        p.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
-        p.style.background  = isActive ? 'var(--accent)' : 'transparent';
-        p.style.color       = isActive ? '#000'          : 'var(--muted)';
+        if (isProductPill) {
+          p.style.borderColor = isActive ? 'var(--copper)'      : 'var(--copper-dim)';
+          p.style.background  = isActive ? 'var(--copper)'      : 'transparent';
+          p.style.color       = isActive ? '#1a0a00'            : 'var(--copper)';
+        } else {
+          p.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
+          p.style.background  = isActive ? 'var(--accent)' : 'transparent';
+          p.style.color       = isActive ? '#000'          : 'var(--muted)';
+        }
       });
       renderBrowse();
     }
@@ -28792,6 +28817,203 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return out;
     }
 
+    // ── Product-type detector for the shop scanner ───────────────────────
+    // Reads the OCR text and picks one of: funko_pop | manga | poster |
+    // plush | statue | other. Each branch then routes to a category-
+    // specific extractor that knows what fields to surface. Scoring
+    // approach mirrors the TCG detector — keyword + format signals,
+    // highest score wins, falls back to 'other' (manual entry) when
+    // none score a confident hit.
+    function detectProductType(text) {
+      if (!text) return 'other';
+      var t = text.toLowerCase();
+      var scores = { funko_pop: 0, manga: 0, poster: 0, plush: 0, statue: 0 };
+
+      // Funko — already-strong brand signal
+      if (/\bfunko\b/i.test(t))           scores.funko_pop += 3;
+      if (/\bpop\s*!/i.test(t))           scores.funko_pop += 2;
+      if (/vinyl\s*figure/i.test(t))      scores.funko_pop += 2;
+
+      // Manga — publisher + volume markers
+      if (/\bvol\.?\s*\d+/i.test(text))   scores.manga += 2;
+      if (/\bvolume\s*\d+/i.test(text))   scores.manga += 2;
+      if (/\b(viz\s*media|tokyopop|kodansha|seven\s*seas|yen\s*press|dark\s*horse|udon)\b/i.test(t)) scores.manga += 3;
+      if (/\bmanga\b/i.test(t))           scores.manga += 1;
+      if (/\b(shonen\s*jump|shojo|seinen|josei)\b/i.test(t)) scores.manga += 2;
+      if (/\b(isbn|published|translation)\b/i.test(t)) scores.manga += 1;
+
+      // Posters / art prints — limited edition + artist credit signals
+      if (/\b(limited\s*edition|signed\s*print|art\s*print|giclee|screen\s*print)\b/i.test(t)) scores.poster += 3;
+      if (/\bedition\s*of\s*\d+/i.test(text)) scores.poster += 3;
+      if (/\b\d+\/\d{2,4}\b/.test(text) && /print|edition|poster/i.test(t)) scores.poster += 2; // edition fraction "12/250"
+      if (/\bposter\b/i.test(t))          scores.poster += 1;
+      if (/\bmondo\b/i.test(t))           scores.poster += 2; // famous poster publisher
+
+      // Plush — brand tags + soft-toy keywords
+      if (/\b(plush|stuffed|cuddl|soft\s*toy)\b/i.test(t)) scores.plush += 3;
+      if (/\b(jellycat|squishmallow|build[-\s]?a[-\s]?bear|pokemon\s*center)\b/i.test(t)) scores.plush += 2;
+      if (/\b(polyester|cotton)\s*fill/i.test(t)) scores.plush += 1;
+      if (/\bsurface\s*wash\b/i.test(t))  scores.plush += 1; // common care label
+
+      // Statues / non-Funko figures — scale + brand markers
+      if (/\b1\s*\/\s*(4|6|7|8|10|12)\b/.test(text)) scores.statue += 3; // "1/7 scale"
+      if (/\bscale\b/i.test(t) && /\bfigure\b/i.test(t)) scores.statue += 2;
+      if (/\b(banpresto|kotobukiya|good\s*smile|max\s*factory|mcfarlane|sideshow|prime\s*1|first\s*4\s*figures)\b/i.test(t)) scores.statue += 3;
+      if (/\b(prize\s*figure|sff|nendoroid|figma)\b/i.test(t)) scores.statue += 2;
+      if (/\bpvc\b/i.test(t) && /\bfigure\b/i.test(t)) scores.statue += 1;
+
+      // Pick winner. Threshold 2 to claim — below that we say 'other'
+      // and let the shop pick from the listing form.
+      var best = 'other', bestN = 0;
+      ['funko_pop','manga','poster','plush','statue'].forEach(function(g) {
+        if (scores[g] > bestN && scores[g] >= 2) { best = g; bestN = scores[g]; }
+      });
+      try { console.log('[product detect]', JSON.stringify(scores), '→', best); } catch(_) {}
+      return best;
+    }
+
+    // ── Per-category extractors ─────────────────────────────────────────
+    // Each returns a best-effort partial { title, ...categorySpecific }
+    // that maps to the listing form. The router in _runProductScan picks
+    // the right extractor based on detectProductType().
+
+    function _extractMangaFromOcr(text) {
+      if (!text) return {};
+      var out = {};
+      var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+      // Volume number — "Vol. 5" / "Volume 12" / just "Vol 3"
+      var volMatch = text.match(/\bvol\.?\s*(\d+)/i) || text.match(/\bvolume\s*(\d+)/i);
+      if (volMatch) out.volume = parseInt(volMatch[1], 10);
+      // Publisher (well-known manga publishers)
+      var PUBLISHERS = [
+        ['VIZ Media','VIZ Media'], ['VIZ','VIZ Media'],
+        ['Tokyopop','Tokyopop'], ['Kodansha','Kodansha'],
+        ['Seven Seas','Seven Seas'], ['Yen Press','Yen Press'],
+        ['Dark Horse','Dark Horse'], ['Udon','Udon Entertainment'],
+        ['Square Enix','Square Enix Manga'],
+      ];
+      for (var i = 0; i < PUBLISHERS.length; i++) {
+        if (text.toLowerCase().indexOf(PUBLISHERS[i][0].toLowerCase()) >= 0) {
+          out.publisher = PUBLISHERS[i][1]; break;
+        }
+      }
+      // Title — usually the largest line; skip publisher / vol / barcode
+      var SKIP = /^(VIZ|TOKYOPOP|KODANSHA|YEN\s*PRESS|DARK\s*HORSE|UDON|VOL\.?\s*\d+|VOLUME\s*\d+|ISBN|\d+|©|MANGA)$/i;
+      for (var j = 0; j < lines.length; j++) {
+        var ln = lines[j];
+        if (ln.length < 3 || ln.length > 50) continue;
+        if (SKIP.test(ln)) continue;
+        if (!/[A-Za-z]/.test(ln)) continue;
+        if (/isbn|barcode|©|tm/i.test(ln)) continue;
+        out.title = ln; break;
+      }
+      return out;
+    }
+
+    function _extractPosterFromOcr(text) {
+      if (!text) return {};
+      var out = {};
+      // Edition fraction "12/250"
+      var edMatch = text.match(/\b(\d+)\s*\/\s*(\d{2,4})\b/);
+      if (edMatch) { out.edition_number = parseInt(edMatch[1], 10); out.edition_total = parseInt(edMatch[2], 10); }
+      // "Edition of 250" / "Limited edition"
+      if (/\blimited\s*edition\b/i.test(text)) out.limited = true;
+      if (/\bsigned\b/i.test(text)) out.signed = true;
+      // Famous publishers / studios
+      if (/\bmondo\b/i.test(text)) out.publisher = 'Mondo';
+      // Title — first long line that isn't an edition number or numeric
+      var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+      for (var j = 0; j < lines.length; j++) {
+        var ln = lines[j];
+        if (ln.length < 4 || ln.length > 60) continue;
+        if (!/[A-Za-z]/.test(ln)) continue;
+        if (/^\d/.test(ln)) continue;
+        if (/edition|signed|©|mondo|print/i.test(ln)) continue;
+        out.title = ln; break;
+      }
+      return out;
+    }
+
+    function _extractPlushFromOcr(text) {
+      if (!text) return {};
+      var out = {};
+      // Brand
+      var BRANDS = [
+        ['Jellycat','Jellycat'], ['Squishmallow','Squishmallow'],
+        ['Build-A-Bear','Build-A-Bear'], ['Pokemon Center','Pokemon Center'],
+        ['Sanrio','Sanrio'], ['Banpresto','Banpresto'],
+      ];
+      for (var i = 0; i < BRANDS.length; i++) {
+        if (text.toLowerCase().indexOf(BRANDS[i][0].toLowerCase()) >= 0) {
+          out.brand = BRANDS[i][1]; break;
+        }
+      }
+      // Size — "12 inch" / "30cm" / "Small/Medium/Large"
+      var sizeMatch = text.match(/\b(\d{1,3})\s*(inch|in|cm|"|')\b/i);
+      if (sizeMatch) out.size = sizeMatch[1] + ' ' + sizeMatch[2];
+      else {
+        var labelSize = text.match(/\b(small|medium|large|xl|jumbo|mini)\b/i);
+        if (labelSize) out.size = labelSize[1];
+      }
+      // Character / item name — first long non-skip line
+      var SKIP = /^(JELLYCAT|SQUISHMALLOW|POKEMON\s*CENTER|SANRIO|©|TM|SMALL|MEDIUM|LARGE|XL|JUMBO|MINI|\d+\s*(?:INCH|CM)|CARE)$/i;
+      var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+      for (var j = 0; j < lines.length; j++) {
+        var ln = lines[j];
+        if (ln.length < 3 || ln.length > 40) continue;
+        if (SKIP.test(ln)) continue;
+        if (!/[A-Za-z]/.test(ln)) continue;
+        out.character = ln; break;
+      }
+      return out;
+    }
+
+    function _extractStatueFromOcr(text) {
+      if (!text) return {};
+      var out = {};
+      // Scale — "1/7 Scale" / "1:6"
+      var scaleMatch = text.match(/\b1\s*[\/:]\s*(\d{1,2})\b/);
+      if (scaleMatch) out.scale = '1/' + scaleMatch[1];
+      // Brand / manufacturer
+      var BRANDS = [
+        ['Banpresto','Banpresto'], ['Kotobukiya','Kotobukiya'],
+        ['Good Smile','Good Smile Company'], ['Max Factory','Max Factory'],
+        ['McFarlane','McFarlane Toys'], ['Sideshow','Sideshow Collectibles'],
+        ['Prime 1','Prime 1 Studio'], ['First 4 Figures','First 4 Figures'],
+        ['Bandai','Bandai'], ['SH Figuarts','S.H. Figuarts'],
+        ['Nendoroid','Good Smile (Nendoroid)'], ['figma','Max Factory (figma)'],
+      ];
+      for (var i = 0; i < BRANDS.length; i++) {
+        if (text.toLowerCase().indexOf(BRANDS[i][0].toLowerCase()) >= 0) {
+          out.brand = BRANDS[i][1]; break;
+        }
+      }
+      // Series — common franchise keywords (reuse the Funko list — overlap is fine)
+      var SERIES_KEYWORDS = [
+        ['DRAGON BALL','Dragon Ball'], ['ONE PIECE','One Piece'],
+        ['NARUTO','Naruto'], ['MY HERO ACADEMIA','My Hero Academia'],
+        ['ATTACK ON TITAN','Attack on Titan'], ['JUJUTSU KAISEN','Jujutsu Kaisen'],
+        ['DEMON SLAYER','Demon Slayer'], ['CHAINSAW MAN','Chainsaw Man'],
+        ['MARVEL','Marvel'], ['DC COMICS','DC Comics'],
+      ];
+      for (var s = 0; s < SERIES_KEYWORDS.length; s++) {
+        if (text.toUpperCase().indexOf(SERIES_KEYWORDS[s][0]) >= 0) {
+          out.series = SERIES_KEYWORDS[s][1]; break;
+        }
+      }
+      // Character — first long line that's not a brand / scale / series
+      var SKIP_PAT = /^(BANPRESTO|KOTOBUKIYA|GOOD\s*SMILE|MAX\s*FACTORY|MCFARLANE|SIDESHOW|PRIME\s*1|BANDAI|©|TM|PVC|SCALE|1\s*\/\s*\d+|\d+\s*MM)$/i;
+      var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+      for (var j = 0; j < lines.length; j++) {
+        var ln = lines[j];
+        if (ln.length < 2 || ln.length > 40) continue;
+        if (SKIP_PAT.test(ln)) continue;
+        if (!/[A-Za-z]/.test(ln)) continue;
+        out.character = ln; break;
+      }
+      return out;
+    }
+
     // ── Shop Product Scanner — completely separate from card scanner ──
     // Tier-gated to 'shop'. Reuses the existing camera capture + GCV OCR
     // helpers but routes results through category-specific extractors.
@@ -28820,8 +29042,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '<div style="position:relative;width:100%;max-width:520px;background:var(--surface);border:2px solid var(--copper-dim);border-radius:6px;padding:18px 18px 22px;max-height:92svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
           '<button onclick="document.getElementById(\'productScannerModal\').remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>' +
           '<div style="font-size:.55rem;letter-spacing:.14em;color:var(--copper);margin-bottom:6px">◈ PRODUCT SCANNER · SHOP TIER</div>' +
-          '<div style="font-size:.8rem;color:var(--text);font-weight:700;margin-bottom:14px">Scan a Funko Pop box</div>' +
-          '<div style="font-size:.65rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Take a photo of the box front. We&apos;ll OCR the text and auto-extract character / series / Pop # for your listing.</div>' +
+          '<div style="font-size:.8rem;color:var(--text);font-weight:700;margin-bottom:14px">Scan a product</div>' +
+          '<div style="font-size:.65rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Take a photo of the front. We&apos;ll detect the category and auto-extract the listing fields. Supported: Funko Pop, manga, posters, plush, statues.</div>' +
           '<input type="file" accept="image/*" capture="environment" id="productScannerFile" style="display:none" onchange="_runProductScan(this)">' +
           '<button onclick="document.getElementById(\'productScannerFile\').click()" style="width:100%;padding:14px;border:1.5px solid var(--accent);background:rgba(26,199,160,.08);color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.06em">TAKE PHOTO</button>' +
           '<div id="productScanResult" style="margin-top:14px"></div>' +
@@ -28846,21 +29068,79 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           return;
         }
 
-        var extracted = _extractFunkoFromOcr(text);
+        // Route to the right extractor based on what we OCR'd. Detector
+        // scores keyword / format signals per category; falls back to
+        // funko_pop (the original pilot) when nothing scores confidently.
+        var ptype = detectProductType(text);
+        var extracted;
+        switch (ptype) {
+          case 'manga':     extracted = _extractMangaFromOcr(text);  break;
+          case 'poster':    extracted = _extractPosterFromOcr(text); break;
+          case 'plush':     extracted = _extractPlushFromOcr(text);  break;
+          case 'statue':    extracted = _extractStatueFromOcr(text); break;
+          case 'funko_pop': extracted = _extractFunkoFromOcr(text);  break;
+          default:
+            // 'other' — try Funko anyway as the most likely case, then
+            // fall through to manual entry if it returns nothing.
+            extracted = _extractFunkoFromOcr(text);
+            if (!Object.keys(extracted).length) ptype = 'other';
+        }
         var hasAny = Object.keys(extracted).length > 0;
 
+        // Display label for the detected category
+        var TYPE_LABELS = {
+          funko_pop: 'FUNKO POP', manga: 'MANGA', poster: 'POSTER / ART PRINT',
+          plush: 'PLUSH', statue: 'STATUE / FIGURE', other: 'OTHER PRODUCT'
+        };
+        var typeLabel = TYPE_LABELS[ptype] || 'PRODUCT';
+
         var html = '';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+        html += '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent)">EXTRACTED</div>';
+        html += '<div style="font-size:.55rem;letter-spacing:.12em;color:var(--copper)">◆ ' + typeLabel + '</div>';
+        html += '</div>';
+
         if (hasAny) {
-          html += '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">EXTRACTED</div>';
           html += '<div style="border:1px solid var(--border);background:var(--surface2);padding:10px 12px;margin-bottom:12px">';
-          if (extracted.character)  html += '<div style="font-size:.75rem;color:var(--text)"><strong>Character:</strong> ' + _escHtml(extracted.character) + '</div>';
-          if (extracted.series)     html += '<div style="font-size:.7rem;color:var(--muted);margin-top:3px"><strong>Series:</strong> ' + _escHtml(extracted.series) + '</div>';
-          if (extracted.pop_number) html += '<div style="font-size:.7rem;color:var(--muted);margin-top:3px"><strong>Pop #:</strong> ' + _escHtml(extracted.pop_number) + '</div>';
-          if (extracted.exclusive)  html += '<div style="font-size:.7rem;color:var(--muted);margin-top:3px"><strong>Exclusive:</strong> ' + _escHtml(extracted.exclusive) + '</div>';
-          if (extracted.is_chase)   html += '<div style="font-size:.7rem;color:var(--copper);margin-top:3px"><strong>◆ Chase variant detected</strong></div>';
+          // Category-specific field display. Each row is " <strong>Label:</strong> value"
+          // with the same teal/muted color treatment regardless of category
+          // so the panel feels consistent across product types.
+          function _row(label, val, accent) {
+            if (val == null || val === '' || val === false) return;
+            var color = accent ? 'var(--copper)' : 'var(--muted)';
+            html += '<div style="font-size:.7rem;color:' + color + ';margin-top:3px"><strong>' + label + ':</strong> ' + _escHtml(String(val)) + '</div>';
+          }
+          if (ptype === 'funko_pop') {
+            if (extracted.character)  html += '<div style="font-size:.75rem;color:var(--text)"><strong>Character:</strong> ' + _escHtml(extracted.character) + '</div>';
+            _row('Series',    extracted.series);
+            _row('Pop #',     extracted.pop_number);
+            _row('Exclusive', extracted.exclusive);
+            if (extracted.is_chase) html += '<div style="font-size:.7rem;color:var(--copper);margin-top:3px"><strong>◆ Chase variant detected</strong></div>';
+          } else if (ptype === 'manga') {
+            if (extracted.title) html += '<div style="font-size:.75rem;color:var(--text)"><strong>Title:</strong> ' + _escHtml(extracted.title) + '</div>';
+            _row('Volume',    extracted.volume);
+            _row('Publisher', extracted.publisher);
+          } else if (ptype === 'poster') {
+            if (extracted.title) html += '<div style="font-size:.75rem;color:var(--text)"><strong>Title:</strong> ' + _escHtml(extracted.title) + '</div>';
+            _row('Publisher', extracted.publisher);
+            if (extracted.edition_number && extracted.edition_total) {
+              _row('Edition', extracted.edition_number + ' of ' + extracted.edition_total, true);
+            }
+            if (extracted.limited) _row('Limited Edition', 'yes', true);
+            if (extracted.signed)  _row('Signed',          'yes', true);
+          } else if (ptype === 'plush') {
+            if (extracted.character) html += '<div style="font-size:.75rem;color:var(--text)"><strong>Name:</strong> ' + _escHtml(extracted.character) + '</div>';
+            _row('Brand', extracted.brand);
+            _row('Size',  extracted.size);
+          } else if (ptype === 'statue') {
+            if (extracted.character) html += '<div style="font-size:.75rem;color:var(--text)"><strong>Character:</strong> ' + _escHtml(extracted.character) + '</div>';
+            _row('Series', extracted.series);
+            _row('Brand',  extracted.brand);
+            _row('Scale',  extracted.scale, true);
+          }
           html += '</div>';
         } else {
-          html += '<div style="font-size:.7rem;color:var(--muted);margin-bottom:12px">No Funko fields recognized — see raw OCR below to copy manually.</div>';
+          html += '<div style="font-size:.7rem;color:var(--muted);margin-bottom:12px">No structured fields recognized — see raw OCR below to copy manually, or pick a category in the listing form.</div>';
         }
 
         // Raw OCR for fallback / debugging
@@ -28868,12 +29148,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         html += '<pre style="margin-top:6px;background:var(--surface2);border:1px solid var(--border);padding:8px 10px;font-size:.6rem;color:var(--text);white-space:pre-wrap;max-height:200px;overflow-y:auto">' + _escHtml(text) + '</pre>';
         html += '</details>';
 
-        // Stash the extracted + raw text + the original File on a window
-        // slot so the DONE button can pick them up without inline-string
-        // serialization gymnastics (quotes inside Funko names would break
-        // a JSON arg). The File is carried so the listing modal can
-        // prefill its photo slot — no need to retake / re-upload.
-        window._lastProductScan = { extracted: extracted, raw: text, file: file };
+        // Stash the extracted + raw text + the original File + the
+        // detected product type so the DONE button can route to the
+        // right listing-modal prefill. The File is carried so the
+        // listing modal pre-fills its photo slot — no re-upload needed.
+        window._lastProductScan = { extracted: extracted, raw: text, file: file, ptype: ptype };
 
         html += '<div style="display:flex;gap:8px">';
         html += '<button onclick="document.getElementById(\'productScannerFile\').click()" style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">↻ RETAKE</button>';
@@ -28897,38 +29176,104 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       var stash = window._lastProductScan || {};
       var ex = stash.extracted || {};
       var rawText = stash.raw || '';
+      var ptype = stash.ptype || 'funko_pop';
       // Close the scanner first so the listing modal sits on top cleanly.
       var sc = document.getElementById('productScannerModal');
       if (sc) sc.remove();
 
-      // Build the listing title from whatever we got. Pattern:
-      //   "Character (Series) - Pop! #N [Exclusive]"
-      // If we don't even have a character name, the listing form opens
-      // with a blank title — the shop can paste from the raw OCR.
-      var parts = [];
-      if (ex.character) parts.push(ex.character);
-      if (ex.series)    parts.push('(' + ex.series + ')');
-      var base = parts.join(' ').trim();
-      var suffix = [];
-      suffix.push('Funko Pop!');
-      if (ex.pop_number) suffix.push(ex.pop_number);
-      var titleParts = [base, suffix.join(' ').trim()].filter(Boolean);
-      var title = titleParts.join(' - ');
-      if (ex.is_chase)   title += ' [CHASE]';
-      if (ex.exclusive)  title += ' [' + ex.exclusive + ']';
+      // Title + description + listing-form gameType are built per
+      // detected product type. Each branch follows the same pattern:
+      //   - title: human-readable headline for the listing
+      //   - description: structured field summary (no raw OCR — kept
+      //     clean per earlier feedback)
+      //   - gameType: matches an option in the product-mode dropdown
+      //   - productType: drives the listing modal's product-mode logic
+      var title = '';
+      var description = '';
+      var gameType = 'Other';
+      var productType = 'funko_pop';
 
-      // Description holds only the structured fields we're confident
-      // about. The raw OCR block used to be appended for shops to mine
-      // for extra details, but it dragged in the bilingual warning
-      // copy ("CHOKING HAZARD... PELIGRO DE ASFIXIA...") and made
-      // listings look chaotic. Shops can paste from the scanner's
-      // RAW OCR TEXT toggle manually if they need something specific.
-      var description = 'Funko Pop figure.';
-      if (ex.character)  description += '\nCharacter: ' + ex.character;
-      if (ex.series)     description += '\nSeries: ' + ex.series;
-      if (ex.pop_number) description += '\nPop #: ' + ex.pop_number;
-      if (ex.exclusive)  description += '\nExclusivity: ' + ex.exclusive;
-      if (ex.is_chase)   description += '\nChase variant: yes';
+      if (ptype === 'funko_pop') {
+        var parts = [];
+        if (ex.character) parts.push(ex.character);
+        if (ex.series)    parts.push('(' + ex.series + ')');
+        var base = parts.join(' ').trim();
+        var suffix = ['Funko Pop!'];
+        if (ex.pop_number) suffix.push(ex.pop_number);
+        title = [base, suffix.join(' ').trim()].filter(Boolean).join(' - ');
+        if (ex.is_chase)   title += ' [CHASE]';
+        if (ex.exclusive)  title += ' [' + ex.exclusive + ']';
+        description = 'Funko Pop figure.';
+        if (ex.character)  description += '\nCharacter: ' + ex.character;
+        if (ex.series)     description += '\nSeries: ' + ex.series;
+        if (ex.pop_number) description += '\nPop #: ' + ex.pop_number;
+        if (ex.exclusive)  description += '\nExclusivity: ' + ex.exclusive;
+        if (ex.is_chase)   description += '\nChase variant: yes';
+        gameType = 'Funko Pop';
+        productType = 'funko_pop';
+      } else if (ptype === 'manga') {
+        var mTitle = ex.title || '';
+        if (ex.volume) mTitle += (mTitle ? ', ' : '') + 'Vol. ' + ex.volume;
+        title = mTitle;
+        description = 'Manga.';
+        if (ex.title)     description += '\nTitle: ' + ex.title;
+        if (ex.volume)    description += '\nVolume: ' + ex.volume;
+        if (ex.publisher) description += '\nPublisher: ' + ex.publisher;
+        gameType = 'Manga';
+        productType = 'manga';
+      } else if (ptype === 'poster') {
+        title = ex.title || '';
+        if (ex.edition_number && ex.edition_total) {
+          title += ' (' + ex.edition_number + '/' + ex.edition_total + ')';
+        } else if (ex.limited) {
+          title += ' [Limited Edition]';
+        }
+        if (ex.signed) title += ' [SIGNED]';
+        description = (ex.publisher ? ex.publisher + ' ' : '') + 'poster / art print.';
+        if (ex.title)          description += '\nTitle: ' + ex.title;
+        if (ex.publisher)      description += '\nPublisher: ' + ex.publisher;
+        if (ex.edition_number) description += '\nEdition: ' + ex.edition_number + ' of ' + ex.edition_total;
+        if (ex.limited)        description += '\nLimited Edition: yes';
+        if (ex.signed)         description += '\nSigned: yes';
+        gameType = 'Posters';
+        productType = 'poster';
+      } else if (ptype === 'plush') {
+        var plushParts = [];
+        if (ex.character) plushParts.push(ex.character);
+        if (ex.brand)     plushParts.push(ex.brand);
+        title = plushParts.join(' - ');
+        if (ex.size) title += ' (' + ex.size + ')';
+        description = 'Plush.';
+        if (ex.character) description += '\nName: ' + ex.character;
+        if (ex.brand)     description += '\nBrand: ' + ex.brand;
+        if (ex.size)      description += '\nSize: ' + ex.size;
+        gameType = 'Plush';
+        productType = 'plush';
+      } else if (ptype === 'statue') {
+        var statueParts = [];
+        if (ex.character) statueParts.push(ex.character);
+        if (ex.series)    statueParts.push('(' + ex.series + ')');
+        title = statueParts.join(' ').trim();
+        var statueSuffix = [];
+        if (ex.brand) statueSuffix.push(ex.brand);
+        if (ex.scale) statueSuffix.push(ex.scale + ' Scale');
+        if (statueSuffix.length) title += ' - ' + statueSuffix.join(' ');
+        description = 'Statue / collectible figure.';
+        if (ex.character) description += '\nCharacter: ' + ex.character;
+        if (ex.series)    description += '\nSeries: ' + ex.series;
+        if (ex.brand)     description += '\nBrand: ' + ex.brand;
+        if (ex.scale)     description += '\nScale: ' + ex.scale;
+        gameType = 'Statues';
+        productType = 'statue';
+      } else {
+        // 'other' — no structured fields. Open the modal with a blank
+        // title so the shop can fill in manually. The scan photo still
+        // carries over via the lcPhotos push below.
+        title = '';
+        description = '';
+        gameType = 'Other';
+        productType = 'funko_pop'; // still product-mode so condition is hidden
+      }
 
       if (typeof openListCardModal !== 'function') {
         showToast('Listing modal unavailable — try again.');
@@ -28936,14 +29281,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       openListCardModal({
         cardName: title || '',
-        // gameType='Funko Pop' pre-selects the right category in the
-        // product-mode dropdown so the shop doesn't have to pick.
-        gameType: 'Funko Pop',
-        // productType='funko_pop' puts the listing modal into product
-        // mode — hides the Condition field, swaps the title to "List
-        // Product for Sale", uses product-category dropdown options,
-        // and renames the Card Name label to Product Name.
-        productType: 'funko_pop'
+        gameType: gameType,
+        productType: productType
       });
       // openListCardModal resets lcDescription = '' and lcPhotos = [];
       // populate both AFTER it runs so the scan photo + description land
