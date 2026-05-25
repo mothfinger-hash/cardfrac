@@ -3256,7 +3256,15 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
     .pb-organize .organize-row:hover{background:var(--surface2)}
     .pb-organize .organize-row.ghost-card{opacity:.6}
-    .pb-organize .organize-row.drag-over{border-top:2px solid var(--accent)}
+    /* Drop indicators — 2px accent line shows EXACTLY where the dragged
+       row will land (above or below the hovered row). Inset shadow keeps
+       the indicator inside the row so adjacent rows don't visually shift. */
+    .pb-organize .organize-row.org-drop-above{
+      box-shadow: inset 0 2px 0 0 var(--accent);
+    }
+    .pb-organize .organize-row.org-drop-below{
+      box-shadow: inset 0 -2px 0 0 var(--accent);
+    }
     .pb-organize .organize-row.binder-card{padding:5px 8px;border-radius:0}
     .pb-organize .org-num{
       font-family:'Space Mono','Share Tech Mono',monospace;
@@ -16655,10 +16663,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               class="organize-row binder-card${isGhost ? ' ghost-card' : ''}"
               draggable="true"
               data-id="${item.id}"
-              ondragstart="binderDragStart(event,'${item.id}')"
-              ondragover="binderDragOver(event)"
-              ondrop="binderDrop(event,'${item.id}')"
-              ondragend="binderDragEnd(event)">
+              ondragstart="organizeDragStart(event,'${item.id}')"
+              ondragover="organizeDragOver(event)"
+              ondrop="organizeDrop(event,'${item.id}')"
+              ondragend="organizeDragEnd(event)">
               <span class="org-num">${pos}</span>
               <span class="org-handle" title="Drag to reorder">⇅</span>
               <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
@@ -17125,6 +17133,82 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         sb.from('collection_items').update({ sort_order: idx }).eq('id', item.id)
       ));
     }
+
+    // ── Organize-view drag handlers ──────────────────────────────────────
+    // Dedicated handlers for the per-binder Organize list. Live alongside
+    // the binder-grid handlers (binderDragStart/Over/Drop/End) instead of
+    // reusing them, because:
+    //   - The grid handlers assume `.binder-card` slot semantics (drop on
+    //     a SLOT swaps two cards; cross-page logic kicks in over the prev/
+    //     next page buttons) — none of which applies in Organize.
+    //   - Organize wants a "drop above target row" insertion model, with
+    //     a visible insertion line, so users see exactly where the card
+    //     will land before releasing.
+    //   - The state var is separate (`_orgDragSrcId`) so the sidebar +
+    //     grid drop handlers can't accidentally consume an Organize drag
+    //     mid-flight. The DataTransfer `text/plain` payload is still set
+    //     so the sidebar (shelfDrop) can move the card cross-binder if
+    //     the user drags onto a binder icon — that's a feature, not a
+    //     conflict.
+    let _orgDragSrcId = null;
+    let _orgDragInsertAbove = true; // tracks above/below drop intent
+    window.organizeDragStart = function(e, itemId) {
+      _orgDragSrcId = String(itemId);
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', _orgDragSrcId); } catch (_) {}
+      // Dim the source row so the user sees what they grabbed
+      var srcRow = e.currentTarget;
+      if (srcRow && srcRow.style) srcRow.style.opacity = '0.45';
+    };
+    window.organizeDragOver = function(e) {
+      if (!_orgDragSrcId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var row = e.currentTarget;
+      // Decide whether the drop will land ABOVE or BELOW the hovered row
+      // based on the cursor's position within it (top half = above).
+      var rect = row.getBoundingClientRect();
+      _orgDragInsertAbove = (e.clientY - rect.top) < (rect.height / 2);
+      // Clear any previous indicator on sibling rows
+      var rows = document.querySelectorAll('#binderGrid .organize-row');
+      for (var i = 0; i < rows.length; i++) {
+        rows[i].classList.remove('org-drop-above', 'org-drop-below');
+      }
+      row.classList.add(_orgDragInsertAbove ? 'org-drop-above' : 'org-drop-below');
+    };
+    window.organizeDrop = function(e, targetId) {
+      e.preventDefault();
+      e.stopPropagation(); // don't bubble to a possible parent dropzone
+      var srcId = _orgDragSrcId;
+      _orgDragSrcId = null;
+      // Clear indicators
+      var rows = document.querySelectorAll('#binderGrid .organize-row');
+      for (var i = 0; i < rows.length; i++) {
+        rows[i].classList.remove('org-drop-above', 'org-drop-below');
+        if (rows[i].style) rows[i].style.opacity = '';
+      }
+      if (!srcId || String(srcId) === String(targetId)) return;
+      var srcIdx = collectionItems.findIndex(function(c) { return String(c.id) === String(srcId); });
+      var tgtIdx = collectionItems.findIndex(function(c) { return String(c.id) === String(targetId); });
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      // Splice src out, find the (possibly shifted) target index, insert
+      // either right before or right after it based on the drop hint.
+      var moved = collectionItems.splice(srcIdx, 1)[0];
+      var newTgt = collectionItems.findIndex(function(c) { return String(c.id) === String(targetId); });
+      var insertAt = _orgDragInsertAbove ? newTgt : newTgt + 1;
+      collectionItems.splice(insertAt, 0, moved);
+      renderBinder();
+      clearTimeout(binderSaveTimer);
+      binderSaveTimer = setTimeout(saveBinderOrder, 600);
+    };
+    window.organizeDragEnd = function(e) {
+      _orgDragSrcId = null;
+      var rows = document.querySelectorAll('#binderGrid .organize-row');
+      for (var i = 0; i < rows.length; i++) {
+        rows[i].classList.remove('org-drop-above', 'org-drop-below');
+        if (rows[i].style) rows[i].style.opacity = '';
+      }
+    };
 
     // Touch-friendly reorder companion to the drag system. Called from the
     // Organize view's "Move to" position dropdown — splices the card out of
@@ -28565,10 +28649,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         html += '<pre style="margin-top:6px;background:var(--surface2);border:1px solid var(--border);padding:8px 10px;font-size:.6rem;color:var(--text);white-space:pre-wrap;max-height:200px;overflow-y:auto">' + _escHtml(text) + '</pre>';
         html += '</details>';
 
-        // Stash the extracted + raw text on a window slot so the DONE
-        // button can pick them up without inline-string serialization
-        // gymnastics (quotes inside Funko names would break a JSON arg).
-        window._lastProductScan = { extracted: extracted, raw: text };
+        // Stash the extracted + raw text + the original File on a window
+        // slot so the DONE button can pick them up without inline-string
+        // serialization gymnastics (quotes inside Funko names would break
+        // a JSON arg). The File is carried so the listing modal can
+        // prefill its photo slot — no need to retake / re-upload.
+        window._lastProductScan = { extracted: extracted, raw: text, file: file };
 
         html += '<div style="display:flex;gap:8px">';
         html += '<button onclick="document.getElementById(\'productScannerFile\').click()" style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">↻ RETAKE</button>';
@@ -28633,11 +28719,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         condition: 'NM',
         productType: 'single'
       });
-      // openListCardModal resets lcDescription to ''; populate after the
-      // call so our autofill text lands in the textarea.
+      // openListCardModal resets lcDescription = '' and lcPhotos = [];
+      // populate both AFTER it runs so the scan photo + description land
+      // in the form. The setTimeout(50) puts us safely after the reset.
       setTimeout(function() {
         var descEl = document.getElementById('lcDescription');
         if (descEl) descEl.value = description;
+        // Carry the scanned image over as the listing's first photo so
+        // the shop doesn't have to retake. lcPhotos is an array of File
+        // objects; renderLcPhotoPreview builds thumbs via createObjectURL.
+        if (stash.file && typeof lcPhotos !== 'undefined') {
+          try {
+            lcPhotos.push(stash.file);
+            if (typeof renderLcPhotoPreview === 'function') renderLcPhotoPreview();
+          } catch (_) { /* if anything is undefined, fall through silently */ }
+        }
       }, 50);
     };
 
