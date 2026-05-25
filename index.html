@@ -4295,10 +4295,17 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 /* ─── 22. BADGE SYSTEM ──────────────────────────────────────────── */
 .badges-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px; padding: 4px 0 24px;
+  /* auto-fill so tiles pack at their natural ~110px width instead of
+     stretching each to 25% of a wide-desktop container. max-width caps
+     the section so it sits tight at the top-left of the account page
+     rather than spanning full width. Was repeat(4, 1fr) with no max,
+     which stretched each tile to ~250-300px on wide displays. */
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 14px;
+  padding: 4px 0 24px;
+  max-width: 540px;
 }
-@media(max-width:600px){.badges-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
+@media(max-width:600px){.badges-grid{grid-template-columns:repeat(2,1fr);gap:12px;max-width:none}}
 .badge-tile {
   display: flex; flex-direction: column; align-items: center;
   gap: 10px; cursor: default;
@@ -8984,11 +8991,27 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             : 'var(--accent2)';
           const partner = r.partner_name ? `<span style="color:var(--text)">${_escHtml(r.partner_name)}</span>` : '<span style="color:var(--muted)">Solo</span>';
 
+          // Each card line is click-to-preview — looks up the catalog
+          // by name and opens the existing movers detail modal (image
+          // + current_value + add-to-wishlist). Hover affordance via
+          // text-decoration: underline + accent color on hover so the
+          // line clearly reads as a link.
+          var _renderTradeCardLine = function(c, arrow) {
+            var nameAttr = String(c.name || '').replace(/'/g, "\\'");
+            var line = arrow + ' ' + _escHtml(c.name)
+              + (c.qty > 1 ? ' ×' + c.qty : '')
+              + (c.avg ? ' · $' + Number(c.avg).toFixed(2) : '');
+            return '<div onclick="openTradeCardDetail(\'' + nameAttr + '\')"'
+              + ' style="font-size:.7rem;color:var(--muted);cursor:pointer;padding:1px 0"'
+              + ' onmouseover="this.style.color=\'var(--accent)\';this.style.textDecoration=\'underline\'"'
+              + ' onmouseout="this.style.color=\'var(--muted)\';this.style.textDecoration=\'none\'"'
+              + ' title="Click to see current price">' + line + '</div>';
+          };
           const offerList = offered.length
-            ? offered.map(c => `<div style="font-size:.7rem;color:var(--muted)">↗ ${_escHtml(c.name)}${c.qty > 1 ? ' ×' + c.qty : ''}${c.avg ? ' · $' + Number(c.avg).toFixed(2) : ''}</div>`).join('')
+            ? offered.map(c => _renderTradeCardLine(c, '↗')).join('')
             : '<div style="font-size:.7rem;color:var(--muted)">—</div>';
           const recvList = received.length
-            ? received.map(c => `<div style="font-size:.7rem;color:var(--muted)">↙ ${_escHtml(c.name)}${c.qty > 1 ? ' ×' + c.qty : ''}${c.avg ? ' · $' + Number(c.avg).toFixed(2) : ''}</div>`).join('')
+            ? received.map(c => _renderTradeCardLine(c, '↙')).join('')
             : '<div style="font-size:.7rem;color:var(--muted)">—</div>';
 
           return `<div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
@@ -10370,6 +10393,42 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     // Smart click-handler for Price Movers rows. Behavior:
+    // Click-by-name lookup for trade-history cards. The trade_history
+    // table stores card snapshots as {name, qty, avg} JSONB without any
+    // catalog reference, so we have to fuzzy-search the catalog by name
+    // to find a likely match. Strategy:
+    //   - Scope to game_type=pokemon (trade analyzer is pokemon-focused)
+    //   - ILIKE on name with a wildcard so common name variations match
+    //   - Take the first result (good enough for the common case; if the
+    //     user complains about wrong matches we can add a disambiguation
+    //     picker later)
+    //   - Route to openMoversCardDetail with the matched id — that modal
+    //     already shows current_value + image + set + add-to-wishlist
+    window.openTradeCardDetail = async function(rawName) {
+      var name = String(rawName || '').trim();
+      if (!name) return;
+      try {
+        var res = await sb.from('catalog')
+          .select('id, name, set_name')
+          .ilike('name', '%' + name.replace(/[%_]/g, '') + '%')
+          .eq('game_type', 'pokemon')
+          .order('current_value', { ascending: false, nullsFirst: false })
+          .limit(1);
+        if (res.error || !res.data || !res.data.length) {
+          showToast('No catalog match for "' + name + '"');
+          return;
+        }
+        var hit = res.data[0];
+        if (typeof openMoversCardDetail === 'function') {
+          openMoversCardDetail(hit.id);
+        } else {
+          showToast('Card detail unavailable');
+        }
+      } catch (e) {
+        showToast('Lookup failed: ' + (e.message || 'unknown'));
+      }
+    };
+
     //   - If the user owns the card (matching api_card_id in their
     //     collection_items), open the regular binder card detail.
     //   - If not, fetch the catalog row and pop a lightweight preview
@@ -10736,7 +10795,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <thead><tr><th>Card</th><th>Grade</th><th>Price</th><th>Status</th><th></th></tr></thead>
         <tbody>${mine.map(l => {
           const price = l.list_price || l.value || 0;
-          return `<tr>
+          // Whole row click → viewDetail. The Remove button calls
+          // event.stopPropagation() so it doesn't double-fire.
+          return `<tr onclick="viewDetail('${l.id}')" style="cursor:pointer">
             <td>
               <div style="display:flex;align-items:center;gap:8px">
                 ${l.photos && l.photos[0] ? `<img src="${l.photos[0]}" style="height:40px;width:auto;border:1px solid var(--border)">` : ''}
@@ -10747,7 +10808,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <td style="color:var(--accent)">$${Number(price).toLocaleString()}</td>
             <td><span class="badge ${l.status === 'sold' ? 'badge-full' : 'badge-open'}">${l.status || 'Active'}</span></td>
             <td>
-              ${l.status !== 'sold' ? `<button onclick="deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>` : ''}
+              ${l.status !== 'sold' ? `<button onclick="event.stopPropagation();deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>` : ''}
             </td>
           </tr>`;
         }).join('')}</tbody>
@@ -10782,17 +10843,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           // Buyer can mark received (which opens a rate-seller prompt) OR
           // file a dispute if there's an issue. No more "Confirm Delivery"
           // gating a payout — sellers are paid via Stripe's normal schedule.
+          // stopPropagation prevents these from also firing the row's
+          // viewDetail click handler.
           actionHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button onclick="markOrderReceived('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Mark Received</button>
-            <button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">⚠ Report Issue</button>
+            <button onclick="event.stopPropagation();markOrderReceived('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Mark Received</button>
+            <button onclick="event.stopPropagation();requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">⚠ Report Issue</button>
           </div>`;
         } else if (isBuying && status === 'completed') {
-          actionHtml = `<button onclick="requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return / Refund Request</button>`;
+          actionHtml = `<button onclick="event.stopPropagation();requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return / Refund Request</button>`;
         } else if (!isBuying && status === 'paid') {
-          actionHtml = `<button onclick="openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add Tracking #</button>`;
+          actionHtml = `<button onclick="event.stopPropagation();openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add Tracking #</button>`;
         }
 
-        return `<div style="background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:12px">
+        // Whole card click → viewDetail. Action buttons inside use
+        // event.stopPropagation() so they don't double-fire. Only
+        // clickable when the underlying listing still exists in cache;
+        // otherwise the click would silently no-op.
+        var _clickAttr = listing
+          ? ' onclick="viewDetail(\'' + listing.id + '\')" style="cursor:pointer;background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:12px"'
+          : ' style="background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:12px"';
+        return '<div' + _clickAttr + '>' + `
           <div style="display:flex;gap:12px;align-items:start;flex-wrap:wrap">
             ${photoSrc ? `<img src="${photoSrc}" style="height:60px;width:auto;border:1px solid var(--border);flex-shrink:0">` : ''}
             <div style="flex:1;min-width:200px">
