@@ -159,8 +159,15 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        padding which on wide desktops looked oversized. New shape:
        fixed 170px wide, 4×4 mini badge grid at 24px tiles, tighter
        padding. Pops out of the sidebar like a sticker rather than
-       a sub-page. */
-    .avatar-dropdown{display:none;position:fixed;left:var(--sb-w);bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:5px 0;width:170px;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
+       a sub-page.
+       Positioning: anchored to the RIGHT edge (right:var(--sb-w))
+       because the sidebar moved to the right side of the viewport
+       in the desktop layout. Previously the base rule used
+       left:var(--sb-w) and the desktop override at line ~137 tried
+       to flip it, but source-order tiebreak meant left always won
+       and the dropdown popped out on the OPPOSITE side from the
+       avatar trigger. */
+    .avatar-dropdown{display:none;position:fixed;right:var(--sb-w);left:auto;bottom:8px;top:auto;background:var(--surface);border:2px solid var(--border);border-radius:0;padding:5px 0;width:170px;z-index:10001;box-shadow:4px 4px 0 var(--shadow)}
     .avatar-dropdown.open{display:block}
     .dd-badge-section{padding:7px 9px 4px;border-bottom:2px solid var(--border)}
     .dd-badge-label{font-family:'Press Start 2P',monospace;font-size:5.5px;color:var(--muted);letter-spacing:.08em;margin-bottom:5px;text-transform:uppercase}
