@@ -6027,15 +6027,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
   </div>
 
   <div id="browsePage" class="page">
-    <div class="pb-page-hdr">
-      <div class="pb-page-hdr-main">
-        <div class="pb-page-hdr-title">⬡ Marketplace</div>
-        <div class="pb-page-hdr-sub">Buy and sell trading cards — verified sellers, secure Stripe payments, 7-day buyer protection.</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
-        <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted)" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Binder</button>
-        <button onclick="openListCardModal()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ List a Card</button>
-      </div>
+    <!-- Compact action row replaces the old hero header. Title + sub copy
+         removed per design pass — the panel below already says "Filter &
+         Search" which is enough orientation. Buttons stay so users can
+         still jump to their binder or open the list-a-card flow. -->
+    <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;padding:10px 0 14px;flex-wrap:wrap">
+      <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted)" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Binder</button>
+      <button onclick="openListCardModal()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">+ List a Card</button>
     </div>
 
     <div class="pb-panel">
@@ -6853,12 +6851,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
   <div id="setsPage" class="page">
     <img class="sets-bg sets-bg-desktop" src="sets_cards.webp?v=2" alt="" aria-hidden="true">
     <img class="sets-bg sets-bg-mobile"  src="sets_cards_mobile.webp?v=2" alt="" aria-hidden="true">
-    <div class="pb-page-hdr">
-      <div class="pb-page-hdr-main">
-        <div class="pb-page-hdr-title">⊞ Sets</div>
-        <div class="pb-page-hdr-sub">Track your set completion across every expansion.<span class="sets-sub-jp">セット完成への道</span></div>
-      </div>
-    </div>
+    <!-- Title/sub hero removed per design pass — page content speaks for itself. -->
     <div id="setsPageContent">
       <div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>
     </div>
@@ -7238,6 +7231,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         Platform GMV + per-shop breakdown. Reads from <code>shop_tier_platform_metrics</code> and <code>shop_seller_metrics</code> views. Apply <code>migration_shop_seller_metrics.sql</code> first.
       </div>
       <div id="adminShopMetricsPanel" style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted)">Click Refresh to load.</div>
+    </div>
+
+    <!-- Image Review Queue — listings flagged via the FLAG IMG button
+         on each marketplace card. Sorted oldest-flag-first so the
+         backlog clears in order. -->
+    <div style="margin-top:24px;border:1px solid var(--copper-dim);background:rgba(184,115,51,.04);padding:16px 18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Image Review Queue</div>
+        <button onclick="renderAdminImageReviewQueue()" class="pb-panel-link" style="border-color:var(--copper-dim);color:var(--copper);font-size:.62rem">Refresh</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Listings whose photos need to be replaced (poor quality, wrong product, watermark, etc.). Flag a listing from the marketplace browse via the small <span style="color:var(--copper)">FLAG IMG</span> button on each card. Apply <code>migration_listings_image_review.sql</code> first.
+      </div>
+      <div id="adminImageReviewQueue" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.6rem;color:var(--muted)">Click Refresh to load.</div>
+      </div>
     </div>
 
     <!-- Danger Zone -->
@@ -8147,8 +8156,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           </div>`;
         }
 
+        // Admin-only image-review affordances — invisible to regular users.
+        // Hover-area icon button toggles the flag; a corner badge appears
+        // on flagged listings so admins can spot them at a glance.
+        var _isAdmin = !!(currentUser && currentUser.is_admin);
+        var _adminFlagBtn = _isAdmin
+          ? `<button class="mini-btn" title="${listing.needsImageReview ? 'Clear image-review flag' : 'Flag for image replacement'}"
+              style="position:absolute;top:8px;left:8px;z-index:4;background:${listing.needsImageReview ? 'var(--copper)' : 'rgba(0,0,0,0.5)'};border:1px solid ${listing.needsImageReview ? 'var(--copper)' : 'var(--border)'};color:${listing.needsImageReview ? '#1a0a00' : 'var(--copper)'};padding:4px 8px;font-size:.6rem;font-family:'Space Mono',monospace;letter-spacing:.06em;cursor:pointer"
+              onclick="event.stopPropagation();flagListingImage('${listing.id}')">${listing.needsImageReview ? '◆ FLAGGED' : 'FLAG IMG'}</button>`
+          : '';
         return `<div class="listing-card ${isSold ? 'locked-card' : ''}" style="position:relative">
           ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
+          ${_adminFlagBtn}
           <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event,'${listing.id}')"></button>
           <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" loading="lazy" decoding="async" onerror="this.src='${PLACEHOLDER_IMG}'" />
@@ -10899,7 +10918,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           binderColor    = binderRow?.color || '#444';
         } else {
           // All Cards — use the default cover
-          binderCoverUrl = 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.png';
+          binderCoverUrl = 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp';
         }
 
         if (error) throw error;
@@ -13373,6 +13392,67 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       loadVendorApplications().then(renderAdminVendorApplications);
       loadAdminClearCollectionUsers();
       renderAdminBetaTesters();
+      renderAdminImageReviewQueue();
+    }
+
+    // ── Admin: image-review queue ───────────────────────────────────────
+    // Pulls every listing where needs_image_review = true, sorted oldest-
+    // flag-first (so backlog gets worked in flag order). Shows a compact
+    // row per listing with: thumbnail · name + admin note · "View" + "Clear".
+    // View opens the listing's buy-card detail (admin can swap photos in
+    // edit flow); Clear toggles the flag off via the existing function.
+    async function renderAdminImageReviewQueue() {
+      const container = document.getElementById('adminImageReviewQueue');
+      if (!container || !currentUser?.is_admin) return;
+      container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">Loading…</div>';
+      var res;
+      try {
+        res = await sb.from('listings')
+          .select('id, name, photos, image_review_note, image_review_flagged_at, seller_name, product_type, value')
+          .eq('needs_image_review', true)
+          .order('image_review_flagged_at', { ascending: true, nullsFirst: true });
+      } catch (e) {
+        container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Query failed — apply migration_listings_image_review.sql.</div>';
+        return;
+      }
+      if (res.error) {
+        // Column-missing error → migration not applied yet
+        var msg = String(res.error.message || '');
+        if (msg.toLowerCase().indexOf('column') >= 0 || msg.toLowerCase().indexOf('schema') >= 0) {
+          container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Apply <code>migration_listings_image_review.sql</code> in Supabase before using this queue.</div>';
+        } else {
+          container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Error: ' + _escHtml(msg) + '</div>';
+        }
+        return;
+      }
+      var rows = res.data || [];
+      if (!rows.length) {
+        container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">Queue empty — no listings flagged for image review.</div>';
+        return;
+      }
+      container.innerHTML = rows.map(function(r) {
+        var thumb = (r.photos && r.photos[0]) || '';
+        var when  = r.image_review_flagged_at
+          ? new Date(r.image_review_flagged_at).toLocaleDateString()
+          : '—';
+        var price = r.value != null ? '$' + Number(r.value).toFixed(2) : '';
+        return '<div style="display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--copper-dim);background:rgba(184,115,51,.06)">' +
+          (thumb
+            ? '<img src="' + thumb + '" alt="" style="width:48px;height:64px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;border-radius:3px">'
+            : '<div style="width:48px;height:64px;background:var(--surface2);border:1px dashed var(--copper-dim);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">?</div>') +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:.74rem;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(r.name || '(no name)') + '</div>' +
+            '<div style="font-size:.6rem;color:var(--muted);margin-top:2px">' + _escHtml(r.product_type || 'single') + ' · ' + price + ' · ' + _escHtml(r.seller_name || '—') + ' · flagged ' + when + '</div>' +
+            (r.image_review_note
+              ? '<div style="font-size:.6rem;color:var(--copper);margin-top:4px;font-style:italic">"' + _escHtml(r.image_review_note) + '"</div>'
+              : '') +
+          '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' +
+            '<button onclick="showPage(\'browse\');setMobileNav(\'browse\');" class="pb-panel-link" style="border-color:var(--copper-dim);color:var(--copper);font-size:.58rem;padding:4px 10px">VIEW</button>' +
+            '<button onclick="(async function(){ if(!confirm(\'Clear image-review flag for this listing?\')) return; var ll = listings.find(function(x){return String(x.id)===\'' + r.id + '\'}); if(ll){ ll.needsImageReview=true; } await flagListingImage(\'' + r.id + '\'); renderAdminImageReviewQueue(); })()" class="pb-panel-link" style="border-color:var(--border);color:var(--muted);font-size:.58rem;padding:4px 10px">CLEAR</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
     }
 
     async function loadAdminClearCollectionUsers() {
@@ -15967,7 +16047,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         ondragover="bsbDragOver(event,null)"
         ondragleave="bsbDragLeave(event)"
         ondrop="bsbDrop(event,null)"
-      ><img src="https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.png"
+      ><img src="https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp"
         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
         alt="All">
       <div class="bsb-fallback" style="display:none;background:#111;color:#888">ALL</div>
@@ -16295,7 +16375,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="binder-book ${allActive ? 'binder-open' : ''}" id="binderBookNull">
             <div class="binder-spine" style="background:var(--surface2)"></div>
             <div class="binder-cover" style="background:var(--surface);padding:0;overflow:hidden">
-              <img src="https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.png"
+              <img src="https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp"
                    alt="All Cards" style="width:100%;height:100%;object-fit:cover;display:block">
             </div>
           </div>
@@ -21465,9 +21545,50 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // migration_sealed_products.sql and defaults to 'single' for every
         // pre-existing row, so the fallback below is just defensive.
         product_type: l.product_type || 'single',
+        // Admin image-review flag (added in migration_listings_image_review.sql).
+        // Surfaced only when currentUser.is_admin; non-admins never see
+        // these in UI.
+        needsImageReview:        l.needs_image_review || false,
+        imageReviewNote:         l.image_review_note  || '',
+        imageReviewFlaggedAt:    l.image_review_flagged_at || null,
         countdown: null
       };
     }
+
+    // ── Admin: flag a listing for image replacement ─────────────────────
+    // Toggles needs_image_review on the listing. Optional note ("blurry box",
+    // "wrong angle", etc.) helps the next admin know what to fix. Setting
+    // the flag also stamps image_review_flagged_at so the admin queue can
+    // sort oldest-first.
+    window.flagListingImage = async function(listingId) {
+      if (!currentUser || !currentUser.is_admin) {
+        showToast('Admin only');
+        return;
+      }
+      var listing = listings.find(function(l) { return String(l.id) === String(listingId); });
+      if (!listing) { showToast('Listing not found'); return; }
+      var nowFlagged = !listing.needsImageReview;
+      var note = '';
+      if (nowFlagged) {
+        // Prompt-based note collection — fine for admin-only tooling.
+        // Empty string is OK (flag without explanation).
+        note = window.prompt('Image-review note (optional):\nWhat needs fixing?', listing.imageReviewNote || '') || '';
+      }
+      var payload = nowFlagged
+        ? { needs_image_review: true,  image_review_note: note, image_review_flagged_at: new Date().toISOString() }
+        : { needs_image_review: false, image_review_note: null, image_review_flagged_at: null };
+      var res = await sb.from('listings').update(payload).eq('id', listingId);
+      if (res.error) {
+        showToast('Flag failed: ' + res.error.message);
+        return;
+      }
+      // Mirror to local cache so the badge updates without a refetch.
+      listing.needsImageReview     = nowFlagged;
+      listing.imageReviewNote      = nowFlagged ? note : '';
+      listing.imageReviewFlaggedAt = nowFlagged ? payload.image_review_flagged_at : null;
+      showToast(nowFlagged ? 'Flagged for image review' : 'Image-review flag cleared');
+      if (typeof renderBrowse === 'function') renderBrowse();
+    };
 
     // ═══════════════════════════════════════════════════════════════════════
     // ── FAIR TRADE CHECK  (client-side, in-person evaluation tool) ─────────
