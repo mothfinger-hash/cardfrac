@@ -8341,15 +8341,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         : cond;
       const PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%231a0a00'/%3E%3Ctext x='200' y='160' font-family='monospace' font-size='14' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
 
-      // Market price comparison
+      // Market price comparison — focal-point boxed strip (mirrors
+      // .market-price-line treatment from the browse-card grid). Left
+      // border accent encodes deal sentiment: green = under, red = over,
+      // accent cyan = within ±2% (at market). Reuses .market-price-line
+      // so any future style updates apply in both spots.
       let marketHtml = '';
       if (marketPrice && price) {
         const diff = price - marketPrice;
         const diffPct = ((diff / marketPrice) * 100).toFixed(1);
-        const cls = diff > 0 ? 'price-diff-neg' : 'price-diff-pos';
-        marketHtml = `<div style="font-size:.82rem;margin-top:4px;color:var(--muted)">
-          Market: <strong>$${Number(marketPrice).toLocaleString()}</strong>
-          <span class="${cls}" style="margin-left:6px">${diff > 0 ? '+' : ''}${diffPct}% vs market</span>
+        const isAbove = diff > 0;
+        const _atMarket = Math.abs(diff / marketPrice) < 0.02;
+        const _stripAccent = _atMarket ? 'var(--accent)'
+                            : isAbove  ? 'var(--red)'
+                            :            'var(--green)';
+        marketHtml = `<div class="market-price-line" style="border-left-color:${_stripAccent}">
+          <span>Market: <strong style="color:var(--text)">$${Number(marketPrice).toLocaleString()}</strong></span>
+          <span class="${isAbove ? 'price-diff-neg' : 'price-diff-pos'}">${isAbove ? '+' : ''}${diffPct}% vs market</span>
         </div>`;
       }
 
@@ -8534,7 +8542,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const svg = document.getElementById(`priceChart_${listingId}`);
       if (!svg) return;
       const pad = {top:20,right:20,bottom:30,left:60};
-      const w = svg.offsetWidth - pad.left - pad.right;
+      // svg.offsetWidth returns 0 for SVG elements (offsetWidth is an
+      // HTMLElement property — SVG inherits SVGElement instead). Was
+      // causing w = -80 and every data point to plot off-screen to the
+      // left. getBoundingClientRect().width works on SVG and reports
+      // the rendered width post-layout.
+      const rectW = svg.getBoundingClientRect().width;
+      // Fallback for the rare case the modal hasn't laid out yet
+      // (e.g. during a re-render race). 600px is a reasonable default
+      // — the SVG width:100% CSS will rescale once layout completes.
+      const w = (rectW > 0 ? rectW : 600) - pad.left - pad.right;
       const h = 200 - pad.top - pad.bottom;
       const prices = priceHistory.map(p => p.price);
       const minP = Math.min(...prices), maxP = Math.max(...prices);
