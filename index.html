@@ -18244,7 +18244,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           q: query.trim(),
           game: 'pokemon',
           jp_mode: 'only',
-          result_limit: 1000
+          result_limit: 1000,
+          // 5th arg disambiguates between two overloads of this RPC in
+          // Supabase (4-param legacy + 5-param trigram-tuned). Without
+          // it PostgREST returns PGRST203 "could not choose the best
+          // candidate function". 0.3 matches the function default.
+          fuzzy_threshold: 0.3
         });
 
         if (error) throw new Error(error.message);
@@ -18796,7 +18801,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           q: query,
           game: gameType,
           jp_mode: 'all',
-          result_limit: 1000
+          result_limit: 1000,
+          fuzzy_threshold: 0.3  // disambiguate 4-vs-5-param overload
         });
         if (error) throw error;
         cards = (rows || []).map(_catalogRowToApiShape);
@@ -18895,7 +18901,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             q: query,
             game: 'pokemon',
             jp_mode: 'exclude',   // EN-only — leaves jp-/pd- rows out
-            result_limit: 1000
+            result_limit: 1000,
+            fuzzy_threshold: 0.3  // disambiguate 4-vs-5-param overload
           });
           if (error) throw error;
           cards = (rows || []).map(_catalogRowToApiShape);
@@ -19234,10 +19241,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const fresh = { id: newRow.id, ...row, current_value: null, purchase_price: null, price_history_log: [] };
       collectionItems.unshift(fresh);
       try { checkBadge_stacked(); } catch(_) {}
-      renderCollection();
 
       const binderLabel = b ? (binders.find(bb => String(bb.id) === String(b))?.name || 'binder') : 'your binder';
       showToast('✓ ' + cardData.cardName + ' added — tap the card to add details');
+
+      // Cinematic hologram modal — pops the 3×3 preview of the page the
+      // card landed on when targeted at a real binder. Skips for the
+      // Unsorted bucket (no binder_id), which falls back to a plain
+      // renderCollection. Same path the saveToCollection flow uses.
+      if (newRow?.id) window._justAddedCardId = newRow.id;
+      console.log('[searchDetail→cinematic] newRow.id:', newRow?.id, '| binderId from dropdown:', b);
+      if (newRow?.id && b) {
+        _playAddCardCinematic(newRow.id, b);
+      } else {
+        renderCollection();
+      }
     }
 
     function wishlistFromDetail() {
@@ -21546,8 +21564,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     };
     var _pbHowls = {};
     var _pbHowlFailed = {};
+    // Howler default HTML5 audio pool is 10. With ~7 cues each grabbing
+    // a slot during preload (preload:true on every Howl), the pool
+    // exhausts and prints "HTML5 Audio pool exhausted" warnings on every
+    // page load. Bump the pool BEFORE any Howl is created so each cue
+    // has its own headroom. 30 is overkill for our 7 cues but harmless;
+    // each unused slot is a tiny dormant Audio() object.
+    try {
+      if (window.Howler && typeof window.Howler.html5PoolSize !== 'undefined') {
+        window.Howler.html5PoolSize = 30;
+      }
+    } catch (_) {}
     function _pbGetHowl(name) {
       if (!window.Howl) return null;          // Howler not loaded yet
+      // Belt-and-suspenders: if Howler loaded AFTER our top-level bump
+      // tried (race on slow networks), set it on first cue creation too.
+      try {
+        if (window.Howler && window.Howler.html5PoolSize < 30) {
+          window.Howler.html5PoolSize = 30;
+        }
+      } catch (_) {}
       if (_pbHowlFailed[name]) return null;   // file 404'd; skip permanently
       if (_pbHowls[name]) return _pbHowls[name];
       try {
@@ -22783,7 +22819,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           if (!cards.length) {
             try {
               var rpc = await sb.rpc('search_catalog_cards', {
-                q: q, game: game, jp_mode: 'all', result_limit: 1000
+                q: q, game: game, jp_mode: 'all', result_limit: 1000,
+                fuzzy_threshold: 0.3  // disambiguate 4-vs-5-param overload
               });
               if (!rpc.error && rpc.data && rpc.data.length) {
                 cards = rpc.data.map(_catalogRowToApiShape);
