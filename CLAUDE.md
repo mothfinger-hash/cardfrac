@@ -62,6 +62,17 @@ PathBinder uses a cyan + copper hologram theme. Key CSS variables:
 
 Use these variables, not hex literals.
 
+### Number inputs — no spinner arrows
+
+`<input type="number">` shows the native browser up/down spinner arrows
+by default. We hide them globally via CSS (`input[type="number"]::-webkit-
+inner-spin-button { -webkit-appearance: none }` plus `-moz-appearance:
+textfield`). They clash with the hologram aesthetic and on touch they
+hijack vertical scroll. Don't re-add `step="0.01"` either — it visually
+gates non-multiples and on some browsers blocks integer entry; use
+`step="any" inputmode="decimal"` for money fields, which still keeps the
+numeric keyboard on mobile while accepting `5`, `5.5`, `5.99` all fine.
+
 ### Fonts
 
 - `'Orbitron', monospace` — display headers (panel titles, hologram callouts)

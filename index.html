@@ -997,6 +997,16 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* ATC Modal inputs */
     .atc-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .atc-input{width:100%;padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;outline:none;transition:border-color .15s}
+    /* Global: kill native number-input spinner arrows. They look out of
+       place against the hologram/cyberpunk aesthetic and on touch they
+       hijack vertical scroll. Keyboard up/down still works for power
+       users — only the visual chrome is hidden. See CLAUDE.md note. */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
     .atc-input:focus{border-color:var(--accent)}
     .atc-input::placeholder{color:var(--muted)}
     @media(max-width:600px){
@@ -5684,7 +5694,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
            server-side too). -->
       <div id="lcScanProductRow" style="margin-bottom:14px;display:none">
         <button type="button" onclick="openProductScanner()" style="width:100%;padding:10px 14px;border:1.5px dashed var(--copper-dim);background:rgba(184,115,51,.05);color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;font-weight:700;letter-spacing:.08em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18l-2 14H5L3 6z"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           SCAN PRODUCT TO AUTOFILL
         </button>
         <div style="font-size:.6rem;color:var(--muted);text-align:center;margin-top:5px">For Funko Pops, manga, posters and other non-TCG items</div>
@@ -5692,7 +5701,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       <div class="atc-grid" style="margin-bottom:14px">
         <div class="form-group" style="grid-column:1/-1">
-          <label>Card Name *</label>
+          <label id="lcNameLabel">Card Name *</label>
           <input class="atc-input" id="lcName" type="text" placeholder="e.g. Charizard Base Set Holo" style="width:100%" />
           <div id="lcMarketPriceResult" style="font-size:.75rem;margin-top:5px;display:none"></div>
         </div>
@@ -5739,11 +5748,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="form-group">
           <label>Your Ask Price ($) *</label>
-          <input class="atc-input" id="lcPrice" type="number" min="0.01" step="0.01" placeholder="e.g. 120.00" style="width:100%" onblur="lookupMarketPrice()" />
+          <input class="atc-input" id="lcPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 120.00" style="width:100%" onblur="lookupMarketPrice()" />
         </div>
         <div class="form-group">
           <label>Shipping ($)</label>
-          <input class="atc-input" id="lcShipping" type="number" min="0" step="0.01" placeholder="e.g. 5.00" style="width:100%" />
+          <input class="atc-input" id="lcShipping" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 5.00" style="width:100%" />
         </div>
       </div>
 
@@ -12477,6 +12486,44 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         photoSectionLabel.innerHTML = (isSealed || isProduct)
           ? 'Photo * <span style="color:var(--muted);font-size:.72rem">(Front view recommended · up to 8)</span>'
           : 'Photos * <span style="color:var(--muted);font-size:.72rem">(Front &amp; back required · up to 8)</span>';
+      }
+      // Card Name → Product Name label swap when listing a non-TCG product
+      const nameLabelEl = document.getElementById('lcNameLabel');
+      if (nameLabelEl) nameLabelEl.textContent = isProduct ? 'Product Name *' : 'Card Name *';
+      // List Card → List Product button text swap
+      const saveBtnEl = document.querySelector('#listCardModal .lc-save-btn');
+      if (saveBtnEl) {
+        saveBtnEl.textContent = isProduct ? 'List Product'
+                              : isSealed  ? 'List Product'
+                              :             'List Card';
+      }
+      // Swap the Game/Category dropdown options. TCG modes (single +
+      // sealed) get the TCG list; product mode gets non-TCG categories
+      // (Funko Pop, Manga, Posters, etc.). The selected value is
+      // honored if prefill specifies one; otherwise defaults to the
+      // first item in the new option list.
+      const gameSel = document.getElementById('lcGame');
+      if (gameSel) {
+        var _TCG_OPTS = [
+          ['Pokémon','Pokémon'], ['Magic: The Gathering','Magic: The Gathering'],
+          ['Yu-Gi-Oh!','Yu-Gi-Oh!'], ['One Piece','One Piece'],
+          ['Gundam','Gundam'], ['Dragon Ball Z','Dragon Ball Z'],
+          ['Pokemon Topps','Pokemon Topps'], ['Sports','Sports'], ['Other','Other'],
+        ];
+        var _PRODUCT_OPTS = [
+          ['Funko Pop','Funko Pop'], ['Manga','Manga'],
+          ['Posters','Posters'], ['Art Prints','Art Prints'],
+          ['Plush','Plush'], ['Figures','Figures'],
+          ['Statues','Statues'], ['Apparel','Apparel'],
+          ['Pins','Pins'], ['Accessories','Accessories'],
+          ['Other','Other'],
+        ];
+        var _opts = isProduct ? _PRODUCT_OPTS : _TCG_OPTS;
+        gameSel.innerHTML = _opts.map(function(o) {
+          return '<option value="' + o[0] + '">' + o[1] + '</option>';
+        }).join('');
+        // Honor prefill, otherwise first option of the list
+        gameSel.value = (prefill && prefill.gameType) || _opts[0][0];
       }
 
       renderLcPhotoPreview();
@@ -26499,10 +26546,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (error) { showToast('Error: ' + error.message); return; }
 
       const fresh = { id: newRow.id, ...row };
-      collectionItems.unshift(fresh);
+      // Push (not unshift) so local order matches Supabase's eventual
+      // load (sort_order ASC nulls-last, created_at ASC) — keeps the
+      // cinematic preview aligned with where the card actually lands.
+      collectionItems.push(fresh);
       try { checkBadge_stacked(); } catch(_) {}
-      renderCollection();
       showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
+
+      // Cinematic hologram modal for any singles add to a real binder.
+      // Sealed product flows have their own add-to-binder path and
+      // deliberately don't trigger the cinematic.
+      if (newRow?.id) window._justAddedCardId = newRow.id;
+      if (newRow?.id && binderId) {
+        _playAddCardCinematic(newRow.id, binderId);
+      } else {
+        renderCollection();
+      }
     }
 
     async function loadSetDetail(setId, setName) {
@@ -26830,10 +26889,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (error) { showToast('Error: ' + error.message); return; }
 
       const fresh = { id: newRow.id, ...row };
-      collectionItems.unshift(fresh);
+      // Push (not unshift) so the local order tracks the eventual
+      // server load order — keeps the cinematic in sync with reality.
+      collectionItems.push(fresh);
       try { checkBadge_stacked(); } catch(_) {}
-      renderCollection();
       showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
+
+      // Cinematic for binder-targeted singles adds (sealed flow excluded).
+      // `b` is the binder dropdown value from earlier in this function.
+      if (newRow?.id) window._justAddedCardId = newRow.id;
+      if (newRow?.id && b) {
+        _playAddCardCinematic(newRow.id, b);
+      } else {
+        renderCollection();
+      }
     }
 
     async function addSetCardToBinder(idx) {
@@ -26854,11 +26923,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         quantity: 1,
         condition: 'raw',
       };
-      const { error } = await sb.from('collection_items').insert(item);
+      // `.select('id').single()` so we get the inserted row's id back
+      // to drive the post-add cinematic. Without it we'd have to refetch.
+      const { data: newRow, error } = await sb.from('collection_items')
+        .insert(item).select('id').single();
       if (error) { showToast('Error adding card'); return; }
       await loadCollection();
       document.getElementById('setCardDetailSheet')?.remove();
       showToast('✓ Added to binder');
+
+      // Cinematic for binder-targeted singles adds (sealed flow excluded).
+      // `binderId` was read at the top of this function from the binder
+      // dropdown; if it's null the user picked Unsorted — skip cinematic.
+      if (newRow?.id) window._justAddedCardId = newRow.id;
+      if (newRow?.id && binderId) {
+        _playAddCardCinematic(newRow.id, binderId);
+      }
     }
 
     async function addSetCardToWishlist(idx) {
@@ -28818,16 +28898,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (ex.is_chase)   title += ' [CHASE]';
       if (ex.exclusive)  title += ' [' + ex.exclusive + ']';
 
-      // Description holds the raw OCR text in a collapsed block so the
-      // shop can copy/paste anything we missed (legal text, dimensions,
-      // edition notes, etc.).
+      // Description holds only the structured fields we're confident
+      // about. The raw OCR block used to be appended for shops to mine
+      // for extra details, but it dragged in the bilingual warning
+      // copy ("CHOKING HAZARD... PELIGRO DE ASFIXIA...") and made
+      // listings look chaotic. Shops can paste from the scanner's
+      // RAW OCR TEXT toggle manually if they need something specific.
       var description = 'Funko Pop figure.';
       if (ex.character)  description += '\nCharacter: ' + ex.character;
       if (ex.series)     description += '\nSeries: ' + ex.series;
       if (ex.pop_number) description += '\nPop #: ' + ex.pop_number;
       if (ex.exclusive)  description += '\nExclusivity: ' + ex.exclusive;
       if (ex.is_chase)   description += '\nChase variant: yes';
-      if (rawText) description += '\n\n--- OCR ---\n' + rawText;
 
       if (typeof openListCardModal !== 'function') {
         showToast('Listing modal unavailable — try again.');
@@ -28835,10 +28917,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       openListCardModal({
         cardName: title || '',
-        gameType: 'Other',
+        // gameType='Funko Pop' pre-selects the right category in the
+        // product-mode dropdown so the shop doesn't have to pick.
+        gameType: 'Funko Pop',
         // productType='funko_pop' puts the listing modal into product
         // mode — hides the Condition field, swaps the title to "List
-        // Product for Sale", lets the seller pick the category.
+        // Product for Sale", uses product-category dropdown options,
+        // and renames the Card Name label to Product Name.
         productType: 'funko_pop'
       });
       // openListCardModal resets lcDescription = '' and lcPhotos = [];
