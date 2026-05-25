@@ -201,32 +201,61 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .subtitle{color:var(--muted);margin-bottom:20px;font-size:.95rem}
 
     /* ACCOUNT PAGE */
-    /* Per-tab background art for the account page. Stamped via the
-       data-tab attribute by switchAccountTab() in JS. Dashboard tab
-       gets dashboard.webp; transaction tabs (My Listings, Orders,
-       Sales Archive, Watchlist, History, Trades) share dash2.webp.
-       Badges tab + default keep the plain page background.
-       Both images are 3840px wide WebP (~360 KB / ~125 KB) so the
-       hit is small and they cache cleanly on the SW. */
-    #accountPage[data-tab="dashboard"],
-    #accountPage[data-tab="myListings"],
-    #accountPage[data-tab="myOrders"],
-    #accountPage[data-tab="salesArchive"],
-    #accountPage[data-tab="watchlist"],
-    #accountPage[data-tab="history"],
-    #accountPage[data-tab="tradeHistory"] {
+    /* Per-tab background art for the account page. Painted on BODY
+       (not #accountPage) so the artwork covers everything including
+       the social footer + any below-content padding. Without painting
+       on body, the bg would stop at the bottom of #accountPage and
+       the footer would sit on bare body bg. Stamped + cleared via
+       body[data-acc-bg=...] in switchAccountTab() / showPage().
+       Dashboard tab gets dashboard.webp; transaction tabs share
+       dash2.webp. Badges tab + default keep the plain page background. */
+    body[data-acc-bg="dashboard"],
+    body[data-acc-bg="myListings"],
+    body[data-acc-bg="myOrders"],
+    body[data-acc-bg="salesArchive"],
+    body[data-acc-bg="watchlist"],
+    body[data-acc-bg="history"],
+    body[data-acc-bg="tradeHistory"] {
       background-size: cover;
       background-position: center top;
       background-repeat: no-repeat;
       background-attachment: fixed;
     }
-    #accountPage[data-tab="dashboard"]    { background-image: url('dashboard.webp'); }
-    #accountPage[data-tab="myListings"],
-    #accountPage[data-tab="myOrders"],
-    #accountPage[data-tab="salesArchive"],
-    #accountPage[data-tab="watchlist"],
-    #accountPage[data-tab="history"],
-    #accountPage[data-tab="tradeHistory"] { background-image: url('dash2.webp'); }
+    /* Mobile bg tuning. `background-attachment: fixed` is laggy / janky
+       on iOS Safari and causes flicker on Android Chrome — switch to
+       scroll so the bg moves with the page. Also re-position so a
+       portrait viewport shows the more centred / interesting slice of
+       the wide landscape art, and dim it further (background-color
+       behind the image is composited via overlay so the dark backdrop
+       reads through the dimly-lit cyberpunk corridors). */
+    @media (max-width: 900px) {
+      body[data-acc-bg="dashboard"],
+      body[data-acc-bg="myListings"],
+      body[data-acc-bg="myOrders"],
+      body[data-acc-bg="salesArchive"],
+      body[data-acc-bg="watchlist"],
+      body[data-acc-bg="history"],
+      body[data-acc-bg="tradeHistory"] {
+        background-attachment: scroll;
+        background-position: center center;
+        /* Dim layer composited with the image so content stays legible
+           on a small screen where the bg can't help but compete. */
+        background-color: rgba(0, 0, 0, 0.55);
+        background-blend-mode: darken;
+      }
+    }
+    body[data-acc-bg="dashboard"]    { background-image: url('dashboard.webp'); }
+    body[data-acc-bg="myListings"],
+    body[data-acc-bg="myOrders"],
+    body[data-acc-bg="salesArchive"],
+    body[data-acc-bg="watchlist"],
+    body[data-acc-bg="history"],
+    body[data-acc-bg="tradeHistory"] { background-image: url('dash2.webp'); }
+    /* #accountPage itself is transparent so body's bg shows through.
+       (The element-level bg approach would clip at #accountPage's
+       bottom edge — see comment above.) */
+    body[data-acc-bg] #accountPage { background: transparent; }
+    body[data-acc-bg] .social-footer { background: transparent; }
     /* The default .page rule caps width at 1160px — which means
        #accountPage itself is only 1160px wide, and the background
        image (painted on that element) can never extend past that
@@ -8202,6 +8231,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Body state classes
       document.body.classList.toggle('on-binder', pageId === 'collection');
       document.body.classList.toggle('on-landing', pageId === 'landing');
+      // Clear the account-tab background art when leaving the account
+      // page so the dashboard.webp / dash2.webp don't bleed into other
+      // pages. switchAccountTab() re-stamps it on return.
+      if (pageId !== 'account') document.body.removeAttribute('data-acc-bg');
       // Lock page scroll on Add Card (phondex has its own internal scroll)
       document.body.style.overflow = (pageId === 'addCard') ? 'hidden' : '';
       // Ensure sidebar is restored when navigating away from landing
@@ -9416,9 +9449,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Stamp the active tab onto the page so CSS can paint per-tab
       // background images (dashboard.webp for Dashboard, dash2.webp for
       // the transaction tabs). Rules live in the stylesheet keyed by
-      // #accountPage[data-tab="..."].
+      // #accountPage[data-tab="..."] for the per-tab content layout +
+      // body[data-acc-bg="..."] for the artwork so the bg covers the
+      // social footer + any below-content padding instead of stopping
+      // at #accountPage's bottom edge.
       const accountPageEl = document.getElementById('accountPage');
       if (accountPageEl) accountPageEl.setAttribute('data-tab', tab);
+      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','watchlist','history','tradeHistory'];
+      if (BG_TABS.indexOf(tab) >= 0) {
+        document.body.setAttribute('data-acc-bg', tab);
+      } else {
+        document.body.removeAttribute('data-acc-bg');
+      }
       if (tab === 'myOrders') renderOrders();
       if (tab === 'myListings') renderMyListings();
       if (tab === 'salesArchive') renderSalesArchive();
@@ -9668,10 +9710,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                   ${_dh}
                 </div>
               </div>
-              <!-- Toggle row: scope / direction / period / sort.
+              <!-- Toggle row: scope / direction / period / product_type.
                    Wraps on mobile so each pair drops to its own line if
                    width is tight. Direction = ↑/↓ swap, shows only the
-                   selected list (top up-movers OR top down-movers). -->
+                   selected list (top up-movers OR top down-movers).
+                   Product type = Singles (TCG cards) / Sealed (boxes,
+                   ETBs, tins, decks, etc.). -->
               <div class="movers-toggles">
                 <div class="movers-toggle-pair">
                   <button class="movers-toggle ${_moversScope==='global'?'active':''}"   onclick="setMoversScope('global')">Global</button>
@@ -9684,6 +9728,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 <div class="movers-toggle-pair">
                   <button class="movers-toggle ${_moversPeriod===1?'active':''}" onclick="setMoversPeriod(1)">24h</button>
                   <button class="movers-toggle ${_moversPeriod===7?'active':''}" onclick="setMoversPeriod(7)">7d</button>
+                </div>
+                <div class="movers-toggle-pair" title="TCG singles vs sealed product (booster boxes, ETBs, tins, decks)">
+                  <button class="movers-toggle ${_moversProductType==='single'?'active':''}" onclick="setMoversProductType('single')">SNG</button>
+                  <button class="movers-toggle ${_moversProductType==='sealed'?'active':''}" onclick="setMoversProductType('sealed')">SLD</button>
                 </div>
               </div>
               <div class="ndash-panel-body">
@@ -10548,6 +10596,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // The setter `setMoversSort` is kept for backwards-compat in case a
     // future toggle wants to flip it again.
     let _moversSort      = 'dollar';   // 'pct' | 'dollar'
+    // 'single' = TCG singles; 'sealed' = booster_box/etb/utb/tin/deck/
+    // any non-single catalog row. Plumbed to the RPC via p_product_type.
+    let _moversProductType = 'single'; // 'single' | 'sealed'
 
     // Setters used by the toggle pills in the Price Movers panel.
     window.setMoversScope = function(scope) {
@@ -10566,11 +10617,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       _moversSort = sort;
       try { renderDashboard(); } catch(_) {}
     };
+    window.setMoversProductType = function(pt) {
+      _moversProductType = pt;
+      try { renderDashboard(); } catch(_) {}
+    };
 
-    async function _loadGlobalMovers(game_type = 'pokemon', period = null, sort = null) {
+    async function _loadGlobalMovers(game_type = 'pokemon', period = null, sort = null, productType = null) {
       var days = period || _moversPeriod;
       var srt  = sort   || _moversSort;
-      var cacheKey = 'p' + days + '-' + srt + '-' + game_type;
+      var pt   = productType || _moversProductType;
+      var cacheKey = 'p' + days + '-' + srt + '-' + pt + '-' + game_type;
       if (_globalMoversCache[cacheKey]) {
         _globalMovers = _globalMoversCache[cacheKey];
         return _globalMovers;
@@ -10578,17 +10634,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (_globalMoversLoading) return null;
       _globalMoversLoading = true;
       window._globalMoversLoading = true;
-      console.log('[movers] loading start: game_type=' + game_type + ' period=' + days + 'd sort=' + srt);
+      console.log('[movers] loading start: game_type=' + game_type + ' period=' + days + 'd sort=' + srt + ' product=' + pt);
       try {
         // Server-side computation via SQL RPC. The RPC does the
         // DISTINCT-ON-oldest + delta math + sort + top-N in one query.
-        // Migration: migration_global_price_movers_rpc.sql (v2).
+        // Migration: migration_global_price_movers_rpc.sql (v3 — adds
+        // p_product_type for the Singles/Sealed dashboard toggle).
         const { data, error } = await sb.rpc('get_global_price_movers', {
-          p_game_type: game_type,
-          p_days_back: days,
-          p_top_n:     10,
-          p_min_pct:   0.5,
-          p_sort:      srt,
+          p_game_type:    game_type,
+          p_days_back:    days,
+          p_top_n:        10,
+          p_min_pct:      0.5,
+          p_sort:         srt,
+          p_product_type: pt,
         });
 
         if (error) {
@@ -10627,7 +10685,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         up.sort((a, b)   => _sortKeyFn(b) - _sortKeyFn(a));
         down.sort((a, b) => _sortKeyFn(b) - _sortKeyFn(a));
 
-        _globalMovers = { up, down, game_type, period: days, sort: srt };
+        _globalMovers = { up, down, game_type, period: days, sort: srt, productType: pt };
         _globalMoversCache[cacheKey] = _globalMovers;
         _globalMoversLoading = false;
         console.log('[movers] loaded via RPC: ' + up.length + ' up, ' + down.length + ' down (key=' + cacheKey + ')');
@@ -10652,7 +10710,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       try {
         var days = _moversPeriod;
         var srt  = _moversSort;
-        var cacheKey = 'p' + days + '-' + srt + '-' + game_type;
+        var pt   = _moversProductType;
+        var cacheKey = 'p' + days + '-' + srt + '-' + pt + '-' + game_type;
         const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
           .toISOString().slice(0, 10);
         const PAGE = 1000;
@@ -10680,7 +10739,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         }
         if (!oldByCatalog.size) {
           // Cache empty result too, so we don't spam the network.
-          var emptyResult = { up: [], down: [], game_type, period: days, sort: srt };
+          var emptyResult = { up: [], down: [], game_type, period: days, sort: srt, productType: pt };
           _globalMovers = emptyResult;
           _globalMoversCache[cacheKey] = emptyResult;
           _globalMoversLoading = false;
@@ -10692,12 +10751,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         for (let i = 0; i < ids.length; i += CHUNK) {
           const slice = ids.slice(i, i + CHUNK);
           const { data } = await sb.from('catalog')
-            .select('id, name, set_name, image_url, current_value, game_type')
+            .select('id, name, set_name, image_url, current_value, game_type, product_type')
             .in('id', slice);
           if (data) cards.push(...data);
         }
         const movers = [];
         for (const c of cards) {
+          // Product-type filter applied client-side here (the SQL fallback
+          // pulls the column so we can scope to singles vs sealed before
+          // the top-N cut).
+          var cpt = (c.product_type || 'single');
+          if (pt === 'single' && cpt !== 'single') continue;
+          if (pt === 'sealed' && cpt === 'single') continue;
           const cur = Number(c.current_value || 0);
           const old = oldByCatalog.get(c.id) || 0;
           if (!cur || !old || Math.abs(cur - old) < 0.01) continue;
@@ -10718,7 +10783,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                            .sort((a, b) => sortKeyFn(b) - sortKeyFn(a)).slice(0, 10);
         const down = movers.filter(m => m.delta < 0)
                            .sort((a, b) => sortKeyFn(b) - sortKeyFn(a)).slice(0, 10);
-        var result = { up, down, game_type, period: days, sort: srt };
+        var result = { up, down, game_type, period: days, sort: srt, productType: pt };
         _globalMovers = result;
         _globalMoversCache[cacheKey] = result;  // ← critical: prevents re-fire loop
         _globalMoversLoading = false;
@@ -10934,11 +10999,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           if (snap && snap.size) renderDashboard();
         });
       }
-      // Re-load the global movers for the currently-selected period+sort
-      // if we don't already have that combo cached.
-      var _cacheKey = 'p' + _moversPeriod + '-' + _moversSort + '-pokemon';
+      // Re-load the global movers for the currently-selected period+sort+
+      // product_type if we don't already have that combo cached.
+      var _cacheKey = 'p' + _moversPeriod + '-' + _moversSort + '-' + _moversProductType + '-pokemon';
       if (!_globalMoversCache[_cacheKey] && !_globalMoversLoading) {
-        _loadGlobalMovers('pokemon', _moversPeriod, _moversSort).then(g => {
+        _loadGlobalMovers('pokemon', _moversPeriod, _moversSort, _moversProductType).then(g => {
           if (g) renderDashboard();
         });
       }
@@ -10951,6 +11016,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const movers = [];
 
       for (const c of cards) {
+        // Honor the Singles/Sealed toggle for personal scope too — read
+        // product_type off the collection_items row (synced from catalog
+        // at add time). Default missing/legacy rows to 'single'.
+        var _cpt = (c.product_type || 'single');
+        if (_moversProductType === 'single' && _cpt !== 'single') continue;
+        if (_moversProductType === 'sealed' && _cpt === 'single') continue;
         const currentVal = c.current_value || 0;
         if (!currentVal) continue;
 
