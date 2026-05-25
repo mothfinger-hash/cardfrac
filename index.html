@@ -24225,14 +24225,28 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (!w || !h) return;
         var photoAspect = w / h;
         var cardAspect  = 245 / 342;   // ≈ 0.716
+        var mode;
         if (photoAspect > cardAspect * 1.15) {
           // Landscape / much wider than card — contain prevents crop
           imgEl.style.objectFit       = 'contain';
           imgEl.style.backgroundColor = 'var(--surface)';
+          mode = 'contain';
         } else {
           // Portrait / card-aspect — cover fills with minimal crop
           imgEl.style.objectFit = 'cover';
+          mode = 'cover';
         }
+        // Debug: surface aspect decisions in the console so we can
+        // confirm the helper actually fired on a given image. Strip
+        // the log once we're confident every code path is wired up.
+        try {
+          if (!window._aspectFitLogCount) window._aspectFitLogCount = 0;
+          if (window._aspectFitLogCount < 12) {
+            window._aspectFitLogCount++;
+            console.log('[aspectFit]', w + '×' + h, 'aspect=' + photoAspect.toFixed(2),
+                        '→', mode, '|', (imgEl.src || '').slice(0, 80));
+          }
+        } catch(_) {}
       } catch(_) { /* best-effort */ }
     }
 
