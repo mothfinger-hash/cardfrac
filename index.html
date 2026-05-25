@@ -227,23 +227,95 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #accountPage[data-tab="watchlist"],
     #accountPage[data-tab="history"],
     #accountPage[data-tab="tradeHistory"] { background-image: url('dash2.webp'); }
-    /* Constrain the content on the tabs that have a background so the
-       artwork reads as a deliberate frame around it instead of getting
-       buried under wall-to-wall panels. Caps at 1280px and centers via
-       auto margins; on viewports narrower than the cap the content
-       fills available width as before. The Account header, tab strip,
-       and Badges tab are left full-width — only the panel-heavy tabs
-       get the centered treatment. */
-    #accountPage[data-tab="dashboard"]    #dashboard,
-    #accountPage[data-tab="myListings"]   #myListings,
-    #accountPage[data-tab="myOrders"]     #myOrders,
-    #accountPage[data-tab="salesArchive"] #salesArchive,
-    #accountPage[data-tab="watchlist"]    #watchlist,
-    #accountPage[data-tab="history"]      #history,
-    #accountPage[data-tab="tradeHistory"] #tradeHistory {
-      max-width: 1280px;
+    /* The default .page rule caps width at 1160px — which means
+       #accountPage itself is only 1160px wide, and the background
+       image (painted on that element) can never extend past that
+       column. Backgrounded tabs override that: #accountPage stretches
+       to fill the full available viewport (everything left of the
+       fixed-position sidebar), then the inner children are centered
+       at 1160px so the layout stays the same as the rest of the app.
+       Result: bg art reads edge-to-edge, content stays in column. */
+    #accountPage[data-tab="dashboard"],
+    #accountPage[data-tab="myListings"],
+    #accountPage[data-tab="myOrders"],
+    #accountPage[data-tab="salesArchive"],
+    #accountPage[data-tab="watchlist"],
+    #accountPage[data-tab="history"],
+    #accountPage[data-tab="tradeHistory"] {
+      max-width: none;
+      margin-left: 0;
+      margin-right: 0;
+      padding-left: 0;
+      padding-right: 0;
+      padding-top: 0;
+    }
+    /* Center the inner children at the standard column width so the
+       page contents don't stretch corner-to-corner — only the bg art
+       does. Targets the header bar, tab strip, and every tab body. */
+    #accountPage[data-tab="dashboard"]    > .pb-page-hdr,
+    #accountPage[data-tab="dashboard"]    > .account-tabs,
+    #accountPage[data-tab="dashboard"]    > .account-content,
+    #accountPage[data-tab="myListings"]   > .pb-page-hdr,
+    #accountPage[data-tab="myListings"]   > .account-tabs,
+    #accountPage[data-tab="myListings"]   > .account-content,
+    #accountPage[data-tab="myOrders"]     > .pb-page-hdr,
+    #accountPage[data-tab="myOrders"]     > .account-tabs,
+    #accountPage[data-tab="myOrders"]     > .account-content,
+    #accountPage[data-tab="salesArchive"] > .pb-page-hdr,
+    #accountPage[data-tab="salesArchive"] > .account-tabs,
+    #accountPage[data-tab="salesArchive"] > .account-content,
+    #accountPage[data-tab="watchlist"]    > .pb-page-hdr,
+    #accountPage[data-tab="watchlist"]    > .account-tabs,
+    #accountPage[data-tab="watchlist"]    > .account-content,
+    #accountPage[data-tab="history"]      > .pb-page-hdr,
+    #accountPage[data-tab="history"]      > .account-tabs,
+    #accountPage[data-tab="history"]      > .account-content,
+    #accountPage[data-tab="tradeHistory"] > .pb-page-hdr,
+    #accountPage[data-tab="tradeHistory"] > .account-tabs,
+    #accountPage[data-tab="tradeHistory"] > .account-content {
+      max-width: 1160px;
       margin-left: auto;
       margin-right: auto;
+      padding-left: 24px;
+      padding-right: 24px;
+      box-sizing: border-box;
+    }
+    /* Restore .page top padding to the inner children — we pushed
+       #accountPage's padding to 0 above so the bg reaches the top. */
+    #accountPage[data-tab="dashboard"]    > .pb-page-hdr,
+    #accountPage[data-tab="myListings"]   > .pb-page-hdr,
+    #accountPage[data-tab="myOrders"]     > .pb-page-hdr,
+    #accountPage[data-tab="salesArchive"] > .pb-page-hdr,
+    #accountPage[data-tab="watchlist"]    > .pb-page-hdr,
+    #accountPage[data-tab="history"]      > .pb-page-hdr,
+    #accountPage[data-tab="tradeHistory"] > .pb-page-hdr {
+      padding-top: 32px;
+    }
+    @media (max-width: 900px) {
+      #accountPage[data-tab="dashboard"]    > .pb-page-hdr,
+      #accountPage[data-tab="dashboard"]    > .account-tabs,
+      #accountPage[data-tab="dashboard"]    > .account-content,
+      #accountPage[data-tab="myListings"]   > .pb-page-hdr,
+      #accountPage[data-tab="myListings"]   > .account-tabs,
+      #accountPage[data-tab="myListings"]   > .account-content,
+      #accountPage[data-tab="myOrders"]     > .pb-page-hdr,
+      #accountPage[data-tab="myOrders"]     > .account-tabs,
+      #accountPage[data-tab="myOrders"]     > .account-content,
+      #accountPage[data-tab="salesArchive"] > .pb-page-hdr,
+      #accountPage[data-tab="salesArchive"] > .account-tabs,
+      #accountPage[data-tab="salesArchive"] > .account-content,
+      #accountPage[data-tab="watchlist"]    > .pb-page-hdr,
+      #accountPage[data-tab="watchlist"]    > .account-tabs,
+      #accountPage[data-tab="watchlist"]    > .account-content,
+      #accountPage[data-tab="history"]      > .pb-page-hdr,
+      #accountPage[data-tab="history"]      > .account-tabs,
+      #accountPage[data-tab="history"]      > .account-content,
+      #accountPage[data-tab="tradeHistory"] > .pb-page-hdr,
+      #accountPage[data-tab="tradeHistory"] > .account-tabs,
+      #accountPage[data-tab="tradeHistory"] > .account-content {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
     }
 
     .account-tabs{display:flex;gap:6px;margin-bottom:20px}
