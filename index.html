@@ -2575,6 +2575,113 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       from { opacity: 0; transform: translateX(-50%) translateY(28px); }
       to   { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
+
+    /* ── Add-card cinematic hologram modal ─────────────────────────────
+       Triggered by saveToCollection / saveToWishlist when a card lands
+       in a real binder. Shows a 3×3 preview of the page the card lives
+       on, with the new card's slot playing the .just-added slide-in.
+       Designed to sit above all other UI without requiring page nav. */
+    @keyframes pbCinFade {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes pbCinModalIn {
+      from { opacity: 0; transform: translateY(18px) scale(.92); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+    }
+    .pb-cin-overlay{
+      position:fixed; inset:0; z-index:10006;
+      background:rgba(0,0,0,.72);
+      display:flex; align-items:center; justify-content:center;
+      padding:18px;
+      animation: pbCinFade .2s ease-out;
+    }
+    .pb-cin-modal{
+      width:100%; max-width:420px;
+      background:var(--surface);
+      border:2px solid var(--copper-dim);
+      border-radius:6px;
+      padding:18px 18px 16px;
+      box-shadow: 0 0 0 1px rgba(184,115,51,.18), 0 18px 48px rgba(0,0,0,.6), 0 0 40px var(--copper-glow);
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      animation: pbCinModalIn .35s cubic-bezier(.2,.85,.3,1.05) both;
+    }
+    .pb-cin-header{
+      text-align:center; margin-bottom:14px;
+      border-bottom:1px solid var(--copper-dim); padding-bottom:10px;
+    }
+    .pb-cin-eyebrow{
+      font-size:.55rem; letter-spacing:.16em; color:var(--copper); margin-bottom:6px;
+    }
+    .pb-cin-title{
+      font-family:'Orbitron','Space Mono',monospace; font-weight:800;
+      font-size:1.05rem; color:var(--text); letter-spacing:.04em;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .pb-cin-sub{
+      font-size:.66rem; color:var(--muted); margin-top:3px; letter-spacing:.08em;
+    }
+    .pb-cin-grid{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:6px;
+      padding:6px;
+      background:var(--surface2);
+      border:1px solid var(--border);
+      border-radius:4px;
+      margin-bottom:14px;
+    }
+    .pb-cin-slot{
+      aspect-ratio: 245 / 342;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:3px;
+      overflow:hidden;
+      display:flex; align-items:center; justify-content:center;
+      position:relative;
+    }
+    .pb-cin-slot img{
+      width:100%; height:100%; object-fit:cover; display:block;
+    }
+    .pb-cin-slot.pb-cin-empty{
+      background:transparent;
+      border:1px dashed rgba(184,115,51,.2);
+    }
+    .pb-cin-ph{
+      font-size:1rem; color:var(--muted); font-family:inherit;
+    }
+    .pb-cin-slot.ghost{ opacity:.7 }
+    /* The new card's slot — slide-in + accent glow. Reuses pbCardSlideIn. */
+    .pb-cin-slot.just-added{
+      animation: pbCardSlideIn 540ms cubic-bezier(.2,.85,.3,1.1) both;
+      box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255,92,0,.45);
+      z-index:1;
+    }
+    .pb-cin-footer{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      flex-wrap:wrap;
+    }
+    .pb-cin-prompt{
+      font-size:.78rem; color:var(--text); letter-spacing:.04em;
+    }
+    .pb-cin-actions{ display:flex; gap:8px }
+    .pb-cin-btn{
+      padding:8px 16px; font-family:inherit; font-size:.74rem; font-weight:700;
+      letter-spacing:.05em; cursor:pointer; border-radius:3px;
+    }
+    .pb-cin-yes{
+      background:var(--accent); color:var(--surface); border:none;
+    }
+    .pb-cin-no{
+      background:transparent; color:var(--muted); border:1px solid var(--border);
+    }
+    @media (max-width:520px){
+      .pb-cin-modal{ padding:14px 14px 12px }
+      .pb-cin-title{ font-size:.95rem }
+      .pb-cin-grid{ gap:4px; padding:4px }
+      .pb-cin-prompt{ font-size:.72rem }
+      .pb-cin-btn{ padding:7px 12px; font-size:.7rem }
+    }
     .binder-card:hover{border-color:var(--accent);transform:translateY(-2px)}
     .binder-card.drag-over{border-color:var(--accent);box-shadow:3px 3px 0 var(--shadow);transform:scale(1.03)}
     .binder-card.ghost-card{opacity:.52;border:1px dashed var(--muted);position:relative}
@@ -3126,6 +3233,78 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-book.shelf-drop-hover{transform:perspective(520px) rotateY(-7deg) translateY(-10px) scale(1.06)!important;filter:drop-shadow(0 0 18px var(--accent))!important;transition:transform .12s ease,filter .12s ease}
     /* All-cards drag list row */
     .allcards-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid var(--border);cursor:grab;transition:background .1s,border-left-color .1s;user-select:none;border-left:3px solid transparent}
+
+    /* ── Organize view (per-binder reorder list) ────────────────────────
+       Tighter than the All Cards list — designed for at-a-glance bulk
+       reordering. Single row, ~46px tall, compact thumbnail, drag
+       handle for pointer users, position dropdown for touch users.
+       Mobile breakpoint shrinks gaps + hides the page/slot subtext to
+       keep the row under 44px on narrow phones. */
+    .pb-organize .organize-row{
+      display:grid;
+      grid-template-columns:24px 20px 32px 1fr 64px;
+      align-items:center;
+      gap:8px;
+      padding:5px 8px;
+      border:0;
+      border-bottom:1px solid var(--border);
+      background:var(--surface);
+      cursor:grab;
+      border-radius:0;
+      user-select:none;
+      transition:background .1s;
+    }
+    .pb-organize .organize-row:hover{background:var(--surface2)}
+    .pb-organize .organize-row.ghost-card{opacity:.6}
+    .pb-organize .organize-row.drag-over{border-top:2px solid var(--accent)}
+    .pb-organize .organize-row.binder-card{padding:5px 8px;border-radius:0}
+    .pb-organize .org-num{
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.7rem;color:var(--muted);text-align:right;letter-spacing:.02em;
+    }
+    .pb-organize .org-handle{
+      font-size:.95rem;color:var(--copper);text-align:center;
+      cursor:grab;user-select:none;line-height:1;
+    }
+    .pb-organize .org-thumb{
+      width:32px;height:44px;object-fit:cover;border-radius:2px;
+      background:var(--surface2);border:1px solid var(--border);display:block;
+    }
+    .pb-organize .org-thumb-ghost{filter:grayscale(30%);border:1px dashed var(--teal)}
+    .pb-organize .org-meta{min-width:0;cursor:pointer}
+    .pb-organize .org-name{
+      font-size:.78rem;color:var(--text);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .pb-organize .org-sub{
+      font-size:.6rem;color:var(--muted);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .pb-organize .org-loc{color:var(--copper);letter-spacing:.04em;margin-left:3px}
+    .pb-organize .org-move{
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.7rem;
+      background:var(--surface2);
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:3px;
+      padding:3px 4px;
+      cursor:pointer;
+      width:64px;
+      appearance:none;
+      -webkit-appearance:none;
+    }
+    .pb-organize .org-move:focus{border-color:var(--accent);outline:none}
+    @media (max-width:520px){
+      .pb-organize .organize-row{
+        grid-template-columns:20px 16px 28px 1fr 56px;
+        gap:6px;padding:4px 6px;
+      }
+      .pb-organize .org-thumb{width:28px;height:38px}
+      .pb-organize .org-sub .org-loc{display:none}
+      .pb-organize .org-move{width:56px;font-size:.66rem}
+      .pb-organize .org-name{font-size:.74rem}
+    }
     .allcards-row:hover{background:var(--surface2);border-left-color:var(--border)}
     .allcards-row:active{cursor:grabbing;opacity:.75}
     .allcards-row.dragging{opacity:.4;border-left-color:var(--accent)}
@@ -16174,119 +16353,87 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     let _dragPageFlipTimer = null; // cross-page flip debounce
 
     // ── Add-card cinematic ─────────────────────────────────────────────────
-    // Triggered by saveToCollection / saveToWishlist when a card was added
-    // to a SPECIFIC binder (not Unsorted / All Cards). Sequence:
-    //   1. Switch to that binder + the page containing the new card
-    //   2. Render (the existing pbCardSlideIn keyframe fires on the cell
-    //      via the .just-added class baked in by the template)
-    //   3. Zoom the binder grid to ~2.4x with transform-origin centered
-    //      on the new card's slot so the slide-in is dramatic
-    //   4. Pause briefly while the slide-in plays at zoom
-    //   5. Ease back out to full page view so the user sees the binder
-    //   6. Show "Add another card?" prompt (Yes → addCard page, Done → dismiss)
-    // If the card is wishlist-only AND on a different page, we still
-    // teleport so the animation is visible.
-    async function _playAddCardCinematic(cardId, binderId) {
+    // Pops a hologram-styled modal that previews the binder page the new
+    // card landed on. The modal contains a 3×3 mini grid mirroring the
+    // binder layout; the new card's slot plays the existing slide-in
+    // keyframe (.just-added). Modal footer asks "Add another?" with
+    // YES (closes + reopens the add-card page) and DONE (closes).
+    //
+    // The modal approach replaced the previous page-navigation cinematic
+    // which silently failed in some flows — switching pages mid-save left
+    // the user wondering whether the add even worked. With the modal the
+    // user stays put, sees the slot the card landed in, and continues.
+    function _playAddCardCinematic(cardId, binderId) {
       if (!cardId || !binderId) return;
       try {
-        // Make sure we're on the collection page
-        if (typeof showPage === 'function') showPage('collection');
-        if (typeof setMobileNav === 'function') setMobileNav('collection');
-        // Switch binder if needed — selectBinder already resets page + renders
-        if (String(currentBinderId) !== String(binderId)) {
-          if (typeof selectBinder === 'function') {
-            selectBinder(binderId);
-          } else {
-            currentBinderId = binderId;
-            binderPage = 0;
-          }
-        }
-        // Compute which page the new card lives on. collectionItems is
-        // pre-sorted by loadCollection (sort_order ASC, created_at ASC),
-        // so a filter preserves that order.
+        // Build the within-binder ordered list to find the new card's index.
+        // collectionItems is pre-sorted by loadCollection (sort_order ASC,
+        // created_at ASC) so this filter preserves the right order.
         var binderItems = collectionItems.filter(function(c) {
           return !c.sold_offline && String(c.binder_id) === String(binderId);
         });
         var idx = binderItems.findIndex(function(c) { return String(c.id) === String(cardId); });
-        var perPage = binderView === '3x3' ? 9 : binderView === '2x2' ? 4 : binderView === '1x1' ? 1 : 9;
-        binderPage = idx >= 0 ? Math.floor(idx / perPage) : 0;
-        // Set the just-added marker so the template applies .just-added
-        window._justAddedCardId = cardId;
-        renderBinder();
-        // Wait two paint frames so the DOM + initial layout are in place
-        await new Promise(function(r) {
-          requestAnimationFrame(function() { requestAnimationFrame(r); });
-        });
-        var cardEl = document.querySelector('#binderGrid [data-id="' + cardId + '"]');
-        var grid   = document.getElementById('binderGrid');
-        if (!cardEl || !grid) {
-          // No grid (e.g. user is in list view) — just show the prompt
-          _showAddAnotherPrompt();
-          return;
-        }
-        // Compute transform-origin so the zoom is anchored on the new slot.
-        var gridRect = grid.getBoundingClientRect();
-        var cardRect = cardEl.getBoundingClientRect();
-        var originX = ((cardRect.left + cardRect.width  / 2 - gridRect.left) / gridRect.width)  * 100;
-        var originY = ((cardRect.top  + cardRect.height / 2 - gridRect.top)  / gridRect.height) * 100;
-        // Clamp so an edge-of-page card doesn't push the zoom off-screen
-        originX = Math.max(0, Math.min(100, originX));
-        originY = Math.max(0, Math.min(100, originY));
-        grid.style.transformOrigin = originX + '% ' + originY + '%';
-        grid.style.transition      = 'transform 550ms cubic-bezier(.2,.85,.3,1)';
-        grid.style.transform       = 'scale(2.4)';
-        // Hold the zoom while the card's slide-in plays (its animation is
-        // 520ms; give it the full duration plus a beat to settle)
-        setTimeout(function() {
-          grid.style.transform = 'scale(1)';
-          setTimeout(function() {
-            // Clean up so the grid isn't stuck with inline styles that
-            // could interfere with future renders (drag-drop transforms etc.)
-            grid.style.transition = '';
-            grid.style.transform = '';
-            grid.style.transformOrigin = '';
-            _showAddAnotherPrompt();
-          }, 600);
-        }, 1050);
-      } catch (_) { /* fail silent — just skip the cinematic */ }
-    }
+        if (idx < 0) return; // sanity — card didn't land in expected binder
+        var perPage = 9; // modal always renders 3×3, regardless of user's binderView
+        var pageNum = Math.floor(idx / perPage);
+        var slotInPage = idx % perPage;
+        var pageStart = pageNum * perPage;
+        var pageItems = binderItems.slice(pageStart, pageStart + perPage);
+        var binder = (typeof binders !== 'undefined' && binders)
+          ? binders.find(function(b) { return String(b.id) === String(binderId); })
+          : null;
+        var binderName = (binder && binder.name) || 'Binder';
 
-    // Small toast-style prompt offering to add another card. Auto-dismisses
-    // after 10s; "Yes" routes to the addCard page so the user can scan or
-    // search for the next card.
-    function _showAddAnotherPrompt() {
-      var existing = document.getElementById('pbAddAnotherPrompt');
-      if (existing) existing.remove();
-      var div = document.createElement('div');
-      div.id = 'pbAddAnotherPrompt';
-      div.style.cssText = [
-        'position:fixed',
-        'bottom:26px',
-        'left:50%',
-        'transform:translateX(-50%)',
-        'z-index:10005',
-        'background:var(--surface)',
-        'border:2px solid var(--accent)',
-        'border-radius:6px',
-        'padding:12px 16px',
-        'box-shadow:0 8px 32px rgba(0,0,0,.55), 0 0 24px rgba(255,92,0,.25)',
-        'display:flex',
-        'align-items:center',
-        'gap:12px',
-        'font-family:Space Mono, Share Tech Mono, monospace',
-        'animation:pbPromptSlideUp .28s ease-out'
-      ].join(';');
-      div.innerHTML =
-        '<span style="font-size:.82rem;color:var(--text);letter-spacing:.04em">Card added — add another?</span>' +
-        '<button onclick="this.closest(&quot;#pbAddAnotherPrompt&quot;).remove();showPage(&quot;addCard&quot;);setMobileNav(&quot;addCard&quot;)" ' +
-          'style="padding:7px 14px;background:var(--accent);color:var(--surface);border:none;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer;letter-spacing:.05em">YES</button>' +
-        '<button onclick="this.closest(&quot;#pbAddAnotherPrompt&quot;).remove()" ' +
-          'style="padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.74rem;cursor:pointer;letter-spacing:.05em">DONE</button>';
-      document.body.appendChild(div);
-      setTimeout(function() {
-        var el = document.getElementById('pbAddAnotherPrompt');
-        if (el) el.remove();
-      }, 10000);
+        // Build the 9 slot cells. Empty slots get a placeholder so the
+        // grid is always uniform; filled slots get the card thumbnail
+        // plus .just-added on the matching id so the slide-in animation
+        // plays automatically when the element is inserted into the DOM.
+        var cells = '';
+        for (var s = 0; s < perPage; s++) {
+          var it = pageItems[s];
+          if (!it) {
+            cells += '<div class="pb-cin-slot pb-cin-empty"></div>';
+            continue;
+          }
+          var isJust = String(it.id) === String(cardId);
+          var imgSrc = it.card_image_url ? it.card_image_url : '';
+          var isGhost = !!it.is_ghost;
+          cells +=
+            '<div class="pb-cin-slot' + (isJust ? ' just-added' : '') + (isGhost ? ' ghost' : '') + '">' +
+              (imgSrc
+                ? '<img src="' + imgSrc + '" alt="" loading="lazy" decoding="async"' + (isGhost ? ' style="filter:grayscale(30%)"' : '') + '>'
+                : '<div class="pb-cin-ph">' + (isGhost ? '♡' : '?') + '</div>') +
+            '</div>';
+        }
+
+        document.getElementById('pbAddCinematic')?.remove();
+        var overlay = document.createElement('div');
+        overlay.id = 'pbAddCinematic';
+        overlay.className = 'pb-cin-overlay';
+        overlay.innerHTML =
+          '<div class="pb-cin-modal" role="dialog" aria-label="Card added to binder">' +
+            '<div class="pb-cin-header">' +
+              '<div class="pb-cin-eyebrow">◈ ADDED TO BINDER</div>' +
+              '<div class="pb-cin-title">' + _escHtml(binderName) + '</div>' +
+              '<div class="pb-cin-sub">Page ' + (pageNum + 1) + ' · Slot ' + (slotInPage + 1) + '</div>' +
+            '</div>' +
+            '<div class="pb-cin-grid">' + cells + '</div>' +
+            '<div class="pb-cin-footer">' +
+              '<span class="pb-cin-prompt">Add another card?</span>' +
+              '<div class="pb-cin-actions">' +
+                '<button class="pb-cin-btn pb-cin-yes"  onclick="(function(){document.getElementById(\'pbAddCinematic\').remove();if(typeof showPage===\'function\'){showPage(\'addCard\');}if(typeof setMobileNav===\'function\'){setMobileNav(\'addCard\');}})()">YES</button>' +
+                '<button class="pb-cin-btn pb-cin-no"   onclick="document.getElementById(\'pbAddCinematic\').remove()">DONE</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(overlay);
+        // Auto-dismiss after 30s if the user walked away — modal is
+        // courteous, not blocking.
+        setTimeout(function() {
+          var el = document.getElementById('pbAddCinematic');
+          if (el) el.remove();
+        }, 30000);
+      } catch (_) { /* fail silent — just skip the cinematic */ }
     }
 
     function renderBinder() {
@@ -16466,49 +16613,66 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           if (hasMore) _acAttachObserver(false);
         } else {
         // ── Binder ORGANIZE view ──────────────────────────────────────────────
-        // Numbered, drag-to-reorder, all-on-one-page compact list. Designed
-        // for bulk reordering across multi-page 3x3 binders — instead of
-        // dragging cards across pages 1→4 in grid mode, drop them in their
-        // target slot here and switch back to 3×3 to see the result.
-        // Reuses binderDragStart/Over/Drop/End from the grid views, which
-        // mutate collectionItems + persist sort_order via saveBinderOrder.
-        // No pagination — show ALL items in the binder so cross-page moves
-        // are a single drag instead of a page-flip-and-redrop dance.
+        // Enhanced list-mode optimized for fast bulk reordering across
+        // multi-page 3×3 binders. Two ways to move a card: drag the row
+        // (desktop / pointer) OR pick a new position from the inline
+        // Move-to dropdown (touch-friendly — no long-press dance). Reuses
+        // binderDragStart/Over/Drop/End from the grid views which mutate
+        // collectionItems + persist sort_order via saveBinderOrder; the
+        // dropdown calls moveCardToPosition which does the same.
+        // No pagination — every card in the binder renders so cross-page
+        // moves are a single interaction.
+        const _totalRows = activeItems.length;
         content.innerHTML = `
-          <div style="font-size:.63rem;color:var(--muted);letter-spacing:.06em;padding:7px 10px 6px;border-bottom:1px solid var(--border)">Drag the handle (⇅) to reorder · changes save automatically</div>
-          <div id="binderGrid" style="display:flex;flex-direction:column">
+          <div style="font-size:.6rem;color:var(--muted);letter-spacing:.06em;padding:6px 10px 5px;border-bottom:1px solid var(--border)">Drag the row or pick a new position · saves automatically</div>
+          <div id="binderGrid" class="pb-organize" style="display:flex;flex-direction:column">
           ${activeItems.map((item, idx) => {
             const isGhost  = item.is_ghost;
-            const isGraded = !isGhost && item.condition && item.condition !== 'raw';
-            const condLabel = isGraded
-              ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
-              : 'Raw';
-            // Page-slot label so the user knows which 3×3 page this lands
-            // on once they switch back. 9 cards per page in 3×3.
+            // Compact position display — just the number, no 3-digit pad
+            const pos = idx + 1;
             const pageNum = Math.floor(idx / 9) + 1;
             const slotInPage = (idx % 9) + 1;
-            const isUserPhoto = typeof item.card_image_url === 'string'
-                                && item.card_image_url.indexOf('/card-photos/') !== -1;
+            // Build the position dropdown options. For large binders we
+            // condense the middle so the option list stays short and
+            // scannable — show every position for binders up to 30 cards,
+            // otherwise show start, near-current, end. The current
+            // position is selected; picking any other value triggers a
+            // move via moveCardToPosition.
+            let _opts = '';
+            if (_totalRows <= 30) {
+              for (let i = 0; i < _totalRows; i++) {
+                _opts += `<option value="${i}"${i === idx ? ' selected' : ''}>${i + 1}</option>`;
+              }
+            } else {
+              // Big binder: page-grouped options to make picking faster
+              for (let i = 0; i < _totalRows; i++) {
+                const p = Math.floor(i / 9) + 1;
+                const s = (i % 9) + 1;
+                _opts += `<option value="${i}"${i === idx ? ' selected' : ''}>${i + 1} (p${p}·${s})</option>`;
+              }
+            }
             return `<div
-              class="organize-row binder-card${isGhost ? ' ghost-card' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
+              class="organize-row binder-card${isGhost ? ' ghost-card' : ''}"
               draggable="true"
               data-id="${item.id}"
               ondragstart="binderDragStart(event,'${item.id}')"
               ondragover="binderDragOver(event)"
               ondrop="binderDrop(event,'${item.id}')"
-              ondragend="binderDragEnd(event)"
-              style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;border-bottom:1px solid var(--border);background:var(--surface);cursor:grab;border-radius:0${isGhost ? ';opacity:.55' : ''}">
-              <span style="font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted);min-width:36px;text-align:right;letter-spacing:.04em">${String(idx+1).padStart(3,'0')}</span>
-              <span class="organize-handle" title="Drag to reorder" style="font-size:1rem;color:var(--copper);cursor:grab;user-select:none;padding:0 4px">⇅</span>
+              ondragend="binderDragEnd(event)">
+              <span class="org-num">${pos}</span>
+              <span class="org-handle" title="Drag to reorder">⇅</span>
               <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-                style="width:38px;height:52px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ';border:1px solid var(--border)'}"
+                class="org-thumb${isGhost ? ' org-thumb-ghost' : ''}"
                 onerror="this.style.visibility='hidden'">
-              <div style="flex:1;min-width:0;cursor:pointer" onclick="openBinderCardDetail('${item.id}')">
-                <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
-                <div style="font-size:.62rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
+              <div class="org-meta" onclick="openBinderCardDetail('${item.id}')">
+                <div class="org-name">${item.card_name}</div>
+                <div class="org-sub">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''} <span class="org-loc">· p${pageNum}·${slotInPage}</span></div>
               </div>
-              <span style="font-size:.58rem;color:var(--copper);letter-spacing:.06em;flex-shrink:0;padding:2px 6px;border:1px solid var(--copper-dim);border-radius:2px" title="Page ${pageNum}, slot ${slotInPage} in 3×3 layout">P${pageNum} · ${slotInPage}</span>
-              ${isGhost ? `<span style="color:var(--teal);font-size:.6rem;flex-shrink:0">WISH</span>` : `<span class="${isGraded ? 'grade-badge' : 'raw-badge'}" style="font-size:.56rem;padding:1px 4px;flex-shrink:0">${condLabel}</span>`}
+              <select class="org-move" title="Move to position"
+                onchange="moveCardToPosition('${item.id}', parseInt(this.value, 10))"
+                onclick="event.stopPropagation()">
+                ${_opts}
+              </select>
             </div>`;
           }).join('')}
           </div>`;
@@ -16961,6 +17125,37 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         sb.from('collection_items').update({ sort_order: idx }).eq('id', item.id)
       ));
     }
+
+    // Touch-friendly reorder companion to the drag system. Called from the
+    // Organize view's "Move to" position dropdown — splices the card out of
+    // its current spot in collectionItems and inserts it at the requested
+    // 0-based position WITHIN ITS BINDER. Other binders' items aren't
+    // touched. Persists via the same saveBinderOrder pathway as drag.
+    window.moveCardToPosition = function(cardId, newIdx) {
+      var srcIdx = collectionItems.findIndex(function(c) { return String(c.id) === String(cardId); });
+      if (srcIdx === -1) return;
+      var item = collectionItems[srcIdx];
+      var binderId = item.binder_id;
+      // Build the within-binder ordered list to translate the user's
+      // requested position into a global collectionItems index.
+      var binderItems = collectionItems
+        .filter(function(c) { return !c.sold_offline && String(c.binder_id) === String(binderId); });
+      var target = binderItems[Math.max(0, Math.min(newIdx, binderItems.length - 1))];
+      // No-op when the user picks the card's current position
+      if (!target || String(target.id) === String(cardId)) return;
+      // Splice src out, find target's (possibly shifted) index, insert before it
+      collectionItems.splice(srcIdx, 1);
+      var tgtGlobalIdx = collectionItems.findIndex(function(c) { return String(c.id) === String(target.id); });
+      // When moving down past the target, the dropdown's "position N"
+      // intent is AFTER the existing item at slot N; otherwise BEFORE.
+      var insertAt = (newIdx > binderItems.findIndex(function(c) { return String(c.id) === String(cardId); }))
+        ? tgtGlobalIdx + 1
+        : tgtGlobalIdx;
+      collectionItems.splice(insertAt, 0, item);
+      renderBinder();
+      clearTimeout(binderSaveTimer);
+      binderSaveTimer = setTimeout(saveBinderOrder, 600);
+    };
 
     function binderChangePage(dir) {
       // Internal: just updates page index + re-renders (no animation).
@@ -28234,21 +28429,62 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Chase variant
       if (/CHASE(?!\s*POP)/i.test(text)) out.is_chase = true;
 
-      // Character name — heuristic: the largest visually prominent line is
-      // usually the character. GCV returns lines in order; the LONGEST
-      // all-caps line that isn't a known skip pattern is a good guess.
-      var SKIP_RE = /^(POP!?|FUNKO|VINYL\s*FIGURE|EXCLUSIVE|HOT\s*TOPIC|GAMESTOP|TARGET|WALMART|BOX\s*LUNCH|FYE|AMAZON|MARVEL|DC|STAR\s*WARS|DISNEY|ANIMATION|TELEVISION|MOVIES|HEROES|GAMES|©.*|\d+|#\d+)$/i;
+      // Character name — heuristic: walk lines in OCR order (top-to-bottom)
+      // and pick the FIRST one that looks like a character name. The OLD
+      // version picked the longest line, which let "VINYL FIGURE/FIGURINE
+      // EN VINYLE" (the bilingual product-type label, always longer than
+      // the actual character name) win every time.
+      //
+      // SKIP rules — match anywhere in the line, not just exact match:
+      //   - Branding: Funko, Pop!, Animation, Television, etc.
+      //   - Bilingual product type: "Vinyl Figure", "Figurine en Vinyle",
+      //     "Figura de Vinil" (always has a slash or appears across langs)
+      //   - Legal copy: "Warning", "Choking Hazard", "Attention", "Age",
+      //     "Months", "Parts", "©", "®", "TM"
+      //   - Pure numbers / SKUs / single-letter noise
+      var SKIP_SUBSTR = [
+        'FUNKO', 'POP!', 'VINYL FIGURE', 'FIGURINE', 'FIGURA', 'VINILO',
+        'EXCLUSIVE', 'HOT TOPIC', 'GAMESTOP', 'TARGET', 'WALMART',
+        'BOX LUNCH', 'FYE', 'AMAZON', 'WARNING', 'CHOKING', 'HAZARD',
+        'ATTENTION', 'ADVERTENCIA', 'PELIGRO', 'ASFIXIA',
+        'SMALL PARTS', 'PETITES PIÈCES', 'PARTES PEQUEÑAS',
+        'NOT SUITABLE', 'CHILDREN UNDER', 'MONTHS', 'MOIS', 'MESES',
+        'CONVIENT PAS', 'NO ES ADECUADO', 'ADEQUADO',
+        '©', '®', '™', 'WWW.', 'HTTP', '.COM'
+      ];
+      var SERIES_LINE_RE = /^(ANIMATION|TELEVISION|MOVIES|HEROES|GAMES|ROCKS|MARVEL|DC|DC\s*COMICS|STAR\s*WARS|DISNEY|POKEMON|POK[ÉE]MON|HARRY\s*POTTER|GAME\s*OF\s*THRONES|STRANGER\s*THINGS|NARUTO|DRAGON\s*BALL|MY\s*HERO\s*ACADEMIA|ONE\s*PIECE)$/i;
+
+      function _isSkipLine(ln) {
+        var upper = ln.toUpperCase();
+        // Bilingual product labels usually have a slash (e.g. "VINYL FIGURE/FIGURINE EN VINYLE")
+        if (ln.indexOf('/') >= 0 && /VINYL|FIGURE|FIGURIN/i.test(ln)) return true;
+        // Pure numeric / SKU
+        if (/^[\d#\s\-]+$/.test(ln)) return true;
+        // Known noise substrings
+        for (var k = 0; k < SKIP_SUBSTR.length; k++) {
+          if (upper.indexOf(SKIP_SUBSTR[k]) >= 0) return true;
+        }
+        // A series-only line is a series keyword, not a character
+        if (SERIES_LINE_RE.test(ln)) return true;
+        return false;
+      }
+
       var bestName = null;
       for (var i2 = 0; i2 < lines.length; i2++) {
         var ln = lines[i2];
-        if (ln.length < 3 || ln.length > 40) continue;
-        if (SKIP_RE.test(ln)) continue;
-        // Prefer lines that contain letters (not just numbers/punctuation)
+        // Character names are usually 2-30 chars, contain letters
+        if (ln.length < 2 || ln.length > 30) continue;
         if (!/[A-Za-z]/.test(ln)) continue;
-        // Prefer the longest plausible line
-        if (!bestName || ln.length > bestName.length) bestName = ln;
+        if (_isSkipLine(ln)) continue;
+        // First valid line wins — Funko boxes lead with the character.
+        bestName = ln;
+        break;
       }
-      if (bestName) out.character = bestName;
+      if (bestName) {
+        // Strip trailing SKU / barcode digits that sometimes get joined to
+        // the name on dense boxes ("MobPsycho 2406" → "MobPsycho").
+        out.character = bestName.replace(/\s+\d{3,}$/, '').trim();
+      }
 
       return out;
     }
@@ -28329,14 +28565,80 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         html += '<pre style="margin-top:6px;background:var(--surface2);border:1px solid var(--border);padding:8px 10px;font-size:.6rem;color:var(--text);white-space:pre-wrap;max-height:200px;overflow-y:auto">' + _escHtml(text) + '</pre>';
         html += '</details>';
 
+        // Stash the extracted + raw text on a window slot so the DONE
+        // button can pick them up without inline-string serialization
+        // gymnastics (quotes inside Funko names would break a JSON arg).
+        window._lastProductScan = { extracted: extracted, raw: text };
+
         html += '<div style="display:flex;gap:8px">';
         html += '<button onclick="document.getElementById(\'productScannerFile\').click()" style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">↻ RETAKE</button>';
-        html += '<button onclick="document.getElementById(\'productScannerModal\').remove()" style="flex:1;padding:10px;border:1px solid var(--accent);background:rgba(26,199,160,.1);color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">DONE</button>';
+        // DONE → close the scanner + open the listing modal with the
+        // extracted fields prefilled. Falls back to a plain close when
+        // nothing was extracted (so the user can dismiss the modal
+        // without entering the listing flow).
+        html += '<button onclick="_applyProductScanToListing()" style="flex:1;padding:10px;border:1px solid var(--accent);background:rgba(26,199,160,.1);color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">DONE → LIST</button>';
         html += '</div>';
 
         if (resultEl) resultEl.innerHTML = html;
       };
       reader.readAsDataURL(file);
+    };
+
+    // Bridge between the product scanner and the marketplace listing
+    // form. Builds a human-readable title from the extracted fields and
+    // calls openListCardModal with a prefill payload. Falls back to a
+    // plain close when there's nothing useful to carry forward.
+    window._applyProductScanToListing = function() {
+      var stash = window._lastProductScan || {};
+      var ex = stash.extracted || {};
+      var rawText = stash.raw || '';
+      // Close the scanner first so the listing modal sits on top cleanly.
+      var sc = document.getElementById('productScannerModal');
+      if (sc) sc.remove();
+
+      // Build the listing title from whatever we got. Pattern:
+      //   "Character (Series) - Pop! #N [Exclusive]"
+      // If we don't even have a character name, the listing form opens
+      // with a blank title — the shop can paste from the raw OCR.
+      var parts = [];
+      if (ex.character) parts.push(ex.character);
+      if (ex.series)    parts.push('(' + ex.series + ')');
+      var base = parts.join(' ').trim();
+      var suffix = [];
+      suffix.push('Funko Pop!');
+      if (ex.pop_number) suffix.push(ex.pop_number);
+      var titleParts = [base, suffix.join(' ').trim()].filter(Boolean);
+      var title = titleParts.join(' - ');
+      if (ex.is_chase)   title += ' [CHASE]';
+      if (ex.exclusive)  title += ' [' + ex.exclusive + ']';
+
+      // Description holds the raw OCR text in a collapsed block so the
+      // shop can copy/paste anything we missed (legal text, dimensions,
+      // edition notes, etc.).
+      var description = 'Funko Pop figure.';
+      if (ex.character)  description += '\nCharacter: ' + ex.character;
+      if (ex.series)     description += '\nSeries: ' + ex.series;
+      if (ex.pop_number) description += '\nPop #: ' + ex.pop_number;
+      if (ex.exclusive)  description += '\nExclusivity: ' + ex.exclusive;
+      if (ex.is_chase)   description += '\nChase variant: yes';
+      if (rawText) description += '\n\n--- OCR ---\n' + rawText;
+
+      if (typeof openListCardModal !== 'function') {
+        showToast('Listing modal unavailable — try again.');
+        return;
+      }
+      openListCardModal({
+        cardName: title || '',
+        gameType: 'Other',
+        condition: 'NM',
+        productType: 'single'
+      });
+      // openListCardModal resets lcDescription to ''; populate after the
+      // call so our autofill text lands in the textarea.
+      setTimeout(function() {
+        var descEl = document.getElementById('lcDescription');
+        if (descEl) descEl.value = description;
+      }, 50);
     };
 
     window.PRODUCT_CATEGORIES = {
