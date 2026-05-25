@@ -2657,11 +2657,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* The new card's slot — slide-in + accent glow. Reuses pbCardSlideIn.
        overflow:visible !important overrides the base .pb-cin-slot rule so
        the keyframe's translateY start position (above the slot frame)
-       is actually visible during the slide. The 810ms duration gives
-       the user time to track the card travelling toward its slot —
-       at 600ms it felt jumpy, especially when images were still loading. */
+       is actually visible during the slide.
+       Timing:
+         - animation-delay 700ms pauses the slide so the user has time
+           to register the modal layout + identify the empty slot before
+           the card appears. The slot is invisible during this window
+           (keyframe 0% has opacity:0) thanks to fill-mode `both`.
+         - 1050ms duration is ~30% slower than the previous 810ms, so
+           the slide itself is trackable end-to-end without feeling
+           jumpy or rushed.                                              */
     .pb-cin-slot.just-added{
-      animation: pbCardSlideIn 810ms cubic-bezier(.2,.85,.3,1.1) both;
+      animation: pbCardSlideIn 1050ms cubic-bezier(.2,.85,.3,1.1) 700ms both;
       box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255,92,0,.45);
       overflow: visible !important;
       z-index: 2;
