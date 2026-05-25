@@ -5680,7 +5680,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="form-group">
           <label>Game / Category *</label>
-          <select class="atc-input" id="lcGame" style="width:100%" disabled>
+          <select class="atc-input" id="lcGame" style="width:100%">
             <option value="Pokémon">Pokémon</option>
             <option value="Magic: The Gathering">Magic: The Gathering</option>
             <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
@@ -5692,7 +5692,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <option value="Other">Other</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="lcConditionWrap">
           <label>Condition *</label>
           <select class="atc-input" id="lcCondition" onchange="toggleLcGrade()" style="width:100%">
             <option value="NM">NM — Near Mint</option>
@@ -5725,7 +5725,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="form-group">
           <label>Shipping ($)</label>
-          <input class="atc-input" id="lcShipping" type="number" min="0" step="0.01" value="5.00" style="width:100%" />
+          <input class="atc-input" id="lcShipping" type="number" min="0" step="0.01" placeholder="e.g. 5.00" style="width:100%" />
         </div>
       </div>
 
@@ -12386,12 +12386,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       lcPhotos = [];
       lcProductType = (prefill && prefill.productType) ? prefill.productType : 'single';
-      const isSealed = lcProductType !== 'single';
+      // Three modes the modal supports:
+      //   - 'single' (TCG single card)         → NM/LP/HP/Graded conditions
+      //   - 'sealed' / 'tcg_sealed'            → Sealed / Damaged Box / Loose
+      //   - 'funko_pop' / anything non-TCG     → no condition field at all
+      // isProduct gates the non-TCG branch — wider than just Funko so any
+      // future product category (manga, posters, plush, etc.) gets the
+      // same treatment without needing a code change.
+      const TCG_TYPES = ['single', 'sealed', 'tcg_sealed', 'tcg_single'];
+      const isProduct = !TCG_TYPES.includes(lcProductType);
+      const isSealed = lcProductType !== 'single' && !isProduct;
 
       document.getElementById('lcName').value = prefill?.cardName || '';
       document.getElementById('lcGame').value = prefill?.gameType || 'Pokémon';
       document.getElementById('lcPrice').value = '';
-      document.getElementById('lcShipping').value = '5.00';
+      // Shipping default is now empty — the seller decides. Was previously
+      // hard-coded to $5.00 which baked an assumption into every listing.
+      document.getElementById('lcShipping').value = '';
       document.getElementById('lcDescription').value = '';
       document.getElementById('lcMarketPriceResult').style.display = 'none';
       document.getElementById('lcPhotoError').style.display = 'none';
@@ -12400,6 +12411,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       // Swap the Condition dropdown contents for sealed product. Sealed
       // products don't have NM/LP/HP — they have packaging condition.
+      // For non-TCG products (Funko etc.) we hide the whole field below.
       const condEl = document.getElementById('lcCondition');
       if (condEl) {
         if (isSealed) {
@@ -12417,8 +12429,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           condEl.value = prefill?.condition || 'NM';
         }
       }
+      // Hide the condition row entirely for non-TCG products. Save flow
+      // reads condEl.value regardless — for products it gets whatever was
+      // last set (harmless; downstream just ignores it for non-TCG).
+      const condWrap = document.getElementById('lcConditionWrap');
+      if (condWrap) condWrap.style.display = isProduct ? 'none' : '';
 
-      // Modal title + sub copy + photo label all shift for sealed.
+      // Modal title + sub copy + photo label all shift per mode.
       const titleEl = document.querySelector('#listCardModal h3');
       const subEl   = document.querySelector('#listCardModal .modal-sub');
       const photoLabelEl = document.querySelector('#listCardModal label[for="lcPhotoInput"], #listCardModal .form-group label');
@@ -12426,13 +12443,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // wraps the dashed photo area).
       const photoSection = document.getElementById('lcPhotoArea');
       const photoSectionLabel = photoSection ? photoSection.parentElement.querySelector('label') : null;
-      if (titleEl) titleEl.textContent = isSealed ? 'List Sealed Product for Sale' : 'List Card for Sale';
-      if (subEl)   subEl.innerHTML = isSealed
-        ? 'Required: one photo of the product (box front with seal visible is best). Buyers see market price vs. your ask.'
-        : 'Required: front &amp; back photo. Buyers see market price vs. your ask.';
+      if (titleEl) {
+        titleEl.textContent = isProduct ? 'List Product for Sale'
+                            : isSealed  ? 'List Sealed Product for Sale'
+                            :             'List Card for Sale';
+      }
+      if (subEl) {
+        subEl.innerHTML = isProduct
+          ? 'Required: one photo of the product (front view recommended). Pick a category that fits.'
+          : isSealed
+              ? 'Required: one photo of the product (box front with seal visible is best). Buyers see market price vs. your ask.'
+              : 'Required: front &amp; back photo. Buyers see market price vs. your ask.';
+      }
       if (photoSectionLabel) {
-        photoSectionLabel.innerHTML = isSealed
-          ? 'Photo * <span style="color:var(--muted);font-size:.72rem">(Box front recommended · up to 8)</span>'
+        photoSectionLabel.innerHTML = (isSealed || isProduct)
+          ? 'Photo * <span style="color:var(--muted);font-size:.72rem">(Front view recommended · up to 8)</span>'
           : 'Photos * <span style="color:var(--muted);font-size:.72rem">(Front &amp; back required · up to 8)</span>';
       }
 
@@ -16372,7 +16397,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // the user wondering whether the add even worked. With the modal the
     // user stays put, sees the slot the card landed in, and continues.
     function _playAddCardCinematic(cardId, binderId) {
-      if (!cardId || !binderId) return;
+      console.log('[cinematic] called', { cardId: cardId, binderId: binderId });
+      if (!cardId || !binderId) {
+        console.log('[cinematic] skip — missing cardId or binderId');
+        return;
+      }
       try {
         // Build the within-binder ordered list to find the new card's index.
         // collectionItems is pre-sorted by loadCollection (sort_order ASC,
@@ -16381,7 +16410,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           return !c.sold_offline && String(c.binder_id) === String(binderId);
         });
         var idx = binderItems.findIndex(function(c) { return String(c.id) === String(cardId); });
-        if (idx < 0) return; // sanity — card didn't land in expected binder
+        console.log('[cinematic] binderItems count:', binderItems.length, '| idx of new card:', idx);
+        if (idx < 0) {
+          console.warn('[cinematic] new card not found in binder ' + binderId + ' — collectionItems may not be reloaded yet, or card.binder_id mismatch');
+          return;
+        }
         var perPage = 9; // modal always renders 3×3, regardless of user's binderView
         var pageNum = Math.floor(idx / perPage);
         var slotInPage = idx % perPage;
@@ -16435,13 +16468,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             '</div>' +
           '</div>';
         document.body.appendChild(overlay);
+        console.log('[cinematic] modal mounted — id=pbAddCinematic');
         // Auto-dismiss after 30s if the user walked away — modal is
         // courteous, not blocking.
         setTimeout(function() {
           var el = document.getElementById('pbAddCinematic');
           if (el) el.remove();
         }, 30000);
-      } catch (_) { /* fail silent — just skip the cinematic */ }
+      } catch (err) {
+        // Log instead of swallow — the previous silent catch hid real
+        // failures (undefined helpers, missing globals) and made it look
+        // like the cinematic just never fired.
+        console.error('[cinematic] failed:', err);
+      }
     }
 
     function renderBinder() {
@@ -18056,10 +18095,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Same slide-in animation as owned cards — wishlist items still
       // live in a binder slot, so the new ghost-card cell animates in.
       if (newRow?.id) window._justAddedCardId = newRow.id;
+      console.log('[wishlist→cinematic] newRow.id:', newRow?.id, '| binderId from form:', binderId);
       // Cinematic add for wishlist too when targeted at a real binder.
       if (newRow?.id && binderId) {
         _playAddCardCinematic(newRow.id, binderId);
       } else {
+        console.log('[wishlist→cinematic] skipped — Unsorted/All Cards bucket (no binderId)');
         renderBinder();
       }
       renderDashboard();
@@ -19663,14 +19704,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // global at the end of its run so subsequent re-renders don't
       // replay the animation.
       if (newRow?.id) window._justAddedCardId = newRow.id;
+      console.log('[save→cinematic] newRow.id:', newRow?.id, '| binderId from form:', binderId);
       // Cinematic add: when the card landed in a real binder (not the
-      // Unsorted / All Cards bucket), teleport to that binder's page,
-      // zoom into the new slot for the slide-in, then zoom out and ask
-      // the user if they want to add another. Falls back to the plain
+      // Unsorted / All Cards bucket), pop the hologram modal showing the
+      // 3×3 page the card landed on. Falls back to the plain
       // renderCollection re-render if there's no target binder.
       if (newRow?.id && binderId) {
         _playAddCardCinematic(newRow.id, binderId);
       } else {
+        console.log('[save→cinematic] skipped — Unsorted/All Cards bucket (no binderId)');
         renderCollection();
       }
       // Auto-refresh price immediately if a price URL was set
@@ -28716,8 +28758,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       openListCardModal({
         cardName: title || '',
         gameType: 'Other',
-        condition: 'NM',
-        productType: 'single'
+        // productType='funko_pop' puts the listing modal into product
+        // mode — hides the Condition field, swaps the title to "List
+        // Product for Sale", lets the seller pick the category.
+        productType: 'funko_pop'
       });
       // openListCardModal resets lcDescription = '' and lcPhotos = [];
       // populate both AFTER it runs so the scan photo + description land
