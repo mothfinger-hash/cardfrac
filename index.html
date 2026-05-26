@@ -258,10 +258,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       }
       body[data-page-bg="sets"] {
         background-attachment: scroll;
-        /* Shift left so the focal element of the artwork stays in
+        /* Shift right so the focal element of the artwork stays in
            the visible portrait slice rather than getting center-cropped
-           into a flat region. 25% biases toward the left edge. */
-        background-position: 25% center;
+           into a flat region. 75% biases toward the right edge. */
+        background-position: 75% center;
       }
     }
     /* The default .page rule caps width at 1160px — which means
@@ -25337,7 +25337,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${_thumbUrl(img, 80)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        ${img ? `<img src="${_thumbUrl(img, 80)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" style="width:36px;height:50px;max-height:50px;object-fit:contain;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -25965,15 +25965,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         });
         if (!newSets.length) return;
 
-        // Update the in-memory cache so a re-render (or filter) sees them.
-        if (_setsCache) _setsCache.sets = (_setsCache.sets || []).concat(newSets);
+        // Catalog-only sets — sets the pokemontcg.io API doesn't have
+        // — are almost always newer sets the API hasn't ingested yet
+        // (e.g. Chaos Rising). Prepend them to the top of the list +
+        // cache so they read as "newest" rather than landing at the
+        // bottom under the placeholder '0000/00/00' date. If we ever
+        // mass-import older catalog-only sets (e.g. a promo dump),
+        // this assumption breaks and we'd want real release dates on
+        // the catalog rows instead.
+        if (_setsCache) _setsCache.sets = newSets.concat(_setsCache.sets || []);
 
-        // Append HTML rows to the existing list container (avoids a full
-        // re-render and preserves the user's scroll position).
         const listInner = document.getElementById('setsListInner');
         if (listInner) {
           const fragHTML = newSets.map(s => _renderSetRow(s)).join('');
-          if (fragHTML) listInner.insertAdjacentHTML('beforeend', fragHTML);
+          if (fragHTML) listInner.insertAdjacentHTML('afterbegin', fragHTML);
         }
       } catch(e) {
         console.warn('[sets] async catalog append failed:', e);
