@@ -14,7 +14,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v315';
+const CACHE = 'pathbinder-v318';
 
 const PRECACHE = [
   '/offline.html',
@@ -31,11 +31,25 @@ self.addEventListener('install', e => {
   );
 });
 
-// Activate: clean up old caches
+// Activate: clean up old caches + purge any previously-cached
+// pokemontcg.io responses from the current cache (the new fetch
+// handler skips that hostname going forward, but any leftover
+// entries from before this SW version need to be flushed once so
+// users don't keep seeing the stale set list).
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() =>
+      caches.open(CACHE).then(cache =>
+        cache.keys().then(reqs =>
+          Promise.all(
+            reqs
+              .filter(req => /api\.pokemontcg\.io|pricecharting\.com/i.test(req.url))
+              .map(req => cache.delete(req))
+          )
+        )
+      )
     ).then(() => self.clients.claim())
   );
 });
@@ -44,9 +58,16 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Always go network for Supabase, API calls, and auth
+  // Always go network for Supabase, API calls, auth, and any
+  // upstream pricing/catalog data sources. pokemontcg.io serves the
+  // master set list — if we cache it, newly-released sets (e.g.
+  // Chaos Rising for Pokemon EN) won't appear on mobile until the
+  // user manually clears storage. Same logic applies to PriceCharting
+  // and any other live catalog endpoint we add later.
   if (
     url.hostname.includes('supabase.co') ||
+    url.hostname.includes('api.pokemontcg.io') ||
+    url.hostname.includes('pricecharting.com') ||
     url.pathname.startsWith('/api/') ||
     e.request.method !== 'GET'
   ) {

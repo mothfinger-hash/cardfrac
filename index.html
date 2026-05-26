@@ -258,11 +258,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       }
       body[data-page-bg="sets"] {
         background-attachment: scroll;
-        /* Shift right so the focal element of the artwork stays in
+        /* Shift left so the focal element of the artwork stays in
            the visible portrait slice rather than getting center-cropped
-           into a flat region. Tune this if a different anchor reads
-           better — 75% biases toward the right edge. */
-        background-position: 75% center;
+           into a flat region. 25% biases toward the left edge. */
+        background-position: 25% center;
       }
     }
     /* The default .page rule caps width at 1160px — which means
@@ -3106,37 +3105,26 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       margin-right:4px;
       color:rgba(255,255,255,.45);
     }
-    /* Sets-page content containers are semi-transparent so the
-       graffiti backdrop reads through. Solid var(--surface) on these
-       boxes (set list, sort pills row, search input wrapper) covered
-       the whole bg after the initial render and made it look like the
-       backdrop flashed in then disappeared. */
+    /* Sets-page panel + container surfaces use the site-default
+       --surface + --border tones so the look matches the rest of the
+       app. The earlier aubergine wash (--sets-overlay + --sets-border)
+       was tuned for the previous sets_cards.webp graffiti backdrop;
+       against the new sets.webp it read too heavy. Site-default
+       neutral panels let the new backdrop come through the gutters
+       between panels (rather than through the panels themselves) the
+       same way the dashboard does. */
     #setsPage [id^="setsListInner"],
     #setsPage #setsCardList,
     #setsPage #catalogSetCardList,
     #setsPage #setsDetailProgress,
     #setsPage #setsSearch,
     #setsPage #setsAcList{
-      background:var(--sets-overlay) !important;
-      border-color:var(--sets-border) !important;
-      backdrop-filter:blur(2px);
-      -webkit-backdrop-filter:blur(2px);
+      background:var(--surface) !important;
+      border:1px solid var(--border) !important;
     }
-    /* Container-level borders use the slightly stronger aubergine tone
-       so the frame reads as a deliberate edge, not a faint suggestion.
-       Both setsCardList (Pokemon EN) and catalogSetCardList (JP / MTG /
-       YGO / OP) get the same treatment. */
-    #setsPage [id^="setsListInner"],
-    #setsPage #setsCardList,
-    #setsPage #catalogSetCardList,
-    #setsPage #setsDetailProgress{
-      border:1px solid var(--sets-border-strong) !important;
-    }
-    /* Search input shares the aubergine wash; default border in the
-       softer overlay tone so the teal focus border lands as a clean
-       state change instead of just a darker line on a lighter input. */
+    /* Search input — keep the teal focus accent (the page's accent
+       palette is still teal); just use the default border at rest. */
     #setsPage #setsSearch{
-      border:1px solid var(--sets-border) !important;
       color:var(--text) !important;
       transition:border-color .15s, box-shadow .15s;
     }
@@ -3144,17 +3132,16 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       border-color:var(--sets-teal) !important;
       box-shadow:0 0 12px var(--sets-teal-glow);
     }
-    /* Autocomplete dropdown — match the search input's softer aubergine
-       frame, no top border (it tucks under the input). */
+    /* Autocomplete dropdown — tucks under the search input, so kill
+       the top border for a continuous edge. */
     #setsPage #setsAcList{
-      border:1px solid var(--sets-border) !important;
       border-top:none !important;
     }
-    /* Card row dividers — .allcards-row is used app-wide with a navy
-       border-bottom by default; inside the sets page we want the row
-       separators to read as aubergine so they don't fight the overlay. */
+    /* Card row dividers — use the site-default --border. Previously
+       overridden to aubergine to harmonize with the overlay wash;
+       that's no longer needed. */
     #setsPage .allcards-row{
-      border-bottom-color:var(--sets-border) !important;
+      border-bottom-color:var(--border) !important;
     }
     /* Mobile: tighter page padding + smaller hero title. The bg
        horizontal anchor is handled at the body level (see the
@@ -25349,7 +25336,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const qty = ci ? (ci.quantity || 1) : 0;
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--sets-border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
         ${img ? `<img src="${_thumbUrl(img, 80)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
@@ -25466,7 +25453,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const ci    = ownedMap[card.id];
       const owned = !!ci;
       const qty   = ci ? (ci.quantity || 1) : 0;
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--sets-border);cursor:pointer;transition:background .12s"
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
         onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
         onclick="${openFn}(${idx})">
         ${card.image_url
@@ -25585,7 +25572,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const logoHtml = s.images && s.images.logo
         ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
         : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
-      return `<div onclick="loadSetDetail('${_escJsAttr(s.id)}','${_escJsAttr(s.name)}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      return `<div onclick="loadSetDetail('${_escJsAttr(s.id)}','${_escJsAttr(s.name)}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         ${logoHtml}
         <div style="flex:1;min-width:0">
           <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.name)}</div>
@@ -25605,7 +25592,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
       const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
       return `<div onclick="loadJpSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}')"
-        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s"
+        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
         <div style="flex:1;min-width:0">
@@ -25626,7 +25613,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
       const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
       return `<div onclick="loadTcgSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}','${_escJsAttr(gameKey)}')"
-        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s"
+        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[${cfg.label}]</div>
         <div style="flex:1;min-width:0">
@@ -26133,7 +26120,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           // 1. API sets (primary — has release date, total, images)
           let apiSets = [];
           try {
-            const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250');
+            // cache: 'no-store' bypasses both the HTTP cache and any SW
+            // cache so a freshly-released set (e.g. Chaos Rising) lands
+            // immediately instead of waiting for a TTL to expire. The
+            // sw.js fetch handler already short-circuits api.pokemontcg.io
+            // to network-only, but no-store is belt-and-suspenders.
+            const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250', { cache: 'no-store' });
             if (res.ok) {
               const data = await res.json();
               apiSets = data.data || [];
@@ -26798,7 +26790,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           var img = s.image_url
             ? '<img src="' + _escHtml(s.image_url) + '" alt="" loading="lazy" style="width:42px;height:42px;object-fit:contain;background:var(--surface2);border-radius:2px;flex-shrink:0">'
             : '<div style="width:42px;height:42px;background:var(--surface2);border-radius:2px;flex-shrink:0"></div>';
-          return '<div onclick="loadPcLangSetDetail(\'' + _escJsAttr(lang) + '\',\'' + _escJsAttr(s.set_code) + '\',\'' + _escJsAttr(s.set_name) + '\')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sets-border);transition:background .15s" onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">' +
+          return '<div onclick="loadPcLangSetDetail(\'' + _escJsAttr(lang) + '\',\'' + _escJsAttr(s.set_code) + '\',\'' + _escJsAttr(s.set_name) + '\')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">' +
             img +
             '<div style="flex:1;min-width:0">' +
               '<div style="font-size:.85rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _escHtml(s.set_name) + '</div>' +
@@ -27303,7 +27295,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <div id="setsDetailProgress" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px">
           <div style="flex:1">
             <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Loading…</div>
-            <div style="height:7px;border-radius:4px;background:var(--sets-border-strong);overflow:hidden;border:1px solid var(--sets-border)"></div>
+            <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden;border:1px solid var(--border)"></div>
           </div>
           <div style="font-size:1.4rem;font-weight:700;color:var(--muted);flex-shrink:0">—</div>
         </div>
@@ -27406,7 +27398,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           progEl.innerHTML = `
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
-              <div style="height:7px;border-radius:4px;background:var(--sets-border-strong);overflow:hidden;border:1px solid var(--sets-border)">
+              <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden;border:1px solid var(--border)">
                 <div style="height:100%;width:${pct}%;background:${barFill};border-radius:4px;transition:width .5s;box-shadow:${barShadow}"></div>
               </div>
             </div>
