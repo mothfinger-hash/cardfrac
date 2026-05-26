@@ -194,8 +194,26 @@ Received" action just flips paid→completed for UX, not for money flow.
 ## Schema / Supabase
 
 - `profiles` is the canonical user table. Tier resolution goes through
-  `subscription_tier` (text: `free` / `collector` / `vendor` / `shop`)
+  `subscription_tier` (text: `free` / `collector` / `enthusiast` / `vendor` / `shop`)
   with legacy boolean fallback (`is_premium`, `is_vendor`, `is_admin`).
+  **The old `vendor` tier was renamed to `enthusiast`** (see migration
+  `migration_tier_rename_vendor_to_enthusiast.sql`) — same feature set,
+  dropped to $20/mo, added a 40-listing concurrent active marketplace
+  cap. The NEW `vendor` tier sits between enthusiast and shop at $75/mo,
+  150-listing cap, and unlocks non-TCG product listing + product scanner
+  access. `shop` is unchanged at $200/mo / unlimited. Anywhere old code
+  wrote `tierAtLeast('vendor')` for OLD vendor features (bulk CSV, sales
+  archive, multi-binder, etc.) has been retargeted to
+  `tierAtLeast('enthusiast')`. New `tierAtLeast('vendor')` references
+  now mean the new vendor tier. Listing caps live in `TIER_LISTING_CAPS`
+  and are enforced via `canCreateListing()` / `listingsRemaining()`.
+  Enthusiast tier is restricted to TCG SINGLES only — sealed products
+  (booster boxes, ETBs, tins, decks) and non-TCG products (Funko, Manga,
+  etc.) are vendor+ exclusives. Client check: `canListSealed()` /
+  `canListNonTCG()`. Server-side: same trigger
+  (`enforce_listing_cap`) in `migration_listing_cap_rls.sql` also
+  enforces this — an enthusiast cannot insert a listing whose
+  `product_type` is anything other than `'single'` or `'tcg_single'`.
 - `catalog` is the canonical card table. Multi-TCG: id is prefixed by
   language/game (`en-`, `jp-`, `pd-` for Pokemon; `mtg-`, `ygo-`, `op-`
   for other TCGs). `game_type` column for explicit filtering.

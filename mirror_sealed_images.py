@@ -55,6 +55,11 @@ try:
 except ImportError:
     sys.exit("Missing 'supabase'. Run: pip3 install supabase --break-system-packages")
 
+# Variant helper — generates 200/400px WebP thumbnails alongside each
+# main image. See image_variants.py for the why; tldr: avoids Supabase's
+# metered image-transformation quota.
+from image_variants import upload_variants
+
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
@@ -339,6 +344,17 @@ def main():
                     time.sleep(2 * (attempt + 1))
         if last_err:
             return (rid, "failed", f"upload: {last_err}")
+
+        # 3b. Variants — 200/400px WebP siblings. Non-fatal; the
+        # browser's onerror handler falls back to the main image when
+        # a variant is missing, so older mirrored rows still render.
+        try:
+            v_results = upload_variants(sb, STORAGE_BUCKET, path, webp_bytes)
+            for vw, ok, detail in v_results:
+                if not ok and "not wider than" not in str(detail):
+                    print(f"     [variant {vw}px] {rid}: {detail}")
+        except Exception as e:
+            print(f"     [variants] {rid}: {e}")
 
         # 4. Rewrite the catalog row's image_url to the new public URL
         new_url = f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{path}"

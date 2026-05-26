@@ -7557,7 +7557,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
             <button onclick="adminInviteBetaTester('shop','code')"
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--gold,#FFE94A);background:transparent;color:var(--gold,#FFE94A);cursor:pointer;white-space:nowrap">Generate Code</button>
-            <button onclick="adminSweepExpiredShopBeta()" title="Downgrades any shop beta whose 1-year window has lapsed → vendor"
+            <button onclick="adminSweepExpiredShopBeta()" title="Downgrades any shop beta whose 1-year window has lapsed → enthusiast"
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid rgba(255,100,100,.5);background:transparent;color:rgba(255,100,100,.85);cursor:pointer;white-space:nowrap">Sweep Expired</button>
           </div>
         </div>
@@ -7821,25 +7821,45 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return Math.round(amount * getFeeRate());
     }
     // ── Subscription tier system ──────────────────────────────────────────────
-    // Tiers: 'free' | 'collector' | 'vendor' | 'shop'
+    // Tiers (in order): 'free' | 'collector' | 'enthusiast' | 'vendor' | 'shop'
+    //
+    // The old 'vendor' tier ($25/mo) was renamed to 'enthusiast' ($20/mo) and
+    // gained a 40-listing/mo marketplace cap. A NEW 'vendor' tier ($75/mo)
+    // sits between enthusiast and shop — adds 150-listing cap, non-TCG product
+    // listing, and product scanner access. Shop stays unchanged ($200/mo
+    // unlimited).
+    //
+    // Migration: existing rows with subscription_tier='vendor' are renamed
+    // to 'enthusiast' via migration_tier_rename_vendor_to_enthusiast.sql.
+    // Legacy boolean fallback (is_vendor) now maps to 'enthusiast' too.
+    //
     // Reads subscription_tier from profile; falls back to legacy flags for existing users.
-    const TIER_ORDER = ['free', 'collector', 'vendor', 'shop'];
-    // Monochromatic — all tiers use the app's CRT palette.
-    // Current tier gets orange accent; others stay muted.
+    const TIER_ORDER = ['free', 'collector', 'enthusiast', 'vendor', 'shop'];
     const TIER_COLORS = {
-      free:      { label: 'FREE'      },
-      collector: { label: 'COLLECTOR' },
-      vendor:    { label: 'VENDOR'    },
-      shop:      { label: 'SHOP'      },
+      free:        { label: 'FREE'         },
+      collector:   { label: 'COLLECTOR'    },
+      enthusiast:  { label: 'ENTHUSIAST'   },
+      vendor:      { label: 'VENDOR'       },
+      shop:        { label: 'SHOP'         },
+    };
+    // Concurrent active marketplace listings per tier.
+    // 0 = no marketplace selling. Infinity = no cap.
+    const TIER_LISTING_CAPS = {
+      free:        0,
+      collector:   0,
+      enthusiast:  40,
+      vendor:      150,
+      shop:        Infinity,
     };
 
     function userTier() {
       if (!currentUser) return 'free';
       if (currentUser.subscription_tier && TIER_ORDER.includes(currentUser.subscription_tier))
         return currentUser.subscription_tier;
-      // Legacy flag fallback
+      // Legacy fallback. The old is_vendor flag now maps to enthusiast
+      // (the tier that inherited the former vendor's feature set).
       if (currentUser.is_admin)   return 'shop';
-      if (currentUser.is_vendor)  return 'vendor';
+      if (currentUser.is_vendor)  return 'enthusiast';
       if (currentUser.is_premium || currentUser.membershipActive) return 'collector';
       return 'free';
     }
@@ -7864,13 +7884,54 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
     function canAddCardFund() {
       const funds = collectionItems.filter(c => c.is_ghost && c.savings_goal > 0 && !c.sold_offline).length;
-      if (tierAtLeast('vendor'))   return true;
-      if (tierAtLeast('collector')) return funds < 3;
+      // Unlimited card funds for enthusiast and up (was 'vendor' pre-rename).
+      if (tierAtLeast('enthusiast')) return true;
+      if (tierAtLeast('collector'))  return funds < 3;
       return funds < 1;
     }
     function hasPriceTracking()  { return tierAtLeast('collector'); }
-    function hasBulkImport()     { return tierAtLeast('vendor'); }
+    // Pre-rename, bulk import was the headline 'vendor' feature. It now lives
+    // at the enthusiast tier — same features at a lower price, plus the cap.
+    function hasBulkImport()     { return tierAtLeast('enthusiast'); }
+    // Non-TCG product listings + product scanner access — exclusive to the
+    // new vendor tier and above.
+    function hasProductScanner() { return tierAtLeast('vendor'); }
+    function canListNonTCG()     { return tierAtLeast('vendor'); }
+    // Sealed TCG product (booster boxes, ETBs, tins, decks) restricted to
+    // vendor+ as well. Enthusiast tier is singles-only. Sealed is higher
+    // AOV + slower turnover, so keeping it behind the vendor paywall both
+    // matches the "serious seller" framing of vendor and prevents low-tier
+    // dumping of bulk product.
+    function canListSealed()     { return tierAtLeast('vendor'); }
     function hasMultiBinder()    { return !!currentUser; }
+
+    // ── Marketplace listing cap helpers ─────────────────────────────────
+    // Counts the user's current ACTIVE listings (concurrent) so the
+    // listing-creation UI can enforce per-tier caps. A sold listing
+    // doesn't count against the cap; only active/available ones do.
+    function activeListingCount() {
+      if (!currentUser) return 0;
+      if (!Array.isArray(listings)) return 0;
+      return listings.filter(function(l) {
+        var mine = (l.seller_id === currentUser.id) || (l.sellerId === currentUser.id);
+        if (!mine) return false;
+        var status = (l.status || '').toLowerCase();
+        // Active = available / active. Sold / cancelled / completed don't count.
+        return status === 'active' || status === 'available' || status === '';
+      }).length;
+    }
+    function listingCap()           { return TIER_LISTING_CAPS[userTier()] || 0; }
+    function listingsRemaining()    {
+      var cap = listingCap();
+      if (cap === Infinity) return Infinity;
+      return Math.max(0, cap - activeListingCount());
+    }
+    function canCreateListing()     {
+      var cap = listingCap();
+      if (cap === Infinity) return true;
+      if (cap === 0)        return false;
+      return activeListingCount() < cap;
+    }
 
     // ── Monthly usage tracking (localStorage, per-user per-month) ────────────
     function _usageKey(prefix) {
@@ -7892,14 +7953,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return 5;                                        // free
     }
     function bulkSessionLimit() {
-      if (tierAtLeast('shop'))      return Infinity;
-      if (tierAtLeast('vendor'))    return 1000;
-      if (tierAtLeast('collector')) return 5;
+      if (tierAtLeast('shop'))       return Infinity;
+      // Bulk-import sessions were the OLD vendor headline feature; that
+      // tier got renamed to enthusiast (same features, lower price + cap).
+      if (tierAtLeast('enthusiast')) return 1000;
+      if (tierAtLeast('collector'))  return 5;
       return 0;  // free: bulk scan not available
     }
     function bulkCardsPerSession() {
-      if (tierAtLeast('vendor'))    return Infinity;
-      if (tierAtLeast('collector')) return 35;
+      if (tierAtLeast('enthusiast')) return Infinity;
+      if (tierAtLeast('collector'))  return 35;
       return 0;
     }
 
@@ -8598,10 +8661,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // the chip color picks up from the surrounding accent var.
         const watchSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.5-9.5-9C1 8 3 4 6.5 4c2 0 3.5 1 5.5 3 2-2 3.5-3 5.5-3C21 4 23 8 21.5 12 19 16.5 12 21 12 21z"/></svg>';
 
+        // Use 200px variant for the condensed card grid (cards are
+        // ~180-200px wide). _pickThumbVariant returns the variant URL
+        // for /card-photos/ URLs, raw URL otherwise. onerror cascades:
+        // variant -> original photo -> placeholder, so older photos
+        // uploaded before variant generation existed still render.
+        const _thumb200 = _pickThumbVariant(photoSrc, 200);
         return `<div class="listing-card ${isSold ? 'locked-card' : ''}">
           ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
           <div class="lc-thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
-            <img src="${photoSrc}" alt="${_escHtml(listing.name)}" class="lc-thumb" loading="lazy" decoding="async" onerror="this.src='${PLACEHOLDER_IMG}'" />
+            <img src="${_thumb200}" data-fallback="${photoSrc}" alt="${_escHtml(listing.name)}" class="lc-thumb" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.src='${PLACEHOLDER_IMG}';this.onerror=null}" />
             <div class="lc-overlay-top">
               <div class="lc-chips">
                 ${condChip}
@@ -9053,6 +9122,55 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (!currentUser) { openModal('loginModal'); return; }
       // Determine billing interval from the pricing modal toggle
       const billing = _pricingBilling === 'yearly' ? 'annual' : 'monthly';
+
+      // ── Tier-change guards ───────────────────────────────────────────
+      // Detect downgrades (current tier ranks higher than target) and warn
+      // the user about the impact (listing cap shrinking, feature loss)
+      // BEFORE we hit Stripe. The Edge Function will hold the current
+      // tier through the paid period for downgrades, but the user should
+      // know what they're committing to.
+      var currentTier = userTier();
+      var currentRank = TIER_ORDER.indexOf(currentTier);
+      var targetRank  = TIER_ORDER.indexOf(tier);
+      if (currentRank > 0 && targetRank < currentRank) {
+        // Downgrade — show listing-impact warning.
+        var newCap = TIER_LISTING_CAPS[tier] || 0;
+        var activeCount = activeListingCount();
+        var warnings = [];
+        if (newCap === 0) {
+          warnings.push('You will lose marketplace selling entirely. ' +
+            'Your ' + activeCount + ' active listing(s) will be deactivated at the period end.');
+        } else if (activeCount > newCap) {
+          warnings.push('You have ' + activeCount + ' active listing(s) but ' +
+            tier.charAt(0).toUpperCase() + tier.slice(1) + ' tier caps at ' + newCap + '. ' +
+            'You will need to deactivate ' + (activeCount - newCap) +
+            ' listing(s) before your downgrade takes effect.');
+        }
+        // Feature loss warnings
+        if (currentTier === 'vendor' && tier === 'enthusiast') {
+          warnings.push('You will lose: non-TCG product listings, product scanner access.');
+        }
+        if ((currentTier === 'shop' || currentTier === 'vendor') && tier === 'collector') {
+          warnings.push('You will lose: bulk CSV import, sales archive analytics, multi-binder, marketplace selling.');
+        }
+        var msg = 'You\'re downgrading from ' + TIER_COLORS[currentTier].label +
+          ' to ' + TIER_COLORS[tier].label + '.\n\n' +
+          'Your current plan stays active until the end of your paid period, ' +
+          'then the new tier takes over with no double-charge.\n\n' +
+          (warnings.length ? warnings.join('\n\n') + '\n\n' : '') +
+          'Confirm downgrade?';
+        if (typeof pbConfirm === 'function') {
+          var ok = await pbConfirm(msg, {
+            confirmText: 'CONFIRM DOWNGRADE',
+            cancelText: 'KEEP CURRENT TIER',
+            danger: true,
+          });
+          if (!ok) return;
+        } else if (!window.confirm(msg)) {
+          return;
+        }
+      }
+
       showToast('Redirecting to checkout...');
       try {
         const result = await callEdgeFunction('create-checkout-session', {
@@ -9062,8 +9180,25 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           successUrl: window.location.origin + window.location.pathname,
           cancelUrl:  window.location.origin + window.location.pathname,
         });
+        // The Edge Function returns one of two shapes:
+        //   { url: '<stripe checkout url>' }                    — new sub flow
+        //   { url: null, updated: true, mode: '...', ... }     — existing sub updated (proration applied)
         if (result.url) {
           window.location.href = result.url;
+        } else if (result.updated) {
+          if (result.mode === 'upgrade_prorated') {
+            showToast('✓ Upgraded — unused time credited to new tier');
+          } else if (result.mode === 'downgrade_at_period_end') {
+            var periodEnd = result.current_period_end
+              ? new Date(result.current_period_end * 1000).toLocaleDateString()
+              : 'period end';
+            showToast('✓ Downgrade scheduled. Current tier active until ' + periodEnd);
+          } else {
+            showToast('✓ Subscription updated');
+          }
+          // Refetch profile so the UI reflects the new tier
+          if (typeof refreshProfile === 'function') await refreshProfile();
+          renderMyListings && renderMyListings();
         } else {
           showToast('Checkout unavailable — see console for details');
         }
@@ -9847,7 +9982,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                     return `<div class="ndash-tcard" onclick="openBinderCardDetail('${item.id}')">
                       <div class="ndash-tcard-art">
                         ${item.card_image_url
-                          ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${item.id}')">`
+                          ? `<img src="${_pickThumbVariant(item.card_image_url, 200)}" data-fallback="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{_binderImgFail(this,'${item.id}')}">`
                           : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
                       </div>
                       <div class="ndash-tcard-foot">
@@ -9924,9 +10059,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                  scanner) so shops can OCR Funko Pops + other non-TCG
                  products to autofill their listings. -->
             ${(() => {
-              var _tier = (currentUser && currentUser.subscription_tier) || '';
-              var _isShop = _tier === 'shop' || (currentUser && currentUser.is_admin);
-              if (!_isShop) return '';
+              // Product scanner moved from shop-only to vendor+ as part of
+              // the new tier structure. Vendor tier ($75/mo) and Shop tier
+              // both unlock the non-TCG product scanner. Admins always
+              // qualify regardless of tier.
+              if (!hasProductScanner() && !(currentUser && currentUser.is_admin)) return '';
               return `<div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-product-cta" style="position:relative;margin-top:10px">
                 <div style="position:absolute;top:7px;right:8px;z-index:3;display:flex;align-items:center">
                   <span class="ndash-drag-handle" title="Drag to move" style="color:rgba(0,0,0,0.45);font-size:13px">⠿</span>
@@ -10510,7 +10647,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return '<div class="ndash-tcard" onclick="openBinderCardDetail(\'' + item.id + '\')">' +
           '<div class="ndash-tcard-art">' +
             (item.card_image_url
-              ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="_binderImgFail(this,\'' + item.id + '\')">'
+              ? '<img src="' + _pickThumbVariant(item.card_image_url, 200) + '" data-fallback="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{_binderImgFail(this,\'' + item.id + '\')}">'
               : '<div class="ndash-tcard-art-ph">' + _escHtml(item.card_name.slice(0,12)) + '</div>') +
           '</div>' +
           '<div class="ndash-tcard-foot">' +
@@ -10589,8 +10726,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       var targetLabel = marketPrice > 0 ? 'market' : 'goal';
       var pct   = target > 0 ? Math.min(100, (saved / target) * 100) : 0;
       var pctStr = pct.toFixed(0);
+      // Raw image (no _thumbUrl) — see _thumbUrl comment: avoids the
+      // Supabase /storage/v1/render endpoint that counts against the
+      // Pro tier image-transformation quota. Browser scales the source
+      // down to the slot size; the bandwidth delta is small here.
       var img = c.card_image_url
-        ? '<img src="' + _thumbUrl(c.card_image_url, 200) + '" alt="" loading="lazy" decoding="async">'
+        ? '<img src="' + c.card_image_url + '" alt="" loading="lazy" decoding="async">'
         : '<div class="ndash-fund-mini-ph">♡</div>';
       var progress = target > 0
         ? '<div class="ndash-fund-bar"><div class="ndash-fund-bar-fill" style="width:' + pctStr + '%"></div></div>' +
@@ -11359,11 +11500,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const content = document.getElementById('myListingsContent');
       if (!content || !currentUser) return;
       const mine = listings.filter(l => l.seller_id === currentUser.id || l.sellerId === currentUser.id);
+      // Listing-cap status header (skip if free/collector since cap=0 means
+      // they shouldn't be here at all, or shop since cap=Infinity).
+      var _cap = listingCap();
+      var _used = activeListingCount();
+      var _capHtml = '';
+      if (_cap !== Infinity && _cap > 0) {
+        var _pct = _cap > 0 ? Math.round((_used / _cap) * 100) : 0;
+        var _color = _used >= _cap ? 'var(--red)' : (_used >= _cap * 0.8 ? 'var(--yellow,#FFD93D)' : 'var(--accent)');
+        _capHtml = '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid ' + _color + ';margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;font-family:\'Space Mono\',monospace;font-size:.72rem;color:var(--muted)">' +
+          '<span><b style="color:' + _color + '">' + _used + ' / ' + _cap + '</b> active listings (' + TIER_COLORS[userTier()].label + ' tier)</span>' +
+          (_used >= _cap
+            ? '<button onclick="openPricingModalWithPromo(\'' + (tierAtLeast('vendor') ? 'shop' : (tierAtLeast('enthusiast') ? 'vendor' : 'enthusiast')) + '\')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);font-size:.65rem">Upgrade for more →</button>'
+            : '<span>' + Math.max(0, _cap - _used) + ' slots remaining</span>') +
+          '</div>';
+      }
       if (mine.length === 0) {
-        content.innerHTML = '<div class="coll-empty">You have no active listings.<br>Click "List A Card" to get started.</div>';
+        content.innerHTML = _capHtml + '<div class="coll-empty">You have no active listings.<br>Click "List A Card" to get started.</div>';
         return;
       }
-      content.innerHTML = `<div class="coll-table-wrap"><table class="coll-table">
+      content.innerHTML = _capHtml + `<div class="coll-table-wrap"><table class="coll-table">
         <thead><tr><th>Card</th><th>Grade</th><th>Price</th><th>Status</th><th></th></tr></thead>
         <tbody>${mine.map(l => {
           const price = l.list_price || l.value || 0;
@@ -12125,7 +12281,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const el = document.getElementById('salesArchiveContent');
       if (!el || !currentUser) return;
 
-      const isVendorPlus = tierAtLeast('vendor');
+      // Sales-archive analytics moved to enthusiast tier (it was the old
+      // 'vendor' tier's headline feature; that tier got renamed). The
+      // variable name stays for code-history reasons but means "this user
+      // can see vendor-class analytics" — true for enthusiast / vendor / shop.
+      const isVendorPlus = tierAtLeast('enthusiast');
       const isShop       = tierAtLeast('shop');
       const { label: periodLabel } = _salesPeriodRange();
 
@@ -12469,7 +12629,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const inPeriod = d => !from || new Date(d) >= from;
 
       const offline = collectionItems.filter(c => c.sold_offline && inPeriod(c.offline_sale_date||'1900-01-01'));
-      const online  = tierAtLeast('vendor')
+      // Online sales view is part of the renamed enthusiast tier's
+      // analytics suite (was the old vendor tier's feature).
+      const online  = tierAtLeast('enthusiast')
         ? orders.filter(o => o.seller_id === currentUser?.id && o.status === 'completed' && inPeriod(o.created_at))
         : [];
 
@@ -12502,9 +12664,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       ].sort((a,b) => b.date.localeCompare(a.date));
     }
 
-    // ── CSV Export (Vendor+) ──────────────────────────────────────────────────
+    // ── CSV Export (Enthusiast+) ──────────────────────────────────────────────
+    // Was originally Vendor+; tier rename moved CSV export to the
+    // enthusiast tier (same feature set, lower price + 40-listing cap).
     function exportSalesCSV() {
-      if (!tierAtLeast('vendor')) { showToast('Vendor+ required'); return; }
+      if (!tierAtLeast('enthusiast')) { showToast('Enthusiast tier or higher required'); return; }
       const rows = _buildSalesRows();
       const { label } = _salesPeriodRange();
       const headers = ['Date','Card','Set','Condition','Channel','Revenue','Cost','Fee','Profit'];
@@ -12522,9 +12686,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       showToast('✓ CSV downloaded');
     }
 
-    // ── PDF Export — Vendor: itemized transaction list ────────────────────────
+    // ── PDF Export — Enthusiast+: itemized transaction list ──────────────────
     function exportSalesPDF() {
-      if (!tierAtLeast('vendor')) { showToast('Vendor+ required'); return; }
+      if (!tierAtLeast('enthusiast')) { showToast('Enthusiast tier or higher required'); return; }
       _loadJsPDF(() => {
         const { jsPDF } = window.jspdf;
         const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
@@ -12718,7 +12882,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const el = document.getElementById('historyContent');
       if (!el || !currentUser) return;
 
-      const isVendor = userIsVendor();
+      // 'isVendor' here means "can sell on the marketplace" — true for
+      // enthusiast / vendor / shop tiers. Legacy variable name kept to
+      // minimize churn in this function.
+      const isVendor = tierAtLeast('enthusiast');
 
       // ── Purchase History (all users) ──────────────────────────────────────
       const purchases = orders.filter(o => o.buyer_id === currentUser.id);
@@ -13089,15 +13256,55 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     function openListCardModal(prefill) {
       if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
-      // Selling on the marketplace is gated to the SHOP tier — vendor +
-      // collector accounts can still buy, manage their binders, etc., but
-      // can't publish new listings. Free / collector / vendor all bounce
-      // through the pricing modal so they can upgrade.
-      if (!tierAtLeast('shop')) {
+      // Marketplace selling is gated by subscription tier with per-tier
+      // listing caps:
+      //   free / collector : cannot sell (cap = 0)
+      //   enthusiast       : 40 concurrent active listings
+      //   vendor           : 150 listings + non-TCG products + product scanner
+      //   shop             : unlimited
+      // Bounce non-sellers through the pricing modal at the enthusiast
+      // tier (the lowest paid tier with marketplace access).
+      if (!tierAtLeast('enthusiast')) {
         if (typeof openPricingModalWithPromo === 'function') {
-          openPricingModalWithPromo('shop');
+          openPricingModalWithPromo('enthusiast');
         } else {
-          showToast('Shop plan required to list on the marketplace');
+          showToast('Enthusiast plan or higher required to list on the marketplace');
+        }
+        return;
+      }
+      // Cap enforcement: if at the listing limit, bounce to the next tier
+      // up so they can upgrade. Only Infinity-capped tiers skip this check.
+      if (!canCreateListing()) {
+        var cap = listingCap();
+        var nextTier = tierAtLeast('vendor') ? 'shop'
+                     : tierAtLeast('enthusiast') ? 'vendor'
+                     : 'enthusiast';
+        showToast('Listing limit reached (' + cap + '/' + cap + '). Upgrade to ' + nextTier + ' for more slots.');
+        if (typeof openPricingModalWithPromo === 'function') {
+          openPricingModalWithPromo(nextTier);
+        }
+        return;
+      }
+      // Product-type gating:
+      //   - Singles (TCG cards): allowed for enthusiast+
+      //   - Sealed TCG (booster boxes, ETBs, tins, decks): vendor+ only
+      //   - Non-TCG (Funko, Manga, etc.): vendor+ only
+      var _ptype = (prefill && prefill.productType) || '';
+      var _isSingle = !_ptype || _ptype === 'single' || _ptype === 'tcg_single';
+      var _isSealed = _ptype === 'sealed' || _ptype === 'tcg_sealed';
+      var _isNonTcg = _ptype && !_isSingle && !_isSealed;
+
+      if (_isSealed && !canListSealed()) {
+        showToast('Vendor tier or higher required to sell sealed product');
+        if (typeof openPricingModalWithPromo === 'function') {
+          openPricingModalWithPromo('vendor');
+        }
+        return;
+      }
+      if (_isNonTcg && !canListNonTCG()) {
+        showToast('Vendor tier or higher required for non-TCG product listings');
+        if (typeof openPricingModalWithPromo === 'function') {
+          openPricingModalWithPromo('vendor');
         }
         return;
       }
@@ -13226,9 +13433,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // check is cheap and defensive.
       var _scanRow = document.getElementById('lcScanProductRow');
       if (_scanRow) {
-        var _tier = (currentUser && currentUser.subscription_tier) || '';
-        var _isShop = _tier === 'shop' || (currentUser && currentUser.is_admin);
-        _scanRow.style.display = _isShop ? 'block' : 'none';
+        // Vendor+ tier unlocks the product scanner UI inside the listing
+        // modal. Admins always qualify regardless of tier.
+        var _showScan = hasProductScanner() || (currentUser && currentUser.is_admin);
+        _scanRow.style.display = _showScan ? 'block' : 'none';
       }
 
       openModal('listCardModal');
@@ -13276,9 +13484,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // for smaller file sizes; falls back to original if encoding fails)
       const photoUrls = [];
       for (const file of lcPhotos) {
-        const conv = await _imgToWebpBlob(file);
-        const path = `listings/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${conv.ext}`;
-        const { data: upData, error: upErr } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: false, contentType: conv.contentType });
+        // Generate full-size WebP + 200/400px variants in one decode.
+        // Variants are uploaded non-blocking after the main upload so
+        // the user flow doesn't wait on them.
+        const v = await _imgToWebpAndVariants(file);
+        const path = `listings/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${v.original.ext}`;
+        const { data: upData, error: upErr } = await sb.storage.from('card-photos').upload(path, v.original.blob, { upsert: false, contentType: v.original.contentType });
         if (upErr) {
           // If storage bucket doesn't exist, continue without photos
           console.warn('Photo upload failed:', upErr.message);
@@ -13286,6 +13497,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         }
         const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
         if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
+        // Fire-and-forget variant uploads (200/400px WebP siblings).
+        _uploadPhotoVariants(path, v.variants);
       }
 
       if (saveBtn) { saveBtn.textContent = 'Saving...'; }
@@ -14546,7 +14759,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ? '<a href="' + _escHtml(r.image_url) + '" target="_blank" rel="noopener" ' +
               'title="Click to view full-size image" ' +
               'style="width:96px;height:140px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in;text-decoration:none">' +
-                '<img src="' + _escHtml(_thumbUrl(r.image_url, 240)) + '" alt="" loading="lazy" decoding="async" ' +
+                // Raw image — admin tooling, low traffic, no transformation needed.
+                '<img src="' + _escHtml(r.image_url) + '" alt="" loading="lazy" decoding="async" ' +
                   'style="max-width:100%;max-height:100%;object-fit:contain">' +
               '</a>'
             : '<div style="width:96px;height:140px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden">' +
@@ -15492,12 +15706,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         };
         reader.readAsDataURL(file);
 
-        const conv = await _imgToWebpBlob(file);
-        const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${conv.ext}`;
-        const { error } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: true, contentType: conv.contentType });
+        const v = await _imgToWebpAndVariants(file);
+        const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${v.original.ext}`;
+        const { error } = await sb.storage.from('card-photos').upload(path, v.original.blob, { upsert: true, contentType: v.original.contentType });
         if (!error) {
           const { data } = sb.storage.from('card-photos').getPublicUrl(path);
           editPendingPhotoUrls.push(data.publicUrl);
+          _uploadPhotoVariants(path, v.variants, { upsert: true });
           // Update the last added img with the URL
           const imgs = document.getElementById('editCurrentPhotos').querySelectorAll('img');
           const lastImg = imgs[imgs.length - 1];
@@ -15646,16 +15861,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           };
           reader.readAsDataURL(file);
 
-          // Upload to Supabase Storage (webp re-encoded)
-          const conv = await _imgToWebpBlob(file);
-          const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${conv.ext}`;
-          const { error } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: true, contentType: conv.contentType });
+          // Upload to Supabase Storage (webp re-encoded + variants)
+          const v = await _imgToWebpAndVariants(file);
+          const path = `listings/${Date.now()}_${Math.random().toString(36).substr(2,6)}.${v.original.ext}`;
+          const { error } = await sb.storage.from('card-photos').upload(path, v.original.blob, { upsert: true, contentType: v.original.contentType });
 
           if (error) {
             console.error('Upload error:', error);
             status.textContent = `Error uploading ${file.name}: ${error.message}`;
             continue;
           }
+          _uploadPhotoVariants(path, v.variants, { upsert: true });
 
           const { data } = sb.storage.from('card-photos').getPublicUrl(path);
           pendingPhotoUrls.push(data.publicUrl);
@@ -15773,11 +15989,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         locked: ['Bulk CSV import','Multi-binder org','Sales archive & trade log'],
       },
       {
-        id: 'vendor', label: 'Vendor', monthly: 25, annual: 239.99,
-        ctaLabel: 'Start Vendor', ctaAction: 'checkout_vendor',
+        // Yearly discount scales with tier price: Collector 0% (no annual),
+        // Enthusiast 17%, Vendor 20%, Shop 25%. Matches the pre-rename
+        // pattern (old Vendor $25 → $239.99 = 20% off; Shop $200 → $1,800
+        // = 25% off). Bigger savings as price climbs.
+        id: 'enthusiast', label: 'Enthusiast', monthly: 20, annual: 199.99,
+        ctaLabel: 'Start Enthusiast', ctaAction: 'checkout_enthusiast',
         badge: null,
         features: [
           'Everything in Collector',
+          'Marketplace selling — TCG singles only',
+          '40 concurrent active listings',
+          '5% commission on sales',
           '1,000 bulk photo scan sessions / month',
           'Bulk CSV import',
           'Multi-binder organization',
@@ -15790,7 +16013,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           'Early feature access',
           '48-hour support response',
         ],
-        locked: ['Monthly revenue chart','Top cards & channel analytics','Full P&L report PDF','Dedicated account manager'],
+        locked: ['Sealed product listings (boxes/ETBs/tins)','Non-TCG product listings','Product scanner (Funko/Manga/etc.)','150 listing slots','Monthly revenue chart','Top cards & channel analytics','Full P&L report PDF'],
+      },
+      {
+        id: 'vendor', label: 'Vendor', monthly: 75, annual: 719.99,
+        ctaLabel: 'Start Vendor', ctaAction: 'checkout_vendor',
+        badge: null,
+        features: [
+          'Everything in Enthusiast',
+          'Marketplace selling — singles AND sealed product',
+          '150 concurrent active listings',
+          'Sealed TCG products (booster boxes, ETBs, UTBs, tins, decks)',
+          'Non-TCG product listings (Funko Pops, Manga, Posters, Plush, Statues)',
+          'Product scanner access (auto-identify non-TCG products)',
+          'Priority order management',
+          'Vendor-specific analytics',
+          '24-hour support response',
+        ],
+        locked: ['Unlimited listings','White-label storefront page','Full P&L report PDF','Dedicated account manager','Featured placement'],
       },
       {
         id: 'shop', label: 'Shop', monthly: 200, annual: 1800,
@@ -15798,6 +16038,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         badge: null,
         features: [
           'Everything in Vendor',
+          'Unlimited concurrent active listings',
           'Unlimited photo card scans',
           'Unlimited bulk scan sessions',
           'Monthly revenue bar chart',
@@ -19850,7 +20091,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           try {
             const { data: direct, error: directErr } = await sb.from('catalog')
               .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
-              .ilike('id', 'en-%')
+              .or(_pokemonENOrFilter())
               .ilike('name', '%' + query + '%')
               .limit(1000);
             if (!directErr && direct && direct.length) {
@@ -19952,7 +20193,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               .select('image_url, name')
               .eq('set_code', mapRow.pd_code)
               .eq('card_number', numPadded)
-              .like('id', 'en-%')
+              .or(_pokemonENOrFilter())
               .maybeSingle();
             // Guard: only use catalog image if the name matches — prevents wrong-card swaps
             // (e.g. catalog mis-numbered so card #044 is Magikarp instead of Bulbasaur)
@@ -20338,12 +20579,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         let userPhotoUrl = null;
         if (_atcPhotoBlob) {
           try {
-            const conv = await _imgToWebpBlob(_atcPhotoBlob);
-            const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${conv.ext}`;
-            const { error: upErr } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: false, contentType: conv.contentType });
+            const v = await _imgToWebpAndVariants(_atcPhotoBlob);
+            const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${v.original.ext}`;
+            const { error: upErr } = await sb.storage.from('card-photos').upload(path, v.original.blob, { upsert: false, contentType: v.original.contentType });
             if (!upErr) {
               const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
               userPhotoUrl = urlData?.publicUrl || null;
+              _uploadPhotoVariants(path, v.variants);
             }
           } catch(_) {}
         }
@@ -20543,12 +20785,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       let userPhotoUrl = null;
       if (_atcPhotoBlob) {
         try {
-          const conv = await _imgToWebpBlob(_atcPhotoBlob);
-          const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${conv.ext}`;
-          const { error: upErr } = await sb.storage.from('card-photos').upload(path, conv.blob, { upsert: false, contentType: conv.contentType });
+          const v = await _imgToWebpAndVariants(_atcPhotoBlob);
+          const path = `collection/${currentUser.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${v.original.ext}`;
+          const { error: upErr } = await sb.storage.from('card-photos').upload(path, v.original.blob, { upsert: false, contentType: v.original.contentType });
           if (!upErr) {
             const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
             userPhotoUrl = urlData?.publicUrl || null;
+            _uploadPhotoVariants(path, v.variants);
           } else {
             console.warn('[ATC] Photo upload failed:', upErr.message);
           }
@@ -21133,6 +21376,33 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         );
         if (upResult.error) throw upResult.error;
 
+        // Generate + upload variants from the already-cropped canvas
+        // (cheaper than re-decoding). Fire-and-forget so user flow
+        // doesn't wait on the variant encodes/uploads.
+        try {
+          var _cropW = canvas.width;
+          var _cropH = canvas.height;
+          var _vsizes = [200, 400].filter(function(s) { return s < _cropW; });
+          var _variantBlobs = {};
+          for (var _i = 0; _i < _vsizes.length; _i++) {
+            (function(w) {
+              var th = Math.round(_cropH * (w / _cropW));
+              var vc = document.createElement('canvas');
+              vc.width = w; vc.height = th;
+              vc.getContext('2d').drawImage(canvas, 0, 0, w, th);
+              vc.toBlob(function(vb) {
+                if (!vb) return;
+                var vpath = path.replace(/(\.[^.]+)?$/, '-' + w + '.webp');
+                sb.storage.from('card-photos').upload(vpath, vb, {
+                  upsert: false, contentType: 'image/webp',
+                }).then(function(r) {
+                  if (r.error) console.warn('[variant upload error]', vpath, r.error.message);
+                }).catch(function(e) { console.warn('[variant upload threw]', vpath, e); });
+              }, 'image/webp', 0.8);
+            })(_vsizes[_i]);
+          }
+        } catch (_vErr) { console.warn('[variants from canvas failed]', _vErr); }
+
         var urlData = sb.storage.from('card-photos').getPublicUrl(path);
         var publicUrl = urlData.data && urlData.data.publicUrl;
 
@@ -21504,8 +21774,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '      set user_id = new.id, claimed_at = now(), expires_at = v_exp',
         '      where id = v_invite.id;',
         '    update profiles set',
+        '      -- Post-tier-rename mapping: founding beta gets enthusiast',
+        '      -- (the spiritual successor to the old vendor tier — same',
+        '      -- feature set, dropped to $20/mo). Mapping to the NEW',
+        '      -- vendor tier ($75/mo with sealed + non-TCG + product',
+        '      -- scanner) would over-grant beyond what beta promised.',
         '      subscription_tier = case',
-        '        when v_invite.tier = \'founding\'  then \'vendor\'',
+        '        when v_invite.tier = \'founding\'  then \'enthusiast\'',
         '        when v_invite.tier = \'shop\'      then \'shop\'',
         '        else \'collector\' end,',
         '      subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
@@ -21562,8 +21837,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '  ) returning beta_testers.id into v_id;',
         '  if v_user_id is not null then',
         '    update profiles set',
+        '      -- founding beta → enthusiast (was \'vendor\' pre-rename;',
+        '      -- enthusiast inherited the same feature set at lower price).',
         '      subscription_tier = case',
-        '        when p_tier = \'founding\'  then \'vendor\'',
+        '        when p_tier = \'founding\'  then \'enthusiast\'',
         '        when p_tier = \'shop\'      then \'shop\'',
         '        else \'collector\' end,',
         '      subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
@@ -21603,14 +21880,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '    set user_id = auth.uid(), claimed_at = now(), expires_at = v_exp',
         '    where id = v_invite.id;',
         '  update profiles set',
+        '    -- founding beta → enthusiast (post-rename mapping).',
         '    subscription_tier = case',
-        '      when v_invite.tier = \'founding\'  then \'vendor\'',
+        '      when v_invite.tier = \'founding\'  then \'enthusiast\'',
         '      when v_invite.tier = \'shop\'      then \'shop\'',
         '      else \'collector\' end,',
         '    subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
         '  where id = auth.uid();',
         '  v_msg := case when v_invite.tier = \'shop\'',
-        '    then \'Welcome — Shop tier active for 1 year. Renew before expiry to keep shop perks; otherwise you\'\'ll drop to vendor.\'',
+        '    then \'Welcome — Shop tier active for 1 year. Renew before expiry to keep shop perks; otherwise you\'\'ll drop to enthusiast.\'',
         '    else \'Welcome to the beta\' end;',
         '  return query select v_invite.tier, true, v_msg;',
         'end;',
@@ -21641,7 +21919,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '      and p.subscription_tier = \'shop\'',
         '  )',
         '  update profiles p set',
-        '    subscription_tier = \'vendor\',',
+        '    -- Drops to enthusiast (was \'vendor\' pre-rename). Shop beta',
+        '    -- promised 1 year of shop access then fall-back to the next',
+        '    -- paid tier the user would normally subscribe to. That\'s the',
+        '    -- renamed enthusiast tier, not the new $75 vendor tier.',
+        '    subscription_tier = \'enthusiast\',',
         '    subscription_expires_at = null',
         '  from expired e where p.id = e.user_id;',
         '  get diagnostics v_count = row_count;',
@@ -21892,11 +22174,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // so the cap slot frees up for a new invite.
     async function adminSweepExpiredShopBeta() {
       if (!currentUser?.is_admin) return;
-      if (!confirm('Sweep all expired Shop-tier betas?\n\nAny user still on the free 1-year shop tier whose window has lapsed will be moved to vendor. Users on a paid shop subscription are not affected.')) return;
+      if (!confirm('Sweep all expired Shop-tier betas?\n\nAny user still on the free 1-year shop tier whose window has lapsed will be moved to enthusiast. Users on a paid shop subscription are not affected.')) return;
       var res = await sb.rpc('downgrade_expired_shop_beta');
       if (res.error) { showToast('Sweep failed: ' + res.error.message); return; }
       var n = (res.data == null) ? 0 : res.data;
-      showToast(n === 0 ? 'No expired shop betas — nothing to sweep' : 'Downgraded ' + n + ' shop beta' + (n === 1 ? '' : 's') + ' to vendor');
+      showToast(n === 0 ? 'No expired shop betas — nothing to sweep' : 'Downgraded ' + n + ' shop beta' + (n === 1 ? '' : 's') + ' to enthusiast');
       renderAdminBetaTesters();
       loadBetaUserCache().then(function() { try { renderBrowse(); } catch(_) {} updateAuthUI(); });
     }
@@ -23580,8 +23862,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       var used  = getUsageCount('scan');
       var limit = scannerLimit();
       if (used >= limit) {
-        var nextTier = tierAtLeast('vendor') ? null
-                     : tierAtLeast('collector') ? 'vendor' : 'collector';
+        var nextTier = tierAtLeast('enthusiast') ? null
+                     : tierAtLeast('collector') ? 'enthusiast' : 'collector';
         showToast('Monthly scan limit reached (' + limit + '/month).');
         setTimeout(function() {
           if (nextTier) openPricingModalWithPromo(nextTier);
@@ -23840,7 +24122,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           try {
             var pkRpc = await sb.from('catalog')
               .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
-              .ilike('id', 'en-%')
+              .or(_pokemonENOrFilter())
               .ilike('name', '%' + q + '%')
               .limit(1000);
             if (!pkRpc.error && pkRpc.data && pkRpc.data.length) {
@@ -25154,13 +25436,30 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       } catch(_) { /* best-effort */ }
     }
 
-    function _thumbUrl(url, width = 200, quality = 80) {
-      if (!url) return url;
-      const STORAGE = '/storage/v1/object/public/';
-      const RENDER  = '/storage/v1/render/image/public/';
-      if (url.includes(STORAGE)) {
-        return url.replace(STORAGE, RENDER) + `?width=${width}&quality=${quality}`;
-      }
+    // ─────────────────────────────────────────────────────────────────
+    // _thumbUrl — DEPRECATED. Don't call from new code.
+    //
+    // Rewrites a Supabase storage URL to hit the /storage/v1/render
+    // image-transformation endpoint with ?width=N&quality=Q. The
+    // endpoint counts every unique (image, width, quality) tuple
+    // against the Pro tier monthly "image transformations" quota
+    // (100/month included), which is trivially exhaustible across
+    // marketplace browse + binder grid + dashboard widgets. We hit
+    // 109/100 within weeks of enabling it. Also has a known issue
+    // returning 100×4032 slivers for certain user photos / catalog
+    // images, which was the original reason we stopped using it on
+    // the all-cards list view and the set detail rows.
+    //
+    // For now: serve raw images and let the browser scale them.
+    // If/when we want server-side thumbnails again, the right move
+    // is to pre-generate variants at upload time (or migrate to a
+    // dedicated image CDN like Cloudflare Images), not to revive
+    // this transform-on-fetch path.
+    //
+    // Kept as a no-op-friendly identity function so any latent
+    // caller (none expected) still gets a working URL.
+    // ─────────────────────────────────────────────────────────────────
+    function _thumbUrl(url, _width, _quality) {
       return url;
     }
 
@@ -25242,6 +25541,227 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (bitmap && typeof bitmap.close === 'function') bitmap.close();
         if (url) URL.revokeObjectURL(url);
       }
+    }
+
+    // ── MULTI-SIZE WEBP HELPER ─────────────────────────────────────────
+    // Decodes a user-supplied image once, then encodes both the full
+    // original (re-encoded as WebP, same logic as _imgToWebpBlob) AND
+    // resized variants at the requested widths. Used to generate fast
+    // thumbnails at upload time so we don't need Supabase's metered
+    // image-transformation endpoint to do it on the fly. Pairs with
+    // _uploadPhotoVariants below, which fires the variant uploads
+    // off non-blocking so the main upload doesn't wait on them.
+    //
+    // Returns:
+    //   {
+    //     original: { blob, ext, contentType },   // full-size, same shape as _imgToWebpBlob
+    //     variants: { 200: Blob, 400: Blob },     // resized WebP blobs keyed by width
+    //   }
+    // Variants are skipped for any width >= the source image's width
+    // (no point upscaling). On any decoder error, returns
+    // { original: fallback, variants: {} } so the caller can still
+    // upload the full-size file.
+    async function _imgToWebpAndVariants(input, sizes, quality = 0.85) {
+      sizes = sizes || [200, 400];
+      const origExt = (input.name && input.name.split('.').pop().toLowerCase()) ||
+                      (input.type === 'image/png'  ? 'png'  :
+                       input.type === 'image/webp' ? 'webp' :
+                       input.type === 'image/gif'  ? 'gif'  : 'jpg');
+      const fallbackOrig = {
+        blob: input, ext: origExt, contentType: input.type || 'application/octet-stream',
+      };
+      // GIFs: re-encoding would lose animation; skip variants entirely.
+      if (input.type === 'image/gif') {
+        return { original: fallbackOrig, variants: {} };
+      }
+      let url = null;
+      let bitmap = null;
+      try {
+        let drawW, drawH;
+        if (typeof createImageBitmap === 'function') {
+          try {
+            bitmap = await createImageBitmap(input, { imageOrientation: 'from-image' });
+          } catch (_) {
+            bitmap = await createImageBitmap(input);
+          }
+          drawW = bitmap.width;
+          drawH = bitmap.height;
+        } else {
+          url = URL.createObjectURL(input);
+          bitmap = await new Promise((resolve, reject) => {
+            const i = new Image();
+            i.onload  = () => resolve(i);
+            i.onerror = () => reject(new Error('image decode failed'));
+            i.src = url;
+          });
+          drawW = bitmap.naturalWidth;
+          drawH = bitmap.naturalHeight;
+        }
+
+        // 1. Full-size WebP — same logic as _imgToWebpBlob. Keep the
+        //    original input if WebP encoding is larger (already-optimized
+        //    JPEGs sometimes are) or if the input is already WebP.
+        let original = fallbackOrig;
+        if (input.type !== 'image/webp') {
+          const fullCanvas = document.createElement('canvas');
+          fullCanvas.width = drawW; fullCanvas.height = drawH;
+          fullCanvas.getContext('2d').drawImage(bitmap, 0, 0);
+          const fullWebp = await new Promise((resolve) => {
+            fullCanvas.toBlob(resolve, 'image/webp', quality);
+          });
+          if (fullWebp && fullWebp.size < input.size) {
+            original = { blob: fullWebp, ext: 'webp', contentType: 'image/webp' };
+          }
+        } else {
+          original = { blob: input, ext: 'webp', contentType: 'image/webp' };
+        }
+
+        // 2. Variants — skip widths >= source. Variants are always WebP
+        //    regardless of whether the full original re-encoded smaller,
+        //    because at 200/400px wide WebP is reliably much smaller.
+        const variants = {};
+        for (const w of sizes) {
+          if (w >= drawW) continue; // no upscaling
+          const targetH = Math.round(drawH * (w / drawW));
+          const vCanvas = document.createElement('canvas');
+          vCanvas.width = w; vCanvas.height = targetH;
+          vCanvas.getContext('2d').drawImage(bitmap, 0, 0, w, targetH);
+          const vBlob = await new Promise((resolve) => {
+            vCanvas.toBlob(resolve, 'image/webp', 0.8);
+          });
+          if (vBlob) variants[w] = vBlob;
+        }
+
+        return { original, variants };
+      } catch (err) {
+        console.warn('[webp variants] generation failed, returning original only:', err);
+        return { original: fallbackOrig, variants: {} };
+      } finally {
+        if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+        if (url) URL.revokeObjectURL(url);
+      }
+    }
+
+    // ── VARIANT UPLOAD (non-blocking) ──────────────────────────────────
+    // Given the path the original was uploaded to (e.g.
+    // "user-123/abc.webp") and a variants object from
+    // _imgToWebpAndVariants, fires each variant upload concurrently and
+    // logs any failures. Returns a Promise that resolves when all
+    // variant uploads finish (or fail). Callers usually fire-and-forget
+    // this so the main upload flow doesn't wait on it.
+    //
+    // Variant paths slot the width before the .webp extension:
+    //   originalPath: "user-123/abc.webp"
+    //   variantPath:  "user-123/abc-200.webp"
+    function _uploadPhotoVariants(originalPath, variants, opts) {
+      opts = opts || {};
+      const bucket = opts.bucket || 'card-photos';
+      const upsert = opts.upsert !== false;
+      const uploads = [];
+      for (const w of Object.keys(variants)) {
+        const vBlob = variants[w];
+        if (!vBlob) continue;
+        const vPath = originalPath.replace(/(\.[^.]+)?$/, '-' + w + '.webp');
+        uploads.push(
+          sb.storage.from(bucket).upload(vPath, vBlob, {
+            upsert: upsert,
+            contentType: 'image/webp',
+          }).then(r => {
+            if (r.error) console.warn('[variant upload error]', vPath, r.error.message);
+          }).catch(e => console.warn('[variant upload threw]', vPath, e))
+        );
+      }
+      return Promise.all(uploads);
+    }
+
+    // ── VARIANT URL PICKER ─────────────────────────────────────────────
+    // Given a Supabase Storage public URL and a target slot width,
+    // returns the URL of the smallest variant >= targetWidth. Variants
+    // are generated:
+    //   - At upload time (browser) by _imgToWebpAndVariants for user
+    //     photos in the card-photos bucket
+    //   - At mirror time (Python) by image_variants.upload_variants
+    //     for catalog images in the card-images bucket
+    //
+    // Returns the original URL untouched if:
+    //   - URL isn't a card-photos or card-images URL
+    //   - targetWidth isn't provided
+    //   - no variant width matches (target larger than any variant)
+    //
+    // Caller MUST add onerror fallback to the original URL so rows
+    // uploaded/mirrored before variant generation existed still render:
+    //   <img src="${_pickThumbVariant(url, 200)}"
+    //        data-fallback="${url}"
+    //        onerror="if(this.src!==this.dataset.fallback){this.src=this.dataset.fallback}">
+    //
+    // See task #41 (user uploads) and task #42 (catalog mirrors).
+    function _pickThumbVariant(url, targetWidth) {
+      if (!url) return url;
+      if (!targetWidth) return url;
+      // Only Supabase Storage buckets have variants. Anything else
+      // (pokemontcg.io API, raw PriceCharting, etc.) passes through.
+      var isCardPhotos = url.indexOf('/card-photos/') !== -1;
+      var isCardImages = url.indexOf('/card-images/') !== -1;
+      if (!isCardPhotos && !isCardImages) return url;
+      var SIZES = [200, 400];
+      var chosen = SIZES.find(function(s) { return s >= targetWidth; });
+      if (!chosen) return url; // target larger than any variant
+      // Strip query string, find extension, insert "-{w}" before it.
+      var qIdx = url.indexOf('?');
+      var base = qIdx >= 0 ? url.slice(0, qIdx) : url;
+      var qry  = qIdx >= 0 ? url.slice(qIdx)    : '';
+      // Replace .webp/.png/.jpg/etc with -{w}.webp (variants are always webp).
+      var replaced = base.replace(/(\.[^.\/]+)$/, '-' + chosen + '.webp');
+      // No extension in path? Append.
+      var finalBase = (replaced === base) ? (base + '-' + chosen + '.webp') : replaced;
+      return finalBase + qry;
+    }
+
+    // ── POKEMON EN LEGACY ID HELPERS ──────────────────────────────────
+    // The 'en-' prefix convention was introduced after the initial
+    // Pokemon catalog sync. Older rows still live with their raw
+    // pokemontcg.io ID (e.g. "sm12-45", "swsh7-22", "base4-12") — see
+    // diagnose with:
+    //   SELECT SPLIT_PART(id, '-', 1), COUNT(*) FROM catalog
+    //   WHERE product_type='single' GROUP BY 1 ORDER BY 2 DESC;
+    //
+    // Any client-side filter that checks `id.startsWith('en-')` or
+    // `.ilike('id', 'en-%')` misses these legacy rows. POKEMON_EN_LEGACY_PREFIXES
+    // lists every set-code stem that historically went un-prefixed.
+    // _POKEMON_EN_LEGACY_RE matches any id that begins with one of
+    // them followed by a digit OR hyphen (so `sm12-45` and `g1-7`
+    // match but `something-else` doesn't).
+    var POKEMON_EN_LEGACY_PREFIXES = [
+      'sm', 'swsh', 'xy', 'bw', 'ex', 'dp', 'pl',
+      'neo', 'base', 'gym', 'pop', 'ecard',
+      'col1', 'cel25', 'det1', 'g1',
+    ];
+    var _POKEMON_EN_LEGACY_RE = new RegExp(
+      '^(' + POKEMON_EN_LEGACY_PREFIXES.join('|') + ')(\\d|-)'
+    );
+
+    function isPokemonEN(id) {
+      if (!id) return false;
+      if (id.indexOf('en-') === 0) return true;
+      return _POKEMON_EN_LEGACY_RE.test(id);
+    }
+
+    // Build a PostgREST `or` filter that matches both `en-` IDs AND
+    // every legacy bare-set-code id. Returns the string ready to drop
+    // into a Supabase JS client `.or()` call:
+    //   sb.from('catalog').or(_pokemonENOrFilter())
+    // -> id=like.en-*,id=like.sm*,id=like.swsh*,...
+    //
+    // The `like.*` glob uses PostgreSQL's wildcard syntax which the
+    // Supabase JS client translates to `like.%` server-side. Without
+    // this, EN queries miss roughly two-thirds of the Pokemon EN
+    // catalog (everything synced before the prefix convention).
+    function _pokemonENOrFilter() {
+      var parts = ['id.like.en-*'];
+      for (var i = 0; i < POKEMON_EN_LEGACY_PREFIXES.length; i++) {
+        parts.push('id.like.' + POKEMON_EN_LEGACY_PREFIXES[i] + '*');
+      }
+      return parts.join(',');
     }
 
 
@@ -25553,7 +26073,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" style="width:36px;height:50px;object-fit:cover;object-position:center top;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        ${img ? `<img src="${_pickThumbVariant(img, 200)}" data-fallback="${_escHtml(img)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" style="width:36px;height:50px;object-fit:cover;object-position:center top;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -26151,7 +26671,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           while (offset < 50000) {  // safety ceiling
             const { data, error } = await sb.from('catalog')
               .select('set_code, set_name')
-              .ilike('id', 'en-%')
+              .or(_pokemonENOrFilter())
               .range(offset, offset + 999);
             if (error || !data || data.length === 0) break;
             data.forEach(r => {
@@ -26208,49 +26728,59 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
     }
 
-    // Prints the migration SQL for catalog_sets_summary to the console
-    // so an admin can copy-paste into Supabase's SQL editor. Run this
-    // once and the slow client-side dedupe path disappears.
+    // Prints the migration SQL for catalog_sets_summary +
+    // catalog_cards_in_set to the console. Superseded by
+    // migration_pokemon_en_legacy_ids.sql in the workspace folder,
+    // which also adds is_pokemon_en_id() so EN-tab queries pick up
+    // legacy bare-set-code rows (sm12-45, swsh7-22, base4-12, etc.).
+    //
+    // Kept here for reference / console access, but the file in the
+    // workspace folder is the canonical source going forward.
     function printCatalogSetsRpcSQL() {
       const sql = [
-        '-- PathBinder: fast Sets-page aggregate ─────────────────────',
-        '-- Returns one row per unique (set_code, set_name) in the',
-        '-- catalog for a given id prefix (en-/jp-/pd-), with card count.',
-        '-- Replaces a 20k+ row client-side dedupe with a single GROUP BY.',
-        'create or replace function catalog_sets_summary(p_prefix text)',
-        'returns table(set_code text, set_name text, total bigint)',
-        'language sql stable as $$',
-        '  select set_code, set_name, count(*) as total',
-        '  from catalog',
-        '  where id ilike p_prefix || \'%\'',
-        '    and set_code is not null',
-        '    and set_name is not null',
-        '  group by set_code, set_name;',
-        '$$;',
-        'grant execute on function catalog_sets_summary(text) to anon, authenticated;',
+        '-- See migration_pokemon_en_legacy_ids.sql for the canonical',
+        '-- version (includes is_pokemon_en_id helper + EN-legacy support).',
         '',
-        '-- PathBinder: fast Set-detail card fetch ──────────────────',
-        '-- Returns every card for a given id-prefix + set_code,',
-        '-- pre-ordered by card_number server-side. Replaces a',
-        '-- client-side ILIKE + sort that was scanning the whole',
-        '-- catalog for each click.',
-        'create or replace function catalog_cards_in_set(p_prefix text, p_set_code text)',
-        'returns table(id text, name text, card_number text, rarity text,',
-        '              set_code text, set_name text, image_url text, game_type text)',
-        'language sql stable as $$',
-        '  select id, name, card_number, rarity, set_code, set_name, image_url, game_type',
-        '  from catalog',
-        '  where id ilike p_prefix || \'%\'',
-        '    and set_code ilike p_set_code',
-        '  order by card_number;',
+        '-- Helper: matches both \'en-\' rows AND legacy bare set codes.',
+        'CREATE OR REPLACE FUNCTION public.is_pokemon_en_id(p_id text)',
+        'RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$',
+        '  SELECT p_id LIKE \'en-%\'',
+        '      OR p_id ~ \'^(sm|swsh|xy|bw|ex|dp|pl|neo|base|gym|pop|ecard|col1|cel25|det1|g1)(\\d|-)\';',
         '$$;',
-        'grant execute on function catalog_cards_in_set(text, text) to anon, authenticated;',
+        'GRANT EXECUTE ON FUNCTION public.is_pokemon_en_id(text) TO anon, authenticated;',
+        '',
+        '-- Sets-page aggregate. EN prefix path includes legacy ids.',
+        'CREATE OR REPLACE FUNCTION public.catalog_sets_summary(p_prefix text)',
+        'RETURNS TABLE(set_code text, set_name text, total bigint)',
+        'LANGUAGE sql STABLE AS $$',
+        '  SELECT set_code, set_name, COUNT(*) AS total',
+        '  FROM catalog',
+        '  WHERE set_code IS NOT NULL AND set_name IS NOT NULL',
+        '    AND ( (p_prefix = \'en-\' AND is_pokemon_en_id(id))',
+        '          OR (p_prefix <> \'en-\' AND id ILIKE p_prefix || \'%\') )',
+        '  GROUP BY set_code, set_name;',
+        '$$;',
+        'GRANT EXECUTE ON FUNCTION public.catalog_sets_summary(text) TO anon, authenticated;',
+        '',
+        '-- Set-detail card fetch. EN prefix path includes legacy ids.',
+        'CREATE OR REPLACE FUNCTION public.catalog_cards_in_set(p_prefix text, p_set_code text)',
+        'RETURNS TABLE(id text, name text, card_number text, rarity text,',
+        '              set_code text, set_name text, image_url text, game_type text)',
+        'LANGUAGE sql STABLE AS $$',
+        '  SELECT id, name, card_number, rarity, set_code, set_name, image_url, game_type',
+        '  FROM catalog',
+        '  WHERE set_code ILIKE p_set_code',
+        '    AND ( (p_prefix = \'en-\' AND is_pokemon_en_id(id))',
+        '          OR (p_prefix <> \'en-\' AND id ILIKE p_prefix || \'%\') )',
+        '  ORDER BY card_number;',
+        '$$;',
+        'GRANT EXECUTE ON FUNCTION public.catalog_cards_in_set(text, text) TO anon, authenticated;',
         '',
         '-- Recommended indexes (one-time, big speed-up for both RPCs):',
         'create index if not exists catalog_set_code_lower_idx on catalog (lower(set_code));',
         'create index if not exists catalog_id_prefix_idx on catalog (id text_pattern_ops);',
       ].join('\n');
-      console.log('%cPathBinder catalog_sets_summary + catalog_cards_in_set migration:', 'color:orange;font-weight:bold;font-size:14px');
+      console.log('%cPathBinder Sets RPCs (with EN-legacy support):', 'color:orange;font-weight:bold;font-size:14px');
       console.log(sql);
     }
 
@@ -27597,7 +28127,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             try {
               const { data: catRows } = await sb.from('catalog')
                 .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
-                .ilike('id', 'en-%')
+                .or(_pokemonENOrFilter())
                 .ilike('set_code', setId)
                 .order('card_number', { ascending: true })
                 .limit(500);
@@ -30586,46 +31116,45 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     // ── Google Cloud Vision OCR ──────────────────────────────────────────────
-    // Paste your API key here. In Google Cloud Console, restrict it to
-    // the Vision API and your domain to prevent abuse.
-    const GCV_API_KEY = 'AIzaSyDgIwyprsrkBmyXSYM1sOjh2V9MFZHPnmc';
-
+    // Calls /api/vision-ocr (Vercel serverless endpoint) which holds the
+    // GCV_API_KEY server-side and proxies the request to Google. The
+    // previous version hard-coded the API key in this file, which meant
+    // anyone reading the page source could steal it and run unlimited
+    // Vision API calls billed to our account. Now the key never leaves
+    // the server — see /api/vision-ocr.js for the proxy implementation.
     async function ocrCardText(dataURL) {
-      if (!GCV_API_KEY || GCV_API_KEY.startsWith('PASTE')) {
-        console.warn('[GCV] No API key set');
-        return '';
-      }
       try {
-        // Strip the data:image/...;base64, prefix
-        const base64 = dataURL.split(',')[1];
-        const res = await fetch(
-          'https://vision.googleapis.com/v1/images:annotate?key=' + GCV_API_KEY,
-          {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              requests: [{
-                image:    { content: base64 },
-                features: [{ type: 'TEXT_DETECTION', maxResults: 1 }]
-              }]
-            })
-          }
-        );
+        // Strip the data:image/...;base64, prefix client-side (the proxy
+        // strips it too, but stripping here keeps the request payload
+        // smaller by ~30 bytes per call).
+        const base64 = dataURL.indexOf(',') >= 0 ? dataURL.split(',')[1] : dataURL;
+        if (!base64) {
+          console.warn('[GCV] empty image data');
+          return '';
+        }
+        const res = await fetch('/api/vision-ocr', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64 }),
+        });
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
-          const reason = errJson?.error?.message || ('HTTP ' + res.status);
-          if (res.status === 403) {
-            console.error('[GCV] 403 — check two things in Google Cloud Console:\n' +
-              '  1. Cloud Vision API is enabled for your project\n' +
-              '  2. Your API key has no HTTP referrer restrictions blocking ' + location.hostname);
-            setScanStatus('Vision API key error (403) — see console for fix');
+          const reason = (errJson && errJson.error) || ('HTTP ' + res.status);
+          if (res.status === 502 || res.status === 503) {
+            // Upstream (Google) issue surfaced through the proxy.
+            console.error('[GCV] proxy reported upstream issue:', reason);
+            setScanStatus('Vision API temporarily unavailable — try again');
+          } else if (res.status === 500) {
+            // Proxy misconfiguration — GCV_API_KEY missing in Vercel env.
+            console.error('[GCV] proxy error:', reason);
+            setScanStatus('Vision proxy not configured — see console');
           } else {
             console.error('[GCV] error:', reason);
           }
           return '';
         }
         const json = await res.json();
-        const text = (json.responses[0].textAnnotations || [])[0]?.description || '';
+        const text = (json && json.text) || '';
         console.log('[GCV] raw text:', JSON.stringify(text.slice(0, 200)));
         return text;
       } catch (e) {
@@ -31172,8 +31701,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const limit = scannerLimit();
         if (used >= limit) {
           // Determine which tier to upsell to
-          const nextTier = tierAtLeast('vendor') ? null
-                         : tierAtLeast('collector') ? 'vendor' : 'collector';
+          const nextTier = tierAtLeast('enthusiast') ? null
+                         : tierAtLeast('collector') ? 'enthusiast' : 'collector';
           const remaining = 'Monthly scan limit reached (' + limit + '/month).';
           setScanStatus(remaining + (nextTier ? ' Upgrade for more.' : ' Contact us to move to Shop.'));
           if (nextTier) {
@@ -31520,7 +32049,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const bulkUsed  = getUsageCount('bulk');
       const bulkLimit = bulkSessionLimit();
       if (bulkUsed >= bulkLimit) {
-        const nextTier = tierAtLeast('vendor') ? null : 'vendor';
+        const nextTier = tierAtLeast('enthusiast') ? null : 'enthusiast';
         if (nextTier) {
           showToast('Monthly bulk scan limit reached (' + bulkLimit + '). Upgrading unlocks more.');
           setTimeout(() => openPricingModalWithPromo(nextTier), 600);

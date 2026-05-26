@@ -12,18 +12,25 @@ const corsHeaders = {
 
 // ── Stripe Price ID map ───────────────────────────────────────────────────────
 // Store these in Supabase Edge Function secrets (Dashboard → Edge Functions → Secrets):
-//   STRIPE_PRICE_COLLECTOR_MONTHLY
-//   STRIPE_PRICE_VENDOR_MONTHLY
-//   STRIPE_PRICE_VENDOR_ANNUAL
-//   STRIPE_PRICE_SHOP_MONTHLY
-//   STRIPE_PRICE_SHOP_ANNUAL
+//   STRIPE_PRICE_COLLECTOR_MONTHLY    ($5/mo,  no annual)
+//   STRIPE_PRICE_ENTHUSIAST_MONTHLY   ($20/mo)
+//   STRIPE_PRICE_ENTHUSIAST_ANNUAL    ($199.99/yr — 17% off)
+//   STRIPE_PRICE_VENDOR_MONTHLY       ($75/mo)
+//   STRIPE_PRICE_VENDOR_ANNUAL        ($719.99/yr — 20% off)
+//   STRIPE_PRICE_SHOP_MONTHLY         ($200/mo)
+//   STRIPE_PRICE_SHOP_ANNUAL          ($1,800/yr — 25% off)
+//
+// Tier renamed from old vendor ($25/mo) to enthusiast ($20/mo, 40 listing cap).
+// New vendor tier ($75/mo, 150 listings, product scanner) added on top.
 function getPriceId(tier: string, billing: string): string {
   const map: Record<string, string> = {
-    'collector_monthly': Deno.env.get('STRIPE_PRICE_COLLECTOR_MONTHLY') || '',
-    'vendor_monthly':    Deno.env.get('STRIPE_PRICE_VENDOR_MONTHLY')    || '',
-    'vendor_annual':     Deno.env.get('STRIPE_PRICE_VENDOR_ANNUAL')     || '',
-    'shop_monthly':      Deno.env.get('STRIPE_PRICE_SHOP_MONTHLY')      || '',
-    'shop_annual':       Deno.env.get('STRIPE_PRICE_SHOP_ANNUAL')       || '',
+    'collector_monthly':  Deno.env.get('STRIPE_PRICE_COLLECTOR_MONTHLY')  || '',
+    'enthusiast_monthly': Deno.env.get('STRIPE_PRICE_ENTHUSIAST_MONTHLY') || '',
+    'enthusiast_annual':  Deno.env.get('STRIPE_PRICE_ENTHUSIAST_ANNUAL')  || '',
+    'vendor_monthly':     Deno.env.get('STRIPE_PRICE_VENDOR_MONTHLY')     || '',
+    'vendor_annual':      Deno.env.get('STRIPE_PRICE_VENDOR_ANNUAL')      || '',
+    'shop_monthly':       Deno.env.get('STRIPE_PRICE_SHOP_MONTHLY')       || '',
+    'shop_annual':        Deno.env.get('STRIPE_PRICE_SHOP_ANNUAL')        || '',
   }
   const key = `${tier}_${billing}`
   const priceId = map[key]
@@ -113,6 +120,61 @@ Deno.serve(async (req) => {
         .eq('id', userId)
         .single()
 
+      // ── Tier change with proration ─────────────────────────────────────
+      // If the user already has an active subscription, we should UPDATE it
+      // (with proration_behavior='create_prorations') rather than create a
+      // new one. Stripe automatically credits the unused portion of the
+      // current period and invoices the difference for the new price.
+      //
+      // Example: User paid $239.99 for an annual Enthusiast plan on day 1
+      // and upgrades to Vendor ($719.99/yr) on day 90. Stripe credits
+      // (275/365) × $239.99 = $180.81 of unused enthusiast time, then
+      // invoices (275/365) × $719.99 − $180.81 = $361.66 for the rest of
+      // the year on Vendor. The user lands exactly at the new tier with
+      // no double-billing or lost time.
+      //
+      // For downgrades we use proration_behavior='none' instead so the
+      // user keeps their current tier through the end of the paid period,
+      // then drops to the new tier at the next renewal — matches what the
+      // user asked for ("membership stays true for as long as the
+      // original tier sub is active").
+      if (profile?.stripe_customer_id) {
+        const existingSubs = await stripe.subscriptions.list({
+          customer: profile.stripe_customer_id,
+          status: 'active',
+          limit: 5,
+        })
+        const liveSub = existingSubs.data.find(s => s.status === 'active' || s.status === 'trialing')
+        if (liveSub) {
+          // Map tier ordering to detect upgrade vs downgrade.
+          const TIER_RANK: Record<string, number> = {
+            free: 0, collector: 1, enthusiast: 2, vendor: 3, shop: 4,
+          }
+          const currentTier = (liveSub.metadata?.tier || '').toLowerCase()
+          const isUpgrade = (TIER_RANK[tier] || 0) > (TIER_RANK[currentTier] || 0)
+
+          const updated = await stripe.subscriptions.update(liveSub.id, {
+            items: [{ id: liveSub.items.data[0].id, price: priceId }],
+            // Upgrades prorate immediately (credit + invoice the diff).
+            // Downgrades hold the current tier until period end.
+            proration_behavior: isUpgrade ? 'create_prorations' : 'none',
+            metadata: { type: 'subscription', tier, user_id: userId },
+          })
+
+          // Webhook will pick up subscription.updated and sync profiles row.
+          return new Response(JSON.stringify({
+            url: null,
+            updated: true,
+            mode: isUpgrade ? 'upgrade_prorated' : 'downgrade_at_period_end',
+            subscription_id: updated.id,
+            current_period_end: updated.current_period_end,
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
+
+      // ── No existing subscription → standard Checkout flow ──────────────
       const sessionParams: any = {
         mode: 'subscription',
         line_items: [{ price: priceId, quantity: 1 }],
