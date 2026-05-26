@@ -200,62 +200,71 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     h2{font-size:1rem;font-weight:700;margin-bottom:6px;color:var(--copper);letter-spacing:.06em}
     .subtitle{color:var(--muted);margin-bottom:20px;font-size:.95rem}
 
-    /* ACCOUNT PAGE */
-    /* Per-tab background art for the account page. Painted on BODY
-       (not #accountPage) so the artwork covers everything including
-       the social footer + any below-content padding. Without painting
-       on body, the bg would stop at the bottom of #accountPage and
-       the footer would sit on bare body bg. Stamped + cleared via
-       body[data-acc-bg=...] in switchAccountTab() / showPage().
-       Dashboard tab gets dashboard.webp; transaction tabs share
-       dash2.webp. Badges tab + default keep the plain page background. */
-    body[data-acc-bg="dashboard"],
-    body[data-acc-bg="myListings"],
-    body[data-acc-bg="myOrders"],
-    body[data-acc-bg="salesArchive"],
-    body[data-acc-bg="watchlist"],
-    body[data-acc-bg="history"],
-    body[data-acc-bg="tradeHistory"] {
+    /* PAGE-LEVEL BACKGROUND ART */
+    /* Per-page background images painted on BODY (not the page element)
+       so the artwork covers everything including the social footer +
+       any below-content padding. Without painting on body, the bg
+       would stop at the bottom of the page element. Stamped + cleared
+       via body[data-page-bg=...] in switchAccountTab() / showPage().
+       Values: dashboard / myListings / myOrders / salesArchive /
+       watchlist / history / tradeHistory  → account tabs (desktop-only,
+       hidden on mobile because the wide landscape art doesn't read on
+       portrait viewports — to be revisited);
+       sets → Sets page artwork (sets.webp), works on mobile + desktop. */
+    body[data-page-bg="dashboard"],
+    body[data-page-bg="myListings"],
+    body[data-page-bg="myOrders"],
+    body[data-page-bg="salesArchive"],
+    body[data-page-bg="watchlist"],
+    body[data-page-bg="history"],
+    body[data-page-bg="tradeHistory"],
+    body[data-page-bg="sets"] {
       background-size: cover;
       background-position: center top;
       background-repeat: no-repeat;
       background-attachment: fixed;
     }
-    /* Mobile bg tuning. `background-attachment: fixed` is laggy / janky
-       on iOS Safari and causes flicker on Android Chrome — switch to
-       scroll so the bg moves with the page. Also re-position so a
-       portrait viewport shows the more centred / interesting slice of
-       the wide landscape art, and dim it further (background-color
-       behind the image is composited via overlay so the dark backdrop
-       reads through the dimly-lit cyberpunk corridors). */
+    body[data-page-bg="dashboard"]    { background-image: url('dashboard.webp'); }
+    body[data-page-bg="myListings"],
+    body[data-page-bg="myOrders"],
+    body[data-page-bg="salesArchive"],
+    body[data-page-bg="watchlist"],
+    body[data-page-bg="history"],
+    body[data-page-bg="tradeHistory"] { background-image: url('dash2.webp'); }
+    body[data-page-bg="sets"]         { background-image: url('sets.webp'); }
+    /* The page element itself is transparent so body's bg shows through.
+       (The element-level bg approach would clip at the page's bottom
+       edge.) Footer transparent for the same reason. */
+    body[data-page-bg] #accountPage,
+    body[data-page-bg] #setsPage    { background: transparent; }
+    body[data-page-bg] .social-footer { background: transparent; }
+    /* Mobile tuning. Dashboard / dash2 art doesn't read on portrait
+       viewports — wide landscape gets cropped to an unrecognizable
+       middle slice — so we strip those bgs entirely on mobile and
+       fall back to the default surface. The Sets bg DOES read well
+       on mobile, so it stays — just switched to scroll attachment
+       (iOS Safari can't render fixed bgs without flicker) and shifted
+       off-center to bias toward one side. */
     @media (max-width: 900px) {
-      body[data-acc-bg="dashboard"],
-      body[data-acc-bg="myListings"],
-      body[data-acc-bg="myOrders"],
-      body[data-acc-bg="salesArchive"],
-      body[data-acc-bg="watchlist"],
-      body[data-acc-bg="history"],
-      body[data-acc-bg="tradeHistory"] {
+      body[data-page-bg="dashboard"],
+      body[data-page-bg="myListings"],
+      body[data-page-bg="myOrders"],
+      body[data-page-bg="salesArchive"],
+      body[data-page-bg="watchlist"],
+      body[data-page-bg="history"],
+      body[data-page-bg="tradeHistory"] {
+        background-image: none;
+        background-color: transparent;
+      }
+      body[data-page-bg="sets"] {
         background-attachment: scroll;
-        background-position: center center;
-        /* Dim layer composited with the image so content stays legible
-           on a small screen where the bg can't help but compete. */
-        background-color: rgba(0, 0, 0, 0.55);
-        background-blend-mode: darken;
+        /* Shift right so the focal element of the artwork stays in
+           the visible portrait slice rather than getting center-cropped
+           into a flat region. Tune this if a different anchor reads
+           better — 75% biases toward the right edge. */
+        background-position: 75% center;
       }
     }
-    body[data-acc-bg="dashboard"]    { background-image: url('dashboard.webp'); }
-    body[data-acc-bg="myListings"],
-    body[data-acc-bg="myOrders"],
-    body[data-acc-bg="salesArchive"],
-    body[data-acc-bg="watchlist"],
-    body[data-acc-bg="history"],
-    body[data-acc-bg="tradeHistory"] { background-image: url('dash2.webp'); }
-    /* #accountPage itself is transparent so body's bg shows through.
-       (The element-level bg approach would clip at #accountPage's
-       bottom edge — see comment above.) */
-    body[data-acc-bg] #accountPage { background: transparent; }
-    body[data-acc-bg] .social-footer { background: transparent; }
     /* The default .page rule caps width at 1160px — which means
        #accountPage itself is only 1160px wide, and the background
        image (painted on that element) can never extend past that
@@ -3036,33 +3045,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       padding:36px 38px 40px !important;
       min-height:calc(100svh - 60px);
     }
-    #setsPage > .sets-bg{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      /* cover (not fill) so the image keeps its native aspect ratio —
-         fill was width-squishing the artwork on narrow viewports. */
-      object-fit:cover;
-      /* desktop anchor — center the artwork; mobile override below
-         shifts the cat off-screen to the right for more negative space. */
-      object-position:center top;
-      pointer-events:none;
-      user-select:none;
-      -webkit-user-drag:none;
-      z-index:0;
-    }
-    /* Default: show desktop backdrop, hide mobile. Mobile media query
-       below flips them. */
-    #setsPage > .sets-bg.sets-bg-mobile{ display:none; }
-    #setsPage > .sets-bg.sets-bg-desktop{ display:block; }
-    /* Lift every child of #setsPage above the absolutely-positioned
-       <img> backdrop. The page content has stacking authority and the
-       backdrop sits behind it. */
-    #setsPage > *:not(.sets-bg){
-      position:relative;
-      z-index:1;
-    }
+    /* The legacy `<img class="sets-bg">` + container CSS was removed
+       when the Sets page moved to the body-level background system
+       (body[data-page-bg="sets"]) — see the PAGE-LEVEL BACKGROUND ART
+       block higher in the sheet. The page contents stay in normal
+       flow with their own backgrounds set on the inner panels. */
     /* Re-map the accent palette WITHIN the sets page (and the card
        detail modal that opens from it). Every descendant rule that
        uses var(--accent) / var(--copper) etc. automatically picks up
@@ -3169,34 +3156,15 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #setsPage .allcards-row{
       border-bottom-color:var(--sets-border) !important;
     }
-    /* Mobile: swap to a portrait crop of the same artwork (right-side
-       slice of sets_cards.png) so the cat + right-edge graffiti land in
-       the visible area instead of being stretched to oblivion. We flip
-       which <img> renders rather than swapping a background-image URL,
-       because Brave-on-iOS chokes on CSS background-image swaps for
-       reasons we never fully isolated — the <img> path is bulletproof. */
+    /* Mobile: tighter page padding + smaller hero title. The bg
+       horizontal anchor is handled at the body level (see the
+       PAGE-LEVEL BACKGROUND ART @media block — bg-position 75% center
+       on mobile so the focal art biases to the right of the viewport). */
     @media(max-width:780px){
       #setsPage{
         padding:24px 16px 32px !important;
+        overflow:hidden;
       }
-      #setsPage > .sets-bg.sets-bg-desktop{ display:none; }
-      #setsPage > .sets-bg.sets-bg-mobile{
-        display:block;
-        /* Push the cat's right side off the viewport so the left half
-           opens up as negative space for the tab pills + search input.
-           Using transform (not object-position past 100%) because Brave
-           on iOS appears to clamp object-position to the container,
-           while transform is a pure geometric translate it can't
-           ignore. 18% shifts noticeably without losing the cat. */
-        object-position:right top;
-        transform:translateX(18%);
-        /* The translate carries the inner image off the right edge;
-           the host <img> stays inside the page, but its painted pixels
-           overflow. We don't want a horizontal scroll bar, so clip at
-           the page level (already overflow:hidden via the .page class
-           in the base sheet — kept here as a safety net). */
-      }
-      #setsPage{ overflow:hidden; }
       #setsPage .pb-page-hdr-title{ font-size:20px !important; }
     }
 
@@ -7105,9 +7073,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
   <!-- ── SETS COMPLETION TRACKER ────────────────────────────────────────── -->
   <div id="setsPage" class="page">
-    <img class="sets-bg sets-bg-desktop" src="sets_cards.webp?v=2" alt="" aria-hidden="true">
-    <img class="sets-bg sets-bg-mobile"  src="sets_cards_mobile.webp?v=2" alt="" aria-hidden="true">
-    <!-- Title/sub hero removed per design pass — page content speaks for itself. -->
+    <!-- Page-level artwork is now painted on body[data-page-bg="sets"]
+         (see CSS, stamped from showPage('sets')) so it spans the full
+         viewport + covers the social footer like the dashboard bg.
+         The old <img class="sets-bg"> approach lived here previously
+         and was anchored inside #setsPage; now removed. -->
     <div id="setsPageContent">
       <div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>
     </div>
@@ -8231,10 +8201,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Body state classes
       document.body.classList.toggle('on-binder', pageId === 'collection');
       document.body.classList.toggle('on-landing', pageId === 'landing');
-      // Clear the account-tab background art when leaving the account
-      // page so the dashboard.webp / dash2.webp don't bleed into other
-      // pages. switchAccountTab() re-stamps it on return.
-      if (pageId !== 'account') document.body.removeAttribute('data-acc-bg');
+      // Manage page-level background art. The account page hands off
+      // to switchAccountTab(), which paints dashboard.webp / dash2.webp
+      // per-tab. The sets page stamps its own bg here.
+      if (pageId === 'sets') {
+        document.body.setAttribute('data-page-bg', 'sets');
+      } else if (pageId !== 'account') {
+        // Any non-account, non-sets page clears the artwork so the
+        // backgrounds don't bleed across pages. Account re-stamps via
+        // switchAccountTab() below.
+        document.body.removeAttribute('data-page-bg');
+      }
       // Lock page scroll on Add Card (phondex has its own internal scroll)
       document.body.style.overflow = (pageId === 'addCard') ? 'hidden' : '';
       // Ensure sidebar is restored when navigating away from landing
@@ -9450,16 +9427,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // background images (dashboard.webp for Dashboard, dash2.webp for
       // the transaction tabs). Rules live in the stylesheet keyed by
       // #accountPage[data-tab="..."] for the per-tab content layout +
-      // body[data-acc-bg="..."] for the artwork so the bg covers the
+      // body[data-page-bg="..."] for the artwork so the bg covers the
       // social footer + any below-content padding instead of stopping
       // at #accountPage's bottom edge.
       const accountPageEl = document.getElementById('accountPage');
       if (accountPageEl) accountPageEl.setAttribute('data-tab', tab);
       const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','watchlist','history','tradeHistory'];
       if (BG_TABS.indexOf(tab) >= 0) {
-        document.body.setAttribute('data-acc-bg', tab);
+        document.body.setAttribute('data-page-bg', tab);
       } else {
-        document.body.removeAttribute('data-acc-bg');
+        document.body.removeAttribute('data-page-bg');
       }
       if (tab === 'myOrders') renderOrders();
       if (tab === 'myListings') renderMyListings();
