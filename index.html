@@ -4523,8 +4523,14 @@ nav {
 .lp-pricing-header { display:flex; align-items:baseline; gap:14px; margin-bottom:12px; }
 .lp-pricing-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.16em; color:var(--accent); }
 .lp-pricing-title { display:none; }
-.lp-tiers { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-@media(max-width:700px) { .lp-tiers { grid-template-columns:1fr; } }
+/* Five tiers now (Free + Collector + Enthusiast + Vendor + Shop).
+   At desktop width, five equal columns get cramped at the standard
+   1160px page width — use auto-fit so the grid drops to 3 cols at
+   ~900px and 2 cols at ~600px before collapsing to 1. */
+.lp-tiers { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+@media(max-width:1100px) { .lp-tiers { grid-template-columns:repeat(3,1fr); } }
+@media(max-width:700px)  { .lp-tiers { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:480px)  { .lp-tiers { grid-template-columns:1fr; } }
 .lp-tier { background:var(--surface); border:1.5px solid var(--border); box-shadow:3px 3px 0 #000; padding:14px 16px; display:flex; flex-direction:column; gap:4px; }
 .lp-tier.featured { border-color:var(--accent); box-shadow:3px 3px 0 var(--accent); }
 .lp-tier-name { font-family:'Orbitron',monospace; font-weight:800; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text); }
@@ -6334,6 +6340,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <div class="lp-pricing-eyebrow">Plans for every collector</div>
         <div class="lp-pricing-title">Built for collectors.<br>Backed by tech.</div>
       </div>
+      <!-- Landing-page tier cards. Mirrors the canonical TIER_DEFS in
+           the JS module (search for "TIER_DEFS" further down) — if you
+           change pricing or feature copy in one place, change it in
+           both. Five tiers; the layout is responsive so they wrap on
+           narrower viewports. 'Collector' carries the featured ribbon
+           since it's the highest-conversion entry-paid tier. -->
       <div class="lp-tiers">
         <div class="lp-tier">
           <div class="lp-tier-name">Free</div>
@@ -6341,8 +6353,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="lp-tier-price">$0</div>
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
-            <li>Up to 256 cards</li>
-            <li>Basic price tracking</li>
+            <li>Up to 200 cards</li>
+            <li>Marketplace browse + buy</li>
+            <li>Basic catalog access</li>
             <li>Community access</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup')">Get Started</button>
@@ -6354,24 +6367,50 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Unlimited cards</li>
-            <li>Advanced analytics</li>
+            <li>Live market prices + daily refresh</li>
+            <li>Biggest Movers + portfolio chart</li>
             <li>Ghost Card Fund</li>
-            <li>Price alerts</li>
+          </ul>
+          <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
+        </div>
+        <div class="lp-tier">
+          <div class="lp-tier-name">Enthusiast</div>
+          <div class="lp-tier-tagline">For active sellers</div>
+          <div class="lp-tier-price">$20</div>
+          <div class="lp-tier-per">/ mo</div>
+          <ul class="lp-tier-feats">
+            <li>Everything in Collector</li>
+            <li>Marketplace listings — 40 active</li>
+            <li>5% commission · bulk CSV import</li>
+            <li>Sales archive + PDF reports</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
         </div>
         <div class="lp-tier">
           <div class="lp-tier-name">Vendor</div>
-          <div class="lp-tier-tagline">For resellers &amp; traders</div>
-          <div class="lp-tier-price">$25</div>
+          <div class="lp-tier-tagline">For resellers &amp; shops</div>
+          <div class="lp-tier-price">$75</div>
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
-            <li>All Collector features</li>
-            <li>Marketplace listings</li>
-            <li>Trade Analytics Pro</li>
-            <li>Bulk scan &amp; import</li>
+            <li>Everything in Enthusiast</li>
+            <li>150 active listings · sealed product</li>
+            <li>Non-TCG products (Funko, manga, etc.)</li>
+            <li>Product scanner access</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
+        </div>
+        <div class="lp-tier">
+          <div class="lp-tier-name">Shop</div>
+          <div class="lp-tier-tagline">For high-volume sellers</div>
+          <div class="lp-tier-price">$200</div>
+          <div class="lp-tier-per">/ mo</div>
+          <ul class="lp-tier-feats">
+            <li>Everything in Vendor</li>
+            <li>Unlimited listings</li>
+            <li>Full P&amp;L report + featured placement</li>
+            <li>Dedicated account manager</li>
+          </ul>
+          <button class="lp-tier-cta" onclick="openAuthModal('signup')">Contact Us</button>
         </div>
       </div>
     </section>
