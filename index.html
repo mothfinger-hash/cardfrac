@@ -1736,7 +1736,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       /* Mobile session code — vertical column of 3 stacked code
          repeats anchored to the right of the QR slam target. The
          QR sits centered at left:50% top:75% with ~10% height, so
-         this column hugs its right edge. */
+         this column hugs its right edge.
+         (Desktop default below the @media block keeps it hidden when
+         not on mobile — _ftRenderSessionBanner clears the inline
+         display:none unconditionally, so without that default the
+         element renders as block on desktop with the code stacked 3x.) */
       .ft-stage #ftMobileSessionCode{
         position:absolute;
         left:58%; right:10%;
@@ -6715,7 +6719,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <img class="ft-stage-art ft-stage-art-mobile"  src="trade_mobile.webp"       alt="" aria-hidden="true">
       <!-- Mobile-only minimal session code display — hidden on desktop,
            visible at the bottom of the stage on mobile when a session
-           is active. Populated by _ftRenderSessionBanner. -->
+           is active. Populated by _ftRenderSessionBanner. The inline
+           style sets the initial pre-session hidden state; once a
+           session starts, the JS clears the inline display so CSS
+           takes over. The CSS hides on desktop, shows on mobile. -->
+      <style>
+        /* Desktop default: keep #ftMobileSessionCode hidden so the
+           mobile @media rule's display:flex doesn't bleed onto desktop
+           when JS clears the inline display:none on session start. */
+        #ftMobileSessionCode { display: none; }
+      </style>
       <div id="ftMobileSessionCode" style="display:none"></div>
       <div class="ft-stage-content">
 
@@ -9651,7 +9664,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                         ${item.card_image_url
                           ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="_binderImgFail(this,'${item.id}')">`
                           : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
-                        ${i<3?`<div class="ndash-tcard-rank">#${i+1}</div>`:''}
                       </div>
                       <div class="ndash-tcard-foot">
                         <div class="ndash-tcard-name">${_escHtml(item.card_name.slice(0,16))}</div>
@@ -10315,7 +10327,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             (item.card_image_url
               ? '<img src="' + item.card_image_url + '" alt="' + _escHtml(item.card_name) + '" loading="lazy" decoding="async" onerror="_binderImgFail(this,\'' + item.id + '\')">'
               : '<div class="ndash-tcard-art-ph">' + _escHtml(item.card_name.slice(0,12)) + '</div>') +
-            (i<3 ? '<div class="ndash-tcard-rank">#' + (i+1) + '</div>' : '') +
           '</div>' +
           '<div class="ndash-tcard-foot">' +
             '<div class="ndash-tcard-name">' + _escHtml(item.card_name.slice(0,16)) + '</div>' +
@@ -25337,7 +25348,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${_thumbUrl(img, 80)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" style="width:36px;height:50px;max-height:50px;object-fit:contain;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        ${img ? `<img src="${img}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" style="width:36px;height:50px;object-fit:cover;object-position:center top;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -25572,11 +25583,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const logoHtml = s.images && s.images.logo
         ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
         : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
+      // Catalog-only sets carry a placeholder '0000/00/00' release date
+      // (the catalog_sets_summary RPC doesn't return a real one). Hide
+      // the placeholder so the meta row reads as "Catalog · 122 cards"
+      // instead of "Catalog · 0000/00/00 · 122 cards".
+      const _date = s.releaseDate && s.releaseDate !== '0000/00/00' ? s.releaseDate : '';
+      const _metaParts = [s.series || '', _date, `${total} cards`].filter(Boolean);
       return `<div onclick="loadSetDetail('${_escJsAttr(s.id)}','${_escJsAttr(s.name)}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         ${logoHtml}
         <div style="flex:1;min-width:0">
           <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.name)}</div>
-          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${s.series || ''} · ${s.releaseDate || ''} · ${total} cards</div>
+          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${_metaParts.join(' · ')}</div>
           <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
             <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
           </div>
@@ -26174,7 +26191,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 onfocusout="this.style.borderColor='var(--border)';setTimeout(()=>document.getElementById('setsAcList')&&(document.getElementById('setsAcList').style.display='none'),160)">
               <div id="setsAcList" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--surface);border:1px solid var(--border);border-top:none;z-index:200;max-height:220px;overflow-y:auto;box-shadow:4px 4px 0 var(--shadow)"></div>
             </div>
-            <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
+            <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 260px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
               ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No sets found</div>'}
             </div>
           </div>`;
@@ -26610,7 +26627,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ${currentUser ? totalOwned + ' JP cards owned' : 'Log in to track your collection'} · ${sets.length} sets
           </p>
           ${_catalogSetsSearchHtml()}
-          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 360px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
             ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No JP sets found — run fetch_jp_pokedata.py to build the catalog</div>'}
           </div>
         </div>`;
@@ -26809,7 +26826,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             (currentUser ? (owned + ' ' + langLabel + ' Pokémon cards owned') : ('Log in to track your collection')) +
             ' · ' + sets.length + ' sets · ' + cached.totalCards + ' cards' +
           '</p>' +
-          '<div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 360px);overflow-y:auto;overflow-x:hidden" id="setsListInner">' +
+          '<div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">' +
             (rowsHtml || '<div style="padding:32px;text-align:center;color:var(--muted)">No ' + langLabel + ' sets in the catalog yet — run sync_pokemon_singles_by_lang.py --lang ' + lang + '</div>') +
           '</div>' +
           '</div>';
@@ -27013,7 +27030,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ${currentUser ? totalOwned + ' ' + cfg.name + ' cards owned' : 'Log in to track your collection'} · ${sets.length} sets
           </p>
           ${_catalogSetsSearchHtml()}
-          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 360px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
             ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No ' + cfg.name + ' sets yet. New sets will appear here as the catalog sync finishes.</div>'}
           </div>
         </div>`;
@@ -27310,7 +27327,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
           <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
         </div>
-        <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 340px);overflow-y:auto;overflow-x:hidden">
+        <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 290px);overflow-y:auto;overflow-x:hidden">
           <div style="padding:32px;text-align:center;color:var(--muted)">Loading cards…</div>
         </div>
       </div>`;
