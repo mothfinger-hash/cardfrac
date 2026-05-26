@@ -419,7 +419,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* CARD GRID */
     .card-section{display:none}
     .card-section.active{display:block}
-    .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+    .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
 
     /* LISTING CARD */
     .listing-card{background:var(--surface);border:2px solid var(--border);border-radius:0;overflow:hidden;cursor:pointer;transition:all .1s;position:relative;box-shadow:4px 4px 0 var(--shadow)}
@@ -440,6 +440,182 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     .thumb-wrap{position:relative}
     .card-thumb{width:100%;height:210px;object-fit:contain;background:var(--surface2);padding:16px;display:block;filter:sepia(.15) hue-rotate(80deg)}
+
+    /* ── CONDENSED LISTING CARD (marketplace) ──────────────────────────
+       Replaces the old tall card+text layout with a half-size card that
+       overlays text on the image so the photo dominates. Image fills
+       the card at card-aspect; condition + watch button float at the
+       top corners; name + ask price ride a gradient at the bottom of
+       the image; market-price strip stays as a thin sub-row below.
+       Seller line moved to the detail view (clicking the card opens
+       it) so the card itself stays compact. */
+    .listing-card .lc-thumb-wrap{
+      position:relative;
+      aspect-ratio: 245 / 342;
+      overflow:hidden;
+      background:var(--surface2);
+    }
+    .listing-card .lc-thumb{
+      width:100%; height:100%;
+      object-fit:cover;
+      display:block;
+      padding:0;
+      background:var(--surface2);
+      transition:transform .35s var(--r404-glide), filter .25s;
+      filter:contrast(1.08) saturate(1.25);
+    }
+    .listing-card:hover .lc-thumb{ transform:scale(1.03); filter:contrast(1.15) saturate(1.4); }
+
+    /* Top-left chips (condition, sealed/vendor) + top-right watch button */
+    .listing-card .lc-overlay-top{
+      position:absolute; top:5px; left:5px; right:5px;
+      display:flex; justify-content:space-between; align-items:flex-start; gap:5px;
+      z-index:3; pointer-events:none;
+    }
+    .listing-card .lc-overlay-top > *{ pointer-events:auto; }
+    .listing-card .lc-chips{ display:flex; flex-wrap:wrap; gap:3px; max-width:75%; }
+    .listing-card .lc-chip{
+      background:rgba(0,0,0,.75);
+      border:1px solid currentColor;
+      padding:1.5px 5px;
+      font-size:.52rem;
+      font-family:'Space Mono',monospace;
+      letter-spacing:.06em;
+      font-weight:700;
+      text-transform:uppercase;
+      line-height:1.3;
+    }
+    .listing-card .lc-chip.lc-cond-nm     { color:var(--accent); }
+    .listing-card .lc-chip.lc-cond-lp     { color:var(--yellow,#FFD93D); }
+    .listing-card .lc-chip.lc-cond-hp     { color:var(--red); }
+    .listing-card .lc-chip.lc-cond-graded { color:var(--gold,#FFD700); }
+    .listing-card .lc-chip.lc-sealed      { color:var(--copper); }
+    .listing-card .lc-chip.lc-vendor      { color:var(--accent); }
+    .listing-card .lc-watch{
+      width:24px; height:24px; flex-shrink:0;
+      background:rgba(0,0,0,.65);
+      border:1px solid rgba(255,255,255,.25);
+      color:#fff;
+      display:grid; place-items:center;
+      cursor:pointer;
+      padding:0;
+      transition:background .12s, border-color .12s;
+    }
+    .listing-card .lc-watch:hover{ background:rgba(0,0,0,.85); border-color:var(--accent); color:var(--accent); }
+    .listing-card .lc-watch.watched{ background:var(--accent); color:#000; border-color:var(--accent); }
+    .listing-card .lc-watch svg{ width:14px; height:14px; display:block; }
+
+    /* Photo count tucked into bottom-right of the image, above the gradient */
+    .listing-card .lc-photo-count{
+      position:absolute; bottom:38px; right:6px;
+      background:rgba(0,0,0,.7);
+      color:#fff;
+      font-size:.52rem;
+      font-family:'Space Mono',monospace;
+      letter-spacing:.06em;
+      padding:1.5px 5px;
+      z-index:3;
+    }
+
+    /* Bottom gradient holds the card name + ask price overlaid on image */
+    .listing-card .lc-overlay-bottom{
+      position:absolute; bottom:0; left:0; right:0;
+      padding:24px 8px 6px;
+      background:linear-gradient(to top, rgba(0,0,0,.95) 35%, rgba(0,0,0,.65) 70%, transparent);
+      display:flex; flex-direction:column; gap:1px;
+      z-index:2;
+    }
+    .listing-card .lc-name{
+      font-family:'Space Mono',monospace;
+      font-size:.68rem;
+      color:#fff;
+      font-weight:700;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      text-shadow:1px 1px 0 #000;
+      line-height:1.25;
+    }
+    .listing-card .lc-price-row{
+      display:flex; justify-content:space-between; align-items:baseline; gap:6px; margin-top:2px;
+    }
+    .listing-card .lc-price{
+      font-family:'Space Mono',monospace;
+      font-size:.92rem;
+      font-weight:800;
+      color:var(--accent);
+      text-shadow:1px 1px 0 #000;
+      letter-spacing:-.01em;
+    }
+    .listing-card .lc-status-pill{
+      font-size:.5rem;
+      letter-spacing:.06em;
+      padding:1px 5px;
+      border:1px solid currentColor;
+      text-transform:uppercase;
+      font-family:'Space Mono',monospace;
+      font-weight:700;
+      line-height:1.3;
+      white-space:nowrap;
+    }
+    .listing-card .lc-status-pill.lc-own  { color:var(--accent); }
+    .listing-card .lc-status-pill.lc-sold { color:var(--red);    }
+
+    /* Market-price strip — focal sub-row below the image. Reuses the
+       same border-left accent treatment as before but compacted. */
+    .listing-card .lc-market{
+      display:flex; justify-content:space-between; align-items:baseline;
+      padding:5px 8px;
+      background:var(--surface);
+      border-top:1px solid var(--border);
+      border-left:3px solid var(--accent);
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.62rem;
+      color:var(--muted);
+    }
+    .listing-card .lc-market strong{ color:var(--text); font-weight:700; }
+    .listing-card .lc-market .lc-diff{ font-weight:800; font-size:.7rem; letter-spacing:.04em; }
+    .listing-card .lc-market .lc-diff.pos{ color:var(--green); }
+    .listing-card .lc-market .lc-diff.neg{ color:var(--red);   }
+
+    /* Compact Buy Now bar — slim band at the bottom of the card.
+       Clicking the card itself also opens the detail view, so this is
+       redundant; kept because the explicit CTA helps casual shoppers. */
+    .listing-card .lc-buy{
+      display:block;
+      padding:6px 8px;
+      background:var(--accent);
+      color:var(--surface);
+      border:none;
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.68rem;
+      font-weight:700;
+      letter-spacing:.08em;
+      cursor:pointer;
+      text-align:center;
+      width:100%;
+      text-transform:uppercase;
+    }
+    .listing-card .lc-buy:hover{ background:var(--accent2,var(--accent)); }
+
+    /* Admin flag button in condensed view — smaller, top-left edge. */
+    .listing-card .lc-flag{
+      position:absolute; top:6px; left:6px; z-index:4;
+      background:rgba(0,0,0,.7);
+      border:1px solid var(--copper);
+      color:var(--copper);
+      padding:2px 6px;
+      font-size:.5rem;
+      font-family:'Space Mono',monospace;
+      letter-spacing:.06em;
+      cursor:pointer;
+    }
+    .listing-card .lc-flag.flagged{
+      background:var(--copper);
+      color:#1a0a00;
+    }
     .photo-count{position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,.65);color:#fff;font-size:.7rem;padding:2px 7px;border-radius:99px}
     .card-info{padding:14px 16px}
     .card-name{font-weight:700;font-size:1rem;margin-bottom:3px}
@@ -692,7 +868,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       #binderSidebar{left:0}
     }
     @media(max-width:768px) {
-      .card-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+      .card-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
       .detail-layout{grid-template-columns:1fr}
       .page{padding:20px 14px}
       h2{font-size:.85rem}
@@ -8369,16 +8545,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           : cond;
         const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
         // Sealed listings get a small copper "SEALED" chip next to the
-        // game-type label so the grid can be skimmed visually.
+        // condition pill so the grid can be skimmed visually.
         const _ptype = listing.product_type || 'single';
         const sealedChip = _ptype !== 'single'
-          ? `<span style="background:var(--surface2);border:1.5px solid var(--copper);color:var(--copper);font-size:.55rem;padding:1px 5px;letter-spacing:.06em;vertical-align:middle;margin-left:4px">SEALED</span>`
+          ? `<span class="lc-chip lc-sealed">SEALED</span>`
           : '';
-        const sellerName = listing.sellerName || 'Seller';
-        const sellerRating = listing.sellerRating ? `★ ${listing.sellerRating.toFixed(1)}` : '';
-        const vendorBadge = listing.isVendorListing ? `<span style="background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent);font-size:.55rem;padding:1px 5px;letter-spacing:.06em;vertical-align:middle;margin-left:4px">VENDOR</span>` : '';
+        // VENDOR badge removed — only shops can sell on the marketplace
+        // so every listing would carry it. Kept the CSS class in place
+        // for any non-marketplace surface that still wants the chip.
 
-        // Market price comparison
+        // Market price comparison — focal sub-row below the image.
         const marketPrice = listing.market_price || listing.marketPrice;
         let marketPriceHtml = '';
         if (marketPrice && price && !isSold) {
@@ -8393,50 +8569,59 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           const _stripAccent = _atMarket   ? 'var(--accent)'
                               : isAbove    ? 'var(--red)'
                               :              'var(--green)';
-          marketPriceHtml = `<div class="market-price-line" style="border-left-color:${_stripAccent}">
-            <span>Market: <strong style="color:var(--text)">$${Number(marketPrice).toLocaleString()}</strong></span>
-            <span class="${isAbove ? 'price-diff-neg' : 'price-diff-pos'}">${isAbove ? '+' : ''}${diffPct}%</span>
+          marketPriceHtml = `<div class="lc-market" style="border-left-color:${_stripAccent}">
+            <span>Mkt <strong>$${Number(marketPrice).toLocaleString()}</strong></span>
+            <span class="lc-diff ${isAbove ? 'neg' : 'pos'}">${isAbove ? '+' : ''}${diffPct}%</span>
           </div>`;
         }
 
-        // Admin-only image-review affordances — invisible to regular users.
-        // Hover-area icon button toggles the flag; a corner badge appears
-        // on flagged listings so admins can spot them at a glance.
-        var _isAdmin = !!(currentUser && currentUser.is_admin);
-        var _adminFlagBtn = _isAdmin
-          ? `<button class="mini-btn" title="${listing.needsImageReview ? 'Clear image-review flag' : 'Flag for image replacement'}"
-              style="position:absolute;top:8px;left:8px;z-index:4;background:${listing.needsImageReview ? 'var(--copper)' : 'rgba(0,0,0,0.5)'};border:1px solid ${listing.needsImageReview ? 'var(--copper)' : 'var(--border)'};color:${listing.needsImageReview ? '#1a0a00' : 'var(--copper)'};padding:4px 8px;font-size:.6rem;font-family:'Space Mono',monospace;letter-spacing:.06em;cursor:pointer"
-              onclick="event.stopPropagation();flagListingImage('${listing.id}')">${listing.needsImageReview ? '◆ FLAGGED' : 'FLAG IMG'}</button>`
-          : '';
-        return `<div class="listing-card ${isSold ? 'locked-card' : ''}" style="position:relative">
+        // Image-review flag moved off the marketplace card — the flag
+        // now lives on catalog rows (sealed products in Sets), surfaced
+        // via the sealed product detail modal. Marketplace listings get
+        // no flag affordance. Tracked in task #32 for the full migration
+        // and queue rewrite.
+        var _adminFlagBtn = '';
+
+        // Status pill in the bottom overlay row — replaces the full
+        // "For Sale / Your Listing" badge with a tiny outlined pill
+        // since the price is the dominant element next to it.
+        const statusPill = isSold
+          ? '<span class="lc-status-pill lc-sold">SOLD</span>'
+          : (isOwn ? '<span class="lc-status-pill lc-own">YOURS</span>' : '');
+
+        // Condition chip with color-coded outline. lc-cond-graded shown
+        // for graded cards with PSA/CGC grade inline.
+        const _condChipClass = {NM:'lc-cond-nm',LP:'lc-cond-lp',HP:'lc-cond-hp',Graded:'lc-cond-graded'}[cond] || 'lc-cond-nm';
+        const condChip = `<span class="lc-chip ${_condChipClass}">${condLabel}</span>`;
+
+        // Watchlist heart — fills with accent when watched. SVG path so
+        // the chip color picks up from the surrounding accent var.
+        const watchSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.5-9.5-9C1 8 3 4 6.5 4c2 0 3.5 1 5.5 3 2-2 3.5-3 5.5-3C21 4 23 8 21.5 12 19 16.5 12 21 12 21z"/></svg>';
+
+        return `<div class="listing-card ${isSold ? 'locked-card' : ''}">
           ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
-          ${_adminFlagBtn}
-          <button class="mini-btn" style="position:absolute;top:8px;right:8px;z-index:4;background:${isWatched ? 'var(--accent)' : 'rgba(0,0,0,0.5)'};border:none;padding:6px 8px" onclick="toggleWatchlist(event,'${listing.id}')"></button>
-          <div class="thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
-            <img src="${photoSrc}" alt="${listing.name}" class="card-thumb" loading="lazy" decoding="async" onerror="this.src='${PLACEHOLDER_IMG}'" />
-            ${photoCount > 1 ? `<div class="photo-count">${photoCount} photos</div>` : ''}
-          </div>
-          <div class="card-info" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
-            <div class="card-name">${listing.name}</div>
-            <div style="margin-bottom:4px">
-              <span class="cond-badge ${condClass}">${condLabel}</span>
-              ${listing.gameType ? `<span style="font-size:.72rem;color:var(--muted);margin-left:6px">${listing.gameType}</span>` : ''}
-              ${sealedChip}
+          <div class="lc-thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
+            <img src="${photoSrc}" alt="${_escHtml(listing.name)}" class="lc-thumb" loading="lazy" decoding="async" onerror="this.src='${PLACEHOLDER_IMG}'" />
+            <div class="lc-overlay-top">
+              <div class="lc-chips">
+                ${condChip}
+                ${sealedChip}
+              </div>
+              <button class="lc-watch ${isWatched ? 'watched' : ''}"
+                title="${isWatched ? 'Remove from watchlist' : 'Add to watchlist'}"
+                onclick="event.stopPropagation();toggleWatchlist(event,'${listing.id}')">${watchSvg}</button>
             </div>
-            <div class="card-stats">
-              <span class="price-tag">${displayPrice}</span>
-              ${isSold
-                ? '<span class="badge badge-full">Sold</span>'
-                : isOwn
-                  ? '<span class="badge" style="background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent)">Your Listing</span>'
-                  : '<span class="badge badge-open">For Sale</span>'}
-            </div>
-            ${marketPriceHtml}
-            <div style="font-size:.72rem;color:var(--muted);margin-top:5px">
-              ${sellerName}${vendorBadge}${renderBetaBadge(listing.seller_id)}${sellerRating ? ` · <span style="color:var(--gold)">${sellerRating}</span>` : ''}
+            ${photoCount > 1 ? `<div class="lc-photo-count">${photoCount} PHOTOS</div>` : ''}
+            <div class="lc-overlay-bottom">
+              <div class="lc-name">${_escHtml(listing.name)}</div>
+              <div class="lc-price-row">
+                <span class="lc-price">${displayPrice}</span>
+                ${statusPill}
+              </div>
             </div>
           </div>
-          ${!isSold && !isOwn ? `<button onclick="event.stopPropagation();buyCard('${listing.id}')" style="width:calc(100% - 28px);margin:0 14px 14px;padding:8px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Buy Now →</button>` : ''}
+          ${marketPriceHtml}
+          ${!isSold && !isOwn ? `<button class="lc-buy" onclick="event.stopPropagation();buyCard('${listing.id}')">Buy Now →</button>` : ''}
         </div>`;
       }).join('');
     }
@@ -13870,19 +14055,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">Loading…</div>';
       var res;
       try {
-        res = await sb.from('listings')
-          .select('id, name, photos, image_review_note, image_review_flagged_at, seller_name, product_type, value')
+        // Queue now reads from catalog (sealed products + any catalog
+        // row admins flag) — see migration_catalog_image_review.sql.
+        // Previously queried listings; the flag moved to catalog so
+        // every reference to the same product shares one flag state.
+        res = await sb.from('catalog')
+          .select('id, name, set_name, image_url, product_type, image_review_note, image_review_flagged_at')
           .eq('needs_image_review', true)
           .order('image_review_flagged_at', { ascending: true, nullsFirst: true });
       } catch (e) {
-        container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Query failed — apply migration_listings_image_review.sql.</div>';
+        container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Query failed — apply migration_catalog_image_review.sql.</div>';
         return;
       }
       if (res.error) {
         // Column-missing error → migration not applied yet
         var msg = String(res.error.message || '');
         if (msg.toLowerCase().indexOf('column') >= 0 || msg.toLowerCase().indexOf('schema') >= 0) {
-          container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Apply <code>migration_listings_image_review.sql</code> in Supabase before using this queue.</div>';
+          container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Apply <code>migration_catalog_image_review.sql</code> in Supabase before using this queue.</div>';
         } else {
           container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Error: ' + _escHtml(msg) + '</div>';
         }
@@ -13890,29 +14079,29 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       var rows = res.data || [];
       if (!rows.length) {
-        container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">Queue empty — no listings flagged for image review.</div>';
+        container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">Queue empty — no catalog rows flagged for image review.</div>';
         return;
       }
       container.innerHTML = rows.map(function(r) {
-        var thumb = (r.photos && r.photos[0]) || '';
+        var thumb = r.image_url || '';
         var when  = r.image_review_flagged_at
           ? new Date(r.image_review_flagged_at).toLocaleDateString()
           : '—';
-        var price = r.value != null ? '$' + Number(r.value).toFixed(2) : '';
+        var ptype = (r.product_type || 'single').toUpperCase().replace(/_/g, ' ');
         return '<div style="display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--copper-dim);background:rgba(184,115,51,.06)">' +
           (thumb
             ? '<img src="' + thumb + '" alt="" style="width:48px;height:64px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;border-radius:3px">'
             : '<div style="width:48px;height:64px;background:var(--surface2);border:1px dashed var(--copper-dim);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">?</div>') +
           '<div style="flex:1;min-width:0">' +
             '<div style="font-size:.74rem;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(r.name || '(no name)') + '</div>' +
-            '<div style="font-size:.6rem;color:var(--muted);margin-top:2px">' + _escHtml(r.product_type || 'single') + ' · ' + price + ' · ' + _escHtml(r.seller_name || '—') + ' · flagged ' + when + '</div>' +
+            '<div style="font-size:.6rem;color:var(--muted);margin-top:2px">' + _escHtml(ptype) + ' · ' + _escHtml(r.set_name || '—') + ' · flagged ' + when + '</div>' +
             (r.image_review_note
               ? '<div style="font-size:.6rem;color:var(--copper);margin-top:4px;font-style:italic">"' + _escHtml(r.image_review_note) + '"</div>'
               : '') +
           '</div>' +
           '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' +
-            '<button onclick="showPage(\'browse\');setMobileNav(\'browse\');" class="pb-panel-link" style="border-color:var(--copper-dim);color:var(--copper);font-size:.58rem;padding:4px 10px">VIEW</button>' +
-            '<button onclick="(async function(){ if(!confirm(\'Clear image-review flag for this listing?\')) return; var ll = listings.find(function(x){return String(x.id)===\'' + r.id + '\'}); if(ll){ ll.needsImageReview=true; } await flagListingImage(\'' + r.id + '\'); renderAdminImageReviewQueue(); })()" class="pb-panel-link" style="border-color:var(--border);color:var(--muted);font-size:.58rem;padding:4px 10px">CLEAR</button>' +
+            '<button onclick="openSealedProductDetail(\'' + _escJsAttr(r.id) + '\')" class="pb-panel-link" style="border-color:var(--copper-dim);color:var(--copper);font-size:.58rem;padding:4px 10px">VIEW</button>' +
+            '<button onclick="flagCatalogImage(\'' + _escJsAttr(r.id) + '\', true)" class="pb-panel-link" style="border-color:var(--border);color:var(--muted);font-size:.58rem;padding:4px 10px">CLEAR</button>' +
           '</div>' +
         '</div>';
       }).join('');
@@ -22093,49 +22282,65 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // migration_sealed_products.sql and defaults to 'single' for every
         // pre-existing row, so the fallback below is just defensive.
         product_type: l.product_type || 'single',
-        // Admin image-review flag (added in migration_listings_image_review.sql).
-        // Surfaced only when currentUser.is_admin; non-admins never see
-        // these in UI.
-        needsImageReview:        l.needs_image_review || false,
-        imageReviewNote:         l.image_review_note  || '',
-        imageReviewFlaggedAt:    l.image_review_flagged_at || null,
+        // Image-review flag moved off listings onto catalog (see
+        // migration_catalog_image_review.sql + flagCatalogImage). The
+        // listings columns added by migration_listings_image_review.sql
+        // are still in the schema but unused — leaving the SQL in
+        // place to avoid orphaning any older rows that might have it
+        // set, but we no longer read or write them from the client.
         countdown: null
       };
     }
 
-    // ── Admin: flag a listing for image replacement ─────────────────────
-    // Toggles needs_image_review on the listing. Optional note ("blurry box",
-    // "wrong angle", etc.) helps the next admin know what to fix. Setting
-    // the flag also stamps image_review_flagged_at so the admin queue can
-    // sort oldest-first.
-    window.flagListingImage = async function(listingId) {
+    // ── Admin: flag a catalog row for image replacement ─────────────────
+    // Toggles needs_image_review on the catalog row. Optional note
+    // ("wrong angle", "shows back of box", etc.) helps the next admin
+    // know what to fix. Setting the flag also stamps
+    // image_review_flagged_at so the admin queue can sort oldest-first.
+    //
+    // Requires migration_catalog_image_review.sql to have been applied
+    // first — the columns live on the catalog table.
+    //
+    // (Predecessor function flagListingImage operated on the listings
+    // table; the flag has since moved to catalog so every reference to
+    // the same sealed product shares one flag state instead of having
+    // per-listing flags scattered around.)
+    window.flagCatalogImage = async function(catalogId, currentState) {
       if (!currentUser || !currentUser.is_admin) {
         showToast('Admin only');
         return;
       }
-      var listing = listings.find(function(l) { return String(l.id) === String(listingId); });
-      if (!listing) { showToast('Listing not found'); return; }
-      var nowFlagged = !listing.needsImageReview;
+      if (!catalogId) { showToast('Catalog id missing'); return; }
+      var nowFlagged = !currentState;
       var note = '';
       if (nowFlagged) {
         // Prompt-based note collection — fine for admin-only tooling.
         // Empty string is OK (flag without explanation).
-        note = window.prompt('Image-review note (optional):\nWhat needs fixing?', listing.imageReviewNote || '') || '';
+        note = window.prompt('Image-review note (optional):\nWhat needs fixing?', '') || '';
       }
       var payload = nowFlagged
         ? { needs_image_review: true,  image_review_note: note, image_review_flagged_at: new Date().toISOString() }
         : { needs_image_review: false, image_review_note: null, image_review_flagged_at: null };
-      var res = await sb.from('listings').update(payload).eq('id', listingId);
+      var res = await sb.from('catalog').update(payload).eq('id', catalogId);
       if (res.error) {
-        showToast('Flag failed: ' + res.error.message);
+        var msg = String(res.error.message || '');
+        if (msg.toLowerCase().indexOf('column') >= 0 || msg.toLowerCase().indexOf('schema') >= 0) {
+          showToast('Apply migration_catalog_image_review.sql first');
+        } else {
+          showToast('Flag failed: ' + msg);
+        }
         return;
       }
-      // Mirror to local cache so the badge updates without a refetch.
-      listing.needsImageReview     = nowFlagged;
-      listing.imageReviewNote      = nowFlagged ? note : '';
-      listing.imageReviewFlaggedAt = nowFlagged ? payload.image_review_flagged_at : null;
       showToast(nowFlagged ? 'Flagged for image review' : 'Image-review flag cleared');
-      if (typeof renderBrowse === 'function') renderBrowse();
+      // Refresh the admin queue if it's open.
+      if (typeof renderAdminImageReviewQueue === 'function') renderAdminImageReviewQueue();
+      // Refresh the sealed detail modal so the button label flips.
+      var modal = document.getElementById('setCardDetailSheet');
+      if (modal && typeof openSealedProductDetail === 'function') {
+        // Re-open the detail to refresh state cleanly.
+        modal.remove();
+        openSealedProductDetail(catalogId);
+      }
     };
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -25982,20 +26187,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         });
         if (!newSets.length) return;
 
-        // Catalog-only sets — sets the pokemontcg.io API doesn't have
-        // — are almost always newer sets the API hasn't ingested yet
-        // (e.g. Chaos Rising). Prepend them to the top of the list +
-        // cache so they read as "newest" rather than landing at the
-        // bottom under the placeholder '0000/00/00' date. If we ever
-        // mass-import older catalog-only sets (e.g. a promo dump),
-        // this assumption breaks and we'd want real release dates on
-        // the catalog rows instead.
-        if (_setsCache) _setsCache.sets = newSets.concat(_setsCache.sets || []);
+        // Append catalog-only sets to the END of the list + cache.
+        // Earlier attempt to prepend (so brand-new sets the API hadn't
+        // ingested yet — e.g. Chaos Rising — would land at top) jumbled
+        // desktop ordering when pokemontcg.io DID have the set, because
+        // any catalog row that matched a real API set by name would
+        // still get filtered by the dedupe, but the LEFTOVER catalog
+        // rows would re-shuffle to the top of the visible list. The
+        // proper fix is real release_date on catalog_sets so they sort
+        // naturally — tracked in task #33.
+        if (_setsCache) _setsCache.sets = (_setsCache.sets || []).concat(newSets);
 
         const listInner = document.getElementById('setsListInner');
         if (listInner) {
           const fragHTML = newSets.map(s => _renderSetRow(s)).join('');
-          if (fragHTML) listInner.insertAdjacentHTML('afterbegin', fragHTML);
+          if (fragHTML) listInner.insertAdjacentHTML('beforeend', fragHTML);
         }
       } catch(e) {
         console.warn('[sets] async catalog append failed:', e);
@@ -26339,13 +26545,28 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '</div>';
       document.body.appendChild(overlay);
 
-      // Fetch the catalog row
+      // Fetch the catalog row. We optimistically request the image-
+      // review columns added in migration_catalog_image_review.sql so
+      // admins see the flag toggle; if the migration hasn't been
+      // applied the request fails and we retry without those columns
+      // so non-admins (and pre-migration admins) still get the modal.
       var prod;
+      var _selectFull = 'id,name,set_name,set_code,image_url,msrp_usd,product_type,price_source_url,pricecharting_id,game_type,supertype,needs_image_review,image_review_note,image_review_flagged_at';
+      var _selectBase = 'id,name,set_name,set_code,image_url,msrp_usd,product_type,price_source_url,pricecharting_id,game_type,supertype';
       try {
         var resp = await sb.from('catalog')
-          .select('id,name,set_name,set_code,image_url,msrp_usd,product_type,price_source_url,pricecharting_id,game_type,supertype')
+          .select(_selectFull)
           .eq('id', catalogId).maybeSingle();
-        prod = resp.data;
+        if (resp.error) {
+          // Likely the migration columns aren't there yet — retry
+          // without them so the modal still renders.
+          var resp2 = await sb.from('catalog')
+            .select(_selectBase)
+            .eq('id', catalogId).maybeSingle();
+          prod = resp2.data;
+        } else {
+          prod = resp.data;
+        }
       } catch(e) {
         console.warn('[sealed detail] fetch failed', e);
       }
@@ -26397,6 +26618,27 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 'title="View on PriceCharting">↗ PC</a>'
               : '') +
           '</div>' +
+          // Admin-only: image-review flag toggle. Lets an admin mark
+          // this catalog row's image as needing replacement so it
+          // surfaces in the admin queue (catalog-side, see
+          // renderAdminImageReviewQueue + migration_catalog_image_review.sql).
+          // Hidden from non-admins entirely.
+          (currentUser && currentUser.is_admin
+            ? '<div style="width:100%;max-width:360px;margin-top:6px;padding-top:10px;border-top:1px dashed var(--copper-dim)">' +
+                '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.1em;margin-bottom:6px;text-align:center">ADMIN</div>' +
+                (prod.needs_image_review
+                  ? '<div style="font-size:.65rem;color:var(--copper);font-style:italic;margin-bottom:6px;text-align:center">◆ Flagged' +
+                      (prod.image_review_note ? ' — "' + _escHtml(prod.image_review_note) + '"' : '') +
+                    '</div>'
+                  : '') +
+                '<button onclick="flagCatalogImage(\'' + _escJsAttr(prod.id) + '\', ' + (prod.needs_image_review ? 'true' : 'false') + ')" ' +
+                  'style="width:100%;padding:8px;background:' + (prod.needs_image_review ? 'var(--copper)' : 'transparent') + ';' +
+                  'color:' + (prod.needs_image_review ? '#1a0a00' : 'var(--copper)') + ';' +
+                  'border:1px solid var(--copper);font-family:\'Space Mono\',monospace;font-size:.7rem;font-weight:700;letter-spacing:.06em;cursor:pointer">' +
+                  (prod.needs_image_review ? 'CLEAR IMAGE-REVIEW FLAG' : '◆ FLAG IMAGE FOR REVIEW') +
+                '</button>' +
+              '</div>'
+            : '') +
         '</div>';
 
       var body = document.getElementById('sealedDetailBody');
