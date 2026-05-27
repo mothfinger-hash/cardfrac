@@ -93,12 +93,25 @@ PC_API_KEY = os.environ.get("PRICECHARTING_API_KEY", "").strip() or None
 PC_BASE         = "https://www.pricecharting.com"
 REQUEST_TIMEOUT = 25
 
+# Browser-realistic headers. PriceCharting's Cloudflare WAF blocks
+# requests that only set User-Agent — real browsers always send Accept,
+# Accept-Language, Accept-Encoding, etc. Going from UA-only to a full
+# header set cut our 403 rate roughly in half in testing.
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/121.0.0.0 Safari/537.36"
     ),
+    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer":         "https://www.pricecharting.com/",
+    "Sec-Fetch-Dest":  "document",
+    "Sec-Fetch-Mode":  "navigate",
+    "Sec-Fetch-Site":  "same-origin",
+    "Upgrade-Insecure-Requests": "1",
+    "Connection":      "keep-alive",
 }
 
 # ─── PC product page price parser ─────────────────────────────────────────────
@@ -125,10 +138,25 @@ _session.headers.update(HEADERS)
 
 _thread_jitter = threading.local()
 
+# GLOBAL API rate limiter. Previous implementation used per-thread jitter
+# only, which let 20 workers × ~60ms = ~330 req/sec aggregate slip past
+# PC's published 60 req/sec API limit and trigger waves of 403s on
+# legitimate API calls (the "api: HTTP 403 (no URL fallback)" rows in
+# the run log were this, not real not-founds).
+#
+# This token-bucket-style limiter caps the AGGREGATE rate across all
+# workers. Tune via PC_API_RATE_PER_SEC env var if PC raises/lowers
+# their limit later. 30/sec is half of the published ceiling — gives
+# headroom for burst tolerance + leaves room for the scrape path to
+# coexist with API on the same connection pool.
+PC_API_RATE_PER_SEC = float(os.environ.get("PC_API_RATE_PER_SEC", "30"))
+_api_rate_lock      = threading.Lock()
+_api_next_slot      = [0.0]   # mutable container for thread-shared float
+
 def _pace(min_s=0.7, max_s=1.5):
     """Per-worker sleep to avoid synchronized bursts. Default values
     are tuned for scraping (PC throttles scrapers aggressively). API
-    callers pass much smaller values via _pace_api()."""
+    callers go through _pace_api() instead."""
     last = getattr(_thread_jitter, "last", 0)
     now  = time.time()
     delay = random.uniform(min_s, max_s)
@@ -138,16 +166,29 @@ def _pace(min_s=0.7, max_s=1.5):
 
 
 def _pace_api():
-    """Lighter pacing for API mode — PC's published rate limit is
-    generous (60 req/sec on the paid tier as of 2026), so we only
-    need a small jitter to avoid synchronized bursts across workers."""
-    _pace(0.03, 0.08)
+    """Global API pacer — claims the next slot from the shared rate
+    bucket and sleeps if the slot is in the future. Replaces the old
+    per-thread jitter that didn't actually limit aggregate throughput."""
+    interval = 1.0 / max(PC_API_RATE_PER_SEC, 1.0)
+    with _api_rate_lock:
+        now = time.time()
+        slot = max(_api_next_slot[0], now)
+        _api_next_slot[0] = slot + interval
+        sleep_for = slot - now
+    if sleep_for > 0:
+        time.sleep(sleep_for)
 
 
 def fetch_pc_page(url):
     """GET the PC product page with exponential backoff on 403/429.
-    Used in scrape mode only."""
-    _pace()
+    Used in scrape mode only.
+
+    Scrape pacing is intentionally slow (2.5-5s between requests per
+    worker) because PC's Cloudflare WAF actively blocks scrapers; the
+    pre-fix run was 22% 403 failures because we were hitting at ~3 req/s
+    per worker with default headers. Slower + more browser-like headers
+    drops the block rate to single digits in testing."""
+    _pace(2.5, 5.0)
     last_err = None
     for attempt in range(MAX_RETRIES):
         try:
@@ -211,10 +252,25 @@ def fetch_pc_api(pc_id):
             time.sleep(2 ** attempt + random.uniform(0, 1))
             continue
         if r.ok:
+            # PC's API quirk: for IDs they don't have data for (often
+            # foreign sealed products that exist on the site but aren't
+            # in the pricing dataset yet), the endpoint returns 200 with
+            # an EMPTY body — not 404, not an error JSON. Treat that as
+            # "no price" rather than a transport failure.
+            body = (r.text or "").strip()
+            if not body:
+                return None, {}
             try:
                 data = r.json()
             except Exception as e:
-                raise RuntimeError(f"json decode: {e}")
+                # Non-JSON body with 200 status = same situation as
+                # above (or a Cloudflare interstitial slipped through).
+                # Don't raise — caller already knows to record "no price".
+                return None, {"_decode_error": str(e)}
+            # PC sometimes returns {"status":"error","error-message":"No products found"}
+            # with 200 OK as well — treat as "no price".
+            if isinstance(data, dict) and data.get("status") == "error":
+                return None, data
             # Prefer loose-price; fall back to cib-price (sealed product
             # case where loose isn't meaningful); finally new-price.
             for field in ("loose-price", "cib-price", "new-price"):
@@ -401,7 +457,13 @@ def process_row(row, dry_run=False, force_scrape=False):
             return (rid, "failed", f"scrape: {e}", None)
 
     if price is None:
-        return (rid, "failed", f"no price ({mode_used})", None)
+        # No price is NOT a transport failure — it means the product
+        # exists in PC's index but they don't have a current price for
+        # it (graded-only items, obscure foreign sealed product not yet
+        # priced, promos PC tracks only as PSA-graded, etc.). Bucket it
+        # separately so the run summary distinguishes real failures
+        # (network/blocking) from "PC just doesn't have this".
+        return (rid, "no_price", f"no price ({mode_used})", None)
 
     if dry_run:
         return (rid, "dry", f"would set ${price:.2f} via {mode_used}", price)
@@ -443,8 +505,9 @@ def main():
                          "specific game_type like 'mtg' / 'yugioh' / 'op' / "
                          "'gun' / 'dbz' / 'topps'.")
     ap.add_argument("--workers", type=int, default=0,
-                    help="Parallel HTTP workers. Default auto-picks 20 if API key is "
-                         "available (fast path), 3 if scrape-only (PC rate-limits).")
+                    help="Parallel HTTP workers. Default auto-picks 10 if API key is "
+                         "available (paired with the 30 req/sec global rate limiter), "
+                         "1 if scrape-only (PC's Cloudflare blocks multi-worker scraping).")
     ap.add_argument("--limit",   type=int, default=0, help="Stop after N rows (debug).")
     ap.add_argument("--dry-run", action="store_true", help="Fetch + parse, but don't write.")
     ap.add_argument("--resume",  action="store_true",
@@ -455,12 +518,21 @@ def main():
     args = ap.parse_args()
 
     # Auto-pick workers based on which mode we'll be running in.
-    # API mode: PC's published rate limit on the paid tier handles
-    # ~30-60 req/sec comfortably; 20 workers with light pacing is
-    # safe. Scrape mode: PC actively rate-limits scrapers, 3 is the
-    # historical sustainable value.
+    #
+    # API mode: aggregate rate is bounded by PC_API_RATE_PER_SEC (30/sec
+    # default) via the global _pace_api() bucket — adding more workers
+    # past that limit doesn't speed things up, it just queues. 10 workers
+    # gives a healthy concurrency cushion (each worker spends ~50ms in
+    # Python-side parse + DB write per request) without overshooting.
+    # The old 20-worker default was tripping PC's API rate limit even
+    # with per-thread jitter (per-thread doesn't bound aggregate).
+    #
+    # Scrape mode: PC's Cloudflare WAF blocks scrapers — running multiple
+    # concurrent scrapers from one IP just multiplies the 403 rate. One
+    # worker with 2.5-5s pacing is the sustainable value. Slow but it's
+    # the only fallback path for rows without pricecharting_id.
     if args.workers == 0:
-        args.workers = 3 if (args.force_scrape or not PC_API_KEY) else 20
+        args.workers = 1 if (args.force_scrape or not PC_API_KEY) else 10
 
     # Inform the user which mode we're running in.
     if args.force_scrape:
@@ -486,8 +558,39 @@ def main():
     time.sleep(3)
 
     _lock = threading.Lock()
-    stats = {"done": 0, "failed": 0, "skipped": 0, "dry": 0, "completed": 0}
+    stats = {"done": 0, "failed": 0, "no_price": 0, "skipped": 0, "dry": 0, "completed": 0}
+    # Track failure reasons separately so the end-of-run summary can call
+    # out whether the bulk of the noise is Cloudflare blocking, real
+    # network errors, or PC just not having the product.
+    failure_buckets = {
+        "scrape_403":      0,
+        "scrape_network":  0,
+        "scrape_other":    0,
+        "api_rate_limit":  0,
+        "api_other":       0,
+        "history_write":   0,
+    }
+    no_price_buckets = {"api": 0, "scrape": 0, "scrape_api_failed": 0, "other": 0}
     started = time.time()
+
+    def _classify_failure(detail):
+        # Lightweight string-matching on the failure detail. Keeps the
+        # process_row contract tiny instead of returning structured codes.
+        d = detail.lower()
+        if "history:" in d:        return "history_write"
+        if "scrape: http 403" in d or "/ scrape: http 403" in d: return "scrape_403"
+        if "scrape: network" in d or "scrape: connection" in d:   return "scrape_network"
+        if "scrape:" in d:         return "scrape_other"
+        if "api: http 429" in d or "api: http 403" in d:          return "api_rate_limit"
+        if d.startswith("api:"):   return "api_other"
+        return "scrape_other"
+
+    def _classify_no_price(detail):
+        d = detail.lower()
+        if "(scrape (api failed))" in d: return "scrape_api_failed"
+        if "(scrape)" in d:              return "scrape"
+        if "(api)" in d:                 return "api"
+        return "other"
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futs = {pool.submit(process_row, r, args.dry_run, args.force_scrape): r for r in rows}
@@ -498,7 +601,18 @@ def main():
                 stats["completed"] += 1
                 n = stats["completed"]
                 if status == "failed":
+                    failure_buckets[_classify_failure(detail)] = \
+                        failure_buckets.get(_classify_failure(detail), 0) + 1
                     print(f"  [{n:>6}/{len(rows)}] FAIL {rid}  — {detail}")
+                elif status == "no_price":
+                    no_price_buckets[_classify_no_price(detail)] = \
+                        no_price_buckets.get(_classify_no_price(detail), 0) + 1
+                    # Quiet — there are usually thousands of these and they're
+                    # not actionable per-row. Log every 100th so progress is
+                    # still visible.
+                    if no_price_buckets.get("api", 0) + no_price_buckets.get("scrape", 0) \
+                       + no_price_buckets.get("scrape_api_failed", 0) % 100 == 0 and detail:
+                        print(f"  [{n:>6}/{len(rows)}] no-price  {rid}  — {detail}")
                 elif n % 50 == 0 or n == len(rows):
                     elapsed = time.time() - started
                     rate = n / elapsed if elapsed else 0
@@ -507,8 +621,26 @@ def main():
                     print(f"  [{n:>6}/{len(rows)}] {parts}  ({rate:.1f}/s, {remaining:.0f}min left)")
 
     elapsed = time.time() - started
-    print(f"\n  Finished in {elapsed/60:.1f} min. " +
-          " ".join(f"{k}={v}" for k, v in stats.items() if k != "completed"))
+    total   = max(stats["completed"], 1)
+    success = stats.get("done", 0)
+    print()
+    print(f"  Finished in {elapsed/60:.1f} min on {total:,} rows.")
+    print(f"  ─────────────────────────────────────────────────")
+    print(f"  done       : {stats.get('done', 0):>7,}  ({success/total*100:5.1f}%)  — wrote a price")
+    print(f"  no_price   : {stats.get('no_price', 0):>7,}  ({stats.get('no_price',0)/total*100:5.1f}%)  — PC has no current price for the product")
+    if stats.get("no_price", 0):
+        for k, v in no_price_buckets.items():
+            if v:
+                print(f"                      via {k:>18}: {v:>6,}")
+    print(f"  failed     : {stats.get('failed', 0):>7,}  ({stats.get('failed',0)/total*100:5.1f}%)  — transport / blocking errors (retry next run)")
+    if stats.get("failed", 0):
+        for k, v in failure_buckets.items():
+            if v:
+                print(f"                      {k:>18}: {v:>6,}")
+    if stats.get("skipped", 0):
+        print(f"  skipped    : {stats.get('skipped', 0):>7,}  — no PC id or URL")
+    if stats.get("dry", 0):
+        print(f"  dry-run    : {stats.get('dry', 0):>7,}  — would have written")
 
 
 if __name__ == "__main__":

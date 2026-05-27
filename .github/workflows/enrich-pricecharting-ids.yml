@@ -1,0 +1,98 @@
+name: Enrich PriceCharting IDs (CSV)
+
+# Weekly backfill of catalog.pricecharting_id (and current_value) from
+# PriceCharting's bulk CSV downloads. Replaces the page-scrape enrichment
+# that was Cloudflare-blocked at scale — CSV ingest is the fast path
+# unlocked by PC's top-tier subscription.
+#
+# What this does, end-to-end:
+#   1. Hits PC's download-custom endpoint for each category we sell
+#      (pokemon-cards, magic-cards, yugioh-cards, one-piece-cards)
+#      using PRICECHARTING_API_KEY as the auth token.
+#   2. Streams the CSVs to a tempdir on the runner.
+#   3. Indexes every CSV row by URL and by (set, name).
+#   4. Loads every catalog row missing a pricecharting_id, matches it
+#      against the CSV index, and PATCHes id + current_value.
+#   5. Also writes a row to catalog_price_history so the dashboard's
+#      Price Movers panel sees the fresh data.
+#
+# Why weekly:
+#   - PC re-prices daily but new products / set additions land in their
+#     CSVs less frequently. Weekly catches everything without hammering
+#     their endpoint.
+#   - Newly-imported PathBinder catalog rows (from pokedata syncs, admin
+#     adds, etc.) automatically get their IDs resolved on the next run.
+#   - Script is idempotent — re-running on a fully-enriched catalog is a
+#     few seconds of "nothing to do".
+#
+# Schedule: Sunday 18:00 UTC (= 1 PM EST Sun / 2 PM EDT Sun). Lands well
+# before the Monday 07:00 UTC nightly refresh so any newly-resolved IDs
+# are immediately usable on the fast API path.
+#
+# Runs on the same self-hosted Mac as the price refresh.
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'    # Sunday 6 PM UTC
+  workflow_dispatch:
+    inputs:
+      categories:
+        description: 'Comma-separated PC categories (leave blank for all four).'
+        required: false
+        default: ''
+      tcg:
+        description: 'catalog.game_type to scope the match (default: all).'
+        required: false
+        default: 'all'
+      skip_prices:
+        description: 'Resolve IDs only, do NOT write current_value (yes/no).'
+        required: false
+        default: 'no'
+      dry_run:
+        description: 'Match + report, do NOT write to Supabase (yes/no).'
+        required: false
+        default: 'no'
+
+jobs:
+  enrich:
+    runs-on: self-hosted
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show Python version
+        run: python3 --version
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip --user
+          python3 -m pip install requests --user
+
+      - name: Run CSV enrichment
+        env:
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PRICECHARTING_API_KEY: ${{ secrets.PRICECHARTING_API_KEY }}
+        run: |
+          # Build the args from the workflow inputs.
+          ARGS=""
+          if [ -n "${{ github.event.inputs.categories }}" ]; then
+            ARGS="--categories ${{ github.event.inputs.categories }}"
+          else
+            # Scheduled runs (or manual with blank categories) get the
+            # full sweep.
+            ARGS="--all-tcgs"
+          fi
+          if [ "${{ github.event.inputs.tcg }}" != "" ] && [ "${{ github.event.inputs.tcg }}" != "all" ]; then
+            ARGS="$ARGS --tcg ${{ github.event.inputs.tcg }}"
+          fi
+          if [ "${{ github.event.inputs.skip_prices }}" = "yes" ]; then
+            ARGS="$ARGS --skip-prices"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "yes" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "Running: python3 enrich_from_pc_csv.py $ARGS"
+          python3 enrich_from_pc_csv.py $ARGS
