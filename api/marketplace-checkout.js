@@ -3,7 +3,14 @@
 //
 // PAYMENT MODEL (post-escrow refactor):
 //   - Sellers receive funds directly on Stripe's normal payout schedule
-//   - PathBinder retains a 5% platform fee via application_fee_amount
+//   - PathBinder retains a tiered platform fee via application_fee_amount:
+//       Enthusiast tier  -> 7%
+//       Vendor tier      -> 6%
+//       Shop tier        -> 5%
+//       (Free/Collector cannot sell, so they never hit this path.)
+//     Lower-tier sellers pay a higher commission because their subscription
+//     contribution is smaller; higher-tier sellers pay less per sale because
+//     they're already paying more in subscription up front.
 //   - Implemented as a Connect "destination charge" when the seller has a
 //     stripe_connect_account_id on their profile
 //   - If the seller has not yet completed Connect onboarding (no account id),
@@ -25,7 +32,25 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-const PLATFORM_FEE_PCT = 0.05; // 5%
+// Server-side mirror of TIER_COMMISSION_RATES in index.html — keep these
+// in sync. The client uses it for display ("you'll keep $X of this sale");
+// the server uses it as the source of truth for the actual charge.
+const TIER_COMMISSION_RATES = {
+  free:       0.00,
+  collector:  0.00,
+  enthusiast: 0.07,
+  vendor:     0.06,
+  shop:       0.05,
+};
+// Default rate when the seller's tier is unknown or unset. Matches the
+// old flat-rate behavior so legacy/edge cases don't accidentally pay 0%.
+const DEFAULT_COMMISSION_RATE = 0.07;
+
+function commissionRateFor(tier) {
+  if (!tier) return DEFAULT_COMMISSION_RATE;
+  const r = TIER_COMMISSION_RATES[String(tier).toLowerCase()];
+  return (typeof r === 'number') ? r : DEFAULT_COMMISSION_RATE;
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -53,26 +78,41 @@ module.exports = async function handler(req, res) {
   const { data: { user }, error: authErr } = await sb.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
 
-  const platformFee = Math.round(amount * PLATFORM_FEE_PCT);
-
-  // Look up the seller's Stripe Connect account id (Phase 2 onboarding column).
-  // If present and not empty, route funds directly via destination charge.
+  // Look up the seller's Stripe Connect account id (Phase 2 onboarding column)
+  // AND their subscription tier (drives the commission rate). One round trip.
   let sellerConnectId = null;
+  let sellerTier      = null;
   if (sellerId) {
     try {
       const { data: profile } = await sb
         .from('profiles')
-        .select('stripe_connect_account_id')
+        .select('stripe_connect_account_id, subscription_tier, is_vendor, is_premium')
         .eq('id', sellerId)
         .maybeSingle();
-      if (profile && profile.stripe_connect_account_id) {
-        sellerConnectId = profile.stripe_connect_account_id;
+      if (profile) {
+        if (profile.stripe_connect_account_id) {
+          sellerConnectId = profile.stripe_connect_account_id;
+        }
+        // Prefer the new subscription_tier column; fall back to legacy
+        // booleans so sellers who haven't been migrated still get charged
+        // a reasonable rate. is_vendor + is_premium were the old
+        // "enthusiast equivalent" flags before the tier rename.
+        if (profile.subscription_tier) {
+          sellerTier = String(profile.subscription_tier).toLowerCase();
+        } else if (profile.is_vendor || profile.is_premium) {
+          sellerTier = 'enthusiast';
+        }
       }
     } catch (_) {
-      // Profile lookup failed — silently fall back to platform-only charging.
-      // Worst case the order succeeds but seller payout requires manual action.
+      // Profile lookup failed — silently fall back to platform-only charging
+      // and the default commission rate. Worst case the order succeeds but
+      // seller payout requires manual action.
     }
   }
+
+  const feeRate     = commissionRateFor(sellerTier);
+  const platformFee = Math.round(amount * feeRate);
+  const feePctLabel = (feeRate * 100).toFixed(0) + '%';
 
   const sessionParams = {
     payment_method_types: ['card'],
@@ -82,7 +122,7 @@ module.exports = async function handler(req, res) {
         currency: 'usd',
         product_data: {
           name: cardName || 'Trading Card',
-          description: 'PathBinder Marketplace Purchase — 5% platform fee applies',
+          description: 'PathBinder Marketplace Purchase — ' + feePctLabel + ' platform fee applies',
         },
         unit_amount: amount,
       },
@@ -92,7 +132,11 @@ module.exports = async function handler(req, res) {
       listing_id: listingId,
       buyer_id: user.id,
       seller_id: sellerId || '',
-      platform_fee: platformFee,
+      // Stripe metadata values are stringified — keep the numbers as strings
+      // so downstream webhook consumers can parse them unambiguously.
+      platform_fee:        String(platformFee),
+      platform_fee_pct:    String(feeRate),
+      seller_tier:         sellerTier || 'unknown',
       type: 'marketplace_purchase',
       // Track which payment route was used so the webhook can act accordingly.
       payment_route: sellerConnectId ? 'destination_charge' : 'platform_only',

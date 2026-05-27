@@ -69,10 +69,18 @@ module.exports = async function handler(req, res) {
   }
 
   // 3. Refund via Stripe
+  //
+  // reverse_transfer + refund_application_fee are required for destination
+  // charges (Stripe Connect) — without them a refund would try to pull
+  // from the platform balance even though the funds live on the seller's
+  // connected account, leaving us out of pocket. On legacy platform-only
+  // orders these params are no-ops. See CLAUDE.md "destination charges".
   try {
     const refund = await stripe.refunds.create({
       payment_intent: order.stripe_payment_intent,
       reason: (reason && ['requested_by_customer','fraudulent','duplicate'].includes(reason)) ? reason : 'requested_by_customer',
+      reverse_transfer:       true,
+      refund_application_fee: true,
       metadata: {
         order_id:       order.id,
         refunded_by:    user.id,
@@ -84,9 +92,10 @@ module.exports = async function handler(req, res) {
     const { error: updErr } = await sb
       .from('orders')
       .update({
-        status:        'refunded',
-        refunded_at:   new Date().toISOString(),
-        refund_id:     refund.id,
+        status:                   'refunded',
+        refunded_at:              new Date().toISOString(),
+        refund_id:                refund.id,
+        refunded_application_fee: true,
       })
       .eq('id', order.id);
     if (updErr) {

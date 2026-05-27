@@ -57,6 +57,24 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 2. Admin invite RPC — maps founding → enthusiast.
+--
+-- Drop any prior signatures of admin_invite_beta before recreating.
+-- PostgreSQL allows multiple functions with the same name but different
+-- argument lists to coexist (overloading), and CREATE OR REPLACE only
+-- swaps the function with the EXACT matching signature. An earlier
+-- deploy likely registered a 3-arg version (pre-p_notes); without
+-- these explicit drops both versions live in the DB and PostgREST
+-- throws PGRST203 ("Could not choose the best candidate function") on
+-- every call — surfaced to the admin as "ref id is ambiguous" when
+-- sending a beta code.
+--
+-- We drop every plausible historical signature. IF EXISTS makes each
+-- line a no-op when that overload isn't present.
+drop function if exists public.admin_invite_beta(text);
+drop function if exists public.admin_invite_beta(text, text);
+drop function if exists public.admin_invite_beta(text, text, text);
+drop function if exists public.admin_invite_beta(text, text, text, text);
+
 CREATE OR REPLACE FUNCTION public.admin_invite_beta(
   p_tier  TEXT,
   p_email TEXT DEFAULT NULL,
