@@ -123,17 +123,119 @@ _dl_session.headers.update(_DL_HEADERS)
 
 
 # ── CSV column name variants ──────────────────────────────────────────────────
-# PC's CSV uses hyphenated names; we accept underscores too just in case.
-# If a future CSV export uses a totally different name, add it here.
+# PC's bulk-CSV export (verified 2026-05) uses these column names. No URL
+# column ships with the CSVs — matching has to go through (console, name)
+# or (console, card_number). Keep the variant lists in case PC tweaks the
+# headers in a future export.
 CSV_COLUMNS = {
-    "id":           ["id", "product-id", "product_id"],
-    "name":         ["product-name", "product_name", "name"],
-    "console":      ["console-name", "console_name", "console", "set"],
-    "url":          ["product-url", "product_url", "url"],
-    "loose":        ["loose-price", "loose_price"],
-    "cib":          ["cib-price", "cib_price"],
-    "new":          ["new-price", "new_price"],
+    "id":      ["id", "product-id", "product_id"],
+    "name":    ["product-name", "product_name", "name"],
+    "console": ["console-name", "console_name", "console", "set"],
+    "loose":   ["loose-price", "loose_price"],
+    "cib":     ["cib-price", "cib_price"],
+    "new":     ["new-price", "new_price"],
 }
+
+# ── Card-number extraction ────────────────────────────────────────────────────
+# PC's product-name format embeds the card number in several patterns:
+#   "Charizard #6"                  → 6              (Pokemon, # prefix)
+#   "Mew V #154"                    → 154
+#   "Pikachu Promo #SWSH024"        → SWSH024
+#   "Tropical Beach #BW28"          → BW28
+#   "Ain OP07-002"                  → OP07-002       (OP/Gundam, bare code)
+#   "Exodia the Forbidden One 25LP-EN000" → 25LP-EN000  (YGO, bare code)
+#   "Dragonite #149 [Holo]"         → 149
+#
+# Two extraction patterns, tried in order:
+#   1. # prefix (Pokemon's dominant style) — supports embedded dashes
+#      so "Exodia ... #25LP-EN000" still works
+#   2. Bare SET-NUM card code (YGO/OP/Gundam) — permissive enough to
+#      catch digit-first set codes like "25LP" that the old regex missed
+_PC_NUM_HASH     = re.compile(r"#\s*([A-Z0-9][A-Z0-9-]*)", re.IGNORECASE)
+_PC_NUM_FULLCODE = re.compile(r"\b([A-Z0-9]{2,6}-[A-Z]{0,4}\d{1,5}[A-Z]?)\b", re.IGNORECASE)
+
+def _extract_pc_card_number(product_name):
+    """Pull the card number out of a PC product-name string.
+    Returns lowercase normalized number or '' if none found."""
+    if not product_name:
+        return ""
+    m = _PC_NUM_HASH.search(product_name)
+    if m:
+        return m.group(1).lower().rstrip("-")
+    m = _PC_NUM_FULLCODE.search(product_name)
+    if m:
+        return m.group(1).lower()
+    return ""
+
+
+def _extract_pc_card_name(product_name):
+    """The card name portion of PC's product-name — everything BEFORE the
+    `#NUM` or `XXX-NNN` suffix, with bracketed tags stripped. For matching
+    against our catalog's plain `name` column."""
+    if not product_name:
+        return ""
+    s = _PC_NUM_HASH.sub("", product_name)
+    s = _PC_NUM_FULLCODE.sub("", s)
+    # Strip [Holo], [Foil], [Reverse Holo] etc. — variant tags don't match
+    # our catalog's name field which doesn't carry them.
+    s = re.sub(r"\[[^\]]*\]", "", s)
+    return s.strip()
+
+
+# ── Catalog-id parsing ────────────────────────────────────────────────────────
+# Our catalog ids encode set + number, e.g.:
+#   en-CRZ-154           → set='crz', num='154'
+#   sv6-219              → set='sv6', num='219'
+#   swsh11tg-TG23        → set='swsh11tg', num='tg23'
+#   gym2-85              → set='gym2', num='85'
+#   jp-sm10a-066         → set='sm10a', num='066'
+#   dbz-awa-C18          → set='awa',  num='c18'  (multi-prefix)
+#   sealed-jp-pc-7641193 → already has pc_id, gets skipped upstream
+#
+# Strategy: split on the LAST '-' to isolate the card number, then strip
+# any known game/lang prefix from the leading portion. This handles the
+# common case (en-CRZ-154) AND the multi-prefix case (dbz-awa-C18) which
+# the old regex couldn't parse.
+_CAT_ID_PREFIXES = ("en", "jp", "pd", "kr", "cn", "topps", "dbz", "mtg", "ygo", "op", "gun", "sealed")
+
+def _extract_catalog_setnum(catalog_id):
+    """Return (set_code_from_id_lower, card_number_lower) or ('','').
+
+    Two patterns supported, picked by the number of dash-separated parts
+    after stripping the game/lang prefix:
+      2 parts → Pokemon-style: set, num                    (en-CRZ-154 → crz, 154)
+      3+ parts → YGO/OP/Gundam-style: the LAST TWO parts
+                 form the full card code, which PC indexes
+                 as the card number INCLUDING the dash.
+                 (ygo-25lp-25LP-EN000 → 25lp, 25lp-en000)
+                 (op-eb-01-EB01-017   → eb01, eb01-017)
+    """
+    if not catalog_id or "-" not in catalog_id:
+        return ("", "")
+
+    # Strip game/lang prefix(es). 'dbz-awa-C18' → 'awa-C18'.
+    rest = catalog_id
+    while "-" in rest:
+        head, tail = rest.split("-", 1)
+        if head.lower() in _CAT_ID_PREFIXES:
+            rest = tail
+        else:
+            break
+
+    parts = rest.split("-")
+    if len(parts) == 2:
+        # Pokemon-style: set + plain number
+        return (parts[0].lower(), parts[1].lower())
+    if len(parts) >= 3:
+        # YGO/OP/Gundam-style: the last two components are the full
+        # card code (e.g. "25LP" + "EN000" → "25lp-en000"). PC's
+        # product-name carries the same code verbatim, so matching the
+        # full-code string against PC's by_setnum index works.
+        card_set = parts[-2]
+        card_num = parts[-1]
+        full_code = (card_set + "-" + card_num).lower()
+        return (card_set.lower(), full_code)
+    return ("", "")
 
 
 def _pick(row, key):
@@ -166,6 +268,79 @@ def _normalize_text(s):
     if not s:
         return ""
     return _NORM_NAME_RE.sub(" ", s.lower()).strip()
+
+
+# PC's CSV always prefixes the set name with the game ("Pokemon Base Set",
+# "Magic: The Gathering Alpha", "Yu-Gi-Oh Legend of Blue Eyes"). Our
+# catalog stores just the set name from pokedata / pokemontcg.io, with no
+# game prefix. Strip the prefix before matching so "Pokemon Base Set" in
+# PC lines up with "Base Set" in pathbinder.
+_PC_CONSOLE_PREFIXES = [
+    "pokemon japanese",         # check longest first so 'pokemon' doesn't eat it
+    "pokemon",
+    "magic the gathering",      # 'magic:' becomes 'magic ' after normalize
+    "magic",
+    "yu gi oh",                 # 'Yu-Gi-Oh!' normalizes to 'yu gi oh'
+    "one piece",
+    "gundam",
+    "dragon ball z",
+    "dragon ball super",
+]
+
+def _normalize_console(s):
+    """Same as _normalize_text but also strips the leading game prefix
+    PC adds to console names. So 'Pokemon Base Set' normalizes to the
+    same key as our catalog's 'Base Set'."""
+    norm = _normalize_text(s)
+    for prefix in _PC_CONSOLE_PREFIXES:
+        if norm.startswith(prefix + " "):
+            return norm[len(prefix) + 1:]
+        if norm == prefix:
+            return ""
+    return norm
+
+
+# Single tokens that are too generic to use as a match key on their own.
+# Without this filter, every PC console containing the word "set" / "edition"
+# / "promos" would compete for the same (token, card_number) slot, and the
+# match would be effectively random. We still emit these as part of bigrams
+# and trigrams (where the surrounding context disambiguates).
+_GENERIC_CONSOLE_TOKENS = frozenset({
+    "the", "of", "and", "a", "an", "or",
+    "set", "edition", "series", "promos", "promo",
+    "card", "cards", "official", "league", "deck",
+})
+
+# Bigrams + trigrams + single tokens + full string of the stripped console
+# name. Order matters — caller uses setdefault, so MORE SPECIFIC keys are
+# yielded first to claim the (key, card_number) slot before any looser
+# variant. So "Pokemon Base Set" Charizard #1 grabs ("base set", "1") AND
+# ("base", "1"), and a later "Pokemon Base Set 2" #1 row only claims
+# ("base set 2", "1") + ("set 2", "1") without clobbering "base".
+def _console_keys(stripped_console):
+    """Yield console keys in DECREASING specificity:
+       full string → bigrams → trigrams → single tokens (stopword-filtered).
+    Caller is responsible for dedup."""
+    if not stripped_console:
+        return
+    yield stripped_console
+    tokens = stripped_console.split()
+    n = len(tokens)
+    if n <= 1:
+        return
+    # n-grams sized 3 then 2 (most-specific-first within multi-word keys).
+    for size in (3, 2):
+        if n < size: continue
+        for i in range(0, n - size + 1):
+            ng = " ".join(tokens[i : i + size])
+            if ng != stripped_console:    # already yielded
+                yield ng
+    # Single tokens last, so they're a fallback after exact / bigram hits.
+    # Generic tokens excluded so (set, num) doesn't get owned by whichever
+    # PC console happened to be processed first.
+    for t in tokens:
+        if t not in _GENERIC_CONSOLE_TOKENS:
+            yield t
 
 
 def _cents_to_dollars(raw):
@@ -322,60 +497,176 @@ def download_category_csv(category, target_dir, max_retries=3):
 
 
 # ── CSV ingest ────────────────────────────────────────────────────────────────
-def load_csv_index(paths):
-    """Build two indexes from the CSV(s):
-        by_url   : normalized URL → csv_row_dict
-        by_text  : (normalized console, normalized name) → csv_row_dict
-    Returns (by_url, by_text, total_rows).
-    """
-    by_url  = {}
-    by_text = {}
-    total   = 0
+def load_csv_index(paths, debug_headers=False):
+    """Build four indexes from the CSV(s):
+        by_setnum    : (normalized stripped console, card_number)        → csv_row_dict
+        by_text      : (normalized stripped console, normalized cardname) → csv_row_dict
+        by_unique_num: card_number → csv_row_dict, ONLY for numbers that
+                       refer to a single product across the entire CSV
+                       (catches things like 'bw100' / 'GG01' / 'TG23' where
+                       PC bundles a set into a catch-all 'Pokemon Promo'
+                       console but the card number is inherently unique)
+        by_url       : reserved for future use; PC's CSV has no URL column
+    Returns (by_url, by_text, by_setnum, by_unique_num, total_rows).
+
+    Card number is the high-precision key — PC's product-name embeds it
+    ("Charizard #6") and our catalog ids encode it too ("en-CRZ-154").
+    Match on (set, number) and you avoid every name-variation pitfall
+    (Charizard vs. Charizard ex vs. Charizard V vs. Charizard [Holo])."""
+    by_url        = {}
+    by_text       = {}
+    by_setnum     = {}
+    # Tracks every (card_number → {pc_id → entry}) so we can derive
+    # by_unique_num after all CSVs are parsed. Built as we go.
+    _num_to_pcids = {}
+    total         = 0
+    first_headers_logged = False
+
     for path in paths:
         with open(path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            if debug_headers or not first_headers_logged:
+                print(f"  CSV columns ({os.path.basename(path)}): {headers}")
+                first_headers_logged = True
+
             for row in reader:
                 total += 1
-                pc_id  = _pick(row, "id")
+                pc_id = _pick(row, "id")
                 if not pc_id:
                     continue
-                name    = _pick(row, "name")
-                console = _pick(row, "console")
-                url     = _pick(row, "url")
-                price   = _cents_to_dollars(_pick(row, "loose")) \
-                       or _cents_to_dollars(_pick(row, "cib"))   \
-                       or _cents_to_dollars(_pick(row, "new"))
+                full_name = _pick(row, "name")
+                console   = _pick(row, "console")
+                if not (full_name and console):
+                    continue
+
+                card_number = _extract_pc_card_number(full_name)
+                card_name   = _extract_pc_card_name(full_name) or full_name
+                price = _cents_to_dollars(_pick(row, "loose")) \
+                     or _cents_to_dollars(_pick(row, "cib"))   \
+                     or _cents_to_dollars(_pick(row, "new"))
+
                 entry = {
-                    "pc_id":   str(pc_id),
-                    "name":    name,
-                    "console": console,
-                    "url":     url,
-                    "price":   price,
+                    "pc_id":       str(pc_id),
+                    "name":        card_name,
+                    "console":     console,
+                    "card_number": card_number,
+                    "price":       price,
                 }
-                if url:
-                    by_url[_normalize_url(url)] = entry
-                if name and console:
-                    by_text[(_normalize_text(console), _normalize_text(name))] = entry
-    return by_url, by_text, total
+
+                # Build the candidate console keys IN ORDER of decreasing
+                # specificity. Indexer uses setdefault so the FIRST inserted
+                # key for any (key, card_number) wins — therefore we want
+                # the most specific console keys to be processed first,
+                # both within one PC row and across rows.
+                stripped = _normalize_console(console)
+                raw      = _normalize_text(console)
+                console_keys = []
+                seen = set()
+                def _add(k):
+                    if k and k not in seen:
+                        seen.add(k); console_keys.append(k)
+                # 1. Raw (with prefix) — most specific
+                _add(raw)
+                # 2. Stripped variants (drops game-name prefix + n-grams + tokens)
+                for k in _console_keys(stripped):
+                    _add(k)
+
+                norm_name = _normalize_text(card_name) if card_name else ""
+                for cn in console_keys:
+                    if card_number:
+                        by_setnum.setdefault((cn, card_number), entry)
+                    if norm_name:
+                        by_text.setdefault((cn, norm_name), entry)
+                # Track this card_number → pc_id for the unique-number index
+                if card_number:
+                    _num_to_pcids.setdefault(card_number, {})[entry["pc_id"]] = entry
+
+    # Build the unique-number index: card numbers that refer to a single
+    # product across the entire CSV. Numbers like '1' or '100' are NOT
+    # unique (every set has them); numbers like 'bw100', 'GG01', 'TG23',
+    # 'SWSH024' typically ARE unique by construction.
+    by_unique_num = {}
+    for num, pcid_map in _num_to_pcids.items():
+        if len(pcid_map) == 1:
+            by_unique_num[num] = next(iter(pcid_map.values()))
+
+    return by_url, by_text, by_setnum, by_unique_num, total
 
 
 # ── Per-row match ─────────────────────────────────────────────────────────────
-def match_row(row, by_url, by_text):
-    """Return the CSV entry for this catalog row, or None."""
-    # 1. Exact URL
-    url = row.get("price_source_url") or ""
-    if url:
-        norm = _normalize_url(url)
-        if norm in by_url:
-            return by_url[norm]
-    # 2. Set + name (case-tolerant). Only attempted if both fields are set.
-    set_name = row.get("set_name") or row.get("set_code")
-    name     = row.get("name")
-    if set_name and name:
-        key = (_normalize_text(set_name), _normalize_text(name))
-        if key in by_text:
-            return by_text[key]
-    return None
+def _catalog_set_keys(set_name, set_code, id_set):
+    """Build ordered candidate set keys for a catalog row.
+
+    Symmetric to PC's indexer — we generate n-grams of the catalog's
+    set_name so a catalog 'Wizards Black Star Promos' can match PC's
+    'Pokemon Black Star Promos' via the trigram 'black star promos'.
+    Without n-gramming the catalog side, the FULL set_name has to match
+    PC's stripped console exactly, which fails for almost every set
+    where the two data sources name things differently."""
+    keys = []
+    seen = set()
+    def _add(k):
+        if k and k not in seen:
+            seen.add(k); keys.append(k)
+
+    if set_name:
+        norm = _normalize_text(set_name)
+        # Full name first (most specific), then n-grams (less specific).
+        _add(norm)
+        for k in _console_keys(norm):
+            _add(k)
+    if set_code:
+        _add(_normalize_text(set_code))
+    if id_set:
+        _add(id_set)
+    return keys
+
+
+def match_row(row, by_url, by_text, by_setnum, by_unique_num):
+    """Return (csv_entry, source_label) for this catalog row, or (None, None).
+
+    Match priority:
+      1. (set, card_number)  — highest precision, immune to name variations
+      2. (set, card_name)    — fallback when set keys agree but number missing
+      3. card_number alone   — only when PC has a single product with that
+                               number globally (catches PC's 'Pokemon Promo'
+                               catch-all console where pokedata splits the
+                               same cards into bwp/basep/neop/etc.)
+
+    Set candidates are n-grammed on BOTH sides so partial matches work."""
+    set_name = row.get("set_name")
+    set_code = row.get("set_code")
+    name     = row.get("name") or ""
+
+    id_set, id_num = _extract_catalog_setnum(row.get("id") or "")
+    set_keys = _catalog_set_keys(set_name, set_code, id_set)
+
+    # 1. Card-number key with set — highest precision
+    if id_num:
+        for sk in set_keys:
+            entry = by_setnum.get((sk, id_num))
+            if entry:
+                return (entry, "setnum")
+
+    # 2. Name + set fallback
+    if name:
+        name_norm = _normalize_text(name)
+        for sk in set_keys:
+            entry = by_text.get((sk, name_norm))
+            if entry:
+                return (entry, "name")
+
+    # 3. Globally-unique card_number fallback. Only fires when PC has
+    #    exactly one product with that number across its entire catalog,
+    #    so 'bw100' or 'GG01' resolves cleanly while plain '1' or '100'
+    #    (which collide across hundreds of sets) won't fire here.
+    if id_num:
+        entry = by_unique_num.get(id_num)
+        if entry:
+            return (entry, "unique_num")
+
+    return (None, None)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -403,6 +694,14 @@ def main():
     ap.add_argument("--keep-downloads", action="store_true",
                     help="Keep downloaded category CSVs on disk after the run (default: delete). "
                          "Useful for re-runs without re-downloading.")
+    ap.add_argument("--inspect", action="store_true",
+                    help="Download (if needed), dump CSV columns + 3 sample rows, "
+                         "then exit. NO catalog match, NO Supabase writes. ALWAYS keeps "
+                         "downloaded CSVs so you can re-run against them.")
+    ap.add_argument("--debug-unmatched", type=int, default=0, metavar="N",
+                    help="At the end of an ingest, print full data for the first N "
+                         "unmatched catalog rows AND the closest CSV candidates we found. "
+                         "Use this to diagnose set-name drift / number-format issues.")
     args = ap.parse_args()
 
     # ── Collect CSV paths ─────────────────────────────────────────────
@@ -447,27 +746,68 @@ def main():
                 return
         if not paths:
             sys.exit("No CSV files found / downloaded.")
-        _run_ingest(paths, args)
+        # Inspect mode: just dump headers + a few rows from each CSV, no DB.
+        if args.inspect:
+            _run_inspect(paths)
+            print(f"\n  CSVs kept at: {tmpdir or 'their original location'}")
+            print(f"  Re-run a real ingest with: --csv-dir {tmpdir or '<your path>'}")
+            return
+        match_rate = _run_ingest(paths, args)
     finally:
-        # Clean up downloaded files unless the user asked to keep them OR
-        # a download failed mid-run (in which case keep them so the user
-        # can resume without re-pulling the ones that worked).
-        if tmpdir and not args.keep_downloads and len(paths) == len(cats if 'cats' in dir() else paths):
+        # Cleanup policy:
+        #   - --keep-downloads → always keep
+        #   - --inspect        → always keep (set above)
+        #   - download failed  → keep (set above via early return)
+        #   - low match rate   → keep so user can iterate without re-pulling
+        #   - everything else  → delete to be tidy
+        delete_ok = (
+            tmpdir
+            and not args.keep_downloads
+            and not args.inspect
+            and ('match_rate' in dir() and match_rate is not None and match_rate >= 50.0)
+        )
+        if delete_ok:
             for p in paths:
                 try: os.remove(p)
                 except Exception: pass
             try: os.rmdir(tmpdir)
             except Exception: pass
+        elif tmpdir:
+            print(f"\n  Downloaded CSVs kept at: {tmpdir}")
+            print(f"  (Re-run without re-downloading: --csv-dir {tmpdir})")
+
+
+def _run_inspect(paths):
+    """Just dump the header + 3 sample rows from each CSV and return.
+    Lets you see exactly what columns PC ships before committing to a
+    full ingest."""
+    for p in paths:
+        print(f"\n=== {os.path.basename(p)} ===")
+        with open(p, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            print(f"Headers ({len(reader.fieldnames or [])}):")
+            for h in reader.fieldnames or []:
+                print(f"  - {h}")
+            print("Sample rows:")
+            for i, row in enumerate(reader):
+                if i >= 3:
+                    break
+                print(f"  Row {i+1}:")
+                for k, v in row.items():
+                    v_str = str(v)
+                    if len(v_str) > 80: v_str = v_str[:77] + "..."
+                    print(f"    {k}: {v_str}")
 
 
 def _run_ingest(paths, args):
     print(f"Loading {len(paths)} CSV file(s)…")
     for p in paths:
         print(f"  • {p}")
-    by_url, by_text, csv_total = load_csv_index(paths)
+    by_url, by_text, by_setnum, by_unique_num, csv_total = load_csv_index(paths)
     print(f"  Indexed {csv_total:,} CSV rows.")
-    print(f"  by-URL keys:  {len(by_url):,}")
-    print(f"  by-text keys: {len(by_text):,}")
+    print(f"  by-setnum keys:    {len(by_setnum):,}   (set + card number — primary key)")
+    print(f"  by-text keys:      {len(by_text):,}   (set + name fallback)")
+    print(f"  by-unique-num:     {len(by_unique_num):,}   (globally-unique card numbers — catch-all-console fallback)")
 
     # ── Load catalog ──────────────────────────────────────────────────
     print(f"\nLoading catalog rows (game_type={args.tcg!r}) missing pricecharting_id…")
@@ -483,25 +823,47 @@ def _run_ingest(paths, args):
         print("\nWriting matches to Supabase. Press Ctrl+C if anything looks wrong.\n")
         time.sleep(2)
 
-    n_url     = 0    # matched by exact URL
-    n_text    = 0    # matched by set + name fallback
-    n_nomatch = 0    # no match in any CSV
-    n_priced  = 0    # current_value also written
-    n_failed  = 0
+    n_setnum     = 0    # matched by (set, card number) — primary
+    n_text       = 0    # matched by (set, card name)   — fallback
+    n_unique_num = 0    # matched by globally-unique card_number
+    n_nomatch    = 0
+    n_priced     = 0
+    n_failed     = 0
     today_iso = date.today().isoformat()
+    debug_n   = args.debug_unmatched
+    unmatched_samples = []
+    # Track outcomes by catalog.game_type so we can see at a glance which
+    # TCG the misses concentrate in (e.g. YGO + Magic might be 90% of the
+    # gap while Pokemon is mostly resolved). Built up per-row, dumped in
+    # the summary block.
+    by_game = {}   # game_type → {matched: int, nomatch: int}
+    def _bump_game(gt, key):
+        slot = by_game.setdefault(gt or "(none)", {"matched": 0, "nomatch": 0, "total": 0})
+        slot[key]   += 1
+        slot["total"] += 1
+    # Reservoir-style: collect up to debug_n unmatched samples per game_type
+    # so we see misses from EVERY TCG, not just whichever sorts alphabetically
+    # first.
+    unmatched_by_game = {}   # game_type → [rows]
 
     for i, row in enumerate(cat_rows, start=1):
         rid     = row["id"]
-        matched = match_row(row, by_url, by_text)
+        matched, source = match_row(row, by_url, by_text, by_setnum, by_unique_num)
         if not matched:
             n_nomatch += 1
+            _bump_game(row.get("game_type"), "nomatch")
+            if debug_n:
+                bucket = unmatched_by_game.setdefault(row.get("game_type") or "(none)", [])
+                if len(bucket) < max(3, debug_n // 4):
+                    bucket.append(row)
+                if len(unmatched_samples) < debug_n:
+                    unmatched_samples.append(row)
             continue
+        _bump_game(row.get("game_type"), "matched")
 
-        # Tag the match source for the summary; small lookup repeat is fine
-        if row.get("price_source_url") and _normalize_url(row["price_source_url"]) in by_url:
-            n_url += 1
-        else:
-            n_text += 1
+        if   source == "setnum":     n_setnum     += 1
+        elif source == "unique_num": n_unique_num += 1
+        else:                        n_text       += 1
 
         payload = {"pricecharting_id": matched["pc_id"]}
         write_price = (not args.skip_prices) and (matched["price"] is not None)
@@ -534,20 +896,69 @@ def _run_ingest(paths, args):
                 print(f"  [{i}/{len(cat_rows)}] history WARN {rid}: {e}")
 
         if i % 500 == 0:
-            print(f"  [{i:>6}/{len(cat_rows)}] matched={n_url+n_text} nomatch={n_nomatch} failed={n_failed}")
+            print(f"  [{i:>6}/{len(cat_rows)}] matched={n_setnum+n_text+n_unique_num} nomatch={n_nomatch} failed={n_failed}")
 
     # ── Summary ───────────────────────────────────────────────────────
-    total_matched = n_url + n_text
+    total_matched = n_setnum + n_text + n_unique_num
+    match_rate    = total_matched / max(len(cat_rows), 1) * 100
     print()
     print(f"  ─────────────────────────────────────────────────")
-    print(f"  matched by URL    : {n_url:>7,}")
-    print(f"  matched by name   : {n_text:>7,}")
-    print(f"  no match in CSV   : {n_nomatch:>7,}  (run another CSV or leave for nightly scrape)")
-    print(f"  patch failures    : {n_failed:>7,}")
+    print(f"  by (set, card #)   : {n_setnum:>7,}  — primary match key")
+    print(f"  by (set, name)     : {n_text:>7,}  — set + name fallback")
+    print(f"  by unique card #   : {n_unique_num:>7,}  — catch-all-console fallback (bw100 / GG01 / TG23 etc.)")
+    print(f"  no match in CSV    : {n_nomatch:>7,}  (likely a set PC doesn't carry, or pokedata set-name drift)")
+    print(f"  patch failures     : {n_failed:>7,}")
     if not args.skip_prices:
         print(f"  prices written    : {n_priced:>7,}  (catalog.current_value + catalog_price_history)")
-    if total_matched and not args.dry_run:
-        print(f"\n  Match rate: {total_matched / max(len(cat_rows), 1) * 100:.1f}%")
+    print(f"\n  Match rate: {match_rate:.1f}%")
+
+    # ── Per-game-type breakdown ───────────────────────────────────────
+    # Tells you which TCGs are pulling the rate down. Skipping the print
+    # when there's only one game_type in scope (no comparison to make).
+    if len(by_game) > 1:
+        print(f"\n  ── By game_type ──")
+        rows_sorted = sorted(by_game.items(), key=lambda kv: -kv[1]["total"])
+        for gt, slot in rows_sorted:
+            pct = slot["matched"] / max(slot["total"], 1) * 100
+            print(f"    {gt:>16}: {slot['matched']:>7,} matched / {slot['total']:>7,} total  ({pct:5.1f}%)")
+
+    # ── Debug dump for unmatched rows ─────────────────────────────────
+    # Per-game-type sampling — show a handful from EVERY TCG that had
+    # misses, not just the first N. Critical when the catalog spans
+    # multiple TCGs and the bottleneck might be in Magic/YGO while
+    # Pokemon is mostly resolved (or vice versa).
+    if debug_n and unmatched_by_game:
+        ordered = []
+        for gt in sorted(unmatched_by_game.keys()):
+            ordered.extend(unmatched_by_game[gt])
+        print(f"\n  ── Sample unmatched rows (per game_type) ──")
+        for row in ordered:
+            id_set, id_num = _extract_catalog_setnum(row.get("id") or "")
+            print()
+            print(f"  CATALOG  id={row.get('id')}")
+            print(f"           name={row.get('name')!r}")
+            print(f"           set_name={row.get('set_name')!r}  set_code={row.get('set_code')!r}  game_type={row.get('game_type')!r}")
+            print(f"           id-derived: set={id_set!r}  num={id_num!r}")
+            # Find the closest PC consoles that have this card number
+            # (without the set constraint) — tells us if the number IS in
+            # PC's data, just not under any set string we tried.
+            if id_num:
+                hits = [(k[0], v) for k, v in by_setnum.items() if k[1] == id_num]
+                # Cap to 5 to avoid flooding
+                if hits:
+                    print(f"  PC candidates with card #{id_num}:")
+                    seen = set()
+                    for cn, entry in hits[:30]:
+                        # Dedupe by pc_id — multiple console keys point at the same entry
+                        if entry["pc_id"] in seen: continue
+                        seen.add(entry["pc_id"])
+                        if len(seen) > 5: break
+                        print(f"    pc_id={entry['pc_id']}  console={entry['console']!r}  name={entry['name']!r}")
+                else:
+                    print(f"  PC candidates with card #{id_num}: none — number not in PC data")
+            else:
+                print(f"  (no card number extractable from catalog id)")
+    return match_rate
 
 
 if __name__ == "__main__":
