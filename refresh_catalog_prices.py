@@ -2,8 +2,8 @@
 """
 PathBinder — Global Catalog Price Refresh
 ===========================================
-Walks every catalog row of the targeted TCG that has a price_source_url,
-fetches the current ungraded market price from PriceCharting, updates
+Walks every catalog row of the targeted TCG that has a price_source_url
+OR a pricecharting_id, fetches the current ungraded market price, updates
 catalog.current_value, and writes a daily snapshot to
 catalog_price_history. Powers the dashboard Price Movers panel with
 global market data (not just the user's collection).
@@ -11,12 +11,33 @@ global market data (not just the user's collection).
 Run nightly at ~3am via cron / launchd / GitHub Actions. Idempotent on
 catalog_price_history thanks to UNIQUE(catalog_id, recorded_at).
 
+PRICE SOURCE MODES:
+    Two modes, picked per row at runtime based on what data we have:
+
+    1. API mode (preferred — fast, reliable, ~30 req/sec safe)
+       Requires:
+         - PRICECHARTING_API_KEY env var set (paid PC API access)
+         - Row has a non-null pricecharting_id column
+       Calls https://www.pricecharting.com/api/product?t=KEY&id=PC_ID
+       and reads 'loose-price' from the JSON response (in cents).
+
+    2. Scrape mode (legacy fallback — slow, brittle, ~2 req/sec)
+       Triggers when the API mode preconditions aren't met (no API key,
+       no pricecharting_id on the row, or API call fails).
+       Fetches the price_source_url HTML and regex-extracts the
+       "Ungraded" price block.
+
+    The script auto-detects mode per row and uses the API whenever it
+    can, falling back to scraping silently for legacy rows that haven't
+    been backfilled with a pricecharting_id yet.
+
 PREREQUISITES:
     pip3 install requests --break-system-packages
     Migration: migration_catalog_price_history.sql applied
 
 USAGE:
-    # Pokemon only (~50K rows). Default workers + pacing — about 4-6h.
+    # Pokemon only — defaults to high workers if API key is set,
+    # falls back to low workers if scraping only.
     python3 refresh_catalog_prices.py --tcg pokemon
 
     # Dry-run on first 20 rows (no writes)
@@ -25,22 +46,26 @@ USAGE:
     # Restart-friendly — skip rows whose history already has TODAY's row
     python3 refresh_catalog_prices.py --tcg pokemon --resume
 
-    # Crank workers (PC will 429 if too aggressive — start at 3)
-    python3 refresh_catalog_prices.py --tcg pokemon --workers 4
+    # Force-scrape (skip API even if key is set — useful for debugging)
+    python3 refresh_catalog_prices.py --tcg pokemon --force-scrape
+
+    # Override worker count (default: 20 if API available, 3 if scrape-only)
+    python3 refresh_catalog_prices.py --tcg pokemon --workers 30
 
 ENVIRONMENT:
     SUPABASE_URL              your project URL
     SUPABASE_SERVICE_KEY      service-role key
+    PRICECHARTING_API_KEY     PC API token (optional — falls back to scrape if unset)
 
 CRON SETUP (Mac, nightly 3am local time):
     crontab -e
     0 3 * * * cd /Users/charleshewitt/Desktop/cardfrac \\
-        && SUPABASE_URL=... SUPABASE_SERVICE_KEY=... \\
+        && SUPABASE_URL=... SUPABASE_SERVICE_KEY=... PRICECHARTING_API_KEY=... \\
         python3 refresh_catalog_prices.py --tcg pokemon --resume \\
         >> /tmp/refresh_catalog.log 2>&1
 
 GITHUB ACTIONS:
-    See .github/workflows/refresh-prices.yml example in repo notes.
+    See .github/workflows/refresh-catalog-prices.yml.
 """
 
 import os, sys, re, time, random, argparse, threading, json
@@ -58,6 +83,12 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 if not (SUPABASE_URL and SUPABASE_KEY):
     sys.exit("Set SUPABASE_URL and SUPABASE_SERVICE_KEY in your environment.")
+
+# PriceCharting API key (optional). When set + the row has a
+# pricecharting_id, we use the JSON API instead of HTML-scraping. The
+# API is ~15× faster, more reliable, and immune to HTML template
+# changes. Falls back to scraping when unset.
+PC_API_KEY = os.environ.get("PRICECHARTING_API_KEY", "").strip() or None
 
 PC_BASE         = "https://www.pricecharting.com"
 REQUEST_TIMEOUT = 25
@@ -95,7 +126,9 @@ _session.headers.update(HEADERS)
 _thread_jitter = threading.local()
 
 def _pace(min_s=0.7, max_s=1.5):
-    """Per-worker sleep to avoid synchronized bursts."""
+    """Per-worker sleep to avoid synchronized bursts. Default values
+    are tuned for scraping (PC throttles scrapers aggressively). API
+    callers pass much smaller values via _pace_api()."""
     last = getattr(_thread_jitter, "last", 0)
     now  = time.time()
     delay = random.uniform(min_s, max_s)
@@ -104,8 +137,16 @@ def _pace(min_s=0.7, max_s=1.5):
     _thread_jitter.last = time.time()
 
 
+def _pace_api():
+    """Lighter pacing for API mode — PC's published rate limit is
+    generous (60 req/sec on the paid tier as of 2026), so we only
+    need a small jitter to avoid synchronized bursts across workers."""
+    _pace(0.03, 0.08)
+
+
 def fetch_pc_page(url):
-    """GET the PC product page with exponential backoff on 403/429."""
+    """GET the PC product page with exponential backoff on 403/429.
+    Used in scrape mode only."""
     _pace()
     last_err = None
     for attempt in range(MAX_RETRIES):
@@ -137,6 +178,58 @@ def parse_price(html):
     if m:
         return float(m.group(1).replace(",", ""))
     return None
+
+
+def fetch_pc_api(pc_id):
+    """API mode — query PriceCharting's product endpoint by ID and
+    return (price, raw_response). PC returns prices in CENTS as
+    integer fields:
+      loose-price   — raw / ungraded (this is what we want for cards)
+      cib-price     — complete-in-box (sealed product equivalent)
+      new-price     — sealed / mint (closest to PSA 10 for graded)
+      graded-price  — graded-card-specific, when available
+
+    For TCG singles, loose-price IS the ungraded market price (matches
+    what the scrape was reading). For sealed products, loose-price is
+    typically zero — fall back to cib-price for those.
+
+    Returns float dollars or None if no price field is populated.
+    Raises RuntimeError on transport / HTTP / parse failures so the
+    caller can decide whether to fall back to scraping.
+    """
+    if not PC_API_KEY:
+        raise RuntimeError("PRICECHARTING_API_KEY not set")
+    _pace_api()
+    url = f"{PC_BASE}/api/product"
+    last_err = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            r = _session.get(url, params={"t": PC_API_KEY, "id": pc_id},
+                             timeout=REQUEST_TIMEOUT)
+        except Exception as e:
+            last_err = f"network: {e}"
+            time.sleep(2 ** attempt + random.uniform(0, 1))
+            continue
+        if r.ok:
+            try:
+                data = r.json()
+            except Exception as e:
+                raise RuntimeError(f"json decode: {e}")
+            # Prefer loose-price; fall back to cib-price (sealed product
+            # case where loose isn't meaningful); finally new-price.
+            for field in ("loose-price", "cib-price", "new-price"):
+                cents = data.get(field)
+                if cents is not None and cents > 0:
+                    return cents / 100.0, data
+            # No usable price field — return None but don't error.
+            return None, data
+        if r.status_code in RETRY_STATUSES:
+            sleep_s = (2 ** (attempt + 1) - 1) + random.uniform(0, 3)
+            last_err = f"HTTP {r.status_code} (retry {attempt+1}/{MAX_RETRIES} after {sleep_s:.1f}s)"
+            time.sleep(sleep_s)
+            continue
+        raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+    raise RuntimeError(last_err or "exhausted retries")
 
 
 # ─── Supabase REST ────────────────────────────────────────────────────────────
@@ -192,35 +285,49 @@ def pg_upsert_history(row):
 
 
 # ─── Loading + processing ─────────────────────────────────────────────────────
-def load_catalog(game_type, only_pokemon, resume):
-    """Pull every catalog row of the target TCG with a price_source_url.
-    With --resume, skips rows that already have today's history entry."""
-    print(f"\n  Loading catalog rows for game_type='{game_type}'…")
+def load_catalog(game_type, resume):
+    """Pull every catalog row of the target TCG with a price_source_url
+    or pricecharting_id. Pass game_type='all' to pull every TCG in one
+    sweep. With --resume, skips rows that already have today's history entry."""
+    if game_type == "all":
+        print(f"\n  Loading catalog rows for ALL TCGs (no game_type filter)…")
+    else:
+        print(f"\n  Loading catalog rows for game_type='{game_type}'…")
     rows = []
     offset = 0
     PAGE = 1000
     while True:
-        # Catalog has TWO URL columns depending on schema vintage:
-        #   - market_price_source  (older Pokemon catalog rows)
+        # Catalog has THREE columns we can use to look up prices:
+        #   - pricecharting_id     (preferred — enables fast API mode)
         #   - price_source_url     (newer TCG syncs: sealed / pc_singles_enrich)
-        # SELECT both, filter with PostgREST OR so a row qualifies if
-        # EITHER is non-null.
+        #   - market_price_source  (older Pokemon catalog rows)
+        # A row qualifies if ANY of the three is non-null. process_row
+        # picks the lookup mode at execution time based on availability.
         params = {
-            "select":           "id,name,game_type,set_code,price_source_url,market_price_source",
-            "or":               "(price_source_url.not.is.null,market_price_source.not.is.null)",
+            "select":           "id,name,game_type,set_code,pricecharting_id,price_source_url,market_price_source",
+            "or":               "(pricecharting_id.not.is.null,price_source_url.not.is.null,market_price_source.not.is.null)",
             "limit":            str(PAGE),
             "offset":           str(offset),
         }
-        if only_pokemon:
-            params["game_type"] = "eq.pokemon"
-        elif game_type:
+        # 'all' = no game_type filter (every TCG). Specific game_type
+        # values still filter the normal way.
+        if game_type and game_type != "all":
             params["game_type"] = f"eq.{game_type}"
         chunk = pg_get("catalog", params=params)
         rows.extend(chunk)
         if len(chunk) < PAGE:
             break
         offset += PAGE
-    print(f"  {len(rows):,} catalog rows with price_source_url.")
+    print(f"  {len(rows):,} catalog rows with price_source or pricecharting_id.")
+    # When running 'all', print a per-game-type breakdown so the
+    # operator can see what's about to be refreshed at a glance.
+    if game_type == "all":
+        by_game = {}
+        for r in rows:
+            g = r.get("game_type") or "(unknown)"
+            by_game[g] = by_game.get(g, 0) + 1
+        for g in sorted(by_game, key=lambda x: -by_game[x]):
+            print(f"    {g:<12} {by_game[g]:>7,}")
 
     if resume:
         today = date.today().isoformat()
@@ -246,26 +353,58 @@ def load_catalog(game_type, only_pokemon, resume):
     return rows
 
 
-def process_row(row, dry_run=False):
+def process_row(row, dry_run=False, force_scrape=False):
     """Fetch PC, parse price, write back to catalog + history.
-    Prefers price_source_url when present (newer schema); falls back to
-    market_price_source (older Pokemon schema)."""
-    rid = row["id"]
-    url = row.get("price_source_url") or row.get("market_price_source")
-    if not url:
-        return (rid, "skipped", "no price URL", None)
 
-    try:
-        html = fetch_pc_page(url)
-    except Exception as e:
-        return (rid, "failed", f"fetch: {e}", None)
+    Mode selection:
+      1. If PC API key is set AND row has pricecharting_id AND NOT
+         --force-scrape → API mode (fast path).
+      2. Else if row has price_source_url or market_price_source →
+         scrape mode (legacy fallback).
+      3. Else → skip.
 
-    price = parse_price(html)
+    On API failure, transparently falls back to scrape mode if a URL
+    is available — so a transient API hiccup doesn't lose a row.
+    """
+    rid    = row["id"]
+    pc_id  = row.get("pricecharting_id")
+    url    = row.get("price_source_url") or row.get("market_price_source")
+
+    api_eligible = bool(PC_API_KEY and pc_id and not force_scrape)
+    price        = None
+    mode_used    = None
+
+    if api_eligible:
+        try:
+            api_result = fetch_pc_api(pc_id)
+            price      = api_result[0] if api_result else None
+            mode_used  = "api"
+        except Exception as e:
+            # API failed — try scraping if we have a URL fallback.
+            if url:
+                try:
+                    html  = fetch_pc_page(url)
+                    price = parse_price(html)
+                    mode_used = "scrape (api failed)"
+                except Exception as e2:
+                    return (rid, "failed", f"api: {e} / scrape: {e2}", None)
+            else:
+                return (rid, "failed", f"api: {e} (no URL fallback)", None)
+    else:
+        if not url:
+            return (rid, "skipped", "no PC id or URL", None)
+        try:
+            html  = fetch_pc_page(url)
+            price = parse_price(html)
+            mode_used = "scrape"
+        except Exception as e:
+            return (rid, "failed", f"scrape: {e}", None)
+
     if price is None:
-        return (rid, "failed", "no price found in page", None)
+        return (rid, "failed", f"no price ({mode_used})", None)
 
     if dry_run:
-        return (rid, "dry", f"would set ${price:.2f}", price)
+        return (rid, "dry", f"would set ${price:.2f} via {mode_used}", price)
 
     # Update catalog current_value (best-effort — history is the
     # authoritative source for movers anyway).
@@ -300,24 +439,47 @@ def main():
     )
     ap.add_argument("--tcg", default="pokemon",
                     help="catalog.game_type filter (default 'pokemon'). "
-                         "Pass 'magic' / 'yugioh' / 'op' / etc. when ready to extend.")
-    ap.add_argument("--workers", type=int, default=3,
-                    help="Parallel HTTP workers (default 3 — PC rate-limits aggressively).")
+                         "Pass 'all' to refresh every TCG in one sweep, or a "
+                         "specific game_type like 'mtg' / 'yugioh' / 'op' / "
+                         "'gun' / 'dbz' / 'topps'.")
+    ap.add_argument("--workers", type=int, default=0,
+                    help="Parallel HTTP workers. Default auto-picks 20 if API key is "
+                         "available (fast path), 3 if scrape-only (PC rate-limits).")
     ap.add_argument("--limit",   type=int, default=0, help="Stop after N rows (debug).")
     ap.add_argument("--dry-run", action="store_true", help="Fetch + parse, but don't write.")
     ap.add_argument("--resume",  action="store_true",
                     help="Skip rows already in catalog_price_history for today's date.")
+    ap.add_argument("--force-scrape", action="store_true",
+                    help="Bypass API mode even when key + pricecharting_id are available "
+                         "(useful for debugging or if PC API is down).")
     args = ap.parse_args()
 
-    only_pokemon = args.tcg.lower() == "pokemon"
-    rows = load_catalog(args.tcg, only_pokemon, args.resume)
+    # Auto-pick workers based on which mode we'll be running in.
+    # API mode: PC's published rate limit on the paid tier handles
+    # ~30-60 req/sec comfortably; 20 workers with light pacing is
+    # safe. Scrape mode: PC actively rate-limits scrapers, 3 is the
+    # historical sustainable value.
+    if args.workers == 0:
+        args.workers = 3 if (args.force_scrape or not PC_API_KEY) else 20
+
+    # Inform the user which mode we're running in.
+    if args.force_scrape:
+        print(f"  Mode: SCRAPE (forced via --force-scrape)")
+    elif PC_API_KEY:
+        print(f"  Mode: API (rows with pricecharting_id) + scrape fallback (rows without)")
+    else:
+        print(f"  Mode: SCRAPE (PRICECHARTING_API_KEY not set — slow path)")
+
+    rows = load_catalog(args.tcg.lower(), args.resume)
     if args.limit:
         rows = rows[:args.limit]
     if not rows:
         print("  Nothing to do.")
         return
 
-    eta_min = len(rows) * 1.2 / args.workers / 60
+    # API mode is ~15× faster per row than scraping. Adjust ETA.
+    per_row_seconds = 0.15 if (PC_API_KEY and not args.force_scrape) else 1.2
+    eta_min = len(rows) * per_row_seconds / args.workers / 60
     print(f"  Processing {len(rows):,} rows with {args.workers} workers — ETA ~{eta_min:.0f} min")
     print(f"  {'DRY RUN' if args.dry_run else 'WRITING TO catalog + catalog_price_history'}")
     print(f"  Starting in 3s — Ctrl+C to abort\n")
@@ -328,7 +490,7 @@ def main():
     started = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futs = {pool.submit(process_row, r, args.dry_run): r for r in rows}
+        futs = {pool.submit(process_row, r, args.dry_run, args.force_scrape): r for r in rows}
         for f in as_completed(futs):
             rid, status, detail, _ = f.result()
             with _lock:
