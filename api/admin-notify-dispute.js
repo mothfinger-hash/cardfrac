@@ -17,6 +17,15 @@
 //   RESEND_FROM       — verified sender, e.g. 'PathBinder Admin <alerts@pathbinder.gg>'
 //                       Must be on a domain you've verified in Resend.
 //
+// OPTIONAL ENV:
+//   ADMIN_EMAIL_RECIPIENTS  — comma-separated explicit override.
+//     Example: "moth@pathbinder.gg,a.duffy@pathbinder.gg"
+//     When set, emails go to exactly these addresses regardless of
+//     profiles.is_admin. Useful pre-launch when admin profiles don't
+//     exist yet, or for adding ops/oncall addresses that aren't
+//     PathBinder users. Unset → falls back to the profiles.is_admin
+//     query.
+//
 // If RESEND_API_KEY or RESEND_FROM is missing the endpoint succeeds with
 // emailed=false rather than 500'ing — the in-app notification still
 // fires regardless, and the admin sees "email not configured" in the
@@ -124,18 +133,39 @@ module.exports = async function handler(req, res) {
   }
 
   // ── Recipients ──────────────────────────────────────────────────────
-  // Service-role client bypasses RLS so we can query emails directly.
-  const { data: admins, error: admErr } = await sb
-    .from('profiles')
-    .select('email, name, username')
-    .eq('is_admin', true)
-    .eq('is_deleted', false)
-    .not('email', 'is', null);
-  if (admErr) {
-    console.error('[admin-notify] admin lookup failed:', admErr.message);
-    return res.status(500).json({ error: 'Could not fetch admin list' });
+  // Two-tier resolution:
+  //
+  //   1. ADMIN_EMAIL_RECIPIENTS env var (comma-separated) — explicit
+  //      override. Takes precedence over the DB query when set. Useful
+  //      pre-launch when admins don't have profile rows yet, OR for
+  //      adding ops/oncall addresses that aren't PathBinder users.
+  //
+  //   2. Otherwise, query profiles where is_admin = true. Auto-scales
+  //      as more admins are added without redeploying.
+  //
+  // Example value:
+  //   ADMIN_EMAIL_RECIPIENTS="moth@pathbinder.gg,a.duffy@pathbinder.gg"
+  let recipients = [];
+  const overrideRaw = (process.env.ADMIN_EMAIL_RECIPIENTS || '').trim();
+  if (overrideRaw) {
+    recipients = overrideRaw
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s && s.includes('@'))
+      .map(email => ({ email, name: 'Admin' }));
+  } else {
+    const { data: admins, error: admErr } = await sb
+      .from('profiles')
+      .select('email, name, username')
+      .eq('is_admin', true)
+      .eq('is_deleted', false)
+      .not('email', 'is', null);
+    if (admErr) {
+      console.error('[admin-notify] admin lookup failed:', admErr.message);
+      return res.status(500).json({ error: 'Could not fetch admin list' });
+    }
+    recipients = (admins || []).filter(a => a.email);
   }
-  const recipients = (admins || []).filter(a => a.email);
   if (recipients.length === 0) {
     return res.status(200).json({ ok: true, emailed: 0, skipped: 'no_admin_emails' });
   }

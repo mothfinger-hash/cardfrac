@@ -1,4 +1,15 @@
 // PathBinder Service Worker
+// v346 — Admin nav badge + manual email test:
+//  - Admin nav-tab now shows the same unread-count badge that the
+//    dropdown "Admin Alerts" item shows, so the admin doesn't need to
+//    open the avatar menu to notice something needs attention. Hidden
+//    for non-admins.
+//  - New "Send test email" button on the admin Disputes panel header.
+//    POSTs to /api/admin-notify-dispute with the most recent disputed
+//    orderId so the admin can verify Resend env vars + ADMIN_EMAIL_
+//    RECIPIENTS are correctly configured without waiting for a real
+//    seller-declines-return flow. Surfaces distinct toasts for the
+//    common failure modes (resend_not_configured / no_admin_emails).
 // v345 — Empty states + 404 + offline + error boundary:
 //  - First-run welcome card on the dashboard when the user has zero
 //    cards, zero listings, zero orders, zero binders. Replaces the
@@ -133,7 +144,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v345';
+const CACHE = 'pathbinder-v346';
 
 const PRECACHE = [
   '/offline.html',

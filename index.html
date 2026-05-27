@@ -5303,6 +5303,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <button class="nav-tab" data-page="admin" data-label="Admin" onclick="showPage('admin')">
           <span class="nav-tab-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
           <span class="nav-tab-lbl">Admin</span>
+          <span class="badge-count" id="adminNavBadge" style="display:none">0</span>
         </button>
       </div>
     </div>
@@ -7675,7 +7676,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     <div id="adminDisputesPanel" style="background:var(--surface);border:1.5px solid var(--red);border-radius:14px;padding:18px;margin-bottom:24px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div style="font-size:.75rem;color:var(--red);letter-spacing:.08em">⚠ Open Disputes <span id="adminDisputesCount" style="color:var(--muted)"></span></div>
-        <button type="button" onclick="loadAdminDisputes()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Refresh</button>
+        <div style="display:flex;gap:6px">
+          <button type="button" onclick="sendAdminTestEmail()" title="Triggers the admin-notify-dispute endpoint for the most recent disputed order to verify Resend wiring" style="background:transparent;border:1px solid var(--copper);color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Send test email</button>
+          <button type="button" onclick="loadAdminDisputes()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Refresh</button>
+        </div>
       </div>
       <div id="adminDisputesList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
     </div>
@@ -14165,20 +14169,37 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const btn      = document.getElementById('adminBellBtn');
       const divider  = document.getElementById('adminBellDivider');
       const countEl  = document.getElementById('adminBellCount');
+      const navBadge = document.getElementById('adminNavBadge');
       if (!btn || !countEl) return;
       if (!userIsAdmin()) {
         btn.style.display = 'none';
-        if (divider) divider.style.display = 'none';
+        if (divider)  divider.style.display  = 'none';
+        if (navBadge) navBadge.style.display = 'none';
         countEl.textContent = '';
         return;
       }
       btn.style.display = 'block';
       if (divider) divider.style.display = 'block';
       const unread = adminNotifications.filter(n => !(n.read_by || []).includes(currentUser.id)).length;
+
+      // Dropdown chip (inside the avatar menu's "Admin Alerts" item)
       if (unread > 0) {
         countEl.innerHTML = '<span style="display:inline-block;background:var(--red);color:#fff;font-family:\'Space Mono\',monospace;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:8px;min-width:18px;text-align:center">' + unread + '</span>';
       } else {
         countEl.innerHTML = '';
+      }
+
+      // Nav-tab badge — mirrors the unread count so the admin can see
+      // there's something needing attention without opening the dropdown.
+      // Reuses the existing .badge-count CSS class used by the orders
+      // notification badge.
+      if (navBadge) {
+        if (unread > 0) {
+          navBadge.textContent  = unread > 99 ? '99+' : String(unread);
+          navBadge.style.display = 'flex';
+        } else {
+          navBadge.style.display = 'none';
+        }
       }
     }
 
@@ -15786,6 +15807,67 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     //   - Refund Buyer    → /api/refund-order (admin path, Connect-aware)
     //   - Resolve for Seller → admin_resolve_dispute_for_seller RPC
     let _adminDisputeCache = [];
+
+    // Manually fires the /api/admin-notify-dispute endpoint for the most
+    // recent disputed order so the admin can verify Resend is wired up
+    // without waiting for a real seller to decline a return. Useful right
+    // after configuring RESEND_API_KEY / RESEND_FROM / ADMIN_EMAIL_RECIPIENTS
+    // in Vercel — confirms the email fires end-to-end. The in-app
+    // notification side fires automatically via the Postgres trigger
+    // whenever an order's status flips to 'disputed'; this button only
+    // tests the email channel which is client-driven.
+    async function sendAdminTestEmail() {
+      if (!userIsAdmin()) { showToast('Admins only'); return; }
+      try {
+        // Find the most recent disputed order to use as the test subject.
+        const { data, error } = await sb
+          .from('orders')
+          .select('id, disputed_at')
+          .eq('status', 'disputed')
+          .order('disputed_at', { ascending: false })
+          .limit(1);
+        if (error) throw error;
+        if (!data || !data.length) {
+          showToast('No disputed orders exist yet — create one first (or just wait for a real one).');
+          return;
+        }
+        const orderId = data[0].id;
+
+        const sess = await supabase.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { showToast('Sign in again'); return; }
+
+        showToast('Firing admin-notify-dispute…');
+        const r = await fetch('/api/admin-notify-dispute', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body:    JSON.stringify({ orderId: orderId }),
+        });
+        const result = await r.json();
+        if (!r.ok) {
+          showToast('Endpoint error: ' + (result.error || r.status));
+          console.error('[test-email] error response:', result);
+          return;
+        }
+        // Distinguish the two soft-failure modes:
+        //   emailed=0 with skipped='resend_not_configured' → env vars missing
+        //   emailed=0 with skipped='no_admin_emails' → recipient list is empty
+        //   emailed=N → success, email actually sent
+        if (result.emailed > 0) {
+          showToast('Email sent to ' + result.emailed + ' admin(s). Check inboxes.');
+        } else if (result.skipped === 'resend_not_configured') {
+          showToast('Resend not configured — set RESEND_API_KEY + RESEND_FROM in Vercel.');
+        } else if (result.skipped === 'no_admin_emails') {
+          showToast('No admin recipients found. Set ADMIN_EMAIL_RECIPIENTS in Vercel.');
+        } else {
+          showToast('Endpoint returned: emailed=' + result.emailed + ' skipped=' + result.skipped);
+        }
+        console.log('[test-email] response:', result);
+      } catch (e) {
+        console.error('[test-email] threw:', e);
+        showToast('Test email failed: ' + (e.message || ''));
+      }
+    }
 
     async function loadAdminDisputes() {
       const host = document.getElementById('adminDisputesList');
@@ -23700,7 +23782,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '  for each row execute function claim_beta_on_profile_create();',
         '',
         '-- RPC: admin invites a beta tester by email or with a generated code.',
-        '-- Caps: founding 10, collector 50, shop 10. Shop tier carries a',
+        '-- Caps: founding 10, collector 50, shop 3. Shop tier carries a',
         '-- 1-year expires_at; auto-claim path applies the same expiry.',
         '--',
         '-- Drop prior signatures first. CREATE OR REPLACE only swaps the',
@@ -23724,7 +23806,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '  v_user_id uuid;',
         '  v_exp timestamptz;',
         'begin',
-        '  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then',
+        '  -- IMPORTANT: qualify EVERY column-`id` reference with its',
+        '  -- table name. RETURNS TABLE(id uuid, ...) creates an implicit',
+        '  -- OUT variable named `id` in this function`s scope. Without',
+        '  -- qualification, postgres can`t tell whether `id` means',
+        '  -- profiles.id (the column) or the return-table OUT param,',
+        '  -- and throws "column reference id is ambiguous" — which the',
+        '  -- admin sends-beta-code button surfaces as "ref id is ambiguous".',
+        '  if not exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) then',
         '    raise exception \'Admin only\';',
         '  end if;',
         '  if p_tier not in (\'founding\',\'collector\',\'shop\') then',
@@ -23734,12 +23823,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '    raise exception \'Must supply email or code\';',
         '  end if;',
         '  select count(*) into v_count from beta_testers',
-        '    where tier = p_tier and revoked_at is null;',
+        '    where beta_testers.tier = p_tier and beta_testers.revoked_at is null;',
         '  if p_tier = \'founding\'  and v_count >= 10 then raise exception \'Founding beta is full (10/10)\';   end if;',
         '  if p_tier = \'collector\' and v_count >= 50 then raise exception \'Collector beta is full (50/50)\'; end if;',
-        '  if p_tier = \'shop\'      and v_count >= 10 then raise exception \'Shop beta is full (10/10)\';      end if;',
+        '  if p_tier = \'shop\'      and v_count >= 3  then raise exception \'Shop beta is full (3/3)\';        end if;',
         '  if p_email is not null then',
-        '    select id into v_user_id from profiles where lower(email) = lower(p_email) limit 1;',
+        '    select profiles.id into v_user_id from profiles where lower(profiles.email) = lower(p_email) limit 1;',
         '  end if;',
         '  v_exp := case when p_tier = \'shop\' and v_user_id is not null then now() + interval \'1 year\' else null end;',
         '  insert into beta_testers (tier, invited_email, invite_code, user_id, invited_by, claimed_at, expires_at, notes)',
@@ -23758,7 +23847,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '        when p_tier = \'shop\'      then \'shop\'',
         '        else \'collector\' end,',
         '      subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
-        '    where id = v_user_id;',
+        '    where profiles.id = v_user_id;',
         '  end if;',
         '  return query select v_id, (v_user_id is not null), v_user_id;',
         'end;',
@@ -23788,7 +23877,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '    where tier = v_invite.tier and user_id is not null and revoked_at is null;',
         '  if v_invite.tier = \'founding\'  and v_count >= 10 then return query select null::text, false, \'Founding beta is full\';  return; end if;',
         '  if v_invite.tier = \'collector\' and v_count >= 50 then return query select null::text, false, \'Collector beta is full\'; return; end if;',
-        '  if v_invite.tier = \'shop\'      and v_count >= 10 then return query select null::text, false, \'Shop beta is full\';      return; end if;',
+        '  if v_invite.tier = \'shop\'      and v_count >= 3  then return query select null::text, false, \'Shop beta is full\';      return; end if;',
         '  v_exp := case when v_invite.tier = \'shop\' then now() + interval \'1 year\' else null end;',
         '  update beta_testers',
         '    set user_id = auth.uid(), claimed_at = now(), expires_at = v_exp',
@@ -23886,11 +23975,27 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     // Collapse/expand cache (defaults: all expanded)
-    var _betaCollapsed = { founding: false, collector: false, shop: false };
+    var _betaCollapsed = { founding: false, enthusiast: false, collector: false, vendor: false, shop: false };
     // Tier → suffix used in DOM ids (PascalCase) so toggling/rendering can
     // resolve the right elements from a single tier string.
-    var _BETA_TIER_SUFFIX = { founding: 'Founding', collector: 'Collector', shop: 'Shop' };
-    var _BETA_TIER_CAPS   = { founding: 10,         collector: 50,           shop: 10  };
+    // founding kept as the historical "early supporter" bucket that grants
+    // Enthusiast on claim; 'enthusiast' is the canonical name going forward.
+    // vendor is the NEW $75/mo tier (post-rename), distinct from old vendor
+    // which was renamed to enthusiast.
+    var _BETA_TIER_SUFFIX = {
+      founding:   'Founding',
+      enthusiast: 'Enthusiast',
+      collector:  'Collector',
+      vendor:     'Vendor',
+      shop:       'Shop',
+    };
+    var _BETA_TIER_CAPS   = {
+      founding:   10,
+      enthusiast: 20,
+      collector:  50,
+      vendor:     5,
+      shop:       3,
+    };
 
     function adminToggleBetaSection(tier) {
       var suffix = _BETA_TIER_SUFFIX[tier]; if (!suffix) return;

@@ -2,17 +2,23 @@
 -- PathBinder — Beta tier remap after vendor → enthusiast rename
 -- Run in: Supabase Dashboard → SQL Editor → New query
 --
--- The vendor → enthusiast rename (migration_tier_rename_vendor_to_enthusiast.sql)
--- handled existing PAID subscribers but the beta system's deployed RPC
--- functions still map:
---   • founding beta  → 'vendor'   (now the NEW $75/mo tier — over-grant!)
---   • shop-beta expiry downgrades → 'vendor'   (same issue)
+-- Updates beta-tier RPCs to support the post-rename five-tier system:
+--   founding   → NEW vendor ($75/mo)   — founders get sealed + scanner access
+--   enthusiast → enthusiast ($20/mo)   — canonical name post-rename, cap 20
+--   collector  → collector ($5/mo)
+--   vendor     → vendor ($75/mo)       — direct invite for vendor tier (cap 5)
+--   shop       → shop ($200/mo, 1yr)   — same as before
 --
--- After the rename, the "spiritual successor" to the OLD vendor tier
--- is enthusiast (same feature set, $20/mo, 40-listing cap). Founding
--- beta users were promised the old vendor's feature set, so they
--- should map to enthusiast — not the new $75 vendor tier which now
--- unlocks sealed + non-TCG products + product scanner.
+-- Also:
+--   • Widens the beta_testers.tier CHECK constraint to accept the new
+--     'enthusiast' + 'vendor' tier names
+--   • Qualifies all unqualified `id` column references inside the SECURITY
+--     DEFINER functions (the old code threw "column reference 'id' is
+--     ambiguous" because RETURNS TABLE creates an implicit `id` OUT param
+--     that conflicts with profiles.id / beta_testers.id)
+--   • Heals existing founding-beta users to subscription_tier='vendor'
+--     (the new $75 tier) so the founders' privilege promise is honored
+--     under the post-rename naming.
 --
 -- This migration:
 --   1. Recreates claim_beta_on_profile_create() — auto-claim path
@@ -26,6 +32,24 @@
 --
 -- Idempotent — CREATE OR REPLACE everything. Safe to re-run.
 -- ============================================================
+
+-- 0. Widen the beta_testers.tier CHECK constraint to accept the
+-- post-rename tier names. The original constraint was
+--   check (tier in ('founding','collector','shop'))
+-- which blocks INSERTs with the new 'enthusiast' or 'vendor' values.
+-- Re-creating the constraint by name is idempotent — the DROP IF
+-- EXISTS handles re-runs cleanly.
+--
+-- Note: Postgres auto-generates a name like 'beta_testers_tier_check'
+-- when the constraint is declared inline with the table. We'll drop by
+-- that conventional name and any older variants, then add a fresh one.
+ALTER TABLE public.beta_testers
+  DROP CONSTRAINT IF EXISTS beta_testers_tier_check;
+ALTER TABLE public.beta_testers
+  DROP CONSTRAINT IF EXISTS beta_testers_tier_check_v2;
+ALTER TABLE public.beta_testers
+  ADD  CONSTRAINT beta_testers_tier_check_v2
+       CHECK (tier IN ('founding','enthusiast','collector','vendor','shop'));
 
 -- 1. Auto-claim trigger function — maps founding → enthusiast.
 CREATE OR REPLACE FUNCTION public.claim_beta_on_profile_create()
@@ -43,18 +67,51 @@ BEGIN
     v_exp := CASE WHEN v_invite.tier = 'shop' THEN now() + INTERVAL '1 year' ELSE NULL END;
     UPDATE public.beta_testers
       SET user_id = NEW.id, claimed_at = now(), expires_at = v_exp
-      WHERE id = v_invite.id;
+      WHERE beta_testers.id = v_invite.id;
     UPDATE public.profiles SET
       subscription_tier = CASE
-        WHEN v_invite.tier = 'founding'  THEN 'enthusiast'
-        WHEN v_invite.tier = 'shop'      THEN 'shop'
+        WHEN v_invite.tier = 'founding'   THEN 'vendor'      -- founders → new $75 Vendor tier (sealed + non-TCG + scanner)
+        WHEN v_invite.tier = 'enthusiast' THEN 'enthusiast'
+        WHEN v_invite.tier = 'collector'  THEN 'collector'
+        WHEN v_invite.tier = 'vendor'     THEN 'vendor'
+        WHEN v_invite.tier = 'shop'       THEN 'shop'
         ELSE 'collector' END,
       subscription_expires_at = COALESCE(v_exp, subscription_expires_at)
-    WHERE id = NEW.id;
+    WHERE profiles.id = NEW.id;
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 1b. Heal founding-beta users to the new Vendor tier.
+--
+-- Tier hierarchy (low → high): free, collector ($5), enthusiast ($20),
+-- vendor ($75), shop ($200, unlimited).
+--
+-- Founding members got the OLD "vendor" tier on sign-up (which carried
+-- the bulk-import / archive / multi-binder features at the time). After
+-- the rename, the OLD vendor became "enthusiast" at $20/mo. PathBinder
+-- now uses "vendor" as the name for a NEW $75/mo tier that adds sealed
+-- + non-TCG product listings + product scanner.
+--
+-- Founders get the NEW vendor tier going forward — meaningfully more
+-- valuable than enthusiast (sealed access alone) without escalating
+-- them all the way to unlimited Shop.
+--
+-- Two heal paths covered here:
+--   1. Founders who were caught by the old rename migration sit on
+--      'enthusiast' today — bump them up to 'vendor'.
+--   2. Founders who slipped past the rename are already on 'vendor';
+--      they stay where they are (which is now correct).
+-- Either way, every active founding-beta user ends on subscription_tier='vendor'.
+UPDATE public.profiles p
+   SET subscription_tier = 'vendor'
+  FROM public.beta_testers b
+ WHERE b.user_id = p.id
+   AND b.tier = 'founding'
+   AND b.revoked_at IS NULL
+   AND p.subscription_tier IN ('enthusiast', 'vendor', 'collector', 'free')
+   AND p.stripe_subscription_id IS NULL;
 
 -- 2. Admin invite RPC — maps founding → enthusiast.
 --
@@ -87,22 +144,43 @@ DECLARE
   v_user_id UUID;
   v_exp     TIMESTAMPTZ;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = TRUE) THEN
+  -- IMPORTANT: every unqualified column reference to `id` inside this
+  -- function MUST be table-qualified (profiles.id, beta_testers.id),
+  -- because the RETURNS TABLE(id UUID, ...) declaration above creates
+  -- an implicit OUT parameter also named `id`. Without qualification,
+  -- PostgreSQL can't tell whether `id` refers to the table column or
+  -- the return-table variable and throws "column reference 'id' is
+  -- ambiguous" — which is what surfaces to the admin UI as "ref id is
+  -- ambiguous" when trying to send a beta code.
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.is_admin = TRUE) THEN
     RAISE EXCEPTION 'Admin only';
   END IF;
-  IF p_tier NOT IN ('founding','collector','shop') THEN
+  -- Five tiers can be invited. Caps:
+  --   founding   10  → grants Vendor (new $75 tier; founders honored
+  --                    with the most-feature-rich non-Shop tier)
+  --   enthusiast 20  → grants Enthusiast (post-rename canonical name;
+  --                    use this for new bulk seeding)
+  --   collector  50  → grants Collector
+  --   vendor      5  → grants Vendor (direct invite path, separate from
+  --                    founding so the founder bucket stays distinct)
+  --   shop        3  → grants Shop (1-year expiry; intentionally small
+  --                    since Shop = unlimited $200/mo top tier)
+  IF p_tier NOT IN ('founding','enthusiast','collector','vendor','shop') THEN
     RAISE EXCEPTION 'Invalid tier %', p_tier;
   END IF;
   IF p_email IS NULL AND p_code IS NULL THEN
     RAISE EXCEPTION 'Must supply email or code';
   END IF;
   SELECT count(*) INTO v_count FROM public.beta_testers
-    WHERE tier = p_tier AND revoked_at IS NULL;
-  IF p_tier = 'founding'  AND v_count >= 10 THEN RAISE EXCEPTION 'Founding beta is full (10/10)';   END IF;
-  IF p_tier = 'collector' AND v_count >= 50 THEN RAISE EXCEPTION 'Collector beta is full (50/50)'; END IF;
-  IF p_tier = 'shop'      AND v_count >= 10 THEN RAISE EXCEPTION 'Shop beta is full (10/10)';      END IF;
+    WHERE beta_testers.tier = p_tier AND beta_testers.revoked_at IS NULL;
+  IF p_tier = 'founding'   AND v_count >= 10 THEN RAISE EXCEPTION 'Founding beta is full (10/10)';     END IF;
+  IF p_tier = 'enthusiast' AND v_count >= 20 THEN RAISE EXCEPTION 'Enthusiast beta is full (20/20)';   END IF;
+  IF p_tier = 'collector'  AND v_count >= 50 THEN RAISE EXCEPTION 'Collector beta is full (50/50)';   END IF;
+  IF p_tier = 'vendor'     AND v_count >= 5  THEN RAISE EXCEPTION 'Vendor beta is full (5/5)';        END IF;
+  IF p_tier = 'shop'       AND v_count >= 3  THEN RAISE EXCEPTION 'Shop beta is full (3/3)';          END IF;
   IF p_email IS NOT NULL THEN
-    SELECT id INTO v_user_id FROM public.profiles WHERE lower(email) = lower(p_email) LIMIT 1;
+    SELECT profiles.id INTO v_user_id FROM public.profiles
+      WHERE lower(profiles.email) = lower(p_email) LIMIT 1;
   END IF;
   v_exp := CASE WHEN p_tier = 'shop' AND v_user_id IS NOT NULL THEN now() + INTERVAL '1 year' ELSE NULL END;
   INSERT INTO public.beta_testers (tier, invited_email, invite_code, user_id, invited_by, claimed_at, expires_at, notes)
@@ -114,13 +192,19 @@ BEGIN
   ) RETURNING beta_testers.id INTO v_id;
   IF v_user_id IS NOT NULL THEN
     UPDATE public.profiles SET
-      -- founding → enthusiast (was 'vendor' pre-rename).
+      -- Beta tier → subscription tier mapping.
+      -- founding grants the new $75/mo Vendor tier (sealed + non-TCG
+      -- products + product scanner) — a meaningful step up from
+      -- Enthusiast without escalating to unlimited Shop.
       subscription_tier = CASE
-        WHEN p_tier = 'founding'  THEN 'enthusiast'
-        WHEN p_tier = 'shop'      THEN 'shop'
+        WHEN p_tier = 'founding'   THEN 'vendor'
+        WHEN p_tier = 'enthusiast' THEN 'enthusiast'
+        WHEN p_tier = 'collector'  THEN 'collector'
+        WHEN p_tier = 'vendor'     THEN 'vendor'
+        WHEN p_tier = 'shop'       THEN 'shop'
         ELSE 'collector' END,
       subscription_expires_at = COALESCE(v_exp, subscription_expires_at)
-    WHERE id = v_user_id;
+    WHERE profiles.id = v_user_id;
   END IF;
   RETURN QUERY SELECT v_id, (v_user_id IS NOT NULL), v_user_id;
 END;
@@ -128,9 +212,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.admin_invite_beta(TEXT, TEXT, TEXT, TEXT) TO authenticated;
 
--- 3. User-facing claim-by-code RPC — maps founding → enthusiast.
+-- 3. User-facing claim-by-code RPC — supports the five beta tiers and
+-- maps each to the corresponding subscription tier on claim.
+-- Drop prior signatures (same overloading rationale as admin_invite_beta).
+drop function if exists public.claim_beta_code(text);
+
 CREATE OR REPLACE FUNCTION public.claim_beta_code(p_code TEXT)
-RETURNS TABLE(tier TEXT, success BOOLEAN, message TEXT) AS $$
+RETURNS TABLE(out_tier TEXT, success BOOLEAN, message TEXT) AS $$
 DECLARE
   v_invite public.beta_testers;
   v_count  INT;
@@ -141,29 +229,39 @@ BEGIN
     RETURN QUERY SELECT NULL::TEXT, FALSE, 'Must be signed in'; RETURN;
   END IF;
   SELECT * INTO v_invite FROM public.beta_testers
-    WHERE invite_code = p_code AND user_id IS NULL AND revoked_at IS NULL LIMIT 1;
+    WHERE beta_testers.invite_code = p_code
+      AND beta_testers.user_id IS NULL
+      AND beta_testers.revoked_at IS NULL LIMIT 1;
   IF NOT FOUND THEN
     RETURN QUERY SELECT NULL::TEXT, FALSE, 'Invalid or already-claimed code'; RETURN;
   END IF;
-  IF EXISTS (SELECT 1 FROM public.beta_testers WHERE user_id = auth.uid() AND revoked_at IS NULL) THEN
+  IF EXISTS (SELECT 1 FROM public.beta_testers
+               WHERE beta_testers.user_id = auth.uid() AND beta_testers.revoked_at IS NULL) THEN
     RETURN QUERY SELECT NULL::TEXT, FALSE, 'You already have an active beta slot'; RETURN;
   END IF;
-  SELECT count(*) INTO v_count FROM public.beta_testers WHERE tier = v_invite.tier AND revoked_at IS NULL;
-  IF v_invite.tier = 'founding'  AND v_count >= 10 THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Founding beta is full';  RETURN; END IF;
-  IF v_invite.tier = 'collector' AND v_count >= 50 THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Collector beta is full'; RETURN; END IF;
-  IF v_invite.tier = 'shop'      AND v_count >= 10 THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Shop beta is full';      RETURN; END IF;
+  SELECT count(*) INTO v_count FROM public.beta_testers
+    WHERE beta_testers.tier = v_invite.tier AND beta_testers.revoked_at IS NULL;
+  IF v_invite.tier = 'founding'   AND v_count >= 10 THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Founding beta is full';   RETURN; END IF;
+  IF v_invite.tier = 'enthusiast' AND v_count >= 20 THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Enthusiast beta is full'; RETURN; END IF;
+  IF v_invite.tier = 'collector'  AND v_count >= 50 THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Collector beta is full';  RETURN; END IF;
+  IF v_invite.tier = 'vendor'     AND v_count >= 5  THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Vendor beta is full';     RETURN; END IF;
+  IF v_invite.tier = 'shop'       AND v_count >= 3  THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Shop beta is full';       RETURN; END IF;
   v_exp := CASE WHEN v_invite.tier = 'shop' THEN now() + INTERVAL '1 year' ELSE NULL END;
   UPDATE public.beta_testers
-    SET user_id = auth.uid(), claimed_at = now(), expires_at = v_exp
-    WHERE id = v_invite.id;
+    SET user_id    = auth.uid(),
+        claimed_at = now(),
+        expires_at = v_exp
+    WHERE beta_testers.id = v_invite.id;
   UPDATE public.profiles SET
-    -- founding → enthusiast (post-rename mapping).
     subscription_tier = CASE
-      WHEN v_invite.tier = 'founding'  THEN 'enthusiast'
-      WHEN v_invite.tier = 'shop'      THEN 'shop'
+      WHEN v_invite.tier = 'founding'   THEN 'vendor'      -- founders → new $75 Vendor tier
+      WHEN v_invite.tier = 'enthusiast' THEN 'enthusiast'
+      WHEN v_invite.tier = 'collector'  THEN 'collector'
+      WHEN v_invite.tier = 'vendor'     THEN 'vendor'
+      WHEN v_invite.tier = 'shop'       THEN 'shop'
       ELSE 'collector' END,
     subscription_expires_at = COALESCE(v_exp, subscription_expires_at)
-  WHERE id = auth.uid();
+  WHERE profiles.id = auth.uid();
   v_msg := CASE WHEN v_invite.tier = 'shop'
     THEN 'Welcome — Shop tier active for 1 year. Renew before expiry to keep shop perks; otherwise you''ll drop to enthusiast.'
     ELSE 'Welcome to the beta' END;
