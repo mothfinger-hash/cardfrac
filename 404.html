@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PathBinder — Offline</title>
+  <title>PathBinder — Not Found</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Space+Mono&display=swap" rel="stylesheet">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -12,6 +12,7 @@
       --surface:#111726;
       --accent:#1AC7A0;
       --copper:#B87333;
+      --red:#FF5C58;
       --text:#d8e0e8;
       --muted:#6a7888;
       --border:#1f2939;
@@ -27,21 +28,31 @@
       text-align:center;
       padding:24px;
     }
-    .container{max-width:440px}
+    .container{max-width:520px}
     .logo{
       font-family:'Orbitron',monospace;
-      font-size:1.6rem;
+      font-size:1.5rem;
       font-weight:800;
       color:var(--accent);
       letter-spacing:.18em;
       margin-bottom:14px;
       text-shadow:0 0 18px rgba(26,199,160,.35);
     }
+    .status-code{
+      font-family:'Orbitron',monospace;
+      font-size:4.5rem;
+      font-weight:800;
+      color:var(--copper);
+      letter-spacing:.08em;
+      line-height:1;
+      margin:18px 0 6px;
+      text-shadow:0 0 24px rgba(184,115,51,.4);
+    }
     .status{
       font-size:.72rem;
       color:var(--copper);
       letter-spacing:.18em;
-      margin-bottom:32px;
+      margin-bottom:28px;
       text-transform:uppercase;
     }
     h1{
@@ -57,11 +68,10 @@
       line-height:1.65;
       margin-bottom:28px;
     }
+    .btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
     .btn{
       display:inline-block;
-      padding:12px 28px;
-      border:1px solid var(--accent);
-      color:var(--accent);
+      padding:12px 22px;
       font-family:'Space Mono',monospace;
       font-size:.85rem;
       letter-spacing:.06em;
@@ -69,26 +79,44 @@
       background:transparent;
       transition:all .15s;
       text-decoration:none;
+      border:1px solid var(--border);
+      color:var(--text);
     }
-    .btn:hover{background:var(--accent);color:var(--bg)}
-    .blink{animation:blink 1s step-end infinite}
-    @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+    .btn:hover{border-color:var(--accent);color:var(--accent)}
+    .btn-primary{
+      border:1px solid var(--accent);
+      color:var(--accent);
+    }
+    .btn-primary:hover{background:var(--accent);color:var(--bg)}
     .panel{
       border:1px solid var(--border);
       background:var(--surface);
-      padding:32px 28px;
+      padding:36px 30px;
       border-left:3px solid var(--copper);
     }
+    .ascii{
+      font-size:.62rem;
+      color:var(--border);
+      white-space:pre;
+      margin:0 0 8px;
+      letter-spacing:0;
+    }
+    .blink{animation:blink 1s step-end infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
   </style>
 </head>
 <body>
   <div class="container">
     <div class="panel">
       <div class="logo">⬡ PATHBINDER</div>
-      <div class="status">// CONNECTION_LOST <span class="blink">_</span></div>
-      <h1>You're offline</h1>
-      <p>No network connection. Your collection data is cached locally and safe — once you reconnect, listings, prices, and trades will sync automatically.</p>
-      <button class="btn" onclick="window.location.reload()">Retry Connection</button>
+      <div class="status-code">404</div>
+      <div class="status">// PAGE_NOT_FOUND <span class="blink">_</span></div>
+      <h1>This page doesn't exist</h1>
+      <p>The page you're looking for might have moved, been removed, or never existed in the first place. Head back to the marketplace, or sign in to view your collection.</p>
+      <div class="btns">
+        <a class="btn btn-primary" href="/">Back to home</a>
+        <a class="btn" href="/?page=browse">Browse marketplace</a>
+      </div>
     </div>
   </div>
 </body>

@@ -5342,9 +5342,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     </div>
     <div class="dropdown-item" id="myAccountBtn">⬡ My Account</div>
     <div class="dropdown-divider"></div>
+    <!-- Admin-only: opens the admin notifications panel. Hidden by JS
+         (updateAdminBellBadge) for non-admins. Unread count is rendered
+         inline so the dropdown shows e.g. "⬡ Admin Alerts (3)". -->
+    <div class="dropdown-item" id="adminBellBtn" style="display:none;color:var(--copper)" onclick="openAdminNotificationsPanel();document.getElementById('avatarDropdown')?.classList?.remove('open')">
+      ⬡ Admin Alerts <span id="adminBellCount" style="margin-left:4px"></span>
+    </div>
+    <div class="dropdown-divider" id="adminBellDivider" style="display:none"></div>
     <div class="dropdown-item" id="createAvatarBtn">Create Avatar</div>
     <div class="dropdown-divider"></div>
     <div class="dropdown-item" onclick="openModal('redeemBetaModal');document.getElementById('avatarDropdown')?.classList?.remove('open')">⬡ Redeem Beta Code</div>
+    <div class="dropdown-divider"></div>
+    <div class="dropdown-item" onclick="openAccountSettingsModal();document.getElementById('avatarDropdown')?.classList?.remove('open')">⬡ Account Settings</div>
     <div class="dropdown-divider"></div>
     <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">⏻ Sign Out</div>
   </div>
@@ -5540,6 +5549,217 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       </div>
       <div id="betaRedeemStatus" style="font-size:.72rem;min-height:18px;margin-bottom:10px;color:var(--muted)"></div>
       <button type="button" class="btn btn-primary" onclick="redeemBetaCode()" style="width:100%">Redeem</button>
+    </div>
+  </div>
+
+  <!-- ADMIN NOTIFICATIONS PANEL — bell-list of pending admin alerts.
+       Driven by the admin_notifications table; trg_order_disputed
+       inserts a row on every escalation. Per-admin read/dismissed
+       state lives in the read_by[] / dismissed_by[] arrays so multiple
+       admins can act independently. Email side fires from
+       /api/admin-notify-dispute on the same status flip — this panel
+       is the in-app channel of the same notification. -->
+  <div class="modal-overlay" id="adminNotificationsModal">
+    <div class="modal" style="max-width:640px;max-height:80vh;overflow-y:auto">
+      <button class="modal-close" onclick="closeModal('adminNotificationsModal')">×</button>
+      <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Admin Alerts</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h3 style="margin:0;font-size:1.1rem">Notifications</h3>
+        <button type="button" onclick="markAllAdminNotificationsRead()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:5px 10px;cursor:pointer">Mark all read</button>
+      </div>
+      <div id="adminNotificationsList" style="display:flex;flex-direction:column;gap:10px">
+        <div style="color:var(--muted);font-size:.78rem">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RETURN-REQUEST MODAL — buyer files a structured return request.
+       Replaces the old confirm()-prompt path. Captures a reason category
+       (controlled list matched by an orders CHECK constraint) plus a
+       free-text detail field so the seller has context when deciding
+       whether to approve or decline. -->
+  <div class="modal-overlay" id="returnRequestModal">
+    <div class="modal" style="max-width:480px">
+      <button class="modal-close" onclick="closeModal('returnRequestModal')">×</button>
+      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">⚠ Report Issue</div>
+      <h3 style="margin-bottom:8px;font-size:1.1rem">Request a refund / return</h3>
+      <p class="modal-sub" style="margin-bottom:14px">
+        The seller is notified immediately and has 48 hours to respond. If they don&rsquo;t, an admin steps in.
+      </p>
+
+      <input type="hidden" id="returnOrderId" />
+
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Reason</label>
+        <select id="returnReason" class="atc-input" style="width:100%">
+          <option value="not_as_described">Not as described</option>
+          <option value="damaged">Arrived damaged</option>
+          <option value="never_arrived">Never arrived</option>
+          <option value="wrong_item">Wrong item received</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Details <span style="color:var(--muted);font-size:.7rem">(required &mdash; describe what went wrong)</span></label>
+        <textarea id="returnReasonDetail" rows="4" class="atc-input" style="width:100%;resize:vertical" placeholder="e.g. The card arrived with a crease on the bottom right edge that wasn't shown in the listing photos."></textarea>
+      </div>
+
+      <div id="returnRequestStatus" style="font-size:.74rem;color:var(--muted);min-height:18px;margin-bottom:10px"></div>
+
+      <div style="display:flex;gap:10px">
+        <button id="returnSubmitBtn" type="button" onclick="submitReturnRequest()"
+          style="flex:1;padding:11px;background:var(--red);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer">
+          Submit Request
+        </button>
+        <button type="button" onclick="closeModal('returnRequestModal')"
+          style="flex:1;padding:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SELLER REFUND CONFIRM MODAL — second-step confirm so an accidental
+       tap doesn't issue a refund. Shows the refund amount + payment route
+       so the seller knows exactly what's happening. -->
+  <div class="modal-overlay" id="sellerRefundConfirmModal">
+    <div class="modal" style="max-width:440px">
+      <button class="modal-close" onclick="closeModal('sellerRefundConfirmModal')">×</button>
+      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">⚠ Confirm Refund</div>
+      <h3 style="margin-bottom:10px;font-size:1.1rem">Issue a full refund?</h3>
+      <div id="sellerRefundBody" style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px"></div>
+      <input type="hidden" id="sellerRefundOrderId" />
+      <div id="sellerRefundStatus" style="font-size:.74rem;color:var(--muted);min-height:18px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px">
+        <button id="sellerRefundBtn" type="button" onclick="confirmSellerRefund()"
+          style="flex:1;padding:11px;background:var(--red);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer">
+          Issue Refund
+        </button>
+        <button type="button" onclick="closeModal('sellerRefundConfirmModal')"
+          style="flex:1;padding:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT MARKETPLACE LISTING MODAL — separate from the legacy
+       admin-only #editListingModal (which targets the older slot-based
+       card record). This one edits a marketplace listing row that the
+       current user owns. Fields mirror the subset of saveMarketplaceListing()
+       that gets persisted: name, price (value), shipping_price, grade.
+       Photos can be removed individually; adding new photos goes through
+       a separate upload flow at the bottom. -->
+  <div class="modal-overlay" id="editMarketplaceListingModal">
+    <div class="modal" style="max-width:560px">
+      <button class="modal-close" onclick="closeModal('editMarketplaceListingModal')">×</button>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Edit Listing</div>
+      <h3 style="margin-bottom:14px;font-size:1.1rem" id="emlTitle">Edit Listing</h3>
+
+      <input type="hidden" id="emlListingId" />
+
+      <div class="atc-grid" style="margin-bottom:14px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Name</label>
+          <input class="atc-input" id="emlName" type="text" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Condition / Grade</label>
+          <input class="atc-input" id="emlGrade" type="text" placeholder="NM / LP / PSA 10" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select class="atc-input" id="emlStatus" style="width:100%">
+            <option value="active">Active</option>
+            <option value="deactivated">Deactivated (hide from browse)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Price ($)</label>
+          <input class="atc-input" id="emlPrice" type="number" min="0" step="any" inputmode="decimal" style="width:100%" oninput="updateEditFeePreview()" />
+        </div>
+        <div class="form-group">
+          <label>Shipping ($)</label>
+          <input class="atc-input" id="emlShipping" type="number" min="0" step="any" inputmode="decimal" style="width:100%" oninput="updateEditFeePreview()" />
+        </div>
+      </div>
+
+      <!-- Live fee/payout preview, same logic as updateListingFeePreview()
+           on the create flow — uses the seller's tier commission rate. -->
+      <div id="emlFeePreview" style="background:var(--surface2);border:1px solid var(--border);padding:10px 14px;font-size:.75rem;color:var(--muted);margin-bottom:16px;line-height:1.7"></div>
+
+      <!-- Existing photos with per-photo remove buttons. Re-rendered by
+           renderEditListingPhotos() so additions/removals show up live
+           before the seller hits Save. -->
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Photos <span style="color:var(--muted);font-size:.72rem">(tap × to remove)</span></label>
+        <div id="emlPhotoGrid" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
+        <div style="margin-top:10px;border:1.5px dashed var(--border);padding:14px;text-align:center;cursor:pointer" onclick="document.getElementById('emlPhotoInput').click()">
+          <div style="color:var(--muted);font-size:.78rem">Add more photos</div>
+          <div style="color:var(--muted);font-size:.7rem;margin-top:2px">JPEG / PNG · max 5MB each · up to 8 total</div>
+          <input type="file" id="emlPhotoInput" accept="image/*" multiple style="display:none" onchange="handleEditPhotoSelect(event)" />
+        </div>
+        <div id="emlPhotoError" style="color:var(--red);font-size:.74rem;margin-top:6px;display:none"></div>
+      </div>
+
+      <div id="emlSaveError" style="display:none;color:var(--red);font-size:.78rem;padding:8px 12px;border:1px solid var(--red);margin-bottom:10px;background:rgba(239,68,68,.06)"></div>
+      <div style="display:flex;gap:10px">
+        <button id="emlSaveBtn" type="button" onclick="saveEditedMarketplaceListing()" style="flex:1;padding:12px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save Changes</button>
+        <button type="button" onclick="closeModal('editMarketplaceListingModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT SETTINGS MODAL — currently houses the App Store-required
+       self-service deletion flow. Future home for password change, email
+       update, marketing-preferences, etc. Body content is rendered by
+       renderAccountSettingsModal() so the deletion state stays live. -->
+  <div class="modal-overlay" id="accountSettingsModal">
+    <div class="modal" style="max-width:520px">
+      <button class="modal-close" onclick="closeModal('accountSettingsModal')">×</button>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Account Settings</div>
+      <h3 style="margin-bottom:14px;font-size:1.1rem">Manage your account</h3>
+      <div id="accountSettingsBody"></div>
+    </div>
+  </div>
+
+  <!-- DELETE-ACCOUNT CONFIRM MODAL — second-step confirmation so a stray
+       click on "Delete My Account" can't initiate the grace period.
+       Requires the user to type DELETE into the box before the button
+       enables. -->
+  <div class="modal-overlay" id="deleteAccountModal">
+    <div class="modal" style="max-width:480px">
+      <button class="modal-close" onclick="closeModal('deleteAccountModal')">×</button>
+      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">⚠ Delete Account</div>
+      <h3 style="margin-bottom:10px;font-size:1.1rem">This will delete your PathBinder account</h3>
+      <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px">
+        After you confirm:
+      </div>
+      <ul style="font-size:.75rem;color:var(--muted);line-height:1.7;margin:0 0 16px 18px;padding:0">
+        <li>You have <strong style="color:var(--text)">30 days</strong> to change your mind &mdash; sign in any time during that window and click <em>Cancel Deletion</em>.</li>
+        <li>Your active marketplace listings are removed immediately.</li>
+        <li>Any active subscription is cancelled at the end of the current billing period (no early refund).</li>
+        <li>After 30 days your profile, photos, and personal info are permanently removed.</li>
+        <li>Sales and order history stays so the other party can still see their record &mdash; your name is replaced with &ldquo;Deleted User&rdquo;.</li>
+      </ul>
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="font-size:.7rem;color:var(--muted)">Type <strong style="color:var(--red);font-family:'Space Mono',monospace">DELETE</strong> to confirm</label>
+        <input type="text" id="deleteConfirmInput" placeholder="DELETE" autocomplete="off"
+          style="width:100%;font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.1em"
+          oninput="document.getElementById('deleteConfirmBtn').disabled = this.value.trim().toUpperCase() !== 'DELETE'" />
+      </div>
+      <div id="deleteAccountStatus" style="font-size:.72rem;min-height:18px;margin-bottom:10px;color:var(--muted)"></div>
+      <div style="display:flex;gap:10px">
+        <button id="deleteConfirmBtn" type="button" onclick="confirmAccountDeletion()" disabled
+          style="flex:1;padding:11px;border:none;background:var(--red);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;opacity:.5">
+          Delete My Account
+        </button>
+        <button type="button" onclick="closeModal('deleteAccountModal')"
+          style="flex:1;padding:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;cursor:pointer">
+          Cancel
+        </button>
+      </div>
     </div>
   </div>
 
@@ -6131,11 +6351,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="form-group">
           <label>Your Ask Price ($) *</label>
-          <input class="atc-input" id="lcPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 120.00" style="width:100%" onblur="lookupMarketPrice()" />
+          <input class="atc-input" id="lcPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 120.00" style="width:100%" oninput="updateListingFeePreview()" onblur="lookupMarketPrice();updateListingFeePreview()" />
         </div>
         <div class="form-group">
           <label>Shipping ($)</label>
-          <input class="atc-input" id="lcShipping" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 5.00" style="width:100%" />
+          <input class="atc-input" id="lcShipping" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 5.00" style="width:100%" oninput="updateListingFeePreview()" />
         </div>
       </div>
 
@@ -6156,11 +6376,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <textarea class="atc-input" id="lcDescription" rows="2" placeholder="Any extra details about the card's condition, history, etc." style="width:100%;resize:vertical"></textarea>
       </div>
 
-      <div style="background:var(--surface2);border:1px solid var(--border);padding:10px 14px;font-size:.75rem;color:var(--muted);margin-bottom:16px;line-height:1.7">
-        Platform fee: <strong style="color:var(--accent)">5%</strong> deducted from your payout on sale ·
-        Payouts processed on Stripe's standard schedule ·
-        7-day buyer protection window via Stripe dispute resolution
-      </div>
+      <!-- Fee + payout preview. Populated by updateListingFeePreview() based on
+           the SELLER's current tier (commission scales 7/6/5% across
+           Enthusiast/Vendor/Shop) and the ask + shipping inputs above. The
+           innerHTML is regenerated on openListCardModal and on every input
+           keystroke so the seller always sees the actual take-home. -->
+      <div id="lcFeePreview" style="background:var(--surface2);border:1px solid var(--border);padding:10px 14px;font-size:.75rem;color:var(--muted);margin-bottom:16px;line-height:1.7"></div>
 
       <div id="lcSaveError" style="display:none;color:var(--red);font-size:.78rem;padding:8px 12px;border:1px solid var(--red);margin-bottom:10px;background:rgba(239,68,68,.06)"></div>
       <div style="display:flex;gap:10px">
@@ -7445,6 +7666,46 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
 
 
+    <!-- DISPUTES PANEL — admin reviews orders escalated to 'disputed'
+         status (seller declined a buyer's return). Two actions per
+         dispute: refund the buyer (calls /api/refund-order) or resolve
+         in the seller's favor (admin_resolve_dispute_for_seller RPC,
+         no money moves). Auto-loads when admin opens the page; deep-link
+         ?admin=disputes&order=<id> scrolls + highlights a specific row. -->
+    <div id="adminDisputesPanel" style="background:var(--surface);border:1.5px solid var(--red);border-radius:14px;padding:18px;margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:.75rem;color:var(--red);letter-spacing:.08em">⚠ Open Disputes <span id="adminDisputesCount" style="color:var(--muted)"></span></div>
+        <button type="button" onclick="loadAdminDisputes()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Refresh</button>
+      </div>
+      <div id="adminDisputesList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
+    </div>
+
+    <!-- USER MANAGEMENT PANEL — search by email/username, view summary,
+         ban / unban. Ban flips profiles.is_banned + cascades all active
+         listings to suspended. Sign-in is blocked server-side via
+         is_account_banned() so even an open session terminates on next
+         page load. -->
+    <div style="background:var(--surface);border:1.5px solid var(--copper-dim);border-radius:14px;padding:18px;margin-bottom:24px">
+      <div style="font-size:.75rem;color:var(--copper);letter-spacing:.08em;margin-bottom:14px">User Management</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <input type="text" id="adminUserSearch" placeholder="Search by email or username" style="flex:1;min-width:220px;padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem"
+          onkeydown="if(event.key==='Enter')searchAdminUsers()" />
+        <button type="button" onclick="searchAdminUsers()" style="padding:8px 18px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Search</button>
+      </div>
+      <div id="adminUserResults" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <!-- SUSPENDED LISTINGS PANEL — quick overview of everything admin
+         has pulled, with the seller-supplied reason and a one-click
+         Restore action. Helps avoid forgetting about suspensions. -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:.75rem;color:var(--yellow);letter-spacing:.08em">Suspended Listings</div>
+        <button type="button" onclick="loadSuspendedListings()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Refresh</button>
+      </div>
+      <div id="adminSuspendedList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
+    </div>
+
     <!-- Vendor Applications Panel (admin only) -->
     <div style="background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:18px;margin-bottom:24px">
       <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em;margin-bottom:14px">Vendor Applications</div>
@@ -7890,6 +8151,31 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       vendor:      150,
       shop:        Infinity,
     };
+    // Commission rate (decimal, 0.07 = 7%) charged on each marketplace
+    // sale, by seller's tier. Decreases as tier climbs — rewards high-
+    // volume sellers + creates a real reason for vendors to upgrade.
+    // 0 for tiers that can't sell (free, collector).
+    //
+    // SERVER-SIDE MIRROR: same rates duplicated in /api/marketplace-
+    // checkout.js so the platform fee is actually computed from the
+    // seller's tier at charge time. If you change a rate here, change
+    // it there too — there's no shared source of truth between
+    // browser JS and Vercel serverless.
+    const TIER_COMMISSION_RATES = {
+      free:        0.00,
+      collector:   0.00,
+      enthusiast:  0.07,
+      vendor:      0.06,
+      shop:        0.05,
+    };
+    function commissionRateFor(tier) {
+      return TIER_COMMISSION_RATES[tier] || 0;
+    }
+    // Returns the commission rate for the CURRENT user. Convenience
+    // for client-side fee-preview UI ("you'll receive $X after our Y% fee").
+    function myCommissionRate() {
+      return commissionRateFor(userTier());
+    }
 
     function userTier() {
       if (!currentUser) return 'free';
@@ -7902,6 +8188,438 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (currentUser.is_premium || currentUser.membershipActive) return 'collector';
       return 'free';
     }
+
+    // ── Stripe Connect Express status (seller payouts) ──────────────────
+    // Single source of truth for the cached Connect state. Populated by
+    // refreshConnectStatus() which hits /api/connect-status and updates
+    // this object. UI helpers read from here synchronously.
+    let connectStatus = {
+      loaded:           false,    // true once /api/connect-status returned at least once
+      loading:          false,    // true while a fetch is in flight (prevents duplicates)
+      accountId:        null,
+      chargesEnabled:   false,
+      payoutsEnabled:   false,
+      detailsSubmitted: false,
+      requirements:     null,
+      payoutsToBank:    false,
+      dashboardUrl:     null,
+    };
+
+    // Fetch + cache the seller's Connect status. Safe to call repeatedly;
+    // de-duplicates in-flight requests. Invokes `onChange` when the cache
+    // actually changes (used by renderMyListings to repaint).
+    async function refreshConnectStatus(onChange) {
+      if (!currentUser) return;
+      if (!tierAtLeast('enthusiast')) return;       // non-sellers don't need it
+      if (connectStatus.loading) return;
+      connectStatus.loading = true;
+      try {
+        const sess = supabase && supabase.auth ? await supabase.auth.getSession() : null;
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { connectStatus.loading = false; return; }
+        const r = await fetch('/api/connect-status', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        });
+        if (!r.ok) { connectStatus.loading = false; return; }
+        const data = await r.json();
+        // Diff against prior snapshot so we only repaint when something
+        // meaningful changed (avoids render storms on every tab switch).
+        const before = JSON.stringify({
+          a: connectStatus.accountId,
+          c: connectStatus.chargesEnabled,
+          p: connectStatus.payoutsEnabled,
+          d: connectStatus.detailsSubmitted,
+        });
+        connectStatus.loaded           = true;
+        connectStatus.accountId        = data.accountId        || null;
+        connectStatus.chargesEnabled   = !!data.chargesEnabled;
+        connectStatus.payoutsEnabled   = !!data.payoutsEnabled;
+        connectStatus.detailsSubmitted = !!data.detailsSubmitted;
+        connectStatus.requirements     = data.requirements     || null;
+        connectStatus.payoutsToBank    = !!data.payoutsToBank;
+        connectStatus.dashboardUrl     = data.dashboardUrl     || null;
+        const after = JSON.stringify({
+          a: connectStatus.accountId,
+          c: connectStatus.chargesEnabled,
+          p: connectStatus.payoutsEnabled,
+          d: connectStatus.detailsSubmitted,
+        });
+        if (before !== after && typeof onChange === 'function') onChange();
+      } catch (e) {
+        // Quiet failure — banner just stays in "checking…" state until the
+        // next call. Logged for debugging only.
+        console.warn('[connect-status] fetch failed:', e && e.message);
+      } finally {
+        connectStatus.loading = false;
+      }
+    }
+
+    // Kicks off Express onboarding for the current seller. Posts to
+    // /api/connect-onboard which creates (or reuses) the account and mints
+    // a hosted-onboarding link, then redirects the browser there. Stripe
+    // bounces back to returnUrl when done; we refresh status on return.
+    async function startStripeConnectOnboarding() {
+      if (!currentUser) { openModal('loginModal'); return; }
+      if (!tierAtLeast('enthusiast')) {
+        showToast('Enthusiast tier or higher required to receive payouts');
+        return;
+      }
+      try {
+        const sess = await supabase.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { showToast('Sign in again to connect Stripe'); return; }
+        showToast('Opening Stripe onboarding…');
+        const origin = location.origin;
+        const r = await fetch('/api/connect-onboard', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body:    JSON.stringify({
+            returnUrl:  origin + '/?connect=success',
+            refreshUrl: origin + '/?connect=refresh',
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.url) {
+          showToast(data.error || 'Could not start Stripe onboarding');
+          return;
+        }
+        // Same-tab redirect — Stripe Express onboarding doesn't play well
+        // inside a popup on mobile Safari.
+        location.assign(data.url);
+      } catch (e) {
+        console.error('[connect-onboard] error:', e);
+        showToast('Could not start Stripe onboarding');
+      }
+    }
+
+    // Renders the seller's payout-status banner above My Listings. Pulls
+    // from cached connectStatus — no async work here. Returns '' when the
+    // user isn't a seller so renderMyListings can safely concatenate it.
+    function renderConnectStatusBanner() {
+      if (!currentUser) return '';
+      if (!tierAtLeast('enthusiast')) return '';
+
+      // While the very first fetch is in flight, show a quiet skeleton so
+      // the banner doesn't pop in jarringly on the second render.
+      if (!connectStatus.loaded) {
+        return '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--muted);margin-bottom:12px;font-family:\'Space Mono\',monospace;font-size:.72rem;color:var(--muted)">'
+             + 'Checking payout status&hellip;'
+             + '</div>';
+      }
+
+      const cs   = connectStatus;
+      // Three states the seller can be in:
+      //   1. No account at all              → big "Connect Stripe" CTA
+      //   2. Account exists but not finished → "Finish setup" CTA
+      //   3. Charges + payouts enabled       → "Connected" pill + dashboard link
+      // The disabled_reason / past_due / currently_due arrays drive the
+      // remediation copy in state 2.
+      const fullyReady = cs.chargesEnabled && cs.payoutsEnabled && cs.detailsSubmitted;
+
+      if (!cs.accountId) {
+        // State 1
+        return ''
+          + '<div style="padding:12px 16px;background:var(--surface2);border:1px solid var(--copper-dim);border-left:3px solid var(--copper);margin-bottom:12px;font-family:\'Space Mono\',monospace">'
+          +   '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
+          +     '<div>'
+          +       '<div style="font-size:.78rem;color:var(--copper);font-weight:700;letter-spacing:.04em;margin-bottom:4px">CONNECT STRIPE TO RECEIVE PAYOUTS</div>'
+          +       '<div style="font-size:.7rem;color:var(--muted);line-height:1.5">'
+          +         'Sellers need a Stripe Express account so we can route sale proceeds to your bank. Until you connect, sales sit on the platform pending a manual payout.'
+          +       '</div>'
+          +     '</div>'
+          +     '<button onclick="startStripeConnectOnboarding()" style="padding:9px 18px;background:var(--copper);color:var(--surface);border:none;font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;letter-spacing:.04em;cursor:pointer;white-space:nowrap">'
+          +       'Connect Stripe &rarr;'
+          +     '</button>'
+          +   '</div>'
+          + '</div>';
+      }
+
+      if (!fullyReady) {
+        // State 2 — partial onboarding. Surface the requirements list so the
+        // seller knows exactly what Stripe is waiting on.
+        const req = cs.requirements || {};
+        const due = [].concat(req.currently_due || [], req.past_due || []);
+        const dueText = due.length
+          ? ' Stripe still needs: ' + due.slice(0, 5).join(', ') + (due.length > 5 ? '&hellip;' : '')
+          : '';
+        const disabled = req.disabled_reason
+          ? ' Status: ' + String(req.disabled_reason).replace(/_/g, ' ') + '.'
+          : '';
+        return ''
+          + '<div style="padding:12px 16px;background:var(--surface2);border:1px solid var(--yellow);border-left:3px solid var(--yellow);margin-bottom:12px;font-family:\'Space Mono\',monospace">'
+          +   '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
+          +     '<div>'
+          +       '<div style="font-size:.78rem;color:var(--yellow);font-weight:700;letter-spacing:.04em;margin-bottom:4px">⚠ STRIPE SETUP INCOMPLETE</div>'
+          +       '<div style="font-size:.7rem;color:var(--muted);line-height:1.5">'
+          +         'Your account exists but isn&rsquo;t cleared for payouts yet.' + disabled + dueText
+          +       '</div>'
+          +     '</div>'
+          +     '<button onclick="startStripeConnectOnboarding()" style="padding:9px 18px;background:var(--yellow);color:var(--surface);border:none;font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;letter-spacing:.04em;cursor:pointer;white-space:nowrap">'
+          +       'Finish Setup &rarr;'
+          +     '</button>'
+          +   '</div>'
+          + '</div>';
+      }
+
+      // State 3 — fully onboarded.
+      const dashBtn = cs.dashboardUrl
+        ? '<a href="' + cs.dashboardUrl + '" target="_blank" rel="noopener" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.7rem;font-weight:700;text-decoration:none;letter-spacing:.04em">Stripe Dashboard &rarr;</a>'
+        : '';
+      return ''
+        + '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--green);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-family:\'Space Mono\',monospace;font-size:.72rem;color:var(--muted)">'
+        +   '<span><span style="color:var(--green);font-weight:700">✓ Stripe Connected</span> &middot; payouts going to your bank on Stripe&rsquo;s standard schedule</span>'
+        +   dashBtn
+        + '</div>';
+    }
+
+    // ── Account deletion (self-service, App Store-required) ────────────
+    // Mirrors the connectStatus pattern — a cached flag the UI renders
+    // synchronously, with refresh helpers that re-paint on change.
+    // Source of truth lives on profiles.deletion_scheduled_for; we mirror
+    // it on currentUser so renderDeletionPendingBanner() doesn't have to
+    // round-trip every render.
+
+    function isAccountDeletionPending() {
+      if (!currentUser) return false;
+      const ts = currentUser.deletion_scheduled_for;
+      if (!ts) return false;
+      // Defensive: if a stale record somehow has a past date, still treat
+      // it as pending so the cancel button stays available.
+      return true;
+    }
+
+    function deletionScheduledDateLabel() {
+      if (!currentUser || !currentUser.deletion_scheduled_for) return '';
+      try {
+        return new Date(currentUser.deletion_scheduled_for).toLocaleDateString(undefined, {
+          year: 'numeric', month: 'long', day: 'numeric',
+        });
+      } catch (_) { return ''; }
+    }
+
+    // The Account Settings modal body — currently just the deletion
+    // section. Re-rendered on open + after every state change so the
+    // copy stays in sync (pending vs. not pending).
+    function renderAccountSettingsModal() {
+      const body = document.getElementById('accountSettingsBody');
+      if (!body) return;
+
+      const pending = isAccountDeletionPending();
+      const dateLbl = deletionScheduledDateLabel();
+
+      // Email row (read-only; we don't yet support changing email).
+      const emailRow = currentUser && currentUser.email
+        ? '<div style="font-size:.72rem;color:var(--muted);margin-bottom:14px">'
+        +   'Signed in as <span style="color:var(--text);font-family:\'Space Mono\',monospace">'
+        +   currentUser.email + '</span>'
+        + '</div>'
+        : '';
+
+      let deletionBlock;
+      if (pending) {
+        deletionBlock = ''
+          + '<div style="border:1px solid rgba(255,60,60,.35);background:rgba(255,60,60,.06);padding:14px 16px;margin-top:8px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:rgba(255,100,100,.9);margin-bottom:8px;text-transform:uppercase">'
+          +     '⚠ Account Deletion Scheduled'
+          +   '</div>'
+          +   '<div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px">'
+          +     'Your account is set to be permanently deleted on '
+          +     '<strong style="color:var(--text)">' + (dateLbl || 'the scheduled date') + '</strong>. '
+          +     'Sign in any time before then to cancel.'
+          +   '</div>'
+          +   '<button type="button" onclick="cancelAccountDeletion()" '
+          +     'style="width:100%;padding:11px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer">'
+          +     'Cancel Deletion &rarr;'
+          +   '</button>'
+          + '</div>';
+      } else {
+        deletionBlock = ''
+          + '<div style="border:1px solid rgba(255,60,60,.35);background:rgba(255,60,60,.04);padding:14px 16px;margin-top:8px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:rgba(255,100,100,.9);margin-bottom:8px;text-transform:uppercase">'
+          +     '⚠ Delete Account'
+          +   '</div>'
+          +   '<div style="font-size:.72rem;color:var(--muted);line-height:1.6;margin-bottom:12px">'
+          +     'Permanently delete your PathBinder account and all personal data. '
+          +     'You&rsquo;ll have a 30-day grace period to change your mind.'
+          +   '</div>'
+          +   '<button type="button" onclick="openDeleteAccountModal()" '
+          +     'style="width:100%;padding:11px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer">'
+          +     'Delete My Account'
+          +   '</button>'
+          + '</div>';
+      }
+
+      body.innerHTML = emailRow + deletionBlock;
+    }
+
+    function openAccountSettingsModal() {
+      if (!currentUser) { openModal('loginModal'); return; }
+      renderAccountSettingsModal();
+      openModal('accountSettingsModal');
+    }
+
+    function openDeleteAccountModal() {
+      closeModal('accountSettingsModal');
+      const inp = document.getElementById('deleteConfirmInput');
+      const btn = document.getElementById('deleteConfirmBtn');
+      const sts = document.getElementById('deleteAccountStatus');
+      if (inp) inp.value = '';
+      if (btn) { btn.disabled = true; btn.style.opacity = '.5'; btn.textContent = 'Delete My Account'; }
+      if (sts) { sts.textContent = ''; sts.style.color = 'var(--muted)'; }
+      openModal('deleteAccountModal');
+    }
+
+    async function confirmAccountDeletion() {
+      const btn = document.getElementById('deleteConfirmBtn');
+      const sts = document.getElementById('deleteAccountStatus');
+      const inp = document.getElementById('deleteConfirmInput');
+      if (!btn || !sts) return;
+      if (inp && inp.value.trim().toUpperCase() !== 'DELETE') {
+        sts.textContent = 'Type DELETE to confirm.';
+        sts.style.color = 'var(--red)';
+        return;
+      }
+      btn.disabled = true;
+      btn.style.opacity = '.5';
+      btn.textContent = 'Deleting…';
+      sts.textContent = '';
+      try {
+        const sess = await supabase.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) throw new Error('Not signed in');
+        const r = await fetch('/api/delete-account', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body:    JSON.stringify({ action: 'request' }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || 'Server rejected the request');
+
+        // Mirror onto currentUser so the banner + modal flip without
+        // having to re-fetch the profile.
+        if (currentUser) {
+          currentUser.deletion_requested_at  = new Date().toISOString();
+          currentUser.deletion_scheduled_for = data.scheduledFor || null;
+        }
+        sts.textContent = 'Account scheduled for deletion.';
+        sts.style.color = 'var(--green)';
+        showToast('Account scheduled for deletion. Sign in within 30 days to cancel.');
+        setTimeout(function() {
+          closeModal('deleteAccountModal');
+          renderAccountSettingsModal();
+          renderDeletionPendingBanner();
+          // Also drop their active listings out of the local cache so the
+          // My Listings view reflects reality.
+          if (Array.isArray(listings)) {
+            listings.forEach(function(l) {
+              if ((l.seller_id === currentUser.id || l.sellerId === currentUser.id)
+                  && (l.status === 'active' || l.status === 'available')) {
+                l.status = 'deactivated';
+              }
+            });
+            if (typeof renderMyListings === 'function') renderMyListings();
+          }
+        }, 900);
+      } catch (e) {
+        console.error('[delete-account] error:', e);
+        sts.textContent = e.message || 'Could not delete account. Please try again.';
+        sts.style.color = 'var(--red)';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = 'Delete My Account';
+      }
+    }
+
+    async function cancelAccountDeletion() {
+      if (!currentUser) return;
+      try {
+        const sess = await supabase.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { showToast('Sign in again to cancel deletion'); return; }
+        showToast('Cancelling deletion…');
+        const r = await fetch('/api/delete-account', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body:    JSON.stringify({ action: 'cancel' }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || 'Cancel failed');
+        if (currentUser) {
+          currentUser.deletion_requested_at  = null;
+          currentUser.deletion_scheduled_for = null;
+        }
+        showToast('Deletion cancelled. Welcome back.');
+        renderAccountSettingsModal();
+        renderDeletionPendingBanner();
+      } catch (e) {
+        console.error('[cancel-deletion] error:', e);
+        showToast(e.message || 'Could not cancel deletion');
+      }
+    }
+
+    // Site-wide banner shown above the nav when an account deletion is
+    // pending. Single source of truth: isAccountDeletionPending(). Mounted
+    // into #deletionPendingBanner (created on demand at the top of <body>).
+    function renderDeletionPendingBanner() {
+      let host = document.getElementById('deletionPendingBanner');
+      if (!isAccountDeletionPending()) {
+        if (host) host.remove();
+        return;
+      }
+      if (!host) {
+        host = document.createElement('div');
+        host.id = 'deletionPendingBanner';
+        host.style.cssText = 'position:sticky;top:0;left:0;right:0;z-index:9000;'
+          + 'background:rgba(255,60,60,.95);color:#fff;padding:8px 14px;'
+          + 'font-family:\'Space Mono\',monospace;font-size:.72rem;'
+          + 'text-align:center;letter-spacing:.04em;'
+          + 'border-bottom:1px solid rgba(0,0,0,.2)';
+        document.body.insertBefore(host, document.body.firstChild);
+      }
+      const dateLbl = deletionScheduledDateLabel();
+      host.innerHTML = ''
+        + '⚠ Your account is scheduled for deletion'
+        + (dateLbl ? ' on <strong>' + dateLbl + '</strong>' : '')
+        + '. <button type="button" onclick="cancelAccountDeletion()" '
+        +   'style="background:#fff;color:rgba(255,60,60,.95);border:none;padding:3px 10px;'
+        +   'margin-left:8px;font-family:\'Space Mono\',monospace;font-size:.7rem;'
+        +   'font-weight:700;cursor:pointer">Cancel Deletion</button>';
+    }
+
+    // If the user just returned from Stripe Express onboarding, refresh
+    // status immediately so the banner flips to "Connected" without a
+    // hard reload. Triggered via the ?connect=success query param set as
+    // the return_url in /api/connect-onboard.
+    function _handleConnectReturnQuery() {
+      try {
+        const q = new URLSearchParams(location.search);
+        const flag = q.get('connect');
+        if (!flag) return;
+        // Clean the query off the URL so re-renders don't keep re-firing.
+        q.delete('connect');
+        const newSearch = q.toString();
+        const newUrl = location.pathname + (newSearch ? '?' + newSearch : '') + location.hash;
+        history.replaceState(null, '', newUrl);
+        if (flag === 'success') {
+          showToast('Refreshing Stripe Connect status…');
+        } else if (flag === 'refresh') {
+          // refresh_url is what Stripe redirects to when the onboarding link
+          // expires. Kick off a fresh one transparently.
+          startStripeConnectOnboarding();
+          return;
+        }
+        // Defer until currentUser is hydrated; refreshConnectStatus is a
+        // no-op when not signed in, so a small delay is enough.
+        setTimeout(function() {
+          refreshConnectStatus(function() {
+            if (typeof renderMyListings === 'function') renderMyListings();
+          });
+        }, 800);
+      } catch (_) { /* no-op */ }
+    }
+    // Run once on script load.
+    _handleConnectReturnQuery();
     function tierAtLeast(tier) {
       return TIER_ORDER.indexOf(userTier()) >= TIER_ORDER.indexOf(tier);
     }
@@ -8106,6 +8824,38 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         errorEl.textContent = error?.message || 'Sign in failed. Please try again.';
         freshSignIn = false;
         return;
+      }
+
+      // Block sign-in for accounts that already finished the 30-day grace
+      // and got purged. The auth row still exists in Supabase auth.users
+      // (we don't delete it during the purge — that breaks RLS for the
+      // counterparty's orders) but the profile row is_deleted = true.
+      // ALSO blocks banned accounts (is_banned = true) so a ToS violator
+      // can't sign back in until an admin clears the flag.
+      try {
+        const { data: prof } = await sb
+          .from('profiles')
+          .select('is_deleted, is_banned')
+          .eq('id', authData.user.id)
+          .maybeSingle();
+        if (prof && prof.is_deleted) {
+          await sb.auth.signOut().catch(() => {});
+          openModal('loginModal');
+          errorEl.textContent = 'This account has been deleted.';
+          freshSignIn = false;
+          return;
+        }
+        if (prof && prof.is_banned) {
+          await sb.auth.signOut().catch(() => {});
+          openModal('loginModal');
+          errorEl.textContent = 'This account has been suspended. Contact support if you believe this is in error.';
+          freshSignIn = false;
+          return;
+        }
+      } catch (_) {
+        // Lookup failed — proceed with sign-in rather than locking the
+        // user out over a transient error. Restore-session path will
+        // re-check.
       }
 
       // Update UI immediately — onAuthStateChange (SIGNED_IN) will re-fetch
@@ -8461,6 +9211,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     function showPage(pageId) {
+      // SPA 404 fallback — if the requested page id doesn't map to a
+      // <div id="<id>Page"> element, route to landing (signed-out) or
+      // collection (signed-in) and toast a hint. Avoids the silent
+      // TypeError that used to fire on stale deep-links / typo URLs.
+      const targetEl = pageId ? document.getElementById(pageId + 'Page') : null;
+      if (!targetEl) {
+        console.warn('[showPage] unknown page id:', pageId);
+        showToast('Page not found');
+        const fallback = currentUser ? 'collection' : 'landing';
+        if (pageId !== fallback) {
+          showPage(fallback);
+          if (typeof setMobileNav === 'function') setMobileNav(fallback);
+        }
+        return;
+      }
       // Guard admin page access
       if (pageId === 'admin' || pageId === 'editListing') {
         if (!currentUser || !currentUser.is_admin) {
@@ -8474,7 +9239,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       try { _preloadPageAssets(pageId); } catch(_) {}
 
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.getElementById(pageId + 'Page').classList.add('active');
+      targetEl.classList.add('active');
       _pushPageState(pageId);
       // Body state classes
       document.body.classList.toggle('on-binder', pageId === 'collection');
@@ -8909,7 +9674,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 Buy Now → $${total.toFixed(2)}
               </button>
               <div style="font-size:.72rem;color:var(--muted);line-height:1.8;text-align:center">
-                ✓ Secure Stripe payment · ✓ 7-day buyer protection · ✓ 5% platform fee paid by seller
+                ✓ Secure Stripe payment · ✓ 7-day buyer protection · ✓ Platform fee paid by seller
               </div>
             </div>` : ''}
             ${isOwn && !isSold ? `
@@ -9823,6 +10588,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
     }
 
+    // Tiny helper for the dashboard first-run welcome card. Builds one
+    // CTA tile with a title, sub-copy, and a single primary button that
+    // fires `onclick`. Returns an HTML string (not a node) so the caller
+    // can concatenate multiples.
+    function _firstRunCard(title, body, onclick, btnLabel) {
+      return ''
+        + '<div style="padding:14px 16px;border:1px solid var(--border);background:var(--surface2);display:flex;flex-direction:column;justify-content:space-between;min-height:140px">'
+        +   '<div>'
+        +     '<div style="font-family:\'Orbitron\',monospace;font-size:.78rem;color:var(--accent);font-weight:700;margin-bottom:6px;letter-spacing:.04em">' + title + '</div>'
+        +     '<div style="font-size:.74rem;color:var(--muted);line-height:1.5">' + body + '</div>'
+        +   '</div>'
+        +   '<button type="button" onclick="' + onclick + '" style="margin-top:12px;padding:8px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.04em;align-self:flex-start">' + btnLabel + '</button>'
+        + '</div>';
+    }
+
     let dashboardRefreshing = false;
     function renderDashboard() {
       if (!currentUser) return;
@@ -9959,6 +10739,62 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       const content = document.getElementById('dashboardContent');
       if (!content) return;
+
+      // First-run welcome card. Triggers when the user has zero cards,
+      // zero listings, zero orders, and zero binders — i.e. nothing to
+      // surface on the dashboard yet. Shows a copper-bordered panel with
+      // three clear next-actions instead of dumping a wall of $0/0/0.
+      // Once the user has ANY data, the regular dashboard renders.
+      const _bindersLen = (typeof binders !== 'undefined' && Array.isArray(binders)) ? binders.length : 0;
+      const _isBrandNew = collectionItems.length === 0
+                       && myListingItems.length === 0
+                       && orders.length === 0
+                       && _bindersLen === 0;
+      if (_isBrandNew) {
+        const firstName = (currentUser && (currentUser.name || currentUser.username) || '').split(' ')[0];
+        const greeting  = firstName ? ('Welcome to PathBinder, ' + firstName + '.') : 'Welcome to PathBinder.';
+        content.innerHTML = ''
+          + '<div style="max-width:720px;margin:24px auto;padding:24px 22px;border:1px solid var(--copper-dim);background:var(--surface);border-left:3px solid var(--copper);font-family:\'Space Mono\',monospace">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.14em;color:var(--copper);margin-bottom:6px;text-transform:uppercase">◈ Getting Started</div>'
+          +   '<h2 style="font-family:\'Orbitron\',monospace;font-size:1.3rem;color:var(--text);margin:0 0 10px;letter-spacing:.04em">' + greeting + '</h2>'
+          +   '<p style="font-size:.85rem;color:var(--muted);line-height:1.6;margin-bottom:22px">'
+          +     'Your dashboard fills in as you add cards, list on the marketplace, or organize a binder. Pick a starting point below &mdash; you can always come back to this page from the nav.'
+          +   '</p>'
+          +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">'
+          + _firstRunCard(
+              'Scan or add a card',
+              'Use the phone scanner to import cards from a binder, or type one in manually.',
+              'showPage(\'addCard\')',
+              'Add Card &rarr;'
+            )
+          + _firstRunCard(
+              'Browse the marketplace',
+              'See what other collectors are selling. Watch listings or buy outright.',
+              'showPage(\'browse\')',
+              'Browse &rarr;'
+            )
+          + _firstRunCard(
+              'Organize with a binder',
+              'Create a digital binder to track sets, builds, or trade piles.',
+              'showPage(\'collection\')',
+              'Open Binders &rarr;'
+            )
+          + (tierAtLeast('enthusiast')
+              ? _firstRunCard(
+                  'Start selling',
+                  'Connect Stripe to receive payouts, then list your first card.',
+                  'openListCardModal()',
+                  'List a Card &rarr;')
+              : _firstRunCard(
+                  'Unlock more features',
+                  'Enthusiast+ tiers add price tracking, bulk import, and marketplace selling.',
+                  'openPricingModalWithPromo(\'enthusiast\')',
+                  'See Plans &rarr;'))
+          + '</div>'
+          + '</div>';
+        return;
+      }
+
       content.innerHTML = `<div class="ndash-wrap">
 
         <!-- ── Stat Ribbon ───────────────────────────────── -->
@@ -11539,6 +12375,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const content = document.getElementById('myListingsContent');
       if (!content || !currentUser) return;
       const mine = listings.filter(l => l.seller_id === currentUser.id || l.sellerId === currentUser.id);
+
+      // Stripe Connect status banner — only for tiers that can sell. Lives
+      // above the listing-cap header so the seller sees payout state first.
+      // Renders synchronously from cached connectStatus; an async refresh
+      // is kicked off in parallel and re-runs this view when it returns.
+      var _connectHtml = (typeof renderConnectStatusBanner === 'function')
+        ? renderConnectStatusBanner()
+        : '';
+      if (typeof refreshConnectStatus === 'function' && tierAtLeast('enthusiast')) {
+        // Fire-and-forget. The callback re-paints my listings if anything
+        // changed. Guarded against being called more than once per page
+        // load by the helper itself.
+        refreshConnectStatus(function() { renderMyListings(); });
+      }
+
       // Listing-cap status header (skip if free/collector since cap=0 means
       // they shouldn't be here at all, or shop since cap=Infinity).
       var _cap = listingCap();
@@ -11555,10 +12406,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           '</div>';
       }
       if (mine.length === 0) {
-        content.innerHTML = _capHtml + '<div class="coll-empty">You have no active listings.<br>Click "List A Card" to get started.</div>';
+        content.innerHTML = _connectHtml + _capHtml + '<div class="coll-empty">You have no active listings.<br>Click "List A Card" to get started.</div>';
         return;
       }
-      content.innerHTML = _capHtml + `<div class="coll-table-wrap"><table class="coll-table">
+      content.innerHTML = _connectHtml + _capHtml + `<div class="coll-table-wrap"><table class="coll-table">
         <thead><tr><th>Card</th><th>Grade</th><th>Price</th><th>Status</th><th></th></tr></thead>
         <tbody>${mine.map(l => {
           const price = l.list_price || l.value || 0;
@@ -11575,7 +12426,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <td style="color:var(--accent)">$${Number(price).toLocaleString()}</td>
             <td><span class="badge ${l.status === 'sold' ? 'badge-full' : 'badge-open'}">${l.status || 'Active'}</span></td>
             <td>
-              ${l.status !== 'sold' ? `<button onclick="event.stopPropagation();deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>` : ''}
+              ${l.status !== 'sold' ? `
+                <div style="display:flex;gap:6px;justify-content:flex-end">
+                  <button onclick="event.stopPropagation();openEditMarketplaceListing('${l.id}')" style="background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Edit</button>
+                  <button onclick="event.stopPropagation();deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>
+                </div>` : ''}
             </td>
           </tr>`;
         }).join('')}</tbody>
@@ -11606,6 +12461,28 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const isBuying = activeOrdersTab === 'buying';
 
         let actionHtml = '';
+        // Block of read-only context shown above the action buttons when
+        // there's a return in flight — gives both sides the reason text
+        // and decision state at a glance.
+        let returnContext = '';
+        if (order.return_reason && (status === 'return_requested' || status === 'disputed' || status === 'refunded')) {
+          const reasonLabels = {
+            not_as_described: 'Not as described',
+            damaged:          'Arrived damaged',
+            never_arrived:    'Never arrived',
+            wrong_item:       'Wrong item',
+            other:            'Other',
+          };
+          const reasonLbl = reasonLabels[order.return_reason] || order.return_reason;
+          const detailEsc = String(order.return_reason_detail || '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          returnContext = ''
+            + '<div style="margin-top:8px;padding:8px 10px;border-left:3px solid var(--yellow);background:rgba(255,217,61,.06);font-size:.72rem;color:var(--muted);line-height:1.5">'
+            +   '<div style="color:var(--yellow);font-weight:700;letter-spacing:.04em;margin-bottom:2px">RETURN REASON &middot; ' + reasonLbl + '</div>'
+            +   (detailEsc ? '<div style="color:var(--text)">"' + detailEsc + '"</div>' : '')
+            + '</div>';
+        }
+
         if (isBuying && status === 'shipped') {
           // Buyer can mark received (which opens a rate-seller prompt) OR
           // file a dispute if there's an issue. No more "Confirm Delivery"
@@ -11618,8 +12495,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           </div>`;
         } else if (isBuying && status === 'completed') {
           actionHtml = `<button onclick="event.stopPropagation();requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return / Refund Request</button>`;
+        } else if (isBuying && status === 'return_requested') {
+          // Buyer is waiting on the seller's decision. No actions.
+          actionHtml = '<div style="font-size:.72rem;color:var(--yellow)">Waiting on seller to respond</div>';
+        } else if (isBuying && status === 'disputed') {
+          actionHtml = '<div style="font-size:.72rem;color:var(--red)">Disputed &mdash; admin reviewing</div>';
         } else if (!isBuying && status === 'paid') {
           actionHtml = `<button onclick="event.stopPropagation();openAddTrackingModal('${order.id}')" style="padding:8px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Add Tracking #</button>`;
+        } else if (!isBuying && status === 'return_requested') {
+          // Seller-side response to a return request. Approve issues the
+          // refund via /api/seller-refund; Decline escalates to disputed.
+          actionHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="event.stopPropagation();openSellerRefundConfirm('${order.id}')" style="padding:8px 16px;background:var(--red);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Approve Refund</button>
+            <button onclick="event.stopPropagation();declineReturnRequest('${order.id}')" style="padding:8px 16px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Decline &amp; Dispute</button>
+          </div>`;
+        } else if (!isBuying && (status === 'shipped' || status === 'delivered' || status === 'completed')) {
+          // Seller can issue a goodwill refund any time before the buyer
+          // confirms. Less prominent (border-only) since most don't need it.
+          actionHtml = `<button onclick="event.stopPropagation();openSellerRefundConfirm('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">Refund Buyer</button>`;
+        } else if (!isBuying && status === 'disputed') {
+          actionHtml = '<div style="font-size:.72rem;color:var(--red)">Disputed &mdash; admin reviewing</div>';
         }
 
         // Whole card click → viewDetail. Action buttons inside use
@@ -11642,6 +12537,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <div style="font-size:.78rem;color:var(--muted);margin-top:4px">
                 ${isBuying ? `Paid: $${(order.amount||0).toFixed(2)}` : `Your payout: $${(order.seller_payout||0).toFixed(2)} · paid via Stripe`}
               </div>
+              ${returnContext}
             </div>
             ${actionHtml ? `<div>${actionHtml}</div>` : ''}
           </div>
@@ -13083,31 +13979,336 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // Legacy alias — older code paths may still call confirmDelivery
     var confirmDelivery = markOrderReceived;
 
-    async function requestReturn(orderId) {
-      if (!confirm('Request a return? This will open a dispute and remove the card from your binder. You will need to ship the card back to the seller.')) return;
+    // Buyer-side: opens the structured return-request modal. The actual
+    // submission happens in submitReturnRequest() once the buyer picks a
+    // reason and writes a detail. Replaces the old confirm()-prompt path
+    // which captured no context for the seller.
+    function requestReturn(orderId) {
+      if (!currentUser) return;
+      const o = orders.find(x => x.id === orderId);
+      if (!o) { showToast('Order not found'); return; }
+      if (o.status === 'refunded' || o.status === 'return_requested' || o.status === 'disputed') {
+        showToast('A return is already in progress for this order'); return;
+      }
+      document.getElementById('returnOrderId').value = orderId;
+      document.getElementById('returnReason').value = 'not_as_described';
+      document.getElementById('returnReasonDetail').value = '';
+      const sts = document.getElementById('returnRequestStatus');
+      if (sts) { sts.textContent = ''; sts.style.color = 'var(--muted)'; }
+      const btn = document.getElementById('returnSubmitBtn');
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Request'; }
+      openModal('returnRequestModal');
+    }
+
+    async function submitReturnRequest() {
+      const orderId = document.getElementById('returnOrderId').value;
+      const reason  = document.getElementById('returnReason').value;
+      const detail  = document.getElementById('returnReasonDetail').value.trim();
+      const sts = document.getElementById('returnRequestStatus');
+      const btn = document.getElementById('returnSubmitBtn');
+      if (!detail || detail.length < 10) {
+        if (sts) { sts.textContent = 'Add a few words describing what went wrong (at least 10 characters).'; sts.style.color = 'var(--red)'; }
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
       const o = orders.find(x => x.id === orderId);
 
-      // Remove auto-added binder card
+      // Auto-purchase binder cleanup — same logic the legacy flow had.
+      // The card goes back to the seller's listing on this side, gets
+      // re-added to the buyer's binder only if the seller declines.
       const autoItem = collectionItems.find(c => c.notes === 'auto_purchase:' + orderId);
       if (autoItem) {
-        await sb.from('collection_items').delete().eq('id', autoItem.id);
-        collectionItems = collectionItems.filter(c => c.id !== autoItem.id);
+        try {
+          await sb.from('collection_items').delete().eq('id', autoItem.id);
+          collectionItems = collectionItems.filter(c => c.id !== autoItem.id);
+        } catch (_) { /* non-fatal */ }
       }
 
-      // Mark listing back to available if we can find it
+      const nowIso = new Date().toISOString();
+      const { error } = await sb.from('orders').update({
+        status:               'return_requested',
+        return_reason:        reason,
+        return_reason_detail: detail,
+        return_requested_at:  nowIso,
+      }).eq('id', orderId);
+
+      if (error) {
+        if (sts) { sts.textContent = 'Error: ' + error.message; sts.style.color = 'var(--red)'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Submit Request'; }
+        return;
+      }
       if (o) {
-        await sb.from('listings').update({ status: 'available' }).eq('id', o.listing_id);
-        const listing = listings.find(l => String(l.id) === String(o.listing_id));
-        if (listing) listing.status = 'available';
+        o.status               = 'return_requested';
+        o.return_reason        = reason;
+        o.return_reason_detail = detail;
+        o.return_requested_at  = nowIso;
       }
 
-      // Mark order as return_requested
-      const { error } = await sb.from('orders').update({ status: 'return_requested' }).eq('id', orderId);
-      if (error) { showToast('Error: ' + error.message); return; }
-      if (o) o.status = 'return_requested';
-
-      showToast('Return requested. Ship the card back to the seller using the original tracking address.');
+      closeModal('returnRequestModal');
+      showToast('Return requested. The seller has 48 hours to respond.');
       renderOrders();
+      updateOrderNotification();
+    }
+
+    // ─── Seller-side response to a return request ──────────────────────
+    // The seller sees the return reason + detail in their Orders → Selling
+    // view. Two paths from there:
+    //   - Approve refund  → /api/seller-refund (Stripe refund + listing back)
+    //   - Decline         → status flips to 'disputed' for admin handling
+    function openSellerRefundConfirm(orderId) {
+      const o = orders.find(x => x.id === orderId);
+      if (!o) { showToast('Order not found'); return; }
+      if (o.seller_id !== currentUser.id && !(currentUser && currentUser.is_admin)) {
+        showToast('Only the seller can refund this order'); return;
+      }
+      document.getElementById('sellerRefundOrderId').value = orderId;
+      const body = document.getElementById('sellerRefundBody');
+      if (body) {
+        const amt = (o.amount || 0).toFixed(2);
+        const route = o.payment_route === 'destination_charge' ? 'Stripe Connect (destination charge)' : 'Stripe (platform balance)';
+        body.innerHTML = ''
+          + 'You&rsquo;re about to refund <strong style="color:var(--text)">$' + amt + '</strong> '
+          + 'to the buyer. Funds + the platform fee are returned via ' + route + '. '
+          + 'The listing is put back on the market. This cannot be undone.';
+      }
+      const sts = document.getElementById('sellerRefundStatus');
+      if (sts) { sts.textContent = ''; sts.style.color = 'var(--muted)'; }
+      const btn = document.getElementById('sellerRefundBtn');
+      if (btn) { btn.disabled = false; btn.textContent = 'Issue Refund'; }
+      openModal('sellerRefundConfirmModal');
+    }
+
+    async function confirmSellerRefund() {
+      const orderId = document.getElementById('sellerRefundOrderId').value;
+      const sts = document.getElementById('sellerRefundStatus');
+      const btn = document.getElementById('sellerRefundBtn');
+      if (!orderId) return;
+      if (btn) { btn.disabled = true; btn.textContent = 'Refunding…'; }
+
+      try {
+        const sess = await supabase.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) throw new Error('Not signed in');
+        const r = await fetch('/api/seller-refund', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body:    JSON.stringify({ orderId: orderId, reason: 'requested_by_customer' }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success) throw new Error(data.error || 'Refund failed');
+
+        // Mirror onto local state so the UI updates without a refetch.
+        const o = orders.find(x => x.id === orderId);
+        if (o) {
+          o.status                   = 'refunded';
+          o.refunded_at              = new Date().toISOString();
+          o.refund_id                = data.refundId;
+          o.return_decision          = 'approved';
+          o.return_decided_at        = new Date().toISOString();
+          o.refunded_application_fee = true;
+          if (o.listing_id) {
+            const l = listings.find(x => String(x.id) === String(o.listing_id));
+            if (l) l.status = 'available';
+          }
+        }
+        closeModal('sellerRefundConfirmModal');
+        showToast('Refunded $' + (data.amount || 0).toFixed(2) + ' to the buyer.');
+        renderOrders();
+        updateOrderNotification();
+      } catch (e) {
+        console.error('[seller-refund] error:', e);
+        if (sts) { sts.textContent = e.message || 'Refund failed'; sts.style.color = 'var(--red)'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Issue Refund'; }
+      }
+    }
+
+    // ─── Admin notifications ───────────────────────────────────────────
+    // Source of truth: admin_notifications table. Populated by the
+    // trg_order_disputed trigger (and future event sources). Per-admin
+    // read state lives on the row itself via the read_by[] / dismissed_by[]
+    // uuid arrays — simpler than a join table for the volume we'll have.
+    let adminNotifications = [];
+    let _adminNotificationsLoading = false;
+
+    function userIsAdmin() {
+      return !!(currentUser && currentUser.is_admin);
+    }
+
+    // Pulls the latest admin notifications into the local cache. Bails
+    // quietly for non-admins. RLS lets admins read every row; the cap
+    // (50 latest) keeps the bell snappy without paginating the whole
+    // history.
+    async function loadAdminNotifications() {
+      if (!userIsAdmin()) { adminNotifications = []; updateAdminBellBadge(); return; }
+      if (_adminNotificationsLoading) return;
+      _adminNotificationsLoading = true;
+      try {
+        const { data, error } = await sb
+          .from('admin_notifications')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (error) { console.warn('[admin-notif] load failed:', error.message); return; }
+        adminNotifications = (data || []).filter(n => !(n.dismissed_by || []).includes(currentUser.id));
+        updateAdminBellBadge();
+      } catch (e) {
+        console.warn('[admin-notif] load exception:', e && e.message);
+      } finally {
+        _adminNotificationsLoading = false;
+      }
+    }
+
+    // Shows the bell row in the avatar dropdown and stamps an unread
+    // count pill. No-op (and explicitly hides) for non-admins.
+    function updateAdminBellBadge() {
+      const btn      = document.getElementById('adminBellBtn');
+      const divider  = document.getElementById('adminBellDivider');
+      const countEl  = document.getElementById('adminBellCount');
+      if (!btn || !countEl) return;
+      if (!userIsAdmin()) {
+        btn.style.display = 'none';
+        if (divider) divider.style.display = 'none';
+        countEl.textContent = '';
+        return;
+      }
+      btn.style.display = 'block';
+      if (divider) divider.style.display = 'block';
+      const unread = adminNotifications.filter(n => !(n.read_by || []).includes(currentUser.id)).length;
+      if (unread > 0) {
+        countEl.innerHTML = '<span style="display:inline-block;background:var(--red);color:#fff;font-family:\'Space Mono\',monospace;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:8px;min-width:18px;text-align:center">' + unread + '</span>';
+      } else {
+        countEl.innerHTML = '';
+      }
+    }
+
+    async function openAdminNotificationsPanel() {
+      if (!userIsAdmin()) { showToast('Admins only'); return; }
+      openModal('adminNotificationsModal');
+      // Refresh in case the cache is stale (other admin marked something
+      // read, etc.) then render.
+      await loadAdminNotifications();
+      renderAdminNotificationsList();
+      // Mark everything in this view as read for this admin. Fire and
+      // forget — if it fails the next open will retry.
+      _markAdminNotificationsReadForViewer().catch(() => {});
+    }
+
+    function renderAdminNotificationsList() {
+      const host = document.getElementById('adminNotificationsList');
+      if (!host) return;
+      if (!adminNotifications.length) {
+        host.innerHTML = '<div style="color:var(--muted);font-size:.82rem;padding:14px 0;text-align:center">No admin notifications. You\'re caught up.</div>';
+        return;
+      }
+      host.innerHTML = adminNotifications.map(function(n) {
+        const isUnread = !(n.read_by || []).includes(currentUser.id);
+        const dateStr = (function() {
+          try { return new Date(n.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+          catch (_) { return ''; }
+        })();
+        const linkBtn = n.link_path
+          ? '<a href="' + n.link_path + '" style="display:inline-block;margin-top:6px;color:var(--accent);font-size:.74rem;font-family:\'Space Mono\',monospace;text-decoration:none">Review &rarr;</a>'
+          : '';
+        const dismissBtn = '<button type="button" onclick="dismissAdminNotification(\'' + n.id + '\')" '
+          + 'style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.65rem;padding:3px 8px;cursor:pointer">Dismiss</button>';
+        const safeTitle   = String(n.title || '').replace(/</g, '&lt;');
+        const safeMessage = String(n.message || '').replace(/</g, '&lt;');
+        return ''
+          + '<div style="padding:12px 14px;border:1px solid var(--border);background:' + (isUnread ? 'rgba(184,115,51,.05)' : 'var(--surface2)') + ';border-left:3px solid ' + (isUnread ? 'var(--copper)' : 'var(--border)') + '">'
+          +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+          +     '<div style="flex:1">'
+          +       '<div style="font-family:\'Space Mono\',monospace;font-size:.78rem;color:var(--text);font-weight:700;margin-bottom:4px">' + safeTitle + '</div>'
+          +       '<div style="font-size:.74rem;color:var(--muted);line-height:1.5">' + safeMessage + '</div>'
+          +       linkBtn
+          +     '</div>'
+          +     '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
+          +       '<div style="font-size:.66rem;color:var(--muted);font-family:\'Space Mono\',monospace">' + dateStr + '</div>'
+          +       dismissBtn
+          +     '</div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    // Append the current admin's uid to read_by[] for every notification
+    // they haven't already marked read. RLS lets admins update any row;
+    // we only ever push our own uid so collisions are impossible.
+    async function _markAdminNotificationsReadForViewer() {
+      if (!userIsAdmin()) return;
+      const myUid = currentUser.id;
+      const toMark = adminNotifications.filter(n => !(n.read_by || []).includes(myUid));
+      for (const n of toMark) {
+        const next = (n.read_by || []).concat([myUid]);
+        try {
+          await sb.from('admin_notifications').update({ read_by: next }).eq('id', n.id);
+          n.read_by = next;
+        } catch (_) { /* best effort */ }
+      }
+      updateAdminBellBadge();
+    }
+
+    async function markAllAdminNotificationsRead() {
+      await _markAdminNotificationsReadForViewer();
+      renderAdminNotificationsList();
+    }
+
+    async function dismissAdminNotification(id) {
+      if (!userIsAdmin()) return;
+      const n = adminNotifications.find(x => x.id === id);
+      if (!n) return;
+      const next = (n.dismissed_by || []).concat([currentUser.id]);
+      try {
+        await sb.from('admin_notifications').update({ dismissed_by: next }).eq('id', id);
+      } catch (_) { /* best effort */ }
+      adminNotifications = adminNotifications.filter(x => x.id !== id);
+      renderAdminNotificationsList();
+      updateAdminBellBadge();
+    }
+
+    async function declineReturnRequest(orderId) {
+      if (!currentUser) return;
+      const o = orders.find(x => x.id === orderId);
+      if (!o) { showToast('Order not found'); return; }
+      if (o.seller_id !== currentUser.id && !(currentUser && currentUser.is_admin)) {
+        showToast('Only the seller can decline this return'); return;
+      }
+      // Plain confirm — declining isn't destructive (no money moves), just
+      // escalates to admin via the disputed status. Admin tools handle it
+      // from there.
+      if (!confirm('Decline this return request? It will be escalated to PathBinder admins to mediate. Do this only if you believe the buyer\'s claim is invalid.')) return;
+
+      const nowIso = new Date().toISOString();
+      const { error } = await sb.from('orders').update({
+        status:            'disputed',
+        return_decision:   'declined',
+        return_decided_at: nowIso,
+        disputed_at:       nowIso,
+      }).eq('id', orderId);
+      if (error) { showToast('Error: ' + error.message); return; }
+      o.status            = 'disputed';
+      o.return_decision   = 'declined';
+      o.return_decided_at = nowIso;
+      o.disputed_at       = nowIso;
+      showToast('Return declined. An admin will review the dispute.');
+      renderOrders();
+      updateOrderNotification();
+
+      // Fire the admin email side. In-app notification is already
+      // handled server-side by trg_order_disputed. Best-effort — we
+      // don't surface a failure to the seller because the dispute is
+      // already in the admin queue regardless.
+      try {
+        const sess = await supabase.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (tok) {
+          fetch('/api/admin-notify-dispute', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+            body:    JSON.stringify({ orderId: orderId }),
+          }).catch(function() { /* silent */ });
+        }
+      } catch (_) { /* silent */ }
     }
 
     // ─── Seller Ratings ────────────────────────────────────────────────
@@ -13293,6 +14494,53 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // Drives photo count requirement, condition options, modal copy.
     let lcProductType = 'single';
 
+    // Re-renders the fee + payout callout inside the listing modal. Pulls
+    // the seller's commission rate from their current tier (server-side
+    // truth lives in /api/marketplace-checkout.js — mirrored in
+    // TIER_COMMISSION_RATES at the top of this script) and projects a
+    // live "you receive $X" number from the ask + shipping inputs.
+    // Safe to call at any time; bails silently if the box isn't mounted.
+    function updateListingFeePreview() {
+      const box = document.getElementById('lcFeePreview');
+      if (!box) return;
+      const rate     = myCommissionRate();          // 0.07 / 0.06 / 0.05
+      const ratePct  = (rate * 100).toFixed(0) + '%';
+      const tierName = userTier();                  // 'enthusiast' | 'vendor' | 'shop'
+      // ucfirst for display — TIER_ORDER keys are lowercase.
+      const tierLabel = tierName.charAt(0).toUpperCase() + tierName.slice(1);
+
+      const askEl  = document.getElementById('lcPrice');
+      const shipEl = document.getElementById('lcShipping');
+      const ask    = parseFloat(askEl && askEl.value)  || 0;
+      const ship   = parseFloat(shipEl && shipEl.value) || 0;
+
+      let payoutLine = '';
+      if (ask > 0) {
+        // Commission applies to the card price only — shipping passes
+        // through to the seller. Matches the server-side calc which uses
+        // the unit_amount (price, not price+shipping).
+        const fee    = ask * rate;
+        const payout = (ask - fee) + ship;
+        payoutLine = ''
+          + '<div style="margin-top:6px;color:var(--text)">'
+          + 'You receive <strong style="color:var(--green)">$' + payout.toFixed(2) + '</strong>'
+          + ' on sale '
+          + '<span style="color:var(--muted)">(ask $' + ask.toFixed(2)
+          + ' &minus; ' + ratePct + ' fee $' + fee.toFixed(2)
+          + (ship > 0 ? ' + shipping $' + ship.toFixed(2) : '')
+          + ')</span>'
+          + '</div>';
+      }
+
+      box.innerHTML = ''
+        + tierLabel + ' tier fee: '
+        + '<strong style="color:var(--accent)">' + ratePct + '</strong>'
+        + ' deducted from your payout on sale &middot; '
+        + 'Payouts on Stripe&rsquo;s standard schedule &middot; '
+        + '7-day buyer protection via Stripe dispute resolution'
+        + payoutLine;
+    }
+
     function openListCardModal(prefill) {
       if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
       // Marketplace selling is gated by subscription tier with per-tier
@@ -13464,6 +14712,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       renderLcPhotoPreview();
       toggleLcGrade();
+      updateListingFeePreview();
 
       // Reveal the "Scan Product to Autofill" row only for shop-tier
       // users (since they're the ones with non-TCG inventory to list).
@@ -13598,6 +14847,237 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       showToast(name + ' listed for sale!');
       renderBrowse();
       renderMyListings();
+    }
+
+    // ─── Edit Marketplace Listing ──────────────────────────────────────
+    // In-memory state for the edit modal. Keyed by listing id; reset on
+    // every openEditMarketplaceListing() call.
+    let _emlState = {
+      listingId:   null,
+      existingPhotos: [],   // URLs currently saved on the listing
+      newPhotos:      [],   // File objects queued to upload on Save
+    };
+
+    function openEditMarketplaceListing(listingId) {
+      if (!currentUser) { openModal('loginModal'); return; }
+      const l = listings.find(x => String(x.id) === String(listingId));
+      if (!l) { showToast('Listing not found'); return; }
+      // Permission check — only the owner can edit.
+      const ownerId = l.seller_id || l.sellerId;
+      if (ownerId !== currentUser.id && !(currentUser && currentUser.is_admin)) {
+        showToast('You can only edit your own listings'); return;
+      }
+      // Sold listings can't be edited — they're locked once a buyer pays.
+      if (l.status === 'sold') {
+        showToast('Sold listings cannot be edited'); return;
+      }
+
+      _emlState.listingId       = listingId;
+      _emlState.existingPhotos  = Array.isArray(l.photos) ? l.photos.slice() : [];
+      _emlState.newPhotos       = [];
+
+      document.getElementById('emlListingId').value = listingId;
+      document.getElementById('emlName').value      = l.name || '';
+      document.getElementById('emlGrade').value     = l.grade || '';
+      document.getElementById('emlStatus').value    = (l.status === 'sold') ? 'active' : (l.status || 'active');
+      document.getElementById('emlPrice').value     = (l.list_price || l.value || 0).toString();
+      document.getElementById('emlShipping').value  = (l.shipping_price || 0).toString();
+
+      const titleEl = document.getElementById('emlTitle');
+      if (titleEl) titleEl.textContent = 'Edit: ' + (l.name || 'Listing');
+
+      const errEl = document.getElementById('emlSaveError');
+      if (errEl) errEl.style.display = 'none';
+      const photoErrEl = document.getElementById('emlPhotoError');
+      if (photoErrEl) photoErrEl.style.display = 'none';
+
+      renderEditListingPhotos();
+      updateEditFeePreview();
+      openModal('editMarketplaceListingModal');
+    }
+
+    // Renders the existing + queued-new photos with per-photo remove
+    // buttons. The newly-queued ones get a small "NEW" pill so the seller
+    // can tell which haven't been uploaded yet.
+    function renderEditListingPhotos() {
+      const grid = document.getElementById('emlPhotoGrid');
+      if (!grid) return;
+      const existing = _emlState.existingPhotos.map(function(url, idx) {
+        return ''
+          + '<div style="position:relative;width:78px;height:78px;border:1px solid var(--border);background:var(--surface2)">'
+          +   '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" alt="" />'
+          +   '<button type="button" onclick="removeEditPhoto(\'existing\',' + idx + ')" '
+          +     'style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--red);background:var(--surface);color:var(--red);font-family:\'Space Mono\',monospace;font-size:.75rem;cursor:pointer;line-height:1">×</button>'
+          + '</div>';
+      }).join('');
+      const queued = _emlState.newPhotos.map(function(file, idx) {
+        // Use URL.createObjectURL for the preview — revoked when the
+        // modal closes via closeModal hook below.
+        const previewUrl = URL.createObjectURL(file);
+        return ''
+          + '<div style="position:relative;width:78px;height:78px;border:1px dashed var(--accent);background:var(--surface2)">'
+          +   '<img src="' + previewUrl + '" style="width:100%;height:100%;object-fit:cover" alt="" />'
+          +   '<div style="position:absolute;bottom:0;left:0;right:0;background:var(--accent);color:var(--surface);font-family:\'Space Mono\',monospace;font-size:.55rem;letter-spacing:.06em;text-align:center;padding:1px 0">NEW</div>'
+          +   '<button type="button" onclick="removeEditPhoto(\'new\',' + idx + ')" '
+          +     'style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--red);background:var(--surface);color:var(--red);font-family:\'Space Mono\',monospace;font-size:.75rem;cursor:pointer;line-height:1">×</button>'
+          + '</div>';
+      }).join('');
+      grid.innerHTML = existing + queued || '<div style="color:var(--muted);font-size:.74rem">No photos. Buyers can\'t see your listing without at least one.</div>';
+    }
+
+    function removeEditPhoto(kind, idx) {
+      if (kind === 'existing') _emlState.existingPhotos.splice(idx, 1);
+      else if (kind === 'new') _emlState.newPhotos.splice(idx, 1);
+      renderEditListingPhotos();
+    }
+
+    function handleEditPhotoSelect(evt) {
+      const files = Array.from(evt.target.files || []);
+      const errEl = document.getElementById('emlPhotoError');
+      const MAX_TOTAL = 8;
+      const MAX_SIZE  = 5 * 1024 * 1024;
+      for (const f of files) {
+        const total = _emlState.existingPhotos.length + _emlState.newPhotos.length;
+        if (total >= MAX_TOTAL) {
+          if (errEl) { errEl.textContent = 'Max ' + MAX_TOTAL + ' photos per listing.'; errEl.style.display = 'block'; }
+          break;
+        }
+        if (f.size > MAX_SIZE) {
+          if (errEl) { errEl.textContent = 'Skipped ' + f.name + ' — over 5MB.'; errEl.style.display = 'block'; }
+          continue;
+        }
+        if (!/^image\//.test(f.type)) {
+          if (errEl) { errEl.textContent = 'Skipped ' + f.name + ' — not an image.'; errEl.style.display = 'block'; }
+          continue;
+        }
+        _emlState.newPhotos.push(f);
+      }
+      // Reset the input so re-selecting the same file fires onchange again.
+      evt.target.value = '';
+      renderEditListingPhotos();
+    }
+
+    // Same logic as updateListingFeePreview() on the create flow — kept
+    // separate so the two modals can evolve independently without one
+    // accidentally repainting the other's box.
+    function updateEditFeePreview() {
+      const box = document.getElementById('emlFeePreview');
+      if (!box) return;
+      const rate     = myCommissionRate();
+      const ratePct  = (rate * 100).toFixed(0) + '%';
+      const tierName = userTier();
+      const tierLabel = tierName.charAt(0).toUpperCase() + tierName.slice(1);
+      const ask  = parseFloat(document.getElementById('emlPrice').value)    || 0;
+      const ship = parseFloat(document.getElementById('emlShipping').value) || 0;
+      let payoutLine = '';
+      if (ask > 0) {
+        const fee    = ask * rate;
+        const payout = (ask - fee) + ship;
+        payoutLine = ''
+          + '<div style="margin-top:6px;color:var(--text)">'
+          + 'You receive <strong style="color:var(--green)">$' + payout.toFixed(2) + '</strong> on sale '
+          + '<span style="color:var(--muted)">(ask $' + ask.toFixed(2) + ' &minus; ' + ratePct + ' fee $' + fee.toFixed(2)
+          + (ship > 0 ? ' + shipping $' + ship.toFixed(2) : '') + ')</span>'
+          + '</div>';
+      }
+      box.innerHTML = tierLabel + ' tier fee: <strong style="color:var(--accent)">' + ratePct + '</strong>'
+        + ' &middot; ' + (ratePct === '0%' ? 'no platform fee on this tier' : 'deducted from your payout on sale')
+        + payoutLine;
+    }
+
+    async function saveEditedMarketplaceListing() {
+      const btn   = document.getElementById('emlSaveBtn');
+      const errEl = document.getElementById('emlSaveError');
+      const listingId = document.getElementById('emlListingId').value;
+      if (!listingId) return;
+      if (!currentUser) { openModal('loginModal'); return; }
+
+      const name     = document.getElementById('emlName').value.trim();
+      const grade    = document.getElementById('emlGrade').value.trim();
+      const status   = document.getElementById('emlStatus').value;
+      const price    = parseFloat(document.getElementById('emlPrice').value);
+      const shipping = parseFloat(document.getElementById('emlShipping').value) || 0;
+
+      if (!name)            { _emlError('Name is required'); return; }
+      if (!price || price <= 0) { _emlError('Enter a valid price'); return; }
+      const totalPhotos = _emlState.existingPhotos.length + _emlState.newPhotos.length;
+      if (totalPhotos === 0) { _emlError('Add at least one photo before saving'); return; }
+
+      if (btn) { btn.textContent = 'Uploading…'; btn.disabled = true; }
+
+      // Upload queued new photos (same path/encoding as create flow).
+      const newUrls = [];
+      try {
+        for (const file of _emlState.newPhotos) {
+          const v = await _imgToWebpAndVariants(file);
+          const path = 'listings/' + currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + v.original.ext;
+          const { error: upErr } = await sb.storage.from('card-photos').upload(path, v.original.blob, { upsert: false, contentType: v.original.contentType });
+          if (upErr) {
+            console.warn('Photo upload failed:', upErr.message);
+            continue;
+          }
+          const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
+          if (urlData && urlData.publicUrl) newUrls.push(urlData.publicUrl);
+          _uploadPhotoVariants(path, v.variants);
+        }
+      } catch (e) {
+        console.error('[edit-listing] photo upload error:', e);
+      }
+
+      const finalPhotos = _emlState.existingPhotos.concat(newUrls);
+
+      if (btn) { btn.textContent = 'Saving…'; }
+
+      // Build the patch — RLS on listings already restricts updates to
+      // the row owner, so this is safe without an extra ownership filter.
+      // We DON'T let edits change product_type / seller_id / sold-state.
+      const patch = {
+        name:           name,
+        grade:          grade || null,
+        value:          price,
+        shipping_price: shipping,
+        status:         (status === 'deactivated' ? 'deactivated' : 'active'),
+        photos:         finalPhotos,
+      };
+
+      const { data, error } = await sb
+        .from('listings')
+        .update(patch)
+        .eq('id', listingId)
+        .eq('seller_id', currentUser.id)   // belt-and-suspenders against RLS misconfig
+        .select()
+        .single();
+
+      if (btn) { btn.textContent = 'Save Changes'; btn.disabled = false; }
+      if (error) {
+        _emlError('Save failed: ' + (error.message || 'unknown error'));
+        return;
+      }
+
+      // Reflect the edit in the local cache so renderMyListings() / browse
+      // show the new values immediately without a refetch.
+      const idx = listings.findIndex(x => String(x.id) === String(listingId));
+      if (idx >= 0 && data) {
+        listings[idx] = Object.assign({}, listings[idx], {
+          name:           data.name,
+          grade:          data.grade || '',
+          value:          data.value,
+          list_price:     data.list_price != null ? data.list_price : data.value,
+          shipping_price: data.shipping_price || 0,
+          status:         data.status,
+          photos:         data.photos || finalPhotos,
+        });
+      }
+
+      closeModal('editMarketplaceListingModal');
+      showToast('Listing updated');
+      if (typeof renderMyListings === 'function') renderMyListings();
+      if (typeof renderBrowse === 'function')     renderBrowse();
+    }
+
+    function _emlError(msg) {
+      const errEl = document.getElementById('emlSaveError');
+      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
     }
 
     // ─── Marketplace Checkout ──────────────────────────────────────────
@@ -14293,6 +15773,357 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       loadAdminClearCollectionUsers();
       renderAdminBetaTesters();
       renderAdminImageReviewQueue();
+      // Admin moderation panels — disputes, user search, suspended listings.
+      loadAdminDisputes();
+      loadSuspendedListings();
+      // Deep-link handler: emails / notifications use ?admin=disputes&order=xxx.
+      maybeFocusAdminDispute();
+    }
+
+    // ─── Admin: Disputes panel ─────────────────────────────────────────
+    // Pulls every order currently in 'disputed' status and renders an
+    // action card per row. Two paths from here:
+    //   - Refund Buyer    → /api/refund-order (admin path, Connect-aware)
+    //   - Resolve for Seller → admin_resolve_dispute_for_seller RPC
+    let _adminDisputeCache = [];
+
+    async function loadAdminDisputes() {
+      const host = document.getElementById('adminDisputesList');
+      if (!host) return;
+      if (!userIsAdmin()) { host.innerHTML = '<div style="color:var(--muted);font-size:.8rem">Admins only.</div>'; return; }
+      host.innerHTML = '<div style="color:var(--muted);font-size:.8rem">Loading…</div>';
+      try {
+        const { data, error } = await sb
+          .from('orders')
+          .select('id, status, amount, created_at, buyer_id, seller_id, listing_id, return_reason, return_reason_detail, return_requested_at, disputed_at, stripe_payment_intent, payment_route')
+          .eq('status', 'disputed')
+          .order('disputed_at', { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        _adminDisputeCache = data || [];
+        // Hydrate buyer/seller names + listing names in parallel.
+        const userIds = Array.from(new Set([].concat(
+          _adminDisputeCache.map(d => d.buyer_id),
+          _adminDisputeCache.map(d => d.seller_id),
+        ).filter(Boolean)));
+        const listingIds = Array.from(new Set(_adminDisputeCache.map(d => d.listing_id).filter(Boolean)));
+        const [{ data: profs }, { data: lsts }] = await Promise.all([
+          userIds.length    ? sb.from('profiles').select('id, name, username, email').in('id', userIds)         : Promise.resolve({ data: [] }),
+          listingIds.length ? sb.from('listings').select('id, name, photos').in('id', listingIds)               : Promise.resolve({ data: [] }),
+        ]);
+        const pm = {}; (profs || []).forEach(p => pm[p.id] = p);
+        const lm = {}; (lsts  || []).forEach(l => lm[l.id] = l);
+        renderAdminDisputesList(pm, lm);
+      } catch (e) {
+        console.error('[admin-disputes] load failed:', e);
+        host.innerHTML = '<div style="color:var(--red);font-size:.78rem">Failed to load disputes: ' + (e.message || e) + '</div>';
+      }
+    }
+
+    function renderAdminDisputesList(profileMap, listingMap) {
+      const host  = document.getElementById('adminDisputesList');
+      const count = document.getElementById('adminDisputesCount');
+      if (count) count.textContent = '(' + _adminDisputeCache.length + ')';
+      if (!host) return;
+      if (!_adminDisputeCache.length) {
+        host.innerHTML = '<div style="color:var(--muted);font-size:.85rem;padding:14px 0;text-align:center">No open disputes. Nice.</div>';
+        return;
+      }
+      const reasonLabels = {
+        not_as_described: 'Not as described',
+        damaged:          'Arrived damaged',
+        never_arrived:    'Never arrived',
+        wrong_item:       'Wrong item',
+        other:            'Other',
+      };
+      host.innerHTML = _adminDisputeCache.map(function(o) {
+        const buyer  = profileMap[o.buyer_id]  || {};
+        const seller = profileMap[o.seller_id] || {};
+        const listng = listingMap[o.listing_id] || {};
+        const short  = String(o.id).slice(0, 8).toUpperCase();
+        const reason = reasonLabels[o.return_reason] || o.return_reason || 'unspecified';
+        const detail = String(o.return_reason_detail || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const photo  = (listng.photos && listng.photos[0]) ? listng.photos[0] : '';
+        const buyerName  = buyer.name  || buyer.username  || buyer.email  || 'Buyer';
+        const sellerName = seller.name || seller.username || seller.email || 'Seller';
+        const disputedDate = o.disputed_at ? new Date(o.disputed_at).toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' }) : '';
+        return ''
+          + '<div id="admin-dispute-' + o.id + '" style="padding:14px;border:1px solid var(--border);background:var(--surface2);margin-bottom:10px">'
+          +   '<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">'
+          +     (photo ? '<img src="' + photo + '" style="width:60px;height:60px;object-fit:cover;border:1px solid var(--border);flex-shrink:0" alt="" />' : '')
+          +     '<div style="flex:1;min-width:240px">'
+          +       '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px">'
+          +         '<div style="color:var(--text);font-size:.92rem;font-weight:700">' + (listng.name || 'Listing') + '</div>'
+          +         '<div style="font-family:\'Space Mono\',monospace;color:var(--muted);font-size:.7rem">#' + short + ' &middot; $' + (o.amount || 0).toFixed(2) + '</div>'
+          +       '</div>'
+          +       '<div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">'
+          +         'Buyer: <span style="color:var(--text)">' + buyerName + '</span>'
+          +         ' &middot; Seller: <span style="color:var(--text)">' + sellerName + '</span>'
+          +         ' &middot; Disputed: ' + disputedDate
+          +       '</div>'
+          +       '<div style="padding:8px 10px;border-left:3px solid var(--yellow);background:rgba(255,217,61,.06);font-size:.74rem;color:var(--muted);line-height:1.55;margin-top:6px">'
+          +         '<div style="color:var(--yellow);font-weight:700;letter-spacing:.04em;margin-bottom:2px">' + reason.toUpperCase() + '</div>'
+          +         (detail ? '<div style="color:var(--text)">"' + detail + '"</div>' : '')
+          +       '</div>'
+          +     '</div>'
+          +     '<div style="display:flex;flex-direction:column;gap:6px;min-width:170px">'
+          +       '<button type="button" onclick="adminResolveDisputeForBuyer(\'' + o.id + '\')" '
+          +         'style="padding:8px 12px;background:var(--red);color:var(--surface);border:none;font-family:\'Space Mono\',monospace;font-size:.72rem;font-weight:700;cursor:pointer">'
+          +         'Refund Buyer'
+          +       '</button>'
+          +       '<button type="button" onclick="adminResolveDisputeForSeller(\'' + o.id + '\')" '
+          +         'style="padding:8px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.72rem;cursor:pointer">'
+          +         'Resolve for Seller'
+          +       '</button>'
+          +     '</div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    async function adminResolveDisputeForBuyer(orderId) {
+      if (!confirm('Refund the buyer in full? This issues a Stripe refund (reverses the application fee on Connect orders) and restores the listing. Cannot be undone.')) return;
+      try {
+        const sess = await supabase.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { showToast('Sign in again'); return; }
+        showToast('Refunding…');
+        const r = await fetch('/api/refund-order', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body:    JSON.stringify({ orderId: orderId, reason: 'requested_by_customer' }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success) throw new Error(data.error || 'Refund failed');
+        showToast('Refunded $' + (data.amount || 0).toFixed(2) + '.');
+        loadAdminDisputes();
+      } catch (e) {
+        console.error('[admin-refund] error:', e);
+        showToast('Refund failed: ' + (e.message || ''));
+      }
+    }
+
+    async function adminResolveDisputeForSeller(orderId) {
+      const note = prompt('Resolution note (visible to buyer + seller). Required.\n\nExample: "Reviewed listing photos vs. buyer images — wear matches what was disclosed."');
+      if (!note || note.trim().length < 10) {
+        if (note !== null) showToast('Note must be at least 10 characters.');
+        return;
+      }
+      try {
+        const { error } = await sb.rpc('admin_resolve_dispute_for_seller', {
+          p_order_id: orderId,
+          p_note:     note.trim(),
+        });
+        if (error) throw error;
+        showToast('Dispute closed in seller\'s favor.');
+        loadAdminDisputes();
+      } catch (e) {
+        console.error('[admin-resolve] error:', e);
+        showToast('Resolve failed: ' + (e.message || ''));
+      }
+    }
+
+    // ─── Admin: User search + ban/unban ────────────────────────────────
+    async function searchAdminUsers() {
+      const host = document.getElementById('adminUserResults');
+      const q    = document.getElementById('adminUserSearch').value.trim();
+      if (!host) return;
+      if (!q) { host.innerHTML = '<div style="color:var(--muted);font-size:.78rem">Type an email or username and hit Search.</div>'; return; }
+      host.innerHTML = '<div style="color:var(--muted);font-size:.78rem">Searching…</div>';
+      try {
+        // ILIKE on email OR username — PostgREST OR filter syntax.
+        const { data, error } = await sb
+          .from('profiles')
+          .select('id, email, username, name, is_admin, is_banned, banned_reason, banned_at, is_deleted, subscription_tier, created_at')
+          .or('email.ilike.%' + q + '%,username.ilike.%' + q + '%,name.ilike.%' + q + '%')
+          .limit(20);
+        if (error) throw error;
+        renderAdminUserResults(data || []);
+      } catch (e) {
+        console.error('[admin-user-search] failed:', e);
+        host.innerHTML = '<div style="color:var(--red);font-size:.78rem">Search failed: ' + (e.message || '') + '</div>';
+      }
+    }
+
+    function renderAdminUserResults(rows) {
+      const host = document.getElementById('adminUserResults');
+      if (!host) return;
+      if (!rows.length) { host.innerHTML = '<div style="color:var(--muted);font-size:.78rem">No matches.</div>'; return; }
+      host.innerHTML = rows.map(function(u) {
+        const label = u.name || u.username || u.email || u.id.slice(0,8);
+        const tierBadge = u.subscription_tier ? '<span style="font-family:\'Space Mono\',monospace;font-size:.62rem;letter-spacing:.06em;padding:2px 6px;border:1px solid var(--border);color:var(--muted);margin-left:6px">' + u.subscription_tier.toUpperCase() + '</span>' : '';
+        const flags = [];
+        if (u.is_admin)   flags.push('<span style="color:var(--copper);font-size:.66rem">ADMIN</span>');
+        if (u.is_banned)  flags.push('<span style="color:var(--red);font-size:.66rem">BANNED</span>');
+        if (u.is_deleted) flags.push('<span style="color:var(--muted);font-size:.66rem">DELETED</span>');
+        const flagHtml = flags.length ? ' &middot; ' + flags.join(' &middot; ') : '';
+        const bannedNote = u.is_banned && u.banned_reason
+          ? '<div style="font-size:.7rem;color:var(--muted);margin-top:4px;font-style:italic">Reason: "' + String(u.banned_reason).replace(/</g,'&lt;') + '"</div>'
+          : '';
+        const banBtn = u.is_admin
+          ? '<span style="color:var(--muted);font-size:.7rem">Cannot ban admins</span>'
+          : (u.is_banned
+              ? '<button type="button" onclick="adminUnbanUser(\'' + u.id + '\')" style="padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer">Unban</button>'
+              : '<button type="button" onclick="adminBanUser(\'' + u.id + '\',\'' + (u.username || u.email || '').replace(/\'/g,"\\'") + '\')" style="padding:6px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer">Ban</button>');
+        return ''
+          + '<div style="padding:10px 14px;border:1px solid var(--border);background:var(--surface2);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">'
+          +   '<div style="flex:1;min-width:220px">'
+          +     '<div style="color:var(--text);font-size:.85rem">' + label + tierBadge + flagHtml + '</div>'
+          +     '<div style="color:var(--muted);font-size:.7rem;font-family:\'Space Mono\',monospace;margin-top:3px">' + (u.email || '') + ' &middot; ' + u.id + '</div>'
+          +     bannedNote
+          +   '</div>'
+          +   '<div>' + banBtn + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    async function adminBanUser(userId, label) {
+      const reason = prompt('Ban ' + (label || 'this user') + '?\n\nEnter a reason (required, visible internally; user just sees "account suspended"):');
+      if (!reason || reason.trim().length < 5) {
+        if (reason !== null) showToast('Reason must be at least 5 characters.');
+        return;
+      }
+      try {
+        const { error } = await sb.rpc('admin_set_user_banned', {
+          p_user_id: userId,
+          p_banned:  true,
+          p_reason:  reason.trim(),
+        });
+        if (error) throw error;
+        showToast('User banned. Active listings suspended.');
+        searchAdminUsers();
+        loadSuspendedListings();
+      } catch (e) {
+        console.error('[admin-ban] error:', e);
+        showToast('Ban failed: ' + (e.message || ''));
+      }
+    }
+
+    async function adminUnbanUser(userId) {
+      if (!confirm('Unban this user? They will be able to sign in immediately. Previously-suspended listings stay suspended — restore those individually.')) return;
+      try {
+        const { error } = await sb.rpc('admin_set_user_banned', {
+          p_user_id: userId,
+          p_banned:  false,
+          p_reason:  null,
+        });
+        if (error) throw error;
+        showToast('User unbanned.');
+        searchAdminUsers();
+      } catch (e) {
+        console.error('[admin-unban] error:', e);
+        showToast('Unban failed: ' + (e.message || ''));
+      }
+    }
+
+    // ─── Admin: Suspended listings list + restore ──────────────────────
+    async function loadSuspendedListings() {
+      const host = document.getElementById('adminSuspendedList');
+      if (!host) return;
+      if (!userIsAdmin()) { host.innerHTML = '<div style="color:var(--muted);font-size:.8rem">Admins only.</div>'; return; }
+      host.innerHTML = '<div style="color:var(--muted);font-size:.8rem">Loading…</div>';
+      try {
+        const { data, error } = await sb
+          .from('listings')
+          .select('id, name, photos, suspended_reason, suspended_at, seller_id, value, list_price')
+          .eq('status', 'suspended')
+          .order('suspended_at', { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        const rows = data || [];
+        if (!rows.length) { host.innerHTML = '<div style="color:var(--muted);font-size:.85rem;padding:8px 0">No suspended listings.</div>'; return; }
+        host.innerHTML = rows.map(function(l) {
+          const photo = (l.photos && l.photos[0]) ? l.photos[0] : '';
+          const price = (l.list_price != null ? l.list_price : l.value) || 0;
+          const when  = l.suspended_at ? new Date(l.suspended_at).toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' }) : '';
+          const reason = String(l.suspended_reason || '').replace(/</g,'&lt;');
+          return ''
+            + '<div style="padding:10px 14px;border:1px solid var(--border);background:var(--surface2);display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">'
+            +   (photo ? '<img src="' + photo + '" style="width:48px;height:48px;object-fit:cover;border:1px solid var(--border)" />' : '')
+            +   '<div style="flex:1;min-width:220px">'
+            +     '<div style="color:var(--text);font-size:.85rem">' + (l.name || 'Listing') + ' <span style="color:var(--muted);font-size:.72rem">&middot; $' + price.toFixed(2) + '</span></div>'
+            +     '<div style="color:var(--muted);font-size:.7rem;margin-top:3px">' + when + (reason ? ' &middot; <em>"' + reason + '"</em>' : '') + '</div>'
+            +   '</div>'
+            +   '<button type="button" onclick="adminRestoreListing(\'' + l.id + '\')" style="padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer">Restore</button>'
+            +   '<button type="button" onclick="adminSuspendListingPrompt(\'' + l.id + '\')" style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer">Edit reason</button>'
+            + '</div>';
+        }).join('');
+      } catch (e) {
+        console.error('[admin-suspended] load failed:', e);
+        host.innerHTML = '<div style="color:var(--red);font-size:.78rem">Failed to load: ' + (e.message || '') + '</div>';
+      }
+    }
+
+    async function adminSuspendListingPrompt(listingId) {
+      const reason = prompt('Reason for suspending this listing? (Surfaced to the seller so they know what to fix.)');
+      if (!reason || reason.trim().length < 5) {
+        if (reason !== null) showToast('Reason must be at least 5 characters.');
+        return;
+      }
+      try {
+        const { error } = await sb.rpc('admin_set_listing_suspended', {
+          p_listing_id: listingId,
+          p_suspended:  true,
+          p_reason:     reason.trim(),
+        });
+        if (error) throw error;
+        showToast('Listing suspended.');
+        loadSuspendedListings();
+        if (typeof renderAdminTable === 'function') renderAdminTable();
+      } catch (e) {
+        console.error('[admin-suspend] error:', e);
+        showToast('Suspend failed: ' + (e.message || ''));
+      }
+    }
+
+    async function adminRestoreListing(listingId) {
+      if (!confirm('Restore this listing to the marketplace?')) return;
+      try {
+        const { error } = await sb.rpc('admin_set_listing_suspended', {
+          p_listing_id: listingId,
+          p_suspended:  false,
+          p_reason:     null,
+        });
+        if (error) throw error;
+        showToast('Listing restored.');
+        loadSuspendedListings();
+      } catch (e) {
+        console.error('[admin-restore] error:', e);
+        showToast('Restore failed: ' + (e.message || ''));
+      }
+    }
+
+    // ─── Admin deep-link handler ───────────────────────────────────────
+    // ?admin=disputes&order=<uuid> opens the admin page, scrolls the
+    // specific dispute card into view, and gives it a 2s pulse so it's
+    // visually obvious which one the email/notification was about.
+    function maybeFocusAdminDispute() {
+      try {
+        const q = new URLSearchParams(location.search);
+        if (q.get('admin') !== 'disputes') return;
+        const orderId = q.get('order');
+        // Clean the query off the URL.
+        q.delete('admin'); q.delete('order');
+        const newSearch = q.toString();
+        history.replaceState(null, '', location.pathname + (newSearch ? '?' + newSearch : '') + location.hash);
+        if (!orderId) return;
+        // Wait for the dispute list to render then scroll + highlight.
+        let tries = 0;
+        const tick = setInterval(function() {
+          tries++;
+          const el = document.getElementById('admin-dispute-' + orderId);
+          if (el) {
+            clearInterval(tick);
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const orig = el.style.boxShadow;
+            el.style.transition = 'box-shadow .3s';
+            el.style.boxShadow  = '0 0 0 3px var(--copper)';
+            setTimeout(function() { el.style.boxShadow = orig; }, 2400);
+          } else if (tries > 30) {
+            clearInterval(tick);
+          }
+        }, 150);
+      } catch (_) { /* no-op */ }
     }
 
     // ── Admin: image-review queue ───────────────────────────────────────
@@ -16248,6 +18079,40 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         setTimeout(() => toast.remove(), 300);
       }, 2000);
     }
+
+    // ── Global error boundary ──────────────────────────────────────────
+    // Catches uncaught synchronous errors AND unhandled promise rejections
+    // so a single misbehaving handler doesn't dump the user on a silent
+    // white screen. Logs detail to the console for debugging, surfaces a
+    // user-friendly toast, and rate-limits to one toast per 5s so a
+    // runaway error loop doesn't spam the screen.
+    let _lastErrorToastAt = 0;
+    function _surfaceCaughtError(detail) {
+      const now = Date.now();
+      console.error('[caught]', detail);
+      if (now - _lastErrorToastAt < 5000) return;
+      _lastErrorToastAt = now;
+      try { showToast('Something went wrong — refresh if it sticks'); } catch (_) {}
+    }
+    window.addEventListener('error', function(ev) {
+      // Ignore network-only errors from images / scripts loaded via <img>
+      // / <link> — those are noisy and not actionable for the user.
+      if (ev && ev.target && ev.target !== window
+          && (ev.target.tagName === 'IMG' || ev.target.tagName === 'LINK' || ev.target.tagName === 'SCRIPT')) {
+        return;
+      }
+      _surfaceCaughtError({
+        message: ev.message,
+        source:  ev.filename + ':' + ev.lineno + ':' + ev.colno,
+        error:   ev.error && ev.error.stack ? ev.error.stack : (ev.error || null),
+      });
+    });
+    window.addEventListener('unhandledrejection', function(ev) {
+      _surfaceCaughtError({
+        message: 'unhandled promise rejection',
+        reason:  ev.reason && ev.reason.stack ? ev.reason.stack : (ev.reason || null),
+      });
+    });
 
 
 
@@ -28615,9 +30480,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const session = sessionResult.data?.session;
         if (session?.user) {
           const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-          currentUser = { ...session.user, ...(profile || {}) };
-          // Fire beta-welcome modal exactly once per claimed slot (gated by localStorage)
-          try { maybeShowBetaWelcome(); } catch(_) {}
+          // Already-purged accounts (deleted_at set, is_deleted = true) shouldn't
+          // have an active session — sign them out and bail so the auth UI
+          // reverts to the signed-out state.
+          if (profile && profile.is_deleted) {
+            try { await sb.auth.signOut(); } catch(_) {}
+            showToast('This account has been deleted.');
+          } else {
+            currentUser = { ...session.user, ...(profile || {}) };
+            // Render the site-wide deletion banner if a 30-day grace window
+            // is in progress. No-op when no deletion is pending.
+            try { renderDeletionPendingBanner(); } catch(_) {}
+            // Fire beta-welcome modal exactly once per claimed slot (gated by localStorage)
+            try { maybeShowBetaWelcome(); } catch(_) {}
+            // Admin bell — pulls latest admin_notifications and stamps
+            // the unread count onto the avatar dropdown. No-op for non-admins.
+            try { loadAdminNotifications(); } catch(_) {}
+          }
         }
 
         // Load listings (marketplace fields included)

@@ -66,7 +66,7 @@ ENVIRONMENT
     SUPABASE_SERVICE_KEY  service-role key (bypasses RLS for catalog writes)
 """
 
-import os, sys, csv, re, io, json, argparse, time, glob, tempfile, random
+import os, sys, csv, re, io, json, argparse, time, glob, tempfile, random, threading
 from urllib.parse import urlparse, urlunparse
 from datetime import date
 
@@ -88,14 +88,21 @@ if not (SUPABASE_URL and SUPABASE_KEY):
 #   magic-cards              (Magic: The Gathering)
 #   yugioh-cards             (Yu-Gi-Oh!)
 #   one-piece-cards          (One Piece TCG)
-# Add more as PC supports them — PC's category list is at
-# https://www.pricecharting.com/category/<slug>.
+#   (probable) gundam-card-game        — Bandai Gundam TCG (2025+)
+#   (probable) dragon-ball-z-cards     — Panini DBZ TCG
+#   (probable) dragon-ball-super-cards — newer DBS TCG
+# Verify a candidate slug with: python3 enrich_from_pc_csv.py --category <slug> --inspect
+# PC's full category list is at https://www.pricecharting.com/category/.
 PC_DOWNLOAD_URL = "https://www.pricecharting.com/price-guide/download-custom"
 KNOWN_CATEGORIES = [
     "pokemon-cards",
     "magic-cards",
     "yugioh-cards",
     "one-piece-cards",
+    # Probable slugs for DBZ + Gundam — uncomment after verifying with --inspect:
+    # "gundam-card-game",
+    # "dragon-ball-z-cards",
+    # "dragon-ball-super-cards",
 ]
 
 # Browser-realistic headers. Without these PC's Cloudflare WAF tends to
@@ -430,6 +437,23 @@ def upsert_history(row):
 
 
 # ── PC category download ──────────────────────────────────────────────────────
+def _peek_first_row_genre(csv_path):
+    """Read just the first data row from the CSV and return its genre
+    column. Used to detect when PC's download endpoint silently returns
+    a fallback catalog (3DO games etc.) for an unrecognized category
+    slug. Returns None if the file can't be read or has no rows."""
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Genre column lives at index 22 in PC's standard CSV
+                # but column name varies, so use the dict accessor.
+                return row.get("genre", "")
+            return None
+    except Exception:
+        return None
+
+
 def download_category_csv(category, target_dir, max_retries=3):
     """Download a PC bulk CSV for the given category slug. Saves to
     `target_dir/<category>.csv` and returns the path.
@@ -475,9 +499,25 @@ def download_category_csv(category, target_dir, max_retries=3):
                     if total_bytes < 50 * 1024:
                         try: os.remove(target_path)
                         except Exception: pass
-                        head = open(target_path, 'rb').read(200) if os.path.exists(target_path) else b''
                         last_err = f"suspiciously small response ({total_bytes} bytes)"
                         continue
+                    # Sanity check: PC's download endpoint silently falls back
+                    # to the DEFAULT category (3DO video games, alphabetically
+                    # first) when the slug isn't recognized — instead of
+                    # erroring or returning empty. A 19MB CSV of 3DO games
+                    # looks like a successful download but matches nothing.
+                    # Sample the first data row's `genre` column; if it
+                    # doesn't contain "Card", "TCG", or "Sealed", flag the
+                    # download as a category-slug miss.
+                    sample = _peek_first_row_genre(target_path)
+                    if sample is not None and not any(t in sample.lower() for t in ("card", "tcg", "sealed")):
+                        try: os.remove(target_path)
+                        except Exception: pass
+                        last_err = (f"slug '{category}' not recognized by PC — endpoint "
+                                    f"returned default catalog (first row genre: {sample!r}). "
+                                    f"Check the slug on pricecharting.com.")
+                        # Don't retry — this isn't a transient error.
+                        raise RuntimeError(last_err)
                     print(f"  → {target_path} ({total_bytes/1024:.0f} KB)")
                     return target_path
 
@@ -846,8 +886,12 @@ def _run_ingest(paths, args):
     # first.
     unmatched_by_game = {}   # game_type → [rows]
 
+    # ── Match phase (single-threaded, fast — pure dict lookups) ──────────
+    # Build a queue of write jobs. Each job is (row, matched_entry,
+    # source) so the write phase can fire them in parallel without
+    # touching the matcher state.
+    write_jobs = []
     for i, row in enumerate(cat_rows, start=1):
-        rid     = row["id"]
         matched, source = match_row(row, by_url, by_text, by_setnum, by_unique_num)
         if not matched:
             n_nomatch += 1
@@ -865,38 +909,70 @@ def _run_ingest(paths, args):
         elif source == "unique_num": n_unique_num += 1
         else:                        n_text       += 1
 
-        payload = {"pricecharting_id": matched["pc_id"]}
-        write_price = (not args.skip_prices) and (matched["price"] is not None)
-        if write_price:
-            payload["current_value"] = matched["price"]
+        if not args.dry_run:
+            write_jobs.append((row, matched, source))
 
-        if args.dry_run:
-            continue
+    if args.dry_run:
+        print(f"  Dry-run: {len(write_jobs) if write_jobs else (n_setnum + n_text + n_unique_num)} matches identified, no writes performed.")
+    else:
+        # ── Write phase (parallel) ────────────────────────────────────────
+        # Supabase round-trip is ~150-300ms each; doing 95k matched rows
+        # serially would take ~8-12 HOURS. ThreadPoolExecutor with 20
+        # workers cuts that to ~10-15 minutes. Supabase service-key writes
+        # don't need rate limiting — its API rate budget is generous.
+        WRITE_WORKERS = int(os.environ.get("SUPABASE_WRITE_WORKERS", "20"))
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        write_total = len(write_jobs)
+        print(f"\n  Matching done. Writing {write_total:,} matches with {WRITE_WORKERS} parallel workers…")
+        write_lock = threading.Lock()
+        write_completed = [0]
+        write_started_at = time.time()
 
-        try:
-            patch_row(rid, payload)
-        except Exception as e:
-            n_failed += 1
-            print(f"  [{i}/{len(cat_rows)}] FAIL patch {rid}: {e}")
-            continue
-
-        if write_price:
+        def _do_write(job):
+            row, matched, source = job
+            rid = row["id"]
+            payload = {"pricecharting_id": matched["pc_id"]}
+            write_price = (not args.skip_prices) and (matched["price"] is not None)
+            if write_price:
+                payload["current_value"] = matched["price"]
             try:
-                upsert_history({
-                    "catalog_id":     rid,
-                    "recorded_value": matched["price"],
-                    "recorded_at":    today_iso,
-                    "source":         "pricecharting_csv",
-                    "game_type":      row.get("game_type"),
-                    "set_code":       row.get("set_code"),
-                })
-                n_priced += 1
+                patch_row(rid, payload)
             except Exception as e:
-                # Non-fatal — id is already written, history is a nice-to-have.
-                print(f"  [{i}/{len(cat_rows)}] history WARN {rid}: {e}")
+                return ("failed", rid, str(e), False)
+            if write_price:
+                try:
+                    upsert_history({
+                        "catalog_id":     rid,
+                        "recorded_value": matched["price"],
+                        "recorded_at":    today_iso,
+                        "source":         "pricecharting_csv",
+                        "game_type":      row.get("game_type"),
+                        "set_code":       row.get("set_code"),
+                    })
+                    return ("done_priced", rid, None, True)
+                except Exception as e:
+                    return ("done_history_warn", rid, str(e), False)
+            return ("done", rid, None, False)
 
-        if i % 500 == 0:
-            print(f"  [{i:>6}/{len(cat_rows)}] matched={n_setnum+n_text+n_unique_num} nomatch={n_nomatch} failed={n_failed}")
+        with ThreadPoolExecutor(max_workers=WRITE_WORKERS) as pool:
+            futs = [pool.submit(_do_write, j) for j in write_jobs]
+            for fut in as_completed(futs):
+                status, rid, err, priced = fut.result()
+                with write_lock:
+                    write_completed[0] += 1
+                    n = write_completed[0]
+                    if status == "failed":
+                        n_failed += 1
+                        print(f"  FAIL patch {rid}: {err}")
+                    elif status == "done_history_warn":
+                        print(f"  history WARN {rid}: {err}")
+                    if priced:
+                        n_priced += 1
+                    if n % 1000 == 0 or n == write_total:
+                        elapsed = time.time() - write_started_at
+                        rate = n / elapsed if elapsed > 0 else 0
+                        eta_s = (write_total - n) / rate if rate > 0 else 0
+                        print(f"  [{n:>7,}/{write_total:,}] writes  ({rate:.0f}/s, {eta_s/60:.1f}min left)")
 
     # ── Summary ───────────────────────────────────────────────────────
     total_matched = n_setnum + n_text + n_unique_num
