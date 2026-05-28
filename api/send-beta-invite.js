@@ -18,10 +18,15 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_KEY
 //   RESEND_API_KEY
-//   RESEND_FROM          — verified sender, e.g. 'PathBinder <invites@pathbinder.gg>'
+//   Either:
+//     RESEND_FROM          — verified sender, e.g. 'PathBinder <invites@pathbinder.gg>'
+//   Or (recommended — sidesteps copy-paste truncation of the angle-bracket form):
+//     RESEND_FROM_NAME     — display name, e.g. 'PathBinder'
+//     RESEND_FROM_EMAIL    — bare address, e.g. 'invites@send.pathbinder.gg'
 
 const { createClient } = require('@supabase/supabase-js');
 const { TIER_COPY, renderEmailHtml, renderEmailText } = require('./_lib/beta-invite-template');
+const { resolveResendFrom } = require('./_lib/resend-from');
 
 const sb = createClient(
   process.env.SUPABASE_URL,
@@ -35,13 +40,25 @@ const sb = createClient(
 
 async function sendEmail({ to, subject, html, text }) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from   = process.env.RESEND_FROM;
-  if (!apiKey || !from) return { ok: false, reason: 'resend_not_configured' };
+  if (!apiKey) return { ok: false, reason: 'resend_not_configured' };
+  const fromResult = resolveResendFrom();
+  if (!fromResult.ok) {
+    console.error('[send-beta-invite] from address invalid:', fromResult);
+    return { ok: false, reason: fromResult.reason };
+  }
+  const from = fromResult.from;
+  // Optional Reply-To. The sending domain (send.pathbinder.gg) doesn't
+  // receive mail, so user replies need somewhere real to land. Set
+  // RESEND_REPLY_TO to e.g. 'moth@pathbinder.gg' so hitting Reply goes
+  // to a real mailbox instead of bouncing.
+  const replyTo = (process.env.RESEND_REPLY_TO || '').trim();
+  const payload = { from, to, subject, html, text };
+  if (replyTo) payload.reply_to = replyTo;
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject, html, text }),
+      body: JSON.stringify(payload),
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => '');

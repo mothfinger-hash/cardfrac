@@ -14,8 +14,12 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_KEY
 //   RESEND_API_KEY    — get from resend.com/api-keys
-//   RESEND_FROM       — verified sender, e.g. 'PathBinder Admin <alerts@pathbinder.gg>'
-//                       Must be on a domain you've verified in Resend.
+//   Either:
+//     RESEND_FROM       — verified sender, e.g. 'PathBinder Admin <alerts@pathbinder.gg>'
+//                         Must be on a domain you've verified in Resend.
+//   Or (recommended — sidesteps copy-paste truncation of the angle-bracket form):
+//     RESEND_FROM_NAME  — display name, e.g. 'PathBinder Admin'
+//     RESEND_FROM_EMAIL — bare address, e.g. 'alerts@send.pathbinder.gg'
 //
 // OPTIONAL ENV:
 //   ADMIN_EMAIL_RECIPIENTS  — comma-separated explicit override.
@@ -41,6 +45,7 @@
 //   400/401/404/500 with { error }
 
 const { createClient } = require('@supabase/supabase-js');
+const { resolveResendFrom } = require('./_lib/resend-from');
 
 const sb = createClient(
   process.env.SUPABASE_URL,
@@ -49,10 +54,18 @@ const sb = createClient(
 
 async function sendEmail({ to, subject, html, text }) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from   = process.env.RESEND_FROM;
-  if (!apiKey || !from) {
-    return { ok: false, reason: 'resend_not_configured' };
+  if (!apiKey) return { ok: false, reason: 'resend_not_configured' };
+  const fromResult = resolveResendFrom();
+  if (!fromResult.ok) {
+    console.error('[admin-notify] from address invalid:', fromResult);
+    return { ok: false, reason: fromResult.reason };
   }
+  const from = fromResult.from;
+  // Optional Reply-To (e.g. moth@pathbinder.gg). The sending domain
+  // doesn't receive mail, so this is where admin replies go.
+  const replyTo = (process.env.RESEND_REPLY_TO || '').trim();
+  const payload = { from, to, subject, html, text };
+  if (replyTo) payload.reply_to = replyTo;
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method:  'POST',
@@ -60,9 +73,7 @@ async function sendEmail({ to, subject, html, text }) {
         'Authorization': 'Bearer ' + apiKey,
         'Content-Type':  'application/json',
       },
-      body: JSON.stringify({
-        from, to, subject, html, text,
-      }),
+      body: JSON.stringify(payload),
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => '');

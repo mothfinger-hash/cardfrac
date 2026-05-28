@@ -1,4 +1,48 @@
 // PathBinder Service Worker
+// v355 — Thumbnail variants wired site-wide + mobile UX fixes:
+//  Now that image_variants.py has finished pre-generating -200.webp and
+//  -400.webp siblings for every catalog + user-photo upload, every <img>
+//  render in the app calls _pickThumbVariant(url, targetWidth) with a
+//  width matched to the rendered element. Variant is picked, falls back
+//  to original on 404, then to PLACEHOLDER_IMG (or hides itself for
+//  inline cases). Bandwidth savings vs. full-size on each grid is
+//  roughly 70-90%, especially noticeable on mobile data.
+//  Spots wired: all-cards list+grid, binder sidebar icons, binder shelf
+//  covers, organize-view thumbs, binder card grid, wishlist detail,
+//  set/catalog row, my-listings rows, admin card list.
+//  Spots intentionally NOT wired: full-screen detail / lightbox / scan
+//  preview — they want max resolution.
+//  ALSO in this version:
+//  - Landing page mobile: tightened .lp-pricing-section padding from
+//    40px → 14px under 700px so single-column tiers don't get cropped
+//    by the viewport edge. Footer strip switched to a real 2x2 grid
+//    with the help button spanning both columns instead of sharing a
+//    column with a wedge of weird whitespace.
+//  - Global -webkit-tap-highlight-color:transparent kills the gray
+//    flash mobile Safari shows on every tap (cards, buttons, toggles).
+//  - html/body overflow-x:hidden so a child that overflows the viewport
+//    doesn't expose a horizontal scroll strip.
+//  - Sticky focus rings on buttons/links after a touch tap are dropped
+//    via :focus:not(:focus-visible). Keyboard a11y focus still renders.
+// v354 — Set/catalog browse rows: image fallback cascade
+//  The `_renderCatalogCardRow` template (sets-detail card list, near
+//  line 28823) was rendering `<img src="${card.image_url}">` raw with
+//  no `onerror`. When a catalog row pointed at a stale Supabase Storage
+//  path (e.g. an old .png that cleanup_png_storage.py later removed,
+//  or a missing -200.webp variant), the user just saw a broken-image
+//  icon. Marketplace browse already had the variant → original →
+//  PLACEHOLDER_IMG cascade; set rows now match.
+// v353 — Price movers "Yours" tab honors the 24h/7d toggle:
+//  Personal-collection movers section was hardcoded to a 7-day window
+//  regardless of which toggle was selected. The legacy in-memory log
+//  cutoff, the periodLabel chip on each row, and the panel header all
+//  said "7d" even when the user clicked 24h. Symptom: clicking 24h on
+//  the Yours panel still showed the same gainers as 7d.
+//  Fix: snapshot now keyed by period (`_priceHistorySnapshots[1]` vs
+//  `[7]`), loader fetches the matching window, and every label /
+//  cutoff in buildMovers derives from `_activePeriod`. Global Market
+//  header now uses the shared `_periodLabel` so a 24h toggle reads
+//  "last 24h" instead of "last 1d".
 // v352 — Order messaging (buyer ↔ seller chat) + Payments empty state:
 //  - New `order_messages` table + RLS scoped to the two parties on
 //    the order. New "Message buyer/seller" button on every order card
@@ -211,7 +255,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v352';
+const CACHE = 'pathbinder-v355';
 
 const PRECACHE = [
   '/offline.html',

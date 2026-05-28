@@ -236,7 +236,7 @@ def parse_price(html):
     return None
 
 
-def fetch_pc_api(pc_id):
+def fetch_pc_api(pc_id, is_sealed=False):
     """API mode — query PriceCharting's product endpoint by ID and
     return (price, raw_response). PC returns prices in CENTS as
     integer fields:
@@ -245,9 +245,14 @@ def fetch_pc_api(pc_id):
       new-price     — sealed / mint (closest to PSA 10 for graded)
       graded-price  — graded-card-specific, when available
 
-    For TCG singles, loose-price IS the ungraded market price (matches
-    what the scrape was reading). For sealed products, loose-price is
-    typically zero — fall back to cib-price for those.
+    Field priority depends on whether we're pricing a single or a
+    sealed product:
+      • Singles  → loose-price → cib-price → new-price
+        (loose = ungraded raw, the market comp the buy/sell flow uses)
+      • Sealed   → cib-price → new-price → loose-price
+        (cib = sealed-in-original-packaging; new = factory-new; loose
+         is rarely populated for sealed product and was the cause of
+         most "no price" results before this fix)
 
     Returns float dollars or None if no price field is populated.
     Raises RuntimeError on transport / HTTP / parse failures so the
@@ -286,9 +291,14 @@ def fetch_pc_api(pc_id):
             # with 200 OK as well — treat as "no price".
             if isinstance(data, dict) and data.get("status") == "error":
                 return None, data
-            # Prefer loose-price; fall back to cib-price (sealed product
-            # case where loose isn't meaningful); finally new-price.
-            for field in ("loose-price", "cib-price", "new-price"):
+            # Field priority depends on product type — sealed flips the
+            # order so cib/new come first (loose is rarely populated for
+            # sealed; we were getting 0/none for them before this fix).
+            if is_sealed:
+                fields = ("cib-price", "new-price", "loose-price", "box-only-price")
+            else:
+                fields = ("loose-price", "cib-price", "new-price")
+            for field in fields:
                 cents = data.get(field)
                 if cents is not None and cents > 0:
                     return cents / 100.0, data
@@ -424,6 +434,20 @@ def load_catalog(game_type, resume):
     return rows
 
 
+_SEALED_ID_RE = re.compile(r"^sealed-[a-z]{2}-pc-(\d+)$", re.IGNORECASE)
+
+def _pc_id_from_sealed_catalog_id(catalog_id):
+    """Extract the PC numeric id from a sealed-style catalog row id.
+    Catalog ids for sealed products follow the pattern
+    `sealed-<lang>-pc-<pc_id>` (e.g. `sealed-en-pc-2245051`). This is
+    a free fallback for sealed rows whose `pricecharting_id` column
+    didn't get backfilled — the PC id is literally in the row id."""
+    if not catalog_id:
+        return None
+    m = _SEALED_ID_RE.match(catalog_id)
+    return m.group(1) if m else None
+
+
 def process_row(row, dry_run=False, force_scrape=False):
     """Fetch PC, parse price, write back to catalog + history.
 
@@ -436,10 +460,28 @@ def process_row(row, dry_run=False, force_scrape=False):
 
     On API failure, transparently falls back to scrape mode if a URL
     is available — so a transient API hiccup doesn't lose a row.
+
+    Sealed-product detection: any catalog id starting with `sealed-`
+    is treated as sealed for API field-priority purposes. The PC api
+    call uses cib-price → new-price first (instead of the loose-price
+    ordering that fits singles). Also extracts the embedded PC id
+    from `sealed-<lang>-pc-<id>` when pricecharting_id is null.
     """
     rid    = row["id"]
     pc_id  = row.get("pricecharting_id")
     url    = row.get("price_source_url") or row.get("market_price_source")
+
+    # Sealed detection via id prefix — cheap, deterministic, doesn't
+    # require a product_type column on catalog.
+    is_sealed = bool(rid and rid.lower().startswith("sealed-"))
+
+    # Backfill PC id from the catalog row id if the column is empty
+    # but the id encodes one. Lets sealed rows that missed the
+    # enrichment sync still hit the fast API path.
+    if not pc_id and is_sealed:
+        extracted = _pc_id_from_sealed_catalog_id(rid)
+        if extracted:
+            pc_id = extracted
 
     api_eligible = bool(PC_API_KEY and pc_id and not force_scrape)
     price        = None
@@ -447,7 +489,7 @@ def process_row(row, dry_run=False, force_scrape=False):
 
     if api_eligible:
         try:
-            api_result = fetch_pc_api(pc_id)
+            api_result = fetch_pc_api(pc_id, is_sealed=is_sealed)
             price      = api_result[0] if api_result else None
             mode_used  = "api"
         except Exception as e:
@@ -484,9 +526,15 @@ def process_row(row, dry_run=False, force_scrape=False):
         return (rid, "dry", f"would set ${price:.2f} via {mode_used}", price)
 
     # Update catalog current_value (best-effort — history is the
-    # authoritative source for movers anyway).
+    # authoritative source for movers anyway). Also persist any
+    # pricecharting_id we extracted from a sealed row id, so the column
+    # is populated for future runs (eliminates the re-extract step and
+    # speeds up the next nightly).
+    patch = {"current_value": price}
+    if is_sealed and not row.get("pricecharting_id") and pc_id:
+        patch["pricecharting_id"] = pc_id
     try:
-        pg_patch_catalog(rid, {"current_value": price})
+        pg_patch_catalog(rid, patch)
     except Exception as e:
         # Don't bail — still try to log to history so we have at least one
         # data point even if catalog write hit a transient error.

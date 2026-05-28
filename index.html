@@ -3955,6 +3955,25 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
 html { scroll-behavior: smooth; }
 
+/* ── Mobile chrome cleanup ──────────────────────────────────────────
+   iOS Safari shows a translucent gray box on every tap (cards,
+   buttons, toggles, links). Kill it globally — the cyan/copper UI
+   already has its own visual feedback for tap states. Also prevent
+   horizontal page scroll on mobile, which used to expose a darker
+   strip on the right edge of the landing page when a child element
+   overflowed the viewport. */
+* { -webkit-tap-highlight-color: transparent; }
+html, body { overflow-x: hidden; }
+/* Kill the lingering gray focus ring that mobile Safari leaves on
+   buttons / links after a tap (focus stays sticky on touch devices).
+   Keep keyboard-focus outlines intact for accessibility via
+   :focus-visible. */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+input[type="button"]:focus:not(:focus-visible),
+input[type="submit"]:focus:not(:focus-visible) { outline: none; }
+
 /* ── Hologram scrollbars — site-wide ─────────────────────────────── */
 * { scrollbar-width: thin; scrollbar-color: rgba(26,199,160,.2) transparent; }
 *::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -4529,7 +4548,10 @@ nav {
 .lp-market-cta-lbl { font-family:'Press Start 2P',monospace; font-size:6px; color:var(--accent); text-align:center; letter-spacing:.1em; line-height:1.6; }
 
 /* ── Pricing ── */
-.lp-pricing-section { border-top:1.5px solid var(--border); padding:16px 40px 18px; max-width:1360px; margin-left:auto; margin-right:auto; }
+.lp-pricing-section { border-top:1.5px solid var(--border); padding:16px 40px 18px; max-width:1360px; margin-left:auto; margin-right:auto; box-sizing:border-box; }
+/* Mobile: shrink the 40px horizontal padding so single-column tiers
+   actually have breathing room on a 375-430px phone viewport. */
+@media(max-width:700px) { .lp-pricing-section { padding-left:14px; padding-right:14px; } }
 .lp-pricing-header { display:flex; align-items:baseline; gap:14px; margin-bottom:12px; }
 .lp-pricing-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.16em; color:var(--accent); }
 .lp-pricing-title { display:none; }
@@ -4558,12 +4580,30 @@ nav {
 .lp-tier.featured .lp-tier-cta:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 #000; }
 
 /* ── LP Footer strip ── */
-.lp-footer-strip { border-top:1.5px solid var(--border); display:grid; grid-template-columns:repeat(4,1fr) auto; background:var(--surface2); }
-@media(max-width:700px) { .lp-footer-strip { grid-template-columns:repeat(2,1fr); } }
-.lp-footer-item { padding:10px 14px; border-right:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.lp-footer-strip { border-top:1.5px solid var(--border); display:grid; grid-template-columns:repeat(4,1fr) auto; background:var(--surface2); box-sizing:border-box; }
+/* Mobile: 2x2 grid for the four items, help button below as its own row
+   spanning both columns. The previous repeat(2,1fr) put the help button
+   in a third row anyway but stretched it weirdly because the implicit
+   row sizing wasn't constrained. */
+@media(max-width:700px) {
+  .lp-footer-strip { grid-template-columns:repeat(2,1fr); }
+  .lp-footer-help { grid-column:1 / -1; border-right:none; }
+}
+.lp-footer-item { padding:10px 14px; border-right:1px solid var(--border); display:flex; align-items:center; gap:10px; min-width:0; }
 .lp-footer-item:last-child { border-right:none; }
+/* Tighter padding + smaller icon-label width on mobile so the title
+   text doesn't break into vertical-stacked single-letter columns. */
+@media(max-width:700px) {
+  .lp-footer-item { padding:8px 10px; gap:8px; }
+}
 .lp-footer-ico { font-family:'Orbitron',monospace; font-weight:900; font-size:8px; color:var(--accent); letter-spacing:.06em; flex-shrink:0; }
-.lp-footer-title { font-family:'Press Start 2P',monospace; font-size:5.5px; letter-spacing:.08em; color:var(--text); line-height:1.5; }
+.lp-footer-title { font-family:'Press Start 2P',monospace; font-size:5.5px; letter-spacing:.08em; color:var(--text); line-height:1.5; min-width:0; word-break:normal; }
+/* Mobile: title at 5.5px with letter-spacing wraps to single-letter
+   vertical columns inside the cramped 2-col grid. Drop the letter
+   spacing and bump size for readability. */
+@media(max-width:700px) {
+  .lp-footer-title { font-size:7px; letter-spacing:.02em; line-height:1.4; }
+}
 .lp-footer-sub { display:none; }
 .lp-footer-help { padding:10px 18px; display:flex; align-items:center; gap:12px; background:var(--surface); }
 .lp-footer-help-title { font-family:'Orbitron',monospace; font-weight:900; font-size:9px; color:var(--text); letter-spacing:.04em; line-height:1.3; text-transform:uppercase; white-space:nowrap; }
@@ -11966,8 +12006,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // versions tried to read c.price_history_log on collection_items but
     // that array never got populated — dailyPriceRefresh actually writes
     // history to the separate `price_history` Supabase table.
-    let _priceHistorySnapshot = null;   // Map<item_id, {value, date}>
-    let _priceHistoryLoading  = false;
+    // Keyed by period (1 or 7) so the panel can switch between 24h /
+    // 7d snapshots without re-fetching. Each entry is a
+    // Map<item_id, {value, date}> with the OLDEST entry within the
+    // window — that's the value we diff against current_value to get
+    // the movement.
+    let _priceHistorySnapshots = {};       // { 1: Map, 7: Map }
+    let _priceHistoryLoading   = {};       // { 1: bool, 7: bool }
 
     // GLOBAL movers — sourced from catalog_price_history (written by
     // refresh_catalog_prices.py at ~3am). Lets the dashboard surface
@@ -12352,22 +12397,25 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       </div>`;
     }
 
-    async function _loadPriceHistorySnapshot() {
+    async function _loadPriceHistorySnapshot(period) {
+      period = period || _moversPeriod || 7;
       if (!currentUser) return null;
-      if (_priceHistorySnapshot)        return _priceHistorySnapshot;
-      if (_priceHistoryLoading)         return null;
-      _priceHistoryLoading = true;
+      if (_priceHistorySnapshots[period])        return _priceHistorySnapshots[period];
+      if (_priceHistoryLoading[period])          return null;
+      _priceHistoryLoading[period] = true;
       try {
-        // 8 days back so the oldest entry within the 7-day display window
-        // is reliably captured even on edge-of-day boundaries.
-        const cutoff = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+        // Window is the user-selected period plus 1 day of buffer so
+        // edge-of-day timestamps don't drop the oldest entry. For 24h
+        // mode we look back 2 days; for 7d mode we look back 8 days.
+        const windowDays = period + 1;
+        const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
           .toISOString().slice(0, 10);
         const { data, error } = await sb.from('price_history')
           .select('collection_item_id, recorded_value, recorded_at')
           .eq('user_id', currentUser.id)
           .gte('recorded_at', cutoff)
           .order('recorded_at', { ascending: true });
-        if (error || !data) { _priceHistoryLoading = false; return null; }
+        if (error || !data) { _priceHistoryLoading[period] = false; return null; }
         const map = new Map();
         // First entry per item_id wins (ascending order = oldest first).
         for (const row of data) {
@@ -12378,11 +12426,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             });
           }
         }
-        _priceHistorySnapshot = map;
-        _priceHistoryLoading  = false;
+        _priceHistorySnapshots[period] = map;
+        _priceHistoryLoading[period]   = false;
         return map;
       } catch(_) {
-        _priceHistoryLoading = false;
+        _priceHistoryLoading[period] = false;
         return null;
       }
     }
@@ -12392,9 +12440,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // resolves it kicks off a re-render so the panel populates without
       // blocking. Global movers come from catalog_price_history (written
       // by refresh_catalog_prices.py at 3am); user movers come from the
-      // per-user price_history table.
-      if (!_priceHistorySnapshot && !_priceHistoryLoading && currentUser) {
-        _loadPriceHistorySnapshot().then(snap => {
+      // per-user price_history table. Cache keyed by period so the
+      // 24h/7d toggle switches without re-fetching.
+      const _activePeriod = _moversPeriod || 7;
+      if (!_priceHistorySnapshots[_activePeriod] && !_priceHistoryLoading[_activePeriod] && currentUser) {
+        _loadPriceHistorySnapshot(_activePeriod).then(snap => {
           if (snap && snap.size) renderDashboard();
         });
       }
@@ -12411,7 +12461,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // global market section so the panel only shows their collection.
       const globalHtml = (_moversScope === 'global' && _activeGlobal)
         ? _renderGlobalMovers(_activeGlobal) : '';
-      const snap = _priceHistorySnapshot;
+      const snap = _priceHistorySnapshots[_activePeriod] || null;
+      const _periodLabel = (_activePeriod === 1) ? '24h' : (_activePeriod + 'd');
       const movers = [];
 
       for (const c of cards) {
@@ -12425,7 +12476,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (!currentVal) continue;
 
         let oldVal = null;
-        let periodLabel = '7d';
+        let periodLabel = _periodLabel;
 
         // 1. Authoritative source: Supabase price_history table.
         if (snap && snap.has(c.id)) {
@@ -12438,7 +12489,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (!oldVal) {
           const history = c.price_history_log || [];
           if (history.length) {
-            const cutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const cutoffMs = Date.now() - _activePeriod * 24 * 60 * 60 * 1000;
             const cutoffStr = new Date(cutoffMs).toISOString().slice(0, 10);
             const oldEntry = [...history].filter(h => h.date >= cutoffStr).shift();
             if (oldEntry && oldEntry.value && oldEntry.value !== currentVal) {
@@ -12467,14 +12518,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // show a "loading" or "no data" placeholder.
         if (globalHtml) return globalHtml;
         return `<div class="dash-chart-section" style="margin-bottom:16px">
-          <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · last ${_moversPeriod}d</div>
+          <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">MARKET · last ${_periodLabel}</div>
           <div style="font-size:.72rem;color:var(--muted);padding:8px 0">${_globalMoversLoading ? 'Loading market data…' : 'No market movement at this threshold — try a wider period.'}</div>
         </div>`;
       }
       // Personal scope: omit globalHtml entirely.
       if (!movers.length) {
-        const yourHeader = `<div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">YOUR COLLECTION · last 7d</div>`;
-        if (_priceHistoryLoading) {
+        const yourHeader = `<div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">YOUR COLLECTION · last ${_periodLabel}</div>`;
+        if (_priceHistoryLoading[_activePeriod]) {
           return `<div class="dash-chart-section" style="margin-bottom:16px">
             ${yourHeader}
             <div style="font-size:.72rem;color:var(--muted);padding:8px 0">Loading price history…</div>
@@ -12519,7 +12570,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       var personalArrow = (_moversDirection === 'down') ? '↓' : '↑';
       var personalColor = (_moversDirection === 'down') ? 'var(--red)' : 'var(--green)';
       return `<div class="dash-chart-section" style="margin-bottom:16px">
-        <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">YOUR COLLECTION · last 7d</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-bottom:8px;letter-spacing:.08em">YOUR COLLECTION · last ${_periodLabel}</div>
         <div style="font-size:.75rem;color:${personalColor};margin-bottom:8px;letter-spacing:.08em">${personalArrow} Movers</div>
         ${personalList.length ? personalList.map(_moverRow).join('') : `<div style="font-size:.7rem;color:var(--muted);padding:6px 0">No ${_moversDirection === 'down' ? 'declines' : 'gains'} in your collection at this threshold.</div>`}
       </div>`;
@@ -12641,7 +12692,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           return `<tr onclick="viewDetail('${l.id}')" style="cursor:pointer">
             <td>
               <div style="display:flex;align-items:center;gap:8px">
-                ${l.photos && l.photos[0] ? `<img src="${l.photos[0]}" style="height:40px;width:auto;border:1px solid var(--border)">` : ''}
+                ${l.photos && l.photos[0] ? `<img src="${_pickThumbVariant(l.photos[0], 200)}" data-fallback="${l.photos[0]}" style="height:40px;width:auto;border:1px solid var(--border)" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.display='none';this.onerror=null}">` : ''}
                 <span style="color:var(--text)">${l.name}</span>
               </div>
             </td>
@@ -17691,7 +17742,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function renderAdminTable() {
       const tbody = document.getElementById('listingsTable');
       tbody.innerHTML = listings.map((l, i) => `<tr>
-        <td><img src="${(l.photos && l.photos[0]) ? l.photos[0] : ''}" alt="" class="admin-card-img" onerror="this.style.display='none'" /></td>
+        <td><img src="${(l.photos && l.photos[0]) ? _pickThumbVariant(l.photos[0], 200) : ''}" data-fallback="${(l.photos && l.photos[0]) ? l.photos[0] : ''}" alt="" class="admin-card-img" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.display='none';this.onerror=null}" /></td>
         <td>${l.name}</td>
         <td>${l.grade}</td>
         <td>${l.type}</td>
@@ -19207,10 +19258,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         ondragend="allCardsDragEnd(event)"
         ${isGhost ? 'style="opacity:.52"' : ''}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
-        <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+        <img src="${_pickThumbVariant(item.card_image_url || '', 200)}" data-fallback="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
           style="width:44px;height:60px;object-fit:cover;border-radius:3px;background:var(--surface2);flex-shrink:0${isGhost ? ';filter:grayscale(30%);border:1px dashed var(--teal)' : ''}"
           onload="_userPhotoAspectFit(this)"
-          onerror="this.style.visibility='hidden'">
+          onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">
         <div style="flex:1;min-width:0">
           <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.card_name}</div>
           <div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''}</div>
@@ -19236,7 +19287,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         onclick="if(!_allCardsDragging) openBinderCardDetail('${item.id}')">
         <div class="acg-card-art">
           ${item.card_image_url
-            ? `<img src="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" draggable="false">`
+            ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" draggable="false" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">${isGhost ? '♡' : '?'}</div>`}
           ${isGhost
             ? `<span class="want-badge" style="position:absolute;top:3px;right:3px;font-size:.44rem;padding:1px 4px">WANT</span>`
@@ -19480,7 +19531,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const active = currentBinderId === b.id;
         const bg = b.color || '#444';
         const imgHtml = b.cover_image_url
-          ? `<img src="${b.cover_image_url}" alt="${b.name}" loading="lazy"><div class="bsb-fallback" style="display:none;background:${bg}28;color:${bg}">${b.name.slice(0,4)}</div>`
+          ? `<img src="${_pickThumbVariant(b.cover_image_url, 200)}" data-fallback="${b.cover_image_url}" alt="${b.name}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex');this.onerror=null}"><div class="bsb-fallback" style="display:none;background:${bg}28;color:${bg}">${b.name.slice(0,4)}</div>`
           : `<div class="bsb-fallback" style="background:${bg}28;color:${bg}">${b.name.slice(0,6)}</div>`;
         // Three ways to open the edit modal:
         //   1. ✎ overlay button (always visible, top-right of the icon)
@@ -19809,7 +19860,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const active   = currentBinderId === b.id;
         const bgColor  = b.color || '#444';
         const coverHtml = b.cover_image_url
-          ? `<img src="${b.cover_image_url}" alt="${b.name}" loading="lazy">`
+          ? `<img src="${_pickThumbVariant(b.cover_image_url, 400)}" data-fallback="${b.cover_image_url}" alt="${b.name}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
           : `<div class="binder-cover-default" style="background:${bgColor}28">
                <div style="font-size:1rem;color:${bgColor};opacity:.8">⬡</div>
                <div class="binder-cover-text">${b.name}</div>
@@ -20326,9 +20377,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               ondragend="organizeDragEnd(event)">
               <span class="org-num">${pos}</span>
               <span class="org-handle" title="Drag to reorder">⇅</span>
-              <img src="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
+              <img src="${_pickThumbVariant(item.card_image_url || '', 200)}" data-fallback="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
                 class="org-thumb${isGhost ? ' org-thumb-ghost' : ''}"
-                onerror="this.style.visibility='hidden'">
+                onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">
               <div class="org-meta" onclick="openBinderCardDetail('${item.id}')">
                 <div class="org-name">${item.card_name}</div>
                 <div class="org-sub">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''} <span class="org-loc">· p${pageNum}·${slotInPage}</span></div>
@@ -20394,7 +20445,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             style="cursor:grab">
             <div class="binder-card-img-wrap">
               ${item.card_image_url
-                ? `<img src="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''}>`
+                ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''} onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
@@ -21036,8 +21087,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
             <div style="flex-shrink:0;text-align:center;opacity:.7">
               ${item.card_image_url
-                ? `<img src="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px dashed var(--teal);display:block;margin:0 auto;filter:grayscale(30%)"
-                     onerror="_binderImgFail(this,'${item.id}')">`
+                ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px dashed var(--teal);display:block;margin:0 auto;filter:grayscale(30%)"
+                     onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{_binderImgFail(this,'${item.id}')}">`
                 : `<div style="width:120px;height:168px;background:var(--surface2);border:1px dashed var(--teal);display:flex;align-items:center;justify-content:center;color:var(--teal);font-size:2.5rem">♡</div>`}
               <div style="margin-top:8px;font-size:.7rem;color:var(--teal);letter-spacing:.06em">WISHLIST</div>
             </div>
@@ -28809,7 +28860,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
         onclick="${openFn}(${idx})">
         ${card.image_url
-          ? `<img src="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
+          ? `<img src="${_pickThumbVariant(card.image_url, 200)}" data-fallback="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.src='${PLACEHOLDER_IMG}';this.onerror=null}" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
           : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
