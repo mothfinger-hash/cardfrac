@@ -23605,7 +23605,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // ── Beta Tester System ────────────────────────────────────────────────
     // PathBinder Discord invite URL. Swap this in once the Discord exists.
     // Used by the post-claim "join Discord" prompt for new beta testers.
-    var PATHBINDER_DISCORD_URL = 'https://discord.gg/pathbinder';
+    var PATHBINDER_DISCORD_URL = 'https://discord.gg/JEwDTxWs4';
     var BETA_LIMITS = { founding: 10, collector: 50 };
 
     // Global lookup of active beta tester user_id → tier. Loaded once at
@@ -24050,9 +24050,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
 
       var rows = res.data || [];
-      _renderBetaList('Founding',  rows.filter(function(r){ return r.tier === 'founding';  }), 10);
-      _renderBetaList('Collector', rows.filter(function(r){ return r.tier === 'collector'; }), 50);
-      _renderBetaList('Shop',      rows.filter(function(r){ return r.tier === 'shop';      }), 10);
+      _renderBetaList('Founding',   rows.filter(function(r){ return r.tier === 'founding';   }), 10);
+      _renderBetaList('Enthusiast', rows.filter(function(r){ return r.tier === 'enthusiast'; }), 20);
+      _renderBetaList('Collector',  rows.filter(function(r){ return r.tier === 'collector';  }), 50);
+      _renderBetaList('Vendor',     rows.filter(function(r){ return r.tier === 'vendor';     }), 5);
+      _renderBetaList('Shop',       rows.filter(function(r){ return r.tier === 'shop';       }), 3);
     }
 
     function _renderBetaList(label, rows, cap) {
@@ -24164,13 +24166,44 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (res.error) { showToast('Invite failed: ' + res.error.message); return; }
 
       if (emailInput) emailInput.value = '';
+      var info = (res.data && res.data[0]) || {};
+
       if (mode === 'code') {
-        // Copy code to clipboard for the admin to share
+        // Code-only mode (no email given) — copy code to clipboard for the
+        // admin to share manually. Skip the email send.
         try { await navigator.clipboard.writeText(code); } catch(_) {}
         showToast('Code generated and copied: ' + code);
       } else {
-        var info = (res.data && res.data[0]) || {};
-        showToast(info.claimed ? 'Granted to existing user' : 'Invite saved — will apply when they sign up');
+        // Email mode — fire the Resend invite email immediately.
+        // Best-effort: if Resend isn't configured the admin still sees
+        // the invite was saved, just without the email going out.
+        if (info.claimed) {
+          showToast('Granted to existing user');
+        } else {
+          showToast('Invite saved — sending email…');
+        }
+        try {
+          const sess = await supabase.auth.getSession();
+          const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
+          if (tok) {
+            const r = await fetch('/api/send-beta-invite', {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+              body:    JSON.stringify({ email: email, tier: tier, code: code }),
+            });
+            const data = await r.json();
+            if (r.ok && data.emailed > 0) {
+              showToast('Invite email sent to ' + email);
+            } else if (data.skipped === 'resend_not_configured') {
+              showToast('Saved — but Resend not configured, email not sent. Share code manually: ' + code);
+            } else if (!r.ok) {
+              showToast('Saved — but email send failed: ' + (data.error || r.status));
+            }
+          }
+        } catch (e) {
+          console.warn('[beta-invite-email] failed:', e);
+          showToast('Saved — but email send failed. Share code manually: ' + code);
+        }
       }
       renderAdminBetaTesters();
       // Refresh the public badge cache + re-render anywhere badges show
@@ -24255,11 +24288,27 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       var badge = document.getElementById('betaDiscordTierBadge');
       var join  = document.getElementById('betaDiscordJoinBtn');
       if (badge) {
-        badge.textContent = tier === 'founding'
-          ? 'You\'ve been granted Founding Beta access — permanent Vendor tier.'
-          : tier === 'collector'
-            ? 'You\'ve been granted Collector Beta access — permanent Collector tier.'
-            : 'Your beta access is active.';
+        var msg;
+        switch (tier) {
+          case 'founding':
+            msg = 'Founding Beta access — Vendor tier features unlocked (sealed + non-TCG listings + product scanner).';
+            break;
+          case 'enthusiast':
+            msg = 'Enthusiast Beta access — bulk import, sales archive, multi-binder.';
+            break;
+          case 'collector':
+            msg = 'Collector Beta access — price tracking + watchlist on every listing.';
+            break;
+          case 'vendor':
+            msg = 'Vendor Beta access — sealed + non-TCG listings + product scanner.';
+            break;
+          case 'shop':
+            msg = 'Shop Beta access — unlimited listings, 1-year promotional window.';
+            break;
+          default:
+            msg = 'Your beta access is active.';
+        }
+        badge.textContent = msg;
       }
       if (join) join.href = PATHBINDER_DISCORD_URL;
       openModal('betaDiscordModal');

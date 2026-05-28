@@ -1,4 +1,18 @@
 // PathBinder Service Worker
+// v347 — Beta invite emails (Resend):
+//  - New /api/send-beta-invite endpoint fires a branded HTML email
+//    to a beta invitee right after admin_invite_beta creates the row.
+//    Email uses dashboard.jpg as background, teal-bordered card on
+//    navy bg, embedded pb_logo.png. Tier-specific feature list +
+//    big "Accept Invite" CTA + prominent Discord callout. Plain-text
+//    fallback included.
+//  - Wired into the admin "send beta code" flow — when an email is
+//    provided (vs code-only mode), the invite email auto-fires.
+//    Surfaces clear toasts for the resend-not-configured / failure cases.
+//  - Beta panel now renders all 5 tier sections (Founding, Enthusiast,
+//    Collector, Vendor, Shop) instead of the original 3.
+//  - showBetaDiscordPrompt() copy updated for all 5 tiers (was only
+//    handling founding + collector).
 // v346 — Admin nav badge + manual email test:
 //  - Admin nav-tab now shows the same unread-count badge that the
 //    dropdown "Admin Alerts" item shows, so the admin doesn't need to
@@ -144,7 +158,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v346';
+const CACHE = 'pathbinder-v347';
 
 const PRECACHE = [
   '/offline.html',
