@@ -20,50 +20,84 @@ const PATHBINDER_BLURB = [
   "We're hand-picking a small group of testers to break things, find rough edges, and tell us what's missing before we open it up to everyone. You're one of them.",
 ].join('|');   // joined with a pipe so the render fn can split + double-paragraph
 
+// `expires` field controls the post-beta conversion behavior:
+//   'permanent'  → founders only, no expiry, no conversion
+//   'to-free'    → every other tier (enthusiast, collector, vendor,
+//                  shop) — account drops to Free after 1 year unless
+//                  they subscribe at any point during the window
 const TIER_COPY = {
   founding: {
-    title:    'Founding Beta — Vendor tier unlocked',
-    pitch:    "You're a founder. The original promise was the most-feature-rich seller tier on the platform, and that's exactly what you're getting — permanently.",
+    title:   'Founding Beta — Vendor tier, permanent',
+    pitch:   "You're a founder — one of a handful. The deal: permanent access to one of the most feature-rich tiers we offer. You sell sealed + non-TCG, you use the scanner, you get every tracking + organizational tool. And unlike every other beta tier, yours doesn't have a clock.",
+    expires: 'permanent',
     features: [
-      'List sealed product, non-TCG items (Funko, manga, posters), AND TCG singles — 150 active listings',
-      'Product scanner with OCR autofill for non-TCG items',
-      'Bulk CSV import, sales archive, multi-binder, live price tracking, watchlist alerts',
+      'Permanent Vendor-tier access — never expires, never auto-converts',
+      'Sell sealed product, non-TCG items (Funko, manga, posters), AND TCG singles — up to 150 active listings (cycling allows up to ~150 sales/month)',
+      'Card scanner + product scanner — snap any TCG card OR Funko box; OCR autofills the binder/listing',
+      'Bulk CSV import, sales archive across every channel, multi-binder organization',
+      'Live price tracking + watchlist alerts + daily / weekly market movers panel',
+      'Trade analyzer — see at a glance if a proposed trade is balanced by current market value',
+      'Easy shipping — buy + print Shippo labels in-app, no carrier-account juggling',
+      'Founding-member badge on your profile + early access to features before public rollout',
     ],
   },
   enthusiast: {
-    title:    'Enthusiast Beta',
-    pitch:    "Enthusiasts go beyond tracking — you can actually sell on the marketplace, bulk-import a whole collection at once, and split things across multiple binders. Built for people who buy and trade often.",
+    title:   'Enthusiast Beta',
+    pitch:   "Enthusiast is built for collectors who buy and trade often — you actually sell on the marketplace, bulk-import a whole collection at once, and split things across multiple binders without losing track.",
+    expires: 'to-free',
     features: [
-      'List up to 40 TCG singles on the marketplace at once',
-      'Bulk CSV import, sales archive, multi-binder organization',
-      'Live price tracking + watchlist alerts on every listing',
+      'Up to 40 active TCG-single listings at a time — cycle through, sell ~40 cards a month as listings turn over',
+      'Card scanner — point your phone at any TCG card, auto-fill it into your binder',
+      'Bulk CSV import — drop a spreadsheet, get a populated binder',
+      'Sales archive aggregating online + offline sales in one view',
+      'Multi-binder organization (sets, builds, trade piles — split however you want)',
+      'Live price tracking + watchlist alerts + daily / weekly market movers',
+      'Trade analyzer to balance proposed trades by current market value',
+      'Easy shipping — buy + print Shippo labels in-app when you sell',
     ],
   },
   collector: {
-    title:    'Collector Beta',
-    pitch:    "Collector tier is for people who want to know what their collection is actually worth and get pinged when something they're watching moves. No selling required — just better visibility into a pile of cards.",
+    title:   'Collector Beta',
+    pitch:   "Collector tier is for people who want to actually know what their collection is worth and get pinged when something they're watching moves. No selling required — just better visibility into the pile.",
+    expires: 'to-free',
     features: [
-      'Live price tracking on every card in your binder',
+      'Card scanner — point your phone at any TCG card, auto-fill it into your binder',
+      'Live price tracking on every card in your binder, refreshed daily',
+      'Daily / weekly market movers panel — see what is heating up before it spikes',
       'Watchlist alerts when prices on cards you want move',
-      'Up to 3 card funds for goal-based collecting',
+      'Up to 3 card funds for goal-based collecting (save toward a specific grail)',
+      'Multi-binder organization to split collections by set, era, or build',
+      'Trade analyzer — see if a proposed trade is balanced before you accept',
+      'Unlimited cards in your binder (free tier caps at 200)',
     ],
   },
   vendor: {
-    title:    'Vendor Beta',
-    pitch:    "Vendor tier is for people running an actual store-on-the-side. Sealed product, non-TCG items, product scanner, and a lower commission rate than Enthusiast.",
+    title:   'Vendor Beta',
+    pitch:   "Vendor tier is for people running an actual store-on-the-side — sealed product, non-TCG items, product scanner, and a lower commission rate than Enthusiast.",
+    expires: 'to-free',
     features: [
-      '150 active marketplace listings — sealed + non-TCG + singles',
-      'Product scanner with OCR autofill for Funko Pops, manga, etc.',
-      '6% commission (vs 7% on Enthusiast)',
+      'Up to 150 active marketplace listings — sealed + non-TCG + singles (cycling allows up to ~150 sales/month)',
+      'Card scanner + product scanner — TCG cards AND Funko Pops / manga / posters / plush',
+      'Bulk CSV import — onboard hundreds of SKUs at once',
+      'Easy shipping — buy + print Shippo labels in-app, batched packing slips for multi-sales days',
+      'Sales archive aggregating every channel (PathBinder + offline)',
+      'Live price tracking + daily / weekly market movers + watchlist alerts',
+      'Trade analyzer + 6% commission (vs 7% on Enthusiast)',
+      'Vendor-tier badge on your profile so buyers see you mean business',
     ],
   },
   shop: {
-    title:    'Shop Beta — unlimited tier',
-    pitch:    "Shop is the top tier — unlimited listings, the lowest commission on the platform, and a 1-year promotional window included with this beta.",
+    title:   'Shop Beta — unlimited tier',
+    pitch:   "Shop is the top tier — unlimited listings, the lowest commission on the platform, and the full pro toolkit. Built for actual brick-and-mortars + serious online sellers.",
+    expires: 'to-free',
     features: [
-      'Unlimited concurrent marketplace listings',
-      '5% commission (lowest available)',
-      '1-year promotional window included with this beta',
+      'Unlimited concurrent marketplace listings — no monthly sales cap',
+      'Card scanner + product scanner — TCG cards AND every non-TCG category',
+      '5% commission — lowest rate on the platform',
+      'Easy shipping — Shippo labels + batched packing slips for bulk fulfillment',
+      'Bulk CSV import + sales archive + revenue dashboard across every channel',
+      'Live price tracking + daily / weekly market movers + trade analyzer',
+      'Shop-tier badge on your profile (your storefront looks the part)',
     ],
   },
 };
@@ -80,6 +114,7 @@ function renderEmailHtml({ email, tier, code, inviteeName, siteOrigin }) {
   const discordUrl = 'https://discord.gg/JEwDTxWs4';
   const logoUrl = siteOrigin + '/pb_logo.png';
   const bgUrl   = siteOrigin + '/dashboard.jpg';
+  const noiseUrl = siteOrigin + '/noise.png';
   const greeting = inviteeName ? ('Hey ' + escapeHtml(inviteeName) + ',') : 'Hey,';
   const blurbParas = PATHBINDER_BLURB.split('|').map(escapeHtml);
 
@@ -88,6 +123,31 @@ function renderEmailHtml({ email, tier, code, inviteeName, siteOrigin }) {
       escapeHtml(f) +
     '</li>'
   ).join('');
+
+  // Post-beta conversion message. Three branches, all rendered as a
+  // small slate panel above the footer so the timeline expectation is
+  // set in writing AND visible without scrolling past the CTA.
+  let timelineHtml;
+  if (tierCopy.expires === 'permanent') {
+    timelineHtml = ''
+      + '<div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.14em;color:#1AC7A0;text-transform:uppercase;margin-bottom:6px;font-weight:700">'
+      +   'Beta timeline'
+      + '</div>'
+      + '<div style="font-size:13px;color:#d8e0e8;line-height:1.6">'
+      +   '<strong style="color:#ffffff">Permanent.</strong> Founding access never expires and never auto-converts. You keep these features as long as PathBinder exists.'
+      + '</div>';
+  } else {
+    // to-free (everyone except founders — including shop, for policy
+    // consistency: all paid betas drop to Free if not subscribed)
+    timelineHtml = ''
+      + '<div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.14em;color:#FFD93D;text-transform:uppercase;margin-bottom:6px;font-weight:700">'
+      +   '⚠ Beta timeline'
+      + '</div>'
+      + '<div style="font-size:13px;color:#d8e0e8;line-height:1.6">'
+      +   'Your beta runs for <strong style="color:#ffffff">1 year</strong>. After that, your account converts to the <strong style="color:#ffffff">Free tier</strong> unless you subscribe at any point during the window. '
+      +   'We\'ll email you 30 days before the window closes so you can decide. No surprise charges, no auto-billing.'
+      + '</div>';
+  }
 
   // Rounded corners use border-radius. Outlook strips it (squared
   // corners as fallback), Apple Mail / Gmail / iOS Mail honor it.
@@ -100,14 +160,18 @@ function renderEmailHtml({ email, tier, code, inviteeName, siteOrigin }) {
   <title>You're invited to PathBinder</title>
 </head>
 <body style="margin:0;padding:0;background:#0a0e1a;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;color:#d8e0e8;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0a0e1a;background-image:url('${bgUrl}');background-size:cover;background-position:center;background-repeat:no-repeat">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0a0e1a;background-image:url('${noiseUrl}'), url('${bgUrl}');background-size:300px 300px, cover;background-position:top left, center;background-repeat:repeat, no-repeat">
     <tr>
       <td align="center" style="padding:36px 16px">
 
-        <!-- Centered card with rounded corners. Card sits on the navy
-             background so when the dashboard.jpg renders, you see the
-             card floating over the screenshot. -->
-        <table role="presentation" width="580" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;width:100%;background:rgba(10,14,26,0.94);border:1px solid #1AC7A0;border-radius:14px">
+        <!-- Centered card with rounded corners + teal hologram glow.
+             Card sits on the navy background so when the dashboard.jpg
+             renders, you see the card floating over the screenshot.
+             The box-shadow stack reads as a soft cyan halo: inner tight
+             ring (clean edge), middle bloom, outer atmospheric haze.
+             Outlook on Windows strips box-shadow — graceful degradation
+             back to just the solid teal border. -->
+        <table role="presentation" width="580" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;width:100%;background:rgba(10,14,26,0.94);border:1px solid #1AC7A0;border-radius:14px;box-shadow:0 0 0 1px rgba(26,199,160,0.4), 0 0 28px rgba(26,199,160,0.35), 0 0 64px rgba(26,199,160,0.18)">
           <tr>
             <td style="padding:34px 30px 14px;text-align:center">
               <img src="${logoUrl}" alt="PathBinder" width="160" style="display:inline-block;max-width:160px;height:auto;margin-bottom:14px" />
@@ -157,17 +221,33 @@ function renderEmailHtml({ email, tier, code, inviteeName, siteOrigin }) {
             </td>
           </tr>
 
+          <!-- Beta timeline — what happens after 1 year. Rendered as
+               a slate panel between perks and CTA so people see the
+               terms BEFORE clicking Accept. Founders get a different
+               (much friendlier) variant. -->
+          <tr>
+            <td style="padding:18px 36px 0">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:rgba(255,217,61,0.04);border:1px solid #1f2939;border-radius:10px">
+                <tr>
+                  <td style="padding:14px 18px">
+                    ${timelineHtml}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
           <!-- Invite code + redeem CTA -->
           <tr>
-            <td style="padding:28px 36px 8px;text-align:center">
+            <td style="padding:24px 36px 8px;text-align:center">
               <div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.14em;color:#6a7888;text-transform:uppercase;margin-bottom:8px">
                 Your invite code
               </div>
-              <div style="font-family:'Courier New',monospace;font-size:20px;letter-spacing:0.16em;color:#1AC7A0;background:rgba(26,199,160,0.08);border:1px dashed #1AC7A0;border-radius:10px;padding:14px 20px;margin:0 auto 22px;display:inline-block;font-weight:700">
+              <div style="font-family:'Courier New',monospace;font-size:20px;letter-spacing:0.16em;color:#1AC7A0;background:rgba(26,199,160,0.08);border:1px dashed #1AC7A0;border-radius:10px;padding:14px 20px;margin:0 auto 22px;display:inline-block;font-weight:700;box-shadow:0 0 12px rgba(26,199,160,0.25)">
                 ${escapeHtml(code)}
               </div>
               <br />
-              <a href="${redeemUrl}" style="display:inline-block;background:#1AC7A0;color:#0a0e1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:800;text-decoration:none;padding:14px 34px;letter-spacing:0.06em;border-radius:10px">
+              <a href="${redeemUrl}" style="display:inline-block;background:#1AC7A0;color:#0a0e1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:800;text-decoration:none;padding:14px 34px;letter-spacing:0.06em;border-radius:10px;box-shadow:0 0 20px rgba(26,199,160,0.5), 0 0 40px rgba(26,199,160,0.25)">
                 Start Your Path &rarr;
               </a>
               <div style="font-size:11px;color:#6a7888;margin-top:12px">
@@ -190,7 +270,7 @@ function renderEmailHtml({ email, tier, code, inviteeName, siteOrigin }) {
                     <p style="font-size:13px;color:#d8e0e8;line-height:1.65;margin:0 0 14px">
                       The Discord is where beta testers report bugs, request features, and hang out with the small team building this. If you join the beta, please join Discord too — it's the fastest path to actually shaping what ships next.
                     </p>
-                    <a href="${discordUrl}" style="display:inline-block;border:1px solid #B87333;color:#B87333;font-family:Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;text-decoration:none;padding:10px 22px;letter-spacing:0.06em;border-radius:8px">
+                    <a href="${discordUrl}" style="display:inline-block;border:1px solid #B87333;color:#B87333;font-family:Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;text-decoration:none;padding:10px 22px;letter-spacing:0.06em;border-radius:8px;box-shadow:0 0 14px rgba(184,115,51,0.3)">
                       Join Discord &rarr;
                     </a>
                     <!-- Plain-text fallback URL in case the link isn't
@@ -232,6 +312,13 @@ function renderEmailText({ email, tier, code, inviteeName, siteOrigin }) {
   const redeemUrl = siteOrigin + '/?invite=' + encodeURIComponent(code);
   const greeting = inviteeName ? ('Hey ' + inviteeName + ',') : 'Hey,';
   const blurbParas = PATHBINDER_BLURB.split('|');
+  let timeline;
+  if (tierCopy.expires === 'permanent') {
+    timeline = 'BETA TIMELINE: Permanent. Founding access never expires.';
+  } else {
+    timeline = 'BETA TIMELINE: Runs 1 year, then your account converts to Free '
+             + 'unless you subscribe. 30-day heads-up email before the window closes.';
+  }
   return [
     greeting,
     '',
@@ -247,6 +334,8 @@ function renderEmailText({ email, tier, code, inviteeName, siteOrigin }) {
     '',
     'WHAT YOU GET:',
     ...tierCopy.features.map(f => '  - ' + f),
+    '',
+    timeline,
     '',
     'YOUR INVITE CODE: ' + code,
     '',

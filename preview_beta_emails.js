@@ -49,7 +49,8 @@ function main() {
     // through this rewrite).
     html = html
       .replace(SITE_ORIGIN + '/pb_logo.png',   '../pb_logo.png')
-      .replace(SITE_ORIGIN + '/dashboard.jpg', '../dashboard.jpg');
+      .replace(SITE_ORIGIN + '/dashboard.jpg', '../dashboard.jpg')
+      .replace(SITE_ORIGIN + '/noise.png',     '../noise.png');
     const outPath = path.join(OUTPUT_DIR, `beta-invite-${tier}.html`);
     fs.writeFileSync(outPath, html);
     console.log(`  → ${outPath}`);

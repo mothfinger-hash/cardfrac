@@ -24,7 +24,9 @@
 --   1. Recreates claim_beta_on_profile_create() — auto-claim path
 --   2. Recreates admin_invite_beta() — direct invite path
 --   3. Recreates claim_beta_code() — code-redeem path
---   4. Recreates downgrade_expired_shop_beta() — shop expiry sweep
+--   4. Recreates downgrade_expired_beta() — sweep for ALL non-founding
+--      tiers whose 1-year window has elapsed; drops them to Free.
+--      (Renamed from downgrade_expired_shop_beta; old signature dropped.)
 --   5. Heals any current rows that ended up on the new vendor tier
 --      via the over-granting code (defensive — should be empty
 --      assuming migration_tier_rename_vendor_to_enthusiast.sql ran
@@ -64,7 +66,18 @@ BEGIN
     ORDER BY invited_at ASC
     LIMIT 1;
   IF FOUND THEN
-    v_exp := CASE WHEN v_invite.tier = 'shop' THEN now() + INTERVAL '1 year' ELSE NULL END;
+    -- 1-year expiry for every non-founding tier. Founding is the only
+    -- permanent grant (the original founders' promise); all other betas
+    -- expire after a year and either drop to Free (enthusiast / collector
+    -- / vendor) or step down one tier (shop → vendor) — see the
+    -- downgrade_expired_beta() sweep function below for the conversion
+    -- logic. The email template (api/_lib/beta-invite-template.js)
+    -- communicates this expectation to invitees upfront so the timeline
+    -- isn't a surprise.
+    v_exp := CASE
+      WHEN v_invite.tier = 'founding' THEN NULL
+      ELSE now() + INTERVAL '1 year'
+    END;
     UPDATE public.beta_testers
       SET user_id = NEW.id, claimed_at = now(), expires_at = v_exp
       WHERE beta_testers.id = v_invite.id;
@@ -182,7 +195,14 @@ BEGIN
     SELECT profiles.id INTO v_user_id FROM public.profiles
       WHERE lower(profiles.email) = lower(p_email) LIMIT 1;
   END IF;
-  v_exp := CASE WHEN p_tier = 'shop' AND v_user_id IS NOT NULL THEN now() + INTERVAL '1 year' ELSE NULL END;
+  -- All non-founding tiers get a 1-year expiry. Founding is permanent.
+  -- v_user_id check on shop is no longer relevant since we now apply the
+  -- 1-year window even to email-only invites that haven't claimed yet —
+  -- once they sign up, claim_beta_on_profile_create reads expires_at.
+  v_exp := CASE
+    WHEN p_tier = 'founding' THEN NULL
+    ELSE now() + INTERVAL '1 year'
+  END;
   INSERT INTO public.beta_testers (tier, invited_email, invite_code, user_id, invited_by, claimed_at, expires_at, notes)
   VALUES (
     p_tier, p_email, p_code, v_user_id, auth.uid(),
@@ -246,7 +266,10 @@ BEGIN
   IF v_invite.tier = 'collector'  AND v_count >= 50 THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Collector beta is full';  RETURN; END IF;
   IF v_invite.tier = 'vendor'     AND v_count >= 5  THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Vendor beta is full';     RETURN; END IF;
   IF v_invite.tier = 'shop'       AND v_count >= 3  THEN RETURN QUERY SELECT NULL::TEXT, FALSE, 'Shop beta is full';       RETURN; END IF;
-  v_exp := CASE WHEN v_invite.tier = 'shop' THEN now() + INTERVAL '1 year' ELSE NULL END;
+  v_exp := CASE
+    WHEN v_invite.tier = 'founding' THEN NULL
+    ELSE now() + INTERVAL '1 year'
+  END;
   UPDATE public.beta_testers
     SET user_id    = auth.uid(),
         claimed_at = now(),
@@ -272,69 +295,71 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.claim_beta_code(TEXT) TO authenticated;
 
 -- 4. Shop expiry sweep — drops expired shop betas to enthusiast.
-CREATE OR REPLACE FUNCTION public.downgrade_expired_shop_beta()
+-- Beta expiry sweep. Runs over EVERY non-founding tier whose expires_at
+-- has elapsed, drops the user's profile to subscription_tier='free',
+-- and revokes the beta row so they can't re-claim. Founding-beta users
+-- are never touched (their grants are permanent by design).
+--
+-- Skips users who:
+--   • Already have a Stripe subscription (they upgraded during the
+--     beta window — don't clobber a paid plan)
+--   • Have already been moved off the beta tier (e.g. cancelled,
+--     downgraded manually, or revoked already)
+--
+-- Run nightly via cron / scheduled task / admin button.
+-- Returns the number of profiles actually downgraded.
+--
+-- Drop the old shop-only signature too so re-runs don't leave it lying
+-- around alongside the new generic one.
+DROP FUNCTION IF EXISTS public.downgrade_expired_shop_beta();
+
+CREATE OR REPLACE FUNCTION public.downgrade_expired_beta()
 RETURNS INT AS $$
 DECLARE
   v_count INT := 0;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = TRUE) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles
+     WHERE profiles.id = auth.uid()
+       AND profiles.is_admin = TRUE
+  ) THEN
     RAISE EXCEPTION 'Admin only';
   END IF;
+
   WITH expired AS (
-    SELECT bt.user_id FROM public.beta_testers bt
-    JOIN public.profiles p ON p.id = bt.user_id
-    WHERE bt.tier = 'shop'
-      AND bt.expires_at IS NOT NULL
-      AND bt.expires_at < now()
-      AND bt.revoked_at IS NULL
-      AND p.subscription_tier = 'shop'
+    SELECT bt.user_id
+      FROM public.beta_testers bt
+      JOIN public.profiles p ON p.id = bt.user_id
+     WHERE bt.tier <> 'founding'
+       AND bt.expires_at IS NOT NULL
+       AND bt.expires_at < now()
+       AND bt.revoked_at IS NULL
+       AND p.stripe_subscription_id IS NULL
+       AND p.subscription_tier IN ('enthusiast','collector','vendor','shop')
   )
   UPDATE public.profiles p SET
-    subscription_tier = 'enthusiast',  -- was 'vendor' pre-rename
+    subscription_tier = 'free',
     subscription_expires_at = NULL
-  FROM expired e WHERE p.id = e.user_id;
+  FROM expired e
+  WHERE p.id = e.user_id;
   GET DIAGNOSTICS v_count = ROW_COUNT;
+
   UPDATE public.beta_testers SET revoked_at = now()
-  WHERE tier = 'shop'
-    AND expires_at IS NOT NULL
-    AND expires_at < now()
-    AND revoked_at IS NULL;
+   WHERE beta_testers.tier <> 'founding'
+     AND beta_testers.expires_at IS NOT NULL
+     AND beta_testers.expires_at < now()
+     AND beta_testers.revoked_at IS NULL;
+
   RETURN v_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-GRANT EXECUTE ON FUNCTION public.downgrade_expired_shop_beta() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.downgrade_expired_beta() TO authenticated;
 
--- ============================================================
--- 5. Heal any rows accidentally on the new vendor tier from beta
---    over-granting. If migration_tier_rename_vendor_to_enthusiast.sql
---    already ran, this should affect 0 rows — anyone on 'vendor' at
---    that point got renamed to 'enthusiast'.
---
---    Skip this block if you want to leave currently-on-vendor users
---    where they are (e.g. if anyone has paid for the new $75 vendor
---    tier already and you don't want to clobber that).
--- ============================================================
-DO $$
-DECLARE
-  v_affected INT;
-BEGIN
-  -- Only fix rows that look like beta-granted vendor (not paid).
-  -- A founding beta tester whose subscription_expires_at is NULL and
-  -- whose tier currently reads 'vendor' is over-granted.
-  UPDATE public.profiles p
-  SET    subscription_tier = 'enthusiast'
-  WHERE  p.subscription_tier = 'vendor'
-    AND  EXISTS (
-      SELECT 1 FROM public.beta_testers bt
-      WHERE bt.user_id = p.id
-        AND bt.tier = 'founding'
-        AND bt.revoked_at IS NULL
-    )
-    AND  p.subscription_expires_at IS NULL;  -- skip if paid-renewal exp is set
-  GET DIAGNOSTICS v_affected = ROW_COUNT;
-  RAISE NOTICE 'Beta over-grant heal: % founding-beta user(s) moved from vendor → enthusiast.', v_affected;
-END $$;
+-- (Removed: an older "founding-beta vendor → enthusiast" heal block
+-- lived here. That block was the OPPOSITE of current policy — founders
+-- now correctly land on the new Vendor tier. The heal step that moves
+-- founders TO vendor lives at the top of this file (section 1b).)
 
 -- ============================================================
 -- Verify:
@@ -349,5 +374,5 @@ END $$;
 --   -- Should return the four updated functions
 --   SELECT proname FROM pg_proc
 --   WHERE proname IN ('claim_beta_on_profile_create','admin_invite_beta',
---                     'claim_beta_code','downgrade_expired_shop_beta');
+--                     'claim_beta_code','downgrade_expired_beta');
 -- ============================================================
