@@ -8266,7 +8266,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (connectStatus.loading) return;
       connectStatus.loading = true;
       try {
-        const sess = supabase && supabase.auth ? await supabase.auth.getSession() : null;
+        const sess = sb && sb.auth ? await sb.auth.getSession() : null;
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) { connectStatus.loading = false; return; }
         const r = await fetch('/api/connect-status', {
@@ -8318,7 +8318,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return;
       }
       try {
-        const sess = await supabase.auth.getSession();
+        const sess = await sb.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) { showToast('Sign in again to connect Stripe'); return; }
         showToast('Opening Stripe onboarding…');
@@ -8537,7 +8537,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       btn.textContent = 'Deleting…';
       sts.textContent = '';
       try {
-        const sess = await supabase.auth.getSession();
+        const sess = await sb.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) throw new Error('Not signed in');
         const r = await fetch('/api/delete-account', {
@@ -8586,7 +8586,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     async function cancelAccountDeletion() {
       if (!currentUser) return;
       try {
-        const sess = await supabase.auth.getSession();
+        const sess = await sb.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) { showToast('Sign in again to cancel deletion'); return; }
         showToast('Cancelling deletion…');
@@ -14245,7 +14245,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (btn) { btn.disabled = true; btn.textContent = 'Refunding…'; }
 
       try {
-        const sess = await supabase.auth.getSession();
+        const sess = await sb.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) throw new Error('Not signed in');
         const r = await fetch('/api/seller-refund', {
@@ -14474,7 +14474,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // don't surface a failure to the seller because the dispute is
       // already in the admin queue regardless.
       try {
-        const sess = await supabase.auth.getSession();
+        const sess = await sb.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (tok) {
           fetch('/api/admin-notify-dispute', {
@@ -15977,7 +15977,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // bypasses the disputed-order DB lookup and fires a synthetic
         // "wiring check" email to ADMIN_EMAIL_RECIPIENTS. Useful for
         // verifying Resend env vars without polluting the DB.
-        const sess = await supabase.auth.getSession();
+        const sess = await sb.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) { showToast('Sign in again'); return; }
 
@@ -16110,7 +16110,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     async function adminResolveDisputeForBuyer(orderId) {
       if (!confirm('Refund the buyer in full? This issues a Stripe refund (reverses the application fee on Connect orders) and restores the listing. Cannot be undone.')) return;
       try {
-        const sess = await supabase.auth.getSession();
+        const sess = await sb.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) { showToast('Sign in again'); return; }
         showToast('Refunding…');
@@ -24327,7 +24327,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           showToast('Invite saved — sending email…');
         }
         try {
-          const sess = await supabase.auth.getSession();
+          const sess = await sb.auth.getSession();
           const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
           if (tok) {
             const r = await fetch('/api/send-beta-invite', {
