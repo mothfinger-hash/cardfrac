@@ -103,32 +103,64 @@ module.exports = async function handler(req, res) {
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch (_) { body = {}; }
   }
-  const orderId = body && body.orderId;
-  if (!orderId) return res.status(400).json({ error: 'orderId required' });
+  const orderId  = body && body.orderId;
+  const testMode = !!(body && body.test);
 
-  // ── Verify the order really IS disputed ─────────────────────────────
-  // Don't trust the caller — re-read from the DB so a stale or malicious
-  // request can't trigger emails for orders that aren't actually disputed.
-  const { data: order, error: orderErr } = await sb
-    .from('orders')
-    .select('id, status, seller_id, buyer_id, listing_id, return_reason, return_reason_detail, amount, created_at')
-    .eq('id', orderId)
-    .maybeSingle();
-  if (orderErr || !order) return res.status(404).json({ error: 'Order not found' });
-  if (order.status !== 'disputed') {
-    return res.status(400).json({ error: 'Order is not disputed (status: ' + order.status + ')' });
-  }
-
-  // Only the seller (who escalated) OR an admin can trigger the email.
-  // Prevents random users from causing email spam by poking the endpoint.
-  if (order.seller_id !== user.id) {
+  // ── Test mode short-circuit ─────────────────────────────────────────
+  // Lets the admin verify Resend wiring (API key + From domain + recipient
+  // list) without needing a real disputed order in the DB. Admin-only:
+  // checks profiles.is_admin before proceeding. Bypasses the order lookup
+  // and uses synthetic values everywhere downstream.
+  let order, isTest = false;
+  if (testMode) {
     const { data: prof } = await sb
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .maybeSingle();
     if (!prof || !prof.is_admin) {
-      return res.status(403).json({ error: 'Only the seller or an admin can trigger this notification' });
+      return res.status(403).json({ error: 'Admin only for test mode' });
+    }
+    order = {
+      id:                    '00000000-0000-0000-0000-000000000000',
+      status:                'disputed',
+      seller_id:             user.id,
+      buyer_id:              user.id,
+      listing_id:            null,
+      return_reason:         'not_as_described',
+      return_reason_detail:  'This is a TEST email triggered from the admin panel. No real dispute exists.',
+      amount:                42.00,
+      created_at:            new Date().toISOString(),
+    };
+    isTest = true;
+  } else {
+    if (!orderId) return res.status(400).json({ error: 'orderId required' });
+
+    // ── Verify the order really IS disputed ───────────────────────────
+    // Don't trust the caller — re-read from the DB so a stale or malicious
+    // request can't trigger emails for orders that aren't actually disputed.
+    const { data: orderRow, error: orderErr } = await sb
+      .from('orders')
+      .select('id, status, seller_id, buyer_id, listing_id, return_reason, return_reason_detail, amount, created_at')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (orderErr || !orderRow) return res.status(404).json({ error: 'Order not found' });
+    if (orderRow.status !== 'disputed') {
+      return res.status(400).json({ error: 'Order is not disputed (status: ' + orderRow.status + ')' });
+    }
+    order = orderRow;
+
+    // Only the seller (who escalated) OR an admin can trigger the email.
+    // Prevents random users from causing email spam by poking the endpoint.
+    if (order.seller_id !== user.id) {
+      const { data: prof } = await sb
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!prof || !prof.is_admin) {
+        return res.status(403).json({ error: 'Only the seller or an admin can trigger this notification' });
+      }
     }
   }
 
@@ -171,8 +203,8 @@ module.exports = async function handler(req, res) {
   }
 
   // ── Pull a card name for the email body ────────────────────────────
-  let cardName = 'Marketplace order';
-  if (order.listing_id) {
+  let cardName = isTest ? 'Test Card (synthetic)' : 'Marketplace order';
+  if (!isTest && order.listing_id) {
     const { data: listing } = await sb
       .from('listings')
       .select('name')
@@ -181,14 +213,16 @@ module.exports = async function handler(req, res) {
     if (listing && listing.name) cardName = listing.name;
   }
 
-  const shortId = String(order.id).slice(0, 8).toUpperCase();
+  const shortId = isTest ? 'TESTTEST' : String(order.id).slice(0, 8).toUpperCase();
   const reason  = order.return_reason || 'unspecified';
   const detail  = order.return_reason_detail || '';
   const amount  = (order.amount || 0).toFixed(2);
   const site    = process.env.NEXT_PUBLIC_SITE_URL || 'https://pathbinder.gg';
   const deepLink = site + '/?admin=disputes&order=' + encodeURIComponent(order.id);
 
-  const subject = '[PathBinder] Order #' + shortId + ' escalated to dispute';
+  const subject = isTest
+    ? '[PathBinder] TEST — admin alert wiring check'
+    : '[PathBinder] Order #' + shortId + ' escalated to dispute';
 
   const html = ''
     + '<div style="font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px">'

@@ -1,4 +1,13 @@
 // PathBinder Service Worker
+// v350 — Admin test-email button no longer needs a real disputed order:
+//  /api/admin-notify-dispute now accepts { test: true } in the POST
+//  body. Admin-only (re-checks profiles.is_admin), bypasses the order
+//  DB lookup, fires a synthetic "wiring check" email to
+//  ADMIN_EMAIL_RECIPIENTS with subject "[PathBinder] TEST — admin
+//  alert wiring check". Lets admins verify Resend env vars work
+//  without creating fake disputed orders in the DB. The button label
+//  + behavior unchanged from the user's POV — toast wording slightly
+//  updated to "Firing admin-notify-dispute test…".
 // v349 — Password reset flow (Forgot Password):
 //  Login modal now has a "Forgot password?" link below the Sign In
 //  button. Click → forgotPasswordModal → enter email → fires
@@ -178,7 +187,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v349';
+const CACHE = 'pathbinder-v350';
 
 const PRECACHE = [
   '/offline.html',

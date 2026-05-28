@@ -15973,29 +15973,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     async function sendAdminTestEmail() {
       if (!userIsAdmin()) { showToast('Admins only'); return; }
       try {
-        // Find the most recent disputed order to use as the test subject.
-        const { data, error } = await sb
-          .from('orders')
-          .select('id, disputed_at')
-          .eq('status', 'disputed')
-          .order('disputed_at', { ascending: false })
-          .limit(1);
-        if (error) throw error;
-        if (!data || !data.length) {
-          showToast('No disputed orders exist yet — create one first (or just wait for a real one).');
-          return;
-        }
-        const orderId = data[0].id;
-
+        // Test mode — POSTs { test: true } to the endpoint which
+        // bypasses the disputed-order DB lookup and fires a synthetic
+        // "wiring check" email to ADMIN_EMAIL_RECIPIENTS. Useful for
+        // verifying Resend env vars without polluting the DB.
         const sess = await supabase.auth.getSession();
         const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         if (!tok) { showToast('Sign in again'); return; }
 
-        showToast('Firing admin-notify-dispute…');
+        showToast('Firing admin-notify-dispute test…');
         const r = await fetch('/api/admin-notify-dispute', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
-          body:    JSON.stringify({ orderId: orderId }),
+          body:    JSON.stringify({ test: true }),
         });
         const result = await r.json();
         if (!r.ok) {
