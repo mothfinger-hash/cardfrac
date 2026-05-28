@@ -1,4 +1,13 @@
 // PathBinder Service Worker
+// v348 — Vision OCR: client-side resize before POST
+//  Phone photos at full resolution (4-8MB) were blowing Vercel's
+//  4.5MB request body limit, returning HTTP 413 from /api/vision-ocr
+//  before the proxy could even invoke Google Vision. Scanner logged
+//  "API key may be rate-limited or expired" which was misleading.
+//  Added _resizeForOcr() helper that decodes the dataURL into an
+//  <img>, draws to a 1200px-max canvas, and re-encodes as JPEG q=0.85.
+//  Drops typical card-photo payloads from 5-7MB → 100-200KB. Vision
+//  reads them just fine at that resolution.
 // v347 — Beta invite emails (Resend):
 //  - New /api/send-beta-invite endpoint fires a branded HTML email
 //    to a beta invitee right after admin_invite_beta creates the row.
@@ -158,7 +167,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v347';
+const CACHE = 'pathbinder-v348';
 
 const PRECACHE = [
   '/offline.html',

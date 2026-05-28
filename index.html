@@ -33204,12 +33204,51 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // anyone reading the page source could steal it and run unlimited
     // Vision API calls billed to our account. Now the key never leaves
     // the server — see /api/vision-ocr.js for the proxy implementation.
+    // Resize a card image down to OCR-friendly dimensions before sending
+    // to the Vision proxy. Vercel functions have a 4.5MB request body
+    // limit; base64 inflates payloads by ~33% so any phone photo over
+    // ~3.4MB on disk would 413 here. Card OCR doesn't need huge
+    // resolution — Google Vision reads text cleanly at 1200px wide, and
+    // JPEG quality 0.85 keeps file size under ~250KB even at that res.
+    // Returns a base64 string (no data: prefix) ready to POST.
+    async function _resizeForOcr(dataURL, maxDim, quality) {
+      maxDim  = maxDim  || 1200;
+      quality = quality || 0.85;
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+            var w = Math.round(img.naturalWidth  * scale);
+            var h = Math.round(img.naturalHeight * scale);
+            var canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            // Always emit JPEG — Vision reads it fine and it's ~10×
+            // smaller than PNG for photographs of cards.
+            var resizedUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(resizedUrl.split(',')[1] || '');
+          } catch (e) { reject(e); }
+        };
+        img.onerror = function () { reject(new Error('image load failed')); };
+        img.src = dataURL;
+      });
+    }
+
     async function ocrCardText(dataURL) {
       try {
-        // Strip the data:image/...;base64, prefix client-side (the proxy
-        // strips it too, but stripping here keeps the request payload
-        // smaller by ~30 bytes per call).
-        const base64 = dataURL.indexOf(',') >= 0 ? dataURL.split(',')[1] : dataURL;
+        // Resize FIRST so phone photos don't blow the Vercel 4.5MB body
+        // limit. Falls back to the raw payload if the resize fails for
+        // any reason — better to attempt the upload than to silently
+        // drop the OCR.
+        let base64;
+        try {
+          base64 = await _resizeForOcr(dataURL);
+        } catch (e) {
+          console.warn('[GCV] resize failed, sending raw:', e);
+          base64 = dataURL.indexOf(',') >= 0 ? dataURL.split(',')[1] : dataURL;
+        }
         if (!base64) {
           console.warn('[GCV] empty image data');
           return '';
