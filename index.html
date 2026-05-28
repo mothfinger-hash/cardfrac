@@ -24295,6 +24295,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       if (mode === 'email') {
         if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email first'); return; }
+        // Always generate a code in email mode too — it's embedded in
+        // the redeem URL so the invitee gets a one-click claim path.
+        // Without this, the email endpoint 400s on missing `code`.
+        code = _genBetaInviteCode();
       } else if (mode === 'code') {
         code = _genBetaInviteCode();
         // Allow email to be optional on code-mode (just leaves a record of who it was for)
