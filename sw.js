@@ -1,4 +1,15 @@
 // PathBinder Service Worker
+// v351 — Payments tab (seller-side payouts dashboard):
+//  New Account → Payments tab between Sales Archive and Watchlist.
+//  Shows:
+//   - Stripe Connect status banner (reused from My Listings)
+//   - 4 stat cards: lifetime payouts, pending payout, platform fees
+//     paid, refunded amount
+//   - Commission-rate table highlighting the user's current tier
+//   - Recent payouts table (last 20 sales) with status, fee, and net
+//     payout per row
+//  Free/Collector tiers see an upgrade prompt instead of the dashboard.
+//  No new server endpoint — reads from in-memory orders array.
 // v350 — Admin test-email button no longer needs a real disputed order:
 //  /api/admin-notify-dispute now accepts { test: true } in the POST
 //  body. Admin-only (re-checks profiles.is_admin), bypasses the order
@@ -187,7 +198,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v350';
+const CACHE = 'pathbinder-v351';
 
 const PRECACHE = [
   '/offline.html',

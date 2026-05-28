@@ -215,6 +215,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     body[data-page-bg="myListings"],
     body[data-page-bg="myOrders"],
     body[data-page-bg="salesArchive"],
+    body[data-page-bg="payments"],
     body[data-page-bg="watchlist"],
     body[data-page-bg="history"],
     body[data-page-bg="tradeHistory"],
@@ -228,6 +229,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     body[data-page-bg="myListings"],
     body[data-page-bg="myOrders"],
     body[data-page-bg="salesArchive"],
+    body[data-page-bg="payments"],
     body[data-page-bg="watchlist"],
     body[data-page-bg="history"],
     body[data-page-bg="tradeHistory"] { background-image: url('dash2.webp'); }
@@ -276,6 +278,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #accountPage[data-tab="myListings"],
     #accountPage[data-tab="myOrders"],
     #accountPage[data-tab="salesArchive"],
+    #accountPage[data-tab="payments"],
     #accountPage[data-tab="watchlist"],
     #accountPage[data-tab="history"],
     #accountPage[data-tab="tradeHistory"] {
@@ -306,6 +309,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #accountPage[data-tab="salesArchive"] > .pb-page-hdr,
     #accountPage[data-tab="salesArchive"] > .account-tabs,
     #accountPage[data-tab="salesArchive"] > .account-content,
+    #accountPage[data-tab="payments"]     > .pb-page-hdr,
+    #accountPage[data-tab="payments"]     > .account-tabs,
+    #accountPage[data-tab="payments"]     > .account-content,
     #accountPage[data-tab="watchlist"]    > .pb-page-hdr,
     #accountPage[data-tab="watchlist"]    > .account-tabs,
     #accountPage[data-tab="watchlist"]    > .account-content,
@@ -328,6 +334,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #accountPage[data-tab="myListings"]   > .pb-page-hdr,
     #accountPage[data-tab="myOrders"]     > .pb-page-hdr,
     #accountPage[data-tab="salesArchive"] > .pb-page-hdr,
+    #accountPage[data-tab="payments"]     > .pb-page-hdr,
     #accountPage[data-tab="watchlist"]    > .pb-page-hdr,
     #accountPage[data-tab="history"]      > .pb-page-hdr,
     #accountPage[data-tab="tradeHistory"] > .pb-page-hdr {
@@ -346,6 +353,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       #accountPage[data-tab="salesArchive"] > .pb-page-hdr,
       #accountPage[data-tab="salesArchive"] > .account-tabs,
       #accountPage[data-tab="salesArchive"] > .account-content,
+      #accountPage[data-tab="payments"]     > .pb-page-hdr,
+      #accountPage[data-tab="payments"]     > .account-tabs,
+      #accountPage[data-tab="payments"]     > .account-content,
       #accountPage[data-tab="watchlist"]    > .pb-page-hdr,
       #accountPage[data-tab="watchlist"]    > .account-tabs,
       #accountPage[data-tab="watchlist"]    > .account-content,
@@ -6791,6 +6801,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <button class="account-tab" onclick="switchAccountTab('myListings')">My Listings</button>
       <button class="account-tab" onclick="switchAccountTab('myOrders')">Orders<span class="badge-count" id="orderNotification" style="display:none">0</span></button>
       <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales Archive</button>
+      <button class="account-tab" onclick="switchAccountTab('payments')">Payments</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
       <button class="account-tab" onclick="switchAccountTab('tradeHistory')">Trades</button>
@@ -6844,6 +6855,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="pb-panel-body">
           <div id="salesArchiveContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="payments" class="account-content">
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">⬢</span>
+            Payments
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="paymentsContent"></div>
         </div>
       </div>
     </div>
@@ -10714,7 +10739,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // at #accountPage's bottom edge.
       const accountPageEl = document.getElementById('accountPage');
       if (accountPageEl) accountPageEl.setAttribute('data-tab', tab);
-      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','watchlist','history','tradeHistory'];
+      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','payments','watchlist','history','tradeHistory'];
       if (BG_TABS.indexOf(tab) >= 0) {
         document.body.setAttribute('data-page-bg', tab);
       } else {
@@ -10723,6 +10748,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (tab === 'myOrders') renderOrders();
       if (tab === 'myListings') renderMyListings();
       if (tab === 'salesArchive') renderSalesArchive();
+      if (tab === 'payments') renderPayments();
       if (tab === 'tradeHistory') renderTradeHistory();
       if (tab === 'badges') renderBadges();
     }
@@ -13368,6 +13394,165 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const { from } = _salesPeriodRange();
       if (!from) return true;
       return new Date(dateStr) >= from;
+    }
+
+    // ─── Payments tab ──────────────────────────────────────────────────
+    // Seller-side payments dashboard:
+    //   1. Stripe Connect status banner (reuses the My Listings one)
+    //   2. Lifetime totals — total earned, total fees paid, pending payout
+    //   3. Commission rate explainer for the user's current tier
+    //   4. Recent payouts list — last 20 sales ordered by date
+    //
+    // No new server endpoints — reads from the existing in-memory
+    // `orders` array. Re-renders on every tab switch via switchAccountTab.
+    function renderPayments() {
+      const content = document.getElementById('paymentsContent');
+      if (!content || !currentUser) return;
+
+      // ── Empty state for free/collector (can't sell) ─────────────────
+      if (!tierAtLeast('enthusiast')) {
+        content.innerHTML = ''
+          + '<div style="text-align:center;padding:48px 24px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:8px">◈ SELLER DASHBOARD</div>'
+          +   '<h2 style="font-family:\'Orbitron\',monospace;font-size:1.15rem;color:var(--text);margin:0 0 10px">Marketplace selling is on Enthusiast+ tiers</h2>'
+          +   '<p style="color:var(--muted);font-size:.85rem;line-height:1.65;max-width:480px;margin:0 auto 20px">Once you upgrade you\'ll see Stripe Connect status, your lifetime payout history, and a per-tier commission breakdown here.</p>'
+          +   '<button onclick="openPricingModalWithPromo(\'enthusiast\')" style="padding:11px 22px;background:var(--accent);color:var(--surface);border:none;font-family:\'Space Mono\',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">See plans</button>'
+          + '</div>';
+        return;
+      }
+
+      // ── Gather seller-side orders ───────────────────────────────────
+      const mySales = (orders || []).filter(o =>
+        o.seller_id === currentUser.id || o.sellerId === currentUser.id
+      );
+      const completed = mySales.filter(o => o.status === 'completed' || o.status === 'delivered');
+      const inFlight  = mySales.filter(o => o.status === 'paid' || o.status === 'shipped');
+      const refunded  = mySales.filter(o => o.status === 'refunded');
+
+      const lifetimePayouts  = completed.reduce((s, o) => s + (o.seller_payout || 0), 0);
+      const lifetimeFees     = completed.reduce((s, o) => s + (o.platform_fee  || 0), 0);
+      const pendingPayout    = inFlight.reduce((s, o) => s + (o.seller_payout || 0), 0);
+      const lifetimeRefunded = refunded.reduce((s, o) => s + (o.amount        || 0), 0);
+
+      const myRate    = myCommissionRate();
+      const myRatePct = (myRate * 100).toFixed(0) + '%';
+      const tierName  = userTier();
+      const tierLabel = tierName.charAt(0).toUpperCase() + tierName.slice(1);
+
+      // Trigger an async Connect status refresh so the banner reflects
+      // current state. Repaint when the cache changes.
+      if (typeof refreshConnectStatus === 'function') {
+        refreshConnectStatus(function() { renderPayments(); });
+      }
+      const connectHtml = (typeof renderConnectStatusBanner === 'function')
+        ? renderConnectStatusBanner() : '';
+
+      // ── Stats grid ──────────────────────────────────────────────────
+      const statsHtml = ''
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">'
+        +   _paymentsStatCard('Lifetime payouts',  '$' + lifetimePayouts.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}), 'completed sales',  'var(--green)')
+        +   _paymentsStatCard('Pending payout',    '$' + pendingPayout.toLocaleString(undefined,   {minimumFractionDigits:2, maximumFractionDigits:2}),  inFlight.length + ' order' + (inFlight.length === 1 ? '' : 's'), 'var(--yellow)')
+        +   _paymentsStatCard('Platform fees paid','$' + lifetimeFees.toLocaleString(undefined,    {minimumFractionDigits:2, maximumFractionDigits:2}),  myRatePct + ' on ' + tierLabel + ' tier', 'var(--copper)')
+        +   _paymentsStatCard('Refunded',          '$' + lifetimeRefunded.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}), refunded.length + ' order' + (refunded.length === 1 ? '' : 's'), 'var(--red)')
+        + '</div>';
+
+      // ── Commission rate explainer ───────────────────────────────────
+      const commissionRowsHtml = [
+        { tier: 'Enthusiast', rate: '7%', isMe: tierName === 'enthusiast' },
+        { tier: 'Vendor',     rate: '6%', isMe: tierName === 'vendor'     },
+        { tier: 'Shop',       rate: '5%', isMe: tierName === 'shop'       },
+      ].map(r => '<tr' + (r.isMe ? ' style="background:rgba(26,199,160,0.08)"' : '') + '>'
+        + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--text)') + ';font-weight:' + (r.isMe ? '700' : '400') + '">' + r.tier + (r.isMe ? ' (you)' : '') + '</td>'
+        + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--muted)') + ';text-align:right;font-family:\'Space Mono\',monospace">' + r.rate + '</td>'
+        + '</tr>'
+      ).join('');
+
+      const commissionHtml = ''
+        + '<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--copper);padding:14px 18px;margin-bottom:16px;border-radius:10px">'
+        +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;font-weight:800;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:10px">'
+        +     '◈ Commission rates by tier'
+        +   '</div>'
+        +   '<div style="font-size:.74rem;color:var(--muted);line-height:1.6;margin-bottom:12px">'
+        +     'Lower commission as you move up tiers. Shipping passes through to you 100% — commission applies to the item price only.'
+        +   '</div>'
+        +   '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
+        +     commissionRowsHtml
+        +   '</table>'
+        + '</div>';
+
+      // ── Recent payouts list ─────────────────────────────────────────
+      const recent = [...mySales]
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        .slice(0, 20);
+
+      let payoutsListHtml;
+      if (!recent.length) {
+        payoutsListHtml = ''
+          + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:32px 20px;text-align:center;color:var(--muted);font-size:.85rem">'
+          +   'No sales yet. Once a buyer purchases one of your listings, it shows up here.'
+          + '</div>';
+      } else {
+        const statusLabel = {
+          pending_payment: 'Pending payment',
+          paid:            'Paid · awaiting ship',
+          shipped:         'In transit',
+          delivered:       'Delivered',
+          completed:       'Completed',
+          cancelled:       'Cancelled',
+          disputed:        'Disputed',
+          return_requested:'Return requested',
+          refunded:        'Refunded',
+        };
+        const statusColor = {
+          pending_payment:'var(--muted)', paid:'var(--yellow)', shipped:'var(--teal)',
+          delivered:'var(--green)',       completed:'var(--green)', cancelled:'var(--red)',
+          disputed:'var(--red)',          return_requested:'var(--yellow)', refunded:'var(--muted)',
+        };
+        payoutsListHtml = '<div class="coll-table-wrap"><table class="coll-table">'
+          + '<thead><tr>'
+          +   '<th>Date</th><th>Item</th><th>Status</th><th style="text-align:right">Sale</th><th style="text-align:right">Fee</th><th style="text-align:right">Payout</th>'
+          + '</tr></thead><tbody>'
+          + recent.map(o => {
+              const listing = (listings || []).find(l => String(l.id) === String(o.listing_id));
+              const itemName = listing ? listing.name : (o.card_name || '(item removed)');
+              const date  = o.created_at ? new Date(o.created_at).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '—';
+              const st    = o.status || 'pending_payment';
+              const lbl   = statusLabel[st] || st;
+              const col   = statusColor[st] || 'var(--muted)';
+              const amt   = (o.amount        || 0).toFixed(2);
+              const fee   = (o.platform_fee  || 0).toFixed(2);
+              const pay   = (o.seller_payout || 0).toFixed(2);
+              return '<tr>'
+                + '<td style="color:var(--muted);font-size:.72rem">' + date + '</td>'
+                + '<td style="color:var(--text)">' + itemName + '</td>'
+                + '<td><span style="color:' + col + ';font-size:.72rem">● ' + lbl + '</span></td>'
+                + '<td style="text-align:right;color:var(--muted)">$' + amt + '</td>'
+                + '<td style="text-align:right;color:var(--copper);font-size:.78rem">−$' + fee + '</td>'
+                + '<td style="text-align:right;color:var(--green);font-weight:700">$' + pay + '</td>'
+              + '</tr>';
+            }).join('')
+          + '</tbody></table></div>';
+      }
+
+      content.innerHTML = ''
+        + connectHtml
+        + statsHtml
+        + commissionHtml
+        + '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;font-weight:800;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin:18px 0 10px">'
+        +   '◈ Recent payouts'
+        + '</div>'
+        + payoutsListHtml;
+    }
+
+    function _paymentsStatCard(label, value, sub, color) {
+      return ''
+        + '<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ' + color + ';padding:14px 16px;border-radius:10px;min-height:90px;display:flex;flex-direction:column;justify-content:space-between">'
+        +   '<div style="font-size:.65rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">' + label + '</div>'
+        +   '<div>'
+        +     '<div style="font-family:\'Orbitron\',monospace;font-size:1.4rem;font-weight:800;color:' + color + ';line-height:1.1;margin:6px 0 4px">' + value + '</div>'
+        +     '<div style="font-size:.65rem;color:var(--muted)">' + sub + '</div>'
+        +   '</div>'
+        + '</div>';
     }
 
     function renderSalesArchive() {
