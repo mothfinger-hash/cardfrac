@@ -61,24 +61,33 @@ function main() {
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Beta Invite Email Previews</title>
+  <title>PathBinder Email Previews</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0e1a; color: #d8e0e8; padding: 32px; max-width: 720px; margin: 0 auto; }
     h1 { color: #1AC7A0; font-size: 22px; letter-spacing: 0.04em; }
+    h2 { color: #B87333; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; margin-top: 32px; }
     p { color: #6a7888; font-size: 14px; line-height: 1.6; }
     ul { padding: 0; list-style: none; }
     li { margin: 12px 0; }
-    a { display: block; padding: 14px 18px; background: rgba(26,199,160,0.06); border-left: 3px solid #1AC7A0; color: #d8e0e8; text-decoration: none; }
+    a { display: block; padding: 14px 18px; background: rgba(26,199,160,0.06); border-left: 3px solid #1AC7A0; color: #d8e0e8; text-decoration: none; border-radius: 6px; }
     a:hover { background: rgba(26,199,160,0.12); }
     .tier { color: #B87333; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
     .title { color: #ffffff; font-size: 15px; margin-top: 4px; }
+    code { background: rgba(184,115,51,0.1); padding: 2px 6px; border-radius: 3px; color: #B87333; }
   </style>
 </head>
 <body>
-  <h1>PathBinder beta invite email previews</h1>
-  <p>One preview per tier. Open in a browser; the rendered HTML is exactly what Resend ships to the invitee. Site assets (logo, background) resolve from <code>${SITE_ORIGIN}</code> — push those first if you're seeing broken images.</p>
+  <h1>PathBinder email previews</h1>
+  <p>Rendered HTML matches exactly what Resend ships. Site assets (logo, background) resolve from <code>${SITE_ORIGIN}</code> in production; local previews use relative paths so they work offline.</p>
+
+  <h2>◈ Beta invites (per tier)</h2>
   <ul>
     ${links.map(l => `<li><a href="${l.file}"><span class="tier">${l.tier}</span><br /><span class="title">${l.title}</span></a></li>`).join('\n    ')}
+  </ul>
+
+  <h2>◈ Account / transactional</h2>
+  <ul>
+    <li><a href="password-reset.html"><span class="tier">password-reset</span><br /><span class="title">Reset your PathBinder password</span></a></li>
   </ul>
 </body>
 </html>`;

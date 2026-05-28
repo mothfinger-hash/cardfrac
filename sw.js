@@ -1,4 +1,17 @@
 // PathBinder Service Worker
+// v352 — Order messaging (buyer ↔ seller chat) + Payments empty state:
+//  - New `order_messages` table + RLS scoped to the two parties on
+//    the order. New "Message buyer/seller" button on every order card
+//    opens a modal thread (SMS-style bubbles, teal=yours / slate=theirs).
+//    Composer at the bottom; Cmd/Ctrl+Enter sends.
+//  - Unread messages roll into the existing Orders nav badge so users
+//    see one count for "things needing attention" (awaiting-ship orders
+//    + unread messages). Mark-as-read fires on modal open via the
+//    mark_order_messages_read RPC.
+//  - Payments tab empty-state polish: when seller has zero sales, the
+//    wall of $0 stat cards is replaced with a "Once your first sale
+//    lands…" panel + "List your first item" CTA, with the commission
+//    table still visible as reference.
 // v351 — Payments tab (seller-side payouts dashboard):
 //  New Account → Payments tab between Sales Archive and Watchlist.
 //  Shows:
@@ -198,7 +211,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v351';
+const CACHE = 'pathbinder-v352';
 
 const PRECACHE = [
   '/offline.html',

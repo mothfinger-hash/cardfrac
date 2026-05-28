@@ -5637,6 +5637,41 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
        (controlled list matched by an orders CHECK constraint) plus a
        free-text detail field so the seller has context when deciding
        whether to approve or decline. -->
+  <!-- ORDER MESSAGES MODAL — buyer ↔ seller chat thread keyed to a
+       single order. Buyer side and seller side both open the same
+       modal (different orderId); RLS ensures non-parties get zero rows.
+       Thread renders bottom-up like SMS; composer at the bottom. -->
+  <div class="modal-overlay" id="orderMessagesModal">
+    <div class="modal" style="max-width:520px;display:flex;flex-direction:column;max-height:80vh">
+      <button class="modal-close" onclick="closeModal('orderMessagesModal')">×</button>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Messages</div>
+      <h3 id="orderMessagesTitle" style="margin-bottom:6px;font-size:1.05rem">Messages</h3>
+      <p class="modal-sub" id="orderMessagesSub" style="margin-bottom:12px"></p>
+
+      <input type="hidden" id="orderMessagesOrderId" />
+
+      <!-- Thread scroll area. Set to flex-grow:1 inside the flex-column
+           modal so it expands to fill, while the composer stays pinned
+           at the bottom. -->
+      <div id="orderMessagesThread" style="flex:1;overflow-y:auto;border:1px solid var(--border);background:var(--surface2);padding:14px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;min-height:200px">
+        <div style="color:var(--muted);font-size:.78rem;text-align:center;padding:18px 0">Loading…</div>
+      </div>
+
+      <!-- Composer -->
+      <div style="display:flex;gap:8px">
+        <textarea id="orderMessagesInput" rows="2" maxlength="4000"
+          placeholder="Type a message…"
+          onkeydown="if(event.key==='Enter' && (event.metaKey || event.ctrlKey)){sendOrderMessage();event.preventDefault();}"
+          style="flex:1;resize:vertical;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem"></textarea>
+        <button id="orderMessagesSendBtn" type="button" onclick="sendOrderMessage()"
+          style="padding:0 18px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.04em">
+          Send
+        </button>
+      </div>
+      <div id="orderMessagesStatus" style="font-size:.7rem;color:var(--muted);min-height:14px;margin-top:6px"></div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="returnRequestModal">
     <div class="modal" style="max-width:480px">
       <button class="modal-close" onclick="closeModal('returnRequestModal')">×</button>
@@ -10765,10 +10800,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         (o.status === 'shipped' && o.buyer_id === currentUser?.id) ||
         (o.status === 'paid' && o.seller_id === currentUser?.id)
       ).length;
+      // Roll unread messages into the same badge. Easier mental model:
+      // the Orders tab badge shows "things needing your attention" —
+      // whether that's an awaiting-ship order or an unread message.
+      const totalBadge = pending + (typeof _totalUnreadMessages === 'number' ? _totalUnreadMessages : 0);
       const badge = document.getElementById('orderNotification');
       if (badge) {
-        badge.textContent = pending;
-        badge.style.display = pending > 0 ? 'flex' : 'none';
+        badge.textContent = totalBadge > 99 ? '99+' : String(totalBadge);
+        badge.style.display = totalBadge > 0 ? 'flex' : 'none';
       }
     }
 
@@ -12722,6 +12761,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 ${isBuying ? `Paid: $${(order.amount||0).toFixed(2)}` : `Your payout: $${(order.seller_payout||0).toFixed(2)} · paid via Stripe`}
               </div>
               ${returnContext}
+              <div style="margin-top:8px">
+                <button onclick="event.stopPropagation();openOrderMessagesModal('${order.id}')"
+                  style="padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.04em">
+                  ⬡ Message ${isBuying ? 'seller' : 'buyer'}
+                </button>
+              </div>
             </div>
             ${actionHtml ? `<div>${actionHtml}</div>` : ''}
           </div>
@@ -13447,6 +13492,34 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const connectHtml = (typeof renderConnectStatusBanner === 'function')
         ? renderConnectStatusBanner() : '';
 
+      // ── First-run / zero-sales empty state ─────────────────────────
+      // No sales yet → skip the wall of $0 stat cards and show a
+      // friendlier "here's what you'll see once it kicks off" panel.
+      // Connect banner stays at top so the user can finish onboarding
+      // before their first sale lands.
+      if (mySales.length === 0) {
+        content.innerHTML = ''
+          + connectHtml
+          + '<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--copper);border-radius:10px;padding:32px 28px;text-align:center;margin-top:12px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:8px">◈ NO SALES YET</div>'
+          +   '<h2 style="font-family:\'Orbitron\',monospace;font-size:1.2rem;color:var(--text);margin:0 0 12px;letter-spacing:.04em">Once your first sale lands, this is where you\'ll track it.</h2>'
+          +   '<p style="color:var(--muted);font-size:.85rem;line-height:1.65;max-width:520px;margin:0 auto 22px">'
+          +     'Every sale shows up here with the gross amount, the ' + myRatePct + ' platform fee deducted, and your net payout. '
+          +     'Lifetime totals and pending balance update in real time as orders move through paid → shipped → completed.'
+          +   '</p>'
+          +   '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+          +     '<button onclick="openListCardModal()" style="padding:11px 22px;background:var(--accent);color:var(--surface);border:none;font-family:\'Space Mono\',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;border-radius:8px">List your first item &rarr;</button>'
+          +     '<button onclick="switchAccountTab(\'myListings\')" style="padding:11px 22px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;border-radius:8px">Manage listings</button>'
+          +   '</div>'
+          + '</div>'
+          // Still show the commission table — useful at-a-glance reference
+          // for new sellers planning what to price things at.
+          + '<div style="margin-top:18px">'
+          +   _paymentsCommissionPanel(tierName)
+          + '</div>';
+        return;
+      }
+
       // ── Stats grid ──────────────────────────────────────────────────
       const statsHtml = ''
         + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">'
@@ -13457,28 +13530,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         + '</div>';
 
       // ── Commission rate explainer ───────────────────────────────────
-      const commissionRowsHtml = [
-        { tier: 'Enthusiast', rate: '7%', isMe: tierName === 'enthusiast' },
-        { tier: 'Vendor',     rate: '6%', isMe: tierName === 'vendor'     },
-        { tier: 'Shop',       rate: '5%', isMe: tierName === 'shop'       },
-      ].map(r => '<tr' + (r.isMe ? ' style="background:rgba(26,199,160,0.08)"' : '') + '>'
-        + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--text)') + ';font-weight:' + (r.isMe ? '700' : '400') + '">' + r.tier + (r.isMe ? ' (you)' : '') + '</td>'
-        + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--muted)') + ';text-align:right;font-family:\'Space Mono\',monospace">' + r.rate + '</td>'
-        + '</tr>'
-      ).join('');
-
-      const commissionHtml = ''
-        + '<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--copper);padding:14px 18px;margin-bottom:16px;border-radius:10px">'
-        +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;font-weight:800;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:10px">'
-        +     '◈ Commission rates by tier'
-        +   '</div>'
-        +   '<div style="font-size:.74rem;color:var(--muted);line-height:1.6;margin-bottom:12px">'
-        +     'Lower commission as you move up tiers. Shipping passes through to you 100% — commission applies to the item price only.'
-        +   '</div>'
-        +   '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
-        +     commissionRowsHtml
-        +   '</table>'
-        + '</div>';
+      const commissionHtml = _paymentsCommissionPanel(tierName);
 
       // ── Recent payouts list ─────────────────────────────────────────
       const recent = [...mySales]
@@ -13542,6 +13594,33 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         +   '◈ Recent payouts'
         + '</div>'
         + payoutsListHtml;
+    }
+
+    // Reusable commission-rate panel — shared between the populated
+    // Payments view AND the zero-sales empty state. Highlights the
+    // user's current tier in teal so they see their own rate at a glance.
+    function _paymentsCommissionPanel(currentTier) {
+      const rows = [
+        { tier: 'Enthusiast', rate: '7%', isMe: currentTier === 'enthusiast' },
+        { tier: 'Vendor',     rate: '6%', isMe: currentTier === 'vendor'     },
+        { tier: 'Shop',       rate: '5%', isMe: currentTier === 'shop'       },
+      ].map(r => '<tr' + (r.isMe ? ' style="background:rgba(26,199,160,0.08)"' : '') + '>'
+        + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--text)') + ';font-weight:' + (r.isMe ? '700' : '400') + '">' + r.tier + (r.isMe ? ' (you)' : '') + '</td>'
+        + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--muted)') + ';text-align:right;font-family:\'Space Mono\',monospace">' + r.rate + '</td>'
+        + '</tr>'
+      ).join('');
+      return ''
+        + '<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--copper);padding:14px 18px;margin-bottom:16px;border-radius:10px">'
+        +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;font-weight:800;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:10px">'
+        +     '◈ Commission rates by tier'
+        +   '</div>'
+        +   '<div style="font-size:.74rem;color:var(--muted);line-height:1.6;margin-bottom:12px">'
+        +     'Lower commission as you move up tiers. Shipping passes through to you 100% — commission applies to the item price only.'
+        +   '</div>'
+        +   '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
+        +     rows
+        +   '</table>'
+        + '</div>';
     }
 
     function _paymentsStatCard(label, value, sub, color) {
@@ -14326,6 +14405,142 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // submission happens in submitReturnRequest() once the buyer picks a
     // reason and writes a detail. Replaces the old confirm()-prompt path
     // which captured no context for the seller.
+    // ─── Order messaging (buyer ↔ seller chat per order) ──────────────
+    // RLS on order_messages restricts read/write to the two parties on
+    // the order (plus admins). Thread is fetched fresh on every modal
+    // open — no realtime subscription in V1 since orders don't churn
+    // fast enough to need live streaming. Unread counts cached on
+    // orders.unread_messages for badge rendering; refreshed via
+    // refreshUnreadMessageCount() on order list render.
+    let _orderMessagesCache = {};   // orderId → array of messages
+    let _totalUnreadMessages = 0;   // populated by refreshUnreadMessageCount
+
+    async function openOrderMessagesModal(orderId) {
+      if (!currentUser) { openModal('loginModal'); return; }
+      const order = (orders || []).find(o => String(o.id) === String(orderId));
+      if (!order) { showToast('Order not found'); return; }
+
+      // Figure out who the "counterparty" is so we can label the modal
+      // accordingly ("Message buyer" vs "Message seller").
+      const isBuyer = order.buyer_id === currentUser.id;
+      const counterpartyRole = isBuyer ? 'seller' : 'buyer';
+
+      document.getElementById('orderMessagesOrderId').value = orderId;
+      const titleEl = document.getElementById('orderMessagesTitle');
+      const subEl   = document.getElementById('orderMessagesSub');
+      if (titleEl) titleEl.textContent = 'Message the ' + counterpartyRole;
+      if (subEl) {
+        const listing = (listings || []).find(l => String(l.id) === String(order.listing_id));
+        const cardName = listing ? listing.name : (order.card_name || 'this order');
+        subEl.innerHTML = 'About <strong style="color:var(--text)">' + (cardName || 'this order').replace(/</g,'&lt;') + '</strong> &middot; Order #' + String(orderId).slice(0,8).toUpperCase();
+      }
+      const inp = document.getElementById('orderMessagesInput');
+      if (inp) inp.value = '';
+      const sts = document.getElementById('orderMessagesStatus');
+      if (sts) sts.textContent = '';
+      openModal('orderMessagesModal');
+      await _loadOrderMessages(orderId);
+    }
+
+    async function _loadOrderMessages(orderId) {
+      const host = document.getElementById('orderMessagesThread');
+      if (!host) return;
+      host.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:18px 0">Loading…</div>';
+      try {
+        const { data, error } = await sb
+          .from('order_messages')
+          .select('id, sender_id, body, created_at, read_at')
+          .eq('order_id', orderId)
+          .order('created_at', { ascending: true });
+        if (error) throw error;
+        _orderMessagesCache[orderId] = data || [];
+        _renderOrderMessagesThread(orderId);
+
+        // Mark every message we received as read.
+        try {
+          await sb.rpc('mark_order_messages_read', { p_order_id: orderId });
+          // Refresh the badge after marking-as-read.
+          refreshUnreadMessageCount();
+        } catch (_) { /* best effort */ }
+      } catch (e) {
+        console.error('[order-messages] load failed:', e);
+        host.innerHTML = '<div style="color:var(--red);font-size:.78rem;text-align:center;padding:18px 0">Failed to load thread: ' + (e.message || '') + '</div>';
+      }
+    }
+
+    function _renderOrderMessagesThread(orderId) {
+      const host = document.getElementById('orderMessagesThread');
+      if (!host) return;
+      const msgs = _orderMessagesCache[orderId] || [];
+      if (!msgs.length) {
+        host.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:24px 0">No messages yet. Start the conversation.</div>';
+        return;
+      }
+      host.innerHTML = msgs.map(m => {
+        const mine = m.sender_id === currentUser.id;
+        const safe = String(m.body || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g, '<br/>');
+        const ts   = (function(){ try { return new Date(m.created_at).toLocaleString(undefined, { dateStyle:'short', timeStyle:'short' }); } catch(_) { return ''; } })();
+        // Right-align user's own messages; left-align counterparty's.
+        // Cyan bubble for mine, slate bubble for theirs (SMS-style).
+        return ''
+          + '<div style="display:flex;justify-content:' + (mine ? 'flex-end' : 'flex-start') + '">'
+          +   '<div style="max-width:80%">'
+          +     '<div style="background:' + (mine ? 'rgba(26,199,160,0.12)' : 'var(--surface)') + ';border:1px solid ' + (mine ? 'var(--accent)' : 'var(--border)') + ';border-radius:10px;padding:9px 12px;font-size:.82rem;color:var(--text);line-height:1.4;white-space:pre-wrap;word-break:break-word">'
+          +       safe
+          +     '</div>'
+          +     '<div style="font-size:.6rem;color:var(--muted);margin-top:3px;text-align:' + (mine ? 'right' : 'left') + ';font-family:\'Space Mono\',monospace">' + ts + '</div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+      // Auto-scroll to bottom (newest message).
+      host.scrollTop = host.scrollHeight;
+    }
+
+    async function sendOrderMessage() {
+      const orderId = document.getElementById('orderMessagesOrderId').value;
+      const inp     = document.getElementById('orderMessagesInput');
+      const btn     = document.getElementById('orderMessagesSendBtn');
+      const sts     = document.getElementById('orderMessagesStatus');
+      const body    = (inp.value || '').trim();
+      if (!body) { if (sts) sts.textContent = 'Type a message first.'; return; }
+      if (body.length > 4000) { if (sts) sts.textContent = 'Message is too long (4000 char max).'; return; }
+      btn.disabled = true; btn.textContent = 'Sending…';
+      if (sts) sts.textContent = '';
+      try {
+        const { error } = await sb.from('order_messages').insert({
+          order_id:  orderId,
+          sender_id: currentUser.id,
+          body:      body,
+        });
+        if (error) throw error;
+        inp.value = '';
+        // Refresh the thread so the new message shows up.
+        await _loadOrderMessages(orderId);
+      } catch (e) {
+        console.error('[order-messages] send failed:', e);
+        if (sts) { sts.textContent = 'Send failed: ' + (e.message || 'try again'); sts.style.color = 'var(--red)'; }
+      } finally {
+        btn.disabled = false; btn.textContent = 'Send';
+      }
+    }
+
+    // Loads the global unread count and stamps it on the Orders nav-tab
+    // badge. Quietly fails for signed-out / unsupported state.
+    async function refreshUnreadMessageCount() {
+      if (!currentUser) return;
+      try {
+        const { data, error } = await sb.rpc('unread_order_messages_count');
+        if (error) throw error;
+        _totalUnreadMessages = parseInt(data, 10) || 0;
+      } catch (e) {
+        _totalUnreadMessages = 0;
+      }
+      // Surface on the Orders tab badge — merges with order-notification
+      // count (paid awaiting-ship orders) by taking the sum so the user
+      // sees ANY actionable orders count.
+      try { updateOrderNotification(); } catch(_) {}
+    }
+
     function requestReturn(orderId) {
       if (!currentUser) return;
       const o = orders.find(x => x.id === orderId);
@@ -30993,6 +31208,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             // Admin bell — pulls latest admin_notifications and stamps
             // the unread count onto the avatar dropdown. No-op for non-admins.
             try { loadAdminNotifications(); } catch(_) {}
+            // Pull the unread-message count so the Orders nav badge
+            // reflects "things needing your attention" on first paint.
+            try { refreshUnreadMessageCount(); } catch(_) {}
           }
         }
 
