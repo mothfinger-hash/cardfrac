@@ -1,4 +1,15 @@
 // PathBinder Service Worker
+// v349 — Password reset flow (Forgot Password):
+//  Login modal now has a "Forgot password?" link below the Sign In
+//  button. Click → forgotPasswordModal → enter email → fires
+//  Supabase's resetPasswordForEmail with redirectTo=pathbinder.gg/?type=recovery.
+//  User clicks the link in their email, lands on the site, and
+//  checkPasswordRecoveryHash() detects the recovery token + opens
+//  newPasswordModal so they can set a new password. updateUser() then
+//  persists it and we route them to their dashboard.
+//  Email currently comes from Supabase default sender — rebrand to
+//  noreply@pathbinder.gg later by configuring Resend SMTP in Supabase
+//  Dashboard → Auth → SMTP Settings.
 // v348 — Vision OCR: client-side resize before POST
 //  Phone photos at full resolution (4-8MB) were blowing Vercel's
 //  4.5MB request body limit, returning HTTP 413 from /api/vision-ocr
@@ -167,7 +178,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v348';
+const CACHE = 'pathbinder-v349';
 
 const PRECACHE = [
   '/offline.html',

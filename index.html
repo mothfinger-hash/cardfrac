@@ -5487,10 +5487,58 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div id="loginError" style="color:#ef4444;font-size:.82rem;margin-bottom:8px;min-height:18px"></div>
         <button type="button" class="btn btn-primary" onclick="handleLogin()" style="width:100%">Sign In</button>
-        <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
+        <p style="text-align:center;font-size:.78rem;color:var(--muted);margin-top:10px;margin-bottom:0">
+          <a href="#" onclick="switchModal('loginModal','forgotPasswordModal');return false" style="color:var(--muted);text-decoration:underline">Forgot password?</a>
+        </p>
+        <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:8px">
           Don't have an account? <a href="#" onclick="switchModal('loginModal','registerModal');return false" style="color:var(--accent2);text-decoration:none">Join</a>
         </p>
       </div>
+    </div>
+  </div>
+
+  <!-- FORGOT PASSWORD MODAL — sends a Supabase password-reset email
+       containing a one-time link. The link lands on pathbinder.gg with
+       a recovery token in the URL hash; checkPasswordRecoveryHash()
+       picks it up and opens the new-password modal. -->
+  <div class="modal-overlay" id="forgotPasswordModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('forgotPasswordModal')">×</button>
+      <h3>Reset your password</h3>
+      <p class="modal-sub">Enter the email on your PathBinder account. We'll send a link to set a new password.</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="forgotPasswordEmail" placeholder="you@example.com" autocomplete="email"
+          onkeydown="if(event.key==='Enter')requestPasswordReset()" />
+      </div>
+      <div id="forgotPasswordStatus" style="font-size:.78rem;min-height:18px;margin-bottom:8px;color:var(--muted)"></div>
+      <button type="button" class="btn btn-primary" onclick="requestPasswordReset()" style="width:100%">Send reset link</button>
+      <p style="text-align:center;font-size:.82rem;color:var(--muted);margin-top:12px">
+        <a href="#" onclick="switchModal('forgotPasswordModal','loginModal');return false" style="color:var(--muted);text-decoration:underline">Back to sign in</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- NEW PASSWORD MODAL — shown after the user clicks the reset link
+       in their email. Supabase puts an access token in the URL hash;
+       the auth client picks it up automatically and we just need to
+       call updateUser({ password }) to set the new one. -->
+  <div class="modal-overlay" id="newPasswordModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('newPasswordModal')">×</button>
+      <h3>Set a new password</h3>
+      <p class="modal-sub">You're signed in via the reset link. Pick a new password to finish.</p>
+      <div class="form-group">
+        <label>New password</label>
+        <input type="password" id="newPasswordInput" placeholder="At least 8 characters" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label>Confirm new password</label>
+        <input type="password" id="newPasswordConfirm" placeholder="Re-enter password" autocomplete="new-password"
+          onkeydown="if(event.key==='Enter')submitNewPassword()" />
+      </div>
+      <div id="newPasswordStatus" style="font-size:.78rem;min-height:18px;margin-bottom:8px;color:var(--muted)"></div>
+      <button type="button" class="btn btn-primary" onclick="submitNewPassword()" style="width:100%">Save new password</button>
     </div>
   </div>
 
@@ -8869,6 +8917,112 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       showPage('account'); setMobileNav('account');
       showToast('Welcome back!');
     }
+
+    // ── Password reset flow ────────────────────────────────────────────
+    // Two-stage:
+    //   1. User clicks "Forgot password?" → requestPasswordReset() fires
+    //      Supabase's resetPasswordForEmail. They get an email with a
+    //      one-click recovery link pointing back to pathbinder.gg/?type=recovery.
+    //   2. checkPasswordRecoveryHash() runs on page load — if the URL
+    //      hash contains a recovery access_token, the supabase-js client
+    //      auto-authenticates the user and we open the new-password modal.
+    //      User picks a new password, submitNewPassword() persists it.
+    //
+    // Supabase handles the actual email send via its built-in SMTP (the
+    // default sender is noreply@mail.app.supabase.io). To rebrand the
+    // sender to @pathbinder.gg, configure Resend as the SMTP server in
+    // Supabase Dashboard → Auth → SMTP Settings.
+    async function requestPasswordReset() {
+      const email   = (document.getElementById('forgotPasswordEmail').value || '').trim();
+      const status  = document.getElementById('forgotPasswordStatus');
+      if (!email || !email.includes('@')) {
+        if (status) { status.textContent = 'Enter the email on your account.'; status.style.color = 'var(--red)'; }
+        return;
+      }
+      if (status) { status.textContent = 'Sending…'; status.style.color = 'var(--muted)'; }
+      // redirectTo lands on the live site with the recovery token in
+      // the URL hash; checkPasswordRecoveryHash() picks it up there.
+      const origin = location.origin;
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: origin + '/?type=recovery',
+      });
+      if (error) {
+        console.error('[reset] error:', error);
+        if (status) { status.textContent = 'Could not send: ' + (error.message || 'try again'); status.style.color = 'var(--red)'; }
+        return;
+      }
+      // Supabase always responds OK even if the email doesn't exist —
+      // to avoid leaking which addresses have accounts. So we always
+      // show the same generic confirmation here.
+      if (status) {
+        status.innerHTML = '<span style="color:var(--accent)">✓</span> If that email has an account, a reset link is on the way. Check your inbox + spam folder.';
+        status.style.color = 'var(--muted)';
+      }
+      // Clear the input so a successful flow doesn't leave it filled.
+      const inp = document.getElementById('forgotPasswordEmail');
+      if (inp) inp.value = '';
+    }
+
+    async function submitNewPassword() {
+      const pw1    = document.getElementById('newPasswordInput').value;
+      const pw2    = document.getElementById('newPasswordConfirm').value;
+      const status = document.getElementById('newPasswordStatus');
+      if (!pw1 || pw1.length < 8) {
+        if (status) { status.textContent = 'Password must be at least 8 characters.'; status.style.color = 'var(--red)'; }
+        return;
+      }
+      if (pw1 !== pw2) {
+        if (status) { status.textContent = 'Passwords don\'t match.'; status.style.color = 'var(--red)'; }
+        return;
+      }
+      if (status) { status.textContent = 'Saving…'; status.style.color = 'var(--muted)'; }
+      const { error } = await sb.auth.updateUser({ password: pw1 });
+      if (error) {
+        if (status) { status.textContent = 'Save failed: ' + (error.message || 'try again'); status.style.color = 'var(--red)'; }
+        return;
+      }
+      if (status) {
+        status.innerHTML = '<span style="color:var(--accent)">✓</span> Password updated. Redirecting…';
+        status.style.color = 'var(--muted)';
+      }
+      // Clear fields + close modal after a beat so the success state
+      // is visible. The user is now signed in (Supabase auto-auths them
+      // via the recovery token) so we just bounce them to their dashboard.
+      setTimeout(function () {
+        closeModal('newPasswordModal');
+        try { showPage('account'); setMobileNav && setMobileNav('account'); } catch(_) {}
+      }, 900);
+    }
+
+    // Run on page load. Supabase puts the recovery access_token in the
+    // URL hash and the supabase-js client auto-establishes a session.
+    // We just detect the recovery type and open the new-password modal.
+    function checkPasswordRecoveryHash() {
+      try {
+        // Recovery flow uses ?type=recovery on the query OR #type=recovery
+        // in the hash — Supabase varies by version. Check both.
+        const search = location.search || '';
+        const hash   = location.hash   || '';
+        const isRecovery =
+          /\btype=recovery\b/.test(search) ||
+          /\btype=recovery\b/.test(hash)   ||
+          /\baccess_token=[^&]+&.*?\btype=recovery\b/.test(hash);
+        if (!isRecovery) return;
+        // Open the modal once the page has hydrated enough for it to
+        // be findable. supabase-js fires the SIGNED_IN event by then.
+        setTimeout(function () {
+          openModal('newPasswordModal');
+          // Strip the recovery params off the URL so a refresh doesn't
+          // re-trigger the modal after the user already set their pw.
+          try {
+            const cleaned = location.pathname;
+            history.replaceState(null, '', cleaned);
+          } catch (_) {}
+        }, 600);
+      } catch (_) { /* no-op */ }
+    }
+    // Kick it off on script load.
+    checkPasswordRecoveryHash();
 
     async function handleRegister(e) {
       e.preventDefault();
