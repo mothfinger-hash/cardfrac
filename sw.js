@@ -1,4 +1,24 @@
 // PathBinder Service Worker
+// v356 — Hotfixes from v355 mobile QA:
+//  - PLACEHOLDER_IMG ReferenceError: my v355 fallback handlers referenced
+//    PLACEHOLDER_IMG, which was a const inside renderBrowse() and not
+//    accessible to other render functions. Set detail pages crashed
+//    with "Failed to load. Can't find variable: PLACEHOLDER_IMG"
+//    instead of rendering cards. Hoisted to window.PLACEHOLDER_IMG +
+//    var alias so every script-level callsite can reference it.
+//  - Sales Archive → Shop Analytics: the 2-col grid (Top Cards |
+//    Channel Breakdown) had a fixed grid-template-columns:1fr 1fr
+//    inline so it didn't collapse on mobile. Channel Breakdown's
+//    5-col Monthly Breakdown table overflowed horizontally past the
+//    viewport edge. Added .tx-shop-analytics-grid class that drops
+//    to single column under 900px; added min-width:0 to children so
+//    table contents wrap rather than push the layout wider.
+//  - Binder sidebar fallback labels (".bsb-fallback") had
+//    word-break:break-all which split short binder names into single-
+//    letter vertical columns ("Charizard" → "Chari / z"). Switched to
+//    nowrap + ellipsis so longer names truncate cleanly with the
+//    full name available via the title attribute. Slice trimmed to
+//    4 chars (was 6 for the no-cover case) so it fits the 38px box.
 // v355 — Thumbnail variants wired site-wide + mobile UX fixes:
 //  Now that image_variants.py has finished pre-generating -200.webp and
 //  -400.webp siblings for every catalog + user-photo upload, every <img>
@@ -255,7 +275,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v355';
+const CACHE = 'pathbinder-v356';
 
 const PRECACHE = [
   '/offline.html',

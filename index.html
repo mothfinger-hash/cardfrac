@@ -925,6 +925,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       /* Table scroll */
       .tx-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
       .tx-table{font-size:.58rem}
+
+      /* Sales Archive → Shop Analytics: collapse the 2-col Top Cards /
+         Channel Breakdown grid to single column so the 5-col Monthly
+         Breakdown table inside Channel Breakdown isn't squashed into
+         a 170px-wide column with horizontal overflow. */
+      .tx-shop-analytics-grid{grid-template-columns:1fr !important}
       .hm{display:none}
       .holdings-grid{grid-template-columns:1fr !important}
 
@@ -3211,7 +3217,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* ── Icons ── */
     .bsb-icon{width:38px;height:38px;border-radius:4px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.12);flex-shrink:0;transition:border-color 0.15s,box-shadow 0.15s,transform 0.18s cubic-bezier(0.34,1.56,0.64,1);position:relative;transform-origin:center center}
     .bsb-icon img{width:100%;height:100%;object-fit:cover}
-    .bsb-icon .bsb-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.5rem;font-family:'Press Start 2P',monospace;text-align:center;padding:3px;line-height:1.2;word-break:break-all}
+    .bsb-icon .bsb-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.5rem;font-family:'Press Start 2P',monospace;text-align:center;padding:3px;line-height:1.2;word-break:keep-all;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .bsb-icon.active{border-color:#1AC7A0;box-shadow:0 0 8px rgba(26,199,160,.35)}
     /* Drag-over: enlarge the hovered binder 1.5x with a snappy spring
        so the user clearly sees which binder is the drop target. */
@@ -9644,7 +9650,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const clearBtn = document.getElementById('clearFiltersBtn');
       if (clearBtn) clearBtn.style.display = showClearBtn ? 'block' : 'none';
 
-      const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a0a00'/%3E%3Crect x='110' y='60' width='80' height='100' rx='4' fill='%232e1500'/%3E%3Ctext x='150' y='185' font-family='monospace' font-size='11' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
+      // PLACEHOLDER_IMG is now a window-level global (defined just above
+      // renderBrowse alongside the other broadly-used image helpers) so
+      // every <img onerror> handler in the app can reference it without
+      // capturing function scope. Kept the local var pointing at the
+      // window value for any browseListings code that still references
+      // PLACEHOLDER_IMG by bare name.
+      var PLACEHOLDER_IMG = window.PLACEHOLDER_IMG;
 
       if (filtered.length === 0) {
         grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted)">
@@ -13940,9 +13952,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
             ${barChartSvg}
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+            <div class="tx-shop-analytics-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
               <!-- Top 5 cards -->
-              <div>
+              <div style="min-width:0">
                 <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">Top Cards by Revenue</div>
                 ${top5.length ? top5.map(([name, data], i) => `
                   <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(74,40,0,.3)">
@@ -13952,7 +13964,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 : '<div style="font-size:.72rem;color:var(--muted)">No data yet</div>'}
               </div>
               <!-- Channel breakdown -->
-              <div>
+              <div style="min-width:0">
                 <div style="font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:8px">Channel Breakdown</div>
                 <div style="display:flex;flex-direction:column;gap:8px">
                   <div>
@@ -19531,8 +19543,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const active = currentBinderId === b.id;
         const bg = b.color || '#444';
         const imgHtml = b.cover_image_url
-          ? `<img src="${_pickThumbVariant(b.cover_image_url, 200)}" data-fallback="${b.cover_image_url}" alt="${b.name}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex');this.onerror=null}"><div class="bsb-fallback" style="display:none;background:${bg}28;color:${bg}">${b.name.slice(0,4)}</div>`
-          : `<div class="bsb-fallback" style="background:${bg}28;color:${bg}">${b.name.slice(0,6)}</div>`;
+          ? `<img src="${_pickThumbVariant(b.cover_image_url, 200)}" data-fallback="${b.cover_image_url}" alt="${b.name}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex');this.onerror=null}"><div class="bsb-fallback" style="display:none;background:${bg}28;color:${bg}" title="${b.name}">${b.name.slice(0,4)}</div>`
+          : `<div class="bsb-fallback" style="background:${bg}28;color:${bg}" title="${b.name}">${b.name.slice(0,4)}</div>`;
         // Three ways to open the edit modal:
         //   1. ✎ overlay button (always visible, top-right of the icon)
         //   2. Right-click on the icon (desktop power users)
@@ -28102,6 +28114,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         } catch(_) {}
       } catch(_) { /* best-effort */ }
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // PLACEHOLDER_IMG — global "no photo" SVG used by every <img>
+    // onerror handler that wants to swap in a placeholder after both
+    // the variant and original URLs 404. Inlined as a data URI so it
+    // has zero network cost and works offline. Previously this was a
+    // const inside renderBrowse() which meant any other render function
+    // referencing it (e.g. _renderCatalogCardRow on the set detail
+    // page) threw "Can't find variable: PLACEHOLDER_IMG" and failed
+    // the entire template literal — visible to users as a totally
+    // broken page. Hoisted to window level here so every callsite can
+    // reach it regardless of which scope they execute in.
+    window.PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a0a00'/%3E%3Crect x='110' y='60' width='80' height='100' rx='4' fill='%232e1500'/%3E%3Ctext x='150' y='185' font-family='monospace' font-size='11' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
+    // Bare-name alias so template literals using `${PLACEHOLDER_IMG}`
+    // resolve via the lexical scope chain instead of relying on
+    // implicit global-property lookup (which fails in strict-mode
+    // contexts). `var` here makes this script-global.
+    var PLACEHOLDER_IMG = window.PLACEHOLDER_IMG;
 
     // ─────────────────────────────────────────────────────────────────
     // _thumbUrl — DEPRECATED. Don't call from new code.
