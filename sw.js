@@ -1,4 +1,17 @@
 // PathBinder Service Worker
+// v360 — Killed the syncUserDataFromCloud infinite loop:
+//  updateAuthUI() called syncUserDataFromCloud(), which awaited a
+//  Supabase profiles query, rendered the avatar, then called
+//  updateAuthUI() back — kicking off the same chain again. Each
+//  iteration was a ~3s network round-trip. The 712-request network
+//  panel screenshot from a single session was exactly this loop
+//  burning through ~3 minutes of bandwidth before the user closed
+//  the tab.
+//  Added a re-entrancy guard plus a per-user "already synced this
+//  session" flag (_syncInProgress + _syncDoneFor). Nested calls
+//  short-circuit immediately. The flag is reset on sign-out and
+//  when a different user signs in on the same tab so we still
+//  pull fresh data for legitimately new sessions.
 // v359 — Sets page perf + free scans bumped + nightly refresh circuit breaker:
 //  - Set detail card lookup switched from `.ilike('set_code', setId)`
 //    (full-table regex scan, ~30s) to `.eq('set_code', setIdLower)`
@@ -327,7 +340,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v359';
+const CACHE = 'pathbinder-v360';
 
 const PRECACHE = [
   '/offline.html',

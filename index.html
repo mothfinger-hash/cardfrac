@@ -9334,6 +9334,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       listings = [];
       slots = [];
       collectionItems = [];
+      // Reset the syncUserDataFromCloud cache key so the NEXT user
+      // signing in on this tab triggers a fresh sync (otherwise we'd
+      // skip the cloud-data hydration for the new account).
+      try { _syncDoneFor = null; } catch(_) {}
       updateCartBar();
       // Wipe personal localStorage so the next user signing in on this
       // device doesn't inherit the previous user's avatar / badges.
@@ -31212,8 +31216,25 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
 
     // ── Load avatar+badges from Supabase on sign-in ─────────────────
+    // Re-entrancy guard. updateAuthUI() calls syncUserDataFromCloud(),
+    // and this function in turn used to call updateAuthUI() back after
+    // rendering the avatar to PFP — which kicked off another
+    // syncUserDataFromCloud, ad infinitum. The 712-request network
+    // panel screenshot was exactly that loop.
+    // The guard makes nested calls within the same sign-in session a
+    // no-op. _syncDoneFor tracks the user id we've already synced for
+    // so a different user signing in on the same tab still gets a
+    // fresh sync.
+    let _syncInProgress = false;
+    let _syncDoneFor    = null;
     async function syncUserDataFromCloud() {
       if (!currentUser) return;
+      if (_syncInProgress) return;
+      // Already synced for this user on this session — re-firing buys
+      // us nothing and burns bandwidth. The auth-state-change listener
+      // resets _syncDoneFor on sign-out.
+      if (_syncDoneFor === currentUser.id) return;
+      _syncInProgress = true;
       try {
         const { data, error } = await sb.from('profiles').select('avatar_state, badges_earned, scan_total').eq('id', currentUser.id).maybeSingle();
         // 400 = columns not yet migrated; silently skip
@@ -31279,7 +31300,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             }
           } catch(_) {}
         }
+        // Stamp success: this user has been synced for this session.
+        // Subsequent calls to syncUserDataFromCloud() short-circuit
+        // until the user signs out or a different user signs in.
+        _syncDoneFor = currentUser && currentUser.id;
       } catch(_) {}
+      finally {
+        _syncInProgress = false;
+      }
     }
     // ── Save avatar+badges to Supabase ──────────────────────────────
     // Reads from the v2 localStorage key (sprite-based engine). The
@@ -31524,6 +31552,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             localStorage.removeItem('pathbinder_avatar_pfp_v1');
             localStorage.removeItem('pathbinder_avatar_v2');
             localStorage.removeItem('pathbinder_badges_v1');
+            // Different user — reset the sync guard so this new user's
+            // profile gets fetched fresh.
+            try { _syncDoneFor = null; } catch(_) {}
           }
           localStorage.setItem('pathbinder_last_user_id', session.user.id);
         } catch(_) {}
