@@ -1,4 +1,20 @@
 // PathBinder Service Worker
+// v368 — Magic / YGO / OP / etc. Sets tabs now fast:
+//  Non-Pokemon TCG paths in loadTcgSetsPage paginated the catalog
+//  client-side in 1000-row chunks and did the GROUP BY in JS. Magic
+//  took 14s, YGO 7s on cold visit. Two-tier fix:
+//    1. New catalog_sets_summary_v2 RPC does the whole aggregation
+//       server-side (one query, returns set_code, set_name, total,
+//       has_singles, has_sealed, max_created_at). With the indexes
+//       from migration_catalog_perf_indexes.sql, ~50ms instead of 14s.
+//       Frontend tries the RPC first; falls back to the old pagination
+//       loop if the migration hasn't been run, with a console warn
+//       pointing at the migration file.
+//    2. Per-TCG localStorage cache (pathbinder_tcg_sets_<gameKey>_v2)
+//       with 24h TTL + background stale-while-revalidate. Once the
+//       cache is warm, subsequent visits render instantly even if
+//       the network is down. Re-renders only when the set count
+//       changed so we don't flash the page on the common case.
 // v367 — Subsidiary claimers also get the Discord prompt:
 //  maybeShowBetaWelcome() only checked beta_testers rows, so friends
 //  redeeming a subsidiary code skipped the Discord modal entirely.
@@ -459,7 +475,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v367';
+const CACHE = 'pathbinder-v368';
 
 const PRECACHE = [
   '/offline.html',

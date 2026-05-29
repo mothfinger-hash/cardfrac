@@ -30940,81 +30940,168 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
     }
 
+    // ── Non-Pokemon TCG sets: RPC fast path + pagination fallback ──
+    // The RPC (catalog_sets_summary_v2) returns one row per (set_code,
+    // set_name) with total / has_singles / has_sealed / max_created_at
+    // — everything the UI needs to render the list and the Singles/
+    // Sealed toggle. ~50ms instead of the multi-second pagination.
+    async function _fetchTcgSetsViaRpc(prefix) {
+      try {
+        const r = await sb.rpc('catalog_sets_summary_v2', { p_prefix: prefix });
+        if (r.error || !Array.isArray(r.data)) return null;
+        return r.data.map(function(row) {
+          return {
+            set_name:       row.set_name || row.set_code || '?',
+            set_code:       row.set_code || '',
+            total:          Number(row.total) || 0,
+            has_singles:    !!row.has_singles,
+            has_sealed:     !!row.has_sealed,
+            max_created_at: row.max_created_at ? new Date(row.max_created_at).getTime() : 0,
+          };
+        });
+      } catch(_) { return null; }
+    }
+    // Fallback when the RPC isn't installed — same logic as before, just
+    // isolated so loadTcgSetsPage stays readable.
+    async function _fetchTcgSetsViaPagination(prefix) {
+      let allRows = [];
+      let offset = 0;
+      let useCreatedAt = true;
+      let firstErr = null;
+      while (true) {
+        const cols = useCreatedAt
+          ? 'set_name, set_code, product_type, created_at'
+          : 'set_name, set_code, product_type';
+        const res = await sb.from('catalog')
+          .select(cols)
+          .like('id', prefix + '%')
+          .range(offset, offset + 999);
+        if (res.error) {
+          const msg = (res.error.message || '').toLowerCase();
+          if (useCreatedAt && (msg.includes('created_at') || msg.includes('column'))) {
+            console.warn('[sets] catalog.created_at not available — falling back to alpha sort');
+            useCreatedAt = false;
+            continue;
+          }
+          firstErr = res.error;
+          break;
+        }
+        const data = res.data || [];
+        if (data.length === 0) break;
+        allRows = allRows.concat(data);
+        if (data.length < 1000) break;
+        offset += 1000;
+      }
+      if (firstErr) throw new Error(firstErr.message || 'catalog query failed');
+      const byCode = {};
+      allRows.forEach(function(r) {
+        const key = r.set_code || r.set_name || '?';
+        if (!byCode[key]) byCode[key] = {
+          set_name: r.set_name || r.set_code || '?',
+          set_code: r.set_code || '',
+          total: 0, max_created_at: 0,
+          has_sealed: false, has_singles: false,
+        };
+        byCode[key].total++;
+        const pt = r.product_type || 'single';
+        if (pt === 'single') byCode[key].has_singles = true;
+        else                 byCode[key].has_sealed  = true;
+        if (useCreatedAt && r.created_at) {
+          const t = new Date(r.created_at).getTime();
+          if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
+        }
+      });
+      return Object.values(byCode);
+    }
+    // Background refresh — fires after we served a stale localStorage hit.
+    // Re-renders the page if the set count changed (catalog grew) so the
+    // user picks up new sets without waiting.
+    const _tcgRefreshInflight = {};
+    function _refreshTcgSetsInBackground(gameKey, prefix, lsKey) {
+      if (_tcgRefreshInflight[gameKey]) return;
+      _tcgRefreshInflight[gameKey] = true;
+      (async function() {
+        try {
+          let sets = await _fetchTcgSetsViaRpc(prefix);
+          if (!sets) sets = await _fetchTcgSetsViaPagination(prefix);
+          sets.sort(function(a, b) {
+            const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
+            if (dt !== 0) return dt;
+            return (a.set_name || '').localeCompare(b.set_name || '');
+          });
+          const now = Date.now();
+          const cached = _tcgSetsCache[gameKey] && _tcgSetsCache[gameKey].sets;
+          const hasNew = !cached || cached.length !== sets.length;
+          _tcgSetsCache[gameKey] = { timestamp: now, sets };
+          try { localStorage.setItem(lsKey, JSON.stringify({ timestamp: now, sets })); } catch(_) {}
+          // Only re-render if the user is still looking at this TCG tab
+          // AND there's actually new data — avoids flash on the common
+          // case of "nothing changed."
+          if (hasNew && _setsLang === gameKey) {
+            try { loadSetsPage(); } catch(_) {}
+          }
+        } catch(_) {} finally {
+          _tcgRefreshInflight[gameKey] = false;
+        }
+      })();
+    }
+
     async function loadTcgSetsPage(el, gameKey) {
       const cfg = _TCG_SETS_CONFIG[gameKey];
       if (!cfg) { el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Unknown TCG</div>'; return; }
       el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading ' + cfg.name + ' sets…</div>';
       try {
         const now = Date.now();
+        const MEM_TTL = 600000;            // 10 min — session memory
+        const LS_TTL  = 24 * 60 * 60 * 1000; // 24h — persistent
+        const LS_KEY  = 'pathbinder_tcg_sets_' + gameKey + '_v2';
         let cachedBlock = _tcgSetsCache[gameKey];
-        if (!cachedBlock || (now - cachedBlock.timestamp > 600000)) {
-          // Paginate through catalog filtered by id prefix. Try first with
-          // created_at so we can sort by recency. If the column doesn't
-          // exist on this DB, fall back to a basic SELECT and alpha sort —
-          // we don't want a missing column to silently produce empty results.
-          // product_type is always selected so we can flag sets that have
-          // sealed products and filter the list when _setsView === 'sealed'.
-          let allRows = [];
-          let offset = 0;
-          let useCreatedAt = true;
-          let firstErr = null;
-          while (true) {
-            const cols = useCreatedAt
-              ? 'set_name, set_code, product_type, created_at'
-              : 'set_name, set_code, product_type';
-            const res = await sb.from('catalog')
-              .select(cols)
-              .like('id', cfg.prefix + '%')
-              .range(offset, offset + 999);
-            if (res.error) {
-              const msg = (res.error.message || '').toLowerCase();
-              // Column-missing error → fall back to schema without created_at
-              if (useCreatedAt && (msg.includes('created_at') || msg.includes('column'))) {
-                console.warn('[sets] catalog.created_at not available — falling back to alpha sort');
-                useCreatedAt = false;
-                continue; // retry the same page without created_at
-              }
-              firstErr = res.error;
-              break;
-            }
-            const data = res.data || [];
-            if (data.length === 0) break;
-            allRows = allRows.concat(data);
-            if (data.length < 1000) break;
-            offset += 1000;
-          }
-          if (firstErr) throw new Error(firstErr.message || 'catalog query failed');
 
-          // Group by set_code, count cards, track max(created_at) if available.
-          // has_sealed / has_singles let the Singles ↔ Sealed toggle filter
-          // the list down to sets with rows of the active type.
-          const byCode = {};
-          allRows.forEach(r => {
-            const key = r.set_code || r.set_name || '?';
-            if (!byCode[key]) byCode[key] = {
-              set_name: r.set_name || r.set_code || '?',
-              set_code: r.set_code || '',
-              total: 0, max_created_at: 0,
-              has_sealed: false, has_singles: false,
-            };
-            byCode[key].total++;
-            const pt = r.product_type || 'single';
-            if (pt === 'single') byCode[key].has_singles = true;
-            else                 byCode[key].has_sealed  = true;
-            if (useCreatedAt && r.created_at) {
-              const t = new Date(r.created_at).getTime();
-              if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
+        if (!cachedBlock || (now - cachedBlock.timestamp > MEM_TTL)) {
+          // ── localStorage cache check ──
+          // Hydrate from disk first so a returning visitor sees Magic
+          // and YGO render instantly instead of re-paying the 14s/7s
+          // catalog-walk cost. Background refresh below keeps it fresh.
+          let lsSets = null, lsAge = Infinity;
+          try {
+            const raw = localStorage.getItem(LS_KEY);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed && Array.isArray(parsed.sets) && parsed.timestamp) {
+                lsAge  = now - parsed.timestamp;
+                lsSets = parsed.sets;
+              }
             }
-          });
-          const sets = Object.values(byCode).sort((a, b) => {
-            if (useCreatedAt) {
+          } catch(_) {}
+
+          if (lsSets && lsAge < LS_TTL) {
+            // Serve from localStorage now, refresh in background.
+            _tcgSetsCache[gameKey] = { timestamp: now, sets: lsSets };
+            cachedBlock = _tcgSetsCache[gameKey];
+            _refreshTcgSetsInBackground(gameKey, cfg.prefix, LS_KEY);
+          } else {
+            // ── No fresh cache — fetch ──
+            // Fast path: catalog_sets_summary_v2 RPC does the whole
+            // GROUP BY server-side. Falls back to pagination if the
+            // RPC isn't installed yet (migration not run).
+            let sets = await _fetchTcgSetsViaRpc(cfg.prefix);
+            if (!sets) {
+              console.warn('[sets] catalog_sets_summary_v2 RPC not installed — falling back to slow client-side pagination. Run migration_catalog_sets_summary_v2.sql to enable the fast path.');
+              sets = await _fetchTcgSetsViaPagination(cfg.prefix);
+            }
+            sets.sort((a, b) => {
               const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
               if (dt !== 0) return dt;
-            }
-            return (a.set_name || '').localeCompare(b.set_name || '');
-          });
-          _tcgSetsCache[gameKey] = { timestamp: now, sets };
-          cachedBlock = _tcgSetsCache[gameKey];
+              return (a.set_name || '').localeCompare(b.set_name || '');
+            });
+            _tcgSetsCache[gameKey] = { timestamp: now, sets };
+            cachedBlock = _tcgSetsCache[gameKey];
+            // Persist to localStorage so the next visit (today or
+            // tomorrow before TTL) skips the network entirely.
+            try {
+              localStorage.setItem(LS_KEY, JSON.stringify({ timestamp: now, sets }));
+            } catch(_) {}
+          }
         }
 
         // Owned map: api_card_id starting with this prefix → count

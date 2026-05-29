@@ -115,31 +115,48 @@ def _build_filter(game, lang):
 
 def load_catalog(game, lang, limit=None):
     """Page through every catalog row that has a Supabase Storage URL
-    in image_url and (optionally) matches the game_type / lang filters."""
+    in image_url and (optionally) matches the game_type / lang filters.
+
+    Uses keyset pagination (id > last_seen_id ORDER BY id) instead of
+    OFFSET/LIMIT. PostgREST + Postgres times out on deep offsets when
+    the filter set includes a leading-wildcard LIKE (image_url LIKE
+    '%storage%') because the planner has to seq-scan + discard each
+    page before returning. Keyset doesn't degrade with depth — each
+    page is a fresh index range scan from the last id forward."""
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
     select = "id,name,game_type,image_url"
     flt    = _build_filter(game, lang)
     rows   = []
-    page   = 0
-    page_size = 1000
+    page_size = 500  # smaller than before (1000) — keeps per-page cost low
+    last_id = None
     headers = {
         "apikey":        SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Accept":        "application/json",
     }
     while True:
-        params = f"?select={select}&{flt}&order=id.asc&limit={page_size}&offset={page * page_size}"
+        # PostgREST gt filter: id=gt.<last_id>. URL-encode the id value
+        # since some ids contain shell-/URL-meaningful characters.
+        cursor = ""
+        if last_id is not None:
+            cursor = f"&id=gt.{requests.utils.quote(last_id, safe='')}"
+        params = f"?select={select}&{flt}{cursor}&order=id.asc&limit={page_size}"
         r = requests.get(url + params, headers=headers, timeout=60)
+        # Retry once on transient 5xx (Supabase occasionally hiccups
+        # mid-scan) before giving up.
+        if r.status_code in (500, 502, 503, 504):
+            time.sleep(1.5 + random.uniform(0, 1))
+            r = requests.get(url + params, headers=headers, timeout=60)
         r.raise_for_status()
         batch = r.json()
         if not batch:
             break
         rows.extend(batch)
+        last_id = batch[-1]["id"]
         if limit and len(rows) >= limit:
             return rows[:limit]
         if len(batch) < page_size:
             break
-        page += 1
     return rows
 
 
