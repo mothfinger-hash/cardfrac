@@ -9338,6 +9338,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // signing in on this tab triggers a fresh sync (otherwise we'd
       // skip the cloud-data hydration for the new account).
       try { _syncDoneFor = null; } catch(_) {}
+      // Same reasoning for the collection/orders/binders/snapshots
+      // bulk loader and the profile+listings hydration — next user
+      // gets fresh data, no stale "already loaded" short-circuits.
+      try { _userDataLoadedFor = null; } catch(_) {}
+      try { _profileListingsHydratedFor = null; } catch(_) {}
       updateCartBar();
       // Wipe personal localStorage so the next user signing in on this
       // device doesn't inherit the previous user's avatar / badges.
@@ -9777,7 +9782,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return `<div class="listing-card ${isSold ? 'locked-card' : ''}">
           ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
           <div class="lc-thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
-            <img src="${_thumb200}" data-fallback="${photoSrc}" alt="${_escHtml(listing.name)}" class="lc-thumb" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.src='${PLACEHOLDER_IMG}';this.onerror=null}" />
+            <img src="${_thumb200}" data-fallback="${photoSrc}" alt="${_escHtml(listing.name)}" class="lc-thumb" loading="lazy" decoding="async" onerror="_thumbFail(this)" />
             <div class="lc-overlay-top">
               <div class="lc-chips">
                 ${condChip}
@@ -28158,6 +28163,47 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // broken page. Hoisted to window level here so every callsite can
     // reach it regardless of which scope they execute in.
     window.PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a0a00'/%3E%3Crect x='110' y='60' width='80' height='100' rx='4' fill='%232e1500'/%3E%3Ctext x='150' y='185' font-family='monospace' font-size='11' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
+
+    // ─────────────────────────────────────────────────────────────────
+    // _thumbFail / _thumbFailHide — universal img onerror handlers.
+    //
+    // The fallback cascade for every grid/list thumbnail in the app:
+    //   1. _pickThumbVariant() URL  (e.g. card-images/foo-200.webp)
+    //   2. data-fallback URL        (the original full-size image)
+    //   3. PLACEHOLDER_IMG          (gray "No Photo" SVG)
+    //
+    // These helpers exist because inlining `this.src='${PLACEHOLDER_IMG}'`
+    // into an HTML `onerror=""` attribute is a parsing disaster — the
+    // SVG data URI contains single quotes (xmlns='...', font-family='...')
+    // that collide with the JS string quotes around it, breaking the
+    // handler silently. With the helpers, the onerror just calls a
+    // function and the data URI never enters the HTML.
+    //
+    // _thumbFail   — falls through to PLACEHOLDER_IMG on final failure
+    // _thumbFailHide — hides the element on final failure (use when the
+    //                  placeholder would be visually worse than blank,
+    //                  e.g. inline list rows where empty space is fine)
+    // ─────────────────────────────────────────────────────────────────
+    window._thumbFail = function _thumbFail(img) {
+      try {
+        var fb = img.dataset.fallback;
+        if (fb && img.src !== fb) { img.src = fb; return; }
+        img.src = window.PLACEHOLDER_IMG;
+        img.onerror = null;
+      } catch(_) {
+        img.onerror = null;
+      }
+    };
+    window._thumbFailHide = function _thumbFailHide(img) {
+      try {
+        var fb = img.dataset.fallback;
+        if (fb && img.src !== fb) { img.src = fb; return; }
+        img.style.visibility = 'hidden';
+        img.onerror = null;
+      } catch(_) {
+        img.onerror = null;
+      }
+    };
     // Bare-name alias so template literals using `${PLACEHOLDER_IMG}`
     // resolve via the lexical scope chain instead of relying on
     // implicit global-property lookup (which fails in strict-mode
@@ -28921,7 +28967,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
         onclick="${openFn}(${idx})">
         ${card.image_url
-          ? `<img src="${_pickThumbVariant(card.image_url, 200)}" data-fallback="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.src='${PLACEHOLDER_IMG}';this.onerror=null}" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
+          ? `<img src="${_pickThumbVariant(card.image_url, 200)}" data-fallback="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" onerror="_thumbFail(this)" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
           : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
@@ -29377,6 +29423,36 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       loadSetsPage();
     }
 
+    // Background refresh for the localStorage-cached pokemontcg.io sets
+    // list. Fires off a fetch without blocking the current render. If
+    // the fresh data differs from what we already showed, update the
+    // cache and re-render so the user sees any new sets without waiting.
+    // Called from loadSetsPage when we served from a fresh (but not
+    // brand-new) localStorage cache.
+    let _setsBackgroundRefreshInflight = false;
+    function _refreshSetsListInBackground(lsKey) {
+      if (_setsBackgroundRefreshInflight) return;
+      _setsBackgroundRefreshInflight = true;
+      fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250', { cache: 'no-store' })
+        .then(function(res) { return res.ok ? res.json() : null; })
+        .then(function(data) {
+          if (!data || !Array.isArray(data.data) || !data.data.length) return;
+          const fresh = data.data;
+          const now = Date.now();
+          try { localStorage.setItem(lsKey, JSON.stringify({ timestamp: now, sets: fresh })); } catch(_) {}
+          // Only re-render if there's a new set the user wasn't seeing.
+          // Avoids a needless flash for the common "nothing changed" case.
+          const cachedIds = new Set((_setsCache && _setsCache.sets || []).map(function(s) { return s.id; }));
+          const hasNew = fresh.some(function(s) { return !cachedIds.has(s.id); });
+          _setsCache = { timestamp: now, sets: fresh };
+          if (hasNew) {
+            try { loadSetsPage(); } catch(_) {}
+          }
+        })
+        .catch(function(){})
+        .finally(function() { _setsBackgroundRefreshInflight = false; });
+    }
+
     // Fetch catalog sets in the background and append any sets the
     // pokemontcg.io list is missing. Tries the catalog_sets_summary
     // RPC first (server-side GROUP BY, <100ms) and falls back to the
@@ -29598,38 +29674,70 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">Loading sets…</div>';
 
       try {
-        // Sets list: render pokemontcg.io sets IMMEDIATELY (~2s typical),
-        // then fetch catalog sets ASYNC and append any pokemontcg.io
-        // doesn't have (Mega Evolution Promos and similar). Without
-        // the async pattern, a 20k-row catalog scan blocks the entire
-        // page for 100s+.
+        // Sets list — stale-while-revalidate caching strategy:
+        //   1. In-memory cache (per session)
+        //   2. localStorage cache (24h TTL, survives reloads + tab close)
+        //   3. pokemontcg.io API for the freshest data (background refresh
+        //      if the localStorage cache is being served)
+        // pokemontcg.io's /v2/sets call regularly runs 3-6 seconds on cold
+        // load. Persisting the response across sessions takes the typical
+        // returning-user load from "wait 6 seconds" → "render instantly".
         let sets;
         const now = Date.now();
-        if (_setsCache && (now - _setsCache.timestamp < 600000)) {
+        const LS_KEY  = 'pathbinder_sets_pokemonen_v1';
+        const LS_TTL  = 24 * 60 * 60 * 1000;   // 24 hours
+        const MEM_TTL = 10 * 60 * 1000;        // 10 minutes (session)
+
+        if (_setsCache && (now - _setsCache.timestamp < MEM_TTL)) {
           sets = _setsCache.sets;
         } else {
-          // 1. API sets (primary — has release date, total, images)
-          let apiSets = [];
+          // Try localStorage first — same-day visit gets instant render.
+          let lsSets = null, lsAge = Infinity;
           try {
-            // cache: 'no-store' bypasses both the HTTP cache and any SW
-            // cache so a freshly-released set (e.g. Chaos Rising) lands
-            // immediately instead of waiting for a TTL to expire. The
-            // sw.js fetch handler already short-circuits api.pokemontcg.io
-            // to network-only, but no-store is belt-and-suspenders.
-            const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250', { cache: 'no-store' });
-            if (res.ok) {
-              const data = await res.json();
-              apiSets = data.data || [];
+            const raw = localStorage.getItem(LS_KEY);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed && Array.isArray(parsed.sets) && parsed.timestamp) {
+                lsAge  = now - parsed.timestamp;
+                lsSets = parsed.sets;
+              }
             }
           } catch(_) {}
 
-          sets = apiSets;   // render these now — catalog appends async below
-          _setsCache = { timestamp: now, sets };
+          if (lsSets && lsAge < LS_TTL) {
+            // Fresh cache hit — render immediately, refresh in background.
+            sets = lsSets;
+            _setsCache = { timestamp: now, sets };
+            _refreshSetsListInBackground(LS_KEY);
+          } else {
+            // No cache (or expired) — wait for API. Slow first load.
+            let apiSets = [];
+            try {
+              // cache: 'no-store' bypasses both the HTTP cache and any SW
+              // cache so a freshly-released set (e.g. Chaos Rising) lands
+              // immediately instead of waiting for a TTL to expire.
+              const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250', { cache: 'no-store' });
+              if (res.ok) {
+                const data = await res.json();
+                apiSets = data.data || [];
+              }
+            } catch(_) {}
 
-          // 2. Catalog sets — non-blocking. Kicks off after the page
-          // has rendered the API sets so the user isn't waiting on
-          // a slow Supabase aggregate.
-          _appendCatalogSetsAsync(apiSets);
+            sets = apiSets;
+            _setsCache = { timestamp: now, sets };
+            // Persist to localStorage so the next visit (today, or after
+            // the user comes back tomorrow) doesn't have to wait again.
+            try {
+              if (apiSets.length) {
+                localStorage.setItem(LS_KEY, JSON.stringify({ timestamp: now, sets: apiSets }));
+              }
+            } catch(_) {}
+          }
+
+          // Catalog sets — non-blocking. Kicks off after the page has
+          // rendered the API sets so the user isn't waiting on the
+          // catalog aggregate.
+          _appendCatalogSetsAsync(sets);
         }
 
         // Build a lookup: set_name → count of owned cards (non-ghost)
@@ -31227,6 +31335,28 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // fresh sync.
     let _syncInProgress = false;
     let _syncDoneFor    = null;
+    // Same idea, separate scope: initApp() and onAuthStateChange both
+    // independently fired Promise.all([loadCollection, loadOrders,
+    // loadPortfolioSnapshots, loadBinders]) on every page load with
+    // an existing session, doubling every query. _userDataLoadedFor
+    // tracks which user id we already hydrated for; the helper below
+    // short-circuits the second caller.
+    let _userDataLoadedFor = null;
+    async function loadUserDataOnce() {
+      if (!currentUser) return;
+      if (_userDataLoadedFor === currentUser.id) return;
+      _userDataLoadedFor = currentUser.id;
+      await Promise.all([
+        loadCollection().catch(() => {}),
+        loadOrders().catch(() => {}),
+        loadPortfolioSnapshots().catch(() => {}),
+        loadBinders().catch(() => {})
+      ]);
+    }
+    // Same idea for the profile + listings hydration that runs in
+    // both initApp AND onAuthStateChange. With this guard the
+    // second-firing path becomes a no-op.
+    let _profileListingsHydratedFor = null;
     async function syncUserDataFromCloud() {
       if (!currentUser) return;
       if (_syncInProgress) return;
@@ -31359,6 +31489,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             showToast('This account has been deleted.');
           } else {
             currentUser = { ...session.user, ...(profile || {}) };
+            // Stamp the dedup guard so onAuthStateChange's SIGNED_IN
+            // handler doesn't re-fetch the same profile + listings
+            // moments later. listings was already fetched above as part
+            // of the parallel Promise.all (`listingsResult`).
+            _profileListingsHydratedFor = session.user.id;
             // Render the site-wide deletion banner if a 30-day grace window
             // is in progress. No-op when no deletion is pending.
             try { renderDeletionPendingBanner(); } catch(_) {}
@@ -31393,13 +31528,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               .order('created_at', { ascending: false });
           } catch(e) { /* transactions table may not exist yet */ }
           const offerResult = { data: [] }; // trade_offers deprecated
-          // Load collection, orders, binders, and portfolio snapshots in parallel
-          await Promise.all([
-            loadCollection().catch(() => {}),
-            loadOrders().catch(() => {}),
-            loadPortfolioSnapshots().catch(() => {}),
-            loadBinders().catch(() => {})
-          ]);
+          // Load collection, orders, binders, and portfolio snapshots in
+          // parallel. Routed through loadUserDataOnce so the duplicate
+          // Promise.all in onAuthStateChange becomes a no-op when this
+          // path runs first.
+          await loadUserDataOnce();
           // Backfill price_source_url for cards that have api_card_id but no URL yet
           await backfillPriceSourceUrls();
           if (hasPriceTracking()) {
@@ -31555,6 +31688,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             // Different user — reset the sync guard so this new user's
             // profile gets fetched fresh.
             try { _syncDoneFor = null; } catch(_) {}
+            try { _userDataLoadedFor = null; } catch(_) {}
+            try { _profileListingsHydratedFor = null; } catch(_) {}
           }
           localStorage.setItem('pathbinder_last_user_id', session.user.id);
         } catch(_) {}
@@ -31569,8 +31704,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // time the user signed in on a fresh browser, because the
         // localStorage badge list hadn't been hydrated yet.
 
-        // Then enrich with profile + fresh data in background
+        // Then enrich with profile + fresh data in background — but
+        // only if initApp hasn't already hydrated this user's profile
+        // and listings. The dedup guard prevents the duplicate
+        // profiles+listings queries seen in the network panel.
         const uid = session.user.id;
+        if (_profileListingsHydratedFor === uid) {
+          // initApp already did this work — skip the duplicate
+          // fetch, fire UI refresh from the cached currentUser.
+          try { maybeShowBetaWelcome(); } catch(_) {}
+          try { updateAuthUI(); } catch(_) {}
+          loadUserDataOnce().then(() => { renderBinder(); renderDashboard(); });
+          return;
+        }
+        _profileListingsHydratedFor = uid;
         Promise.all([
           sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
           sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false })
@@ -31611,13 +31758,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           }
           updateAuthUI();
           renderAllContent();
-          // Load collection + orders + binders + snapshots in background after sign-in, then re-render
-          Promise.all([
-            loadCollection().catch(() => {}),
-            loadOrders().catch(() => {}),
-            loadPortfolioSnapshots().catch(() => {}),
-            loadBinders().catch(() => {})
-          ]).then(() => {
+          // Routed through loadUserDataOnce so initApp's parallel block
+          // doesn't get fired again here (or vice versa, depending which
+          // hits first). Only one round of fetches per sign-in.
+          loadUserDataOnce().then(() => {
             renderBinder();
             renderDashboard();
           });

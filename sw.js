@@ -1,4 +1,49 @@
 // PathBinder Service Worker
+// v363 — Killed every duplicate Sets-page query on sign-in:
+//  Network panel showed collection_items × 2, listings × 2, profiles × 2,
+//  portfolio_snapshots × 2 firing on a single page load. Two code paths
+//  were each independently doing the same Promise.all of loaders:
+//    1. initApp() — runs on DOMContentLoaded
+//    2. onAuthStateChange('SIGNED_IN') — fires the same event when the
+//       page restores an existing session
+//  With an active session both paths run, doubling every query.
+//  Same fix as the syncUserDataFromCloud loop: per-user guard flags.
+//  - loadUserDataOnce() wraps the 4-loader parallel block. The second
+//    caller short-circuits if the same user id already triggered it.
+//  - _profileListingsHydratedFor tracks the profile + listings fetch;
+//    initApp stamps it after its parallel Promise.all, and the
+//    SIGNED_IN handler bails before re-firing the queries.
+//  Both guards reset on sign-out and on different-user sign-in, so a
+//  fresh account always gets fresh data.
+// v362 — Sets page no longer waits 6s on pokemontcg.io every visit:
+//  The /v2/sets API was the single biggest Sets-page latency hit (3-6s
+//  on cold load, every load). The in-memory _setsCache only survived
+//  the session, so closing the tab or reloading reset the wait.
+//  Switched to a 3-tier stale-while-revalidate strategy:
+//    1. Session memory cache (10 min TTL) — fastest, unchanged
+//    2. localStorage cache (24h TTL) — survives reloads + tab close.
+//       Returning users render instantly from cache, fresh data
+//       refreshes in the background.
+//    3. Network — only on first-ever load or when the localStorage
+//       cache has expired.
+//  Background refresh updates the cache + re-renders ONLY when there's
+//  a new set the cached version was missing, so we don't flash the
+//  page when nothing changed.
+//  Expected impact for return users: 6s → ~0ms initial render.
+// v361 — Thumbnail fallback handlers no longer silently fail:
+//  My v354 image-fallback patches interpolated PLACEHOLDER_IMG (a
+//  data:image/svg+xml URI containing single quotes for xmlns / font-
+//  family attrs) directly into HTML onerror="..." attributes. The
+//  inner quotes collided with the outer quotes and broke the parser
+//  on every fired error event, so when a -200.webp variant 404'd the
+//  fallback never ran. Visible symptom: broken-image icons in set
+//  detail rows + marketplace browse cards while the original full-
+//  size image (in the modal / detail view) loaded fine.
+//  Fix: replaced the inline onerror with a window._thumbFail(this)
+//  helper that does the variant→fallback→placeholder cascade in JS.
+//  PLACEHOLDER_IMG never enters the HTML attribute now, so the quote
+//  collision is gone. Companion _thumbFailHide handler for the
+//  visibility:hidden variant.
 // v360 — Killed the syncUserDataFromCloud infinite loop:
 //  updateAuthUI() called syncUserDataFromCloud(), which awaited a
 //  Supabase profiles query, rendered the avatar, then called
@@ -340,7 +385,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v360';
+const CACHE = 'pathbinder-v363';
 
 const PRECACHE = [
   '/offline.html',
