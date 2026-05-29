@@ -136,6 +136,43 @@ MAX_RETRIES    = 5
 _session       = requests.Session()
 _session.headers.update(HEADERS)
 
+# ─── Circuit breaker for sustained WAF blocking ───────────────────────────────
+# If PriceCharting's Cloudflare WAF flags our IP partway through a run,
+# every subsequent request 403s. Without a circuit breaker the script
+# spins on each row through 5 retries × ~30s backoff = ~150s per row,
+# burning hours of CI time to accomplish nothing. The breaker watches
+# for consecutive 403/429s and "trips" after the threshold, after which
+# every fetch_pc_api fast-fails without retrying for the remainder of
+# the run. Counter resets on any 2xx so a brief blip doesn't kill the
+# whole job.
+_BREAKER_THRESHOLD = int(os.environ.get("PC_BREAKER_THRESHOLD", "75"))
+_breaker_lock      = threading.Lock()
+_consec_blocked    = 0
+_breaker_tripped   = False
+
+def _breaker_record_block():
+    """Increment the consecutive-block counter and trip if we cross
+    the threshold. Returns True if the breaker is now tripped."""
+    global _consec_blocked, _breaker_tripped
+    with _breaker_lock:
+        _consec_blocked += 1
+        if _consec_blocked >= _BREAKER_THRESHOLD and not _breaker_tripped:
+            _breaker_tripped = True
+            print(f"\n  ⚠  Circuit breaker TRIPPED after {_consec_blocked} consecutive "
+                  f"403/429s from PriceCharting. Fast-failing remaining rows "
+                  f"to avoid burning CI minutes. Re-run after the WAF flag "
+                  f"clears (usually a few hours).\n", flush=True)
+        return _breaker_tripped
+
+def _breaker_record_success():
+    """A 2xx response — reset the consecutive-block counter."""
+    global _consec_blocked
+    with _breaker_lock:
+        _consec_blocked = 0
+
+def _breaker_is_tripped():
+    return _breaker_tripped
+
 _thread_jitter = threading.local()
 
 # GLOBAL API rate limiter. Previous implementation used per-thread jitter
@@ -260,6 +297,12 @@ def fetch_pc_api(pc_id, is_sealed=False):
     """
     if not PC_API_KEY:
         raise RuntimeError("PRICECHARTING_API_KEY not set")
+    # Circuit breaker — if we've already tripped on this run, every
+    # subsequent call fast-fails. Saves ~150s per row vs. burning
+    # through MAX_RETRIES rounds of exponential backoff against a WAF
+    # that won't relent until our IP cools off.
+    if _breaker_is_tripped():
+        raise RuntimeError("circuit breaker tripped (sustained 403/429 from PC)")
     _pace_api()
     url = f"{PC_BASE}/api/product"
     last_err = None
@@ -272,6 +315,7 @@ def fetch_pc_api(pc_id, is_sealed=False):
             time.sleep(2 ** attempt + random.uniform(0, 1))
             continue
         if r.ok:
+            _breaker_record_success()
             # PC's API quirk: for IDs they don't have data for (often
             # foreign sealed products that exist on the site but aren't
             # in the pricing dataset yet), the endpoint returns 200 with
@@ -305,6 +349,12 @@ def fetch_pc_api(pc_id, is_sealed=False):
             # No usable price field — return None but don't error.
             return None, data
         if r.status_code in RETRY_STATUSES:
+            # 403/429 → record toward the circuit breaker. If the
+            # breaker trips mid-retry, bail immediately rather than
+            # finishing the remaining backoff rounds.
+            if r.status_code in (403, 429):
+                if _breaker_record_block():
+                    raise RuntimeError(f"HTTP {r.status_code} (circuit breaker tripped)")
             sleep_s = (2 ** (attempt + 1) - 1) + random.uniform(0, 3)
             last_err = f"HTTP {r.status_code} (retry {attempt+1}/{MAX_RETRIES} after {sleep_s:.1f}s)"
             time.sleep(sleep_s)

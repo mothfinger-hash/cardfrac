@@ -8804,7 +8804,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (tierAtLeast('collector'))  return funds < 3;
       return funds < 1;
     }
-    function hasPriceTracking()  { return tierAtLeast('collector'); }
+    // Price tracking is FREE for everyone — a collector binder isn't
+    // useful if the values don't update, and we'd rather give it away
+    // and earn upgrades on the marketplace / multi-binder / scanner
+    // features. Kept as a function (instead of inlining `true`) so any
+    // callsite that wants to re-gate it later can do so in one place.
+    function hasPriceTracking()  { return true; }
     // Pre-rename, bulk import was the headline 'vendor' feature. It now lives
     // at the enthusiast tier — same features at a lower price, plus the cap.
     function hasBulkImport()     { return tierAtLeast('enthusiast'); }
@@ -8865,7 +8870,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function scannerLimit() {
       if (tierAtLeast('shop'))      return Infinity;   // unlimited
       if (tierAtLeast('collector')) return 1000;       // vendor inherits this too
-      return 5;                                        // free
+      return 25;                                       // free — bumped from 5 to 25/month
     }
     function bulkSessionLimit() {
       if (tierAtLeast('shop'))       return Infinity;
@@ -9221,6 +9226,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         } else {
           adminTab.classList.remove('admin-visible');
         }
+        // Mirror the same visibility logic to the mobile-nav admin
+        // button — inline style toggle since the mobile-nav uses an
+        // entirely different layout system than the sidebar.
+        var _mobAdmin = document.getElementById('mobileNavAdmin');
+        if (_mobAdmin) _mobAdmin.style.display = currentUser.is_admin ? 'flex' : 'none';
         // Hide the Premium button for members (they're already in)
         const membershipBtn = document.getElementById('membershipBtn');
         if (membershipBtn) {
@@ -9231,6 +9241,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         authSection.style.display = 'flex';
         userSection.style.display = 'none';
         adminTab.classList.remove('admin-visible');
+        var _mobAdminHide = document.getElementById('mobileNavAdmin');
+        if (_mobAdminHide) _mobAdminHide.style.display = 'none';
       }
       // Sync top nav auth state
       const tnAuth = document.getElementById('topNavAuthSection');
@@ -9323,6 +9335,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       slots = [];
       collectionItems = [];
       updateCartBar();
+      // Wipe personal localStorage so the next user signing in on this
+      // device doesn't inherit the previous user's avatar / badges.
+      // These keys are NOT namespaced by user id (legacy design), so
+      // the only safe move at sign-out is to remove them entirely.
+      // Server-side they're persisted on the profiles row and get
+      // re-fetched + re-cached by syncUserDataFromCloud after the next
+      // sign-in, so nothing is lost — just isolated per session.
+      try { localStorage.removeItem('pathbinder_avatar_pfp_v1'); } catch(_) {}
+      try { localStorage.removeItem('pathbinder_avatar_v2'); } catch(_) {}
+      try { localStorage.removeItem('pathbinder_badges_v1'); } catch(_) {}
+      // Reset the visible avatar chips so the old PFP doesn't linger
+      // in the UI between the click and the page refresh.
+      ['avatarInitials','mobileUserChip','sidebarAvatarImg'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.tagName === 'IMG') el.removeAttribute('src');
+      });
       updateAuthUI();
       // Clear personal data from badge dropdown so it doesn't persist
       const ddBg = document.getElementById('ddBadgeGrid');
@@ -11062,7 +11091,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                   'List a Card &rarr;')
               : _firstRunCard(
                   'Unlock more features',
-                  'Enthusiast+ tiers add price tracking, bulk import, and marketplace selling.',
+                  'Enthusiast+ tiers add bulk CSV import, multi-binder organization, and marketplace selling.',
                   'openPricingModalWithPromo(\'enthusiast\')',
                   'See Plans &rarr;'))
           + '</div>'
@@ -18516,8 +18545,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         features: [
           'Up to 200 cards logged',
           'Card catalog search & auto-fill (unlimited)',
-          '5 photo card scans / month',
-          'Manual value entry',
+          '25 photo card scans / month',
+          'Live market prices on your cards',
+          'Price trend charts',
           'Condition & grade tracking',
           'Collection dashboard',
           '2 Wishlist goals',
@@ -18525,7 +18555,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           'Shareable binder link',
           'Marketplace access',
         ],
-        locked: ['Live market prices','Price trend charts','Bulk CSV import','Multi-binder org','Bulk photo scanning'],
+        locked: ['Bulk CSV import','Multi-binder org','Bulk photo scanning'],
       },
       {
         id: 'collector', label: 'Collector', monthly: 5, annual: null,
@@ -18536,13 +18566,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           '1,000 photo card scans / month',
           '5 bulk photo scan sessions / month',
           'Up to 35 cards per bulk session',
-          'Live market price tracking',
-          'Daily auto price refresh',
-          'Per-card price trend charts',
-          'YTD portfolio chart',
-          'Biggest Movers dashboard',
           'Unlimited Wishlist goals',
           'Up to 3 Card Fund goals',
+          'Watchlist price alerts',
+          'Biggest Movers dashboard',
           'Marketplace access',
         ],
         locked: ['Bulk CSV import','Multi-binder org','Sales archive & trade log'],
@@ -28925,7 +28952,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // We pass the ORIGINAL idx (from the unsorted cards array) to the
       // open-detail function so it can pull the right card from the cache
       // without us having to re-stash a parallel sorted array.
-      const origIdx = (c) => cards.indexOf(c);
+      // Pre-build an id→origIdx map ONCE so the per-row lookup is O(1)
+      // instead of cards.indexOf — that was O(n) per row, O(n²) total,
+      // and on a ~250-card set was a measurable chunk of the 30s render.
+      const _origIdxMap = new Map();
+      for (let i = 0; i < cards.length; i++) _origIdxMap.set(cards[i].id, i);
+      const origIdx = (c) => _origIdxMap.get(c.id) ?? 0;
       return sorted.map(c => _renderCatalogCardRow(c, origIdx(c), ownedMap, openFn)).join('') ||
         '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>';
     }
@@ -30822,12 +30854,30 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
           if (!allCards.length) {
             try {
-              const { data: catRows } = await sb.from('catalog')
+              // .eq is index-friendly; .ilike forces a full-table regex
+              // scan even when there's an index on set_code. Set codes
+              // in our catalog are stored lowercase by convention, so
+              // an exact match on the lowercased setId works for the
+              // overwhelming majority of rows. We fall back to ilike
+              // ONLY if eq returns empty — that handles the handful
+              // of legacy uppercase set_code rows without paying the
+              // ilike cost on every lookup.
+              const setIdLower = (setId || '').toLowerCase();
+              let { data: catRows } = await sb.from('catalog')
                 .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
                 .or(_pokemonENOrFilter())
-                .ilike('set_code', setId)
+                .eq('set_code', setIdLower)
                 .order('card_number', { ascending: true })
                 .limit(500);
+              if (!catRows || !catRows.length) {
+                const fallback = await sb.from('catalog')
+                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                  .or(_pokemonENOrFilter())
+                  .ilike('set_code', setId)
+                  .order('card_number', { ascending: true })
+                  .limit(500);
+                catRows = fallback.data || [];
+              }
               if (catRows && catRows.length) {
                 allCards = catRows.map(_catalogRowToApiShape);
               }
@@ -31461,6 +31511,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // Rule: update UI immediately, fetch data in the background
     sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
+        // If a different user signed in on this device than was last
+        // cached, wipe the personal localStorage keys so we don't
+        // inherit the previous user's avatar / badges. Common case:
+        // someone signs up on a device that previously had another
+        // PathBinder account without going through the sign-out flow.
+        // syncUserDataFromCloud will re-populate from this user's
+        // profiles row a few hundred ms later.
+        try {
+          const lastUid = localStorage.getItem('pathbinder_last_user_id');
+          if (lastUid && lastUid !== session.user.id) {
+            localStorage.removeItem('pathbinder_avatar_pfp_v1');
+            localStorage.removeItem('pathbinder_avatar_v2');
+            localStorage.removeItem('pathbinder_badges_v1');
+          }
+          localStorage.setItem('pathbinder_last_user_id', session.user.id);
+        } catch(_) {}
         // Update nav instantly using whatever we have
         if (!currentUser) currentUser = { ...session.user };
         updateAuthUI();
@@ -32176,6 +32242,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <img src="icons/dashboard.svg" alt="" aria-hidden="true">
       Account
       <span class="mobile-nav-badge" id="mobileTradeNotification" style="display:none">0</span>
+    </button>
+    <!-- Admin tab — hidden by default, revealed for is_admin=true users
+         via the .admin-visible class set in updateAuthUI(). Mirrors the
+         desktop sidebar pattern. The 7th button squeezes the row tighter
+         but only for admins (population ≈ 1), so the UX trade-off is
+         acceptable. -->
+    <button class="mobile-nav-btn" id="mobileNavAdmin" onclick="showPage('admin'); setMobileNav('admin')" style="display:none">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Admin
+      <span class="mobile-nav-badge" id="mobileAdminNavBadge" style="display:none">0</span>
     </button>
   </div>
 

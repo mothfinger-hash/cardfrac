@@ -1,4 +1,56 @@
 // PathBinder Service Worker
+// v359 — Sets page perf + free scans bumped + nightly refresh circuit breaker:
+//  - Set detail card lookup switched from `.ilike('set_code', setId)`
+//    (full-table regex scan, ~30s) to `.eq('set_code', setIdLower)`
+//    with an ilike fallback for legacy uppercase rows. With the new
+//    idx_catalog_set_code + idx_catalog_game_type_set_code indexes
+//    (see migration_catalog_perf_indexes.sql) this is an index scan
+//    instead of a seq scan over 48k rows.
+//  - _buildCatalogSetCardRows replaced cards.indexOf(c) (O(n) per row,
+//    O(n²) total) with an id→origIdx Map built once before the render
+//    loop. Material savings on 200+ card sets.
+//  - Free tier scanner limit bumped from 5 → 25 photo scans / month.
+//    More room for new users to actually try the scanner before they
+//    bump into the paywall. Pricing modal feature list updated.
+//  - refresh_catalog_prices.py: added a circuit breaker that
+//    fast-fails fetch_pc_api once consecutive 403/429s cross a
+//    threshold (default 75). Prevents the nightly job from grinding
+//    for 7+ hours when PC's Cloudflare flags our IP. Re-run after the
+//    WAF cools off (a few hours).
+// v358 — Avatar/badges no longer leak across accounts on the same device:
+//  Profile picture + avatar state + badge list live in localStorage
+//  under non-namespaced keys (pathbinder_avatar_pfp_v1,
+//  pathbinder_avatar_v2, pathbinder_badges_v1). The sign-out handler
+//  cleared in-memory state but left those keys intact, so when another
+//  user signed up or signed in on the same device they inherited the
+//  previous user's PFP and badges. Two-pronged fix:
+//   - signOut handler now removes those three keys + blanks the
+//     visible avatar chips so the old PFP doesn't linger in the UI
+//     during the page transition.
+//   - The onAuthStateChange SIGNED_IN handler stamps and compares the
+//     user id against pathbinder_last_user_id. A mismatch wipes the
+//     personal keys before syncUserDataFromCloud repopulates from the
+//     incoming user's profiles row. This catches the case where
+//     someone signs up on a device without going through sign-out
+//     first, which is exactly what triggered the report.
+// v357 — Admin tab on mobile + price tracking now FREE:
+//  - Added 7th button to the mobile-nav for the Admin page, hidden by
+//    default and revealed via updateAuthUI() when currentUser.is_admin
+//    is true. Mirrors the desktop sidebar visibility pattern. Only
+//    admins see the extra tab so the cramped 7-column layout impacts
+//    a tiny user population.
+//  - hasPriceTracking() now returns true unconditionally. Live market
+//    prices, per-card trend charts, YTD portfolio chart, and the
+//    biggest-movers dashboard are no longer gated behind Collector+.
+//    A binder that doesn't update its values isn't worth using — we'd
+//    rather give away the visualization and convert on the
+//    marketplace / multi-binder / scanner features. Pricing modal
+//    feature lists updated: "Live market prices" + "Price trend
+//    charts" moved from Free's `locked` to its `features`; Collector
+//    tier's redundant price-tracking lines were replaced with
+//    "Watchlist price alerts" as a more distinct upgrade reason. Free
+//    tier first-run copy no longer claims price tracking is an
+//    Enthusiast+ perk.
 // v356 — Hotfixes from v355 mobile QA:
 //  - PLACEHOLDER_IMG ReferenceError: my v355 fallback handlers referenced
 //    PLACEHOLDER_IMG, which was a const inside renderBrowse() and not
@@ -275,7 +327,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v356';
+const CACHE = 'pathbinder-v359';
 
 const PRECACHE = [
   '/offline.html',
