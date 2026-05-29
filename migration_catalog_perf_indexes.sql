@@ -64,6 +64,16 @@ CREATE INDEX IF NOT EXISTS idx_catalog_game_type_set_code
 CREATE INDEX IF NOT EXISTS idx_catalog_product_type
   ON public.catalog (product_type);
 
+-- ── id prefix index for catalog_sets_summary RPC ─────────────
+-- catalog_sets_summary() and catalog_cards_in_set() filter rows
+-- with `id ILIKE 'magic-%'` / `'mtg-%'` / `'op-%'` etc. Default
+-- B-tree indexes can't accelerate LIKE/ILIKE patterns — you
+-- need text_pattern_ops (or varchar_pattern_ops). Without this
+-- the RPC seq-scans the whole catalog and takes 5-8 seconds
+-- per Sets-page TCG-tab switch.
+CREATE INDEX IF NOT EXISTS catalog_id_prefix_idx
+  ON public.catalog (id text_pattern_ops);
+
 -- ── ANALYZE so the planner picks them up immediately ─────────
 -- Without this, the planner relies on stats gathered before the
 -- index existed and might briefly continue with the seq scan

@@ -1,4 +1,78 @@
 // PathBinder Service Worker
+// v367 — Subsidiary claimers also get the Discord prompt:
+//  maybeShowBetaWelcome() only checked beta_testers rows, so friends
+//  redeeming a subsidiary code skipped the Discord modal entirely.
+//  Added maybeShowSubsidiaryWelcome() that queries subsidiary_invites
+//  for a claimed_by row by the current user and fires the same Discord
+//  modal with friend-invite variant copy ("Friend invite redeemed —
+//  X tier for N months. Discord is where the testers share what
+//  they're building. Worth a peek.").
+//  showBetaDiscordPrompt(tier, opts) gained an opts.fromFriend flag
+//  + opts.durationMonths so the modal copy matches the source.
+//  Trigger sites: same three as the admin-beta prompt (initApp post-
+//  hydrate, onAuthStateChange fresh path, onAuthStateChange dedup
+//  path) + immediately after a successful subsidiary claim so the
+//  user doesn't have to wait for a page reload.
+//  Once-per-claim gating via localStorage key pb_subsidiary_welcome_seen_<id>.
+// v366 — Subsidiary beta invites (friend-to-friend trial codes):
+//  New feature: select beta testers can give time-limited invites to
+//  friends. Quotas:
+//    • Founding   → 3 invites of VENDOR tier,     3 months
+//    • Enthusiast → 1 invite  of ENTHUSIAST tier, 6 months
+//    • Collector  → 1 invite  of COLLECTOR tier,  6 months
+//  (Vendor / Shop beta testers don't get subsidiary invites by design.)
+//
+//  Backed by:
+//    - migration_subsidiary_invites.sql — table, RLS, helper RPCs
+//      (beta_subsidiary_quota, create_subsidiary_invite,
+//       claim_subsidiary_invite, expire_subsidiary_grants).
+//    - api/send-subsidiary-invite.js — Resend email endpoint. Reuses
+//      RESEND_FROM_NAME / RESEND_FROM_EMAIL env vars.
+//    - api/_lib/subsidiary-invite-template.js — friend-to-friend email
+//      template (distinct from the admin beta-invite copy).
+//
+//  Dashboard additions:
+//    - Copper banner showing N/total invites left + Generate button for
+//      eligible beta testers. Modal generates the code, copy-to-clip,
+//      then optional Send Email field.
+//    - Yellow warning banner when granted tier is within 14 days of
+//      expiring with a "Subscribe to keep it" CTA.
+//    - Post-expiry modal listing exactly which features are gone after
+//      reverting to free. localStorage-gated so it shows once per
+//      expiry, not on every page load.
+//
+//  Redeem flow update: the existing /redeem modal accepts either an
+//  admin beta code OR a subsidiary invite code. Tries claim_beta_code
+//  first, falls through to claim_subsidiary_invite. UX is identical
+//  to the user.
+// v365 — Set logos mirrored to Supabase, kills the 35 MB pokemontcg.io
+// dependency on the Sets page:
+//  Lighthouse showed pokemontcg.io transferring 35 MB on a single Sets
+//  page visit — almost entirely set logo images. The new
+//  set_metadata table (migration_set_metadata.sql) + mirror_set_logos.py
+//  copies every logo + symbol into Supabase Storage and stamps the
+//  mirrored URLs (plus release_date + totals) into set_metadata.
+//  loadSetsPage now overlays those mirrored fields on the cached
+//  pokemontcg.io response via the _enrichSetsWithMirrored helper.
+//  Sets not yet mirrored keep their pokemontcg.io URLs as a fallback
+//  so the page works during the initial migration window.
+//  Mirrored set_metadata also stores release_date — so non-Pokemon
+//  TCGs that get added later can render with real dates instead of
+//  the catalog's created_at fallback.
+// v364 — Console hygiene + migration completeness:
+//  - SW install no longer fails atomically if one PRECACHE asset is
+//    unreachable. cache.addAll([6 URLs]) was rejecting on a single
+//    failure ("Failed to execute 'addAll' on 'Cache': Request
+//    failed" — the red error in the console screenshot). Switched
+//    to Promise.allSettled with per-URL cache.add so one dead URL
+//    logs a warn but doesn't kill installation.
+//  - Added <link rel="icon"> + <link rel="shortcut icon"> pointing
+//    at /icons/icon-192.png so browsers stop 404'ing /favicon.ico.
+//  - migration_catalog_perf_indexes.sql now also creates
+//    catalog_id_prefix_idx (id text_pattern_ops). Without it the
+//    catalog_sets_summary RPC seq-scans the whole catalog on every
+//    TCG-tab switch, which is exactly the 7.66s call seen in the
+//    network panel. With the index it's an index-range scan.
 // v363 — Killed every duplicate Sets-page query on sign-in:
 //  Network panel showed collection_items × 2, listings × 2, profiles × 2,
 //  portfolio_snapshots × 2 firing on a single page load. Two code paths
@@ -385,7 +459,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v363';
+const CACHE = 'pathbinder-v367';
 
 const PRECACHE = [
   '/offline.html',
@@ -396,10 +470,28 @@ const PRECACHE = [
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap'
 ];
 
-// Install: cache core assets
+// Install: cache core assets.
+// Why not cache.addAll(PRECACHE)? It rejects atomically if ANY single
+// URL fails — one dead asset (e.g. the Google Fonts CSS during a brief
+// network blip, or a missing icon path) blocks the entire SW install.
+// The DevTools error "Failed to execute 'addAll' on 'Cache': Request
+// failed" was that. Switched to Promise.allSettled with per-URL
+// cache.add so a single 404 logs but doesn't kill installation. Other
+// failures get a console.warn so we can spot bad PRECACHE entries.
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(cache => Promise.allSettled(
+        PRECACHE.map(url =>
+          cache.add(url).catch(err => {
+            console.warn('[SW] PRECACHE skipped (failed to fetch):', url, err && err.message);
+            // Re-throw so allSettled records the rejection — caller
+            // doesn't act on individual failures.
+            throw err;
+          })
+        )
+      ))
+      .then(() => self.skipWaiting())
   );
 });
 
