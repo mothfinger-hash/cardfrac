@@ -321,11 +321,28 @@ def main():
         stats = {"updated": 0, "would_update": 0, "not_in_csv": 0,
                  "skipped": 0, "failed": 0, "updated_history_warn": 0}
 
+        # Track unmatched rows by game_type so the summary can show
+        # where the gap is. If the gap is concentrated in one TCG, that
+        # usually means a missing CSV category download.
+        unmatched_by_game = {}
+        # Also keep a few sample unmatched ids per game_type so the
+        # operator can manually check them in PC's UI to see if they
+        # exist at all.
+        unmatched_samples = {}
+
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
             futs = [pool.submit(process_row, r, pmap, today_iso, args.dry_run) for r in cat_rows]
+            futs_by_idx = {f: cat_rows[i] for i, f in enumerate(futs)}
             for i, fut in enumerate(as_completed(futs), start=1):
+                row = futs_by_idx[fut]
                 status, rid, detail = fut.result()
                 stats[status] = stats.get(status, 0) + 1
+                # Tally per-game gap data for the not_in_csv class.
+                if status == "not_in_csv":
+                    g = row.get("game_type") or "(unknown)"
+                    unmatched_by_game[g] = unmatched_by_game.get(g, 0) + 1
+                    if len(unmatched_samples.setdefault(g, [])) < 5:
+                        unmatched_samples[g].append((rid, row.get("pricecharting_id")))
                 # Log noisy classes only — "updated" and "not_in_csv"
                 # are the volume cases.
                 if status in ("failed", "updated_history_warn"):
@@ -349,6 +366,22 @@ def main():
         print(f"  Failed                  : {stats['failed']:,}", flush=True)
         match_rate = (stats['updated'] + stats['would_update']) / len(cat_rows) * 100.0
         print(f"  Match rate              : {match_rate:.1f}%", flush=True)
+
+        # ── Diagnostic breakdown ─────────────────────────────────────
+        # When the "not in CSV" bucket is big, this view tells you
+        # whether the gap is concentrated in one TCG (missing category
+        # download) or scattered across all of them (CSV format
+        # mismatch / PC not indexing those products).
+        if unmatched_by_game:
+            print(f"\n  Unmatched by game_type:", flush=True)
+            for g in sorted(unmatched_by_game, key=lambda x: -unmatched_by_game[x]):
+                pct = unmatched_by_game[g] / max(stats['not_in_csv'], 1) * 100.0
+                print(f"    {g:<14s} {unmatched_by_game[g]:>7,}  ({pct:5.1f}%)", flush=True)
+            print(f"\n  Sample unmatched ids (rid -> pricecharting_id):", flush=True)
+            for g in sorted(unmatched_samples, key=lambda x: -unmatched_by_game.get(x, 0)):
+                print(f"    [{g}]", flush=True)
+                for rid, pcid in unmatched_samples[g][:5]:
+                    print(f"      {rid:<28s} pc_id={pcid}", flush=True)
 
     finally:
         # Tidy up downloaded CSVs unless asked to keep them.

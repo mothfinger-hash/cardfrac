@@ -1,4 +1,42 @@
 // PathBinder Service Worker
+// v371 — Multi-source price comps (TCGplayer secondary):
+//  New card_prices table keyed by (catalog_id, source) lets us store
+//  prices from multiple sources without schema churn. v1 sources:
+//  'pricecharting' (mirrors catalog.current_value, written by the
+//  daily CSV refresh) and 'tcgplayer' (written by the new
+//  sync_tcgplayer_via_free_apis.py script which pulls from
+//  pokemontcg.io / Scryfall / YGOPRODeck — all of which already
+//  expose TCGplayer market price in their card response).
+//  No scraping. Free APIs. Three of six TCGs covered immediately;
+//  OP/Gundam/DBZ/Topps wait for TCGplayer Partner API approval.
+//
+//  Binder card detail modal now shows a "PRICE COMPS" panel below
+//  the stats 2x2 grid with side-by-side cards for each source that
+//  has data. Async-loads via _loadCardPrices (per-session in-memory
+//  cache), synthesizes a pricecharting row from catalog.current_value
+//  when card_prices hasn't yet been populated, hides the whole panel
+//  when neither source has anything.
+// v370 — Scanner tuned for the multi-TCG catalog:
+//  The match_cards embedding RPC searched the entire catalog (250K+
+//  rows across 6 TCGs × 5 Pokemon languages) without TCG or language
+//  filters. After the catalog grew, mediocre matches from the wrong
+//  TCG / language floated to the top — Pokemon scans surfaced Magic
+//  cards as candidates, JP Pokemon scans returned EN, etc.
+//  Two-tier fix:
+//    1. New match_cards_v2 RPC (migration_match_cards_v2.sql) adds
+//       optional p_game_type and p_id_prefixes filters. The vector
+//       search is restricted to the relevant slice before scoring.
+//    2. Frontend passes the detected TCG + an OCR-language-derived
+//       prefix list (en- / jp-+pd- / cn- / kr-) so the embedding
+//       search only considers candidates that could plausibly be
+//       the right card. JA/ZH/KO OCR locks game_type to 'pokemon'
+//       (only Pokemon has multi-language catalog coverage).
+//    3. Threshold raised from 0.0 → 0.18, match_count dropped from
+//       15 → 10. Trims the noise floor that the unfiltered v1 had
+//       to tolerate.
+//  Falls back to v1 match_cards (with the old loose settings) if
+//  the migration hasn't been applied yet, with a console warn
+//  pointing at the migration file.
 // v369 — White body bg on mobile Account tabs:
 //  The mobile @media block stripping the desktop landscape-art
 //  backgrounds for Dashboard / My Listings / Orders / Sales Archive /
@@ -486,7 +524,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v369';
+const CACHE = 'pathbinder-v371';
 
 const PRECACHE = [
   '/offline.html',

@@ -21405,6 +21405,87 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       `;
     }
 
+    // ── Multi-source price comps ─────────────────────────────────────
+    // Reads from card_prices table (one row per catalog_id × source).
+    // PriceCharting prices ALSO live in catalog.current_value, so we
+    // synthesize a 'pricecharting' source from there if no explicit
+    // row exists — keeps the comps panel useful before the daily
+    // sync_tcgplayer_via_free_apis.py run has populated card_prices.
+    const _cardPricesCache = new Map();
+    async function _loadCardPrices(catalogId) {
+      if (!catalogId) return [];
+      if (_cardPricesCache.has(catalogId)) return _cardPricesCache.get(catalogId);
+      try {
+        const r = await sb.from('card_prices')
+          .select('source, value, currency, source_url, recorded_at')
+          .eq('catalog_id', catalogId);
+        const data = r.error ? [] : (r.data || []);
+        _cardPricesCache.set(catalogId, data);
+        return data;
+      } catch(_) {
+        _cardPricesCache.set(catalogId, []);
+        return [];
+      }
+    }
+    function _formatSourceLabel(src) {
+      switch (src) {
+        case 'pricecharting': return 'PriceCharting';
+        case 'tcgplayer':     return 'TCGplayer';
+        case 'cardmarket':    return 'Cardmarket';
+        case 'cardkingdom':   return 'Card Kingdom';
+        default:              return src;
+      }
+    }
+    function _priceCompsHtml(rows) {
+      if (!rows || !rows.length) return '';
+      return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px">
+        ${rows.map(function(r) {
+          const v   = Number(r.value || 0);
+          if (v <= 0) return '';
+          const lbl = _formatSourceLabel(r.source);
+          const link = r.source_url
+            ? `<a href="${r.source_url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none">view&nbsp;&rarr;</a>`
+            : '';
+          return `<div class="coll-stat-box" style="padding:8px 10px">
+            <div class="coll-stat-label" style="font-size:.55rem">${lbl}</div>
+            <div class="coll-stat-value" style="font-size:.92rem">$${v.toFixed(2)}</div>
+            ${link ? `<div style="font-size:.6rem;margin-top:2px">${link}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+    // Renders a placeholder div + kicks off the async load. The
+    // placeholder's id is unique per catalog_id so multiple modals
+    // (e.g. binder detail then scanner preview) don't trample each
+    // other's render.
+    function _renderPriceCompsPlaceholder(catalogId, fallbackPcValue) {
+      if (!catalogId) return '';
+      const elId = 'cardPriceComps_' + catalogId.replace(/[^a-z0-9]/gi, '_');
+      // Schedule the async populate after the parent HTML lands in the DOM.
+      setTimeout(async function() {
+        const target = document.getElementById(elId);
+        if (!target) return;
+        const rows = await _loadCardPrices(catalogId);
+        // If card_prices has no PC row but we know one from catalog,
+        // synthesize so the comps panel still shows the comparison.
+        const haveSources = new Set(rows.map(function(r){ return r.source; }));
+        const merged = rows.slice();
+        if (!haveSources.has('pricecharting') && fallbackPcValue && Number(fallbackPcValue) > 0) {
+          merged.unshift({ source: 'pricecharting', value: Number(fallbackPcValue), source_url: null });
+        }
+        const html = _priceCompsHtml(merged);
+        if (!html) {
+          target.style.display = 'none';
+          return;
+        }
+        target.innerHTML = `
+          <div style="font-size:.62rem;color:var(--muted);letter-spacing:.1em;margin-bottom:6px">PRICE COMPS</div>
+          ${html}
+        `;
+      }, 0);
+      return `<div id="${elId}" style="margin-bottom:12px"></div>`;
+    }
+
     function openBinderCardDetail(itemId) {
       const item = collectionItems.find(c => String(c.id) === String(itemId));
       if (!item) return;
@@ -21548,6 +21629,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}" style="font-size:.95rem">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:.95rem">${qty}</div></div>
         </div>
+
+        <!-- Multi-source price comps. Async-populated by _loadCardPrices;
+             hidden when neither source has data. Catalog id comes from
+             item.api_card_id (the FK into catalog.id). -->
+        ${_renderPriceCompsPlaceholder(item.api_card_id, item.current_value)}
 
         <!-- Price trend -->
         ${hasPriceTracking()
@@ -35340,8 +35426,53 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // I: expanded trainer name   J: Pokémon-only name from trainer card
         //    I+J handle trainer cards where OCR drops the 's (N'Zekrom → N's Zekrom → Zekrom)
         //    H is the set-size fingerprint: sv3pt5 has card #165, hgss4 doesn't
+        // ── Scope the CLIP embedding search ──────────────────────────────
+        // game_type filter eliminates cross-TCG noise (a Magic scan no
+        // longer pulls Pokemon JP candidates into the top 10).
+        // id-prefix filter narrows within Pokemon to the right language
+        // bucket — when OCR detects Japanese text, we only want jp-/pd-
+        // ids; when it's Chinese, only cn-; etc. EN OCR is permissive
+        // (no prefix filter) because EN includes both `en-` rows and the
+        // legacy bare-prefix rows from older syncs.
+        const _scanPrefixes = (function() {
+          if (ocrLang === 'JA') return ['jp-', 'pd-'];
+          if (ocrLang === 'ZH') return ['cn-'];
+          if (ocrLang === 'KO') return ['kr-'];
+          return null; // EN — no prefix filter
+        })();
+        // For JP/ZH/KO OCR, lock TCG to pokemon (only Pokemon has
+        // multi-language catalog coverage). Frontend already did this
+        // for SQL queries; now apply the same to the embedding match.
+        const _scanGameType = (ocrLang !== 'EN') ? 'pokemon' : scanTcg;
+        // Try the v2 RPC first; fall back to the original match_cards
+        // if the migration hasn't been applied yet. Threshold raised to
+        // 0.18 (was 0.0) to cut bottom-of-the-barrel noise; count
+        // dropped to 10 (was 15) since we don't need as many candidates
+        // when the search is properly scoped.
+        async function _runClipMatch() {
+          const v2 = await sb.rpc('match_cards_v2', {
+            query_embedding: fullEmbedding,
+            match_threshold: 0.18,
+            match_count:     10,
+            p_game_type:     _scanGameType,
+            p_id_prefixes:   _scanPrefixes,
+          });
+          if (!v2.error) return v2;
+          // PGRST202 = function not found → fall through to v1.
+          if (v2.error.code !== 'PGRST202' &&
+              !(v2.error.message || '').includes('match_cards_v2')) {
+            return v2; // genuine error — let caller surface it
+          }
+          console.warn('[Scanner] match_cards_v2 RPC not installed — falling back to unfiltered match_cards. Run migration_match_cards_v2.sql for sharper results.');
+          return sb.rpc('match_cards', {
+            query_embedding: fullEmbedding,
+            match_threshold: 0.0,
+            match_count:     15,
+          });
+        }
+
         const [clipRes, nameNumRes, nameNumRawRes, baseNameNumRes, baseNameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes] = await Promise.all([
-          sb.rpc('match_cards', { query_embedding: fullEmbedding, match_threshold: 0.0, match_count: 15 }),
+          _runClipMatch(),
           // A
           (numStripped && cardName)
             ? q().ilike('name', '%' + cardName + '%').eq('card_number', numStripped).limit(5)

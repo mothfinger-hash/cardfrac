@@ -99,10 +99,17 @@ KNOWN_CATEGORIES = [
     "magic-cards",
     "yugioh-cards",
     "one-piece-cards",
-    # Probable slugs for DBZ + Gundam — uncomment after verifying with --inspect:
-    # "gundam-card-game",
-    # "dragon-ball-z-cards",
-    # "dragon-ball-super-cards",
+    # Added 2026-05-29 to close the 5,783-row gap the bulk-CSV refresh
+    # left after the first full run. ~2,500 of those rows are DBZ
+    # ("h&v" prefix = Heroes & Villains era from Score Entertainment)
+    # plus Gundam (gun-gd03-* set). Activating these three slugs is
+    # expected to drop unmatched rows from 3.5% → < 2%. If any of
+    # these slugs is rejected by PC's endpoint (returns a default 3DO
+    # catalog — see download_category_csv's sanity check), comment it
+    # out and rerun.
+    "gundam-card-game",
+    "dragon-ball-z-cards",
+    "dragon-ball-super-cards",
 ]
 
 # Browser-realistic headers. Without these PC's Cloudflare WAF tends to
