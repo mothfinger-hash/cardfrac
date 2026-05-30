@@ -1,10 +1,20 @@
 name: Refresh Catalog Prices
 
-# Catalog price refresh from PriceCharting. Fetches the ungraded market
-# price for every catalog row with a pricecharting_id (API mode, fast)
-# or a price_source_url (scrape fallback). Updates catalog.current_value
-# and writes a daily snapshot to catalog_price_history (powers the
-# dashboard Price Movers panel).
+# Catalog price refresh from PriceCharting via BULK CSV EXPORTS.
+# Replaces the legacy per-row API approach which made one HTTP call
+# per catalog row — that took 14+ hours for Pokemon alone and stalled
+# constantly on PC's Cloudflare WAF.
+#
+# New architecture:
+#   1. Download 4 PC bulk CSVs (one per category — pokemon-cards,
+#      magic-cards, yugioh-cards, one-piece-cards). ~10-15 MB each.
+#   2. Parse all CSVs into a single pc_id → price map.
+#   3. Walk the catalog rows with pricecharting_id and update
+#      current_value + write a daily snapshot to catalog_price_history.
+#
+# Result: ~15 minutes wall-time for the entire catalog (~250K rows
+# across all TCGs) instead of 4-14 hours. Cloudflare WAF risk is
+# essentially zero — only the 4 downloads matter.
 #
 # Two scheduled runs per day:
 #   07:00 UTC = 2 AM EST / 3 AM EDT   →  ALL TCGs (overnight full sweep)
@@ -12,15 +22,11 @@ name: Refresh Catalog Prices
 #
 # Why two: Pokemon is the highest-traffic TCG, so a midday refresh
 # keeps prices current during peak shopping hours. The other TCGs
-# (MTG, YGO, OP, Gundam, DBZ, Topps) only refresh once overnight
-# since their prices move more slowly and there are far more rows.
-#
-# Both schedules use API mode when PRICECHARTING_API_KEY is set,
-# which makes the full catalog (~250K rows across all TCGs) finish in
-# ~90 min instead of the 4-6 hours scraping used to take.
+# (MTG, YGO, OP) only refresh once overnight since their prices move
+# more slowly.
 #
 # Runs on a self-hosted Mac runner (no 6h timeout). Uses the Mac's
-# system Python 3.11 directly — setup-python action skipped because
+# system Python 3 directly — setup-python action skipped because
 # it tries to write to /Users/runner/ which doesn't exist on a
 # personal Mac.
 
@@ -29,27 +35,46 @@ on:
     # Note: GitHub cron is in UTC and does NOT auto-adjust for DST.
     # Times here are tuned for EST (winter); during EDT (summer) they
     # fire 1 hour earlier. Acceptable drift for nightly batch jobs.
-    - cron: '0 7 * * *'    # 2 AM EST / 3 AM EDT  →  all TCGs (see matrix)
-    - cron: '0 17 * * *'   # 12 PM EST / 1 PM EDT →  pokemon only (see matrix)
+    - cron: '0 7 * * *'    # 2 AM EST / 3 AM EDT  →  all TCGs (see Determine scope below)
+    - cron: '0 17 * * *'   # 12 PM EST / 1 PM EDT →  pokemon only
   workflow_dispatch:
     inputs:
-      tcg:
-        description: 'TCG to refresh (default: pokemon). Use "all" for every TCG.'
+      scope:
+        description: 'Refresh scope: "all" or "pokemon" (default: pokemon)'
         required: false
         default: 'pokemon'
+        type: choice
+        options:
+          - 'pokemon'
+          - 'all'
       workers:
-        description: 'Parallel HTTP workers (0 = auto: 20 if API key set, 3 if scrape-only)'
+        description: 'Parallel Supabase write workers (default 10)'
         required: false
-        default: '0'
+        default: '10'
       limit:
-        description: 'Cap rows for a smoke test (0 = no cap)'
+        description: 'Cap catalog rows scanned (0 = no cap; useful for smoke tests)'
         required: false
         default: '0'
+      dry_run:
+        description: 'Dry-run: fetch + match, no DB writes'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   refresh:
     runs-on: self-hosted
-    timeout-minutes: 1440
+    timeout-minutes: 60   # CSV path finishes in ~15 min, generous safety margin
+
+    # PYTHONUNBUFFERED keeps print() output flowing to the GitHub
+    # Actions log in real time. Without it Python block-buffers stdout
+    # on pipes (which is what CI captures), and the entire run looks
+    # frozen for 10+ minutes before the buffer flushes.
+    env:
+      PYTHONUNBUFFERED: '1'
 
     steps:
       - name: Checkout repo
@@ -63,15 +88,12 @@ jobs:
           python3 -m pip install --upgrade pip --user
           python3 -m pip install requests --user
 
-      # Pick which TCG to refresh based on what triggered the workflow:
-      #   - 07:00 UTC cron (2 AM EST)  → all TCGs
+      # Pick scope based on trigger:
+      #   - 07:00 UTC cron (2 AM EST)  → all TCGs (every category)
       #   - 17:00 UTC cron (12 PM EST) → pokemon only
-      #   - workflow_dispatch (manual)  → whatever the user typed in inputs
-      # github.event.schedule is the cron string of the scheduled run
-      # that fired; for manual dispatch it's empty so we fall through
-      # to the user-provided input (which itself defaults to 'pokemon').
-      - name: Determine TCG scope
-        id: tcg
+      #   - workflow_dispatch (manual) → whatever the user typed
+      - name: Determine scope
+        id: scope
         run: |
           if [ "${{ github.event.schedule }}" = "0 7 * * *" ]; then
             echo "value=all" >> "$GITHUB_OUTPUT"
@@ -80,23 +102,45 @@ jobs:
             echo "value=pokemon" >> "$GITHUB_OUTPUT"
             echo "Triggered by 17:00 UTC cron → refreshing pokemon only"
           else
-            echo "value=${{ github.event.inputs.tcg || 'pokemon' }}" >> "$GITHUB_OUTPUT"
-            echo "Triggered manually → refreshing ${{ github.event.inputs.tcg || 'pokemon' }}"
+            echo "value=${{ github.event.inputs.scope || 'pokemon' }}" >> "$GITHUB_OUTPUT"
+            echo "Triggered manually → scope=${{ github.event.inputs.scope || 'pokemon' }}"
+          fi
+
+      # Map scope ('all' | 'pokemon') to the new script's args:
+      #   all     → --all-tcgs           (downloads all 4 PC CSVs)
+      #   pokemon → --categories pokemon-cards --game pokemon
+      - name: Build script args
+        id: args
+        run: |
+          if [ "${{ steps.scope.outputs.value }}" = "all" ]; then
+            echo "value=--all-tcgs --game all" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=--categories pokemon-cards --game pokemon" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run catalog price refresh
         env:
           SUPABASE_URL:           ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY:   ${{ secrets.SUPABASE_SERVICE_KEY }}
-          # PriceCharting API key — when set, refresh uses the JSON API
-          # for rows with a pricecharting_id (much faster + more reliable
-          # than HTML scraping). Falls back to scraping when unset or for
-          # rows missing the id. Add via Repo → Settings → Secrets and
-          # variables → Actions → New repository secret.
+          # PriceCharting API key — required for the bulk-CSV download
+          # endpoint. Get one from the PC dashboard → API tab; add via
+          # Repo → Settings → Secrets and variables → Actions →
+          # New repository secret.
           PRICECHARTING_API_KEY:  ${{ secrets.PRICECHARTING_API_KEY }}
         run: |
-          python3 refresh_catalog_prices.py \
-            --tcg "${{ steps.tcg.outputs.value }}" \
-            --workers "${{ github.event.inputs.workers || '0' }}" \
-            --limit "${{ github.event.inputs.limit || '0' }}" \
-            --resume
+          # -u forces unbuffered stdout/stderr so progress streams to
+          # the GH Actions log live. Belt-and-suspenders with the
+          # PYTHONUNBUFFERED env var at the job level.
+          DRY_RUN_FLAG=""
+          if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          LIMIT_FLAG=""
+          if [ "${{ github.event.inputs.limit || '0' }}" != "0" ]; then
+            LIMIT_FLAG="--limit ${{ github.event.inputs.limit }}"
+          fi
+          python3 -u refresh_catalog_prices_csv.py \
+            ${{ steps.args.outputs.value }} \
+            --workers "${{ github.event.inputs.workers || '10' }}" \
+            $LIMIT_FLAG \
+            $DRY_RUN_FLAG
