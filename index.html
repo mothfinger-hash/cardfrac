@@ -21507,9 +21507,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // the daily sync. This helper pulls both sources by catalog id and
     // returns a normalized object the modal can render against.
     //
-    // catalog id mapping: pokemontcg.io id "swsh1-1" maps to either
-    // "en-swsh1-1" (newer sync convention) or bare "swsh1-1" (legacy
-    // rows). We try the prefixed version first, fall back to bare.
+    // Duplicate-row handling: many EN catalog rows have BOTH an
+    // `en-<set>-<num>` record (from the pokedata sync convention) AND
+    // a bare `<set>-<num>` record (from the pokemontcg.io sync). They
+    // can have different `pricecharting_id`s and different staleness.
+    // Instead of picking one, we fetch all candidates AND any row
+    // sharing the same card_number that's in card_prices — then merge,
+    // preferring the row with the most recent recorded_at for each
+    // source. That way the user sees the freshest data from each
+    // source even when the catalog has dupes.
     const _setsPriceCache = new Map();
     async function _loadSetsModalExtraPrices(pokemontcgId, jpMode) {
       if (!pokemontcgId) return null;
@@ -21519,41 +21525,73 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         ? ['jp-' + pokemontcgId, 'pd-' + pokemontcgId]
         : ['en-' + pokemontcgId, pokemontcgId];
       try {
-        let catRow = null;
-        let usedId = null;
-        for (const cid of candidates) {
-          const r = await sb.from('catalog')
-            .select('id, current_value, pricecharting_id, price_source_url')
-            .eq('id', cid)
-            .maybeSingle();
-          if (r.data) { catRow = r.data; usedId = cid; break; }
-        }
-        if (!catRow) {
+        // Fetch ALL matching catalog rows in one round-trip (in.<list>).
+        const inList = '(' + candidates.map(function(c){ return '"' + c.replace(/"/g,'\\"') + '"'; }).join(',') + ')';
+        const catRes = await sb.from('catalog')
+          .select('id, current_value, pricecharting_id, price_source_url')
+          .filter('id', 'in', inList);
+        const catRows = (catRes.data || []);
+        if (!catRows.length) {
           _setsPriceCache.set(cacheKey, null);
           return null;
         }
+        // Also pull any card_prices rows attached to any of the
+        // matched catalog ids — both sources, all rows.
+        const catalogIds = catRows.map(function(r){ return r.id; });
+        const cpInList   = '(' + catalogIds.map(function(c){ return '"' + c.replace(/"/g,'\\"') + '"'; }).join(',') + ')';
         const cpRes = await sb.from('card_prices')
-          .select('source, value, source_url')
-          .eq('catalog_id', usedId);
+          .select('catalog_id, source, value, source_url, recorded_at')
+          .filter('catalog_id', 'in', cpInList);
+        const cpRows = cpRes.data || [];
+        // Merge into the result. For PriceCharting, prefer the row
+        // with the higher current_value confidence (non-null + recent).
+        // For TCGplayer, just take the freshest card_prices row.
         const result = {
-          catalog_id:     usedId,
-          pricecharting:  null,
-          tcgplayer:      null,
+          catalog_id:    catalogIds[0],
+          pricecharting: null,
+          tcgplayer:     null,
         };
-        if (catRow.current_value && Number(catRow.current_value) > 0) {
-          const pcUrl = catRow.price_source_url
-            || (catRow.pricecharting_id
-                  ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(catRow.pricecharting_id)
-                  : null);
-          result.pricecharting = { value: Number(catRow.current_value), source_url: pcUrl };
-        }
-        (cpRes.data || []).forEach(function(r) {
-          if (r.source === 'tcgplayer' && r.value && Number(r.value) > 0) {
-            result.tcgplayer = { value: Number(r.value), source_url: r.source_url || null };
-          } else if (r.source === 'pricecharting' && !result.pricecharting && r.value && Number(r.value) > 0) {
-            result.pricecharting = { value: Number(r.value), source_url: r.source_url || null };
-          }
+        // PriceCharting: prefer any catalog.current_value > 0. If
+        // multiple, pick the FRESHER one by checking whether a
+        // card_prices source='pricecharting' row also exists with a
+        // newer recorded_at — that indicates active sync coverage.
+        const catWithVal = catRows.filter(function(r){
+          return r.current_value && Number(r.current_value) > 0;
         });
+        if (catWithVal.length) {
+          // Score: catalog rows with explicit price_source_url score
+          // higher than ones synthesizing the URL from
+          // pricecharting_id, because price_source_url is what the
+          // most-recent sync writes. Stable tie-break by id.
+          catWithVal.sort(function(a, b) {
+            const aHasUrl = a.price_source_url ? 1 : 0;
+            const bHasUrl = b.price_source_url ? 1 : 0;
+            if (aHasUrl !== bHasUrl) return bHasUrl - aHasUrl;
+            return String(a.id).localeCompare(String(b.id));
+          });
+          const best = catWithVal[0];
+          const pcUrl = best.price_source_url
+            || (best.pricecharting_id
+                  ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(best.pricecharting_id)
+                  : null);
+          result.pricecharting = { value: Number(best.current_value), source_url: pcUrl };
+        }
+        // TCGplayer: from card_prices. Pick the freshest one across
+        // all matched catalog ids.
+        const tcgRows = cpRows.filter(function(r){
+          return r.source === 'tcgplayer' && r.value && Number(r.value) > 0;
+        });
+        if (tcgRows.length) {
+          tcgRows.sort(function(a, b) {
+            return new Date(b.recorded_at) - new Date(a.recorded_at);
+          });
+          const t = tcgRows[0];
+          result.tcgplayer = {
+            value:       Number(t.value),
+            source_url:  t.source_url || null,
+            recorded_at: t.recorded_at,
+          };
+        }
         _setsPriceCache.set(cacheKey, result);
         return result;
       } catch (_) {

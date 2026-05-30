@@ -1,4 +1,22 @@
 // PathBinder Service Worker
+// v374 — Sets modal handles duplicate catalog rows gracefully:
+//  Diagnosed via console SQL: catalog often has TWO rows for the
+//  same Pokemon EN card — `en-<set>-<num>` from the pokedata sync
+//  and bare `<set>-<num>` from the pokemontcg.io sync. They can
+//  carry different pricecharting_ids and different staleness.
+//  Symptom: Sets modal hits the bare-id row (since pokemontcg.io
+//  returns ids in that format) which had a stale $85.88 PC price,
+//  while the parallel `en-` row had a fresh $46.94.
+//  Fix: _loadSetsModalExtraPrices now fetches ALL candidate rows
+//  in one query, then picks the freshest source per data source.
+//  PriceCharting prefers the catalog row with an explicit
+//  price_source_url (last written by an active sync run) over one
+//  that only has pricecharting_id (synthesized URL = older row).
+//  TCGplayer takes the freshest card_prices.recorded_at across
+//  the candidate set. Final fix is a one-time SQL dedup of the
+//  catalog (see today's chat for the GROUP BY ... HAVING COUNT > 1
+//  query), but the helper now papers over existing dupes so the
+//  app shows good data even before that cleanup lands.
 // v373 — Binder card detail now matches the Sets modal:
 //  v371's binder price-comps panel rendered as small grid cards;
 //  v372 added a row-based prices list + TCGplayer/PriceCharting
@@ -553,7 +571,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v373';
+const CACHE = 'pathbinder-v374';
 
 const PRECACHE = [
   '/offline.html',
