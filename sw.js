@@ -1,4 +1,14 @@
 // PathBinder Service Worker
+// v373 — Binder card detail now matches the Sets modal:
+//  v371's binder price-comps panel rendered as small grid cards;
+//  v372 added a row-based prices list + TCGplayer/PriceCharting
+//  buttons to the Sets modal. The two looked inconsistent.
+//  Extracted a shared _buildExtrasHtml + _loadExtraPricesByCatalogId
+//  pair, plus a thin _renderBinderExtrasPlaceholder wrapper for the
+//  binder path. Binder detail now shows the same "PriceCharting:
+//  $X / TCGplayer: $Y" rows + two-button (TCGPLAYER / PRICECHARTING)
+//  row as the Sets modal. Single source of truth for both modals'
+//  external-link presentation.
 // v372 — Sets card detail: TCGplayer + PriceCharting buttons, extra prices:
 //  The Sets-page card detail modal only rendered prices from
 //  pokemontcg.io's live card response. For brand-new EN sets (Perfect
@@ -543,7 +553,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v372';
+const CACHE = 'pathbinder-v373';
 
 const PRECACHE = [
   '/offline.html',

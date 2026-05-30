@@ -21405,6 +21405,99 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       `;
     }
 
+    // ── Catalog price + source-button extras (shared by Sets + Binder) ──
+    // Direct-by-catalog-id variant. Used by the binder card detail
+    // modal where we already know the catalog id (collection_items
+    // stores it as api_card_id). The Sets path uses
+    // _renderSetsModalExtrasPlaceholder below which derives candidate
+    // catalog ids from the pokemontcg.io id.
+    async function _loadExtraPricesByCatalogId(catalogId) {
+      if (!catalogId) return null;
+      try {
+        const [catRes, cpRes] = await Promise.all([
+          sb.from('catalog')
+            .select('id, current_value, pricecharting_id, price_source_url')
+            .eq('id', catalogId)
+            .maybeSingle(),
+          sb.from('card_prices')
+            .select('source, value, source_url, recorded_at')
+            .eq('catalog_id', catalogId),
+        ]);
+        const catRow = catRes.data || null;
+        const cps    = cpRes.data || [];
+        if (!catRow && !cps.length) return null;
+        const result = { catalog_id: catalogId, pricecharting: null, tcgplayer: null };
+        if (catRow && catRow.current_value && Number(catRow.current_value) > 0) {
+          const pcUrl = catRow.price_source_url
+            || (catRow.pricecharting_id
+                  ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(catRow.pricecharting_id)
+                  : null);
+          result.pricecharting = { value: Number(catRow.current_value), source_url: pcUrl };
+        }
+        cps.forEach(function(r) {
+          if (r.source === 'tcgplayer' && r.value && Number(r.value) > 0) {
+            result.tcgplayer = {
+              value:       Number(r.value),
+              source_url:  r.source_url || null,
+              recorded_at: r.recorded_at,
+            };
+          } else if (r.source === 'pricecharting' && !result.pricecharting && r.value && Number(r.value) > 0) {
+            result.pricecharting = {
+              value:       Number(r.value),
+              source_url:  r.source_url || null,
+              recorded_at: r.recorded_at,
+            };
+          }
+        });
+        return result;
+      } catch (_) { return null; }
+    }
+    // Shared HTML renderer — used by both Sets and Binder paths.
+    function _buildExtrasHtml(extras, fallbackTcgUrl, cardName) {
+      const pcRow  = extras && extras.pricecharting;
+      const tcgRow = extras && extras.tcgplayer;
+      const extraPriceRows = [];
+      if (pcRow)  extraPriceRows.push({ label: 'PriceCharting', val: pcRow.value });
+      if (tcgRow) extraPriceRows.push({ label: 'TCGplayer',     val: tcgRow.value });
+      const tcgUrl = (tcgRow && tcgRow.source_url)
+        || fallbackTcgUrl
+        || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
+      const pcUrl  = pcRow && pcRow.source_url;
+      const tcgBtn = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
+      const pcBtn  = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
+      const extraPricesHtml = extraPriceRows.length
+        ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02)">
+            ${extraPriceRows.map(function(r) {
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
+                <span style="font-size:.6rem;color:rgba(26,199,160,.55);letter-spacing:.06em">${r.label}</span>
+                <span style="font-size:.72rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
+              </div>`;
+            }).join('')}
+          </div>`
+        : '';
+      const buttonsHtml = `<div style="display:flex;gap:8px;margin-top:12px">
+        <a href="${tcgUrl}" target="_blank" rel="noopener" style="${tcgBtn}"
+          onmouseover="this.style.background='rgba(26,199,160,.14)';this.style.color='rgba(26,199,160,1)'"
+          onmouseout="this.style.background='rgba(26,199,160,.04)';this.style.color='rgba(26,199,160,.85)'">&#8599; TCGPLAYER</a>
+        ${pcUrl ? `<a href="${pcUrl}" target="_blank" rel="noopener" style="${pcBtn}"
+          onmouseover="this.style.background='rgba(184,115,51,.14)';this.style.color='rgba(184,115,51,1)'"
+          onmouseout="this.style.background='rgba(184,115,51,.04)';this.style.color='rgba(184,115,51,.9)'">&#8599; PRICECHARTING</a>` : ''}
+      </div>`;
+      return extraPricesHtml + buttonsHtml;
+    }
+    // Binder path — async-renders the extras block by catalog_id.
+    function _renderBinderExtrasPlaceholder(catalogId, cardName) {
+      if (!catalogId) return '';
+      const elId = 'binderExtras_' + String(catalogId).replace(/[^a-z0-9]/gi, '_');
+      setTimeout(async function() {
+        const slot = document.getElementById(elId);
+        if (!slot) return;
+        const extras = await _loadExtraPricesByCatalogId(catalogId);
+        slot.innerHTML = _buildExtrasHtml(extras, null, cardName);
+      }, 0);
+      return `<div id="${elId}" style="margin-top:8px"></div>`;
+    }
+
     // ── Sets-modal extra prices + source buttons ─────────────────────
     // The Sets-page catalog detail modal pulls prices straight from
     // pokemontcg.io's card response. For brand-new EN sets or JP cards,
@@ -21741,10 +21834,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:.95rem">${qty}</div></div>
         </div>
 
-        <!-- Multi-source price comps. Async-populated by _loadCardPrices;
-             hidden when neither source has data. Catalog id comes from
-             item.api_card_id (the FK into catalog.id). -->
-        ${_renderPriceCompsPlaceholder(item.api_card_id, item.current_value)}
+        <!-- Multi-source extras: PriceCharting + TCGplayer rows +
+             buttons to each product page. Shared renderer with the
+             Sets-page card detail modal so the two views stay
+             visually consistent. -->
+        ${_renderBinderExtrasPlaceholder(item.api_card_id, item.card_name)}
 
         <!-- Price trend -->
         ${hasPriceTracking()
