@@ -257,11 +257,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       body[data-page-bg="myListings"],
       body[data-page-bg="myOrders"],
       body[data-page-bg="salesArchive"],
+      body[data-page-bg="payments"],
       body[data-page-bg="watchlist"],
       body[data-page-bg="history"],
       body[data-page-bg="tradeHistory"] {
         background-image: none;
-        background-color: transparent;
+        /* Fall back to the app's dark surface, NOT transparent — html
+           has no background by default, so transparent here would
+           show the browser's white default (visible-bug repro on
+           iPhone Safari, Dashboard / My Listings / Orders / Sales
+           Archive tabs). var(--bg) keeps everything consistent. */
+        background-color: var(--bg);
       }
       body[data-page-bg="sets"] {
         background-attachment: scroll;

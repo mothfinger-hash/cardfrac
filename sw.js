@@ -1,4 +1,15 @@
 // PathBinder Service Worker
+// v369 — White body bg on mobile Account tabs:
+//  The mobile @media block stripping the desktop landscape-art
+//  backgrounds for Dashboard / My Listings / Orders / Sales Archive /
+//  Watchlist / History / Trade History tabs was setting
+//  `background-color: transparent`. With nothing painting the
+//  html element either, `transparent` exposed the browser's
+//  default white background. Switched to `background-color:
+//  var(--bg)` so we explicitly fall back to the app's dark
+//  surface color. Also added the missing `body[data-page-bg=
+//  "payments"]` selector to the mobile rule so the Payments tab
+//  matches the rest.
 // v368 — Magic / YGO / OP / etc. Sets tabs now fast:
 //  Non-Pokemon TCG paths in loadTcgSetsPage paginated the catalog
 //  client-side in 1000-row chunks and did the GROUP BY in JS. Magic
@@ -475,7 +486,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v368';
+const CACHE = 'pathbinder-v369';
 
 const PRECACHE = [
   '/offline.html',
