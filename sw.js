@@ -1,4 +1,23 @@
 // PathBinder Service Worker
+// v372 — Sets card detail: TCGplayer + PriceCharting buttons, extra prices:
+//  The Sets-page card detail modal only rendered prices from
+//  pokemontcg.io's live card response. For brand-new EN sets (Perfect
+//  Order, May 2026) and all JP cards, pokemontcg.io has the metadata
+//  but no tcgplayer.prices, so users saw "No price data available"
+//  even though catalog.current_value (PriceCharting) and card_prices
+//  (TCGplayer from our daily sync) both had data for many of those
+//  rows.
+//  New _loadSetsModalExtraPrices helper joins catalog + card_prices
+//  by candidate id (en-X for EN, jp-X / pd-X for JP). Falls back to
+//  the bare id for legacy catalog rows that pre-date the prefix
+//  convention. Result merges into the modal as a secondary price
+//  block below pokemontcg.io's results.
+//  Single text "VIEW ON TCGPLAYER" link replaced with a two-button
+//  row: TCGPLAYER (accent green) and PRICECHARTING (copper). Button
+//  URLs prefer card_prices.source_url, then pokemontcg.io's
+//  tcgplayer.url, then a TCGplayer name search as ultimate fallback.
+//  Both Sets modal variants (search-by-name and set-card-list) wired
+//  through the same _renderSetsModalExtrasPlaceholder helper.
 // v371 — Multi-source price comps (TCGplayer secondary):
 //  New card_prices table keyed by (catalog_id, source) lets us store
 //  prices from multiple sources without schema churn. v1 sources:
@@ -524,7 +543,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v371';
+const CACHE = 'pathbinder-v372';
 
 const PRECACHE = [
   '/offline.html',

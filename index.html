@@ -21405,6 +21405,117 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       `;
     }
 
+    // ── Sets-modal extra prices + source buttons ─────────────────────
+    // The Sets-page catalog detail modal pulls prices straight from
+    // pokemontcg.io's card response. For brand-new EN sets or JP cards,
+    // pokemontcg.io often has the card metadata but no tcgplayer.prices —
+    // user sees "No price data available" even though our catalog has
+    // PriceCharting prices and card_prices has TCGplayer prices from
+    // the daily sync. This helper pulls both sources by catalog id and
+    // returns a normalized object the modal can render against.
+    //
+    // catalog id mapping: pokemontcg.io id "swsh1-1" maps to either
+    // "en-swsh1-1" (newer sync convention) or bare "swsh1-1" (legacy
+    // rows). We try the prefixed version first, fall back to bare.
+    const _setsPriceCache = new Map();
+    async function _loadSetsModalExtraPrices(pokemontcgId, jpMode) {
+      if (!pokemontcgId) return null;
+      const cacheKey = (jpMode ? 'jp-' : '') + pokemontcgId;
+      if (_setsPriceCache.has(cacheKey)) return _setsPriceCache.get(cacheKey);
+      const candidates = jpMode
+        ? ['jp-' + pokemontcgId, 'pd-' + pokemontcgId]
+        : ['en-' + pokemontcgId, pokemontcgId];
+      try {
+        let catRow = null;
+        let usedId = null;
+        for (const cid of candidates) {
+          const r = await sb.from('catalog')
+            .select('id, current_value, pricecharting_id, price_source_url')
+            .eq('id', cid)
+            .maybeSingle();
+          if (r.data) { catRow = r.data; usedId = cid; break; }
+        }
+        if (!catRow) {
+          _setsPriceCache.set(cacheKey, null);
+          return null;
+        }
+        const cpRes = await sb.from('card_prices')
+          .select('source, value, source_url')
+          .eq('catalog_id', usedId);
+        const result = {
+          catalog_id:     usedId,
+          pricecharting:  null,
+          tcgplayer:      null,
+        };
+        if (catRow.current_value && Number(catRow.current_value) > 0) {
+          const pcUrl = catRow.price_source_url
+            || (catRow.pricecharting_id
+                  ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(catRow.pricecharting_id)
+                  : null);
+          result.pricecharting = { value: Number(catRow.current_value), source_url: pcUrl };
+        }
+        (cpRes.data || []).forEach(function(r) {
+          if (r.source === 'tcgplayer' && r.value && Number(r.value) > 0) {
+            result.tcgplayer = { value: Number(r.value), source_url: r.source_url || null };
+          } else if (r.source === 'pricecharting' && !result.pricecharting && r.value && Number(r.value) > 0) {
+            result.pricecharting = { value: Number(r.value), source_url: r.source_url || null };
+          }
+        });
+        _setsPriceCache.set(cacheKey, result);
+        return result;
+      } catch (_) {
+        _setsPriceCache.set(cacheKey, null);
+        return null;
+      }
+    }
+
+    // Renders the placeholder div for async price + button injection.
+    // populateFn runs after the modal is in the DOM and fills the slots.
+    function _renderSetsModalExtrasPlaceholder(pokemontcgId, jpMode, fallbackTcgUrl, cardName) {
+      const elId = 'setsExtras_' + String(pokemontcgId || 'unknown').replace(/[^a-z0-9]/gi, '_');
+      setTimeout(async function() {
+        const slot = document.getElementById(elId);
+        if (!slot) return;
+        const extras = await _loadSetsModalExtraPrices(pokemontcgId, jpMode);
+        const pcRow  = extras && extras.pricecharting;
+        const tcgRow = extras && extras.tcgplayer;
+        // Build extra price rows. Avoids duplicating anything the
+        // pokemontcg.io path already rendered above.
+        const extraPriceRows = [];
+        if (pcRow)  extraPriceRows.push({ label: 'PriceCharting', val: pcRow.value });
+        if (tcgRow) extraPriceRows.push({ label: 'TCGplayer',     val: tcgRow.value });
+        // Pick button URLs. Prefer card_prices.source_url, then
+        // pokemontcg.io's tcgplayer.url, then a TCGplayer name search.
+        const tcgUrl = (tcgRow && tcgRow.source_url)
+          || fallbackTcgUrl
+          || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
+        const pcUrl  = pcRow && pcRow.source_url;
+        // Common button style: square, accent-bordered, hover lift.
+        const btnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
+        const pcBtnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
+        const extraPricesHtml = extraPriceRows.length
+          ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02)">
+              ${extraPriceRows.map(function(r) {
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
+                  <span style="font-size:.6rem;color:rgba(26,199,160,.55);letter-spacing:.06em">${r.label}</span>
+                  <span style="font-size:.72rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
+                </div>`;
+              }).join('')}
+            </div>`
+          : '';
+        const buttonsHtml = `<div style="display:flex;gap:8px;margin-top:12px">
+          <a href="${tcgUrl}" target="_blank" rel="noopener" style="${btnStyle}"
+            onmouseover="this.style.background='rgba(26,199,160,.14)';this.style.color='rgba(26,199,160,1)'"
+            onmouseout="this.style.background='rgba(26,199,160,.04)';this.style.color='rgba(26,199,160,.85)'">&#8599; TCGPLAYER</a>
+          ${pcUrl ? `<a href="${pcUrl}" target="_blank" rel="noopener" style="${pcBtnStyle}"
+            onmouseover="this.style.background='rgba(184,115,51,.14)';this.style.color='rgba(184,115,51,1)'"
+            onmouseout="this.style.background='rgba(184,115,51,.04)';this.style.color='rgba(184,115,51,.9)'">&#8599; PRICECHARTING</a>` : ''}
+        </div>`;
+        slot.innerHTML = extraPricesHtml + buttonsHtml;
+      }, 0);
+      return `<div id="${elId}"></div>`;
+    }
+
     // ── Multi-source price comps ─────────────────────────────────────
     // Reads from card_prices table (one row per catalog_id × source).
     // PriceCharting prices ALSO live in catalog.current_value, so we
@@ -23336,9 +23447,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <div style="font-size:.56rem;color:rgba(26,199,160,.38);letter-spacing:.06em">best market price</div>` : ''}
           </div>
           ${priceHtml}
-          ${card.tcgplayer?.url ? `<a href="${card.tcgplayer.url}" target="_blank" rel="noopener"
-            style="display:block;text-align:center;margin-top:10px;font-size:.58rem;color:rgba(26,199,160,.38);text-decoration:none;letter-spacing:.08em;transition:color .15s"
-            onmouseover="this.style.color='rgba(26,199,160,.85)'" onmouseout="this.style.color='rgba(26,199,160,.38)'">&#8599; VIEW ON TCGPLAYER</a>` : ''}
+          <!-- Extra prices (PriceCharting from catalog, TCGplayer from
+               card_prices) + TCGplayer / PriceCharting buttons. Async-
+               populates after the modal lands so the initial render
+               isn't blocked on a Supabase round-trip. Hidden cleanly
+               when neither source has data. -->
+          ${_renderSetsModalExtrasPlaceholder(card.id, isJp, card.tcgplayer?.url || null, card.name)}
           ${currentUser ? `
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(26,199,160,.1);padding-top:16px">
             <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(26,199,160,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
@@ -31735,10 +31849,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
           ${priceHtml}
 
-          <!-- TCGPlayer link -->
-          ${card.tcgplayer?.url ? `<a href="${card.tcgplayer.url}" target="_blank" rel="noopener"
-            style="display:block;text-align:center;margin-top:10px;font-size:.58rem;color:rgba(26,199,160,.38);text-decoration:none;letter-spacing:.08em;transition:color .15s"
-            onmouseover="this.style.color='rgba(26,199,160,.85)'" onmouseout="this.style.color='rgba(26,199,160,.38)'">&#8599; VIEW ON TCGPLAYER</a>` : ''}
+          <!-- PriceCharting + TCGplayer buttons + extra-source prices.
+               Same async pattern as the search modal above. Pulls from
+               catalog.current_value + card_prices for whichever sources
+               have data; falls through cleanly if neither does. -->
+          ${_renderSetsModalExtrasPlaceholder(card.id, false, card.tcgplayer?.url || null, card.name)}
 
           <!-- Actions -->
           ${currentUser ? `
