@@ -1,4 +1,23 @@
 // PathBinder Service Worker
+// v375 — Sets modal tiebreaker: prefer en- prefix over legacy prefix:
+//  v374's merge logic scored catalog rows by "has explicit
+//  price_source_url first, then alphabetical." That picked the wrong
+//  row in cases where the legacy bare-prefix row (`swshp-SWSH260`)
+//  had a price_source_url set from an older sync run while the newer
+//  `en-swsd-SWSH260` row was using pricecharting_id only — Charizard
+//  V SWSH260 kept showing $85.88 (stale) instead of $45.50 (fresh).
+//  Verified via post-dedup query: catalog correctly held both rows
+//  because they have different pricecharting_ids (3449523 vs
+//  4246445). True duplicates were cleaned up (4633 rows deleted);
+//  these false-duplicate pairs remain by design.
+//  Fix: inverted the primary tiebreaker inside
+//  _loadSetsModalExtraPrices. New sort order:
+//    1) `en-` prefix wins (newer pokedata convention, active sync)
+//    2) row with price_source_url wins (most-recent sync write)
+//    3) alphabetical by id (stability)
+//  Binder card detail (_loadExtraPricesByCatalogId) is unaffected —
+//  it queries by a single catalog_id stored on the collection_items
+//  row, so there's no merge step there.
 // v374 — Sets modal handles duplicate catalog rows gracefully:
 //  Diagnosed via console SQL: catalog often has TWO rows for the
 //  same Pokemon EN card — `en-<set>-<num>` from the pokedata sync
@@ -571,7 +590,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v374';
+const CACHE = 'pathbinder-v375';
 
 const PRECACHE = [
   '/offline.html',

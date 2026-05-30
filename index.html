@@ -21559,11 +21559,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           return r.current_value && Number(r.current_value) > 0;
         });
         if (catWithVal.length) {
-          // Score: catalog rows with explicit price_source_url score
-          // higher than ones synthesizing the URL from
-          // pricecharting_id, because price_source_url is what the
-          // most-recent sync writes. Stable tie-break by id.
+          // Tiebreaker: prefer `en-` prefixed rows first. They follow
+          // the newer pokedata sync convention and have active daily
+          // PriceCharting CSV sync coverage. Legacy bare-prefix rows
+          // (`swshp-SWSH260` etc.) were imported by older sync paths
+          // and often go stale. Secondary: prefer rows with an
+          // explicit price_source_url (what the most-recent sync
+          // writes). Tertiary: alphabetical by id for stability.
+          // Example: Charizard V SWSH260 had en-swsd-SWSH260 ($45.50,
+          // fresh) AND swshp-SWSH260 ($85.88, stale). Without the
+          // en- preference, the stale row won by virtue of having a
+          // price_source_url set.
           catWithVal.sort(function(a, b) {
+            const aIsEn = String(a.id).startsWith('en-') ? 1 : 0;
+            const bIsEn = String(b.id).startsWith('en-') ? 1 : 0;
+            if (aIsEn !== bIsEn) return bIsEn - aIsEn;
             const aHasUrl = a.price_source_url ? 1 : 0;
             const bHasUrl = b.price_source_url ? 1 : 0;
             if (aHasUrl !== bHasUrl) return bHasUrl - aHasUrl;
