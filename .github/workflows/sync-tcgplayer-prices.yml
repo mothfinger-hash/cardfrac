@@ -1,0 +1,110 @@
+name: Sync TCGplayer Prices
+
+# Pulls TCGplayer market prices for the catalog via three free-tier
+# intermediary APIs:
+#
+#   Pokemon EN  →  pokemontcg.io     paginate /v2/cards (~100 reqs)
+#   Magic       →  Scryfall          /bulk-data/default-cards (1 download)
+#   Yu-Gi-Oh    →  YGOPRODeck        /api/v7/cardinfo.php (1 response)
+#
+# Writes into public.card_prices keyed by (catalog_id, source='tcgplayer').
+# The app's binder card detail modal reads card_prices alongside
+# catalog.current_value to display PriceCharting + TCGplayer side-by-side.
+#
+# Sealed product (booster boxes, tins, etc.) and the 3 TCGs without free
+# TCGplayer intermediaries (One Piece, Gundam, DBZ, Topps) are skipped —
+# they stay PriceCharting-only.
+#
+# Scheduling:
+#   08:00 UTC = 3 AM EST / 4 AM EDT  →  daily full sync
+#
+# This runs 1 hour AFTER the PriceCharting all-TCGs refresh (07:00 UTC)
+# so both sources are fresh by the time morning users land on the
+# dashboard.
+#
+# Runs on the same self-hosted Mac runner as refresh-catalog-prices.yml.
+# Total wall time: ~5-8 minutes (bulk fetches + parallel Supabase writes).
+
+on:
+  schedule:
+    # Note: GitHub cron is UTC and does NOT auto-adjust for DST.
+    # Times here are tuned for EST (winter); EDT (summer) fires 1h
+    # earlier. Acceptable drift for a nightly batch job.
+    - cron: '0 8 * * *'    # 3 AM EST / 4 AM EDT
+  workflow_dispatch:
+    inputs:
+      game:
+        description: 'TCG scope (default: all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'pokemon'
+          - 'magic'
+          - 'yugioh'
+      limit:
+        description: 'Cap catalog rows per game (0 = no cap; smoke testing)'
+        required: false
+        default: '0'
+      dry_run:
+        description: 'Dry-run: fetch + match, no DB writes'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    timeout-minutes: 45   # bulk-fetch run is ~5-8 min; generous margin
+
+    # PYTHONUNBUFFERED keeps print() output flowing to the GitHub Actions
+    # log in real time. Without it, Python block-buffers stdout on
+    # pipes (which is what CI captures), making the run look frozen.
+    env:
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show Python version
+        run: python3 --version
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip --user
+          python3 -m pip install requests --user
+
+      - name: Build script args
+        id: args
+        run: |
+          ARGS="--game ${{ github.event.inputs.game || 'all' }}"
+          if [ "${{ github.event.inputs.limit || '0' }}" != "0" ]; then
+            ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "value=$ARGS" >> "$GITHUB_OUTPUT"
+          echo "Running: python3 -u sync_tcgplayer_via_free_apis.py $ARGS"
+
+      - name: Run TCGplayer sync
+        env:
+          SUPABASE_URL:           ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:   ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Optional, but strongly recommended — pokemontcg.io's
+          # unauthenticated tier is severely rate-limited. With a free
+          # API key (https://dev.pokemontcg.io/), quota jumps to
+          # 20,000 req/day. The bulk-paginate run needs ~100 reqs, so
+          # an unauth daily quota of ~30 hits the wall immediately.
+          # Add at Repo → Settings → Secrets and variables → Actions
+          # → New repository secret. Name: POKEMONTCG_IO_API_KEY.
+          POKEMONTCG_IO_API_KEY:  ${{ secrets.POKEMONTCG_IO_API_KEY }}
+        run: |
+          # -u forces unbuffered stdout/stderr so progress streams live.
+          # Belt-and-suspenders with PYTHONUNBUFFERED at the job level.
+          python3 -u sync_tcgplayer_via_free_apis.py ${{ steps.args.outputs.value }}
