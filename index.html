@@ -23562,8 +23562,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // Fall back to pokemontcg.io only after BOTH catalog paths come
         // up empty — covers brand-new cards we haven't synced yet, or
         // weird typos that beat the catalog's ILIKE but the API can
-        // still resolve.
-        if (cards.length === 0) {
+        // still resolve. Skip the API call entirely when the query
+        // contains characters pokemontcg.io can't handle in a name
+        // filter (#, /, :) — they'd produce a guaranteed 400 and
+        // litter the console. Same goes for card-number queries that
+        // already failed the catalog lookup above (no point asking
+        // pokemontcg.io to name-match "015/086").
+        const _apiUnsafe = /[#/:]/.test(query) || _acCardNum != null;
+        if (cards.length === 0 && !_apiUnsafe) {
           source = 'pokemontcg';
           const res  = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=250&orderBy=name`);
           if (!res.ok) throw new Error('API error ' + res.status);
@@ -27646,30 +27652,61 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // Works across every game since the catalog is keyed by id prefix
     // (en-/jp-/pd-/mtg-/ygo-/op-) plus card_number. ──────────────
     function _pbDetectCardNumber(q) {
-      // Match "63", "063", "63/182", "063/182" — capture the first
-      // numeric group (the card position). Returns the un-padded
-      // string ("63") or null if it isn't a card-number query.
-      var m = (q || '').trim().match(/^(\d+)\s*(?:\/\s*\d+)?$/);
+      // Match "63", "063", "63/182", "063/182", "#63", "#015/86" —
+      // capture the card position AND the optional set total. Leading
+      // "#" + whitespace is stripped so "#15" reads as a card-number
+      // query (otherwise the # leaks into pokemontcg.io's name filter
+      // which 400s on the special char).
+      //
+      // Returns { num, total } where num is the un-padded card position
+      // ("63") and total is the un-padded set size ("182") or null if
+      // the user didn't include it. Returns null when the input isn't a
+      // card-number query at all.
+      var m = (q || '').trim().replace(/^#\s*/, '').match(/^(\d+)\s*(?:\/\s*(\d+))?$/);
       if (!m) return null;
-      // Drop leading zeros — variants are generated downstream.
-      var n = m[1].replace(/^0+/, '');
-      return n === '' ? '0' : n;
+      var n = m[1].replace(/^0+/, ''); if (n === '') n = '0';
+      var t = m[2] ? m[2].replace(/^0+/, '') : null;
+      if (t === '') t = '0';
+      return { num: n, total: t };
     }
-    function _pbCardNumberVariants(n) {
-      // Build the common zero-padded forms catalog tables use:
-      // 63 → ["63", "063", "0063"]. Catalogs that store "63" or "063"
-      // are both covered. 4-digit padding is the practical ceiling
-      // for any printed card number.
+    function _pbCardNumberVariants(spec, totalArg) {
+      // Build every common storage form catalog tables use, so a user
+      // typing "15/86" matches catalog rows storing "15", "015", "15/86",
+      // "015/86", "15/086", or "015/086". Different sync paths chose
+      // different formats — covering all of them in a single .in()
+      // query is the only way to find every printing.
+      //
+      // Accepts either a string ("15") OR a { num, total } object — the
+      // detector returns the latter, but callers that have just the num
+      // (e.g. the OCR parser stripping it from card text) can still pass
+      // a bare string and optionally a second totalArg.
+      var num   = typeof spec === 'object' && spec ? spec.num   : spec;
+      var total = typeof spec === 'object' && spec ? spec.total : (totalArg || null);
+      if (num == null) return [];
+      num = String(num);
       var out = new Set();
-      out.add(n);
-      var max = Math.max(4 - n.length, 0);
+      var nVariants = [num];
+      var max = Math.max(4 - num.length, 0);
       for (var pad = 1; pad <= max; pad++) {
-        out.add(n.padStart(n.length + pad, '0'));
+        nVariants.push(num.padStart(num.length + pad, '0'));
+      }
+      nVariants.forEach(function(n) { out.add(n); });
+      if (total != null) {
+        total = String(total);
+        var tVariants = [total];
+        var tMax = Math.max(3 - total.length, 0);
+        for (var p = 1; p <= tMax; p++) {
+          tVariants.push(total.padStart(total.length + p, '0'));
+        }
+        nVariants.forEach(function(n) {
+          tVariants.forEach(function(t) { out.add(n + '/' + t); });
+        });
       }
       return Array.from(out);
     }
-    async function _pbSearchCatalogByCardNumber(num, idPrefix, limit) {
-      var variants = _pbCardNumberVariants(num);
+    async function _pbSearchCatalogByCardNumber(numSpec, idPrefix, limit) {
+      var variants = _pbCardNumberVariants(numSpec);
+      if (!variants.length) return [];
       var query = sb.from('catalog')
         .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
         .in('card_number', variants)
@@ -27693,7 +27730,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       var game = _ftSearchGame[side] || 'pokemon';
       var idPrefix = { pokemon: 'en-', magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-' }[game];
-      var cardNum = _pbDetectCardNumber(q);   // "063/182" / "63" → "63" or null
+      var cardNum = _pbDetectCardNumber(q);   // "063/182" → { num:"63", total:"182" } | "63" → { num:"63", total:null } | null
 
       try {
         var cards = [];
@@ -35948,35 +35985,58 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           });
         }
 
+        // Build the set of card_number formats to match against. Catalog
+        // rows from different sync paths store the number differently:
+        // older sets use the bare form ('15' or '015'), newer pokedata
+        // syncs store the full printed format ('015/086'). Without
+        // covering both, modern cards never land in the name+number
+        // tier and get out-scored by name-mismatch setTotal hits.
+        const _cardNumVariants = (function() {
+          var out = new Set();
+          if (numStripped) out.add(numStripped);
+          if (numRaw)      out.add(numRaw);
+          if (numTotal) {
+            if (numStripped) {
+              out.add(numStripped + '/' + numTotal);
+              // Also try padded total in case catalog stored it that way
+              var paddedTotal = numTotal.length < 3 ? numTotal.padStart(3, '0') : numTotal;
+              if (paddedTotal !== numTotal) out.add(numStripped + '/' + paddedTotal);
+            }
+            if (numRaw) {
+              out.add(numRaw + '/' + numTotal);
+              var paddedTotalB = numTotal.length < 3 ? numTotal.padStart(3, '0') : numTotal;
+              if (paddedTotalB !== numTotal) out.add(numRaw + '/' + paddedTotalB);
+            }
+          }
+          return Array.from(out);
+        })();
+        const _hasNumVariants = _cardNumVariants.length > 0;
+
         const [clipRes, nameNumRes, nameNumRawRes, baseNameNumRes, baseNameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes] = await Promise.all([
           _runClipMatch(),
-          // A
-          (numStripped && cardName)
-            ? q().ilike('name', '%' + cardName + '%').eq('card_number', numStripped).limit(5)
+          // A — exact cardName + any card_number variant
+          (_hasNumVariants && cardName)
+            ? q().ilike('name', '%' + cardName + '%').in('card_number', _cardNumVariants).limit(8)
             : Promise.resolve({ data: [] }),
-          // B
-          (numRaw && numRaw !== numStripped && cardName)
-            ? q().ilike('name', '%' + cardName + '%').eq('card_number', numRaw).limit(5)
+          // B — kept as a no-op placeholder; query A now covers all
+          //     number variants in one round-trip via .in(...).
+          Promise.resolve({ data: [] }),
+          // A2 — baseName (suffix-stripped) + any card_number variant.
+          //     Pokedata stores ex/V/VSTAR cards under the bare Pokémon
+          //     name (catalog has "Mega Pyroar", card prints "Mega Pyroar
+          //     ex"). Without this query the OCR'd name never matches a
+          //     strong-tier row.
+          (_hasNumVariants && baseName)
+            ? q().ilike('name', '%' + baseName + '%').in('card_number', _cardNumVariants).limit(8)
             : Promise.resolve({ data: [] }),
-          // A2 — same as A but with the suffix-stripped baseName. Pokedata stores
-          // ex/V/VSTAR cards under the bare Pokémon name (e.g. catalog has
-          // "Mega Pyroar", card prints "Mega Pyroar ex"). Without this query,
-          // the OCR'd name never matches a strong-tier row.
-          (numStripped && baseName)
-            ? q().ilike('name', '%' + baseName + '%').eq('card_number', numStripped).limit(5)
+          // B2 — placeholder; A2 now covers all variants.
+          Promise.resolve({ data: [] }),
+          // C — number only, any variant
+          _hasNumVariants
+            ? q().in('card_number', _cardNumVariants).limit(30)
             : Promise.resolve({ data: [] }),
-          // B2 — baseName + padded number
-          (numRaw && numRaw !== numStripped && baseName)
-            ? q().ilike('name', '%' + baseName + '%').eq('card_number', numRaw).limit(5)
-            : Promise.resolve({ data: [] }),
-          // C
-          numStripped
-            ? q().eq('card_number', numStripped).limit(20)
-            : Promise.resolve({ data: [] }),
-          // D
-          (numRaw && numRaw !== numStripped)
-            ? q().eq('card_number', numRaw).limit(20)
-            : Promise.resolve({ data: [] }),
+          // D — placeholder; C now covers all variants.
+          Promise.resolve({ data: [] }),
           // E
           cardName
             ? q().ilike('name', '%' + cardName + '%').limit(12)
@@ -36060,7 +36120,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         // Scoring tiers (higher = more confident match):
         //   1.30  JP num + set confirmed (jp- id, correct number, set has right total) [JP OCR mode]
-        //   1.22  nameNum + set confirmed by size fingerprint  (sv3pt5 Gengar vs hgss4 Gengar)
+        //   1.30  nameNum + set confirmed by size fingerprint  (was 1.22 — was being out-scored
+        //                                                       by name-mismatch setTotal hits)
+        //   1.20  exact-name-match bonus is layered on top of the above tiers
         //   1.15  setTotal RPC                                 (number + RPC set fingerprint)
         //   1.10  JP num (jp- id, correct number, no set confirm) [JP OCR mode]
         //   1.05  expanded trainer name match                  (N's Zekrom)
@@ -36071,8 +36133,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         //
         // When JP OCR is detected, all non-jp-/pd- cards are penalised by −0.35 so
         // any jp-/pd- number match wins over English-only hits.
-        // CLIP similarity is added as a ×0.12 tiebreaker within each tier.
-        // JP CLIP matches get ×0.27 boost when JP OCR was detected.
+        // CLIP similarity bumped to ×0.20 (was 0.12) for EN and ×0.35 (was 0.27) for
+        // language-matched, so a strong visual confirmation (>70%) decisively breaks ties.
+        // Exact-name-match bonus (+0.20) separates "Mega Pyroar" from "Mega Pyroar ex"
+        // when both are returned from an ilike substring search.
+        var _cardNameLc = cardName ? cardName.toLowerCase() : '';
+        var _baseNameLc = baseName ? baseName.toLowerCase() : '';
         function scoreOcr(m, source) {
           // Derive the catalog row's language from its id prefix:
           //   jp-/pd-  → JA   |  cn-* → ZH   |  kr-* → KO   |  en-/raw → EN
@@ -36091,15 +36157,29 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                    : source === 'jpNum'      ? (numTotal && confirmedSets.has(m.set_code) ? 1.30 : 1.10)
                    : source === 'num'        ? 0.88
                    :                          0.78;
-          // +0.22 when name+number match AND the card's set contains card #numTotal
-          var setConfirmedBoost = (source === 'nameNum' && numTotal && confirmedSets.has(m.set_code)) ? 0.22 : 0;
+          // +0.30 when name+number match AND the card's set contains card #numTotal
+          // (bumped from 0.22 so name+num+setConfirm decisively beats name-mismatch
+          // setTotal hits at 1.15).
+          var setConfirmedBoost = (source === 'nameNum' && numTotal && confirmedSets.has(m.set_code)) ? 0.30 : 0;
+          // Exact-name-match bonus — separates the actual card from
+          // accidental substring matches. cardName "Mega Pyroar ex" vs
+          // catalog rows "Mega Pyroar" + "Mega Pyroar ex" — the exact
+          // one gets +0.20.
+          var nameLc = (m.name || '').toLowerCase();
+          var exactNameBonus = 0;
+          if (nameLc && (nameLc === _cardNameLc || nameLc === _baseNameLc)) {
+            exactNameBonus = 0.20;
+          }
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
-          // Boost CLIP similarity when the card's language matches the OCR
-          var clipMult = langMatch ? 0.27 : 0.12;
+          // Boost CLIP similarity when the card's language matches the OCR.
+          // Multipliers bumped (0.12 → 0.20, 0.27 → 0.35) so a strong
+          // visual match (>70%) carries real weight even against the
+          // catalog scoring tiers.
+          var clipMult = langMatch ? 0.35 : 0.20;
           var clipBoost = clipEntry ? clipEntry.similarity * clipMult : 0;
           // Penalise wrong-language cards so language-matched hits always win
           var langPenalty = langMismatch ? 0.35 : 0;
-          return base + setConfirmedBoost + clipBoost - langPenalty;
+          return base + setConfirmedBoost + exactNameBonus + clipBoost - langPenalty;
         }
 
         const merged = [];
