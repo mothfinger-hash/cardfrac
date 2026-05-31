@@ -4100,16 +4100,16 @@ nav {
 .avatar-circle { background-color: var(--accent) !important; color: #000 !important; border-color: #000 !important; overflow: hidden; }
 
 .member-chip {
-  background: var(--gold) !important;
-  color: #000 !important;
+  background: var(--copper) !important;
+  color: var(--text) !important;
   border-color: #000 !important;
-  box-shadow: 2px 2px 0 var(--accent) !important;
+  box-shadow: 2px 2px 0 var(--copper-glow) !important;
   animation: r404-chip-breathe 2.6s ease-in-out infinite;
 }
-.member-chip:hover { box-shadow: 3px 3px 0 var(--accent) !important; transform: translate(-1px,-1px); }
+.member-chip:hover { box-shadow: 3px 3px 0 var(--copper) !important; transform: translate(-1px,-1px); }
 @keyframes r404-chip-breathe {
-  0%, 100% { box-shadow: 2px 2px 0 var(--accent); }
-  50%      { box-shadow: 3px 3px 0 var(--accent); }
+  0%, 100% { box-shadow: 2px 2px 0 var(--copper-glow); }
+  50%      { box-shadow: 3px 3px 0 var(--copper); }
 }
 
 .join-btn  { background: var(--premium) !important; color: #fff !important; border-color: #000 !important; }
@@ -4481,15 +4481,10 @@ nav {
 
 /* ── LP Hero ── */
 .lp-hero { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:stretch; padding:20px 40px 16px; max-width:1360px; margin-left:auto; margin-right:auto; }
-.lp-hero-logo { display:block; height:clamp(64px,8vw,120px); width:auto; max-width:90%; margin-bottom:18px; }
-/* Right column wraps the headline above the device image. The headline
-   used to live in the left column above the sub copy + CTAs; pushed it
-   right so the logo can take the visual focal point on the left. */
-.lp-hero-right { display:flex; flex-direction:column; gap:14px; align-self:stretch; }
-.lp-hero-right .lp-headline { font-size:clamp(28px,3.6vw,44px); margin:0; }
+.lp-hero-logo { display:block; height:42px; width:auto; max-width:220px; margin-bottom:14px; }
 @media(max-width:1100px) { .lp-hero { padding:20px 28px 16px; } }
 @media(max-width:900px) { .lp-hero { grid-template-columns:1fr; gap:16px; padding:20px 16px; } }
-.lp-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.18em; color:var(--text); margin-bottom:10px; }
+.lp-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.18em; color:var(--accent); margin-bottom:10px; }
 .lp-headline { font-family:'Orbitron',monospace; font-weight:900; font-size:clamp(20px,3vw,36px); line-height:1.06; letter-spacing:.04em; text-transform:uppercase; color:var(--text); margin:0 0 10px; }
 .lp-headline span { color:var(--accent); }
 .lp-hero-sub { font-family:'Space Mono','Share Tech Mono',monospace; font-size:.65rem; color:var(--muted); line-height:1.6; margin-bottom:14px; max-width:380px; }
@@ -6684,13 +6679,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     <!-- HERO -->
     <section class="lp-hero" id="lpBinder">
-      <!-- LEFT: logo lockup + eyebrow + sub + CTAs + stats. Logo is the
-           visual anchor now (was the headline); the headline moved to
-           the right column above the device image so the page reads
-           logo-first instead of copy-first. -->
       <div>
         <img src="pathbinder.svg" alt="PathBinder" class="lp-hero-logo" decoding="async">
         <div class="lp-eyebrow">&gt;&gt; POWER TO COLLECTORS &gt;&gt;</div>
+        <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
         <p class="lp-hero-sub">The ultimate cockpit for card collectors. Track your collection, find missing cards, grow your value, and trade with confidence.</p>
         <div class="lp-cta-row">
           <button class="lp-cta-primary" onclick="openAuthModal('signup')">START FREE</button>
@@ -6707,18 +6699,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Market Value</div>
           </div>
           <div>
-            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)">5% + 30¢</div>
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)">From 5% + 30¢</div>
             <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Platform Fee / tx</div>
           </div>
         </div>
       </div>
 
-      <!-- RIGHT: headline stacked above the device image. -->
-      <div class="lp-hero-right">
-        <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
-        <div class="lp-hero-graphic">
-          <img class="lp-pdx-photo" src="pokedex.webp" alt="PathBinder device" loading="lazy" decoding="async">
-        </div>
+      <!-- Device hero image -->
+      <div class="lp-hero-graphic">
+        <img class="lp-pdx-photo" src="pokedex.webp" alt="PathBinder device" loading="lazy" decoding="async">
       </div>
     </section>
 
@@ -6794,7 +6783,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <ul class="lp-tier-feats">
             <li>Everything in Collector</li>
             <li>Marketplace listings — 40 active</li>
-            <li>5% + $0.30/tx commission · bulk CSV import</li>
+            <li>7% + $0.30/tx commission · bulk CSV import</li>
             <li>Sales archive + PDF reports</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
@@ -6807,7 +6796,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Everything in Enthusiast</li>
-            <li>150 active listings · sealed product</li>
+            <li>6% + $0.30/tx commission · 150 active listings</li>
+            <li>Sealed product · non-TCG listings</li>
             <li>Non-TCG products (Funko, manga, etc.)</li>
             <li>Product scanner access</li>
           </ul>
@@ -6821,7 +6811,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Everything in Vendor</li>
-            <li>Unlimited listings</li>
+            <li>5% + $0.30/tx commission · unlimited listings</li>
             <li>Full P&amp;L report + featured placement</li>
             <li>Dedicated account manager</li>
           </ul>
@@ -14128,9 +14118,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // user's current tier in teal so they see their own rate at a glance.
     function _paymentsCommissionPanel(currentTier) {
       const rows = [
-        { tier: 'Enthusiast', rate: '7%', isMe: currentTier === 'enthusiast' },
-        { tier: 'Vendor',     rate: '6%', isMe: currentTier === 'vendor'     },
-        { tier: 'Shop',       rate: '5%', isMe: currentTier === 'shop'       },
+        { tier: 'Enthusiast', rate: '7% + $0.30/tx', isMe: currentTier === 'enthusiast' },
+        { tier: 'Vendor',     rate: '6% + $0.30/tx', isMe: currentTier === 'vendor'     },
+        { tier: 'Shop',       rate: '5% + $0.30/tx', isMe: currentTier === 'shop'       },
       ].map(r => '<tr' + (r.isMe ? ' style="background:rgba(26,199,160,0.08)"' : '') + '>'
         + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--text)') + ';font-weight:' + (r.isMe ? '700' : '400') + '">' + r.tier + (r.isMe ? ' (you)' : '') + '</td>'
         + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--muted)') + ';text-align:right;font-family:\'Space Mono\',monospace">' + r.rate + '</td>'
@@ -14142,7 +14132,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         +     '◈ Commission rates by tier'
         +   '</div>'
         +   '<div style="font-size:.74rem;color:var(--muted);line-height:1.6;margin-bottom:12px">'
-        +     'Lower commission as you move up tiers. Shipping passes through to you 100% — commission applies to the item price only.'
+        +     'Lower commission as you move up tiers. The $0.30/transaction Stripe processing floor is included so cheap-item sales never put us underwater. Shipping passes through to you 100% — commission applies to the item price only.'
         +   '</div>'
         +   '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
         +     rows
@@ -19027,7 +19017,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           'Everything in Collector',
           'Marketplace selling — TCG singles only',
           '40 concurrent active listings',
-          '5% + $0.30/tx commission on sales',
+          '7% + $0.30/tx commission on sales',
           '1,000 bulk photo scan sessions / month',
           'Bulk CSV import',
           'Multi-binder organization',
@@ -19048,6 +19038,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         badge: null,
         features: [
           'Everything in Enthusiast',
+          '6% + $0.30/tx commission on sales',
           'Marketplace selling — singles AND sealed product',
           '150 concurrent active listings',
           'Sealed TCG products (booster boxes, ETBs, UTBs, tins, decks)',
@@ -19065,6 +19056,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         badge: null,
         features: [
           'Everything in Vendor',
+          '5% + $0.30/tx commission on sales',
           'Unlimited concurrent active listings',
           'Unlimited photo card scans',
           'Unlimited bulk scan sessions',
