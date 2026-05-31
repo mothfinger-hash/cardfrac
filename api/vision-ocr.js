@@ -89,16 +89,17 @@ module.exports = async (req, res) => {
     );
 
     if (!upstream.ok) {
-      // Don't leak the upstream response shape directly — could contain
-      // API key fragments in error messages. Return a generic error
-      // status + log the detail server-side for debugging.
       const detail = await upstream.json().catch(() => ({}));
       const reason = (detail && detail.error && detail.error.message) || ('HTTP ' + upstream.status);
-      console.error('[vision-ocr] upstream error:', upstream.status, reason);
+      const status = (detail && detail.error && detail.error.status) || '';
+      console.error('[vision-ocr] upstream error:', upstream.status, status, reason);
+      // Surface the Google error message to the browser. Google's error
+      // text never includes the API key (key is in the URL, not the
+      // response body), so this is safe to forward — and absolutely
+      // essential for diagnosing 403s (billing disabled, API not
+      // enabled, key disabled, etc. all return different reason strings).
       res.status(upstream.status === 403 ? 502 : upstream.status).json({
-        error: upstream.status === 403
-          ? 'Vision API key or quota issue — check Google Cloud Console'
-          : 'Vision API error: ' + reason,
+        error: 'Vision API error (' + upstream.status + (status ? ' ' + status : '') + '): ' + reason,
       });
       return;
     }
