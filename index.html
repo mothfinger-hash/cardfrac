@@ -4481,10 +4481,15 @@ nav {
 
 /* ── LP Hero ── */
 .lp-hero { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:stretch; padding:20px 40px 16px; max-width:1360px; margin-left:auto; margin-right:auto; }
-.lp-hero-logo { display:block; height:42px; width:auto; max-width:220px; margin-bottom:14px; }
+.lp-hero-logo { display:block; height:clamp(64px,8vw,120px); width:auto; max-width:90%; margin-bottom:18px; }
+/* Right column wraps the headline above the device image. The headline
+   used to live in the left column above the sub copy + CTAs; pushed it
+   right so the logo can take the visual focal point on the left. */
+.lp-hero-right { display:flex; flex-direction:column; gap:14px; align-self:stretch; }
+.lp-hero-right .lp-headline { font-size:clamp(28px,3.6vw,44px); margin:0; }
 @media(max-width:1100px) { .lp-hero { padding:20px 28px 16px; } }
 @media(max-width:900px) { .lp-hero { grid-template-columns:1fr; gap:16px; padding:20px 16px; } }
-.lp-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.18em; color:var(--accent); margin-bottom:10px; }
+.lp-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.18em; color:var(--text); margin-bottom:10px; }
 .lp-headline { font-family:'Orbitron',monospace; font-weight:900; font-size:clamp(20px,3vw,36px); line-height:1.06; letter-spacing:.04em; text-transform:uppercase; color:var(--text); margin:0 0 10px; }
 .lp-headline span { color:var(--accent); }
 .lp-hero-sub { font-family:'Space Mono','Share Tech Mono',monospace; font-size:.65rem; color:var(--muted); line-height:1.6; margin-bottom:14px; max-width:380px; }
@@ -6679,10 +6684,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     <!-- HERO -->
     <section class="lp-hero" id="lpBinder">
+      <!-- LEFT: logo lockup + eyebrow + sub + CTAs + stats. Logo is the
+           visual anchor now (was the headline); the headline moved to
+           the right column above the device image so the page reads
+           logo-first instead of copy-first. -->
       <div>
         <img src="pathbinder.svg" alt="PathBinder" class="lp-hero-logo" decoding="async">
         <div class="lp-eyebrow">&gt;&gt; POWER TO COLLECTORS &gt;&gt;</div>
-        <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
         <p class="lp-hero-sub">The ultimate cockpit for card collectors. Track your collection, find missing cards, grow your value, and trade with confidence.</p>
         <div class="lp-cta-row">
           <button class="lp-cta-primary" onclick="openAuthModal('signup')">START FREE</button>
@@ -6705,9 +6713,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
       </div>
 
-      <!-- Device hero image -->
-      <div class="lp-hero-graphic">
-        <img class="lp-pdx-photo" src="pokedex.webp" alt="PathBinder device" loading="lazy" decoding="async">
+      <!-- RIGHT: headline stacked above the device image. -->
+      <div class="lp-hero-right">
+        <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
+        <div class="lp-hero-graphic">
+          <img class="lp-pdx-photo" src="pokedex.webp" alt="PathBinder device" loading="lazy" decoding="async">
+        </div>
       </div>
     </section>
 
