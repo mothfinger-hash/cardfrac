@@ -7215,6 +7215,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                   <button type="button" role="option" class="ac-lang-opt"             data-game="magic"    onclick="acDeskSetGame('magic')">Magic: The Gathering</button>
                   <button type="button" role="option" class="ac-lang-opt"             data-game="yugioh"   onclick="acDeskSetGame('yugioh')">Yu-Gi-Oh!</button>
                   <button type="button" role="option" class="ac-lang-opt"             data-game="onepiece" onclick="acDeskSetGame('onepiece')">One Piece</button>
+                  <button type="button" role="option" class="ac-lang-opt"             data-game="gundam"   onclick="acDeskSetGame('gundam')">Gundam</button>
+                  <button type="button" role="option" class="ac-lang-opt"             data-game="dbz"      onclick="acDeskSetGame('dbz')">Dragon Ball Z</button>
                 </div>
               </div>
 
@@ -22935,12 +22937,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     // ── Desktop game switcher (cross-TCG) ──────────────────────────────────────
-    let acDeskGame = 'pokemon';  // 'pokemon' | 'magic' | 'yugioh' | 'onepiece'
+    let acDeskGame = 'pokemon';  // 'pokemon' | 'magic' | 'yugioh' | 'onepiece' | 'gundam' | 'dbz'
     var _AC_GAME_LABELS = {
       pokemon:  'Pokémon',
       magic:    'Magic: The Gathering',
       yugioh:   'Yu-Gi-Oh!',
       onepiece: 'One Piece',
+      gundam:   'Gundam',
+      dbz:      'Dragon Ball Z',
     };
     function acDeskSetGame(game) {
       acDeskGame = game;
@@ -22960,6 +22964,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         magic:    'Lightning Bolt...',
         yugioh:   'Blue-Eyes...',
         onepiece: 'Luffy...',
+        gundam:   'Gundam, Char...',
+        dbz:      'Goku, Vegeta...',
       };
       const inp = document.getElementById('cardSearchInput');
       if (inp) inp.placeholder = placeholders[game] || 'Card name...';
@@ -23411,7 +23417,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Card-number queries (e.g. "063" or "063/182") route through a
       // catalog.card_number lookup instead of name search.
       const _otCardNum = (typeof _pbDetectCardNumber === 'function') ? _pbDetectCardNumber(query) : null;
-      const _otPrefix = { magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-' }[gameType];
+      const _otPrefix = { magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-', gundam: 'gun-', dbz: 'dbz-' }[gameType];
       if (_otCardNum) {
         try {
           const numRows = await _pbSearchCatalogByCardNumber(_otCardNum, _otPrefix, 1000);
@@ -26718,19 +26724,30 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function _pbPlayThud()       { _pbPlayCue('thud',     _pbSynthThud);       }
     function _pbPlayCoinFlip()   { _pbPlayCue('coinflip', _pbSynthCoinFlip);   }
 
-    // Eager-preload all Howls as soon as the library is available, so
-    // their files start downloading in idle time before any user
-    // interaction triggers a cue. Without this, the FIRST play of each
-    // cue catches the file mid-download and falls back to synth — the
-    // user has to trigger the cue twice to hear the real sample.
-    (function _pbPreloadHowls() {
-      if (window.Howl) {
-        Object.keys(_pbHowlSrcs).forEach(function(name) { _pbGetHowl(name); });
-        return;
-      }
-      // Howler library hasn't loaded yet — poll lightly until it does.
-      setTimeout(_pbPreloadHowls, 250);
-    })();
+    // Preload all Howls after the first user gesture. We used to preload
+    // in idle time on script-load, but Howler's _obtainHtml5Audio runs a
+    // test new Audio().play() during creation — and pre-gesture, the
+    // browser's autoplay policy rejects that play(), which fires Howler's
+    // "HTML5 Audio pool exhausted, returning potentially locked audio
+    // object" warning on every cue. Cosmetic but noisy (one log per cue
+    // per page load). Deferring to first user gesture means by the time
+    // we create Howls the page is unlocked, the test play() succeeds,
+    // and no warnings fire. Cues still cache before the user actually
+    // triggers one — any click/keypress/touch counts as the unlock.
+    var _pbHowlsPreloaded = false;
+    function _pbDoPreloadHowls() {
+      if (_pbHowlsPreloaded) return;
+      if (!window.Howl) { setTimeout(_pbDoPreloadHowls, 250); return; }
+      _pbHowlsPreloaded = true;
+      Object.keys(_pbHowlSrcs).forEach(function(name) { _pbGetHowl(name); });
+    }
+    function _pbArmHowlPreload() {
+      var opts = { once: true, passive: true, capture: true };
+      window.addEventListener('pointerdown', _pbDoPreloadHowls, opts);
+      window.addEventListener('keydown',     _pbDoPreloadHowls, opts);
+      window.addEventListener('touchstart',  _pbDoPreloadHowls, opts);
+    }
+    _pbArmHowlPreload();
 
     // ── PathBinder magnifying-glass animation ──────────────────────
     // Sweeps the magglass image down→up over each of the two cards in
@@ -36992,7 +37009,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
   const tCanvas = document.createElement('canvas');
   tCanvas.width = W;
   tCanvas.height = H;
-  const tCtx = tCanvas.getContext('2d');
+  // willReadFrequently:true tells the browser to keep the canvas backing
+  // store in CPU memory — drawBodyTinted calls getImageData on every
+  // render, and without this Chrome warns that the readback would be
+  // faster with the flag set.
+  const tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
 
   // Sprite cache — URL → Promise<Image|null>. Resolves null on 404 so
   // missing assets render as a no-op rather than blocking the chain.
