@@ -7200,18 +7200,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <div class="ac-lp-title">ADD CARD</div>
 
               <label class="ac-fl">GAME</label>
-              <!-- Game switcher — 4 TCGs in a copper-trimmed pill row.
-                   Active game tinted cyan to match the rest of the app.
-                   Cyan/copper hologram palette throughout. -->
-              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:6px;border:1px solid rgba(184,115,51,.32);border-radius:3px;overflow:hidden;font-size:.46em;letter-spacing:.08em;font-family:inherit;box-shadow:inset 0 0 8px rgba(184,115,51,.08)">
-                <button id="acDeskGame_pokemon"  onclick="acDeskSetGame('pokemon')"
-                  style="padding:5px 2px;border:none;cursor:pointer;background:rgba(26,199,160,.12);color:#1AC7A0;transition:all .15s;font-family:inherit;letter-spacing:.06em;border-right:1px solid rgba(184,115,51,.22)">PKMN</button>
-                <button id="acDeskGame_magic"    onclick="acDeskSetGame('magic')"
-                  style="padding:5px 2px;border:none;cursor:pointer;background:transparent;color:rgba(26,199,160,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em;border-right:1px solid rgba(184,115,51,.22)">MTG</button>
-                <button id="acDeskGame_yugioh"   onclick="acDeskSetGame('yugioh')"
-                  style="padding:5px 2px;border:none;cursor:pointer;background:transparent;color:rgba(26,199,160,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em;border-right:1px solid rgba(184,115,51,.22)">YGO</button>
-                <button id="acDeskGame_onepiece" onclick="acDeskSetGame('onepiece')"
-                  style="padding:5px 2px;border:none;cursor:pointer;background:transparent;color:rgba(26,199,160,.45);transition:all .15s;font-family:inherit;letter-spacing:.06em">OP</button>
+              <!-- TCG dropdown — same hologram trigger + popover pattern
+                   as the language picker below. Replaces the old 4-pill
+                   row so we can add more TCGs (Flesh & Blood, Lorcana,
+                   Digimon, etc.) without crowding the search panel. -->
+              <div id="acDeskGameRow" style="position:relative;margin-bottom:6px;font-size:.5em;letter-spacing:.08em;font-family:inherit">
+                <button type="button" id="acDeskGameTrigger" class="ac-lang-trigger"
+                  onclick="_toggleAcDeskGamePopover(event)" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="acDeskGameLabel">Pokémon</span>
+                  <span class="ac-lang-caret">▾</span>
+                </button>
+                <div class="ac-lang-popover" id="acDeskGamePopover" role="listbox" style="display:none">
+                  <button type="button" role="option" class="ac-lang-opt is-selected" data-game="pokemon"  onclick="acDeskSetGame('pokemon')">Pokémon</button>
+                  <button type="button" role="option" class="ac-lang-opt"             data-game="magic"    onclick="acDeskSetGame('magic')">Magic: The Gathering</button>
+                  <button type="button" role="option" class="ac-lang-opt"             data-game="yugioh"   onclick="acDeskSetGame('yugioh')">Yu-Gi-Oh!</button>
+                  <button type="button" role="option" class="ac-lang-opt"             data-game="onepiece" onclick="acDeskSetGame('onepiece')">One Piece</button>
+                </div>
               </div>
 
               <label class="ac-fl">SEARCH</label>
@@ -22852,19 +22856,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     // ── Desktop game switcher (cross-TCG) ──────────────────────────────────────
     let acDeskGame = 'pokemon';  // 'pokemon' | 'magic' | 'yugioh' | 'onepiece'
+    var _AC_GAME_LABELS = {
+      pokemon:  'Pokémon',
+      magic:    'Magic: The Gathering',
+      yugioh:   'Yu-Gi-Oh!',
+      onepiece: 'One Piece',
+    };
     function acDeskSetGame(game) {
       acDeskGame = game;
-      const games = ['pokemon', 'magic', 'yugioh', 'onepiece'];
-      games.forEach(g => {
-        const btn = document.getElementById('acDeskGame_' + g);
-        if (!btn) return;
-        const active = g === game;
-        btn.style.background = active ? 'rgba(26,199,160,.12)' : 'transparent';
-        btn.style.color      = active ? '#1AC7A0' : 'rgba(26,199,160,.45)';
+      // Update dropdown trigger label + repaint option selection state
+      var labelEl = document.getElementById('acDeskGameLabel');
+      if (labelEl) labelEl.textContent = _AC_GAME_LABELS[game] || game;
+      document.querySelectorAll('#acDeskGamePopover .ac-lang-opt').forEach(function(opt) {
+        opt.classList.toggle('is-selected', opt.getAttribute('data-game') === game);
       });
+      _closeAcDeskGamePopover();
       // EN/JP language toggle is only relevant for Pokemon
       const langRow = document.getElementById('acDeskLangRow');
-      if (langRow) langRow.style.display = (game === 'pokemon') ? 'flex' : 'none';
+      if (langRow) langRow.style.display = (game === 'pokemon') ? '' : 'none';
       // Update placeholder hint per game
       const placeholders = {
         pokemon:  acDeskLang === 'JA' ? 'Pikachu, Charizard...' : 'Charizard...',
@@ -22874,6 +22883,41 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       };
       const inp = document.getElementById('cardSearchInput');
       if (inp) inp.placeholder = placeholders[game] || 'Card name...';
+    }
+
+    // ── Custom dropdown for game picker (mirrors the lang-dropdown above) ─
+    function _toggleAcDeskGamePopover(ev) {
+      if (ev) ev.stopPropagation();
+      var pop = document.getElementById('acDeskGamePopover');
+      if (!pop) return;
+      var isOpen = pop.style.display !== 'none';
+      if (isOpen) { _closeAcDeskGamePopover(); return; }
+      pop.style.display = 'flex';
+      var trig = document.getElementById('acDeskGameTrigger');
+      if (trig) { trig.classList.add('is-open'); trig.setAttribute('aria-expanded', 'true'); }
+      setTimeout(function() {
+        document.addEventListener('click', _acDeskGameOutsideClick);
+        document.addEventListener('keydown', _acDeskGameKeydown);
+      }, 0);
+    }
+    function _closeAcDeskGamePopover() {
+      var pop = document.getElementById('acDeskGamePopover');
+      if (!pop) return;
+      pop.style.display = 'none';
+      var trig = document.getElementById('acDeskGameTrigger');
+      if (trig) { trig.classList.remove('is-open'); trig.setAttribute('aria-expanded', 'false'); }
+      document.removeEventListener('click', _acDeskGameOutsideClick);
+      document.removeEventListener('keydown', _acDeskGameKeydown);
+    }
+    function _acDeskGameOutsideClick(e) {
+      var pop  = document.getElementById('acDeskGamePopover');
+      var trig = document.getElementById('acDeskGameTrigger');
+      if (!pop || !trig) return;
+      if (pop.contains(e.target) || trig.contains(e.target)) return;
+      _closeAcDeskGamePopover();
+    }
+    function _acDeskGameKeydown(e) {
+      if (e.key === 'Escape') _closeAcDeskGamePopover();
     }
 
     // ── Desktop language dropdown ──────────────────────────────────────────────
