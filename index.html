@@ -7452,12 +7452,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
           <!-- SEARCH mode -->
           <div class="ft-modal-mode" data-mode="search">
-            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('A','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(26,199,160,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
-              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('A','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
-              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('A','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
-              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('A','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
-            </div>
+            <!-- Pills are rendered from _FT_GAMES via _ftRenderGamePills().
+                 To add a new TCG (Flesh & Blood, Lorcana, etc.), append
+                 one entry to _FT_GAMES — all four pill rows update. -->
+            <div class="ft-game-pills" data-ft-side="A" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"></div>
             <div class="ft-search-row">
               <input id="ftSearchA" type="text" placeholder="Search Pokemon card…"
                 class="ft-search-input"
@@ -7469,12 +7467,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
           <!-- SCAN mode -->
           <div class="ft-modal-mode" data-mode="scan" style="display:none">
-            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('A','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(26,199,160,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
-              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('A','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
-              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('A','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
-              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('A','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
-            </div>
+            <div class="ft-game-pills" data-ft-side="A" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"></div>
             <div id="ftScanStatusA" class="ft-scan-status"></div>
             <div id="ftScanMatchesA" class="ft-dropdown-results"></div>
           </div>
@@ -7490,12 +7483,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="ft-modal-title" id="ftHoloTitleB">SEARCH SIDE B</div>
 
           <div class="ft-modal-mode" data-mode="search">
-            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('B','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(26,199,160,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
-              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('B','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
-              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('B','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
-              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('B','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
-            </div>
+            <div class="ft-game-pills" data-ft-side="B" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"></div>
             <div class="ft-search-row">
               <input id="ftSearchB" type="text" placeholder="Search Pokemon card…"
                 class="ft-search-input"
@@ -7506,12 +7494,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           </div>
 
           <div class="ft-modal-mode" data-mode="scan" style="display:none">
-            <div class="ft-game-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-              <button class="ft-game-pill" data-game="pokemon"  onclick="ftSetSearchGame('B','pokemon')"  style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--ft-cyan);background:rgba(26,199,160,.1);color:var(--ft-cyan);cursor:pointer;font-family:inherit">PKMN</button>
-              <button class="ft-game-pill" data-game="magic"    onclick="ftSetSearchGame('B','magic')"    style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">MTG</button>
-              <button class="ft-game-pill" data-game="yugioh"   onclick="ftSetSearchGame('B','yugioh')"   style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">YGO</button>
-              <button class="ft-game-pill" data-game="onepiece" onclick="ftSetSearchGame('B','onepiece')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit">OP</button>
-            </div>
+            <div class="ft-game-pills" data-ft-side="B" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"></div>
             <div id="ftScanStatusB" class="ft-scan-status"></div>
             <div id="ftScanMatchesB" class="ft-dropdown-results"></div>
           </div>
@@ -11502,7 +11485,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <div class="ndash-panel-body">
                 ${top8.length > 0 ? `<div class="ndash-card-grid">
                   ${top8.map((item,i) => {
-                    const v = (item.current_value||item.purchase_price||0)*(item.quantity||1);
+                    const v = (item.current_value||item._compEstimate||item.purchase_price||0)*(item.quantity||1);
                     return `<div class="ndash-tcard" onclick="openBinderCardDetail('${item.id}')">
                       <div class="ndash-tcard-art">
                         ${item.card_image_url
@@ -20936,41 +20919,38 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                     ? ''   // sealed: no badge per spec
                     : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`)}
             </div>
-            <div class="binder-card-info">
+            ${(isAllCards || isGhost) ? `<div class="binder-card-info">
               ${isAllCards
                 ? `<div class="binder-card-name">${item.card_name}</div>
                    ${effectiveView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}`
-                : '' /* Per-binder view: hide the name + set so the cell
-                        reads like a real binder page — just the card
-                        image (and the wishlist progress bar / condition
-                        badge that lives outside this block). Card-detail
-                        modal still surfaces name + set on tap.            */
+                : '' /* Per-binder owned cards skip the wrapper entirely
+                        (handled by the outer conditional above) so the
+                        card box doesn't carry empty bottom padding.    */
               }
               ${isGhost
                 ? (goal > 0
                     ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
                        <div style="font-size:.6rem;color:var(--teal)">${pct}% — $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>`
                     : `<div class="binder-card-value" style="color:var(--teal)">Wishlist</div>`)
-                : (isAllCards
-                    ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
-                        <div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
-                        ${(()=>{
-                          if (!hasPriceTracking() || !item.price_history_log?.length || !item.current_value) return '';
-                          const hist = item.price_history_log;
-                          const oldest = hist[0]?.value;
-                          if (!oldest || oldest === item.current_value) return '';
-                          const chg = ((item.current_value - oldest) / oldest * 100);
-                          const sign = chg >= 0 ? '+' : '';
-                          const color = chg >= 0 ? 'var(--green)' : 'var(--red)';
-                          return `<span style="font-size:.56rem;color:${color};white-space:nowrap;font-weight:700">${sign}${chg.toFixed(1)}%</span>`;
-                        })()}
-                      </div>`
-                    : '' /* Per-binder view: hide the price chip + trend
-                            so the binder reads like an actual binder.
-                            Card-detail modal still surfaces the price
-                            when the user taps in for full detail.       */
-                  )}
-            </div>
+                : `<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+                    <div class="binder-card-value">${val > 0 ? '$' + val.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
+                    ${(()=>{
+                      if (!hasPriceTracking() || !item.price_history_log?.length || !item.current_value) return '';
+                      const hist = item.price_history_log;
+                      const oldest = hist[0]?.value;
+                      if (!oldest || oldest === item.current_value) return '';
+                      const chg = ((item.current_value - oldest) / oldest * 100);
+                      const sign = chg >= 0 ? '+' : '';
+                      const color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+                      return `<span style="font-size:.56rem;color:${color};white-space:nowrap;font-weight:700">${sign}${chg.toFixed(1)}%</span>`;
+                    })()}
+                  </div>`
+              }
+            </div>` : '' /* Per-binder owned cards: drop the info wrapper
+                            so the card's bottom padding matches the side
+                            padding. Card-detail modal still shows name +
+                            price + trend on tap.                          */
+            }
           </div>`;
         }).join('')}</div>`;
       }
@@ -27705,9 +27685,61 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // Pokemon. ftSetSearchGame() switches it from the modal's pill row.
     var _ftSearchGame = { A: 'pokemon', B: 'pokemon' };
 
+    // SINGLE SOURCE OF TRUTH for trade-analyzer TCG support. Add a new
+    // entry here to expose a new game in every pill row (search +
+    // scan modals on both sides). idPrefix drives catalog id-prefix
+    // filtering in ftSearch; placeholder shows in the search input.
+    //
+    // When adding a TCG also update:
+    //   • detectScanTcg() in runMatch (scan-side OCR routing)
+    //   • Sets page CFG block (sets tab list)
+    //   • Listing modal game dropdown
+    // — see CLAUDE.md "Adding a new TCG" for the full checklist.
+    var _FT_GAMES = [
+      { key: 'pokemon',  label: 'PKMN', idPrefix: 'en-',  placeholder: 'Pokemon card…'     },
+      { key: 'magic',    label: 'MTG',  idPrefix: 'mtg-', placeholder: 'Magic card…'       },
+      { key: 'yugioh',   label: 'YGO',  idPrefix: 'ygo-', placeholder: 'Yu-Gi-Oh card…'    },
+      { key: 'onepiece', label: 'OP',   idPrefix: 'op-',  placeholder: 'One Piece card…'   },
+      { key: 'gundam',   label: 'GUN',  idPrefix: 'gun-', placeholder: 'Gundam card…'      },
+      { key: 'dbz',      label: 'DBZ',  idPrefix: 'dbz-', placeholder: 'Dragon Ball Z card…' },
+    ];
+    function _ftGame(key) {
+      for (var i = 0; i < _FT_GAMES.length; i++) {
+        if (_FT_GAMES[i].key === key) return _FT_GAMES[i];
+      }
+      return _FT_GAMES[0]; // pokemon fallback
+    }
+    // Renders the game pill row inside every .ft-game-pills container.
+    // Containers carry data-ft-side="A"|"B" so the click handler can
+    // wire to the right side without per-row JS. Safe to call multiple
+    // times (idempotent — re-renders from scratch).
+    function _ftRenderGamePills() {
+      var containers = document.querySelectorAll('.ft-game-pills');
+      containers.forEach(function(c) {
+        var side = c.getAttribute('data-ft-side') || 'A';
+        var active = _ftSearchGame[side] || 'pokemon';
+        var html = '';
+        _FT_GAMES.forEach(function(g) {
+          var isActive = g.key === active;
+          var borderCol = isActive ? 'var(--ft-cyan)' : 'var(--border)';
+          var textCol   = isActive ? 'var(--ft-cyan)' : 'var(--muted)';
+          var bg        = isActive ? 'rgba(26,199,160,.1)' : 'transparent';
+          html += '<button class="ft-game-pill" data-game="' + g.key + '"'
+                + ' onclick="ftSetSearchGame(\'' + side + '\',\'' + g.key + '\')"'
+                + ' style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;'
+                + 'border:1px solid ' + borderCol + ';background:' + bg + ';'
+                + 'color:' + textCol + ';cursor:pointer;font-family:inherit">'
+                + g.label + '</button>';
+        });
+        c.innerHTML = html;
+      });
+    }
+
     function ftSetSearchGame(side, game) {
       _ftSearchGame[side] = game;
-      // Update active state on the game pills inside this side's modal
+      // Re-render this side's pill rows (search + scan modes share the
+      // same containers within ftHoloModalSide, so a single re-render
+      // updates both). Other side's pills stay as they were.
       var modal = document.getElementById('ftHoloModal' + side);
       if (modal) {
         modal.querySelectorAll('.ft-game-pill').forEach(function(p) {
@@ -27717,15 +27749,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           p.style.background  = active ? 'rgba(26,199,160,.1)' : 'transparent';
         });
       }
-      // Update placeholder hint
+      // Update placeholder hint from the _FT_GAMES config
       var input = document.getElementById('ftSearch' + side);
-      if (input) {
-        var label = game === 'magic'    ? 'Magic card…'
-                  : game === 'yugioh'   ? 'Yu-Gi-Oh card…'
-                  : game === 'onepiece' ? 'One Piece card…'
-                  : 'Pokemon card…';
-        input.placeholder = 'Search ' + label;
-      }
+      if (input) input.placeholder = 'Search ' + _ftGame(game).placeholder;
     }
 
     // ── Card-number search helpers — shared by trade analyzer + add
@@ -27811,7 +27837,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       resultsEl.innerHTML = '<div style="padding:10px;font-size:.75rem;color:var(--muted)">Searching…</div>';
 
       var game = _ftSearchGame[side] || 'pokemon';
-      var idPrefix = { pokemon: 'en-', magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-' }[game];
+      var idPrefix = _ftGame(game).idPrefix;
       var cardNum = _pbDetectCardNumber(q);   // "063/182" → { num:"63", total:"182" } | "63" → { num:"63", total:null } | null
 
       try {
@@ -28854,6 +28880,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       var modal = document.getElementById('ftHoloModal' + side);
       if (!modal) return;
       modal.style.display = 'flex';
+      // Populate game pills lazily on first open — empty containers in
+      // the markup get filled from _FT_GAMES so adding a TCG only needs
+      // one config entry. Idempotent — safe to call every open.
+      _ftRenderGamePills();
       // Title text per mode
       var titleEl = document.getElementById('ftHoloTitle' + side);
       if (titleEl) {
