@@ -205,7 +205,19 @@ def extract_next_data(html):
 
 
 def _str(val):
-    return val if isinstance(val, str) else ""
+    # html.unescape decodes the entities upstream pages occasionally pass
+    # through (&#39; &amp; &eacute; &rsquo; etc.) so we don't store
+    # "Goku&#39;s Energy" / "Pok&eacute;dex" as the canonical card name.
+    # Idempotent on already-decoded text. See migration_decode_html_entities.sql
+    # for the one-off cleanup of historical rows already written without
+    # this pass.
+    if not isinstance(val, str):
+        return ""
+    try:
+        import html as _html
+        return _html.unescape(val)
+    except Exception:
+        return val
 
 
 # ═════════════════════════════════════════════════════════════════════════════

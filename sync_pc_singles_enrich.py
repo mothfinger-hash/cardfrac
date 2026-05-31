@@ -37,7 +37,7 @@ ID PREFIX CONVENTION:
     PC-only (--create-missing): gun-pc-{pricecharting_id} / dbz-pc-{pricecharting_id}
 """
 
-import os, sys, re, json, time, random, argparse, threading
+import os, sys, re, json, time, random, argparse, threading, html
 from urllib.parse import urljoin, quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -349,7 +349,13 @@ def parse_console_page(slug, html):
         if not name_m:
             continue
         product_url = name_m.group(1)
-        name_raw = name_m.group(2).strip()
+        # html.unescape decodes entities that the PriceCharting page
+        # ships in product titles (Goku&#39;s Energy, Pok&eacute;dex,
+        # &amp;, &rsquo;, etc.) so we don't write the encoded form into
+        # the catalog. Idempotent on already-decoded text. See also
+        # migration_decode_html_entities.sql for the one-off cleanup
+        # of rows already written before this pass landed.
+        name_raw = html.unescape(name_m.group(2).strip())
         name_clean = _clean_pc_name(name_raw)
         full_code, bare_number = _extract_card_number(name_raw, product_url)
         # Image URL — PC pages ship /60 thumbs in src= and the full

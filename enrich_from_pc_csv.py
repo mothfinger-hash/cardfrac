@@ -66,7 +66,7 @@ ENVIRONMENT
     SUPABASE_SERVICE_KEY  service-role key (bypasses RLS for catalog writes)
 """
 
-import os, sys, csv, re, io, json, argparse, time, glob, tempfile, random, threading
+import os, sys, csv, re, io, json, argparse, time, glob, tempfile, random, threading, html
 from urllib.parse import urlparse, urlunparse
 from datetime import date
 
@@ -254,10 +254,18 @@ def _extract_catalog_setnum(catalog_id):
 
 def _pick(row, key):
     """Return row[col] where col is the first matching variant from
-    CSV_COLUMNS[key], or '' if none of them are present / non-empty."""
+    CSV_COLUMNS[key], or '' if none of them are present / non-empty.
+    Strings are run through html.unescape so PriceCharting CSV titles
+    that arrive entity-encoded (Goku&#39;s Energy, Pok&eacute;dex,
+    &amp;, &rsquo;, etc.) match the catalog's decoded names cleanly.
+    This script doesn't write back into name/set_name — but the
+    matching pipeline normalises strings to compare against catalog
+    rows, and encoded-vs-decoded mismatches silently drop matches
+    that should have hit."""
     for col in CSV_COLUMNS.get(key, []):
         if col in row and row[col] not in (None, ""):
-            return row[col]
+            v = row[col]
+            return html.unescape(v) if isinstance(v, str) else v
     return ""
 
 

@@ -203,9 +203,27 @@ def bulk_fetch_pokemon():
             if not cid:
                 continue
             prices = (c.get("tcgplayer") or {}).get("prices") or {}
+            # Pick the price that matches what TCGplayer's product page
+            # shows by default — i.e. the base (normal) printing if
+            # available, otherwise the only finish that exists.
+            #
+            # Old priority (holofoil → reverseHolofoil → … → normal) was
+            # inverted for common cards. Common rarity cards typically
+            # exist in BOTH `normal` and `reverseHolofoil` finishes on
+            # pokemontcg.io; the reverse-holo "market" is easily spiked
+            # by a single graded sale ($100+ for an otherwise-$1 common),
+            # which our priority then stored as THE price. Users saw
+            # "Magikarp Deoxys #64 → $112" while TCGplayer's product
+            # page shows the normal printing at ~$1.
+            #
+            # New priority: normal-tier finishes first (what the product
+            # page shows by default), then holo finishes as fallback for
+            # holo-only printings (most Rare Holo Charizards etc. don't
+            # have a `normal` entry — they fall through naturally).
             best = None
-            for finish in ("holofoil", "reverseHolofoil", "1stEditionHolofoil",
-                           "1stEditionNormal", "normal", "unlimited"):
+            for finish in ("normal", "unlimited",
+                           "1stEditionNormal",
+                           "holofoil", "reverseHolofoil", "1stEditionHolofoil"):
                 if finish in prices:
                     mkt = (prices[finish] or {}).get("market")
                     if mkt and mkt > 0:

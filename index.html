@@ -160,11 +160,11 @@
 nav.sb-collapsed .auth-btn{width:auto;flex:1;max-width:22px;height:26px;padding:0;font-size:0;border-width:1.5px;overflow:hidden;white-space:nowrap}
 nav.sb-collapsed #loginBtn::after{content:'L';font-size:7px;display:block;font-family:'Space Mono',monospace;color:var(--muted)}
 nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;font-family:'Space Mono',monospace;color:var(--muted)}
-    .user-avatar{display:flex;align-items:center;gap:8px;background:var(--surface2);border:2px solid var(--border);border-radius:0;padding:5px 8px;cursor:pointer;transition:all .1s}
+    .user-avatar{display:flex;align-items:center;gap:8px;background:var(--surface2);border:2px solid var(--border);border-radius:var(--r-sm,6px);padding:5px 8px;cursor:pointer;transition:all .1s}
     .user-avatar:hover{border-color:var(--accent);box-shadow:2px 2px 0 var(--shadow)}
     nav.sb-collapsed .user-avatar #userName{display:none}
     nav.sb-collapsed .user-avatar{padding:4px;justify-content:center;gap:0}
-    .avatar-circle{width:26px;height:26px;border-radius:0;background:var(--accent);color:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6rem;border:1.5px solid var(--shadow)}
+    .avatar-circle{width:26px;height:26px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6rem;border:1.5px solid var(--shadow);overflow:hidden}
     /* Avatar dropdown — shrunk ~30% from its prior footprint. Was
        min-width:220px / max-width:92vw with 36px badge tiles + 10px
        padding which on wide desktops looked oversized. New shape:
@@ -982,8 +982,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .top-nav-logo{height:26px;width:auto;display:block;object-fit:contain;cursor:pointer}
     .top-nav-auth-btns{display:flex;gap:6px;align-items:center}
     .top-nav-auth-btns .auth-btn{width:auto;padding:4px 10px;font-size:.56rem}
-    .top-nav-user-chip{display:flex;align-items:center;gap:7px;cursor:pointer;padding:3px 8px;border:1px solid var(--border)}
-    .top-nav-user-chip .avatar-circle{width:26px;height:26px;border-radius:0;font-size:.6rem;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .top-nav-user-chip{display:flex;align-items:center;gap:7px;cursor:pointer;padding:3px 8px;border:1px solid var(--border);border-radius:var(--r-sm,6px)}
+    .top-nav-user-chip .avatar-circle{width:26px;height:26px;border-radius:var(--r-pill,999px);font-size:.6rem;display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden}
     .top-nav-username{font-family:'Space Mono',monospace;font-size:.58rem;color:var(--text)}
     .top-nav-tabs{display:flex;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--border);padding:0 4px}
     .top-nav-tabs::-webkit-scrollbar{display:none}
@@ -3334,6 +3334,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #setsPage #setsAcList{
       background:var(--surface) !important;
       border:1px solid var(--border) !important;
+      border-radius:var(--r-md) !important;
+      overflow:hidden;
     }
     /* Search input — keep the teal focus accent (the page's accent
        palette is still teal); just use the default border at rest. */
@@ -4893,7 +4895,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 @media(max-width:860px){.ndash-card-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:480px){.ndash-card-grid{grid-template-columns:repeat(2,1fr)}}
-.ndash-tcard{background:var(--bg);border:1.5px solid var(--border);aspect-ratio:.72;position:relative;overflow:hidden;cursor:pointer;transition:border-color .14s,transform .14s,box-shadow .14s;display:flex;flex-direction:column}
+.ndash-tcard{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-md,8px);aspect-ratio:.72;position:relative;overflow:hidden;cursor:pointer;transition:border-color .14s,transform .14s,box-shadow .14s;display:flex;flex-direction:column}
 .ndash-tcard:hover{border-color:var(--accent);transform:translate(-1px,-2px);box-shadow:0 8px 20px rgba(26,199,160,.25),3px 3px 0 #000}
 .ndash-tcard-art{flex:1;position:relative;overflow:hidden;background:repeating-linear-gradient(135deg,rgba(0,0,0,.45) 0 10px,rgba(0,0,0,.2) 10px 20px),var(--surface2)}
 .ndash-tcard-art img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
@@ -4968,8 +4970,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .ndash-sum-r{font-family:'Orbitron',monospace;font-weight:700;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
 
 /* ── Scan CTA ── */
-.ndash-scan-cta{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:13px;background:var(--accent);color:#000;font-family:'Orbitron',monospace;font-weight:800;font-size:13px;letter-spacing:.18em;text-transform:uppercase;box-shadow:4px 4px 0 #000,0 0 24px rgba(26,199,160,.3);border:none;cursor:pointer;position:relative;overflow:hidden;transition:transform .12s,box-shadow .12s}
-.ndash-scan-cta::before{content:'';position:absolute;inset:-1px;border:2px dashed rgba(0,0,0,.35);pointer-events:none}
+.ndash-scan-cta{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:13px;background:var(--accent);color:#000;font-family:'Orbitron',monospace;font-weight:800;font-size:13px;letter-spacing:.18em;text-transform:uppercase;box-shadow:4px 4px 0 #000,0 0 24px rgba(26,199,160,.3);border:none;border-radius:var(--r-md,8px);cursor:pointer;position:relative;overflow:hidden;transition:transform .12s,box-shadow .12s}
 .ndash-scan-cta:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000,0 0 36px rgba(26,199,160,.55)}
 .ndash-scan-cta svg{width:20px;height:20px;flex-shrink:0}
 
@@ -20733,17 +20734,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           const owned = ownedItems.reduce((s, c) => s + (c.quantity || 1), 0);
           const pct = Math.min(100, (owned / 200) * 100);
           const barColor = owned >= 200 ? '#e74c3c' : owned >= 160 ? 'var(--gold)' : '#1D9E75';
+          // Single-line free-plan banner. Label, count, and progress bar
+          // sit inline on one row; over-limit / approaching-limit nudges
+          // append after the bar so the whole strip still fits at one
+          // line on mobile (the upgrade link wraps to a second line only
+          // when it has to). Border rounded to match the rest of the UI;
+          // the "// FREE PLAN" prefix was dropped per design ask.
           summary.innerHTML = `
-            <div style="margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);background:var(--surface2)">
-              <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-bottom:5px">
-                <span>// FREE PLAN — CARD SLOTS</span>
-                <span style="color:${barColor}">${owned} / 200</span>
+            <div style="margin-bottom:10px;padding:8px 14px;border:1px solid var(--border);background:var(--surface2);border-radius:var(--r-md);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <span style="font-size:.72rem;color:var(--muted);letter-spacing:.06em;white-space:nowrap">FREE PLAN — CARD SLOTS</span>
+              <span style="font-size:.72rem;color:${barColor};font-weight:700;white-space:nowrap">${owned} / 200</span>
+              <div style="flex:1;min-width:80px;height:4px;background:var(--border);border-radius:var(--r-pill);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:var(--r-pill);transition:width .4s"></div>
               </div>
-              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;transition:width .4s"></div>
-              </div>
-              ${owned >= 200 ? `<div style="font-size:.68rem;color:#e74c3c;margin-top:6px">Limit reached — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade to Collector</span> for unlimited cards.</div>` :
-                owned >= 160 ? `<div style="font-size:.68rem;color:var(--gold);margin-top:6px">${200 - owned} slots remaining — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade for unlimited</span></div>` : ''}
+              ${owned >= 200 ? `<span style="font-size:.68rem;color:#e74c3c;white-space:nowrap">Limit reached — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` :
+                owned >= 160 ? `<span style="font-size:.68rem;color:var(--gold);white-space:nowrap">${200 - owned} left — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` : ''}
             </div>`;
         } else {
           summary.innerHTML = '';
@@ -21604,10 +21609,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         || fallbackTcgUrl
         || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
       const pcUrl  = pcRow && pcRow.source_url;
-      const tcgBtn = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
-      const pcBtn  = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
+      const tcgBtn = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
+      const pcBtn  = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
       const extraPricesHtml = extraPriceRows.length
-        ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02)">
+        ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02);border-radius:var(--r-md)">
             ${extraPriceRows.map(function(r) {
               return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
                 <span style="font-size:.6rem;color:rgba(26,199,160,.55);letter-spacing:.06em">${r.label}</span>
@@ -21805,10 +21810,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
         const pcUrl  = pcRow && pcRow.source_url;
         // Common button style: square, accent-bordered, hover lift.
-        const btnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
-        const pcBtnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer';
+        const btnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
+        const pcBtnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
         const extraPricesHtml = extraPriceRows.length
-          ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02)">
+          ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02);border-radius:var(--r-md)">
               ${extraPriceRows.map(function(r) {
                 return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
                   <span style="font-size:.6rem;color:rgba(26,199,160,.55);letter-spacing:.06em">${r.label}</span>
@@ -21823,7 +21828,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // source breakdown.
         const _setsEst = _computeEstimateFromExtras(extras);
         const estHtml = _setsEst
-          ? `<div style="margin-top:10px;border:1px solid var(--copper-dim);padding:8px 12px;background:rgba(184,115,51,.04);display:flex;justify-content:space-between;align-items:center">
+          ? `<div style="margin-top:10px;border:1px solid var(--copper-dim);padding:8px 12px;background:rgba(184,115,51,.04);display:flex;justify-content:space-between;align-items:center;border-radius:var(--r-md)">
               <span style="font-size:.6rem;color:var(--copper);letter-spacing:.08em">ESTIMATED VALUE${_setsEst.sourceCount > 1 ? ' (AVG)' : ''}</span>
               <span style="font-size:.85rem;font-weight:800;color:var(--copper)">$${_setsEst.value.toFixed(2)}</span>
             </div>`
@@ -22052,7 +22057,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
 
         <!-- Notes -->
-        ${item.notes ? `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;font-size:.68rem;color:var(--muted);line-height:1.5;word-break:break-word;margin-bottom:12px">${_escHtml(item.notes)}</div>` : ''}
+        ${item.notes ? `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);font-size:.68rem;color:var(--muted);line-height:1.5;word-break:break-word;margin-bottom:12px">${_escHtml(item.notes)}</div>` : ''}
 
         <!-- Name + set + cert -->
         <div style="margin-bottom:12px">
@@ -22082,13 +22087,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                  <div style="font-size:.65rem;color:var(--accent);letter-spacing:.08em">// PRICE_TREND</div>
                  <span id="cardTrendRange_${item.id}" style="font-size:.6rem;color:var(--muted)">Loading…</span>
                </div>
-               <svg id="cardTrendSvg_${item.id}" width="100%" height="70" style="display:block;overflow:visible;background:var(--surface2);border:1px solid var(--border)">
+               <svg id="cardTrendSvg_${item.id}" width="100%" height="70" style="display:block;overflow:visible;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md)">
                  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="var(--muted)" font-family="Share Tech Mono,monospace">Fetching history…</text>
                </svg>
              </div>`
-          : `<div style="padding:8px 10px;background:var(--surface2);border:1px dashed var(--border);text-align:center;margin-bottom:12px">
+          : `<div style="padding:8px 10px;background:var(--surface2);border:1px dashed var(--border);border-radius:var(--r-md);text-align:center;margin-bottom:12px">
                <div style="font-size:.62rem;color:var(--muted)">// PRICE_TREND — <span style="color:var(--teal)">Collector+</span></div>
-               <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:5px;padding:3px 10px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;cursor:pointer">Upgrade →</button>
+               <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:5px;padding:3px 10px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;cursor:pointer;border-radius:var(--r-sm)">Upgrade →</button>
              </div>`}
 
         <!-- Price source URL -->
@@ -29916,7 +29921,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
       const img = card.images && card.images.small ? card.images.small : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${_pickThumbVariant(img, 200)}" data-fallback="${_escHtml(img)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" style="width:36px;height:50px;object-fit:cover;object-position:center top;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+        ${img ? `<img src="${_pickThumbVariant(img, 200)}" data-fallback="${_escHtml(img)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" style="width:36px;height:50px;object-fit:cover;object-position:center top;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:var(--r-sm,6px);border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
@@ -30036,8 +30041,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
         onclick="${openFn}(${idx})">
         ${card.image_url
-          ? `<img src="${_pickThumbVariant(card.image_url, 200)}" data-fallback="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" onerror="_thumbFail(this)" style="width:36px;height:auto;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
-          : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:3px;border:1px solid var(--border)"></div>`}
+          ? `<img src="${_pickThumbVariant(card.image_url, 200)}" data-fallback="${card.image_url}" alt="${_escHtml(card.name||'')}" loading="lazy" onerror="_thumbFail(this)" style="width:36px;height:auto;flex-shrink:0;border-radius:var(--r-sm,6px);${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">`
+          : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:var(--r-sm,6px);border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name||'—')}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${_escHtml(card.card_number||'?')}${card.rarity ? ' · '+_escHtml(card.rarity) : ''}</div>
@@ -33360,9 +33365,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       aspect-ratio: 245 / 342 !important;
       margin: 0 auto 10px !important;
       padding: 0 !important;
-      background: var(--surface2) !important;
-      border: 1px solid var(--border) !important;
-      border-radius: 4px !important;
+      /* No border / no fill — the card art is its own bounding box.
+         Previously had a faint border + surface2 fill that read as a
+         frame around the card, which looked silly especially against
+         the modal's already-dark background. */
+      background: transparent !important;
+      border: none !important;
+      border-radius: var(--r-md) !important;
       overflow: hidden !important;
     }
     #binderDetailContent .pb-detail-photo-slot img {
@@ -34232,13 +34241,109 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (statusEl) statusEl.textContent = '✓ Filled: ' + found.join(' · ');
     }
 
+    // Resolve a graded slab's PSA / cert metadata to a row in our catalog
+    // so the saved collection_items.api_card_id points somewhere real.
+    // Without this, slab cards never pick up multi-source comp prices
+    // (_enrichOwnedFromComps / _renderBinderExtrasPlaceholder both filter
+    // on api_card_id) and the PRICE_TREND chart has no series to draw.
+    //
+    // Strategy:
+    //   1. Card-number lookup against the en- catalog (slab path is
+    //      Pokemon-only today; gameType is hard-coded below).
+    //   2. Filter results by case-insensitive name match — try the full
+    //      cert name first, then a suffix-stripped baseName ('Charizard
+    //      ex' → 'Charizard') so pokedata rows that drop the ex/V suffix
+    //      still hit.
+    //   3. Score remaining candidates by token overlap against the
+    //      cert's brand + year tokens vs catalog set_name (PSA brand
+    //      'Pokemon Game' + year '1999' should beat a Charizard #4
+    //      from a 2024 reprint).
+    //   4. Top-scoring candidate wins; ties / zero hits → null
+    //      (caller leaves api_card_id null, user can edit later).
+    async function _linkSlabToCatalog(cert) {
+      if (!cert) return { apiCardId: null, matches: [] };
+      const name = String(cert.cardName || '').trim();
+      const num  = String(cert.cardNumber || '').trim();
+      if (!name && !num) return { apiCardId: null, matches: [] };
+
+      let rows = [];
+      if (num) {
+        try {
+          rows = await _pbSearchCatalogByCardNumber({ num: num, total: null }, 'en-', 100);
+        } catch(_) { rows = []; }
+      }
+      // Name-only fallback for slabs missing a card_number (older
+      // promos, oddities, etc.). Caps at 100 rows so a common name
+      // like 'Pikachu' doesn't pull the whole catalog.
+      if (!rows.length && name) {
+        try {
+          const r = await sb.from('catalog')
+            .select('id, name, set_name, card_number, game_type')
+            .ilike('name', '%' + name + '%')
+            .ilike('id', 'en-%')
+            .limit(100);
+          if (!r.error && r.data) rows = r.data;
+        } catch(_) {}
+      }
+      if (!rows.length) return { apiCardId: null, matches: [] };
+
+      const nameLc = name.toLowerCase();
+      const baseLc = nameLc.replace(/\s+(ex|v|vmax|vstar|gx|vunion)$/i, '').trim();
+      let candidates = rows.filter(function(r) {
+        const rn = (r.name || '').toLowerCase();
+        return rn === nameLc || rn === baseLc || rn.includes(nameLc) || nameLc.includes(rn);
+      });
+      // If the name filter wipes everything out, fall back to the raw
+      // number hits (catalog name might be wildly different from the
+      // cert text — Promo cards are notorious for this).
+      if (!candidates.length) candidates = rows;
+
+      const yearStr = String(cert.year || '').trim();
+      const brandLc = String(cert.brand || '').toLowerCase();
+      const brandTokens = brandLc.split(/\s+/).filter(function(t) { return t.length >= 3; });
+
+      candidates.forEach(function(c) {
+        const sn = (c.set_name || '').toLowerCase();
+        let score = 0;
+        if (yearStr && sn.indexOf(yearStr) !== -1) score += 2;
+        brandTokens.forEach(function(t) { if (sn.indexOf(t) !== -1) score += 1; });
+        if ((c.name || '').toLowerCase() === nameLc) score += 1;
+        c._linkScore = score;
+      });
+      candidates.sort(function(a, b) { return (b._linkScore || 0) - (a._linkScore || 0); });
+
+      const top    = candidates[0];
+      const second = candidates[1];
+      // Pick the top match. When the runner-up ties on score, log so we
+      // can see how often the heuristic is ambiguous — useful for tuning.
+      if (second && (top._linkScore || 0) === (second._linkScore || 0)) {
+        console.log('[Slab] ambiguous catalog link for "' + name + '" #' + num +
+                    ' — ' + candidates.slice(0, 5).map(function(c){return c.id;}).join(', '));
+      }
+      return {
+        apiCardId: top.id,
+        matches: candidates.slice(0, 5).map(function(c) {
+          return { id: c.id, name: c.name, set_name: c.set_name, card_number: c.card_number, score: c._linkScore || 0 };
+        }),
+      };
+    }
+
     // Opens the add-to-collection modal pre-filled from a PSA cert API result
-    function _openModalFromSlabCert(slab, cert) {
+    async function _openModalFromSlabCert(slab, cert) {
       _returnToScanner = true;
       document.getElementById('scannerModal').style.display = 'none';
 
+      // Resolve to a real catalog row before building pendingCollectionCard
+      // so api_card_id points somewhere on save. Falls back to null on
+      // miss; user can still save (and link manually later via edit).
+      const link = await _linkSlabToCatalog(cert);
+      if (link.apiCardId) {
+        console.log('[Slab] linked to catalog row:', link.apiCardId,
+                    '(from ' + link.matches.length + ' candidate(s))');
+      }
+
       pendingCollectionCard = {
-        apiCardId:    null,
+        apiCardId:    link.apiCardId,
         cardName:     cert.cardName  || '',
         setName:      [cert.brand, cert.year].filter(Boolean).join(' ') || '',
         setCode:      '',
