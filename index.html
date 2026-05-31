@@ -23377,12 +23377,36 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // openSearchCardDetail for catalog YGO hits (catalog has no prices).
     // YGO doesn't have per-printing pricing in the basic API — prices are
     // keyed by card name, which is fine for most use cases.
+    // Strip rarity-in-parens, set-code prefixes, and edition suffixes
+    // from a YGOPRODeck-bound query. YGOPRODeck rejects parenthesized
+    // variants and # characters with a 400, which floods the console
+    // when our search/refresh hands the raw catalog name through.
+    // Examples cleaned:
+    //   "The Winged Dragon of Ra (Secret Pharaoh's Rare)" → "The Winged Dragon of Ra"
+    //   "Elemental Hero Neos (Blue)"                      → "Elemental Hero Neos"
+    //   "#GBI-003" / "MZMU-EN059"                         → "" (set code, not a name)
+    //   "Elemental HERO Neos 1st Edition"                 → "Elemental HERO Neos"
+    function _cleanYgoQuery(s) {
+      if (!s) return '';
+      var q = String(s).trim();
+      // Set-code patterns (XXX-NNN, XXX-ENNNN, leading #) — definitely
+      // not a card name. Return empty so the caller skips the API call.
+      if (/^#/.test(q)) return '';
+      if (/^[A-Z]{2,6}-(EN|JP|KR|FR|DE|IT|PT|SP|TC|SC)?\d{1,4}$/i.test(q)) return '';
+      // Strip parenthesized rarity/edition tags wherever they sit.
+      q = q.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+      // Strip trailing edition noise.
+      q = q.replace(/\s+(1st\s*Edition|Unlimited|Limited|Foil|Promo)\s*$/i, '').trim();
+      return q;
+    }
+
     async function _fetchYugiohPrices(cardName) {
-      if (!cardName) return null;
+      var q = _cleanYgoQuery(cardName);
+      if (!q) return null;
       // Try exact name first (no false positives), fall back to fuzzy.
       const urls = [
-        `https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(cardName)}`,
-        `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(cardName)}&num=1&offset=0`,
+        `https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(q)}`,
+        `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(q)}&num=1&offset=0`,
       ];
       for (const url of urls) {
         try {
@@ -23401,7 +23425,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // YGOPRODeck — free, no auth, very comprehensive.
     // https://ygoprodeck.com/api-guide/
     async function _fallbackYugioh(query) {
-      const url = `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}&num=250&offset=0`;
+      // Reuse the same cleaner the price-fetch path uses so set codes
+      // and parenthesized rarity tags don't 400 the API. Empty result
+      // → silent return (don't even hit the endpoint).
+      var q = _cleanYgoQuery(query);
+      if (!q) return [];
+      const url = `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(q)}&num=250&offset=0`;
       try {
         const r = await fetch(url, { headers: _FALLBACK_HEADERS });
         if (!r.ok) return [];
@@ -35704,15 +35733,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     // Extract card number like "4/102", "SV001/SV122", "TG01/TG30"
     // Returns { full, num, total } e.g. { full:"094/165", num:"94", total:"165" }
+    //
+    // Alphanumeric prefixes (TG, GG, SWSH, SVE, etc.) need the digit-only
+    // tail for parseInt; we also keep the prefixed forms so the catalog
+    // query can match rows stored either way ("TG30" → "30" via num,
+    // "TG30" via numRaw). Without this, trainer-gallery / promo cards
+    // parsed as NaN and never landed in the strong-tier search.
     function parseCardNumber(text) {
       if (!text) return null;
       const m = text.match(/\b([A-Z]{0,4}\d+)\s*[\/\\|]\s*([A-Z]{0,4}\d+)\b/);
       if (!m) return null;
+      var leftDigits  = (m[1].match(/\d+/) || [''])[0];
+      var rightDigits = (m[2].match(/\d+/) || [''])[0];
+      // Without digit tails the match is meaningless (shouldn't happen
+      // given the regex but guard so downstream parseInt doesn't NaN).
+      if (!leftDigits || !rightDigits) return null;
       return {
-        full:  m[1] + '/' + m[2],
-        num:   String(parseInt(m[1], 10)),   // stripped, e.g. "94"
-        numRaw: m[1],                         // as-read, e.g. "094"
-        total: String(parseInt(m[2], 10)),   // set base size, e.g. "165"
+        full:   m[1] + '/' + m[2],
+        num:    String(parseInt(leftDigits,  10)),   // unpadded numeric ("94", "30")
+        numRaw: m[1],                                 // as-read incl. any prefix ("TG30", "094")
+        total:  String(parseInt(rightDigits, 10)),   // numeric set size
       };
     }
 
@@ -35742,12 +35782,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // stray CJK glyphs that bleed onto English-card OCR).
     function detectOcrLanguage(text) {
       if (!text) return 'EN';
+      // Cards are often majority-EN with a small CJK disclaimer block at
+      // the bottom (e.g. Obelisk "Cannot be used in official duels"
+      // promo, certain English-region cards reprinted from JP plates).
+      // Require both an absolute floor (>=4 chars) AND that the CJK
+      // characters make up a meaningful share of the text (>=15%) so
+      // a tiny disclaimer doesn't override a large EN body.
+      var total  = text.length || 1;
+      var meets  = function(arr) { return arr && arr.length >= 4 && (arr.length / total) >= 0.15; };
       var kana   = text.match(/[ぁ-ゖァ-ヶ]/g);  // JA-exclusive
-      if (kana && kana.length >= 4) return 'JA';
+      if (meets(kana)) return 'JA';
       var hangul = text.match(/[가-힯]/g);                 // KO-exclusive
-      if (hangul && hangul.length >= 4) return 'KO';
+      if (meets(hangul)) return 'KO';
       var han    = text.match(/[一-鿿]/g);                 // Han → ZH (kana ruled out)
-      if (han && han.length >= 4) return 'ZH';
+      if (meets(han)) return 'ZH';
       return 'EN';
     }
 
@@ -36426,7 +36474,46 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         addHits(trainerPokHits, 'trainerPok');  // Pokémon name from trainer card
         clipMatches.forEach(function(m) { if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); } });
         merged.sort(function(a, b) { return b.similarity - a.similarity; });
-        const final = merged.slice(0, 10);
+
+        // When OCR read a card name, drop any CLIP-only candidate whose
+        // catalog name doesn't share a token with the parsed name (or
+        // the suffix-stripped baseName). Catalog-hit rows (anything with
+        // _ocr set — name+num, num-only, expanded, trainer, jpNum, etc.)
+        // came from an actual OCR signal so they always stay; this only
+        // trims the visual-match cards that have no textual confirmation,
+        // which is where the scanner was surfacing unrelated cards
+        // (Drilbur/Cresselia/Naganadel etc. when the OCR clearly said
+        // "Houndoom" or "Clefairy").
+        let filtered = merged;
+        if (cardName) {
+          const nameLcF  = cardName.toLowerCase();
+          const baseLcF  = (baseName || '').toLowerCase();
+          // Token overlap rather than substring: "Mega Pyroar ex" tokens
+          // ['mega','pyroar','ex'] overlap with catalog 'Pyroar' on
+          // 'pyroar'. Strips common short tokens that match too easily.
+          const STOP = new Set(['ex','v','vmax','vstar','gx','de','the','of','and','&']);
+          const tokenize = function(s) {
+            return String(s || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+          };
+          const queryTokens = tokenize(nameLcF + ' ' + baseLcF).filter(function(t) {
+            return t.length >= 3 && !STOP.has(t);
+          });
+          if (queryTokens.length) {
+            filtered = merged.filter(function(m) {
+              if (m._ocr) return true;  // came from an OCR-anchored query
+              const rn = (m.name || '').toLowerCase();
+              if (!rn) return false;
+              // Keep if any meaningful query token appears in the
+              // candidate's name OR vice-versa.
+              for (let qi = 0; qi < queryTokens.length; qi++) {
+                if (rn.indexOf(queryTokens[qi]) !== -1) return true;
+              }
+              return false;
+            });
+          }
+          if (filtered.length === 0) filtered = merged; // never strand the user
+        }
+        const final = filtered.slice(0, 10);
 
         if (!silent) {
           // Reveal name search fallback now that scan is complete

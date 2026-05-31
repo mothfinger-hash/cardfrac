@@ -101,7 +101,11 @@ parser.add_argument("--language", choices=["EN", "JA"], default=None,
 parser.add_argument("--tcg", type=str, default="Pokemon",
     help="Which TCG to scrape. Pokedata covers: Pokemon, Magic, Yugioh, One Piece, Digimon, Lorcana, Flesh and Blood, Union Arena, Dragon Ball, Grand Archive, MetaZoo, Star Wars, Gundam, Sorcery. Default 'Pokemon' for backward compat with existing scripts.")
 parser.add_argument("--only", type=str, default=None,
-    help="Process only this set code")
+    help="Process only this set code (or name — name matching is case-insensitive)")
+parser.add_argument("--from-url", type=str, default=None,
+    help="Shortcut: pass a Pokedata set URL like https://www.pokedata.io/tcg/yugioh/Blazing+Dominion. "
+         "Pre-fills --tcg from the URL slug and --only with the URL-decoded set name. "
+         "Saves looking up the set code by hand when adding a brand-new set.")
 parser.add_argument("--dry-run", action="store_true",
     help="Read everything but don't write to Supabase")
 parser.add_argument("--limit", type=int, default=None,
@@ -513,6 +517,42 @@ def canonical_tcg(tcg):
     """Return the exact TCG display name Pokedata wants in query params."""
     if not tcg: return "Pokemon"
     return _TCG_CANONICAL.get(tcg.lower().strip(), tcg)
+
+
+# ─── Resolve --from-url shortcut into --tcg + --only ────────────────────────
+# Accepts any of:
+#   https://www.pokedata.io/tcg/yugioh/Blazing+Dominion
+#   https://pokedata.io/tcg/yugioh/Blazing%20Dominion
+#   www.pokedata.io/tcg/one-piece/Pillars+of+Strength
+#   pokedata.io/tcg/yugioh/Blazing+Dominion/
+# Lifts the tcg slug + URL-decoded set name and slots them into the
+# existing --tcg / --only paths. The set-name filter at the call site
+# already matches by EITHER code OR name (case-insensitive), so passing
+# the URL-decoded name as --only works without further plumbing.
+#
+# Runs lazily after canonical_tcg is defined because that's what we
+# need to normalize the URL's tcg slug into the display name Pokedata
+# wants on its API.
+if getattr(args, "from_url", None):
+    try:
+        from urllib.parse import urlparse, unquote
+        u = args.from_url.strip()
+        if not u.startswith(("http://", "https://")):
+            u = "https://" + u
+        path_parts = [p for p in urlparse(u).path.split("/") if p]
+        # Expected shape: ["tcg", "<tcg-slug>", "<URL-encoded-set-name>"]
+        if len(path_parts) >= 3 and path_parts[0].lower() == "tcg":
+            tcg_slug = path_parts[1].replace("-", " ").replace("+", " ").strip()
+            set_name = unquote(path_parts[2].replace("+", " ")).strip()
+            if tcg_slug:
+                args.tcg = canonical_tcg(tcg_slug)
+            if set_name and not args.only:
+                args.only = set_name
+            print(f"✓ --from-url resolved: tcg='{args.tcg}', only='{args.only}'")
+        else:
+            print(f"⚠ --from-url path didn't look like /tcg/<game>/<set>: {u}")
+    except Exception as e:
+        print(f"⚠ --from-url parse failed: {e}")
 
 
 # ═════════════════════════════════════════════════════════════════════════════

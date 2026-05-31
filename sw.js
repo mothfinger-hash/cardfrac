@@ -608,14 +608,14 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v393';
+const CACHE = 'pathbinder-v395';
 
 const PRECACHE = [
   '/offline.html',
   '/404.html',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/pokedex.png',
+  '/pokedex.webp',
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap'
 ];
 
