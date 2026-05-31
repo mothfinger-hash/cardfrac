@@ -46,6 +46,15 @@ const TIER_COMMISSION_RATES = {
 // old flat-rate behavior so legacy/edge cases don't accidentally pay 0%.
 const DEFAULT_COMMISSION_RATE = 0.07;
 
+// Stripe's per-transaction fixed fee (in cents). We fold this into the
+// platform commission so PathBinder isn't out-of-pocket on cheap sales.
+// Without this, a $1 sale at 5% would leave us with $0.05 commission
+// against $0.30 + 2.9% in Stripe processing — a loss of ~$0.28 per sale.
+// Folding it in means the platform fee always at least covers the
+// processing floor; cheap-item sellers absorb it (their incentive to
+// price reasonably).
+const STRIPE_FIXED_FEE_CENTS = 30;
+
 function commissionRateFor(tier) {
   if (!tier) return DEFAULT_COMMISSION_RATE;
   const r = TIER_COMMISSION_RATES[String(tier).toLowerCase()];
@@ -111,8 +120,8 @@ module.exports = async function handler(req, res) {
   }
 
   const feeRate     = commissionRateFor(sellerTier);
-  const platformFee = Math.round(amount * feeRate);
-  const feePctLabel = (feeRate * 100).toFixed(0) + '%';
+  const platformFee = Math.round(amount * feeRate) + STRIPE_FIXED_FEE_CENTS;
+  const feePctLabel = (feeRate * 100).toFixed(0) + '% + $0.30/tx';
 
   const sessionParams = {
     payment_method_types: ['card'],

@@ -73,6 +73,12 @@
     .logo-img-btn:hover{opacity:.85}
     .nav-logo-img{height:28px;width:auto;display:block;object-fit:contain;image-rendering:auto;max-width:140px}
     nav.sb-collapsed .nav-logo-img{max-width:26px;height:26px;object-fit:cover;object-position:left}
+    /* Logo split: full PathBinder lockup when expanded, PB monogram when
+       collapsed. CSS-only toggle keyed off the nav.sb-collapsed class. */
+    .nav-logo-full{display:block}
+    .nav-logo-mark{display:none}
+    nav.sb-collapsed .nav-logo-full{display:none}
+    nav.sb-collapsed .nav-logo-mark{display:block;height:26px;width:26px;object-fit:contain}
     .nav-collapse-btn{width:26px;height:26px;border:1.5px solid var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:all .12s;background:transparent;padding:0}
     .nav-collapse-btn:hover{border-color:var(--accent);color:var(--accent)}
     .nav-collapse-btn svg{width:12px;height:12px;transition:transform .25s}
@@ -4475,6 +4481,7 @@ nav {
 
 /* ── LP Hero ── */
 .lp-hero { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:stretch; padding:20px 40px 16px; max-width:1360px; margin-left:auto; margin-right:auto; }
+.lp-hero-logo { display:block; height:42px; width:auto; max-width:220px; margin-bottom:14px; }
 @media(max-width:1100px) { .lp-hero { padding:20px 28px 16px; } }
 @media(max-width:900px) { .lp-hero { grid-template-columns:1fr; gap:16px; padding:20px 16px; } }
 .lp-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.18em; color:var(--accent); margin-bottom:10px; }
@@ -4584,6 +4591,8 @@ nav {
 .lp-tier.featured { border-color:var(--accent); box-shadow:3px 3px 0 var(--accent); }
 .lp-tier-name { font-family:'Orbitron',monospace; font-weight:800; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text); }
 .lp-tier.featured .lp-tier-name { color:var(--accent); }
+.lp-tier-jp { font-family:'Space Mono','Share Tech Mono',monospace; font-weight:400; font-size:9px; letter-spacing:.08em; color:var(--muted); margin-top:2px; }
+.lp-tier.featured .lp-tier-jp { color:rgba(26,199,160,.55); }
 .lp-tier-tagline { font-family:'Space Mono',monospace; font-size:.56rem; color:var(--muted); margin-bottom:4px; }
 .lp-tier-price { font-family:'Orbitron',monospace; font-weight:900; font-size:22px; color:var(--text); line-height:1; }
 .lp-tier.featured .lp-tier-price { color:var(--accent); }
@@ -5325,7 +5334,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     <!-- Logo header -->
     <div class="nav-header">
       <button class="logo-img-btn" onclick="showPage('collection');setMobileNav('collection')">
-        <img src="weblogo.webp" alt="PathBinder" class="nav-logo-img" fetchpriority="high" decoding="async">
+        <img src="pathbinder.svg" alt="PathBinder" class="nav-logo-img nav-logo-full" fetchpriority="high" decoding="async">
+        <img src="pb.svg"         alt="PathBinder" class="nav-logo-img nav-logo-mark" decoding="async">
       </button>
       <button class="nav-collapse-btn" id="navCollapseBtn" onclick="toggleNavCollapse()" title="Collapse sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -5357,7 +5367,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </button>
         <button class="nav-tab" data-page="fairTrade" data-label="Trade Analyzer" onclick="showPage('fairTrade');setMobileNav('fairTrade')">
           <span class="nav-tab-ico"><img src="icons/trade_analyzer.svg" alt="" aria-hidden="true"></span>
-          <span class="nav-tab-lbl">Trade Analyzer <span class="beta-badge" style="font-size:.42rem;padding:1px 5px;margin-left:4px">BETA</span></span>
+          <span class="nav-tab-lbl">Trade Analyzer</span>
         </button>
       </div>
       <div class="nav-group-label">Account</div>
@@ -6626,8 +6636,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <button class="modal-close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
       <div style="font-family:'Space Mono','Share Tech Mono',monospace">
         <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(26,199,160,.65);margin-bottom:14px">⬡ CARD SEARCH</div>
-        <!-- EN / JP toggle -->
-        <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid rgba(26,199,160,.22);border-radius:4px;overflow:hidden">
+        <!-- Game / TCG selector — mirrors the desktop dropdown so mobile
+             search isn't pinned to Pokemon. acSetMobGame() handles the
+             selection and toggles the EN/JA strip below (Pokemon-only). -->
+        <div style="margin-bottom:12px">
+          <div style="font-size:.5rem;letter-spacing:.14em;color:rgba(26,199,160,.45);margin-bottom:5px">GAME</div>
+          <select id="acMobGame" onchange="acSetMobGame(this.value)"
+            style="width:100%;padding:9px 10px;background:rgba(255,255,255,.04);color:rgba(225,238,252,.9);font-family:inherit;font-size:.72rem;letter-spacing:.06em;border:1px solid rgba(26,199,160,.22);border-radius:4px;outline:none">
+            <option value="pokemon">Pokémon</option>
+            <option value="magic">Magic: The Gathering</option>
+            <option value="yugioh">Yu-Gi-Oh!</option>
+            <option value="onepiece">One Piece</option>
+            <option value="gundam">Gundam</option>
+            <option value="dbz">Dragon Ball Z</option>
+          </select>
+        </div>
+        <!-- EN / JP toggle — Pokemon only. Hidden by acSetMobGame for
+             other TCGs (catalog only has multi-language Pokemon coverage). -->
+        <div id="acMobLangRow" style="display:flex;gap:0;margin-bottom:16px;border:1px solid rgba(26,199,160,.22);border-radius:4px;overflow:hidden">
           <button id="acLangEN" onclick="acSetSearchLang('EN')"
             style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:rgba(26,199,160,.12);color:#1AC7A0;border:none;cursor:pointer;transition:all .18s">
             ENGLISH
@@ -6654,6 +6680,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     <!-- HERO -->
     <section class="lp-hero" id="lpBinder">
       <div>
+        <img src="pathbinder.svg" alt="PathBinder" class="lp-hero-logo" decoding="async">
         <div class="lp-eyebrow">&gt;&gt; POWER TO COLLECTORS &gt;&gt;</div>
         <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
         <p class="lp-hero-sub">The ultimate cockpit for card collectors. Track your collection, find missing cards, grow your value, and trade with confidence.</p>
@@ -6672,8 +6699,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Market Value</div>
           </div>
           <div>
-            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)">5%</div>
-            <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Platform Fee</div>
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)">5% + 30¢</div>
+            <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Platform Fee / tx</div>
           </div>
         </div>
       </div>
@@ -6721,6 +6748,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <div class="lp-tiers">
         <div class="lp-tier">
           <div class="lp-tier-name">Free</div>
+          <div class="lp-tier-jp">無料</div>
           <div class="lp-tier-tagline">Start your journey</div>
           <div class="lp-tier-price">$0</div>
           <div class="lp-tier-per">/ mo</div>
@@ -6734,6 +6762,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="lp-tier featured">
           <div class="lp-tier-name">Collector</div>
+          <div class="lp-tier-jp">コレクター</div>
           <div class="lp-tier-tagline">For serious collectors</div>
           <div class="lp-tier-price">$5</div>
           <div class="lp-tier-per">/ mo</div>
@@ -6747,19 +6776,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="lp-tier">
           <div class="lp-tier-name">Enthusiast</div>
+          <div class="lp-tier-jp">愛好家</div>
           <div class="lp-tier-tagline">For active sellers</div>
           <div class="lp-tier-price">$20</div>
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Everything in Collector</li>
             <li>Marketplace listings — 40 active</li>
-            <li>5% commission · bulk CSV import</li>
+            <li>5% + $0.30/tx commission · bulk CSV import</li>
             <li>Sales archive + PDF reports</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
         </div>
         <div class="lp-tier">
           <div class="lp-tier-name">Vendor</div>
+          <div class="lp-tier-jp">ベンダー</div>
           <div class="lp-tier-tagline">For resellers &amp; shops</div>
           <div class="lp-tier-price">$75</div>
           <div class="lp-tier-per">/ mo</div>
@@ -6773,6 +6804,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="lp-tier">
           <div class="lp-tier-name">Shop</div>
+          <div class="lp-tier-jp">ショップ</div>
           <div class="lp-tier-tagline">For high-volume sellers</div>
           <div class="lp-tier-price">$200</div>
           <div class="lp-tier-per">/ mo</div>
@@ -8346,6 +8378,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function commissionRateFor(tier) {
       return TIER_COMMISSION_RATES[tier] || 0;
     }
+    // Stripe's per-transaction fixed processing fee, in dollars. Added
+    // on top of the percentage commission so cheap-item sales don't put
+    // the platform underwater on Stripe processing. Server mirror lives
+    // in /api/marketplace-checkout.js (STRIPE_FIXED_FEE_CENTS = 30).
+    const STRIPE_FIXED_FEE = 0.30;
     // Returns the commission rate for the CURRENT user. Convenience
     // for client-side fee-preview UI ("you'll receive $X after our Y% fee").
     function myCommissionRate() {
@@ -15572,15 +15609,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (ask > 0) {
         // Commission applies to the card price only — shipping passes
         // through to the seller. Matches the server-side calc which uses
-        // the unit_amount (price, not price+shipping).
-        const fee    = ask * rate;
-        const payout = (ask - fee) + ship;
+        // the unit_amount (price, not price+shipping). The $0.30 fixed
+        // Stripe fee is folded into the platform commission so cheap-
+        // item sales don't put us underwater on processing.
+        const pctFee  = ask * rate;
+        const fee     = pctFee + STRIPE_FIXED_FEE;
+        const payout  = (ask - fee) + ship;
         payoutLine = ''
           + '<div style="margin-top:6px;color:var(--text)">'
           + 'You receive <strong style="color:var(--green)">$' + payout.toFixed(2) + '</strong>'
           + ' on sale '
           + '<span style="color:var(--muted)">(ask $' + ask.toFixed(2)
-          + ' &minus; ' + ratePct + ' fee $' + fee.toFixed(2)
+          + ' &minus; ' + ratePct + ' commission $' + pctFee.toFixed(2)
+          + ' &minus; $' + STRIPE_FIXED_FEE.toFixed(2) + ' Stripe fee'
           + (ship > 0 ? ' + shipping $' + ship.toFixed(2) : '')
           + ')</span>'
           + '</div>';
@@ -15588,7 +15629,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       box.innerHTML = ''
         + tierLabel + ' tier fee: '
-        + '<strong style="color:var(--accent)">' + ratePct + '</strong>'
+        + '<strong style="color:var(--accent)">' + ratePct + ' + $' + STRIPE_FIXED_FEE.toFixed(2) + '/tx</strong>'
         + ' deducted from your payout on sale &middot; '
         + 'Payouts on Stripe&rsquo;s standard schedule &middot; '
         + '7-day buyer protection via Stripe dispute resolution'
@@ -16025,17 +16066,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const ship = parseFloat(document.getElementById('emlShipping').value) || 0;
       let payoutLine = '';
       if (ask > 0) {
-        const fee    = ask * rate;
+        const pctFee = ask * rate;
+        const fee    = pctFee + STRIPE_FIXED_FEE;
         const payout = (ask - fee) + ship;
         payoutLine = ''
           + '<div style="margin-top:6px;color:var(--text)">'
           + 'You receive <strong style="color:var(--green)">$' + payout.toFixed(2) + '</strong> on sale '
-          + '<span style="color:var(--muted)">(ask $' + ask.toFixed(2) + ' &minus; ' + ratePct + ' fee $' + fee.toFixed(2)
+          + '<span style="color:var(--muted)">(ask $' + ask.toFixed(2) + ' &minus; ' + ratePct + ' commission $' + pctFee.toFixed(2)
+          + ' &minus; $' + STRIPE_FIXED_FEE.toFixed(2) + ' Stripe fee'
           + (ship > 0 ? ' + shipping $' + ship.toFixed(2) : '') + ')</span>'
           + '</div>';
       }
-      box.innerHTML = tierLabel + ' tier fee: <strong style="color:var(--accent)">' + ratePct + '</strong>'
-        + ' &middot; ' + (ratePct === '0%' ? 'no platform fee on this tier' : 'deducted from your payout on sale')
+      box.innerHTML = tierLabel + ' tier fee: <strong style="color:var(--accent)">' + ratePct + ' + $' + STRIPE_FIXED_FEE.toFixed(2) + '/tx</strong>'
+        + ' &middot; ' + (ratePct === '0%' ? 'Stripe fixed $' + STRIPE_FIXED_FEE.toFixed(2) + '/tx applies' : 'deducted from your payout on sale')
         + payoutLine;
     }
 
@@ -18926,7 +18969,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     const TIER_DEFS = [
       {
-        id: 'free', label: 'Free', monthly: 0, annual: null,
+        id: 'free', label: 'Free', jpLabel: '無料', monthly: 0, annual: null,
         ctaLabel: 'Get started free', ctaAction: null,
         badge: null,
         features: [
@@ -18945,7 +18988,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         locked: ['Bulk CSV import','Multi-binder org','Bulk photo scanning'],
       },
       {
-        id: 'collector', label: 'Collector', monthly: 5, annual: null,
+        id: 'collector', label: 'Collector', jpLabel: 'コレクター', monthly: 5, annual: null,
         ctaLabel: 'Start Collector', ctaAction: 'checkout_collector',
         badge: 'Most popular',
         features: [
@@ -18966,14 +19009,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // Enthusiast 17%, Vendor 20%, Shop 25%. Matches the pre-rename
         // pattern (old Vendor $25 → $239.99 = 20% off; Shop $200 → $1,800
         // = 25% off). Bigger savings as price climbs.
-        id: 'enthusiast', label: 'Enthusiast', monthly: 20, annual: 199.99,
+        id: 'enthusiast', label: 'Enthusiast', jpLabel: '愛好家', monthly: 20, annual: 199.99,
         ctaLabel: 'Start Enthusiast', ctaAction: 'checkout_enthusiast',
         badge: null,
         features: [
           'Everything in Collector',
           'Marketplace selling — TCG singles only',
           '40 concurrent active listings',
-          '5% commission on sales',
+          '5% + $0.30/tx commission on sales',
           '1,000 bulk photo scan sessions / month',
           'Bulk CSV import',
           'Multi-binder organization',
@@ -18989,7 +19032,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         locked: ['Sealed product listings (boxes/ETBs/tins)','Non-TCG product listings','Product scanner (Funko/Manga/etc.)','150 listing slots','Monthly revenue chart','Top cards & channel analytics','Full P&L report PDF'],
       },
       {
-        id: 'vendor', label: 'Vendor', monthly: 75, annual: 719.99,
+        id: 'vendor', label: 'Vendor', jpLabel: 'ベンダー', monthly: 75, annual: 719.99,
         ctaLabel: 'Start Vendor', ctaAction: 'checkout_vendor',
         badge: null,
         features: [
@@ -19006,7 +19049,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         locked: ['Unlimited listings','White-label storefront page','Full P&L report PDF','Dedicated account manager','Featured placement'],
       },
       {
-        id: 'shop', label: 'Shop', monthly: 200, annual: 1800,
+        id: 'shop', label: 'Shop', jpLabel: 'ショップ', monthly: 200, annual: 1800,
         ctaLabel: 'Contact us', ctaAction: 'shop_intake',
         badge: null,
         features: [
@@ -19066,24 +19109,30 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         }
 
         // ── Promo banner (shown when user hit a usage limit) ─────────────
+        // Restyled as an inline informational chip (not a CTA-looking
+        // strip) so users don't read it as a second button alongside
+        // the actual CTA below.
         const isPromoTarget = (_limitPromoTier === t.id) && !isCurrent;
         const promoBanner = isPromoTarget
-          ? `<div style="background:var(--accent2);color:var(--surface);font-size:.6rem;font-weight:700;letter-spacing:.08em;text-align:center;padding:4px 8px;margin-bottom:8px">25% OFF YOUR FIRST MONTH — upgrade now</div>`
+          ? `<div style="background:transparent;color:var(--accent);font-size:.58rem;font-weight:700;letter-spacing:.08em;text-align:center;padding:6px 8px;margin-bottom:8px;border:1px dashed var(--accent);border-radius:var(--r-sm,6px)">25% OFF YOUR FIRST MONTH</div>`
           : '';
 
-        // ── CTA button ──────────────────────────────────────────────────
+        // ── CTA button — every interactive CTA shares the same teal
+        //     hologram styling. Previously the badged tier used a copper
+        //     `--premium` background and the promo target used pink
+        //     `--accent2`, so the modal read as three different colors
+        //     instead of one coherent button family.
         let ctaBtn = '';
         if (isCurrent) {
-          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:var(--surface2);letter-spacing:.06em">✓ Current plan</div>`;
+          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:var(--surface2);letter-spacing:.06em;border-radius:var(--r-sm,6px)">✓ Current plan</div>`;
         } else if (t.ctaAction === 'shop_intake') {
-          ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Contact us →</button>`;
+          ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px)">Contact us →</button>`;
         } else if (t.ctaAction) {
           const isAbove = TIER_ORDER.indexOf(t.id) < TIER_ORDER.indexOf(current);
-          const btnBg = isPromoTarget ? 'var(--accent2)' : (t.badge ? 'var(--premium)' : 'transparent');
-          const btnColor = isPromoTarget ? 'var(--surface)' : (t.badge ? 'var(--premium-txt)' : 'var(--accent)');
-          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:${btnBg};color:${btnColor};border:2px solid var(--border);box-shadow:3px 3px 0 var(--shadow);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;opacity:${isAbove ? '.5' : '1'}">${isPromoTarget ? 'Upgrade & Save 25% →' : t.ctaLabel + ' →'}</button>`;
+          const ctaText = isPromoTarget ? (t.ctaLabel + ' — Save 25% →') : (t.ctaLabel + ' →');
+          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:var(--accent);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px);opacity:${isAbove ? '.5' : '1'};transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">${ctaText}</button>`;
         } else {
-          ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em">${t.ctaLabel}</button>`;
+          ctaBtn = `<button onclick="closeModal('membershipModal')" style="width:100%;padding:9px;background:transparent;color:var(--accent);border:1px solid var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px)">${t.ctaLabel}</button>`;
         }
         ctaBtn = promoBanner + ctaBtn;
 
@@ -19112,7 +19161,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return `<div style="border:${borderStyle};${bgStyle};${glowStyle};padding:18px;display:flex;flex-direction:column;gap:0;position:relative">
           ${t.badge ? `<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--surface);font-size:.58rem;font-weight:700;padding:2px 10px;letter-spacing:.08em;white-space:nowrap">${t.badge}</div>` : ''}
           ${isCurrent ? `<div style="position:absolute;top:8px;right:10px;font-size:.58rem;color:var(--accent);letter-spacing:.06em;opacity:.7">● ACTIVE</div>` : ''}
-          <div style="font-size:.62rem;letter-spacing:.12em;${headerColor};margin-bottom:6px">${t.label.toUpperCase()}</div>
+          <div style="font-size:.62rem;letter-spacing:.12em;${headerColor};margin-bottom:2px">${t.label.toUpperCase()}</div>
+          ${t.jpLabel ? `<div style="font-size:.55rem;color:var(--muted);letter-spacing:.08em;margin-bottom:6px;font-weight:400">${t.jpLabel}</div>` : ''}
           <div style="margin-bottom:14px;line-height:1.4">${priceLine}</div>
           <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:12px;flex:1">
             ${featureLines}
@@ -22703,7 +22753,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     window.addEventListener('resize', () => { acFitDevice(); acPositionMobLed(); });
 
     let acMobSearchOpen  = false;
-    let acSearchLanguage = 'EN'; // 'EN' | 'JA'
+    let acSearchLanguage = 'EN'; // 'EN' | 'JA' — Pokemon only
+    let acMobGame        = 'pokemon'; // 'pokemon' | 'magic' | 'yugioh' | 'onepiece' | 'gundam' | 'dbz'
 
     function acSetSearchLang(lang) {
       acSearchLanguage = lang;
@@ -22715,18 +22766,46 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (inp)   inp.placeholder = lang === 'JA' ? 'Pikachu, Charizard, Mewtwo...' : 'Charizard, Pikachu, Mewtwo...';
     }
 
+    function acSetMobGame(game) {
+      acMobGame = game;
+      const langRow = document.getElementById('acMobLangRow');
+      if (langRow) langRow.style.display = (game === 'pokemon') ? 'flex' : 'none';
+      const inp = document.getElementById('acMobInput');
+      if (inp) {
+        const placeholders = {
+          pokemon:  acSearchLanguage === 'JA' ? 'Pikachu, Charizard, Mewtwo...' : 'Charizard, Pikachu, Mewtwo...',
+          magic:    'Lightning Bolt, Black Lotus...',
+          yugioh:   'Blue-Eyes, Dark Magician...',
+          onepiece: 'Luffy, Zoro, Nami...',
+          gundam:   'Gundam, Char...',
+          dbz:      'Goku, Vegeta...',
+        };
+        inp.placeholder = placeholders[game] || 'Card name...';
+      }
+    }
+
     function acMobSearch() {
       const mob   = document.getElementById('acMobInput');
       const query = mob ? mob.value.trim() : '';
       if (!query) return;
       acMobSearchOpen = false;
       closeModal('acMobSearchModal');
-      if (acSearchLanguage === 'JA') {
-        searchJapaneseCards(query);
+      // Mirror the query into the desktop input so the shared search
+      // functions (which read from cardSearchInput) work identically
+      // on both layouts.
+      const desk = document.getElementById('cardSearchInput');
+      if (desk) desk.value = query;
+      if (acMobGame === 'pokemon') {
+        if (acSearchLanguage === 'JA') {
+          searchJapaneseCards(query);
+        } else {
+          searchPokemonCards();
+        }
       } else {
-        const desk = document.getElementById('cardSearchInput');
-        if (desk) desk.value = query;
-        searchPokemonCards();
+        // searchOtherTcgCards reads cardSearchInput and renders to both
+        // acDeskGrid and acMobGrid via acRenderMobGrid — same shared
+        // pipeline as desktop.
+        searchOtherTcgCards(acMobGame);
       }
     }
 
@@ -33446,7 +33525,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     .listing-card,
     .coll-stat-box,
     .pb-stat-card,
+    .lp-tier,
+    .lp-feat-card,
     .pb-detail-photo-slot { border-radius: var(--r-md) !important; }
+
+    /* — Landing-page CTA buttons + tier CTAs — match the global button
+         radius so the landing surface reads as one shape family. */
+    .lp-cta-primary,
+    .lp-cta-secondary,
+    .lp-tier-cta { border-radius: var(--r-sm) !important; }
 
     /* — Panels & surfaces — the dashboard panels, sets-page panels,
          filter panels. Even larger than cards. */
