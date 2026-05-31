@@ -12191,6 +12191,86 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       } catch (_) { /* network blip — fall back to whatever was stored */ }
     }
 
+    // JIT-enrich OWNED rows that have no current_value with an averaged
+    // estimate from the comp tables (catalog.current_value = PriceCharting,
+    // card_prices.source='tcgplayer'). Mirrors _enrichGhostsFromCatalog
+    // but populates item._compEstimate rather than overwriting current_value
+    // — graded rows store condition-adjusted prices in current_value, so
+    // overwriting them with a raw-market average would mislead. The list
+    // row + card-detail modal read _compEstimate as the next fallback
+    // after current_value/purchase_price. Items where current_value is
+    // already set are skipped (no need — the displayed value is correct).
+    async function _enrichOwnedFromComps(items) {
+      try {
+        if (!items || !items.length) return;
+        var ids = [];
+        var seen = new Set();
+        for (var i = 0; i < items.length; i++) {
+          var c = items[i];
+          if (c.is_ghost) continue;
+          if (!c.api_card_id) continue;
+          // Already has a current_value or a meaningful purchase_price — skip.
+          if (Number(c.current_value) > 0) continue;
+          if (seen.has(c.api_card_id)) continue;
+          ids.push(c.api_card_id);
+          seen.add(c.api_card_id);
+        }
+        if (!ids.length) return;
+        var estMap = {};  // catalog_id → averaged number
+        var CHUNK  = 200;
+        for (var j = 0; j < ids.length; j += CHUNK) {
+          var slice = ids.slice(j, j + CHUNK);
+          // Pull PC from catalog and TCGplayer from card_prices in one
+          // round-trip each. Average per id when both exist.
+          var catRes = await sb.from('catalog')
+            .select('id, current_value')
+            .in('id', slice);
+          var cpRes = await sb.from('card_prices')
+            .select('catalog_id, source, value')
+            .in('catalog_id', slice);
+          var perId = {};  // id → { pc: n, tcg: n }
+          if (catRes && catRes.data) {
+            for (var k = 0; k < catRes.data.length; k++) {
+              var r = catRes.data[k];
+              var v = Number(r.current_value) || 0;
+              if (v > 0) { perId[r.id] = perId[r.id] || {}; perId[r.id].pc = v; }
+            }
+          }
+          if (cpRes && cpRes.data) {
+            for (var m = 0; m < cpRes.data.length; m++) {
+              var rr = cpRes.data[m];
+              var vv = Number(rr.value) || 0;
+              if (vv <= 0) continue;
+              perId[rr.catalog_id] = perId[rr.catalog_id] || {};
+              // Source-key collision avoidance: only take the highest
+              // value per source if multiple rows exist (e.g. variants).
+              if (rr.source === 'tcgplayer') {
+                if (!perId[rr.catalog_id].tcg || vv > perId[rr.catalog_id].tcg) perId[rr.catalog_id].tcg = vv;
+              } else if (rr.source === 'pricecharting' && !perId[rr.catalog_id].pc) {
+                perId[rr.catalog_id].pc = vv;
+              }
+            }
+          }
+          for (var id in perId) {
+            var srcs = [];
+            if (perId[id].pc)  srcs.push(perId[id].pc);
+            if (perId[id].tcg) srcs.push(perId[id].tcg);
+            if (srcs.length) {
+              estMap[id] = srcs.reduce(function(a, b) { return a + b; }, 0) / srcs.length;
+            }
+          }
+        }
+        for (var n = 0; n < items.length; n++) {
+          var it = items[n];
+          if (it.is_ghost) continue;
+          if (Number(it.current_value) > 0) continue;
+          if (it.api_card_id && estMap[it.api_card_id]) {
+            it._compEstimate = estMap[it.api_card_id];
+          }
+        }
+      } catch (_) { /* network blip — list rows fall back to em-dash */ }
+    }
+
     // ── Ghost Card Fund — render one row + dynamic list refresh ─────────────
     // Renders a single fund row (mini-card thumb + name + progress bar
     // + saved/goal text). Number() coercion guards against Supabase
@@ -19305,6 +19385,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // when the row was added long before the most recent daily refresh.
         // No DB writes — strictly in-memory enrichment.
         try { await _enrichGhostsFromCatalog(collectionItems); } catch(_) {}
+        // Also enrich owned rows that have no current_value so the list
+        // shows a comp-derived estimate instead of an em-dash when
+        // PriceCharting has no row but TCGplayer (or vice versa) does.
+        try { await _enrichOwnedFromComps(collectionItems); } catch(_) {}
         // Safety net — every collection refresh re-checks size-based badges
         // so any add-card path that calls loadCollection picks up the
         // STACKED + PHANTOM badge progress, even if it skipped a direct
@@ -19586,7 +19670,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const condLabel = isGraded
         ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
         : 'Raw';
-      const val = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+      const val = (item.current_value || item._compEstimate || item.purchase_price || 0) * (item.quantity || 1);
       const binderName = binders.find(b => String(b.id) === String(item.binder_id))?.name || 'Unsorted';
       const tagStyle = binderName !== 'Unsorted' ? 'border-color:var(--teal);color:var(--teal)' : '';
       // User photos (card-photos bucket) have arbitrary aspect ratios —
@@ -20746,7 +20830,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           const condLabel = isGraded
             ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
             : 'Raw';
-          const val  = (item.current_value || item.purchase_price || 0) * (item.quantity || 1);
+          const val  = (item.current_value || item._compEstimate || item.purchase_price || 0) * (item.quantity || 1);
           const goal = item.savings_goal || 0;
           const saved= item.amount_saved || 0;
           const pct  = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
@@ -21471,23 +21555,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return { value: avg, sourceCount: vals.length };
     }
     // Shared HTML renderer — used by both Sets and Binder paths.
+    // The binder modal renders an Est_Value tile above this block and
+    // patches it from the comp lookup, so we don't repeat the average
+    // here. The Sets modal has no such tile; it inlines its own
+    // estimate row in _renderSetsModalExtrasPlaceholder.
     function _buildExtrasHtml(extras, fallbackTcgUrl, cardName) {
       const pcRow  = extras && extras.pricecharting;
       const tcgRow = extras && extras.tcgplayer;
       const extraPriceRows = [];
       if (pcRow)  extraPriceRows.push({ label: 'PriceCharting', val: pcRow.value });
       if (tcgRow) extraPriceRows.push({ label: 'TCGplayer',     val: tcgRow.value });
-      // Prepend an Estimated Value row when we have any comp data so the
-      // user sees a single number alongside the per-source breakdown.
-      // When only one source has data we still show it — clarifies that
-      // the displayed estimate falls back to that source rather than 0.
-      const est = _computeEstimateFromExtras(extras);
-      const estHtml = est
-        ? `<div style="margin-top:10px;border:1px solid var(--copper-dim);padding:8px 12px;background:rgba(184,115,51,.04);display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:.6rem;color:var(--copper);letter-spacing:.08em">ESTIMATED VALUE${est.sourceCount > 1 ? ' (AVG)' : ''}</span>
-            <span style="font-size:.85rem;font-weight:800;color:var(--copper)">$${est.value.toFixed(2)}</span>
-          </div>`
-        : '';
       const tcgUrl = (tcgRow && tcgRow.source_url)
         || fallbackTcgUrl
         || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
@@ -21512,7 +21589,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           onmouseover="this.style.background='rgba(184,115,51,.14)';this.style.color='rgba(184,115,51,1)'"
           onmouseout="this.style.background='rgba(184,115,51,.04)';this.style.color='rgba(184,115,51,.9)'">&#8599; PRICECHARTING</a>` : ''}
       </div>`;
-      return estHtml + extraPricesHtml + buttonsHtml;
+      return extraPricesHtml + buttonsHtml;
     }
     // Binder path — async-renders the extras block by catalog_id.
     // itemId (optional) lets the loader also patch the binder modal's
@@ -21901,7 +21978,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       // ── Owned card view ───────────────────────────────────────────────────
       const qty  = item.quantity || 1;
-      const val  = (item.current_value || item.purchase_price || 0) * qty;
+      // _compEstimate is JIT-populated by _enrichOwnedFromComps when the
+      // collection loads — fills in cards where current_value is missing
+      // but card_prices / catalog hold a usable comp.
+      const val  = (item.current_value || item._compEstimate || item.purchase_price || 0) * qty;
       const cost = (item.purchase_price || 0) * qty;
       const gain = val - cost;
       const gainSign = gain >= 0 ? '+' : '';
@@ -21950,7 +22030,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
           <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" id="binderEstValueTile_${item.id}" style="font-size:.95rem">${val > 0 ? '$' + val.toFixed(2) : '—'}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Cost Basis</div><div class="coll-stat-value" style="font-size:.95rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg'}" style="font-size:.95rem">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : '—'}</div></div>
+          <div class="coll-stat-box" ${cost > 0 ? '' : `title="Add a purchase price (cost basis) to track gain/loss"`}><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gainPct === null ? '' : (gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg')}" style="font-size:${gainPct === null ? '.6rem' : '.95rem'};${gainPct === null ? 'color:var(--muted);font-weight:400;line-height:1.3' : ''}">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : 'Add cost basis<br>to track'}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:.95rem">${qty}</div></div>
         </div>
 
