@@ -20506,7 +20506,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
 
       // "All Cards" view: lazy-load list or 4-col grid, drag-to-binder mode
-      const isAllCards = (currentBinderId === null) && binders.length > 0;
+      const isAllCards = (currentBinderId === null);
       const effectiveView = isAllCards ? _allCardsView : binderView;
       // Widen frame to match sets UI only in All Cards; restore for individual binders
       document.querySelector('.binder-frame')?.classList.toggle('all-cards-wide', isAllCards);
@@ -21612,7 +21612,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     // Renders the placeholder div for async price + button injection.
     // populateFn runs after the modal is in the DOM and fills the slots.
-    function _renderSetsModalExtrasPlaceholder(pokemontcgId, jpMode, fallbackTcgUrl, cardName) {
+    function _renderSetsModalExtrasPlaceholder(pokemontcgId, jpMode, fallbackTcgUrl, cardName, hadPokemontcgPrices) {
       const elId = 'setsExtras_' + String(pokemontcgId || 'unknown').replace(/[^a-z0-9]/gi, '_');
       setTimeout(async function() {
         const slot = document.getElementById(elId);
@@ -21625,6 +21625,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const extraPriceRows = [];
         if (pcRow)  extraPriceRows.push({ label: 'PriceCharting', val: pcRow.value });
         if (tcgRow) extraPriceRows.push({ label: 'TCGplayer',     val: tcgRow.value });
+        // Empty-state: only show "No price data available" if NEITHER
+        // pokemontcg.io's market block above NOR our card_prices /
+        // catalog.current_value extras produced any rows. Previously
+        // the empty state was rendered statically in priceHtml before
+        // this async callback ran, so users saw "No price data
+        // available" stacked above the actual extras rows the
+        // placeholder filled in. Centralizing the empty-state here
+        // eliminates that race.
+        const emptyStateHtml = (!hadPokemontcgPrices && !extraPriceRows.length)
+          ? `<div style="margin-top:8px;font-size:.63rem;color:rgba(26,199,160,.35);text-align:center">No price data available</div>`
+          : '';
         // Pick button URLs. Prefer card_prices.source_url, then
         // pokemontcg.io's tcgplayer.url, then a TCGplayer name search.
         const tcgUrl = (tcgRow && tcgRow.source_url)
@@ -21652,7 +21663,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             onmouseover="this.style.background='rgba(184,115,51,.14)';this.style.color='rgba(184,115,51,1)'"
             onmouseout="this.style.background='rgba(184,115,51,.04)';this.style.color='rgba(184,115,51,.9)'">&#8599; PRICECHARTING</a>` : ''}
         </div>`;
-        slot.innerHTML = extraPricesHtml + buttonsHtml;
+        slot.innerHTML = emptyStateHtml + extraPricesHtml + buttonsHtml;
       }, 0);
       return `<div id="${elId}"></div>`;
     }
@@ -23539,7 +23550,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 <span style="font-size:.76rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
               </div>`).join('')}
            </div>`
-        : `<div style="margin-top:8px;font-size:.63rem;color:rgba(26,199,160,.35);text-align:center">No price data available</div>`;
+        : '';
+      // Empty-state ("No price data available") is now rendered by
+      // _renderSetsModalExtrasPlaceholder below — it sees both the
+      // pokemontcg.io priceRows result (via hadPokemontcgPrices) AND
+      // its own async extras lookup, so it only displays the message
+      // when truly nothing is known. Eliminates the v374 race where
+      // the empty-state rendered statically above the extras block
+      // and then the extras block populated below it with real data.
 
       const cardData = {
         apiCardId:    (isJp ? 'jp-' : '') + card.id,
@@ -23594,7 +23612,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                populates after the modal lands so the initial render
                isn't blocked on a Supabase round-trip. Hidden cleanly
                when neither source has data. -->
-          ${_renderSetsModalExtrasPlaceholder(card.id, isJp, card.tcgplayer?.url || null, card.name)}
+          ${_renderSetsModalExtrasPlaceholder(card.id, isJp, card.tcgplayer?.url || null, card.name, priceRows.length > 0)}
           ${currentUser ? `
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(26,199,160,.1);padding-top:16px">
             <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(26,199,160,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
@@ -31949,7 +31967,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 <span style="font-size:.76rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
               </div>`).join('')}
            </div>`
-        : `<div style="margin-top:8px;font-size:.63rem;color:rgba(26,199,160,.35);text-align:center">No price data available</div>`;
+        : '';
+      // Empty-state moved into _renderSetsModalExtrasPlaceholder so
+      // pokemontcg.io's empty result no longer renders above our
+      // async-loaded PriceCharting / TCGplayer extras. See v375
+      // changelog comment in sw.js for the race condition this fixes.
 
       const binderOptions = (currentUser && binders.length > 0)
         ? binders.map(b => `<option value="${b.id}">${_escHtml(b.name)}</option>`).join('')
@@ -31995,7 +32017,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                Same async pattern as the search modal above. Pulls from
                catalog.current_value + card_prices for whichever sources
                have data; falls through cleanly if neither does. -->
-          ${_renderSetsModalExtrasPlaceholder(card.id, false, card.tcgplayer?.url || null, card.name)}
+          ${_renderSetsModalExtrasPlaceholder(card.id, false, card.tcgplayer?.url || null, card.name, priceRows.length > 0)}
 
           <!-- Actions -->
           ${currentUser ? `

@@ -1,4 +1,22 @@
 // PathBinder Service Worker
+// v376 — Sets modal: stop double-rendering the empty-state message:
+//  v371-v374 left a race in the Pokemon Sets card-detail modal. The
+//  "MARKET PRICES" block (which sources prices from pokemontcg.io's
+//  tcgplayer.prices field on the card response) renders
+//  synchronously. When pokemontcg.io had no prices for the card,
+//  that block fell back to a centered "No price data available" line.
+//  Separately, _renderSetsModalExtrasPlaceholder injects a div that
+//  asynchronously loads PriceCharting + TCGplayer prices from our
+//  own catalog + card_prices tables and renders them. For older or
+//  promo cards (Charizard V SWSH260, most JP cards, etc.)
+//  pokemontcg.io has no price data but our extras DO have it — so
+//  the user saw "No price data available" stacked above the
+//  PriceCharting price row, looking broken.
+//  Fix: priceHtml's empty branch is now '' in both modal entry
+//  points (search-results modal at ~23553 + binder/sets modal at
+//  ~31970). _renderSetsModalExtrasPlaceholder now accepts a
+//  `hadPokemontcgPrices` flag and renders its own "No price data
+//  available" line only when both sources came up empty.
 // v375 — Sets modal tiebreaker: prefer en- prefix over legacy prefix:
 //  v374's merge logic scored catalog rows by "has explicit
 //  price_source_url first, then alphabetical." That picked the wrong
@@ -590,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v375';
+const CACHE = 'pathbinder-v377';
 
 const PRECACHE = [
   '/offline.html',
