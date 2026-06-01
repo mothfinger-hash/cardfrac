@@ -99,9 +99,9 @@ def _log(*args):
 
 
 # ─── Catalog scan ────────────────────────────────────────────────────────────
-def _build_filter(game, lang):
+def _build_filter(game, lang, only=None):
     """Build the PostgREST `image_url=like.*storage*` filter plus
-    optional game_type / id-prefix filters."""
+    optional game_type / id-prefix / set-code filters."""
     flt = "image_url=like.*storage/v1/object/public/*"
     if game and game != "all":
         flt += f"&game_type=eq.{game}"
@@ -110,10 +110,25 @@ def _build_filter(game, lang):
         # ilike for case-insensitive match. Quote the % via PostgREST's
         # standard syntax.
         flt += f"&id=ilike.{lang}-*"
+    if only:
+        # Scope to one set — same flag name as pokedata_sync.py's --only.
+        # Single-column ilike against set_code (proven syntax — same
+        # shape as the --lang filter above). User wildcards (`*`) pass
+        # through unencoded so callers can target patterns like
+        # "--only 'blazing-*'" if pokedata wrote the slug form.
+        #
+        # An earlier version tried `or=(set_code.ilike.X,set_name.ilike.X)`
+        # to also match against set_name, but PostgREST's or-filter
+        # parsing was silently dropping the whole clause and returning
+        # the entire scope-game's catalog. set_code is where pokedata
+        # writes the canonical short code anyway (verified against the
+        # audit query — every well-formed YGO set has it populated).
+        q = requests.utils.quote(only, safe='*')
+        flt += f"&set_code=ilike.{q}"
     return flt
 
 
-def load_catalog(game, lang, limit=None):
+def load_catalog(game, lang, limit=None, only=None):
     """Page through every catalog row that has a Supabase Storage URL
     in image_url and (optionally) matches the game_type / lang filters.
 
@@ -125,7 +140,7 @@ def load_catalog(game, lang, limit=None):
     page is a fresh index range scan from the last id forward."""
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
     select = "id,name,game_type,image_url"
-    flt    = _build_filter(game, lang)
+    flt    = _build_filter(game, lang, only)
     rows   = []
     page_size = 500  # smaller than before (1000) — keeps per-page cost low
     last_id = None
@@ -331,10 +346,16 @@ def main():
                          "absorbs them but smaller default is faster).")
     ap.add_argument("--dry-run", action="store_true",
                     help="Report what's missing, don't actually generate variants.")
+    ap.add_argument("--only",   default=None,
+                    help="Scope to a single set_code (e.g. 'BLZD', 'sv8'). "
+                         "Mirrors pokedata_sync.py's --only flag so the "
+                         "new-set workflow is consistent across scripts.")
     args = ap.parse_args()
 
-    _log(f"Loading catalog rows (game={args.game}, lang={args.lang or '*'})…")
-    rows = load_catalog(args.game, args.lang, args.limit)
+    _log(f"Loading catalog rows (game={args.game}, lang={args.lang or '*'}, set={args.only or '*'})…")
+    if args.only:
+        _log(f"  PostgREST filter: {_build_filter(args.game, args.lang, args.only)}")
+    rows = load_catalog(args.game, args.lang, args.limit, args.only)
     _log(f"  {len(rows):,} rows with Supabase Storage image_urls in scope.")
     if not rows:
         _log("Nothing to do.")

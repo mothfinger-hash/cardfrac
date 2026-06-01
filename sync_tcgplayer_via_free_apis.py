@@ -94,12 +94,33 @@ def load_catalog(game_type, limit=None):
     """Pull catalog SINGLES rows for one TCG using keyset pagination
     (id > last_id ORDER BY id). Same filter as before: product_type=
     'single' + id NOT LIKE 'sealed-%' belt-and-suspenders against
-    sealed-product rows that none of the bulk APIs index."""
+    sealed-product rows that none of the bulk APIs index.
+
+    Pokemon-specific scoping
+    ------------------------
+    pokemontcg.io carries ENGLISH cards only — no JP, no CN, no KR.
+    Without this filter, every jp-/pd-/cn-/kr- prefixed row in the
+    catalog gets pulled, fed through the bulk-map lookup, and logged as
+    'not_found' (the EN-only map can't have a key like 'jp-swsh11-1').
+    For the Pokemon path that meant ~30K wasted SELECT rows + 30K
+    spurious 'not_found' log lines per run. Filtering at the SELECT
+    layer cuts both. Non-Pokemon games don't have this issue (Scryfall
+    covers all Magic languages, YGOPRODeck covers all YGO languages)
+    so the prefix filter only applies when game_type='pokemon'.
+    """
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
     select = "id,name,set_code,card_number,game_type"
     rows = []
     page_size = 500
     last_id = None
+    # Pokemon: exclude non-EN id prefixes. Stack `not.like.*` filters —
+    # PostgREST ANDs them together. EN rows arrive as either 'en-...'
+    # (new pokedata sync convention) or bare pokemontcg.io ids like
+    # 'swsh11-1' (legacy imports); both pass these filters.
+    pokemon_lang_filter = ""
+    if game_type == "pokemon":
+        for prefix in ("jp-", "pd-", "cn-", "kr-", "tw-"):
+            pokemon_lang_filter += f"&id=not.like.{prefix}*"
     while True:
         cursor = f"&id=gt.{requests.utils.quote(last_id, safe='')}" if last_id else ""
         params = (
@@ -107,6 +128,7 @@ def load_catalog(game_type, limit=None):
             f"&game_type=eq.{game_type}"
             f"&product_type=eq.single"
             f"&id=not.like.sealed-*"
+            f"{pokemon_lang_filter}"
             f"{cursor}&order=id.asc&limit={page_size}"
         )
         r = _sb.get(url + params, timeout=60)
