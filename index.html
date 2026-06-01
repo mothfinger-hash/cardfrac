@@ -6001,6 +6001,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <label>Card Name</label>
         <input type="text" class="atc-input" id="atcManualNameInput" placeholder="e.g. e.g. Charizard Holo 1st Edition" style="width:100%" />
       </div>
+      <!-- Variant chips — finish/printing picker. Always shows Normal;
+           Reverse Holo / Holo only when the catalog row signals the set
+           printed those finishes. Hidden entirely for non-Pokemon games
+           where the variant concept doesn't apply. -->
+      <div class="form-group" id="atcVariantRow" style="margin-bottom:14px;display:none;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="white-space:nowrap;flex-shrink:0;margin:0">Variant</label>
+        <div id="atcVariantChips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
       <!-- Language row — sits above the main grid -->
       <div class="form-group" style="margin-bottom:14px;display:flex;align-items:center;gap:12px">
         <label style="white-space:nowrap;flex-shrink:0;margin:0">Print Language</label>
@@ -6493,6 +6501,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <option value="Graded">Graded / Slabbed</option>
           </select>
         </div>
+        <div class="form-group">
+          <!-- Variant / finish picker. Buyers filter by this in the
+               marketplace browse, so disambiguating Normal vs Reverse
+               Holo at list time is critical for searchable inventory. -->
+          <label>Variant / Finish</label>
+          <select class="atc-input" id="lcVariant" style="width:100%">
+            <option value="normal">Normal</option>
+            <option value="reverse_holo">Reverse Holo</option>
+            <option value="holo">Holo</option>
+            <option value="1st_edition_holo">1st Edition Holo</option>
+          </select>
+        </div>
         <div class="form-group" id="lcGradeWrap" style="display:none">
           <label>Grading Company</label>
           <select class="atc-input" id="lcGradingCo" style="width:100%">
@@ -6891,6 +6911,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <input type="text" id="browseSearchInput" placeholder="Search by name, type, or grade..." style="padding:8px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;width:100%;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" />
           <select id="gameTypeFilter" onchange="applyBrowseFilters()" style="display:none">
             <option value="all">All Types</option>
+          </select>
+          <select id="variantFilter" onchange="applyBrowseFilters()" style="padding:7px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;outline:none;cursor:pointer" title="Filter by card finish / variant">
+            <option value="all">Any Finish</option>
+            <option value="normal">Normal</option>
+            <option value="reverse_holo">Reverse Holo</option>
+            <option value="holo">Holo</option>
+            <option value="1st_edition_holo">1st Edition Holo</option>
           </select>
           <select id="sortByFilter" onchange="applyBrowseFilters()" style="padding:7px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;outline:none;cursor:pointer">
             <option value="newest">Newest</option>
@@ -8284,6 +8311,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     let buyoutOffers = [];
     let browseSearchQuery = '';
     let browseGameTypeFilter = 'all';
+    // Variant filter: 'all' | 'normal' | 'reverse_holo' | 'holo' | etc.
+    // Surfaced by the marketplace browse panel so buyers can drill down
+    // to a specific finish (e.g. "only reverse-holo Charizards").
+    let browseVariantFilter = 'all';
     // Marketplace product-type filter — 'all' (default) | 'single' | 'sealed'
     let browseProductTypeFilter = 'all';
     let browseSortFilter = 'newest';
@@ -8952,6 +8983,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // ===== AUTH =====
     function openModal(modalId) {
       document.getElementById(modalId).classList.add('open');
+      // Side-effect hooks for specific modals — kept here so every
+      // openModal call site doesn't have to remember to fire them.
+      if (modalId === 'addToCollectionModal' && typeof _atcRefreshVariantChips === 'function') {
+        // Fire async; modal is already visible so the chip row appearing
+        // a frame later reads as a natural progressive enhancement.
+        _atcRefreshVariantChips();
+      }
     }
     // Convenience wrapper for landing page CTA buttons
     function openAuthModal(tab) {
@@ -9691,6 +9729,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const gameTypeMatch = browseGameTypeFilter === 'all' || listing.gameType === browseGameTypeFilter;
         if (!gameTypeMatch) return false;
 
+        // Variant / finish filter. Untagged legacy rows fall under
+        // 'normal' so existing inventory stays visible at default.
+        if (browseVariantFilter !== 'all') {
+          const lv = listing.variant || 'normal';
+          if (lv !== browseVariantFilter) return false;
+        }
+
         // Product-type filter. Four buckets:
         //   'single'  — TCG singles
         //   'sealed'  — TCG sealed (booster_box, etb, utb, tin, deck, etc.)
@@ -9826,6 +9871,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <div class="lc-chips">
                 ${condChip}
                 ${sealedChip}
+                ${(listing.variant && listing.variant !== 'normal') ? `<span class="cond-badge" style="background:rgba(26,199,160,.18);color:var(--accent);border:1px solid var(--accent)">${(listing.variant === 'reverse_holo' ? 'REVERSE HOLO' : listing.variant.toUpperCase().replace(/_/g,' '))}</span>` : ''}
               </div>
               <button class="lc-watch ${isWatched ? 'watched' : ''}"
                 title="${isWatched ? 'Remove from watchlist' : 'Add to watchlist'}"
@@ -9856,6 +9902,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function applyBrowseFilters() {
       browseSearchQuery = (document.getElementById('browseSearchInput') || {}).value || '';
       browseGameTypeFilter = (document.getElementById('gameTypeFilter') || {}).value || 'all';
+      browseVariantFilter = (document.getElementById('variantFilter') || {}).value || 'all';
       browseSortFilter = (document.getElementById('sortByFilter') || {}).value || 'newest';
       renderBrowse();
     }
@@ -15873,6 +15920,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       const gradeDisplay = condition === 'Graded' ? `${gradingCo} ${gradeNum}` : condition;
 
+      const variantSel = document.getElementById('lcVariant');
+      const lcVariant  = (variantSel && variantSel.value) || 'normal';
+
       const { data, error } = await sb.from('listings').insert({
         name,
         game_type: game,
@@ -15885,7 +15935,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         is_vendor_listing: true,
         total_slots: 1,
         photos: photoUrls,
-        product_type: productType
+        product_type: productType,
+        variant: lcVariant,
       }).select().single();
 
       // Restore the mode-appropriate label — was hard-coded to 'List Card'
@@ -22054,7 +22105,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <!-- Badge -->
         <div style="text-align:center;margin-bottom:${item.notes ? '8px' : '12px'}">
           <span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>
+          ${item.variant && item.variant !== 'normal' ? `<span style="margin-left:6px;padding:2px 8px;border:1px solid var(--accent);color:var(--accent);font-size:.58rem;letter-spacing:.06em;border-radius:var(--r-pill,999px);background:rgba(26,199,160,.08)">${(item.variant === 'reverse_holo' ? 'REVERSE HOLO' : item.variant.toUpperCase().replace(/_/g,' '))}</span>` : ''}
         </div>
+
+        <!-- Variant chips — when this card's printing has a reverse-holo
+             variant (catalog.has_reverse_holo) but the user doesn't yet
+             own that finish, offer a one-click add. Each (card, variant)
+             pair is its own collection_items row per the two-row binder
+             model. -->
+        <div id="binderVariantChips_${item.id}" style="margin-bottom:12px"></div>
 
         <!-- Notes -->
         ${item.notes ? `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);font-size:.68rem;color:var(--muted);line-height:1.5;word-break:break-word;margin-bottom:12px">${_escHtml(item.notes)}</div>` : ''}
@@ -22163,6 +22222,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const titleEl2 = document.getElementById('binderDetailTitle');
       if (titleEl2) { titleEl2.textContent = 'Card Detail'; titleEl2.style.color = ''; }
       openModal('binderDetailModal');
+      // Variant chip strip (Normal / Reverse Holo) — async since it
+      // hits the catalog for has_reverse_holo. Hidden when the
+      // printing has no RH variant or game isn't Pokemon.
+      setTimeout(function() { _renderBinderVariantChips(item); }, 0);
       if (hasPriceTracking()) {
         // Load chart asynchronously after modal is visible
         setTimeout(() => loadAndDrawCardChart(item.id), 80);
@@ -24266,6 +24329,68 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       atcUpdateCertBtn();
     }
 
+    // ── Variant chip picker for the Add Card modal ──────────────────────
+    // Reads pendingCollectionCard.{apiCardId, gameType} → checks the
+    // catalog row's has_reverse_holo flag → renders chips for the
+    // available finishes. Defaults to 'normal'. Click sets
+    // pendingCollectionCard.variant which saveToCollection then writes
+    // to collection_items.variant on insert.
+    //
+    // Non-Pokemon games hide the row entirely (variant concept doesn't
+    // apply to MTG/YGO/OP the same way — those have their own finish
+    // conventions like Foil/Borderless which we can layer on later).
+    const _ATC_VARIANT_LABELS = {
+      normal:       'Normal',
+      reverse_holo: 'Reverse Holo',
+      holo:         'Holo',
+    };
+    async function _atcRefreshVariantChips() {
+      const row     = document.getElementById('atcVariantRow');
+      const chipsEl = document.getElementById('atcVariantChips');
+      if (!row || !chipsEl) return;
+      const pc = pendingCollectionCard || {};
+      const game = (pc.gameType || '').toLowerCase();
+      // Pokemon only for now — extend the list when variant taxonomies
+      // for other TCGs land.
+      if (game !== 'pokemon') {
+        row.style.display = 'none';
+        if (pc) pc.variant = 'normal';
+        return;
+      }
+      // Build the available-variant list. Always offer Normal. Look up
+      // catalog.has_reverse_holo when we have a real catalog id.
+      let variants = ['normal'];
+      if (pc.apiCardId) {
+        try {
+          const r = await sb.from('catalog')
+            .select('has_reverse_holo')
+            .eq('id', pc.apiCardId)
+            .maybeSingle();
+          if (r && r.data && r.data.has_reverse_holo) variants.push('reverse_holo');
+        } catch(_) { /* network blip — render Normal only */ }
+      }
+      // Default selection: whatever the pendingCollectionCard already
+      // has set, otherwise Normal. Keeps the chip state across re-opens.
+      if (!pc.variant || variants.indexOf(pc.variant) === -1) pc.variant = 'normal';
+      row.style.display = variants.length > 1 ? 'flex' : 'none';
+      chipsEl.innerHTML = variants.map(function(v) {
+        const active = pc.variant === v;
+        const lbl = _ATC_VARIANT_LABELS[v] || v;
+        return '<button type="button" data-variant="' + v + '"'
+             + ' onclick="_atcSetVariant(\'' + v + '\')"'
+             + ' style="padding:6px 12px;border:1px solid ' + (active ? 'var(--accent)' : 'var(--border)') + ';'
+             + 'background:' + (active ? 'rgba(26,199,160,.12)' : 'transparent') + ';'
+             + 'color:' + (active ? 'var(--accent)' : 'var(--muted)') + ';'
+             + 'font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.68rem;'
+             + 'letter-spacing:.05em;cursor:pointer;border-radius:var(--r-sm,6px);transition:all .12s">'
+             + lbl + '</button>';
+      }).join('');
+    }
+    function _atcSetVariant(v) {
+      if (pendingCollectionCard) pendingCollectionCard.variant = v;
+      _atcRefreshVariantChips();
+    }
+
     // Cert lookup URLs for each grader — CGC supports cert in URL path; others are form-based
     var _certLookupUrls = {
       psa: function(n) { return 'https://www.psacard.com/cert/' + n; },
@@ -24405,6 +24530,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         binder_id:       binderId || null,
         language,
         rarity:          pendingCollectionCard.rarity || null,
+        // Variant — defaults to 'normal' so existing flows unchanged.
+        // Each (api_card_id, variant) is its own row per the two-row
+        // binder model; the unique key in collection_items includes
+        // variant so a user can own both Normal + Reverse Holo.
+        variant:         pendingCollectionCard.variant || 'normal',
       };
 
       // Apply admin overrides (image / set / number / rarity / name)
@@ -29944,15 +30074,38 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     var _SETS_PAGE     = () => window.innerWidth < 768 ? 10 : 20;
 
     function _rowHtml(card, origIdx, ownedMap) {
-      const ci = ownedMap[card.id];
+      // ownedMap shape (per the two-row variant model):
+      //   ownedMap[card_id] = { normal: row?, reverse_holo: row?, item: legacyRow }
+      // .item is a legacy pointer to any owned variant so the existing
+      // truthy "owned?" UI still works without per-row changes elsewhere.
+      const entry = ownedMap[card.id];
+      const ci    = entry && entry.item;
       const owned = !!ci;
-      const qty = ci ? (ci.quantity || 1) : 0;
+      const qty   = ci ? (ci.quantity || 1) : 0;
       const price = ci ? (ci.current_value || ci.purchase_price || null) : null;
+      const ownsNormal = !!(entry && entry.normal);
+      const ownsRH     = !!(entry && entry.reverse_holo);
       const img = card.images && card.images.small ? card.images.small : '';
+      // Variant chips: small Normal/RH indicators after the ✓×qty.
+      // RH chip only renders when the card's set has an RH printing
+      // (detected from pokemontcg.io's tcgplayer.prices.reverseHolofoil).
+      const cardHasRH = !!(card.tcgplayer && card.tcgplayer.prices && card.tcgplayer.prices.reverseHolofoil);
+      let variantChips = '';
+      if (cardHasRH) {
+        const chip = function(filled, label) {
+          const fg = filled ? 'var(--accent)' : 'var(--muted)';
+          const bg = filled ? 'rgba(26,199,160,.12)' : 'transparent';
+          return '<span style="display:inline-block;padding:1px 5px;margin-left:3px;border:1px solid '
+               + fg + ';color:' + fg + ';background:' + bg
+               + ';border-radius:var(--r-pill,999px);font-size:.5rem;letter-spacing:.04em;font-weight:700">'
+               + label + '</span>';
+        };
+        variantChips = chip(ownsNormal, 'N') + chip(ownsRH, 'RH');
+      }
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
         ${img ? `<img src="${_pickThumbVariant(img, 200)}" data-fallback="${_escHtml(img)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" style="width:36px;height:50px;object-fit:cover;object-position:center top;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:var(--r-sm,6px);border:1px solid var(--border)"></div>`}
         <div style="flex:1;min-width:0">
-          <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}</div>
+          <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}${variantChips}</div>
           <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
         </div>
         ${owned
@@ -30063,7 +30216,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     window._catalogSetDetailOpenFn  = 'openJpSetCardDetail';
 
     function _renderCatalogCardRow(card, idx, ownedMap, openFn) {
-      const ci    = ownedMap[card.id];
+      // ownedMap is the variant-aware shape — { card_id: { normal,
+      // reverse_holo, item } }. .item is the legacy single-row pointer
+      // so the truthy check + qty read still work without per-call-site
+      // refactoring.
+      const entry = ownedMap[card.id];
+      const ci    = entry && entry.item;
       const owned = !!ci;
       const qty   = ci ? (ci.quantity || 1) : 0;
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
@@ -31444,12 +31602,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           _jpSetsDetailCache[setCode] = { timestamp: now, cards };
         }
 
-        // Build owned map from collection items
+        // Build owned map — variant-aware shape (see EN path comment
+        // above). Each card_id keys an object with optional .normal /
+        // .reverse_holo pointers plus a .item legacy pointer that the
+        // existing _renderCatalogCardRow reads as the "single owned row".
         const ownedMap = {};
         if (currentUser) {
           collectionItems.filter(c => !c.is_ghost && !c.sold_offline && c.api_card_id &&
             (c.api_card_id.startsWith('jp-') || c.api_card_id.startsWith('pd-'))
-          ).forEach(c => { ownedMap[c.api_card_id] = c; });
+          ).forEach(c => {
+            const v = c.variant || 'normal';
+            const existing = ownedMap[c.api_card_id] || {};
+            existing[v] = c;
+            if (!existing.item) existing.item = c;
+            ownedMap[c.api_card_id] = existing;
+          });
         }
 
         const ownedCount = cards.filter(c => ownedMap[c.id]).length;
@@ -31948,9 +32115,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // Owned map (collection items in this set)
         const ownedMap = {};
         if (currentUser) {
+          // Variant-aware shape — see EN path. _renderCatalogCardRow
+          // pulls .item as the displayable owned row.
           collectionItems.filter(c => !c.is_ghost && !c.sold_offline && c.api_card_id &&
             c.api_card_id.startsWith(cfg.prefix)
-          ).forEach(c => { ownedMap[c.api_card_id] = c; });
+          ).forEach(c => {
+            const v = c.variant || 'normal';
+            const existing = ownedMap[c.api_card_id] || {};
+            existing[v] = c;
+            if (!existing.item) existing.item = c;
+            ownedMap[c.api_card_id] = existing;
+          });
         }
 
         const ownedCount = cards.filter(c => ownedMap[c.id]).length;
@@ -32261,11 +32436,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           _setsDetailCache[setId] = { timestamp: now, cards };
         }
 
-        // Build owned lookup
+        // Build owned lookup — keyed by api_card_id, value tracks which
+        // variants the user owns ({ normal, reverse_holo }). Each pair
+        // is its own collection_items row per the two-row binder model.
         const ownedMap = {};
         if (currentUser) {
           collectionItems.filter(c => !c.is_ghost && !c.sold_offline).forEach(c => {
-            if (c.api_card_id) ownedMap[c.api_card_id] = c;
+            if (!c.api_card_id) return;
+            const v = c.variant || 'normal';
+            const existing = ownedMap[c.api_card_id] || {};
+            existing[v] = c;
+            // Maintain legacy single-row pointer at .item so the per-row
+            // renderer that hasn't been updated yet still finds something.
+            if (!existing.item) existing.item = c;
+            ownedMap[c.api_card_id] = existing;
           });
         }
 
@@ -32277,6 +32461,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         // ── Phase 3: swap ONLY the cards list + progress block ────
         const ownedCount = cards.filter(c => ownedMap[c.id]).length;
+        // Reverse-holo set-completion math. A card has an RH variant if
+        // pokemontcg.io's tcgplayer.prices includes a reverseHolofoil
+        // entry (we mirror this into catalog.has_reverse_holo via the
+        // sync, but the EN path reads pokemontcg.io live so we can
+        // detect it without a DB roundtrip). Owned count = cards where
+        // the user has a collection_items row with variant='reverse_holo'.
+        const _hasRH = (c) => {
+          const p = c && c.tcgplayer && c.tcgplayer.prices;
+          return !!(p && p.reverseHolofoil);
+        };
+        const rhCards = cards.filter(_hasRH);
+        const rhOwned = rhCards.filter(c => ownedMap[c.id] && ownedMap[c.id].reverse_holo).length;
         const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
         // Bar fill: teal→magenta gradient at every percent < 100, solid
         // green (with glow) at completion. Ties teal + magenta — the
@@ -32296,12 +32492,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         const progEl = document.getElementById('setsDetailProgress');
         if (progEl) {
+          // Split base vs reverse-holo so "master set" completion is
+          // visible at a glance. RH line only shows when the set has
+          // any reverse-holo printings to count.
+          const rhLine = rhCards.length > 0
+            ? `<div style="font-size:.62rem;color:var(--muted);margin-top:3px">Reverse Holo: <strong style="color:var(--accent)">${rhOwned}</strong> / ${rhCards.length}</div>`
+            : '';
           progEl.innerHTML = `
             <div style="flex:1">
-              <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Base: <strong style="color:var(--text)">${ownedCount}</strong> / ${cards.length} cards owned</div>
               <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden;border:1px solid var(--border)">
                 <div style="height:100%;width:${pct}%;background:${barFill};border-radius:4px;transition:width .5s;box-shadow:${barShadow}"></div>
               </div>
+              ${rhLine}
             </div>
             <div style="font-size:1.4rem;font-weight:700;color:${pctColor};flex-shrink:0">${pct}%</div>`;
         }
@@ -34270,6 +34473,114 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (statusEl) statusEl.textContent = '✓ Filled: ' + found.join(' · ');
     }
 
+    // ── Binder card-detail variant chip renderer ────────────────────────
+    // After openBinderCardDetail builds the modal, this fills the
+    // `binderVariantChips_<id>` div with chips showing which finishes
+    // exist for this card AND which the user owns. Clicking a chip the
+    // user doesn't own inserts a new collection_items row for that
+    // variant (two-row binder model).
+    async function _renderBinderVariantChips(item) {
+      const slot = document.getElementById('binderVariantChips_' + item.id);
+      if (!slot || !item.api_card_id) return;
+      if ((item.game_type || 'pokemon').toLowerCase() !== 'pokemon') return;
+      // What variants does this catalog row support?
+      let hasRH = false;
+      try {
+        const r = await sb.from('catalog')
+          .select('has_reverse_holo')
+          .eq('id', item.api_card_id)
+          .maybeSingle();
+        if (r && r.data) hasRH = !!r.data.has_reverse_holo;
+      } catch(_) {}
+      if (!hasRH) { slot.style.display = 'none'; return; }
+      // Which variants of this api_card_id does the current user already own?
+      const owned = new Set();
+      collectionItems.forEach(function(c) {
+        if (String(c.api_card_id) === String(item.api_card_id)) {
+          owned.add(c.variant || 'normal');
+        }
+      });
+      const variants = [
+        { key: 'normal',       label: 'Normal' },
+        { key: 'reverse_holo', label: 'Reverse Holo' },
+      ];
+      slot.innerHTML =
+        '<div style="font-size:.6rem;color:var(--muted);letter-spacing:.06em;margin-bottom:5px">VARIANTS OWNED</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        + variants.map(function(v) {
+            const isOwned = owned.has(v.key);
+            const isMe    = (item.variant || 'normal') === v.key;
+            const bg      = isMe ? 'rgba(26,199,160,.18)' : (isOwned ? 'rgba(26,199,160,.06)' : 'transparent');
+            const border  = isMe ? 'var(--accent)' : (isOwned ? 'rgba(26,199,160,.4)' : 'var(--border)');
+            const color   = isMe ? 'var(--accent)' : (isOwned ? 'var(--accent)' : 'var(--muted)');
+            const mark    = isOwned ? (isMe ? '✓ ' : '') : '+ ';
+            // If owned and not the current card, jump to that variant's
+            // row via openBinderCardDetail (single click swap). If not
+            // owned, click adds a new row.
+            let onClick;
+            if (isMe) {
+              onClick = '';
+            } else if (isOwned) {
+              // Find the OTHER row's id for this api_card_id+variant.
+              let targetId = '';
+              for (let i = 0; i < collectionItems.length; i++) {
+                const c = collectionItems[i];
+                if (String(c.api_card_id) === String(item.api_card_id)
+                    && (c.variant || 'normal') === v.key
+                    && String(c.id) !== String(item.id)) { targetId = c.id; break; }
+              }
+              onClick = targetId
+                ? 'onclick="closeModal(\'binderDetailModal\');setTimeout(function(){openBinderCardDetail(\'' + targetId + '\')},80)"'
+                : '';
+            } else {
+              onClick = 'onclick="_addVariantOfCard(\'' + item.id + '\',\'' + v.key + '\')"';
+            }
+            return '<button type="button" ' + onClick
+                + ' style="padding:5px 11px;border:1px solid ' + border + ';'
+                + 'background:' + bg + ';color:' + color + ';'
+                + 'font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.65rem;'
+                + 'letter-spacing:.05em;cursor:' + (isMe ? 'default' : 'pointer') + ';'
+                + 'border-radius:var(--r-sm,6px);transition:all .12s">'
+                + mark + v.label + '</button>';
+          }).join('')
+        + '</div>';
+    }
+
+    // Inserts a new collection_items row for a different finish of the
+    // same catalog card. Clones the relevant fields from the source row
+    // (image, set, number, binder placement) so the new variant row
+    // shows up where the user expects.
+    async function _addVariantOfCard(sourceItemId, variant) {
+      if (!currentUser) { showToast('Sign in first'); return; }
+      const src = collectionItems.find(function(c){ return String(c.id) === String(sourceItemId); });
+      if (!src) { showToast('Source card not found'); return; }
+      const payload = {
+        user_id:        currentUser.id,
+        api_card_id:    src.api_card_id,
+        card_name:      src.card_name,
+        set_name:       src.set_name,
+        set_code:       src.set_code,
+        card_number:    src.card_number,
+        card_image_url: src.card_image_url,
+        game_type:      src.game_type,
+        condition:      'raw',
+        quantity:       1,
+        binder_id:      src.binder_id,
+        language:       src.language,
+        rarity:         src.rarity,
+        variant:        variant,
+      };
+      const res = await sb.from('collection_items').insert(payload).select().single();
+      if (res.error) { showToast('Add failed: ' + res.error.message); return; }
+      // Refresh local cache so the chip re-render sees the new row
+      try { collectionItems.push(res.data); } catch(_) {}
+      showToast('Added ' + (variant === 'reverse_holo' ? 'Reverse Holo' : variant) + ' variant');
+      // Jump straight to the new variant's detail so the user sees
+      // it was created and can fill in cert/condition/purchase price.
+      closeModal('binderDetailModal');
+      setTimeout(function() { openBinderCardDetail(res.data.id); }, 100);
+    }
+
     // Resolve a graded slab's PSA / cert metadata to a row in our catalog
     // so the saved collection_items.api_card_id points somewhere real.
     // Without this, slab cards never pick up multi-source comp prices
@@ -35228,6 +35539,44 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // Defaults: raw (or detected slab grade), qty 1, current binder,
     // catalog image as the card photo. Slab data is auto-applied
     // when window._detectedSlab is set.
+    // Quick chip-style variant picker used by the scanner save path.
+    // Returns 'normal' | 'reverse_holo' | null (cancelled). Renders
+    // a lightweight overlay rather than a full modal because the
+    // scanner is already in modal-stack territory and a nested
+    // openModal/closeModal call fights the scanner's overlay state.
+    function _promptVariantChoice(cardName) {
+      return new Promise(function(resolve) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:30001;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:18px';
+        overlay.innerHTML =
+          '<div style="background:var(--surface);border:1px solid var(--accent);box-shadow:0 0 32px rgba(26,199,160,.25);padding:22px 24px;max-width:360px;width:100%;font-family:\'Space Mono\',\'Share Tech Mono\',monospace;border-radius:var(--r-lg,12px)">'
+        +   '<div style="font-size:.6rem;letter-spacing:.12em;color:var(--accent);margin-bottom:6px">◈ WHICH FINISH?</div>'
+        +   '<div style="font-size:.85rem;color:var(--text);margin-bottom:14px;line-height:1.4">' + _escHtml(cardName) + '</div>'
+        +   '<div style="font-size:.7rem;color:var(--muted);margin-bottom:14px;line-height:1.5">This card has a Reverse Holo printing. Which one did you scan?</div>'
+        +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +     '<button data-pick="normal"       style="flex:1;padding:10px 14px;border:1px solid var(--accent);background:var(--accent);color:#000;font-family:inherit;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-sm,6px)">Normal</button>'
+        +     '<button data-pick="reverse_holo" style="flex:1;padding:10px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-sm,6px)">Reverse Holo</button>'
+        +   '</div>'
+        +   '<button data-pick="cancel" style="margin-top:12px;width:100%;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.68rem;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-sm,6px)">Cancel</button>'
+        + '</div>';
+        document.body.appendChild(overlay);
+        const cleanup = function(val) {
+          try { overlay.remove(); } catch(_) {}
+          resolve(val);
+        };
+        overlay.addEventListener('click', function(e) {
+          const btn = e.target.closest('[data-pick]');
+          if (!btn) {
+            // Click outside the inner panel = cancel
+            if (e.target === overlay) cleanup(null);
+            return;
+          }
+          const p = btn.getAttribute('data-pick');
+          cleanup(p === 'cancel' ? null : p);
+        });
+      });
+    }
+
     async function quickAddScannedCard(card) {
       if (!currentUser) { showToast('Sign in to add cards to your collection'); return; }
       if (!canAddMoreCards()) {
@@ -35252,6 +35601,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (slab.certNumber) certNumber = slab.certNumber;
       }
 
+      // Scanner-driven variant prompt. If the catalog row signals an
+      // RH variant exists, give the user a quick chip-style picker
+      // BEFORE the silent insert — otherwise a scan auto-saves as
+      // Normal and they'd have to manually flip it later. Cancel from
+      // the prompt aborts the add (the user can re-scan).
+      let scanVariant = 'normal';
+      if (card.has_reverse_holo) {
+        const pick = await _promptVariantChoice(card.name || 'this card');
+        if (pick === null) { showToast('Add cancelled'); return; }
+        scanVariant = pick;
+      }
+
       const _insertBase = {
         user_id:          currentUser.id,
         api_card_id:      card.id || null,
@@ -35272,6 +35633,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         binder_id:        currentBinderId || null,
         language,
         rarity:           card.rarity || null,
+        variant:          scanVariant,
       };
 
       try { applyOverrideToInsertRow(_insertBase); } catch(_) {}
@@ -35739,20 +36101,58 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // query can match rows stored either way ("TG30" → "30" via num,
     // "TG30" via numRaw). Without this, trainer-gallery / promo cards
     // parsed as NaN and never landed in the strong-tier search.
+    //
+    // Magic P/T disambiguation: every Magic creature prints its
+    // power/toughness as "2/2", "7/7", "5/4" etc. The OCR finds that
+    // before the actual collector number (which often sits at the very
+    // bottom-left in small text), so we'd parse "2/2" and search for
+    // a card numbered 2 in a 2-card set. To avoid this:
+    //   • Walk ALL matches in order, not just the first.
+    //   • Reject candidates that look like P/T — both sides ≤ 2 digits,
+    //     no leading zero, and total < 20.
+    //   • Prefer candidates with a leading zero (collector numbers
+    //     almost always pad: "027/350", "001/168") or total >= 20.
     function parseCardNumber(text) {
       if (!text) return null;
-      const m = text.match(/\b([A-Z]{0,4}\d+)\s*[\/\\|]\s*([A-Z]{0,4}\d+)\b/);
-      if (!m) return null;
-      var leftDigits  = (m[1].match(/\d+/) || [''])[0];
-      var rightDigits = (m[2].match(/\d+/) || [''])[0];
-      // Without digit tails the match is meaningless (shouldn't happen
-      // given the regex but guard so downstream parseInt doesn't NaN).
-      if (!leftDigits || !rightDigits) return null;
+      const re = /\b([A-Z]{0,4}\d+)\s*[\/\\|]\s*([A-Z]{0,4}\d+)\b/g;
+      let m;
+      let fallback = null;
+      while ((m = re.exec(text)) !== null) {
+        const leftDigits  = (m[1].match(/\d+/) || [''])[0];
+        const rightDigits = (m[2].match(/\d+/) || [''])[0];
+        if (!leftDigits || !rightDigits) continue;
+        const numInt   = parseInt(leftDigits,  10);
+        const totalInt = parseInt(rightDigits, 10);
+        const hasPad   = leftDigits.length > String(numInt).length || rightDigits.length > String(totalInt).length;
+        const looksLikePT =
+          leftDigits.length <= 2 && rightDigits.length <= 2
+          && !hasPad && totalInt < 20;
+        if (looksLikePT) {
+          // Remember the first P/T-shaped match as a last-resort fallback
+          // in case the whole text only contains short fractions (rare
+          // — usually means OCR missed the real number entirely).
+          if (!fallback) fallback = m;
+          continue;
+        }
+        return {
+          full:   m[1] + '/' + m[2],
+          num:    String(numInt),
+          numRaw: m[1],
+          total:  String(totalInt),
+        };
+      }
+      if (!fallback) return null;
+      // No "proper" collector number found — fall back to whatever the
+      // first P/T-shaped match was, but mark it. The caller's downstream
+      // search will probably miss anyway, but it preserves the old
+      // behavior for the (rare) cases where small fractions ARE legit.
+      const leftDigits  = (fallback[1].match(/\d+/) || [''])[0];
+      const rightDigits = (fallback[2].match(/\d+/) || [''])[0];
       return {
-        full:   m[1] + '/' + m[2],
-        num:    String(parseInt(leftDigits,  10)),   // unpadded numeric ("94", "30")
-        numRaw: m[1],                                 // as-read incl. any prefix ("TG30", "094")
-        total:  String(parseInt(rightDigits, 10)),   // numeric set size
+        full:   fallback[1] + '/' + fallback[2],
+        num:    String(parseInt(leftDigits,  10)),
+        numRaw: fallback[1],
+        total:  String(parseInt(rightDigits, 10)),
       };
     }
 
@@ -35994,6 +36394,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const STAGE_PRE = /^(Basic|Stage\s*[12])\s+/i;  // stage as prefix on same line
       const STAGE     = /^(Basic|Stage\s*[12]|STAGE)$/i; // stage alone on its own line (incl. bare STAGE from OCR-truncated label)
       const SKIP      = /^(Basic|Stage\s*[12]|STAGE|VMAX|VSTAR|GX|EX|V|VUNION|TAG\s*TEAM|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule|DX|VOLUME|RASH|TRASH|HATS?|MUTE|MAX|MIN|MOD)$/i;
+      // Magic type-line skip. Every Magic card prints a TYPE line below
+      // the title art: "Creature - Beast", "Artifact Creature - Construct",
+      // "Legendary Artifact Creature - Necron", "Token Creature - X" etc.
+      // Without this skip the parser was returning the type line as the
+      // card name (Szarekh→"Legendary Artifact Creature - Necron",
+      // Astartes Warrior token→"Token Creature-Astartes Warrior") so
+      // the catalog name search never hit anything sensible. Real Magic
+      // names always sit above the mana cost row; once we skip the type
+      // lines, the name-detection loop finds them on the next pass.
+      const MAGIC_TYPE_LINE = /^(Token\s+)?(Legendary\s+|Snow\s+|World\s+|Basic\s+|Tribal\s+)*(Artifact\s+|Enchantment\s+|Land\s+|Creature|Sorcery|Instant|Planeswalker|Battle|Kindred|Vehicle)(\s*[-—–:].+)?$/i;
       // Card names are ALWAYS mixed case ("Espurr", "Mewtwo", "Ho-Oh"),
       // never SHOUTING. The (?=...) lookahead requires at least one
       // lowercase letter — this rejects all-uppercase background OCR
@@ -36024,7 +36434,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         // Pattern: "Lugia\nVSTAR" — name then suffix on next line
         if (i + 1 < lines.length && SUFFIX.test(lines[i + 1])) {
-          if (NAME_RE.test(line) && !SKIP.test(line) && line.length > 1 && line.length < 35) {
+          if (NAME_RE.test(line) && !SKIP.test(line) && !MAGIC_TYPE_LINE.test(line) && line.length > 1 && line.length < 35) {
             return _cleanCardName(line) + ' ' + lines[i + 1].replace(/\s+/g, ' ').toUpperCase();
           }
         }
@@ -36045,7 +36455,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         }
 
         // Fallback: first valid title-case line that isn't a keyword
-        if (!SKIP.test(line) && NAME_RE.test(line) && line.length > 2 && line.length < 40) {
+        // and isn't a Magic type line ("Creature - Beast" etc.).
+        if (!SKIP.test(line) && !MAGIC_TYPE_LINE.test(line) && NAME_RE.test(line) && line.length > 2 && line.length < 40) {
           return _cleanCardName(line);
         }
       }

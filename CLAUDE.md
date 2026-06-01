@@ -217,8 +217,63 @@ Received" action just flips paid→completed for UX, not for money flow.
 - `catalog` is the canonical card table. Multi-TCG: id is prefixed by
   language/game (`en-`, `jp-`, `pd-` for Pokemon; `mtg-`, `ygo-`, `op-`
   for other TCGs). `game_type` column for explicit filtering.
+  `has_reverse_holo` (bool) marks rows whose printing has a Reverse Holo
+  variant — see "Variants" below.
 - `collection_items` is per-user owned cards. `api_card_id` references
   the catalog id. `game_type` should match the catalog row's game.
+  `variant` (text, default `'normal'`) records which finish the user
+  owns — each `(api_card_id, variant)` pair is its own row per the
+  two-row binder model. See "Variants" below.
+- `listings` carries the same `variant` column so marketplace listings
+  can disambiguate finish (a Normal Charizard and a Reverse Holo
+  Charizard are different products with different prices).
+
+### Variants (Normal / Reverse Holo / Holo / 1st Edition Holo)
+
+Pokemon cards exist in multiple FINISHES. Originally the catalog stored
+one row per `(set, number)` and finishes lived only as pokemontcg.io
+price-object keys. That made master-set tracking impossible — a "200-
+card set" actually has ~350+ collector slots when reverse-holos count.
+
+The model now:
+- **`catalog.has_reverse_holo`** — does this card's printing have a
+  Reverse Holo variant? Populated by
+  `sync_tcgplayer_via_free_apis.py` (looks for `reverseHolofoil` in
+  pokemontcg.io's `tcgplayer.prices` object). Migration
+  `migration_card_variants.sql` adds the column + a partial index.
+- **`collection_items.variant`** — `'normal'` (default), `'reverse_holo'`,
+  `'holo'`, `'1st_edition_holo'`. Two-row model: a user who owns both
+  Normal and Reverse Holo of the same card has TWO `collection_items`
+  rows, one per variant.
+- **`listings.variant`** — same enum. Marketplace browse filters by it
+  via `browseVariantFilter`.
+
+JS touchpoints:
+- `pendingCollectionCard.variant` flows into `saveToCollection` and
+  `quickAddScannedCard`. Default `'normal'`.
+- `_atcRefreshVariantChips()` renders the picker in the add modal.
+  Fired automatically by `openModal('addToCollectionModal')`.
+- `_renderBinderVariantChips()` renders the picker in the card detail
+  modal. Clicking an un-owned variant chip calls `_addVariantOfCard()`
+  which inserts a new `collection_items` row for that variant.
+- `_promptVariantChoice()` is a lightweight overlay used by the scanner
+  save path to ask Normal vs Reverse Holo before the silent insert.
+- Set completion (`#setsDetailProgress`) shows "Base: X/total · Reverse
+  Holo: Y/RH-total" when the set has any RH printings.
+- `ownedMap` in set-detail loaders is the variant-aware shape:
+  `{ card_id: { normal: row?, reverse_holo: row?, item: legacyRow } }`.
+  `.item` is the legacy single-row pointer so renderers that haven't
+  been migrated still find a truthy "is owned" signal.
+
+When adding a new finish (e.g. `'cosmos_holo'`, `'reverse_holo_promo'`):
+1. Add a flag column on catalog (`has_cosmos_holo` etc.) if the variant
+   is set-specific.
+2. Add the value to the `lcVariant` `<select>` and `_atcRefreshVariantChips`
+   chip list.
+3. Add it to the marketplace `variantFilter` select.
+4. Update `_renderBinderVariantChips` if you want a clickable chip.
+5. Bump the sync script to detect the new finish from the upstream
+   data source.
 - Migrations are printed to the browser console by admin "Print SQL"
   buttons — copy-paste pattern, not auto-run. Keep migrations idempotent
   (`create if not exists`, `create or replace`, `drop policy if exists`).

@@ -230,9 +230,18 @@ def bulk_fetch_pokemon():
                         best = float(mkt)
                         break
             if best is not None:
+                # Detect reverse-holo printing: pokemontcg.io's
+                # tcgplayer.prices object exposes one key per printed
+                # finish. If `reverseHolofoil` is present with any non-
+                # null market field, this card has an RH variant — feed
+                # that fact into catalog.has_reverse_holo so the Sets
+                # page can compute master-set completion accurately.
+                rh = prices.get("reverseHolofoil") or {}
+                has_rh = bool(rh) and (rh.get("market") is not None or rh.get("low") is not None)
                 pmap[cid] = {
-                    "value":      best,
-                    "source_url": (c.get("tcgplayer") or {}).get("url") or None,
+                    "value":           best,
+                    "source_url":      (c.get("tcgplayer") or {}).get("url") or None,
+                    "has_reverse_holo": has_rh,
                 }
         if page % 10 == 0:
             _log(f"    …pulled {page * PAGE_SIZE:,} cards so far ({len(pmap):,} with prices)")
@@ -435,6 +444,28 @@ def process_row(row, match_func, pmap, dry_run):
                           source_url=payload.get("source_url"))
     except Exception as e:
         return ("failed", cat_id, f"upsert: {e}")
+    # Set has_reverse_holo when the upstream price entry exposed an
+    # RH printing. Only flip false→true to keep this idempotent —
+    # never clear the flag (a temporarily-missing RH price doesn't
+    # mean the printing was unreleased; pokemontcg.io's data can drop
+    # individual fields between crawls).
+    if payload.get("has_reverse_holo"):
+        try:
+            r = _sb.patch(
+                f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog?id=eq.{requests.utils.quote(cat_id, safe='')}&has_reverse_holo=is.false",
+                headers={
+                    "Content-Type":  "application/json",
+                    "Prefer":        "return=minimal",
+                },
+                data=json.dumps({"has_reverse_holo": True}),
+                timeout=30,
+            )
+            # 204 (success, no content) is the happy path; PostgREST returns
+            # 200 if the row didn't match the is.false filter (already true).
+            # Either is fine — silent on errors so a single bad write doesn't
+            # bomb the whole sync.
+        except Exception:
+            pass
     return ("updated", cat_id, f"${payload['value']:.2f}")
 
 
