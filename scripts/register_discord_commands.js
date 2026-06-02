@@ -86,10 +86,18 @@ const commands = [
       { name: 'Dragon Ball Z',           value: 'dbz'      },
     ] },
   ] },
-  { name: 'duel', type: 1, description: 'Card duel — best of 3 random pulls, most rounds wins', options: [
+  { name: 'duel', type: 1, description: 'Challenge someone to a card duel — they accept, then play', options: [
     { name: 'opponent', description: 'Who to duel', type: 6, required: true },
     { name: 'game',     description: 'pokemon (default), magic, yugioh, onepiece, gundam, dbz', type: 3, required: false },
     { name: 'rounds',   description: '3 (default, best of 3) | 1 (single pull)', type: 4, required: false },
+  ] },
+
+  // ── Pokémon game loop ──────────────────────────
+  { name: 'starter', type: 1, description: 'Pick (or change) your starter Pokémon', options: [
+    { name: 'pokemon', description: 'Your starter (autocompletes — type a few letters)', type: 3, required: true, autocomplete: true },
+  ] },
+  { name: 'profile', type: 1, description: 'Show your starter Pokémon, level, XP, and W/L', options: [
+    { name: 'user', description: 'Whose profile to view (defaults to you)', type: 6, required: false },
   ] },
   { name: 'leaderboard', type: 1, description: 'Top portfolios (opt-in only)' },
   { name: 'trade-open',  type: 1, description: 'Start a Trade Analyzer session you can share' },

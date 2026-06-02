@@ -59,6 +59,8 @@ const INTERACTION_RESPONSE_TYPE = {
   PONG:                            1,
   CHANNEL_MESSAGE_WITH_SOURCE:     4,
   DEFERRED_CHANNEL_MESSAGE:        5,
+  UPDATE_MESSAGE:                  7,  // edit the message a component lives on
+  APPLICATION_COMMAND_AUTOCOMPLETE_RESULT: 8,
 };
 // Flags bitfield. 64 = EPHEMERAL (only the caller sees the response).
 const EPHEMERAL = 1 << 6;
@@ -187,6 +189,8 @@ const handler = async (req, res) => {
           case 'track':         reply = await handleTrack(interaction);         break;
           case 'untrack':       reply = await handleUntrack(interaction);       break;
           case 'duel':          reply = await handleDuel(interaction);          break;
+          case 'starter':       reply = await handleStarter(interaction);       break;
+          case 'profile':       reply = await handleProfile(interaction);       break;
           default: reply = ephemeral(`Unknown command: ${name}`);
         }
       }
@@ -199,7 +203,42 @@ const handler = async (req, res) => {
     }
   }
 
-  // Anything else (component interactions, modal submits) — not used yet.
+  // Autocomplete — Discord sends this as the user types in a slash-
+  // command STRING option that's marked `autocomplete: true`. We return
+  // up to 25 suggestions. Used by /starter so all 27 starters are
+  // reachable even though Discord caps static `choices` at 25.
+  if (interaction.type === INTERACTION_TYPE.AUTOCOMPLETE) {
+    try {
+      const name = interaction.data && interaction.data.name;
+      if (name === 'starter') {
+        return res.status(200).json(handleStarterAutocomplete(interaction));
+      }
+    } catch (e) {
+      console.error('[discord-bot] autocomplete error:', e);
+    }
+    return res.status(200).json({
+      type: INTERACTION_RESPONSE_TYPE.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+      data: { choices: [] },
+    });
+  }
+
+  // Message component (button / select). Used by /duel's Accept and
+  // Decline buttons. custom_id encodes which action + the participants.
+  if (interaction.type === INTERACTION_TYPE.MESSAGE_COMPONENT) {
+    try {
+      const cid = (interaction.data && interaction.data.custom_id) || '';
+      if (cid.startsWith('duel_accept:') || cid.startsWith('duel_decline:')) {
+        const reply = await handleDuelComponent(interaction);
+        return res.status(200).json(reply);
+      }
+      return res.status(200).json(ephemeral('Unknown button.'));
+    } catch (e) {
+      console.error('[discord-bot] component error:', e);
+      return res.status(200).json(ephemeral('That button hit an error.'));
+    }
+  }
+
+  // Anything else (modal submits etc.) — not used yet.
   return res.status(400).json({ error: 'Unhandled interaction type' });
 };
 module.exports = handler;
@@ -1133,6 +1172,222 @@ async function handleUntrack(interaction) {
 // pulls N random catalog cards; higher current_value takes that round.
 // Most rounds won wins the match. Pure chat candy, no money /
 // inventory effect. Default rounds = 3 (best of three).
+// ─── Bot game loop (starter, profile, accept-required duel) ──────
+//
+// 27 starters across Gens 1-9. Discord caps STATIC `choices` at 25 so
+// we expose the full list via autocomplete instead. Artwork comes from
+// the PokeAPI sprites repo — stable URLs, MIT-licensed.
+const STARTERS = [
+  // Gen 1
+  { id:   1, name: 'Bulbasaur',  gen: 1 },
+  { id:   4, name: 'Charmander', gen: 1 },
+  { id:   7, name: 'Squirtle',   gen: 1 },
+  // Gen 2
+  { id: 152, name: 'Chikorita',  gen: 2 },
+  { id: 155, name: 'Cyndaquil',  gen: 2 },
+  { id: 158, name: 'Totodile',   gen: 2 },
+  // Gen 3
+  { id: 252, name: 'Treecko',    gen: 3 },
+  { id: 255, name: 'Torchic',    gen: 3 },
+  { id: 258, name: 'Mudkip',     gen: 3 },
+  // Gen 4
+  { id: 387, name: 'Turtwig',    gen: 4 },
+  { id: 390, name: 'Chimchar',   gen: 4 },
+  { id: 393, name: 'Piplup',     gen: 4 },
+  // Gen 5
+  { id: 495, name: 'Snivy',      gen: 5 },
+  { id: 498, name: 'Tepig',      gen: 5 },
+  { id: 501, name: 'Oshawott',   gen: 5 },
+  // Gen 6
+  { id: 650, name: 'Chespin',    gen: 6 },
+  { id: 653, name: 'Fennekin',   gen: 6 },
+  { id: 656, name: 'Froakie',    gen: 6 },
+  // Gen 7
+  { id: 722, name: 'Rowlet',     gen: 7 },
+  { id: 725, name: 'Litten',     gen: 7 },
+  { id: 728, name: 'Popplio',    gen: 7 },
+  // Gen 8
+  { id: 810, name: 'Grookey',    gen: 8 },
+  { id: 813, name: 'Scorbunny',  gen: 8 },
+  { id: 816, name: 'Sobble',     gen: 8 },
+  // Gen 9
+  { id: 906, name: 'Sprigatito', gen: 9 },
+  { id: 909, name: 'Fuecoco',    gen: 9 },
+  { id: 912, name: 'Quaxly',     gen: 9 },
+];
+function starterArt(pokemonId) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemonId}.png`;
+}
+function findStarter(query) {
+  if (!query) return null;
+  const q = String(query).toLowerCase().trim();
+  // Exact match first, then prefix match.
+  return STARTERS.find(s => s.name.toLowerCase() === q)
+      || STARTERS.find(s => s.name.toLowerCase().startsWith(q))
+      || STARTERS.find(s => s.name.toLowerCase().includes(q))
+      || null;
+}
+
+// XP / level curve. Total XP needed to REACH level N is `10 * (N-1)^2`,
+// so:
+//   Level 1 →  2:    10 XP   (10*1   - 10*0)
+//   Level 2 →  3:    30 XP   (10*4   - 10*1)
+//   Level 10 → 11:  190 XP   (10*100 - 10*81)
+//   Level 50 → 51: 1010 XP
+//   Level 98 → 99: 1970 XP
+//
+// XP per win against a same-level opponent is ~30 — so the curve eases
+// you up the first ~20 levels then becomes a real grind, which is what
+// people expect from a Pokémon-style progression.
+function levelFromXp(xp) {
+  if (xp <= 0) return 1;
+  return Math.min(99, Math.floor(Math.sqrt(xp / 10)) + 1);
+}
+function xpForLevel(level) { return 10 * (level - 1) * (level - 1); }
+
+// XP awarded for a single duel outcome. Win is base 30 modulated by
+// the level difference (clamped 10..100 so you can't farm vastly
+// weaker opponents but can't be totally shut out by a huge mismatch).
+function calcXpAwarded(outcome, myLevel, oppLevel) {
+  if (outcome === 'win') {
+    const diff = (oppLevel || 1) - (myLevel || 1);
+    const raw  = Math.round(30 * (1 + diff * 0.1));
+    return Math.max(10, Math.min(100, raw));
+  }
+  if (outcome === 'tie') return 15;
+  if (outcome === 'loss') return 8;
+  return 0;
+}
+
+// Cooldowns (in seconds). 10s per-challenger stops anyone from sending
+// challenges to multiple targets in rapid succession. 30s per-pair
+// stops back-and-forth spam between two specific users.
+const DUEL_CD_CHALLENGER_SEC = 10;
+const DUEL_CD_PAIR_SEC       = 30;
+
+// Pull one random priced single from the catalog (shared between the
+// /duel invitation flow and the accept-button handler).
+async function pullDuelCard(game) {
+  const alpha = '0123456789abcdef';
+  const ch = alpha[Math.floor(Math.random() * alpha.length)];
+  const r = await sb.from('catalog')
+    .select('id,name,set_name,card_number,image_url,current_value,product_type')
+    .eq('game_type', game)
+    .not('image_url', 'is', null)
+    .not('current_value', 'is', null)
+    .gt('current_value', 0)
+    .or('product_type.eq.single,product_type.is.null')
+    .like('id', `%${ch}%`)
+    .limit(80);
+  const list = (r.data || []).filter(x =>
+    Number(x.current_value) > 0 &&
+    (x.product_type === 'single' || x.product_type == null)
+  );
+  if (!list.length) return null;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+
+// /starter pokemon:<name>  — pick (or change) your starter.
+async function handleStarter(interaction) {
+  const u = (interaction.member && interaction.member.user) || interaction.user;
+  const q = optString(interaction, 'pokemon');
+  const s = findStarter(q);
+  if (!s) {
+    return ephemeral(
+      'Pick a starter from the autocomplete list — type a few letters of your favorite ' +
+      'starter (Bulbasaur, Charmander, Squirtle, … Quaxly).'
+    );
+  }
+  // Upsert — first-time picks get level 1 / 0 xp / 0 w-l-t; changing a
+  // starter keeps existing progress so people can swap to their fave
+  // without losing their grind.
+  const existing = await sb.from('bot_pokemon')
+    .select('level,xp,wins,losses,ties').eq('discord_user_id', u.id).maybeSingle();
+  const isUpdate = !!(existing.data);
+  const payload = {
+    discord_user_id: u.id,
+    pokemon_id:      s.id,
+    pokemon_name:    s.name,
+    updated_at:      new Date().toISOString(),
+  };
+  if (!isUpdate) {
+    payload.level  = 1;
+    payload.xp     = 0;
+    payload.wins   = 0;
+    payload.losses = 0;
+    payload.ties   = 0;
+  }
+  const up = await sb.from('bot_pokemon').upsert(payload, { onConflict: 'discord_user_id' });
+  if (up.error) throw up.error;
+
+  return ephemeral(
+    `${isUpdate ? 'Swapped' : 'Picked'} your starter: **${s.name}** (Gen ${s.gen}).\n` +
+    `${isUpdate ? 'Your XP and W/L stay the same.' : 'You start at level 1. Win /duels to earn XP.'}\n` +
+    `Check your stats with \`/profile\`.`
+  );
+}
+
+// Autocomplete handler for /starter pokemon:. Returns up to 25
+// matching starters; if the user hasn't typed anything we surface the
+// first 25 (covers Gens 1-8 — they can keep typing for Gen 9).
+function handleStarterAutocomplete(interaction) {
+  const focused = (interaction.data.options || []).find(o => o.focused);
+  const q = (focused && focused.value || '').toLowerCase();
+  const matches = !q
+    ? STARTERS
+    : STARTERS.filter(s => s.name.toLowerCase().includes(q));
+  const choices = matches.slice(0, 25).map(s => ({
+    name:  `${s.name} (Gen ${s.gen})`,
+    value: s.name,
+  }));
+  return {
+    type: INTERACTION_RESPONSE_TYPE.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+    data: { choices },
+  };
+}
+
+// /profile [user]  — show starter + stats. Defaults to caller; takes
+// optional user:@someone to peek at another player.
+async function handleProfile(interaction) {
+  const targetUser = optUser(interaction, 'user')
+    || (interaction.member && interaction.member.user)
+    || interaction.user;
+  const r = await sb.from('bot_pokemon')
+    .select('*').eq('discord_user_id', targetUser.id).maybeSingle();
+  if (!r.data) {
+    const who = targetUser.global_name || targetUser.username || 'They';
+    return ephemeral(`${who} hasn\'t picked a starter yet — run \`/starter\` to get going.`);
+  }
+  const p          = r.data;
+  const totalDuels = (p.wins || 0) + (p.losses || 0) + (p.ties || 0);
+  const winRate    = totalDuels ? Math.round((p.wins / totalDuels) * 100) : 0;
+  const curBase    = xpForLevel(p.level);
+  const nextBase   = p.level >= 99 ? curBase : xpForLevel(p.level + 1);
+  const intoLevel  = p.xp - curBase;
+  const toNext     = Math.max(0, nextBase - p.xp);
+  const barFilled  = p.level >= 99 ? 20 : Math.max(0, Math.min(20, Math.round((intoLevel / (nextBase - curBase)) * 20)));
+  const bar        = '█'.repeat(barFilled) + '░'.repeat(20 - barFilled);
+  const name       = targetUser.global_name || targetUser.username || 'Trainer';
+  return publicReply({
+    embeds: [{
+      title: `${name}\'s ${p.pokemon_name}`,
+      color: 0x1AC7A0,
+      thumbnail: { url: starterArt(p.pokemon_id) },
+      fields: [
+        { name: 'Level',  value: `**${p.level}**${p.level >= 99 ? ' (MAX)' : ''}`, inline: true },
+        { name: 'XP',     value: `${p.xp} / ${p.level >= 99 ? p.xp : nextBase}`,   inline: true },
+        { name: 'Record', value: `${p.wins}W · ${p.losses}L · ${p.ties}T (${winRate}%)`, inline: true },
+        { name: 'Progress', value: '`' + bar + '`' + (p.level >= 99 ? '' : `  ${toNext} to next`), inline: false },
+      ],
+      footer: { text: totalDuels ? `${totalDuels} duels fought` : 'No duels yet — challenge someone with /duel!' },
+    }],
+  });
+}
+
+// /duel opponent:<user> [game] [rounds]  — send a challenge. The
+// opponent has to click Accept (or Decline) before any cards get
+// pulled, so people can't spam-duel into someone's inbox.
 async function handleDuel(interaction) {
   const opp = optUser(interaction, 'opponent');
   if (!opp || !opp.id) return ephemeral('Pick an opponent: `/duel opponent:@someone`');
@@ -1144,50 +1399,128 @@ async function handleDuel(interaction) {
     return ephemeral('Bots don\'t pull cards. Pick a real opponent.');
   }
   const game     = (optString(interaction, 'game')   || 'pokemon').toLowerCase();
-  // Round count: default 3 (best of three). Allow 1 for quick single
-  // pulls. Anything else falls back to 3 so a typo doesn't accidentally
-  // start a 50-round marathon that overflows the embed.
   const roundsIn = Number(optString(interaction, 'rounds'));
   const rounds   = roundsIn === 1 ? 1 : 3;
 
-  // Pull one random priced card from the catalog using the same trick
-  // /random uses — random hex char in the id, cap result set, pick one.
-  async function pullCard() {
-    const alpha = '0123456789abcdef';
-    const ch = alpha[Math.floor(Math.random() * alpha.length)];
-    const r = await sb.from('catalog')
-      .select('id,name,set_name,card_number,image_url,current_value,product_type')
-      .eq('game_type', game)
-      .not('image_url', 'is', null)
-      .not('current_value', 'is', null)
-      .gt('current_value', 0)
-      // Singles only — sealed products (booster boxes, ETBs, tins,
-      // decks, etc.) would dominate the duel on price and feel unfair.
-      // .or() lets us keep legacy rows where product_type is NULL.
-      .or('product_type.eq.single,product_type.is.null')
-      .like('id', `%${ch}%`)
-      .limit(80);
-    const list = (r.data || []).filter(x =>
-      Number(x.current_value) > 0 &&
-      (x.product_type === 'single' || x.product_type == null)
-    );
-    if (!list.length) return null;
-    return list[Math.floor(Math.random() * list.length)];
+  // Cooldown checks — per-challenger first, then per-pair. The pair
+  // check uses an OR so it catches challenges in either direction (so
+  // you can't dodge it by swapping who challenges).
+  const cdChallenger = await sb.from('bot_duel_log')
+    .select('created_at')
+    .eq('challenger_discord_id', challenger.id)
+    .order('created_at', { ascending: false }).limit(1);
+  if (cdChallenger.data && cdChallenger.data[0]) {
+    const ageSec = (Date.now() - new Date(cdChallenger.data[0].created_at).getTime()) / 1000;
+    if (ageSec < DUEL_CD_CHALLENGER_SEC) {
+      return ephemeral(`Slow down — wait ${Math.ceil(DUEL_CD_CHALLENGER_SEC - ageSec)}s before sending another challenge.`);
+    }
+  }
+  const cdPair = await sb.from('bot_duel_log')
+    .select('created_at')
+    .or(`and(challenger_discord_id.eq.${challenger.id},opponent_discord_id.eq.${opp.id}),and(challenger_discord_id.eq.${opp.id},opponent_discord_id.eq.${challenger.id})`)
+    .order('created_at', { ascending: false }).limit(1);
+  if (cdPair.data && cdPair.data[0]) {
+    const ageSec = (Date.now() - new Date(cdPair.data[0].created_at).getTime()) / 1000;
+    if (ageSec < DUEL_CD_PAIR_SEC) {
+      return ephemeral(`That pair was just challenged — wait ${Math.ceil(DUEL_CD_PAIR_SEC - ageSec)}s.`);
+    }
   }
 
-  // Pull every card we need in parallel — N pulls per side. Each round
-  // is independent so a single round-trip is fine.
+  // Log the challenge as pending. The Accept/Decline button handler
+  // updates the row to resolved + winner.
+  await sb.from('bot_duel_log').insert({
+    challenger_discord_id: challenger.id,
+    opponent_discord_id:   opp.id,
+    game, rounds,
+    status: 'pending',
+  });
+
+  const aName = challenger.global_name || challenger.username || 'Challenger';
+  const bName = opp.global_name        || opp.username        || 'Opponent';
+  // custom_id encodes everything the button handler needs to know
+  // without a DB round-trip: who can click, what game, how many rounds.
+  const acceptId  = `duel_accept:${challenger.id}:${opp.id}:${game}:${rounds}`;
+  const declineId = `duel_decline:${challenger.id}:${opp.id}`;
+
+  return publicReply({
+    content: `${aName} challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} ${game} duel!`,
+    embeds: [{
+      title: 'Duel Challenge',
+      description:
+        `<@${opp.id}>, do you accept?\n\n` +
+        `**Game:** ${game}\n**Rounds:** ${rounds === 1 ? '1 (single pull)' : `Best of ${rounds}`}`,
+      color: 0x1AC7A0,
+      footer: { text: 'Both players need /starter to earn XP from the result.' },
+    }],
+    components: [{
+      type: 1, // ACTION_ROW
+      components: [
+        { type: 2, style: 3, label: 'Accept',  custom_id: acceptId  },
+        { type: 2, style: 4, label: 'Decline', custom_id: declineId },
+      ],
+    }],
+    allowed_mentions: { users: [opp.id] },
+  });
+}
+
+// Handle the Accept / Decline buttons on a /duel invitation.
+async function handleDuelComponent(interaction) {
+  const clicker = (interaction.member && interaction.member.user) || interaction.user;
+  const cid     = interaction.data.custom_id || '';
+  const parts   = cid.split(':');
+  const action  = parts[0];           // duel_accept | duel_decline
+  const challengerId = parts[1];
+  const opponentId   = parts[2];
+
+  // Only the opponent can click these buttons. Anyone else gets an
+  // ephemeral nag so it doesn't clutter the channel.
+  if (clicker.id !== opponentId) {
+    return ephemeral('This duel is between two other people — wait your turn.');
+  }
+
+  if (action === 'duel_decline') {
+    await sb.from('bot_duel_log')
+      .update({ status: 'declined', resolved_at: new Date().toISOString() })
+      .eq('challenger_discord_id', challengerId)
+      .eq('opponent_discord_id',   opponentId)
+      .eq('status', 'pending');
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: {
+        content: `<@${opponentId}> declined the duel.`,
+        embeds: [],
+        components: [],
+        allowed_mentions: { users: [] },
+      },
+    };
+  }
+
+  // Accept — actually pull cards and resolve the duel.
+  const game     = parts[3] || 'pokemon';
+  const rounds   = Number(parts[4]) === 1 ? 1 : 3;
+
+  // Fetch both players' pokemon (if any) for XP scaling.
+  const pkRes = await sb.from('bot_pokemon')
+    .select('discord_user_id, pokemon_name, pokemon_id, level, xp, wins, losses, ties')
+    .in('discord_user_id', [challengerId, opponentId]);
+  const pkMap = {};
+  (pkRes.data || []).forEach(r => { pkMap[r.discord_user_id] = r; });
+  const aPk = pkMap[challengerId] || null;
+  const bPk = pkMap[opponentId]   || null;
+
+  // Pull all cards.
   const pulls = await Promise.all(
-    Array.from({ length: rounds * 2 }, () => pullCard())
+    Array.from({ length: rounds * 2 }, () => pullDuelCard(game))
   );
   if (pulls.some(p => !p)) {
-    return ephemeral(`Couldn\'t pull enough priced cards for ${game}. Try another game.`);
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: { content: `Couldn\'t pull enough priced cards for ${game}.`, embeds: [], components: [] },
+    };
   }
   const aCards = pulls.slice(0, rounds);
   const bCards = pulls.slice(rounds);
 
-  // Tally per-round wins. Ties don't count toward either side — they're
-  // "split rounds", which can leave a BO3 at 1-1-1 (a draw).
   let aWins = 0, bWins = 0;
   const roundLines = [];
   for (let i = 0; i < rounds; i++) {
@@ -1198,45 +1531,72 @@ async function handleDuel(interaction) {
     if (av > bv)      { aWins++; mark = '◀'; }
     else if (bv > av) { bWins++; mark = '▶'; }
     else              { mark = '=';          }
-    roundLines.push(
-      `**R${i + 1}** ${mark}  ${a.name} ($${av.toFixed(2)})  vs  ${b.name} ($${bv.toFixed(2)})`
-    );
+    roundLines.push(`**R${i + 1}** ${mark}  ${a.name} ($${av.toFixed(2)})  vs  ${b.name} ($${bv.toFixed(2)})`);
   }
 
-  // Display names — prefer the user's global display name, fall back to
-  // their handle. Discord doesn't render <@id> mentions inside embed
-  // titles/field names, and pinging twice in one match got noisy, so we
-  // show plain text names throughout.
-  const aName = challenger.global_name || challenger.username || 'Challenger';
-  const bName = opp.global_name        || opp.username        || 'Opponent';
+  // Pull display names from the resolved users payload Discord sends
+  // with the original interaction. We saved them in custom_id only
+  // partially, but interaction.message has the original content/embeds.
+  // Easier: re-fetch via Discord REST — but adding a roundtrip per
+  // click is wasteful. We'll just use mention strings; Discord renders
+  // them inline in the embed description.
+  const aMention = `<@${challengerId}>`;
+  const bMention = `<@${opponentId}>`;
 
+  // Result + XP.
   let resultLine;
   let winnerColor;
+  let winnerId = null;
+  let aOutcome = 'tie', bOutcome = 'tie';
   if (aWins > bWins) {
-    resultLine = `**${aName}** wins **${aWins}-${bWins}**!`;
-    winnerColor = 0x1AC7A0; // cyan
+    resultLine = `${aMention} wins **${aWins}-${bWins}**!`;
+    winnerColor = 0x1AC7A0;
+    winnerId = challengerId;
+    aOutcome = 'win'; bOutcome = 'loss';
   } else if (bWins > aWins) {
-    resultLine = `**${bName}** wins **${bWins}-${aWins}**!`;
-    winnerColor = 0xC97A3E; // copper
+    resultLine = `${bMention} wins **${bWins}-${aWins}**!`;
+    winnerColor = 0xC97A3E;
+    winnerId = opponentId;
+    aOutcome = 'loss'; bOutcome = 'win';
   } else {
     resultLine = `It\'s a tie at **${aWins}-${bWins}** — split the pot.`;
-    winnerColor = 0xFFC857; // gold
+    winnerColor = 0xFFC857;
   }
 
-  // Totals row — fun extra stat so people can compare aggregate pulls.
+  // Award XP only if both players have a starter. If either is
+  // missing, the duel still resolves; we just don't write any XP.
+  let aXp = 0, bXp = 0;
+  let xpFooter;
+  if (aPk && bPk) {
+    aXp = calcXpAwarded(aOutcome, aPk.level, bPk.level);
+    bXp = calcXpAwarded(bOutcome, bPk.level, aPk.level);
+    await applyDuelResult(aPk, aOutcome, aXp);
+    await applyDuelResult(bPk, bOutcome, bXp);
+    xpFooter = `XP: ${aPk.pokemon_name} +${aXp} · ${bPk.pokemon_name} +${bXp}`;
+  } else {
+    const missing = [];
+    if (!aPk) missing.push(aMention);
+    if (!bPk) missing.push(bMention);
+    xpFooter = `No XP awarded — ${missing.join(' and ')} need to run /starter first.`;
+  }
+
+  await sb.from('bot_duel_log')
+    .update({
+      status: 'accepted',
+      winner_discord_id: winnerId,
+      challenger_xp_gained: aXp,
+      opponent_xp_gained:   bXp,
+      resolved_at: new Date().toISOString(),
+      result_summary: { aWins, bWins, rounds, game },
+    })
+    .eq('challenger_discord_id', challengerId)
+    .eq('opponent_discord_id',   opponentId)
+    .eq('status', 'pending');
+
   const aTotal = aCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
   const bTotal = bCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
-
-  // Image cue: show each side's highest-value pull. Challenger gets the
-  // big "image" slot, opponent gets the thumbnail.
   const aBest = aCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const bBest = bCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
-
-  // Side-by-side image trick: Discord visually merges multiple embeds in
-  // one message into a single card IF they share the same `url`. Each
-  // embed's `image` then tiles next to the others in that merged card.
-  // We use this so the two highest-value pulls render side by side
-  // beneath the round results instead of one big / one thumbnail.
   const SHARED_URL = 'https://pathbinder.gg/?page=dashboard';
   const embeds = [{
     url: SHARED_URL,
@@ -1244,29 +1604,42 @@ async function handleDuel(interaction) {
     description: roundLines.join('\n') + '\n\n' + resultLine,
     color: winnerColor,
     fields: [
-      { name: `${aName} total`, value: `$${aTotal.toFixed(2)}`, inline: true },
-      { name: `${bName} total`, value: `$${bTotal.toFixed(2)}`, inline: true },
+      { name: `${aMention} total`, value: `$${aTotal.toFixed(2)}`, inline: true },
+      { name: `${bMention} total`, value: `$${bTotal.toFixed(2)}`, inline: true },
     ],
     image: aBest && aBest.image_url ? { url: aBest.image_url } : undefined,
-    footer: { text: 'Just for fun — no cards change hands.' },
+    footer: { text: xpFooter },
   }];
-  // Second embed contributes only its image to the merged card. It
-  // needs the same url so Discord groups it; everything else is omitted
-  // so the visual is just "another tile next to the first".
   if (bBest && bBest.image_url) {
     embeds.push({ url: SHARED_URL, image: { url: bBest.image_url } });
   }
 
-  return publicReply({
-    // One mention up top so the opponent gets a single notification ping
-    // — but the rest of the embed uses plain display names so it reads
-    // cleanly.
-    content: `${aName} challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} duel!`,
-    embeds,
-    // Only ping the opponent (the challenger initiated, so they don't
-    // need a self-ping).
-    allowed_mentions: { users: [opp.id] },
-  });
+  return {
+    type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+    data: {
+      content: `${aMention} vs ${bMention} — accepted!`,
+      embeds,
+      components: [],
+      allowed_mentions: { users: [] },
+    },
+  };
+}
+
+// Compute new totals after a duel outcome and write them back. Pure
+// JS-side recompute of level (no race conditions vs concurrent writes
+// because each user duels one at a time via the button click).
+async function applyDuelResult(pk, outcome, xpDelta) {
+  const newXp     = (pk.xp || 0) + (xpDelta || 0);
+  const newLevel  = levelFromXp(newXp);
+  const patch = {
+    xp:         newXp,
+    level:      newLevel,
+    wins:       (pk.wins   || 0) + (outcome === 'win'  ? 1 : 0),
+    losses:     (pk.losses || 0) + (outcome === 'loss' ? 1 : 0),
+    ties:       (pk.ties   || 0) + (outcome === 'tie'  ? 1 : 0),
+    updated_at: new Date().toISOString(),
+  };
+  await sb.from('bot_pokemon').update(patch).eq('discord_user_id', pk.discord_user_id);
 }
 
 

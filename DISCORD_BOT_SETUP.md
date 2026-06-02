@@ -108,7 +108,7 @@ After running `register_discord_commands.js` you'll have:
 **Linking / roles:** `/link`, `/tier`
 **Lookup:** `/price`, `/set`, `/random`, `/marketplace`
 **Personal (DM):** `/portfolio`, `/wishlist`, `/listings`, `/sales` (Enthusiast+), `/badge`
-**Community:** `/showcase`, `/movers` (personal+global), `/leaderboard` (opt-in), `/trade-open`, `/duel`
+**Community:** `/showcase`, `/movers` (personal+global), `/leaderboard` (opt-in), `/trade-open`, `/duel`, `/starter`, `/profile`
 **Alerts:** `/track`, `/untrack`
 **Feedback:** `/bug`
 **Admin:** `/usercount`
@@ -122,6 +122,27 @@ After running `register_discord_commands.js` you'll have:
 ## A note on Discord reactions
 
 Discord's emoji-reaction events (e.g. 🐛 on a message → file as bug) require a **persistent Gateway connection**, which can't run on Vercel serverless. Implementing those would mean either a separate always-on relay (Railway, Fly, etc.) or migrating the whole bot to a worker. **We use Discord's right-click "Apps" menu instead** — same one-action UX, works with the existing HTTP-only setup. The two message commands ("File as Bug", "Track Card Price") appear on every message via right-click → Apps → \<command\>.
+
+## Pokémon game loop (`/starter`, `/duel`, `/profile`)
+
+Beta-community engagement layer. Run `migration_discord_pokemon.sql`
+in Supabase to create the two tables (`bot_pokemon`, `bot_duel_log`)
+before deploying.
+
+- `/starter pokemon:Charmander` — pick one of the 27 starters (Gens
+  1-9). Discord-autocomplete; type a few letters to filter. Re-running
+  swaps your starter without losing XP/wins.
+- `/duel opponent:@someone` — sends an Accept/Decline challenge. Pulls
+  + XP only happen after the opponent clicks Accept. Cooldowns: 10s
+  per challenger, 30s per pair.
+- `/profile [user:@someone]` — shows starter art, level, XP bar,
+  W/L/T record.
+
+XP curve: total XP to reach level N is `10 * (N-1)^2`. Win against
+same-level = 30 XP; bonus/penalty scales ±10% per level diff (clamped
+10..100). Loss = 8, tie = 15. Max level 99. Both players need a
+starter for any XP to be awarded; if either is missing, the duel
+still runs but the embed footer reminds them to `/starter`.
 
 ## Real Phase 2 ideas
 
