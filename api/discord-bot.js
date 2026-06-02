@@ -70,8 +70,11 @@ const INTERACTION_RESPONSE_TYPE = {
 // deferral type has to match, otherwise the final message renders
 // wrong). Anything NOT in either set responds synchronously.
 const DEFER_PUBLIC_SLASH = new Set([
-  'movers', 'duel', 'showcase', 'random', 'set',
+  'movers', 'showcase', 'random', 'set',
   'price', 'marketplace', 'usercount', 'leaderboard',
+  // /duel intentionally NOT deferred — it was snappy without it, and
+  // the "Bot is thinking..." preface was extra noise before the
+  // challenge embed showed up.
 ]);
 const DEFER_EPHEMERAL_SLASH = new Set([
   'portfolio', 'wishlist', 'listings', 'sales', 'badge',
@@ -242,26 +245,12 @@ const handler = async (req, res) => {
 
   // Message component (button / select). Used by /duel's Accept and
   // Decline buttons. custom_id encodes which action + the participants.
+  // Handled synchronously — was snappy in practice and deferring just
+  // added a "thinking..." UX flash before the result.
   if (interaction.type === INTERACTION_TYPE.MESSAGE_COMPONENT) {
-    const cid = (interaction.data && interaction.data.custom_id) || '';
-    // duel_accept is slow (card pulls + DB writes). Defer it with
-    // type 6 (DEFERRED_UPDATE_MESSAGE — no "thinking..." UI on the
-    // button click), then PATCH the message with the resolved
-    // result. duel_decline is fast — handle inline.
-    if (cid.startsWith('duel_accept:')) {
-      res.status(200).json({ type: INTERACTION_RESPONSE_TYPE.DEFERRED_UPDATE_MESSAGE });
-      try {
-        const reply = await handleDuelComponent(interaction);
-        await patchOriginalInteractionResponse(interaction, reply);
-      } catch (e) {
-        console.error('[discord-bot] component error:', e);
-        await patchOriginalInteractionResponse(interaction,
-          ephemeral('That button hit an error.'));
-      }
-      return;
-    }
     try {
-      if (cid.startsWith('duel_decline:')) {
+      const cid = (interaction.data && interaction.data.custom_id) || '';
+      if (cid.startsWith('duel_accept:') || cid.startsWith('duel_decline:')) {
         const reply = await handleDuelComponent(interaction);
         return res.status(200).json(reply);
       }
