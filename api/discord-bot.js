@@ -1156,14 +1156,21 @@ async function handleDuel(interaction) {
     const alpha = '0123456789abcdef';
     const ch = alpha[Math.floor(Math.random() * alpha.length)];
     const r = await sb.from('catalog')
-      .select('id,name,set_name,card_number,image_url,current_value')
+      .select('id,name,set_name,card_number,image_url,current_value,product_type')
       .eq('game_type', game)
       .not('image_url', 'is', null)
       .not('current_value', 'is', null)
       .gt('current_value', 0)
+      // Singles only — sealed products (booster boxes, ETBs, tins,
+      // decks, etc.) would dominate the duel on price and feel unfair.
+      // .or() lets us keep legacy rows where product_type is NULL.
+      .or('product_type.eq.single,product_type.is.null')
       .like('id', `%${ch}%`)
       .limit(80);
-    const list = (r.data || []).filter(x => Number(x.current_value) > 0);
+    const list = (r.data || []).filter(x =>
+      Number(x.current_value) > 0 &&
+      (x.product_type === 'single' || x.product_type == null)
+    );
     if (!list.length) return null;
     return list[Math.floor(Math.random() * list.length)];
   }
