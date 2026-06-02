@@ -31,8 +31,14 @@ const sb = createClient(
 // tier they had previously. Added now along with the rest.
 const VALID_TIERS = ['free', 'collector', 'enthusiast', 'vendor', 'shop'];
 
-// Disable body parsing — Stripe needs the raw body for signature verification
-export const config = { api: { bodyParser: false } };
+// Disable body parsing — Stripe needs the raw bytes for signature
+// verification. This file is CommonJS (uses module.exports), so we
+// must declare config via module.exports.config — `export const`
+// would silently no-op and Vercel would pre-parse the body, breaking
+// every webhook signature. The property is re-attached after the
+// handler assignment at the bottom because `module.exports = handler`
+// would otherwise overwrite it.
+module.exports.config = { api: { bodyParser: false } };
 
 function buffer(req) {
   return new Promise((resolve, reject) => {
@@ -377,3 +383,7 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json({ received: true });
 };
+// Re-attach config — `module.exports = handler` above overwrote the
+// property we set at the top. Vercel reads it off module.exports at
+// build time, so both have to live on the same object.
+module.exports.config = { api: { bodyParser: false } };
