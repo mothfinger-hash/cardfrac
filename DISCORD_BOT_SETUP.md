@@ -108,7 +108,7 @@ After running `register_discord_commands.js` you'll have:
 **Linking / roles:** `/link`, `/tier`
 **Lookup:** `/price`, `/set`, `/random`, `/marketplace`
 **Personal (DM):** `/portfolio`, `/wishlist`, `/listings`, `/sales` (Enthusiast+), `/badge`
-**Community:** `/showcase`, `/movers`, `/leaderboard` (opt-in), `/trade-open`
+**Community:** `/showcase`, `/movers` (personal+global), `/leaderboard` (opt-in), `/trade-open`, `/duel`
 **Alerts:** `/track`, `/untrack`
 **Feedback:** `/bug`
 **Admin:** `/usercount`

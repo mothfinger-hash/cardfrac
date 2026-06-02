@@ -186,6 +186,7 @@ const handler = async (req, res) => {
           case 'leaderboard':   reply = await handleLeaderboard(interaction);   break;
           case 'track':         reply = await handleTrack(interaction);         break;
           case 'untrack':       reply = await handleUntrack(interaction);       break;
+          case 'duel':          reply = await handleDuel(interaction);          break;
           default: reply = ephemeral(`Unknown command: ${name}`);
         }
       }
@@ -624,34 +625,127 @@ async function handleShowcase(interaction) {
   });
 }
 
-// /movers [period] — global top up & down movers. Public.
+// /movers [period] [scope] — global market movers, or YOUR collection
+// movers when scope=personal. Default scope is 'personal' when the
+// caller is linked (matches the dashboard "Yours" toggle), 'global'
+// when they aren't. Public.
 async function handleMovers(interaction) {
   const period = optString(interaction, 'period') || '24h';
-  const days = period === '7d' ? 7 : 1;
+  const days   = period === '7d' ? 7 : 1;
+  const scopeOpt = (optString(interaction, 'scope') || '').toLowerCase();
+
+  // Resolve scope. If the caller passed one explicitly, honor it. Otherwise
+  // default to 'personal' for linked users (mirrors the dashboard default
+  // they're used to seeing) and fall back to global for unlinked users.
+  const linkCheck = await getLinkedProfile(interaction, { silent: true });
+  let scope = scopeOpt === 'global' || scopeOpt === 'personal'
+    ? scopeOpt
+    : (linkCheck.ok ? 'personal' : 'global');
+  if (scope === 'personal' && !linkCheck.ok) {
+    return ephemeral('Link your account first: run `/link`. Or try `/movers scope:global` for market-wide movers.');
+  }
+
+  const fmtPct = (n) => `${n >= 0 ? '+' : ''}${Number(n).toFixed(1)}%`;
+  const fmtRow = (x) =>
+    `• ${x.name} — $${Number(x.current_value || 0).toFixed(2)} (${fmtPct(x.delta_pct)})`;
+
+  // ── Personal scope ──────────────────────────────────────────────
+  // Walk the user's collection, join against catalog_price_history for
+  // the period, compute deltas, and return top 3 up + top 3 down.
+  // Mirrors the dashboard "Yours" code path in index.html (around line
+  // 13180) so the numbers line up with what they see in the app.
+  if (scope === 'personal') {
+    const userId = linkCheck.profile.id;
+    // Fetch the user's owned + ghost rows that have a catalog id and a
+    // current value to compare against. is_ghost rows count too — they
+    // contribute to "wishlist movers" the dashboard also surfaces.
+    const items = await sb.from('collection_items')
+      .select('api_card_id, card_name, current_value, is_ghost')
+      .eq('user_id', userId)
+      .not('api_card_id', 'is', null)
+      .not('current_value', 'is', null);
+    if (items.error) throw items.error;
+    const rows = (items.data || []).filter(r => Number(r.current_value) > 0);
+    if (!rows.length) {
+      return ephemeral('Your collection has no priced cards yet — add some and try again.');
+    }
+
+    // Pull oldest-in-window price per catalog_id, in chunks (PostgREST
+    // .in() URL gets huge otherwise).
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const ids = [...new Set(rows.map(r => r.api_card_id))];
+    const oldByCat = new Map();
+    const CHUNK = 100;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const hist = await sb.from('catalog_price_history')
+        .select('catalog_id, recorded_value, recorded_at')
+        .in('catalog_id', slice)
+        .gte('recorded_at', cutoff)
+        .order('recorded_at', { ascending: true });
+      if (hist.error) continue;
+      for (const h of (hist.data || [])) {
+        if (!oldByCat.has(h.catalog_id)) oldByCat.set(h.catalog_id, Number(h.recorded_value));
+      }
+    }
+
+    const movers = [];
+    for (const r of rows) {
+      const oldVal = oldByCat.get(r.api_card_id);
+      const cur    = Number(r.current_value);
+      if (!oldVal || !cur) continue;
+      const delta = cur - oldVal;
+      const pct   = (delta / oldVal) * 100;
+      if (Math.abs(pct) < 0.1) continue;
+      movers.push({ name: r.card_name, current_value: cur, delta, delta_pct: pct });
+    }
+    const up   = movers.filter(m => m.delta > 0).sort((a, b) => b.delta_pct - a.delta_pct).slice(0, 3);
+    const down = movers.filter(m => m.delta < 0).sort((a, b) => a.delta_pct - b.delta_pct).slice(0, 3);
+
+    return publicReply({
+      embeds: [{
+        title: `Your collection movers (${period})`,
+        color: 0x1AC7A0,
+        fields: [
+          { name: '▲ Up',   value: up.length   ? up.map(fmtRow).join('\n')   : '_no gains_',    inline: true },
+          { name: '▼ Down', value: down.length ? down.map(fmtRow).join('\n') : '_no declines_', inline: true },
+        ],
+        footer: { text: 'pathbinder.gg/?page=dashboard' },
+      }],
+    });
+  }
+
+  // ── Global scope ────────────────────────────────────────────────
+  // Use the same RPC the dashboard's "Global" toggle uses.
   let up = [], down = [];
   try {
-    const r = await sb.rpc('global_price_movers_v2', {
-      p_game_type: 'pokemon',
-      p_period_days: days,
-      p_sort: 'percent',
+    const r = await sb.rpc('get_global_price_movers', {
+      p_game_type:    'pokemon',
+      p_days_back:    days,
+      p_top_n:        3,
+      p_min_pct:      0.5,
+      p_sort:         'pct',
       p_product_type: 'single',
-      p_limit: 3,
     });
     if (!r.error && r.data) {
-      up   = r.data.filter(x => Number(x.pct_change) > 0).slice(0, 3);
-      down = r.data.filter(x => Number(x.pct_change) < 0).reverse().slice(0, 3);
+      up   = r.data.filter(x => x.direction === 'up').slice(0, 3);
+      down = r.data.filter(x => x.direction === 'down').slice(0, 3);
+    } else if (r.error) {
+      console.error('[discord-bot] /movers RPC error:', r.error);
     }
-  } catch (_) {}
-  const fmt = (x) => `• ${x.name} — $${Number(x.current_value || 0).toFixed(2)} (${Number(x.pct_change) >= 0 ? '+' : ''}${Number(x.pct_change).toFixed(1)}%)`;
+  } catch (e) {
+    console.error('[discord-bot] /movers exception:', e);
+  }
+
   return publicReply({
     embeds: [{
-      title: `Pokémon price movers (${period})`,
+      title: `Pokémon market movers (${period})`,
       color: 0x1AC7A0,
       fields: [
-        { name: '▲ Up',   value: up.length ? up.map(fmt).join('\n')   : '_no data_', inline: true },
-        { name: '▼ Down', value: down.length ? down.map(fmt).join('\n') : '_no data_', inline: true },
+        { name: '▲ Up',   value: up.length   ? up.map(fmtRow).join('\n')   : '_no data_', inline: true },
+        { name: '▼ Down', value: down.length ? down.map(fmtRow).join('\n') : '_no data_', inline: true },
       ],
-      footer: { text: 'pathbinder.gg/?page=account' },
+      footer: { text: linkCheck.ok ? 'Tip: /movers scope:personal for your collection' : 'pathbinder.gg/?page=dashboard' },
     }],
   });
 }
@@ -947,6 +1041,116 @@ async function handleUntrack(interaction) {
 }
 
 
+// /duel opponent:<user> [game] [rounds] — community fun. Each side
+// pulls N random catalog cards; higher current_value takes that round.
+// Most rounds won wins the match. Pure chat candy, no money /
+// inventory effect. Default rounds = 3 (best of three).
+async function handleDuel(interaction) {
+  const opp = optUser(interaction, 'opponent');
+  if (!opp || !opp.id) return ephemeral('Pick an opponent: `/duel opponent:@someone`');
+  const challenger = (interaction.member && interaction.member.user) || interaction.user;
+  if (opp.id === challenger.id) {
+    return ephemeral('You can\'t duel yourself — that\'s a draw by default.');
+  }
+  if (opp.bot) {
+    return ephemeral('Bots don\'t pull cards. Pick a real opponent.');
+  }
+  const game     = (optString(interaction, 'game')   || 'pokemon').toLowerCase();
+  // Round count: default 3 (best of three). Allow 1 for quick single
+  // pulls. Anything else falls back to 3 so a typo doesn't accidentally
+  // start a 50-round marathon that overflows the embed.
+  const roundsIn = Number(optString(interaction, 'rounds'));
+  const rounds   = roundsIn === 1 ? 1 : 3;
+
+  // Pull one random priced card from the catalog using the same trick
+  // /random uses — random hex char in the id, cap result set, pick one.
+  async function pullCard() {
+    const alpha = '0123456789abcdef';
+    const ch = alpha[Math.floor(Math.random() * alpha.length)];
+    const r = await sb.from('catalog')
+      .select('id,name,set_name,card_number,image_url,current_value')
+      .eq('game_type', game)
+      .not('image_url', 'is', null)
+      .not('current_value', 'is', null)
+      .gt('current_value', 0)
+      .like('id', `%${ch}%`)
+      .limit(80);
+    const list = (r.data || []).filter(x => Number(x.current_value) > 0);
+    if (!list.length) return null;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  // Pull every card we need in parallel — N pulls per side. Each round
+  // is independent so a single round-trip is fine.
+  const pulls = await Promise.all(
+    Array.from({ length: rounds * 2 }, () => pullCard())
+  );
+  if (pulls.some(p => !p)) {
+    return ephemeral(`Couldn\'t pull enough priced cards for ${game}. Try another game.`);
+  }
+  const aCards = pulls.slice(0, rounds);
+  const bCards = pulls.slice(rounds);
+
+  // Tally per-round wins. Ties don't count toward either side — they're
+  // "split rounds", which can leave a BO3 at 1-1-1 (a draw).
+  let aWins = 0, bWins = 0;
+  const roundLines = [];
+  for (let i = 0; i < rounds; i++) {
+    const a = aCards[i], b = bCards[i];
+    const av = Number(a.current_value) || 0;
+    const bv = Number(b.current_value) || 0;
+    let mark;
+    if (av > bv)      { aWins++; mark = '◀'; }
+    else if (bv > av) { bWins++; mark = '▶'; }
+    else              { mark = '=';          }
+    roundLines.push(
+      `**R${i + 1}** ${mark}  ${a.name} ($${av.toFixed(2)})  vs  ${b.name} ($${bv.toFixed(2)})`
+    );
+  }
+
+  let resultLine;
+  let winnerColor;
+  if (aWins > bWins) {
+    resultLine = `<@${challenger.id}> wins **${aWins}-${bWins}**!`;
+    winnerColor = 0x1AC7A0; // cyan
+  } else if (bWins > aWins) {
+    resultLine = `<@${opp.id}> wins **${bWins}-${aWins}**!`;
+    winnerColor = 0xC97A3E; // copper
+  } else {
+    resultLine = `It\'s a tie at **${aWins}-${bWins}** — split the pot.`;
+    winnerColor = 0xFFC857; // gold
+  }
+
+  // Totals row — fun extra stat so people can compare aggregate pulls.
+  const aTotal = aCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
+  const bTotal = bCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
+
+  // Image cue: show each side's highest-value pull. Challenger gets the
+  // big "image" slot, opponent gets the thumbnail.
+  const aBest = aCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
+  const bBest = bCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
+
+  return publicReply({
+    content: `<@${challenger.id}> challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} duel!`,
+    embeds: [{
+      title: rounds === 1 ? 'Card Duel' : `Card Duel — Best of ${rounds}`,
+      description: roundLines.join('\n') + '\n\n' + resultLine,
+      color: winnerColor,
+      fields: [
+        { name: `<@${challenger.id}> total`, value: `$${aTotal.toFixed(2)}`, inline: true },
+        { name: `<@${opp.id}> total`,        value: `$${bTotal.toFixed(2)}`, inline: true },
+      ],
+      image:     aBest && aBest.image_url ? { url: aBest.image_url } : undefined,
+      thumbnail: bBest && bBest.image_url ? { url: bBest.image_url } : undefined,
+      footer: { text: 'Just for fun — no cards change hands.' },
+    }],
+    // Allow the user pings in the message text + embed field names so
+    // the @ mentions actually render as pings.
+    allowed_mentions: { users: [challenger.id, opp.id] },
+  });
+}
+
+
 // ─── Message context-menu handlers (right-click → Apps menu) ──────
 
 // "File as Bug" — when invoked on a message, the original message text
@@ -1013,6 +1217,19 @@ function optString(interaction, name) {
   const opts = (interaction.data && interaction.data.options) || [];
   const o = opts.find(x => x.name === name);
   return o && o.value != null ? String(o.value) : null;
+}
+
+// Pull a USER (type 6) option. Discord sends the user's id as the value;
+// the actual user object lives in interaction.data.resolved.users keyed
+// by that id. Returns the resolved user object (with id, username, bot,
+// etc.) or a minimal { id } stub if resolved didn't include it.
+function optUser(interaction, name) {
+  const opts = (interaction.data && interaction.data.options) || [];
+  const o = opts.find(x => x.name === name);
+  if (!o || !o.value) return null;
+  const resolved = interaction.data && interaction.data.resolved && interaction.data.resolved.users;
+  const u = resolved ? resolved[o.value] : null;
+  return u || { id: String(o.value) };
 }
 
 // Resolve the Discord user → linked PathBinder profile. Returns

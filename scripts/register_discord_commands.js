@@ -73,8 +73,14 @@ const commands = [
   { name: 'showcase', type: 1, description: 'Public spotlight on a card', options: [
     { name: 'card', description: 'Card name', type: 3, required: true },
   ] },
-  { name: 'movers',   type: 1, description: 'Biggest market movers (Pokémon)', options: [
+  { name: 'movers',   type: 1, description: 'Biggest movers — your collection (if linked) or market', options: [
     { name: 'period', description: '24h (default) | 7d', type: 3, required: false },
+    { name: 'scope',  description: 'personal (default if linked) | global', type: 3, required: false },
+  ] },
+  { name: 'duel', type: 1, description: 'Card duel — best of 3 random pulls, most rounds wins', options: [
+    { name: 'opponent', description: 'Who to duel', type: 6, required: true },
+    { name: 'game',     description: 'pokemon (default), magic, yugioh, onepiece, gundam, dbz', type: 3, required: false },
+    { name: 'rounds',   description: '3 (default, best of 3) | 1 (single pull)', type: 4, required: false },
   ] },
   { name: 'leaderboard', type: 1, description: 'Top portfolios (opt-in only)' },
   { name: 'trade-open',  type: 1, description: 'Start a Trade Analyzer session you can share' },
