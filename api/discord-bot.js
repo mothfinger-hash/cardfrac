@@ -647,8 +647,12 @@ const GAME_LABEL = {
 // when the caller is linked (matches the dashboard "Yours" toggle),
 // 'global' when they aren't. Default game is 'pokemon'. Public.
 async function handleMovers(interaction) {
-  const period = optString(interaction, 'period') || '24h';
-  const days   = period === '7d' ? 7 : 1;
+  // Default to 7-day. 24h is too tight when the snapshot cron only
+  // fires once a day — if today's snapshot hasn't run yet, the 24h
+  // baseline equals catalog.current_value and every delta is zero.
+  // 7d always has enough history depth to surface real movement.
+  const period = optString(interaction, 'period') || '7d';
+  const days   = period === '24h' ? 1 : 7;
   const scopeOpt = (optString(interaction, 'scope') || '').toLowerCase();
   // game option — accept any catalog game_type, plus 'all' which fans
   // out across every game and merges the results. Default pokemon for

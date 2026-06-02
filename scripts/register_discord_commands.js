@@ -74,7 +74,7 @@ const commands = [
     { name: 'card', description: 'Card name', type: 3, required: true },
   ] },
   { name: 'movers',   type: 1, description: 'Biggest movers — your collection (if linked) or market', options: [
-    { name: 'period', description: '24h (default) | 7d', type: 3, required: false },
+    { name: 'period', description: '7d (default) | 24h', type: 3, required: false },
     { name: 'scope',  description: 'global (default) | personal', type: 3, required: false },
     { name: 'game',   description: 'all (cross-TCG) | pokemon (default) | magic | yugioh | onepiece | gundam | dbz', type: 3, required: false, choices: [
       { name: 'All TCGs',                value: 'all'      },
