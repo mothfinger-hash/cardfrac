@@ -1108,13 +1108,20 @@ async function handleDuel(interaction) {
     );
   }
 
+  // Display names — prefer the user's global display name, fall back to
+  // their handle. Discord doesn't render <@id> mentions inside embed
+  // titles/field names, and pinging twice in one match got noisy, so we
+  // show plain text names throughout.
+  const aName = challenger.global_name || challenger.username || 'Challenger';
+  const bName = opp.global_name        || opp.username        || 'Opponent';
+
   let resultLine;
   let winnerColor;
   if (aWins > bWins) {
-    resultLine = `<@${challenger.id}> wins **${aWins}-${bWins}**!`;
+    resultLine = `**${aName}** wins **${aWins}-${bWins}**!`;
     winnerColor = 0x1AC7A0; // cyan
   } else if (bWins > aWins) {
-    resultLine = `<@${opp.id}> wins **${bWins}-${aWins}**!`;
+    resultLine = `**${bName}** wins **${bWins}-${aWins}**!`;
     winnerColor = 0xC97A3E; // copper
   } else {
     resultLine = `It\'s a tie at **${aWins}-${bWins}** — split the pot.`;
@@ -1130,23 +1137,40 @@ async function handleDuel(interaction) {
   const aBest = aCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const bBest = bCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
 
+  // Side-by-side image trick: Discord visually merges multiple embeds in
+  // one message into a single card IF they share the same `url`. Each
+  // embed's `image` then tiles next to the others in that merged card.
+  // We use this so the two highest-value pulls render side by side
+  // beneath the round results instead of one big / one thumbnail.
+  const SHARED_URL = 'https://pathbinder.gg/?page=dashboard';
+  const embeds = [{
+    url: SHARED_URL,
+    title: rounds === 1 ? 'Card Duel' : `Card Duel — Best of ${rounds}`,
+    description: roundLines.join('\n') + '\n\n' + resultLine,
+    color: winnerColor,
+    fields: [
+      { name: `${aName} total`, value: `$${aTotal.toFixed(2)}`, inline: true },
+      { name: `${bName} total`, value: `$${bTotal.toFixed(2)}`, inline: true },
+    ],
+    image: aBest && aBest.image_url ? { url: aBest.image_url } : undefined,
+    footer: { text: 'Just for fun — no cards change hands.' },
+  }];
+  // Second embed contributes only its image to the merged card. It
+  // needs the same url so Discord groups it; everything else is omitted
+  // so the visual is just "another tile next to the first".
+  if (bBest && bBest.image_url) {
+    embeds.push({ url: SHARED_URL, image: { url: bBest.image_url } });
+  }
+
   return publicReply({
-    content: `<@${challenger.id}> challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} duel!`,
-    embeds: [{
-      title: rounds === 1 ? 'Card Duel' : `Card Duel — Best of ${rounds}`,
-      description: roundLines.join('\n') + '\n\n' + resultLine,
-      color: winnerColor,
-      fields: [
-        { name: `<@${challenger.id}> total`, value: `$${aTotal.toFixed(2)}`, inline: true },
-        { name: `<@${opp.id}> total`,        value: `$${bTotal.toFixed(2)}`, inline: true },
-      ],
-      image:     aBest && aBest.image_url ? { url: aBest.image_url } : undefined,
-      thumbnail: bBest && bBest.image_url ? { url: bBest.image_url } : undefined,
-      footer: { text: 'Just for fun — no cards change hands.' },
-    }],
-    // Allow the user pings in the message text + embed field names so
-    // the @ mentions actually render as pings.
-    allowed_mentions: { users: [challenger.id, opp.id] },
+    // One mention up top so the opponent gets a single notification ping
+    // — but the rest of the embed uses plain display names so it reads
+    // cleanly.
+    content: `${aName} challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} duel!`,
+    embeds,
+    // Only ping the opponent (the challenger initiated, so they don't
+    // need a self-ping).
+    allowed_mentions: { users: [opp.id] },
   });
 }
 
