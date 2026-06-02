@@ -75,8 +75,9 @@ const commands = [
   ] },
   { name: 'movers',   type: 1, description: 'Biggest movers — your collection (if linked) or market', options: [
     { name: 'period', description: '24h (default) | 7d', type: 3, required: false },
-    { name: 'scope',  description: 'personal (default if linked) | global', type: 3, required: false },
-    { name: 'game',   description: 'pokemon (default) | magic | yugioh | onepiece | gundam | dbz', type: 3, required: false, choices: [
+    { name: 'scope',  description: 'global (default) | personal', type: 3, required: false },
+    { name: 'game',   description: 'all (cross-TCG) | pokemon (default) | magic | yugioh | onepiece | gundam | dbz', type: 3, required: false, choices: [
+      { name: 'All TCGs',                value: 'all'      },
       { name: 'Pokémon',                 value: 'pokemon'  },
       { name: 'Magic: The Gathering',    value: 'magic'    },
       { name: 'Yu-Gi-Oh!',               value: 'yugioh'   },

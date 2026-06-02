@@ -627,7 +627,10 @@ async function handleShowcase(interaction) {
 
 // Canonical game_type strings the catalog uses. Anything else falls
 // back to 'pokemon' so a typo doesn't return zero results silently.
+// 'all' is a special pseudo-value handled separately — it fans the
+// query out across every game and merges the top movers.
 const MOVERS_GAMES = ['pokemon', 'magic', 'yugioh', 'onepiece', 'gundam', 'dbz'];
+const MOVERS_GAMES_ACCEPTED = [...MOVERS_GAMES, 'all'];
 // Display labels (Pokémon's é + pretty TCG names) for embed titles.
 const GAME_LABEL = {
   pokemon: 'Pokémon',
@@ -636,6 +639,7 @@ const GAME_LABEL = {
   onepiece:'One Piece',
   gundam:  'Gundam',
   dbz:     'Dragon Ball Z Fusion World',
+  all:     'All TCGs',
 };
 
 // /movers [period] [scope] [game] — global market movers, or YOUR
@@ -646,19 +650,21 @@ async function handleMovers(interaction) {
   const period = optString(interaction, 'period') || '24h';
   const days   = period === '7d' ? 7 : 1;
   const scopeOpt = (optString(interaction, 'scope') || '').toLowerCase();
-  // game option — accept any catalog game_type. Default pokemon for
+  // game option — accept any catalog game_type, plus 'all' which fans
+  // out across every game and merges the results. Default pokemon for
   // backwards compatibility (the original command was pokemon-only).
   const gameIn = (optString(interaction, 'game') || 'pokemon').toLowerCase();
-  const game   = MOVERS_GAMES.includes(gameIn) ? gameIn : 'pokemon';
+  const game   = MOVERS_GAMES_ACCEPTED.includes(gameIn) ? gameIn : 'pokemon';
   const gameLabel = GAME_LABEL[game] || game;
 
-  // Resolve scope. If the caller passed one explicitly, honor it. Otherwise
-  // default to 'personal' for linked users (mirrors the dashboard default
-  // they're used to seeing) and fall back to global for unlinked users.
+  // Resolve scope. Default is always 'global' (the market view) — most
+  // users running /movers in a public channel want to see market-wide
+  // movement, not their own collection. Pass scope:personal explicitly
+  // to see your own collection.
   const linkCheck = await getLinkedProfile(interaction, { silent: true });
   let scope = scopeOpt === 'global' || scopeOpt === 'personal'
     ? scopeOpt
-    : (linkCheck.ok ? 'personal' : 'global');
+    : 'global';
   if (scope === 'personal' && !linkCheck.ok) {
     return ephemeral('Link your account first: run `/link`. Or try `/movers scope:global` for market-wide movers.');
   }
@@ -677,16 +683,22 @@ async function handleMovers(interaction) {
     // Fetch the user's owned + ghost rows that have a catalog id and a
     // current value to compare against. is_ghost rows count too — they
     // contribute to "wishlist movers" the dashboard also surfaces.
-    const items = await sb.from('collection_items')
+    // Collection query — scope by game_type unless caller asked for 'all'.
+    let itemsQ = sb.from('collection_items')
       .select('api_card_id, card_name, current_value, is_ghost, game_type')
       .eq('user_id', userId)
-      .eq('game_type', game)
       .not('api_card_id', 'is', null)
       .not('current_value', 'is', null);
+    if (game !== 'all') itemsQ = itemsQ.eq('game_type', game);
+    const items = await itemsQ;
     if (items.error) throw items.error;
     const rows = (items.data || []).filter(r => Number(r.current_value) > 0);
     if (!rows.length) {
-      return ephemeral(`You have no priced **${gameLabel}** cards yet — add some and try again, or run \`/movers game:pokemon\`.`);
+      return ephemeral(
+        game === 'all'
+          ? 'Your collection has no priced cards yet — add some and try again.'
+          : `You have no priced **${gameLabel}** cards yet — add some and try again, or run \`/movers game:all\`.`
+      );
     }
 
     // Pull oldest-in-window price per catalog_id, in chunks (PostgREST
@@ -735,34 +747,60 @@ async function handleMovers(interaction) {
   }
 
   // ── Global scope ────────────────────────────────────────────────
-  // Use the same RPC the dashboard's "Global" toggle uses.
+  // Use the same RPC the dashboard's "Global" toggle uses. For 'all'
+  // we fan out across every game in parallel and merge — the RPC takes
+  // exactly one game_type, so we ask each for its top-10 and pick the
+  // overall top 3 client-side.
+  const gamesToQuery = game === 'all' ? MOVERS_GAMES : [game];
+  // Bigger per-game pull when merging so we don't accidentally miss a
+  // game's strong mover just because its top-3 ranked below another
+  // game's top-3 in the global merge.
+  const perGameLimit = game === 'all' ? 10 : 3;
+
   let up = [], down = [];
   try {
-    const r = await sb.rpc('get_global_price_movers', {
-      p_game_type:    game,
-      p_days_back:    days,
-      p_top_n:        3,
-      p_min_pct:      0.5,
-      p_sort:         'pct',
-      p_product_type: 'single',
-    });
-    if (!r.error && r.data) {
-      up   = r.data.filter(x => x.direction === 'up').slice(0, 3);
-      down = r.data.filter(x => x.direction === 'down').slice(0, 3);
-    } else if (r.error) {
-      console.error('[discord-bot] /movers RPC error:', r.error);
-    }
+    const results = await Promise.all(gamesToQuery.map(gt =>
+      sb.rpc('get_global_price_movers', {
+        p_game_type:    gt,
+        p_days_back:    days,
+        p_top_n:        perGameLimit,
+        p_min_pct:      0.5,
+        p_sort:         'pct',
+        p_product_type: 'single',
+      }).then(r => {
+        if (r.error) {
+          console.error(`[discord-bot] /movers RPC error (${gt}):`, r.error);
+          return [];
+        }
+        // Tag each row with its game so the merged display can show
+        // which TCG each entry came from when scope=all.
+        return (r.data || []).map(x => ({ ...x, _game: gt }));
+      })
+    ));
+    const merged = results.flat();
+    up   = merged.filter(x => x.direction === 'up')
+                 .sort((a, b) => Math.abs(b.delta_pct) - Math.abs(a.delta_pct))
+                 .slice(0, 3);
+    down = merged.filter(x => x.direction === 'down')
+                 .sort((a, b) => Math.abs(b.delta_pct) - Math.abs(a.delta_pct))
+                 .slice(0, 3);
   } catch (e) {
     console.error('[discord-bot] /movers exception:', e);
   }
+
+  // When showing across-all-TCGs, prefix each row with the game so the
+  // reader knows the context. Single-game mode stays clean (no prefix).
+  const fmtRowG = (x) => game === 'all'
+    ? `• [${(GAME_LABEL[x._game] || x._game).slice(0, 6)}] ${x.name} — $${Number(x.current_value || 0).toFixed(2)} (${fmtPct(x.delta_pct)})`
+    : fmtRow(x);
 
   return publicReply({
     embeds: [{
       title: `${gameLabel} market movers (${period})`,
       color: 0x1AC7A0,
       fields: [
-        { name: '▲ Up',   value: up.length   ? up.map(fmtRow).join('\n')   : '_no data_', inline: true },
-        { name: '▼ Down', value: down.length ? down.map(fmtRow).join('\n') : '_no data_', inline: true },
+        { name: '▲ Up',   value: up.length   ? up.map(fmtRowG).join('\n')   : '_no data_', inline: true },
+        { name: '▼ Down', value: down.length ? down.map(fmtRowG).join('\n') : '_no data_', inline: true },
       ],
       footer: { text: linkCheck.ok ? 'Tip: /movers scope:personal for your collection' : 'pathbinder.gg/?page=dashboard' },
     }],
