@@ -1607,9 +1607,10 @@ async function handleProfile(interaction) {
   });
 }
 
-// /duel opponent:<user> [game] [rounds]  — send a challenge. The
-// opponent has to click Accept (or Decline) before any cards get
-// pulled, so people can't spam-duel into someone's inbox.
+// /duel opponent:<user> [game] [rounds]  — runs immediately, no
+// accept prompt. Cooldowns (10s per challenger, 30s per pair) are
+// the only spam guard. XP is still only awarded when both players
+// have starters; otherwise the duel runs purely for fun.
 async function handleDuel(interaction) {
   const opp = optUser(interaction, 'opponent');
   if (!opp || !opp.id) return ephemeral('Pick an opponent: `/duel opponent:@someone`');
@@ -1648,11 +1649,11 @@ async function handleDuel(interaction) {
     }
   }
 
-  // Decide flow: ask-to-accept ONLY when both players have starters
-  // (i.e. XP is on the line). Otherwise the duel is pure entertainment
-  // and runs immediately — no consent prompt needed.
+  // Fetch both players' pokemon records (if any) for XP scaling. The
+  // duel runs regardless — XP is only awarded when both have starters,
+  // but no consent prompt either way.
   const pkRes = await sb.from('bot_pokemon')
-    .select('discord_user_id, pokemon_name, pokemon_id, level, xp, wins, losses, ties')
+    .select('discord_user_id, pokemon_name, pokemon_id, level, xp, wins, losses, ties, allow_evolution, original_pokemon_id')
     .in('discord_user_id', [challenger.id, opp.id]);
   const pkMap = {};
   (pkRes.data || []).forEach(r => { pkMap[r.discord_user_id] = r; });
@@ -1660,44 +1661,9 @@ async function handleDuel(interaction) {
   const bPk = pkMap[opp.id]        || null;
 
   const aName = challenger.global_name || challenger.username || 'Challenger';
-  const bName = opp.global_name        || opp.username        || 'Opponent';
 
-  // ── Both have starters → invitation flow (Accept/Decline buttons) ─
-  if (aPk && bPk) {
-    await sb.from('bot_duel_log').insert({
-      challenger_discord_id: challenger.id,
-      opponent_discord_id:   opp.id,
-      game, rounds,
-      status: 'pending',
-    });
-
-    const acceptId  = `duel_accept:${challenger.id}:${opp.id}:${game}:${rounds}`;
-    const declineId = `duel_decline:${challenger.id}:${opp.id}`;
-    return publicReply({
-      content: `${aName} challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} ${game} duel!`,
-      embeds: [{
-        title: 'Duel Challenge',
-        description:
-          `<@${opp.id}>, do you accept?\n\n` +
-          `**Game:** ${game}\n**Rounds:** ${rounds === 1 ? '1 (single pull)' : `Best of ${rounds}`}\n` +
-          `**XP on the line:** ${aPk.pokemon_name} (lvl ${aPk.level}) vs ${bPk.pokemon_name} (lvl ${bPk.level})`,
-        color: 0x1AC7A0,
-        footer: { text: 'Decline if you\'d rather not risk it.' },
-      }],
-      components: [{
-        type: 1, // ACTION_ROW
-        components: [
-          { type: 2, style: 3, label: 'Accept',  custom_id: acceptId  },
-          { type: 2, style: 4, label: 'Decline', custom_id: declineId },
-        ],
-      }],
-      allowed_mentions: { users: [opp.id] },
-    });
-  }
-
-  // ── One or neither has a starter → run immediately ───────────────
-  // No XP at stake means no consent needed. Logs as accepted (skipping
-  // the pending state entirely) and posts the result inline.
+  // Log the duel — single insert, marked pending and immediately
+  // resolved by resolveDuelMatch below.
   const logRow = await sb.from('bot_duel_log').insert({
     challenger_discord_id: challenger.id,
     opponent_discord_id:   opp.id,
