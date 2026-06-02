@@ -3373,27 +3373,122 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       transform:translateY(-2px);
       border-color:var(--accent);
     }
+    /* Logo box has a fixed aspect ratio (4:3) so every tile is the
+       same height regardless of which logo (or no logo) gets rendered
+       inside. object-fit:contain keeps the actual logo proportions
+       while still centering inside the box. */
     .sets-tile-logo{
-      aspect-ratio:16/9;
+      aspect-ratio:4/3;
       display:flex; align-items:center; justify-content:center;
       background:rgba(0,0,0,.25);
-      padding:10px;
+      padding:14px;
+      box-sizing:border-box;
     }
-    .sets-tile-logo img{ max-width:100%; max-height:100%; object-fit:contain; }
-    .sets-tile-body{ padding:8px 10px 10px; display:flex; flex-direction:column; gap:4px; }
+    .sets-tile-logo img{ max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
+    /* Body is fixed-shape too — name + meta both single-line w/
+       ellipsis, then the progress bar at a fixed height. All tiles
+       end up identical in total height. */
+    .sets-tile-body{ padding:10px 12px 12px; display:flex; flex-direction:column; gap:5px; }
     .sets-tile-name{
-      font-size:.78rem; font-weight:700;
+      font-size:.78rem; font-weight:700; line-height:1.25;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
-    .sets-tile-meta{ font-size:.62rem; color:var(--muted); }
+    .sets-tile-meta{
+      font-size:.62rem; color:var(--muted); line-height:1.25; min-height:1em;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
     .sets-tile-bar{
       margin-top:4px; height:5px; border-radius:3px; background:var(--border); overflow:hidden;
     }
     .sets-tile-bar > div{ height:100%; border-radius:3px; transition:width .4s; }
+    /* Catalog-tab placeholder badge for sets without a logo (JP, MTG,
+       YGO, OP). Sized to feel like a logo without claiming logo space. */
     .sets-tile-tag{
-      width:40px; height:28px; display:flex; align-items:center; justify-content:center;
-      font-size:.55rem; color:var(--copper); letter-spacing:.04em;
-      border:1px solid var(--copper-dim); border-radius:2px; background:var(--copper-glow);
+      display:flex; align-items:center; justify-content:center;
+      padding:6px 14px;
+      font-size:.7rem; font-weight:700; color:var(--copper); letter-spacing:.08em;
+      border:1px solid var(--copper-dim); border-radius:4px; background:var(--copper-glow);
+    }
+
+    /* Set-detail card grid — clicking into a set shows its cards as
+       dashboard-style tiles (image with name + price overlaid at the
+       bottom), in chronological/number order. Owned cards get the
+       copper outline glow + price visible; missing cards stay
+       dimmed without price. 5 cols desktop, 3 mobile. */
+    #setsPage #setsCardList,
+    #setsPage #catalogSetCardList{
+      display:grid !important;
+      grid-template-columns:repeat(5, minmax(0, 1fr));
+      gap:8px;
+      padding:10px;
+    }
+    @media (max-width:900px){
+      #setsPage #setsCardList,
+      #setsPage #catalogSetCardList{
+        grid-template-columns:repeat(3, minmax(0, 1fr));
+        gap:6px;
+        padding:6px;
+      }
+    }
+    .sets-cardtile{
+      position:relative; cursor:pointer;
+      aspect-ratio:245/342; /* Pokemon card portrait */
+      border-radius:var(--r-sm, 6px); overflow:hidden;
+      background:var(--surface2);
+      border:1.5px solid var(--border);
+      transition:border-color .14s, transform .14s, box-shadow .14s;
+      min-width:0;
+    }
+    .sets-cardtile:hover{
+      border-color:var(--accent);
+      transform:translateY(-2px);
+      box-shadow:0 6px 14px rgba(26,199,160,.22);
+    }
+    .sets-cardtile.owned{
+      border-color:var(--copper);
+      box-shadow:0 0 8px rgba(184,115,51,.35);
+    }
+    .sets-cardtile.owned:hover{
+      box-shadow:0 6px 16px rgba(184,115,51,.45);
+    }
+    .sets-cardtile.missing img{ filter:grayscale(60%) brightness(.55); }
+    .sets-cardtile-img{
+      width:100%; height:100%; object-fit:cover; display:block;
+    }
+    .sets-cardtile-num{
+      position:absolute; top:5px; left:5px; z-index:3;
+      font-size:.55rem; font-weight:700; letter-spacing:.04em;
+      background:rgba(0,0,0,.78); color:var(--text);
+      padding:2px 5px; border-radius:3px;
+    }
+    .sets-cardtile-foot{
+      position:absolute; bottom:0; left:0; right:0; z-index:2;
+      background:linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,0));
+      padding:14px 6px 5px;
+    }
+    .sets-cardtile-name{
+      font-size:.6rem; font-weight:700; color:var(--text);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      text-shadow:1px 1px 0 #000;
+    }
+    .sets-cardtile-val{
+      font-family:'Orbitron', monospace;
+      font-size:.62rem; font-weight:800; color:var(--copper);
+      letter-spacing:.02em; margin-top:1px;
+      text-shadow:1px 1px 0 #000;
+    }
+    .sets-cardtile-miss{
+      font-size:.55rem; color:var(--muted); letter-spacing:.06em;
+      text-shadow:1px 1px 0 #000;
+    }
+    .sets-cardtile-vchips{
+      position:absolute; top:5px; right:5px; z-index:3;
+      display:flex; gap:3px;
+    }
+    .sets-cardtile-vchip{
+      font-size:.5rem; font-weight:700; letter-spacing:.04em;
+      padding:1px 4px; border-radius:var(--r-pill, 999px);
+      background:rgba(0,0,0,.7); border:1px solid currentColor;
     }
     /* Search input — keep the teal focus accent (the page's accent
        palette is still teal); just use the default border at rest. */
@@ -30456,32 +30551,38 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const ownsNormal = !!(entry && entry.normal);
       const ownsRH     = !!(entry && entry.reverse_holo);
       const img = card.images && card.images.small ? card.images.small : '';
-      // Variant chips: small Normal/RH indicators after the ✓×qty.
-      // RH chip only renders when the card's set has an RH printing
-      // (detected from pokemontcg.io's tcgplayer.prices.reverseHolofoil).
       const cardHasRH = !!(card.tcgplayer && card.tcgplayer.prices && card.tcgplayer.prices.reverseHolofoil);
+
+      // Variant chips overlay top-right when the card has a Reverse
+      // Holo printing — small N / RH indicators showing which variants
+      // the user owns.
       let variantChips = '';
       if (cardHasRH) {
         const chip = function(filled, label) {
-          const fg = filled ? 'var(--accent)' : 'var(--muted)';
-          const bg = filled ? 'rgba(26,199,160,.12)' : 'transparent';
-          return '<span style="display:inline-block;padding:1px 5px;margin-left:3px;border:1px solid '
-               + fg + ';color:' + fg + ';background:' + bg
-               + ';border-radius:var(--r-pill,999px);font-size:.5rem;letter-spacing:.04em;font-weight:700">'
-               + label + '</span>';
+          const color = filled ? 'var(--accent)' : 'var(--muted)';
+          return '<span class="sets-cardtile-vchip" style="color:' + color + '">' + label + '</span>';
         };
-        variantChips = chip(ownsNormal, 'N') + chip(ownsRH, 'RH');
+        variantChips = '<div class="sets-cardtile-vchips">' + chip(ownsNormal, 'N') + chip(ownsRH, 'RH') + '</div>';
       }
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="openSetCardDetail(${origIdx})">
-        ${img ? `<img src="${_pickThumbVariant(img, 200)}" data-fallback="${_escHtml(img)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" style="width:36px;height:50px;object-fit:cover;object-position:center top;flex-shrink:0;border-radius:3px;${owned?'box-shadow:0 0 0 2px var(--copper),0 0 8px rgba(184,115,51,.45);':''}">` : `<div style="width:36px;height:50px;background:var(--surface2);flex-shrink:0;border-radius:var(--r-sm,6px);border:1px solid var(--border)"></div>`}
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.76rem;font-weight:${owned?'700':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(card.name)}${variantChips}</div>
-          <div style="font-size:.62rem;color:var(--muted)">#${card.number || '?'}${card.rarity ? ' · ' + card.rarity : ''}</div>
+
+      const priceLine = owned && price
+        ? `<div class="sets-cardtile-val">$${Number(price).toFixed(2)}${qty > 1 ? ` ×${qty}` : ''}</div>`
+        : owned
+          ? `<div class="sets-cardtile-val">✓${qty > 1 ? ' ×' + qty : ''}</div>`
+          : `<div class="sets-cardtile-miss">Missing</div>`;
+
+      const imgHtml = img
+        ? `<img src="${_pickThumbVariant(img, 400)}" data-fallback="${_escHtml(img)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" class="sets-cardtile-img">`
+        : `<div class="sets-cardtile-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">?</div>`;
+
+      return `<div class="sets-cardtile ${owned ? 'owned' : 'missing'}" onclick="openSetCardDetail(${origIdx})">
+        ${imgHtml}
+        <span class="sets-cardtile-num">#${card.number || '?'}</span>
+        ${variantChips}
+        <div class="sets-cardtile-foot">
+          <div class="sets-cardtile-name">${_escHtml(card.name)}</div>
+          ${priceLine}
         </div>
-        ${owned
-          ? `<span style="font-size:.66rem;color:var(--green);font-weight:700;flex-shrink:0">✓ ×${qty}${price ? ' · $' + Number(price).toFixed(2) : ''}</span>`
-          : `<span style="font-size:.66rem;color:var(--muted);flex-shrink:0">Missing</span>`}
-        <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;margin-left:4px">›</span>
       </div>`;
     }
 
@@ -31943,7 +32044,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // re-render rows without re-walking collectionItems on every keystroke.
         _jpSetsCache.owned = jpOwned;
 
-        const sets = _jpSetsCache.sets;
+        // `let` because we reassign below to the sorted copy.
+        let sets = _jpSetsCache.sets;
         const totalOwned = Object.values(jpOwned).reduce((a, b) => a + b, 0);
 
         sets = _pbSortSetsNewestFirst(sets);
@@ -32440,7 +32542,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // list until the cache refreshes (10-minute TTL).
         const allSets    = cachedBlock.sets;
         const wantSealed = (_setsView === 'sealed');
-        const sets = allSets.filter(s => {
+        // `let` because we reassign below to the sorted copy.
+        let sets = allSets.filter(s => {
           if (s.has_sealed === undefined && s.has_singles === undefined) return true;
           return wantSealed ? !!s.has_sealed : (s.has_singles !== false);
         });
