@@ -38,22 +38,24 @@ const sb = createClient(
 const TIER_COMMISSION_RATES = {
   free:       0.00,
   collector:  0.00,
-  enthusiast: 0.07,
-  vendor:     0.06,
-  shop:       0.05,
+  enthusiast: 0.08,
+  vendor:     0.07,
+  shop:       0.06,
 };
 // Default rate when the seller's tier is unknown or unset. Matches the
 // old flat-rate behavior so legacy/edge cases don't accidentally pay 0%.
-const DEFAULT_COMMISSION_RATE = 0.07;
+const DEFAULT_COMMISSION_RATE = 0.08;
 
-// Stripe's per-transaction fixed fee (in cents). We fold this into the
-// platform commission so PathBinder isn't out-of-pocket on cheap sales.
-// Without this, a $1 sale at 5% would leave us with $0.05 commission
-// against $0.30 + 2.9% in Stripe processing — a loss of ~$0.28 per sale.
-// Folding it in means the platform fee always at least covers the
-// processing floor; cheap-item sellers absorb it (their incentive to
-// price reasonably).
-const STRIPE_FIXED_FEE_CENTS = 30;
+// Buyer-side processing fee (in cents). Charged as a separate line
+// item on the Stripe checkout page so the buyer sees it explicitly,
+// and folded into application_fee_amount so the money lands in the
+// platform account (not the seller's). Covers Stripe's $0.30 per-tx
+// floor on cheap items.
+//
+// History: previously this $0.30 was deducted from the seller's payout
+// (folded into the seller commission). We moved it to the buyer side
+// so seller tier rates stay clean percentages.
+const BUYER_PROCESSING_FEE_CENTS = 30;
 
 function commissionRateFor(tier) {
   if (!tier) return DEFAULT_COMMISSION_RATE;
@@ -120,23 +122,46 @@ module.exports = async function handler(req, res) {
   }
 
   const feeRate     = commissionRateFor(sellerTier);
-  const platformFee = Math.round(amount * feeRate) + STRIPE_FIXED_FEE_CENTS;
-  const feePctLabel = (feeRate * 100).toFixed(0) + '% + $0.30/tx';
+  // Seller commission — percentage of the listing price, no per-tx fee.
+  const sellerCommission = Math.round(amount * feeRate);
+  // Total platform take = seller commission + the buyer's processing
+  // fee. We want the entire processing fee to land in the platform
+  // account (not the seller's), which is exactly what
+  // application_fee_amount does — Stripe deducts this from the buyer
+  // charge before transferring the rest to the seller.
+  const platformFee  = sellerCommission + BUYER_PROCESSING_FEE_CENTS;
 
   const sessionParams = {
     payment_method_types: ['card'],
     mode: 'payment',
-    line_items: [{
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: cardName || 'Trading Card',
-          description: 'PathBinder Marketplace Purchase — ' + feePctLabel + ' platform fee applies',
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: cardName || 'Trading Card',
+            description: 'PathBinder Marketplace Purchase',
+          },
+          unit_amount: amount,
         },
-        unit_amount: amount,
+        quantity: 1,
       },
-      quantity: 1,
-    }],
+      // Buyer-side processing fee — surfaces as its own line on the
+      // Stripe checkout page ("Processing fee … $0.30") so the buyer
+      // sees what they're paying for. Goes to the platform via the
+      // application_fee_amount above.
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Processing fee',
+            description: 'Per-transaction processing fee',
+          },
+          unit_amount: BUYER_PROCESSING_FEE_CENTS,
+        },
+        quantity: 1,
+      },
+    ],
     metadata: {
       listing_id: listingId,
       buyer_id: user.id,
@@ -145,6 +170,8 @@ module.exports = async function handler(req, res) {
       // so downstream webhook consumers can parse them unambiguously.
       platform_fee:        String(platformFee),
       platform_fee_pct:    String(feeRate),
+      seller_commission:   String(sellerCommission),
+      buyer_processing_fee:String(BUYER_PROCESSING_FEE_CENTS),
       seller_tier:         sellerTier || 'unknown',
       type: 'marketplace_purchase',
       // Track which payment route was used so the webhook can act accordingly.

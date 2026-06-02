@@ -6720,7 +6720,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Market Value</div>
           </div>
           <div>
-            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)">From 5% + 30¢</div>
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)">From 6%</div>
             <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Platform Fee / tx</div>
           </div>
         </div>
@@ -6804,7 +6804,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <ul class="lp-tier-feats">
             <li>Everything in Collector</li>
             <li>Marketplace listings — 40 active</li>
-            <li>7% + $0.30/tx commission · bulk CSV import</li>
+            <li>8% commission · bulk CSV import</li>
             <li>Sales archive + PDF reports</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup')">Start 7-Day Free Trial</button>
@@ -6817,7 +6817,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Everything in Enthusiast</li>
-            <li>6% + $0.30/tx commission · 150 active listings</li>
+            <li>7% commission · 150 active listings</li>
             <li>Sealed product · non-TCG listings</li>
             <li>Non-TCG products (Funko, manga, etc.)</li>
             <li>Product scanner access</li>
@@ -6832,7 +6832,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Everything in Vendor</li>
-            <li>5% + $0.30/tx commission · unlimited listings</li>
+            <li>6% commission · unlimited listings</li>
             <li>Full P&amp;L report + featured placement</li>
             <li>Dedicated account manager</li>
           </ul>
@@ -8028,6 +8028,58 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
       </div>
 
+      <!-- Enthusiast Beta (enthusiast tier × 20) -->
+      <div id="betaSectionEnthusiast" style="margin-bottom:10px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.05)">
+        <div onclick="adminToggleBetaSection('enthusiast')"
+          style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="betaCaretEnthusiast" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--accent);transition:transform .15s">▾</span>
+            <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Enthusiast Beta</span>
+            <span id="betaCountEnthusiast" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 20</span>
+          </div>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent enthusiast access · marketplace selling · 40 listing cap</span>
+        </div>
+        <div id="betaBodyEnthusiast" style="padding:0 14px 14px 14px">
+          <div id="betaListEnthusiast" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+            <div style="font-size:.6rem;color:rgba(26,199,160,.4);letter-spacing:.06em">Loading…</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px solid rgba(26,199,160,.15)">
+            <input type="text" id="betaInviteEmailEnthusiast" placeholder="email@example.com"
+              style="flex:1;min-width:170px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
+            <button onclick="adminInviteBetaTester('enthusiast','email')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
+            <button onclick="adminInviteBetaTester('enthusiast','code')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">Generate Code</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vendor Beta (vendor tier × 5) -->
+      <div id="betaSectionVendor" style="margin-bottom:10px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.05)">
+        <div onclick="adminToggleBetaSection('vendor')"
+          style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="betaCaretVendor" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--copper);transition:transform .15s">▾</span>
+            <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Vendor Beta</span>
+            <span id="betaCountVendor" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 5</span>
+          </div>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent vendor access · sealed + non-TCG listings · 150 cap</span>
+        </div>
+        <div id="betaBodyVendor" style="padding:0 14px 14px 14px">
+          <div id="betaListVendor" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+            <div style="font-size:.6rem;color:rgba(184,115,51,.5);letter-spacing:.06em">Loading…</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px solid rgba(184,115,51,.2)">
+            <input type="text" id="betaInviteEmailVendor" placeholder="email@example.com"
+              style="flex:1;min-width:170px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
+            <button onclick="adminInviteBetaTester('vendor','email')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
+            <button onclick="adminInviteBetaTester('vendor','code')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">Generate Code</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Collector Beta (collector tier × 50) -->
       <div id="betaSectionCollector" style="border:1px solid rgba(26,199,160,.25);background:rgba(26,199,160,.03)">
         <div onclick="adminToggleBetaSection('collector')"
@@ -8387,18 +8439,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     const TIER_COMMISSION_RATES = {
       free:        0.00,
       collector:   0.00,
-      enthusiast:  0.07,
-      vendor:      0.06,
-      shop:        0.05,
+      enthusiast:  0.08,
+      vendor:      0.07,
+      shop:        0.06,
     };
     function commissionRateFor(tier) {
       return TIER_COMMISSION_RATES[tier] || 0;
     }
-    // Stripe's per-transaction fixed processing fee, in dollars. Added
-    // on top of the percentage commission so cheap-item sales don't put
-    // the platform underwater on Stripe processing. Server mirror lives
-    // in /api/marketplace-checkout.js (STRIPE_FIXED_FEE_CENTS = 30).
-    const STRIPE_FIXED_FEE = 0.30;
+    // Buyer-side processing fee (dollars). Added as a separate line item
+    // on the Stripe checkout page so the BUYER sees it explicitly — it
+    // is NOT deducted from the seller's payout anymore. Surfaced only on
+    // the checkout page; sellers don't see it in their fee preview.
+    // Server mirror: BUYER_PROCESSING_FEE_CENTS in /api/marketplace-checkout.js.
+    const BUYER_PROCESSING_FEE = 0.30;
     // Returns the commission rate for the CURRENT user. Convenience
     // for client-side fee-preview UI ("you'll receive $X after our Y% fee").
     function myCommissionRate() {
@@ -14326,9 +14379,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // user's current tier in teal so they see their own rate at a glance.
     function _paymentsCommissionPanel(currentTier) {
       const rows = [
-        { tier: 'Enthusiast', rate: '7% + $0.30/tx', isMe: currentTier === 'enthusiast' },
-        { tier: 'Vendor',     rate: '6% + $0.30/tx', isMe: currentTier === 'vendor'     },
-        { tier: 'Shop',       rate: '5% + $0.30/tx', isMe: currentTier === 'shop'       },
+        { tier: 'Enthusiast', rate: '8%', isMe: currentTier === 'enthusiast' },
+        { tier: 'Vendor',     rate: '7%', isMe: currentTier === 'vendor'     },
+        { tier: 'Shop',       rate: '6%', isMe: currentTier === 'shop'       },
       ].map(r => '<tr' + (r.isMe ? ' style="background:rgba(26,199,160,0.08)"' : '') + '>'
         + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--text)') + ';font-weight:' + (r.isMe ? '700' : '400') + '">' + r.tier + (r.isMe ? ' (you)' : '') + '</td>'
         + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--muted)') + ';text-align:right;font-family:\'Space Mono\',monospace">' + r.rate + '</td>'
@@ -15818,19 +15871,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (ask > 0) {
         // Commission applies to the card price only — shipping passes
         // through to the seller. Matches the server-side calc which uses
-        // the unit_amount (price, not price+shipping). The $0.30 fixed
-        // Stripe fee is folded into the platform commission so cheap-
-        // item sales don't put us underwater on processing.
+        // the unit_amount (price, not price+shipping). The $0.30 buyer
+        // processing fee is charged to the buyer separately on the
+        // checkout page; it does NOT come out of the seller's payout.
         const pctFee  = ask * rate;
-        const fee     = pctFee + STRIPE_FIXED_FEE;
-        const payout  = (ask - fee) + ship;
+        const payout  = (ask - pctFee) + ship;
         payoutLine = ''
           + '<div style="margin-top:6px;color:var(--text)">'
           + 'You receive <strong style="color:var(--green)">$' + payout.toFixed(2) + '</strong>'
           + ' on sale '
           + '<span style="color:var(--muted)">(ask $' + ask.toFixed(2)
           + ' &minus; ' + ratePct + ' commission $' + pctFee.toFixed(2)
-          + ' &minus; $' + STRIPE_FIXED_FEE.toFixed(2) + ' Stripe fee'
           + (ship > 0 ? ' + shipping $' + ship.toFixed(2) : '')
           + ')</span>'
           + '</div>';
@@ -15838,7 +15889,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
       box.innerHTML = ''
         + tierLabel + ' tier fee: '
-        + '<strong style="color:var(--accent)">' + ratePct + ' + $' + STRIPE_FIXED_FEE.toFixed(2) + '/tx</strong>'
+        + '<strong style="color:var(--accent)">' + ratePct + '</strong>'
         + ' deducted from your payout on sale &middot; '
         + 'Payouts on Stripe&rsquo;s standard schedule &middot; '
         + '7-day buyer protection via Stripe dispute resolution'
@@ -16280,18 +16331,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       let payoutLine = '';
       if (ask > 0) {
         const pctFee = ask * rate;
-        const fee    = pctFee + STRIPE_FIXED_FEE;
-        const payout = (ask - fee) + ship;
+        const payout = (ask - pctFee) + ship;
         payoutLine = ''
           + '<div style="margin-top:6px;color:var(--text)">'
           + 'You receive <strong style="color:var(--green)">$' + payout.toFixed(2) + '</strong> on sale '
           + '<span style="color:var(--muted)">(ask $' + ask.toFixed(2) + ' &minus; ' + ratePct + ' commission $' + pctFee.toFixed(2)
-          + ' &minus; $' + STRIPE_FIXED_FEE.toFixed(2) + ' Stripe fee'
           + (ship > 0 ? ' + shipping $' + ship.toFixed(2) : '') + ')</span>'
           + '</div>';
       }
-      box.innerHTML = tierLabel + ' tier fee: <strong style="color:var(--accent)">' + ratePct + ' + $' + STRIPE_FIXED_FEE.toFixed(2) + '/tx</strong>'
-        + ' &middot; ' + (ratePct === '0%' ? 'Stripe fixed $' + STRIPE_FIXED_FEE.toFixed(2) + '/tx applies' : 'deducted from your payout on sale')
+      box.innerHTML = tierLabel + ' tier fee: <strong style="color:var(--accent)">' + ratePct + '</strong>'
+        + ' &middot; deducted from your payout on sale'
         + payoutLine;
     }
 
@@ -19229,7 +19278,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           'Everything in Collector',
           'Marketplace selling — TCG singles only',
           '40 concurrent active listings',
-          '7% + $0.30/tx commission on sales',
+          '8% commission on sales',
           '1,000 bulk photo scan sessions / month',
           'Bulk CSV import',
           'Multi-binder organization',
@@ -19250,7 +19299,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         badge: null,
         features: [
           'Everything in Enthusiast',
-          '6% + $0.30/tx commission on sales',
+          '7% commission on sales',
           'Marketplace selling — singles AND sealed product',
           '150 concurrent active listings',
           'Sealed TCG products (booster boxes, ETBs, UTBs, tins, decks)',
@@ -19268,7 +19317,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         badge: null,
         features: [
           'Everything in Vendor',
-          '5% + $0.30/tx commission on sales',
+          '6% commission on sales',
           'Unlimited concurrent active listings',
           'Unlimited photo card scans',
           'Unlimited bulk scan sessions',
@@ -25707,7 +25756,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '  if not exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true) then',
         '    raise exception \'Admin only\';',
         '  end if;',
-        '  if p_tier not in (\'founding\',\'collector\',\'shop\') then',
+        '  if p_tier not in (\'founding\',\'enthusiast\',\'vendor\',\'collector\',\'shop\') then',
         '    raise exception \'Invalid tier %\', p_tier;',
         '  end if;',
         '  if p_email is null and p_code is null then',
@@ -25715,9 +25764,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '  end if;',
         '  select count(*) into v_count from beta_testers',
         '    where beta_testers.tier = p_tier and beta_testers.revoked_at is null;',
-        '  if p_tier = \'founding\'  and v_count >= 10 then raise exception \'Founding beta is full (10/10)\';   end if;',
-        '  if p_tier = \'collector\' and v_count >= 50 then raise exception \'Collector beta is full (50/50)\'; end if;',
-        '  if p_tier = \'shop\'      and v_count >= 3  then raise exception \'Shop beta is full (3/3)\';        end if;',
+        '  if p_tier = \'founding\'   and v_count >= 10 then raise exception \'Founding beta is full (10/10)\';     end if;',
+        '  if p_tier = \'enthusiast\' and v_count >= 20 then raise exception \'Enthusiast beta is full (20/20)\';   end if;',
+        '  if p_tier = \'vendor\'     and v_count >= 5  then raise exception \'Vendor beta is full (5/5)\';         end if;',
+        '  if p_tier = \'collector\'  and v_count >= 50 then raise exception \'Collector beta is full (50/50)\';    end if;',
+        '  if p_tier = \'shop\'       and v_count >= 3  then raise exception \'Shop beta is full (3/3)\';           end if;',
         '  if p_email is not null then',
         '    select profiles.id into v_user_id from profiles where lower(profiles.email) = lower(p_email) limit 1;',
         '  end if;',
@@ -25733,9 +25784,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '    update profiles set',
         '      -- founding beta → enthusiast (was \'vendor\' pre-rename;',
         '      -- enthusiast inherited the same feature set at lower price).',
+        '      -- enthusiast / vendor / shop betas map to their own tier;',
+        '      -- everything else falls through to collector.',
         '      subscription_tier = case',
-        '        when p_tier = \'founding\'  then \'enthusiast\'',
-        '        when p_tier = \'shop\'      then \'shop\'',
+        '        when p_tier = \'founding\'   then \'enthusiast\'',
+        '        when p_tier = \'enthusiast\' then \'enthusiast\'',
+        '        when p_tier = \'vendor\'     then \'vendor\'',
+        '        when p_tier = \'shop\'       then \'shop\'',
         '        else \'collector\' end,',
         '      subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
         '    where profiles.id = v_user_id;',
@@ -25766,18 +25821,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         '  end if;',
         '  select count(*) into v_count from beta_testers',
         '    where tier = v_invite.tier and user_id is not null and revoked_at is null;',
-        '  if v_invite.tier = \'founding\'  and v_count >= 10 then return query select null::text, false, \'Founding beta is full\';  return; end if;',
-        '  if v_invite.tier = \'collector\' and v_count >= 50 then return query select null::text, false, \'Collector beta is full\'; return; end if;',
-        '  if v_invite.tier = \'shop\'      and v_count >= 3  then return query select null::text, false, \'Shop beta is full\';      return; end if;',
+        '  if v_invite.tier = \'founding\'   and v_count >= 10 then return query select null::text, false, \'Founding beta is full\';   return; end if;',
+        '  if v_invite.tier = \'enthusiast\' and v_count >= 20 then return query select null::text, false, \'Enthusiast beta is full\'; return; end if;',
+        '  if v_invite.tier = \'vendor\'     and v_count >= 5  then return query select null::text, false, \'Vendor beta is full\';     return; end if;',
+        '  if v_invite.tier = \'collector\'  and v_count >= 50 then return query select null::text, false, \'Collector beta is full\';  return; end if;',
+        '  if v_invite.tier = \'shop\'       and v_count >= 3  then return query select null::text, false, \'Shop beta is full\';       return; end if;',
         '  v_exp := case when v_invite.tier = \'shop\' then now() + interval \'1 year\' else null end;',
         '  update beta_testers',
         '    set user_id = auth.uid(), claimed_at = now(), expires_at = v_exp',
         '    where id = v_invite.id;',
         '  update profiles set',
         '    -- founding beta → enthusiast (post-rename mapping).',
+        '    -- enthusiast / vendor / shop betas map to their own tier.',
         '    subscription_tier = case',
-        '      when v_invite.tier = \'founding\'  then \'enthusiast\'',
-        '      when v_invite.tier = \'shop\'      then \'shop\'',
+        '      when v_invite.tier = \'founding\'   then \'enthusiast\'',
+        '      when v_invite.tier = \'enthusiast\' then \'enthusiast\'',
+        '      when v_invite.tier = \'vendor\'     then \'vendor\'',
+        '      when v_invite.tier = \'shop\'       then \'shop\'',
         '      else \'collector\' end,',
         '    subscription_expires_at = coalesce(v_exp, subscription_expires_at)',
         '  where id = auth.uid();',
@@ -25923,19 +25983,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (res.error) {
         var msg = (res.error.message || '').toLowerCase();
         var lF = document.getElementById('betaListFounding');
+        var lE = document.getElementById('betaListEnthusiast');
+        var lV = document.getElementById('betaListVendor');
         var lC = document.getElementById('betaListCollector');
         var lS = document.getElementById('betaListShop');
         if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1 || msg.indexOf('schema') !== -1 || msg.indexOf('column') !== -1) {
           var warn = '<div style="font-size:.6rem;color:var(--copper)">Run the beta SQL migration first — click "Print SQL" above and paste into Supabase.</div>';
-          if (lF) lF.innerHTML = warn;
-          if (lC) lC.innerHTML = warn;
-          if (lS) lS.innerHTML = warn;
+          [lF, lE, lV, lC, lS].forEach(function(el){ if (el) el.innerHTML = warn; });
           printBetaTesterSQL();
         } else {
           var err = '<div style="font-size:.6rem;color:var(--red)">Error: ' + res.error.message + '</div>';
-          if (lF) lF.innerHTML = err;
-          if (lC) lC.innerHTML = err;
-          if (lS) lS.innerHTML = err;
+          [lF, lE, lV, lC, lS].forEach(function(el){ if (el) el.innerHTML = err; });
         }
         return;
       }
