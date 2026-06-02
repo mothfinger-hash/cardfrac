@@ -94,7 +94,8 @@ const commands = [
 
   // ── Pokémon game loop ──────────────────────────
   { name: 'starter', type: 1, description: 'Pick (or change) your starter Pokémon', options: [
-    { name: 'pokemon', description: 'Your starter (autocompletes — type a few letters)', type: 3, required: true, autocomplete: true },
+    { name: 'pokemon',     description: 'Your starter (autocompletes — type a few letters)', type: 3, required: true, autocomplete: true },
+    { name: 'auto_evolve', description: 'Evolve at standard levels? Default true. Set false to keep your starter form forever.', type: 5, required: false },
   ] },
   { name: 'profile', type: 1, description: 'Show your starter Pokémon, level, XP, and W/L', options: [
     { name: 'user', description: 'Whose profile to view (defaults to you)', type: 6, required: false },

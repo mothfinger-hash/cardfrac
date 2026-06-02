@@ -1320,6 +1320,82 @@ const STARTERS = [
 function starterArt(pokemonId) {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemonId}.png`;
 }
+
+// Evolution chains for each starter. Levels match the canonical
+// games (mostly 16/36 for Gens 1-3 with a few outliers — Cyndaquil
+// and Chimchar evolve early at 14, Totodile late at 18, Quilladin/
+// Bayleef etc. as in cart). Stage IDs are PokeAPI pokedex numbers
+// so starterArt(id) works for the evolved form too.
+const EVOLUTIONS = {
+  // Gen 1
+  1:   { stage2: { id: 2,   name: 'Ivysaur',     level: 16 }, stage3: { id: 3,   name: 'Venusaur',    level: 32 } },
+  4:   { stage2: { id: 5,   name: 'Charmeleon',  level: 16 }, stage3: { id: 6,   name: 'Charizard',   level: 36 } },
+  7:   { stage2: { id: 8,   name: 'Wartortle',   level: 16 }, stage3: { id: 9,   name: 'Blastoise',   level: 36 } },
+  // Gen 2
+  152: { stage2: { id: 153, name: 'Bayleef',     level: 16 }, stage3: { id: 154, name: 'Meganium',    level: 32 } },
+  155: { stage2: { id: 156, name: 'Quilava',     level: 14 }, stage3: { id: 157, name: 'Typhlosion',  level: 36 } },
+  158: { stage2: { id: 159, name: 'Croconaw',    level: 18 }, stage3: { id: 160, name: 'Feraligatr',  level: 30 } },
+  // Gen 3
+  252: { stage2: { id: 253, name: 'Grovyle',     level: 16 }, stage3: { id: 254, name: 'Sceptile',    level: 36 } },
+  255: { stage2: { id: 256, name: 'Combusken',   level: 16 }, stage3: { id: 257, name: 'Blaziken',    level: 36 } },
+  258: { stage2: { id: 259, name: 'Marshtomp',   level: 16 }, stage3: { id: 260, name: 'Swampert',    level: 36 } },
+  // Gen 4
+  387: { stage2: { id: 388, name: 'Grotle',      level: 18 }, stage3: { id: 389, name: 'Torterra',    level: 32 } },
+  390: { stage2: { id: 391, name: 'Monferno',    level: 14 }, stage3: { id: 392, name: 'Infernape',   level: 36 } },
+  393: { stage2: { id: 394, name: 'Prinplup',    level: 16 }, stage3: { id: 395, name: 'Empoleon',    level: 36 } },
+  // Gen 5
+  495: { stage2: { id: 496, name: 'Servine',     level: 17 }, stage3: { id: 497, name: 'Serperior',   level: 36 } },
+  498: { stage2: { id: 499, name: 'Pignite',     level: 17 }, stage3: { id: 500, name: 'Emboar',      level: 36 } },
+  501: { stage2: { id: 502, name: 'Dewott',      level: 17 }, stage3: { id: 503, name: 'Samurott',    level: 36 } },
+  // Gen 6
+  650: { stage2: { id: 651, name: 'Quilladin',   level: 16 }, stage3: { id: 652, name: 'Chesnaught',  level: 36 } },
+  653: { stage2: { id: 654, name: 'Braixen',     level: 16 }, stage3: { id: 655, name: 'Delphox',     level: 36 } },
+  656: { stage2: { id: 657, name: 'Frogadier',   level: 16 }, stage3: { id: 658, name: 'Greninja',    level: 36 } },
+  // Gen 7
+  722: { stage2: { id: 723, name: 'Dartrix',     level: 17 }, stage3: { id: 724, name: 'Decidueye',   level: 34 } },
+  725: { stage2: { id: 726, name: 'Torracat',    level: 17 }, stage3: { id: 727, name: 'Incineroar',  level: 34 } },
+  728: { stage2: { id: 729, name: 'Brionne',     level: 17 }, stage3: { id: 730, name: 'Primarina',   level: 34 } },
+  // Gen 8
+  810: { stage2: { id: 811, name: 'Thwackey',    level: 16 }, stage3: { id: 812, name: 'Rillaboom',   level: 35 } },
+  813: { stage2: { id: 814, name: 'Raboot',      level: 16 }, stage3: { id: 815, name: 'Cinderace',   level: 35 } },
+  816: { stage2: { id: 817, name: 'Drizzile',    level: 16 }, stage3: { id: 818, name: 'Inteleon',    level: 35 } },
+  // Gen 9
+  906: { stage2: { id: 907, name: 'Floragato',   level: 16 }, stage3: { id: 908, name: 'Meowscarada', level: 36 } },
+  909: { stage2: { id: 910, name: 'Crocalor',    level: 16 }, stage3: { id: 911, name: 'Skeledirge',  level: 36 } },
+  912: { stage2: { id: 913, name: 'Quaxwell',    level: 16 }, stage3: { id: 914, name: 'Quaquaval',   level: 36 } },
+};
+
+// Given a starter ID and a level, the highest evolution stage the
+// pokemon would be in at that level. Returns null when still in
+// stage-1 (the starter itself).
+function pokemonAtLevel(starterId, level) {
+  const ev = EVOLUTIONS[starterId];
+  if (!ev) return null;
+  if (level >= ev.stage3.level) return { id: ev.stage3.id, name: ev.stage3.name, stage: 3 };
+  if (level >= ev.stage2.level) return { id: ev.stage2.id, name: ev.stage2.name, stage: 2 };
+  return null;
+}
+
+// Should this pokemon evolve as a result of a level-up? Compares the
+// current stage (inferred from currentPokemonId) against the highest
+// stage available at the new level. Returns the new form info or null.
+// Skips intermediate stages if a big XP burst leapfrogs multiple
+// thresholds (you'd evolve directly to stage 3 rather than 2).
+function checkEvolution(starterId, currentPokemonId, newLevel) {
+  const ev = EVOLUTIONS[starterId];
+  if (!ev) return null;
+  let currentStage = 1;
+  if (currentPokemonId === ev.stage3.id)      currentStage = 3;
+  else if (currentPokemonId === ev.stage2.id) currentStage = 2;
+
+  let targetStage = currentStage;
+  if (newLevel >= ev.stage3.level)      targetStage = 3;
+  else if (newLevel >= ev.stage2.level) targetStage = Math.max(targetStage, 2);
+
+  if (targetStage <= currentStage) return null;
+  const stage = targetStage === 3 ? ev.stage3 : ev.stage2;
+  return { id: stage.id, name: stage.name, fromStage: currentStage, toStage: targetStage };
+}
 function findStarter(query) {
   if (!query) return null;
   const q = String(query).toLowerCase().trim();
@@ -1401,17 +1477,44 @@ async function handleStarter(interaction) {
       'starter (Bulbasaur, Charmander, Squirtle, … Quaxly).'
     );
   }
+  // auto_evolve option — defaults true (Pokémon games default).
+  // Explicit false makes the pokemon stay in its current form across
+  // level-ups, same as holding B to cancel evolution in the games.
+  const autoEvolveOpt = optBool(interaction, 'auto_evolve');
+  const allowEvolution = autoEvolveOpt === null ? true : autoEvolveOpt;
+
   // Upsert — first-time picks get level 1 / 0 xp / 0 w-l-t; changing a
   // starter keeps existing progress so people can swap to their fave
   // without losing their grind.
   const existing = await sb.from('bot_pokemon')
     .select('level,xp,wins,losses,ties').eq('discord_user_id', u.id).maybeSingle();
   const isUpdate = !!(existing.data);
+
+  // Catch-up evolution: if the trainer is already a higher level than
+  // the starter's first/second evolution thresholds and auto_evolve is
+  // on, evolve straight to the appropriate form. Without this, picking
+  // Charmander at lvl 50 would leave you stuck as a Charmander until
+  // you gained more XP — surprising and bad UX.
+  let displayPokemonId   = s.id;
+  let displayPokemonName = s.name;
+  let evolvedTo = null;
+  if (isUpdate && allowEvolution) {
+    const lvl = existing.data.level || 1;
+    const catchUp = pokemonAtLevel(s.id, lvl);
+    if (catchUp) {
+      displayPokemonId   = catchUp.id;
+      displayPokemonName = catchUp.name;
+      evolvedTo = catchUp;
+    }
+  }
+
   const payload = {
-    discord_user_id: u.id,
-    pokemon_id:      s.id,
-    pokemon_name:    s.name,
-    updated_at:      new Date().toISOString(),
+    discord_user_id:     u.id,
+    pokemon_id:          displayPokemonId,
+    pokemon_name:        displayPokemonName,
+    original_pokemon_id: s.id,
+    allow_evolution:     allowEvolution,
+    updated_at:          new Date().toISOString(),
   };
   if (!isUpdate) {
     payload.level  = 1;
@@ -1423,11 +1526,21 @@ async function handleStarter(interaction) {
   const up = await sb.from('bot_pokemon').upsert(payload, { onConflict: 'discord_user_id' });
   if (up.error) throw up.error;
 
-  return ephemeral(
-    `${isUpdate ? 'Swapped' : 'Picked'} your starter: **${s.name}** (Gen ${s.gen}).\n` +
-    `${isUpdate ? 'Your XP and W/L stay the same.' : 'You start at level 1. Win /duels to earn XP.'}\n` +
-    `Check your stats with \`/profile\`.`
-  );
+  // Build the confirmation message.
+  const verb = isUpdate ? 'Swapped' : 'Picked';
+  let line = `${verb} your starter: **${s.name}** (Gen ${s.gen}).`;
+  if (evolvedTo) {
+    line += `\nYour level ${existing.data.level} progress evolved it straight into **${evolvedTo.name}**.`;
+  } else if (isUpdate) {
+    line += '\nYour XP and W/L stay the same.';
+  } else {
+    line += '\nYou start at level 1. Win /duels to earn XP.';
+  }
+  line += allowEvolution
+    ? '\nAuto-evolution: **on**. Pass `auto_evolve: false` next time to keep your starter form.'
+    : '\nAuto-evolution: **off**. Your pokemon will stay in this form across level-ups.';
+  line += '\nCheck your stats with `/profile`.';
+  return ephemeral(line);
 }
 
 // Autocomplete handler for /starter pokemon:. Returns up to 25
@@ -1471,6 +1584,21 @@ async function handleProfile(interaction) {
   const barFilled  = p.level >= 99 ? 20 : Math.max(0, Math.min(20, Math.round((intoLevel / (nextBase - curBase)) * 20)));
   const bar        = '█'.repeat(barFilled) + '░'.repeat(20 - barFilled);
   const name       = targetUser.global_name || targetUser.username || 'Trainer';
+
+  // Evolution status — find the starter name (might differ from current
+  // pokemon name if they've evolved), and note whether evolution is on.
+  const starterId = p.original_pokemon_id || p.pokemon_id;
+  const starterEntry = STARTERS.find(s => s.id === starterId);
+  const starterName  = starterEntry ? starterEntry.name : null;
+  const evolved      = starterName && p.pokemon_name !== starterName;
+  const evoOn        = p.allow_evolution !== false;
+  // Footer breakdown:
+  //   "5 duels fought · originally Charmander · evolution: on"
+  const footerParts = [];
+  footerParts.push(totalDuels ? `${totalDuels} duels fought` : 'No duels yet — challenge someone with /duel!');
+  if (evolved && starterName) footerParts.push(`originally ${starterName}`);
+  footerParts.push(`evolution: ${evoOn ? 'on' : 'paused'}`);
+
   return publicReply({
     embeds: [{
       title: `${name}\'s ${p.pokemon_name}`,
@@ -1482,7 +1610,7 @@ async function handleProfile(interaction) {
         { name: 'Record', value: `${p.wins}W · ${p.losses}L · ${p.ties}T (${winRate}%)`, inline: true },
         { name: 'Progress', value: '`' + bar + '`' + (p.level >= 99 ? '' : `  ${toNext} to next`), inline: false },
       ],
-      footer: { text: totalDuels ? `${totalDuels} duels fought` : 'No duels yet — challenge someone with /duel!' },
+      footer: { text: footerParts.join(' · ') },
     }],
   });
 }
@@ -1528,39 +1656,77 @@ async function handleDuel(interaction) {
     }
   }
 
-  // Log the challenge as pending. The Accept/Decline button handler
-  // updates the row to resolved + winner.
-  await sb.from('bot_duel_log').insert({
+  // Decide flow: ask-to-accept ONLY when both players have starters
+  // (i.e. XP is on the line). Otherwise the duel is pure entertainment
+  // and runs immediately — no consent prompt needed.
+  const pkRes = await sb.from('bot_pokemon')
+    .select('discord_user_id, pokemon_name, pokemon_id, level, xp, wins, losses, ties')
+    .in('discord_user_id', [challenger.id, opp.id]);
+  const pkMap = {};
+  (pkRes.data || []).forEach(r => { pkMap[r.discord_user_id] = r; });
+  const aPk = pkMap[challenger.id] || null;
+  const bPk = pkMap[opp.id]        || null;
+
+  const aName = challenger.global_name || challenger.username || 'Challenger';
+  const bName = opp.global_name        || opp.username        || 'Opponent';
+
+  // ── Both have starters → invitation flow (Accept/Decline buttons) ─
+  if (aPk && bPk) {
+    await sb.from('bot_duel_log').insert({
+      challenger_discord_id: challenger.id,
+      opponent_discord_id:   opp.id,
+      game, rounds,
+      status: 'pending',
+    });
+
+    const acceptId  = `duel_accept:${challenger.id}:${opp.id}:${game}:${rounds}`;
+    const declineId = `duel_decline:${challenger.id}:${opp.id}`;
+    return publicReply({
+      content: `${aName} challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} ${game} duel!`,
+      embeds: [{
+        title: 'Duel Challenge',
+        description:
+          `<@${opp.id}>, do you accept?\n\n` +
+          `**Game:** ${game}\n**Rounds:** ${rounds === 1 ? '1 (single pull)' : `Best of ${rounds}`}\n` +
+          `**XP on the line:** ${aPk.pokemon_name} (lvl ${aPk.level}) vs ${bPk.pokemon_name} (lvl ${bPk.level})`,
+        color: 0x1AC7A0,
+        footer: { text: 'Decline if you\'d rather not risk it.' },
+      }],
+      components: [{
+        type: 1, // ACTION_ROW
+        components: [
+          { type: 2, style: 3, label: 'Accept',  custom_id: acceptId  },
+          { type: 2, style: 4, label: 'Decline', custom_id: declineId },
+        ],
+      }],
+      allowed_mentions: { users: [opp.id] },
+    });
+  }
+
+  // ── One or neither has a starter → run immediately ───────────────
+  // No XP at stake means no consent needed. Logs as accepted (skipping
+  // the pending state entirely) and posts the result inline.
+  const logRow = await sb.from('bot_duel_log').insert({
     challenger_discord_id: challenger.id,
     opponent_discord_id:   opp.id,
     game, rounds,
     status: 'pending',
+  }).select('id').maybeSingle();
+  const duelLogId = (logRow.data && logRow.data.id) || null;
+
+  const resolved = await resolveDuelMatch({
+    challengerId: challenger.id,
+    opponentId:   opp.id,
+    game, rounds,
+    aPk, bPk,
+    duelLogId,
   });
-
-  const aName = challenger.global_name || challenger.username || 'Challenger';
-  const bName = opp.global_name        || opp.username        || 'Opponent';
-  // custom_id encodes everything the button handler needs to know
-  // without a DB round-trip: who can click, what game, how many rounds.
-  const acceptId  = `duel_accept:${challenger.id}:${opp.id}:${game}:${rounds}`;
-  const declineId = `duel_decline:${challenger.id}:${opp.id}`;
-
+  if (resolved.error) {
+    return publicReply({ content: resolved.error });
+  }
   return publicReply({
     content: `${aName} challenged <@${opp.id}> to a ${rounds === 1 ? 'single-pull' : 'best-of-' + rounds} ${game} duel!`,
-    embeds: [{
-      title: 'Duel Challenge',
-      description:
-        `<@${opp.id}>, do you accept?\n\n` +
-        `**Game:** ${game}\n**Rounds:** ${rounds === 1 ? '1 (single pull)' : `Best of ${rounds}`}`,
-      color: 0x1AC7A0,
-      footer: { text: 'Both players need /starter to earn XP from the result.' },
-    }],
-    components: [{
-      type: 1, // ACTION_ROW
-      components: [
-        { type: 2, style: 3, label: 'Accept',  custom_id: acceptId  },
-        { type: 2, style: 4, label: 'Decline', custom_id: declineId },
-      ],
-    }],
+    embeds: resolved.embeds,
     allowed_mentions: { users: [opp.id] },
   });
 }
@@ -1598,27 +1764,58 @@ async function handleDuelComponent(interaction) {
   }
 
   // Accept — actually pull cards and resolve the duel.
-  const game     = parts[3] || 'pokemon';
-  const rounds   = Number(parts[4]) === 1 ? 1 : 3;
+  const game   = parts[3] || 'pokemon';
+  const rounds = Number(parts[4]) === 1 ? 1 : 3;
 
-  // Fetch both players' pokemon (if any) for XP scaling.
+  // Fetch both players' pokemon — by the time we reach here both should
+  // exist (handleDuel only uses buttons when both have starters), but
+  // we handle the missing case defensively.
   const pkRes = await sb.from('bot_pokemon')
     .select('discord_user_id, pokemon_name, pokemon_id, level, xp, wins, losses, ties')
     .in('discord_user_id', [challengerId, opponentId]);
   const pkMap = {};
   (pkRes.data || []).forEach(r => { pkMap[r.discord_user_id] = r; });
-  const aPk = pkMap[challengerId] || null;
-  const bPk = pkMap[opponentId]   || null;
 
-  // Pull all cards.
+  const resolved = await resolveDuelMatch({
+    challengerId,
+    opponentId,
+    game, rounds,
+    aPk: pkMap[challengerId] || null,
+    bPk: pkMap[opponentId]   || null,
+    duelLogId: null, // looked up by challenger+opponent+pending below
+  });
+  if (resolved.error) {
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: { content: resolved.error, embeds: [], components: [] },
+    };
+  }
+
+  return {
+    type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+    data: {
+      content: `<@${challengerId}> vs <@${opponentId}> — accepted!`,
+      embeds: resolved.embeds,
+      components: [],
+      allowed_mentions: { users: [] },
+    },
+  };
+}
+
+// Shared duel runner: pulls cards, scores rounds, awards XP if both
+// players have starters, updates the duel log row, returns embed
+// data. Called from BOTH the immediate-run path in /duel (no
+// invitation) and the Accept-button path in handleDuelComponent.
+//
+// duelLogId: if known (from immediate-run insert), updates that row
+//   directly. Otherwise (accept path), updates the most recent pending
+//   row for the (challenger, opponent) pair.
+async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, bPk, duelLogId }) {
   const pulls = await Promise.all(
     Array.from({ length: rounds * 2 }, () => pullDuelCard(game))
   );
   if (pulls.some(p => !p)) {
-    return {
-      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
-      data: { content: `Couldn\'t pull enough priced cards for ${game}.`, embeds: [], components: [] },
-    };
+    return { error: `Couldn\'t pull enough priced cards for ${game}.` };
   }
   const aCards = pulls.slice(0, rounds);
   const bCards = pulls.slice(rounds);
@@ -1636,16 +1833,9 @@ async function handleDuelComponent(interaction) {
     roundLines.push(`**R${i + 1}** ${mark}  ${a.name} ($${av.toFixed(2)})  vs  ${b.name} ($${bv.toFixed(2)})`);
   }
 
-  // Pull display names from the resolved users payload Discord sends
-  // with the original interaction. We saved them in custom_id only
-  // partially, but interaction.message has the original content/embeds.
-  // Easier: re-fetch via Discord REST — but adding a roundtrip per
-  // click is wasteful. We'll just use mention strings; Discord renders
-  // them inline in the embed description.
   const aMention = `<@${challengerId}>`;
   const bMention = `<@${opponentId}>`;
 
-  // Result + XP.
   let resultLine;
   let winnerColor;
   let winnerId = null;
@@ -1665,45 +1855,62 @@ async function handleDuelComponent(interaction) {
     winnerColor = 0xFFC857;
   }
 
-  // Award XP only if both players have a starter. If either is
-  // missing, the duel still resolves; we just don't write any XP.
+  // XP only if BOTH players have starters. Mismatched / missing setups
+  // run the duel for entertainment but skip the level grind.
   let aXp = 0, bXp = 0;
   let xpFooter;
+  const evolutionLines = [];
   if (aPk && bPk) {
     aXp = calcXpAwarded(aOutcome, aPk.level, bPk.level);
     bXp = calcXpAwarded(bOutcome, bPk.level, aPk.level);
-    await applyDuelResult(aPk, aOutcome, aXp);
-    await applyDuelResult(bPk, bOutcome, bXp);
+    const aRes = await applyDuelResult(aPk, aOutcome, aXp);
+    const bRes = await applyDuelResult(bPk, bOutcome, bXp);
+    if (aRes && aRes.evolution) {
+      evolutionLines.push(`✦ ${aMention}'s **${aPk.pokemon_name}** evolved into **${aRes.evolution.name}**!`);
+    }
+    if (bRes && bRes.evolution) {
+      evolutionLines.push(`✦ ${bMention}'s **${bPk.pokemon_name}** evolved into **${bRes.evolution.name}**!`);
+    }
     xpFooter = `XP: ${aPk.pokemon_name} +${aXp} · ${bPk.pokemon_name} +${bXp}`;
   } else {
     const missing = [];
     if (!aPk) missing.push(aMention);
     if (!bPk) missing.push(bMention);
-    xpFooter = `No XP awarded — ${missing.join(' and ')} need to run /starter first.`;
+    xpFooter = `Run /starter to start earning XP. (${missing.join(' and ')} not registered.)`;
   }
 
-  await sb.from('bot_duel_log')
-    .update({
-      status: 'accepted',
-      winner_discord_id: winnerId,
-      challenger_xp_gained: aXp,
-      opponent_xp_gained:   bXp,
-      resolved_at: new Date().toISOString(),
-      result_summary: { aWins, bWins, rounds, game },
-    })
-    .eq('challenger_discord_id', challengerId)
-    .eq('opponent_discord_id',   opponentId)
-    .eq('status', 'pending');
+  // Log update. Prefer the direct id path; fall back to (challenger,
+  // opponent, pending) for the accept-button flow which doesn't have
+  // an id passed through the custom_id.
+  const update = sb.from('bot_duel_log').update({
+    status: 'accepted',
+    winner_discord_id: winnerId,
+    challenger_xp_gained: aXp,
+    opponent_xp_gained:   bXp,
+    resolved_at: new Date().toISOString(),
+    result_summary: { aWins, bWins, rounds, game },
+  });
+  if (duelLogId) {
+    await update.eq('id', duelLogId);
+  } else {
+    await update
+      .eq('challenger_discord_id', challengerId)
+      .eq('opponent_discord_id',   opponentId)
+      .eq('status', 'pending');
+  }
 
   const aTotal = aCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
   const bTotal = bCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
   const aBest = aCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const bBest = bCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const SHARED_URL = 'https://pathbinder.gg/?page=dashboard';
+  // Build description: rounds, result, then any evolution celebrations.
+  const descParts = [roundLines.join('\n'), resultLine];
+  if (evolutionLines.length) descParts.push(evolutionLines.join('\n'));
   const embeds = [{
     url: SHARED_URL,
     title: rounds === 1 ? 'Card Duel' : `Card Duel — Best of ${rounds}`,
-    description: roundLines.join('\n') + '\n\n' + resultLine,
+    description: descParts.join('\n\n'),
     color: winnerColor,
     fields: [
       { name: `${aMention} total`, value: `$${aTotal.toFixed(2)}`, inline: true },
@@ -1715,24 +1922,18 @@ async function handleDuelComponent(interaction) {
   if (bBest && bBest.image_url) {
     embeds.push({ url: SHARED_URL, image: { url: bBest.image_url } });
   }
-
-  return {
-    type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
-    data: {
-      content: `${aMention} vs ${bMention} — accepted!`,
-      embeds,
-      components: [],
-      allowed_mentions: { users: [] },
-    },
-  };
+  return { embeds };
 }
 
 // Compute new totals after a duel outcome and write them back. Pure
 // JS-side recompute of level (no race conditions vs concurrent writes
 // because each user duels one at a time via the button click).
+// Returns { evolution } so resolveDuelMatch can celebrate any
+// evolution that fired during this update.
 async function applyDuelResult(pk, outcome, xpDelta) {
-  const newXp     = (pk.xp || 0) + (xpDelta || 0);
-  const newLevel  = levelFromXp(newXp);
+  const oldLevel = pk.level || 1;
+  const newXp    = (pk.xp   || 0) + (xpDelta || 0);
+  const newLevel = levelFromXp(newXp);
   const patch = {
     xp:         newXp,
     level:      newLevel,
@@ -1741,7 +1942,23 @@ async function applyDuelResult(pk, outcome, xpDelta) {
     ties:       (pk.ties   || 0) + (outcome === 'tie'  ? 1 : 0),
     updated_at: new Date().toISOString(),
   };
+
+  // Evolution check — only if the trainer's allowed it, only when we
+  // actually crossed at least one level boundary. The starter id used
+  // for the lookup is original_pokemon_id (so once-evolved Charmeleon
+  // still resolves to the Charmander chain).
+  let evolution = null;
+  if (pk.allow_evolution !== false && newLevel > oldLevel) {
+    const starterId = pk.original_pokemon_id || pk.pokemon_id;
+    evolution = checkEvolution(starterId, pk.pokemon_id, newLevel);
+    if (evolution) {
+      patch.pokemon_id   = evolution.id;
+      patch.pokemon_name = evolution.name;
+    }
+  }
+
   await sb.from('bot_pokemon').update(patch).eq('discord_user_id', pk.discord_user_id);
+  return { evolution };
 }
 
 
@@ -1811,6 +2028,16 @@ function optString(interaction, name) {
   const opts = (interaction.data && interaction.data.options) || [];
   const o = opts.find(x => x.name === name);
   return o && o.value != null ? String(o.value) : null;
+}
+
+// Pull a BOOLEAN (type 5) slash-command option. Returns true/false
+// when set, null when omitted, so callers can distinguish "user said
+// false" from "user didn't pass it" and apply their own default.
+function optBool(interaction, name) {
+  const opts = (interaction.data && interaction.data.options) || [];
+  const o = opts.find(x => x.name === name);
+  if (!o || o.value === undefined || o.value === null) return null;
+  return Boolean(o.value);
 }
 
 // Pull a USER (type 6) option. Discord sends the user's id as the value;
