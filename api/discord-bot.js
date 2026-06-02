@@ -78,7 +78,10 @@ const DEFER_PUBLIC_SLASH = new Set([
 ]);
 const DEFER_EPHEMERAL_SLASH = new Set([
   'portfolio', 'wishlist', 'listings', 'sales', 'badge',
-  'track', 'untrack', 'trade-open', 'starter', 'profile',
+  'track', 'untrack', 'trade-open', 'profile',
+  // /starter intentionally NOT deferred — one read + one upsert is
+  // fast enough that the "Bot is thinking..." flash before the confirm
+  // is more annoying than useful.
 ]);
 // Flags bitfield. 64 = EPHEMERAL (only the caller sees the response).
 const EPHEMERAL = 1 << 6;
