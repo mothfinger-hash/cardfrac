@@ -59,9 +59,24 @@ const INTERACTION_RESPONSE_TYPE = {
   PONG:                            1,
   CHANNEL_MESSAGE_WITH_SOURCE:     4,
   DEFERRED_CHANNEL_MESSAGE:        5,
+  DEFERRED_UPDATE_MESSAGE:         6,  // ack a component without showing "thinking"
   UPDATE_MESSAGE:                  7,  // edit the message a component lives on
   APPLICATION_COMMAND_AUTOCOMPLETE_RESULT: 8,
 };
+
+// Commands that touch the DB or do real work — we defer the response
+// so cold-start latency doesn't blow past Discord's 3-second window.
+// Listed by whether the eventual response is public or ephemeral (the
+// deferral type has to match, otherwise the final message renders
+// wrong). Anything NOT in either set responds synchronously.
+const DEFER_PUBLIC_SLASH = new Set([
+  'movers', 'duel', 'showcase', 'random', 'set',
+  'price', 'marketplace', 'usercount', 'leaderboard',
+]);
+const DEFER_EPHEMERAL_SLASH = new Set([
+  'portfolio', 'wishlist', 'listings', 'sales', 'badge',
+  'track', 'untrack', 'trade-open', 'starter', 'profile',
+]);
 // Flags bitfield. 64 = EPHEMERAL (only the caller sees the response).
 const EPHEMERAL = 1 << 6;
 
@@ -156,43 +171,46 @@ const handler = async (req, res) => {
   if (interaction.type === INTERACTION_TYPE.APPLICATION_COMMAND) {
     const name    = interaction.data && interaction.data.name;
     const cmdType = (interaction.data && interaction.data.type) || 1;
+
+    // Decide whether to defer this command. Deferring sends an empty
+    // "Bot is thinking..." ack inside Discord's 3s window, then we
+    // PATCH the real result in via the webhook (up to 15 min later).
+    // This is what lets cold-start invocations succeed.
+    const willDefer = cmdType !== 3 && (
+      DEFER_PUBLIC_SLASH.has(name) || DEFER_EPHEMERAL_SLASH.has(name)
+    );
+    const deferEphemeral = DEFER_EPHEMERAL_SLASH.has(name);
+
+    if (willDefer) {
+      // Send the deferred ack immediately. The handler keeps running
+      // because we don't return — Vercel waits for the awaits below
+      // to settle before terminating the function.
+      res.status(200).json({
+        type: INTERACTION_RESPONSE_TYPE.DEFERRED_CHANNEL_MESSAGE,
+        data: deferEphemeral ? { flags: EPHEMERAL } : {},
+      });
+      try {
+        const reply = await runSlashHandler(name, interaction);
+        await patchOriginalInteractionResponse(interaction, reply);
+      } catch (e) {
+        console.error('[discord-bot] deferred handler error:', name, e);
+        await patchOriginalInteractionResponse(interaction,
+          ephemeral('Sorry, that command hit an error. The team has been notified.'));
+      }
+      return;
+    }
+
+    // Non-deferred path — synchronous, must finish in <3s.
     try {
       let reply;
       if (cmdType === 3) {
-        // Message-context-menu commands (right-click message → Apps)
         switch (name) {
           case 'File as Bug':       reply = await handleFileAsBugMessage(interaction); break;
           case 'Track Card Price':  reply = await handleTrackFromMessage(interaction); break;
           default: reply = ephemeral(`Unknown message command: ${name}`);
         }
       } else {
-        // Slash commands
-        switch (name) {
-          case 'link':          reply = await handleLink(interaction);          break;
-          case 'tier':          reply = await handleTier(interaction);          break;
-          case 'price':         reply = await handlePrice(interaction);         break;
-          case 'bug':           reply = await handleBug(interaction);           break;
-          case 'help':          reply = await handleHelp(interaction);          break;
-          case 'portfolio':     reply = await handlePortfolio(interaction);     break;
-          case 'showcase':      reply = await handleShowcase(interaction);      break;
-          case 'movers':        reply = await handleMovers(interaction);        break;
-          case 'wishlist':      reply = await handleWishlist(interaction);      break;
-          case 'listings':      reply = await handleListings(interaction);      break;
-          case 'marketplace':   reply = await handleMarketplace(interaction);   break;
-          case 'random':        reply = await handleRandom(interaction);        break;
-          case 'badge':         reply = await handleBadge(interaction);         break;
-          case 'trade-open':    reply = await handleTradeOpen(interaction);     break;
-          case 'set':           reply = await handleSet(interaction);           break;
-          case 'usercount':     reply = await handleUsercount(interaction);     break;
-          case 'sales':         reply = await handleSales(interaction);         break;
-          case 'leaderboard':   reply = await handleLeaderboard(interaction);   break;
-          case 'track':         reply = await handleTrack(interaction);         break;
-          case 'untrack':       reply = await handleUntrack(interaction);       break;
-          case 'duel':          reply = await handleDuel(interaction);          break;
-          case 'starter':       reply = await handleStarter(interaction);       break;
-          case 'profile':       reply = await handleProfile(interaction);       break;
-          default: reply = ephemeral(`Unknown command: ${name}`);
-        }
+        reply = await runSlashHandler(name, interaction);
       }
       return res.status(200).json(reply);
     } catch (e) {
@@ -225,9 +243,25 @@ const handler = async (req, res) => {
   // Message component (button / select). Used by /duel's Accept and
   // Decline buttons. custom_id encodes which action + the participants.
   if (interaction.type === INTERACTION_TYPE.MESSAGE_COMPONENT) {
+    const cid = (interaction.data && interaction.data.custom_id) || '';
+    // duel_accept is slow (card pulls + DB writes). Defer it with
+    // type 6 (DEFERRED_UPDATE_MESSAGE — no "thinking..." UI on the
+    // button click), then PATCH the message with the resolved
+    // result. duel_decline is fast — handle inline.
+    if (cid.startsWith('duel_accept:')) {
+      res.status(200).json({ type: INTERACTION_RESPONSE_TYPE.DEFERRED_UPDATE_MESSAGE });
+      try {
+        const reply = await handleDuelComponent(interaction);
+        await patchOriginalInteractionResponse(interaction, reply);
+      } catch (e) {
+        console.error('[discord-bot] component error:', e);
+        await patchOriginalInteractionResponse(interaction,
+          ephemeral('That button hit an error.'));
+      }
+      return;
+    }
     try {
-      const cid = (interaction.data && interaction.data.custom_id) || '';
-      if (cid.startsWith('duel_accept:') || cid.startsWith('duel_decline:')) {
+      if (cid.startsWith('duel_decline:')) {
         const reply = await handleDuelComponent(interaction);
         return res.status(200).json(reply);
       }
@@ -418,6 +452,74 @@ function ephemeral(content) {
 }
 function publicReply(data) {
   return { type: INTERACTION_RESPONSE_TYPE.CHANNEL_MESSAGE_WITH_SOURCE, data };
+}
+
+// Single source of truth for slash-command routing. Used by both the
+// synchronous dispatch path and the deferred dispatch path (after the
+// type-5 ack is sent). Keep in sync with the command list registered
+// in scripts/register_discord_commands.js.
+async function runSlashHandler(name, interaction) {
+  switch (name) {
+    case 'link':          return await handleLink(interaction);
+    case 'tier':          return await handleTier(interaction);
+    case 'price':         return await handlePrice(interaction);
+    case 'bug':           return await handleBug(interaction);
+    case 'help':          return await handleHelp(interaction);
+    case 'portfolio':     return await handlePortfolio(interaction);
+    case 'showcase':      return await handleShowcase(interaction);
+    case 'movers':        return await handleMovers(interaction);
+    case 'wishlist':      return await handleWishlist(interaction);
+    case 'listings':      return await handleListings(interaction);
+    case 'marketplace':   return await handleMarketplace(interaction);
+    case 'random':        return await handleRandom(interaction);
+    case 'badge':         return await handleBadge(interaction);
+    case 'trade-open':    return await handleTradeOpen(interaction);
+    case 'set':           return await handleSet(interaction);
+    case 'usercount':     return await handleUsercount(interaction);
+    case 'sales':         return await handleSales(interaction);
+    case 'leaderboard':   return await handleLeaderboard(interaction);
+    case 'track':         return await handleTrack(interaction);
+    case 'untrack':       return await handleUntrack(interaction);
+    case 'duel':          return await handleDuel(interaction);
+    case 'starter':       return await handleStarter(interaction);
+    case 'profile':       return await handleProfile(interaction);
+    default:              return ephemeral(`Unknown command: ${name}`);
+  }
+}
+
+// PATCH the deferred-interaction's original response with the real
+// message. Uses Discord's interaction-webhook endpoint, which requires
+// only the interaction token (no Bot Authorization header). The reply
+// shape we get back from a handler is { type, data } — the webhook
+// endpoint only wants the `data` payload, so we unwrap.
+//
+// For UPDATE_MESSAGE responses (button-click flows), `reply` is also
+// { type: 7, data: {...} } and we just take the data, since PATCHing
+// the original interaction message is equivalent to type-7 edit.
+async function patchOriginalInteractionResponse(interaction, reply) {
+  const appId = process.env.DISCORD_APP_ID;
+  if (!appId) {
+    console.error('[discord-bot] DISCORD_APP_ID missing — cannot PATCH deferred response');
+    return;
+  }
+  const body = (reply && reply.data) || {};
+  // PATCH endpoint is forgiving — sends back the message we just set,
+  // or { code: 10015 } if the interaction token expired (15-min cap).
+  try {
+    const r = await fetch(
+      `https://discord.com/api/v10/webhooks/${appId}/${interaction.token}/messages/@original`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }
+    );
+    if (!r.ok) {
+      console.error('[discord-bot] PATCH failed:', r.status, await r.text());
+    }
+  } catch (e) {
+    console.error('[discord-bot] PATCH threw:', e.message);
+  }
 }
 
 // A-Z + 2-9 (no 0/O/1/I/L to dodge font confusion), 6 chars, dash
