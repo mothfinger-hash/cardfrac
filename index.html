@@ -6583,6 +6583,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--muted)">Card grade</span><span id="buyCardGrade" style="color:var(--text)"></span></div>
         <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--muted)">Card price</span><span id="buyCardPrice" style="color:var(--text)"></span></div>
         <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--muted)">Shipping</span><span id="buyCardShipping" style="color:var(--text)"></span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span style="color:var(--muted)">Processing fee
+            <span title="Per-transaction payment-processing fee. Disclosed at checkout per surcharging laws in CA, CT, NY, ME, OK, and FL."
+                  style="cursor:help;color:var(--muted);font-size:.85em">ⓘ</span>
+          </span>
+          <span style="color:var(--text)">$0.30</span>
+        </div>
         <div style="border-top:1px solid var(--border);margin:8px 0"></div>
         <div style="display:flex;justify-content:space-between"><span style="color:var(--accent)">Total</span><span id="buyCardTotal" style="color:var(--accent);font-weight:700"></span></div>
       </div>
@@ -8426,6 +8433,33 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       vendor:      150,
       shop:        Infinity,
     };
+    // Maximum per-item dollar price by tier. Defense-in-depth: enforced
+    // BOTH at listing creation (reject over-ceiling new listings) AND
+    // at checkout server-side (so an over-ceiling listing that somehow
+    // exists can never actually be purchased). Shop's high ceiling is
+    // a feature gate, not a payment gate — sellers don't unlock it by
+    // upgrading; they unlock it by passing identity + inventory checks
+    // (profiles.verified_high_value flag).
+    //
+    // SERVER-SIDE MIRROR: TIER_PRICE_CEILINGS in /api/marketplace-checkout.js.
+    const TIER_PRICE_CEILINGS = {
+      free:        0,
+      collector:   0,
+      enthusiast:  150,    // entry tier — keeps cheap items in the cheap-flow band
+      vendor:      1000,   // mid tier — covers most sealed product and most graded singles
+      shop:        50000,  // high tier — additionally requires verified_high_value=true
+    };
+    function priceCeilingFor(tier, verifiedHighValue) {
+      var base = TIER_PRICE_CEILINGS[tier];
+      if (typeof base !== 'number') return 0;
+      // Without the verified flag, Shop falls back to Vendor's ceiling.
+      // The Top-tier high ceiling is gated by verification, not payment.
+      if (tier === 'shop' && !verifiedHighValue) return TIER_PRICE_CEILINGS.vendor;
+      return base;
+    }
+    function myPriceCeiling() {
+      return priceCeilingFor(userTier(), !!(currentUser && currentUser.verified_high_value));
+    }
     // Commission rate (decimal, 0.07 = 7%) charged on each marketplace
     // sale, by seller's tier. Decreases as tier climbs — rewards high-
     // volume sellers + creates a real reason for vendors to upgrade.
@@ -16110,6 +16144,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Validation
       if (!name) { showToast(isSealed ? 'Enter a product name' : 'Enter a card name'); return; }
       if (!price || price <= 0) { showToast('Enter a valid price'); return; }
+      // Per-tier price ceiling — see TIER_PRICE_CEILINGS. Client-side
+      // is informational; the canonical check lives on the server in
+      // marketplace-checkout.js (and a Supabase trigger blocks INSERT
+      // for safety, identical logic).
+      var _ceiling = myPriceCeiling();
+      if (_ceiling > 0 && price > _ceiling) {
+        var _tname = userTier();
+        var _next = _tname === 'enthusiast' ? 'Vendor' : _tname === 'vendor' ? 'Shop' : null;
+        var _msg = 'This price exceeds your ' + _tname.charAt(0).toUpperCase() + _tname.slice(1)
+                 + ' tier max of $' + _ceiling.toFixed(0) + '.';
+        if (_next) _msg += ' Upgrade to ' + _next + ' to list higher-value items.';
+        showToast(_msg);
+        return;
+      }
       const errEl = document.getElementById('lcPhotoError');
       const minPhotos = isSealed ? 1 : 2;
       if (lcPhotos.length < minPhotos) {
@@ -16454,7 +16502,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const shipping = listing.shipping_price || 0;
       document.getElementById('buyCardPrice').textContent = '$' + price.toFixed(2);
       document.getElementById('buyCardShipping').textContent = shipping > 0 ? '$' + shipping.toFixed(2) : 'Free';
-      document.getElementById('buyCardTotal').textContent = '$' + (price + shipping).toFixed(2);
+      // Total now includes the $0.30 buyer processing fee — same value
+      // the Stripe checkout line item charges. Mirrored server-side via
+      // BUYER_PROCESSING_FEE_CENTS in marketplace-checkout.js.
+      document.getElementById('buyCardTotal').textContent = '$' + (price + shipping + 0.30).toFixed(2);
       document.getElementById('buyCardListingId').value = listingId;
       openModal('buyCardModal');
     }
@@ -26747,6 +26798,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Stop any active session polling
       if (_ftSession) { _ftStopPolling(); _ftSession = null; }
       clearTimeout(_ftSyncDebounce);
+      // Hide and clear the session banner + reparented QR + mobile
+      // session-code chip. Without this the QR slam-animated copy and
+      // the trade code stay on screen after Reset, even though the
+      // session itself has been torn down. Mirrors the same DOM sweep
+      // ftEndSession does so reset acts like a full session-end.
+      var _resetBanner = document.getElementById('ftSessionBanner');
+      if (_resetBanner) { _resetBanner.style.display = 'none'; _resetBanner.innerHTML = ''; }
+      document.querySelectorAll('.ft-stage > #ftQrContainer').forEach(function(el) { el.remove(); });
+      var _resetMobileCode = document.getElementById('ftMobileSessionCode');
+      if (_resetMobileCode) { _resetMobileCode.style.display = 'none'; _resetMobileCode.innerHTML = ''; }
       // Cancel any pending slam-audio timers so a Reset mid-scan doesn't
       // play orphan thud/scratch after the user has bailed.
       if (window._ftSlamTimer1) { clearTimeout(window._ftSlamTimer1); window._ftSlamTimer1 = null; }

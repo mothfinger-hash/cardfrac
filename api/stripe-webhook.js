@@ -240,6 +240,59 @@ async function handleAccountUpdated(account) {
   }
 }
 
+// ── Buyer risk event logging ─────────────────────────────────────────────────
+// Records a row in buyer_risk_events keyed on the card fingerprint
+// (durable across charges and accounts) so the next checkout from
+// the same card / buyer can be friction-scored. Tolerant: any error
+// is logged and swallowed — we never want to 500 the webhook over a
+// missing optional risk-table row.
+async function logRiskEvent(eventType, stripeObj) {
+  try {
+    // stripeObj is either a Dispute (has .charge) or a Charge (has .id).
+    const isCharge = stripeObj && stripeObj.object === 'charge';
+    const chargeId = isCharge
+      ? stripeObj.id
+      : (stripeObj && stripeObj.charge) || null;
+
+    let card = null;
+    let amountCents = 0;
+    let reason = null;
+    let meta = {};
+    let zip = null;
+
+    if (chargeId) {
+      try {
+        const charge = await stripe.charges.retrieve(chargeId, {
+          expand: ['payment_method_details'],
+        });
+        card = charge.payment_method_details && charge.payment_method_details.card;
+        meta = charge.metadata || {};
+        amountCents = isCharge ? (stripeObj.amount_refunded || stripeObj.amount || 0)
+                               : (stripeObj.amount || 0);
+        reason = isCharge ? null : (stripeObj.reason || null);
+        const billing = charge.billing_details && charge.billing_details.address;
+        if (billing && billing.postal_code) zip = String(billing.postal_code).slice(0, 10);
+      } catch (e) {
+        console.warn('[webhook] risk-log charge fetch failed:', e.message);
+      }
+    }
+
+    const buyerId = meta.buyer_id || null;
+    await sb.from('buyer_risk_events').insert({
+      card_fingerprint: card && card.fingerprint ? card.fingerprint : null,
+      buyer_id:         buyerId,
+      order_id:         meta.listing_id || null,
+      stripe_charge_id: chargeId,
+      shipping_zip:     zip,
+      event_type:       eventType,
+      amount_cents:     amountCents,
+      reason:           reason,
+    });
+  } catch (e) {
+    console.error('[webhook] logRiskEvent failed:', eventType, e.message);
+  }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -294,6 +347,27 @@ module.exports = async function handler(req, res) {
           console.error('[webhook] capability.updated re-fetch failed:', e.message);
         }
       }
+      break;
+
+    case 'charge.dispute.created':
+      await logRiskEvent('chargeback_opened', obj);
+      break;
+    case 'charge.dispute.closed':
+      // Stripe sets `status` to 'won' | 'lost' | 'warning_closed' on close.
+      // We log lost disputes heavily (friendly fraud), won ones neutrally.
+      if (obj.status === 'lost') {
+        await logRiskEvent('chargeback_lost', obj);
+      } else if (obj.status === 'won') {
+        await logRiskEvent('chargeback_won', obj);
+      }
+      break;
+    case 'charge.refunded':
+      // Full vs partial refund — drives whether this looks like a normal
+      // buyer-satisfaction issue or a money-back-grab pattern.
+      await logRiskEvent(
+        obj.amount_refunded >= obj.amount ? 'refund_full' : 'refund_partial',
+        obj
+      );
       break;
 
     default:

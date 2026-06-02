@@ -63,6 +63,32 @@ function commissionRateFor(tier) {
   return (typeof r === 'number') ? r : DEFAULT_COMMISSION_RATE;
 }
 
+// Server mirror of TIER_PRICE_CEILINGS in index.html. Enforced here
+// as a hard block — an over-ceiling listing CAN'T be checked out even
+// if it somehow exists in the DB. Shop's high ceiling additionally
+// requires profiles.verified_high_value=true (verification, not
+// payment, unlocks it).
+const TIER_PRICE_CEILINGS = {
+  free:        0,
+  collector:   0,
+  enthusiast:  150,
+  vendor:      1000,
+  shop:        50000,
+};
+function priceCeilingFor(tier, verifiedHighValue) {
+  const base = TIER_PRICE_CEILINGS[tier];
+  if (typeof base !== 'number') return 0;
+  if (tier === 'shop' && !verifiedHighValue) return TIER_PRICE_CEILINGS.vendor;
+  return base;
+}
+
+// Buyer risk thresholds — when to force manual capture so Stripe Radar
+// gets a look before the card is actually charged. Triggers when a
+// brand-new buyer tries to spend real money: a fraud red flag we'd
+// rather wait 10 minutes on than refund a week later.
+const MANUAL_CAPTURE_NEW_BUYER_THRESHOLD_CENTS = 20000; // $200
+const NEW_BUYER_MAX_AGE_DAYS                   = 14;
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -91,19 +117,22 @@ module.exports = async function handler(req, res) {
 
   // Look up the seller's Stripe Connect account id (Phase 2 onboarding column)
   // AND their subscription tier (drives the commission rate). One round trip.
+  // Also pull verified_high_value so the Shop high-ceiling gate is enforced.
   let sellerConnectId = null;
   let sellerTier      = null;
+  let sellerVerifiedHighValue = false;
   if (sellerId) {
     try {
       const { data: profile } = await sb
         .from('profiles')
-        .select('stripe_connect_account_id, subscription_tier, is_vendor, is_premium')
+        .select('stripe_connect_account_id, subscription_tier, is_vendor, is_premium, verified_high_value')
         .eq('id', sellerId)
         .maybeSingle();
       if (profile) {
         if (profile.stripe_connect_account_id) {
           sellerConnectId = profile.stripe_connect_account_id;
         }
+        sellerVerifiedHighValue = !!profile.verified_high_value;
         // Prefer the new subscription_tier column; fall back to legacy
         // booleans so sellers who haven't been migrated still get charged
         // a reasonable rate. is_vendor + is_premium were the old
@@ -121,6 +150,16 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // Hard block: item price (in dollars) over the seller's tier ceiling.
+  // This is the server-side guard that backs up the client-side check
+  // in index.html and any DB-trigger enforcement. amount is in cents.
+  const ceilingDollars = priceCeilingFor(sellerTier, sellerVerifiedHighValue);
+  if (ceilingDollars > 0 && amount > ceilingDollars * 100) {
+    return res.status(403).json({
+      error: `Listing exceeds the seller's tier price ceiling of $${ceilingDollars}.`,
+    });
+  }
+
   const feeRate     = commissionRateFor(sellerTier);
   // Seller commission — percentage of the listing price, no per-tx fee.
   const sellerCommission = Math.round(amount * feeRate);
@@ -130,6 +169,34 @@ module.exports = async function handler(req, res) {
   // application_fee_amount does — Stripe deducts this from the buyer
   // charge before transferring the rest to the seller.
   const platformFee  = sellerCommission + BUYER_PROCESSING_FEE_CENTS;
+
+  // Manual-capture risk gate. Brand-new buyer + high-value order = the
+  // single highest-risk combo for friendly-fraud chargebacks (account
+  // created today, $400 order, expedited shipping is the classic
+  // pattern). Setting capture_method=manual on the underlying
+  // PaymentIntent means Stripe AUTHORIZES the card but doesn't actually
+  // charge it — gives us up to 7 days to review (or let Radar review)
+  // before either capturing or canceling. Standard "secure" Stripe
+  // pattern, no special approval needed.
+  let isRiskyOrder = false;
+  try {
+    const buyerProfile = await sb.from('profiles')
+      .select('created_at')
+      .eq('id', user.id).maybeSingle();
+    const ageDays = buyerProfile.data
+      ? (Date.now() - new Date(buyerProfile.data.created_at).getTime()) / 86400000
+      : 999;
+    const priorOrders = await sb.from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('buyer_id', user.id);
+    const orderCount = priorOrders.count || 0;
+    const isNewBuyer = ageDays < NEW_BUYER_MAX_AGE_DAYS || orderCount === 0;
+    if (isNewBuyer && amount >= MANUAL_CAPTURE_NEW_BUYER_THRESHOLD_CENTS) {
+      isRiskyOrder = true;
+    }
+  } catch (e) {
+    console.warn('[checkout] risk check failed, defaulting to auto-capture:', e.message);
+  }
 
   const sessionParams = {
     payment_method_types: ['card'],
@@ -173,6 +240,7 @@ module.exports = async function handler(req, res) {
       seller_commission:   String(sellerCommission),
       buyer_processing_fee:String(BUYER_PROCESSING_FEE_CENTS),
       seller_tier:         sellerTier || 'unknown',
+      risky_order:         isRiskyOrder ? '1' : '0',
       type: 'marketplace_purchase',
       // Track which payment route was used so the webhook can act accordingly.
       payment_route: sellerConnectId ? 'destination_charge' : 'platform_only',
@@ -189,6 +257,19 @@ module.exports = async function handler(req, res) {
       application_fee_amount: platformFee,
       transfer_data: { destination: sellerConnectId },
     };
+  }
+
+  // Manual capture for risky orders. We attach capture_method=manual to
+  // the PaymentIntent so the card is AUTHORIZED but not actually
+  // charged at checkout — Radar evaluates it, admin can review, and we
+  // capture (or release) within Stripe's 7-day auth window. Works in
+  // both the destination-charge and platform-only branches.
+  if (isRiskyOrder) {
+    sessionParams.payment_intent_data = Object.assign(
+      {},
+      sessionParams.payment_intent_data || {},
+      { capture_method: 'manual' }
+    );
   }
 
   try {
