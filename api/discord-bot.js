@@ -758,25 +758,43 @@ async function handleMovers(interaction) {
   const perGameLimit = game === 'all' ? 10 : 3;
 
   let up = [], down = [];
+  let lastRpcError = null;
+  let totalRowsReceived = 0;
   try {
-    const results = await Promise.all(gamesToQuery.map(gt =>
-      sb.rpc('get_global_price_movers', {
+    const results = await Promise.all(gamesToQuery.map(gt => {
+      const params = {
         p_game_type:    gt,
         p_days_back:    days,
         p_top_n:        perGameLimit,
         p_min_pct:      0.5,
         p_sort:         'pct',
         p_product_type: 'single',
-      }).then(r => {
+      };
+      console.log(`[discord-bot] /movers RPC call (${gt}):`, JSON.stringify(params));
+      return sb.rpc('get_global_price_movers', params).then(r => {
+        // Log everything — status, error shape, data length, first row.
+        // Vercel function logs surface these so we can see what the
+        // RPC actually returned to the bot vs what SQL Editor sees.
+        const dataArr = Array.isArray(r.data) ? r.data : (r.data ? [r.data] : []);
+        console.log(`[discord-bot] /movers RPC reply (${gt}):`, JSON.stringify({
+          status:    r.status,
+          statusText:r.statusText,
+          errorMsg:  r.error && r.error.message,
+          errorCode: r.error && r.error.code,
+          errorHint: r.error && r.error.hint,
+          rowCount:  dataArr.length,
+          firstRow:  dataArr[0] || null,
+        }));
         if (r.error) {
-          console.error(`[discord-bot] /movers RPC error (${gt}):`, r.error);
-          return [];
+          lastRpcError = r.error;
+          // Don't return [] — keep any data we got even alongside an error.
         }
+        totalRowsReceived += dataArr.length;
         // Tag each row with its game so the merged display can show
         // which TCG each entry came from when scope=all.
-        return (r.data || []).map(x => ({ ...x, _game: gt }));
-      })
-    ));
+        return dataArr.map(x => ({ ...x, _game: gt }));
+      });
+    }));
     const merged = results.flat();
     up   = merged.filter(x => x.direction === 'up')
                  .sort((a, b) => Math.abs(b.delta_pct) - Math.abs(a.delta_pct))
@@ -784,9 +802,18 @@ async function handleMovers(interaction) {
     down = merged.filter(x => x.direction === 'down')
                  .sort((a, b) => Math.abs(b.delta_pct) - Math.abs(a.delta_pct))
                  .slice(0, 3);
+    console.log(`[discord-bot] /movers totals: rows=${totalRowsReceived} up=${up.length} down=${down.length}`);
   } catch (e) {
     console.error('[discord-bot] /movers exception:', e);
+    lastRpcError = { message: String((e && e.message) || e) };
   }
+
+  // Surface the actual error in the embed footer when DEBUG_MOVERS=1
+  // is set in Vercel env. Lets you see the failure right in Discord
+  // without having to tail logs.
+  const debugFooter = process.env.DEBUG_MOVERS === '1' && lastRpcError
+    ? ` · err: ${(lastRpcError.message || '').slice(0, 80)}`
+    : '';
 
   // When showing across-all-TCGs, prefix each row with the game so the
   // reader knows the context. Single-game mode stays clean (no prefix).
@@ -802,7 +829,7 @@ async function handleMovers(interaction) {
         { name: '▲ Up',   value: up.length   ? up.map(fmtRowG).join('\n')   : '_no data_', inline: true },
         { name: '▼ Down', value: down.length ? down.map(fmtRowG).join('\n') : '_no data_', inline: true },
       ],
-      footer: { text: linkCheck.ok ? 'Tip: /movers scope:personal for your collection' : 'pathbinder.gg/?page=dashboard' },
+      footer: { text: (linkCheck.ok ? 'Tip: /movers scope:personal for your collection' : 'pathbinder.gg/?page=dashboard') + debugFooter },
     }],
   });
 }
