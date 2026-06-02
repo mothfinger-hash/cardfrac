@@ -625,14 +625,32 @@ async function handleShowcase(interaction) {
   });
 }
 
-// /movers [period] [scope] — global market movers, or YOUR collection
-// movers when scope=personal. Default scope is 'personal' when the
-// caller is linked (matches the dashboard "Yours" toggle), 'global'
-// when they aren't. Public.
+// Canonical game_type strings the catalog uses. Anything else falls
+// back to 'pokemon' so a typo doesn't return zero results silently.
+const MOVERS_GAMES = ['pokemon', 'magic', 'yugioh', 'onepiece', 'gundam', 'dbz'];
+// Display labels (Pokémon's é + pretty TCG names) for embed titles.
+const GAME_LABEL = {
+  pokemon: 'Pokémon',
+  magic:   'Magic: The Gathering',
+  yugioh:  'Yu-Gi-Oh!',
+  onepiece:'One Piece',
+  gundam:  'Gundam',
+  dbz:     'Dragon Ball Z Fusion World',
+};
+
+// /movers [period] [scope] [game] — global market movers, or YOUR
+// collection movers when scope=personal. Default scope is 'personal'
+// when the caller is linked (matches the dashboard "Yours" toggle),
+// 'global' when they aren't. Default game is 'pokemon'. Public.
 async function handleMovers(interaction) {
   const period = optString(interaction, 'period') || '24h';
   const days   = period === '7d' ? 7 : 1;
   const scopeOpt = (optString(interaction, 'scope') || '').toLowerCase();
+  // game option — accept any catalog game_type. Default pokemon for
+  // backwards compatibility (the original command was pokemon-only).
+  const gameIn = (optString(interaction, 'game') || 'pokemon').toLowerCase();
+  const game   = MOVERS_GAMES.includes(gameIn) ? gameIn : 'pokemon';
+  const gameLabel = GAME_LABEL[game] || game;
 
   // Resolve scope. If the caller passed one explicitly, honor it. Otherwise
   // default to 'personal' for linked users (mirrors the dashboard default
@@ -660,14 +678,15 @@ async function handleMovers(interaction) {
     // current value to compare against. is_ghost rows count too — they
     // contribute to "wishlist movers" the dashboard also surfaces.
     const items = await sb.from('collection_items')
-      .select('api_card_id, card_name, current_value, is_ghost')
+      .select('api_card_id, card_name, current_value, is_ghost, game_type')
       .eq('user_id', userId)
+      .eq('game_type', game)
       .not('api_card_id', 'is', null)
       .not('current_value', 'is', null);
     if (items.error) throw items.error;
     const rows = (items.data || []).filter(r => Number(r.current_value) > 0);
     if (!rows.length) {
-      return ephemeral('Your collection has no priced cards yet — add some and try again.');
+      return ephemeral(`You have no priced **${gameLabel}** cards yet — add some and try again, or run \`/movers game:pokemon\`.`);
     }
 
     // Pull oldest-in-window price per catalog_id, in chunks (PostgREST
@@ -704,7 +723,7 @@ async function handleMovers(interaction) {
 
     return publicReply({
       embeds: [{
-        title: `Your collection movers (${period})`,
+        title: `Your ${gameLabel} movers (${period})`,
         color: 0x1AC7A0,
         fields: [
           { name: '▲ Up',   value: up.length   ? up.map(fmtRow).join('\n')   : '_no gains_',    inline: true },
@@ -720,7 +739,7 @@ async function handleMovers(interaction) {
   let up = [], down = [];
   try {
     const r = await sb.rpc('get_global_price_movers', {
-      p_game_type:    'pokemon',
+      p_game_type:    game,
       p_days_back:    days,
       p_top_n:        3,
       p_min_pct:      0.5,
@@ -739,7 +758,7 @@ async function handleMovers(interaction) {
 
   return publicReply({
     embeds: [{
-      title: `Pokémon market movers (${period})`,
+      title: `${gameLabel} market movers (${period})`,
       color: 0x1AC7A0,
       fields: [
         { name: '▲ Up',   value: up.length   ? up.map(fmtRow).join('\n')   : '_no data_', inline: true },

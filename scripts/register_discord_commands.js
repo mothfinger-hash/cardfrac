@@ -76,6 +76,14 @@ const commands = [
   { name: 'movers',   type: 1, description: 'Biggest movers — your collection (if linked) or market', options: [
     { name: 'period', description: '24h (default) | 7d', type: 3, required: false },
     { name: 'scope',  description: 'personal (default if linked) | global', type: 3, required: false },
+    { name: 'game',   description: 'pokemon (default) | magic | yugioh | onepiece | gundam | dbz', type: 3, required: false, choices: [
+      { name: 'Pokémon',                 value: 'pokemon'  },
+      { name: 'Magic: The Gathering',    value: 'magic'    },
+      { name: 'Yu-Gi-Oh!',               value: 'yugioh'   },
+      { name: 'One Piece',               value: 'onepiece' },
+      { name: 'Gundam',                  value: 'gundam'   },
+      { name: 'Dragon Ball Z',           value: 'dbz'      },
+    ] },
   ] },
   { name: 'duel', type: 1, description: 'Card duel — best of 3 random pulls, most rounds wins', options: [
     { name: 'opponent', description: 'Who to duel', type: 6, required: true },
