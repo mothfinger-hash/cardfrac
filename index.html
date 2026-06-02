@@ -3342,6 +3342,59 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       border-radius:var(--r-md) !important;
       overflow:hidden;
     }
+    /* Sets list grid — 4 columns on desktop, 2 on mobile. Tiles wrap
+       set logo, name, series + date, and a progress bar. Scrollable
+       inside the existing height-capped container. */
+    #setsPage [id^="setsListInner"]{
+      display:grid !important;
+      grid-template-columns:repeat(4, minmax(0, 1fr));
+      gap:10px;
+      padding:12px;
+      overflow-y:auto !important;
+    }
+    @media (max-width:900px){
+      #setsPage [id^="setsListInner"]{
+        grid-template-columns:repeat(2, minmax(0, 1fr));
+        gap:8px;
+        padding:8px;
+      }
+    }
+    .sets-tile{
+      display:flex; flex-direction:column;
+      background:var(--surface2);
+      border:1px solid var(--border);
+      border-radius:var(--r-md, 10px);
+      overflow:hidden;
+      cursor:pointer;
+      transition:transform .12s, border-color .12s;
+      min-width:0;
+    }
+    .sets-tile:hover{
+      transform:translateY(-2px);
+      border-color:var(--accent);
+    }
+    .sets-tile-logo{
+      aspect-ratio:16/9;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.25);
+      padding:10px;
+    }
+    .sets-tile-logo img{ max-width:100%; max-height:100%; object-fit:contain; }
+    .sets-tile-body{ padding:8px 10px 10px; display:flex; flex-direction:column; gap:4px; }
+    .sets-tile-name{
+      font-size:.78rem; font-weight:700;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .sets-tile-meta{ font-size:.62rem; color:var(--muted); }
+    .sets-tile-bar{
+      margin-top:4px; height:5px; border-radius:3px; background:var(--border); overflow:hidden;
+    }
+    .sets-tile-bar > div{ height:100%; border-radius:3px; transition:width .4s; }
+    .sets-tile-tag{
+      width:40px; height:28px; display:flex; align-items:center; justify-content:center;
+      font-size:.55rem; color:var(--copper); letter-spacing:.04em;
+      border:1px solid var(--copper-dim); border-radius:2px; background:var(--copper-glow);
+    }
     /* Search input — keep the teal focus accent (the page's accent
        palette is still teal); just use the default border at rest. */
     #setsPage #setsSearch{
@@ -10517,7 +10570,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             showToast('✓ Upgraded — unused time credited to new tier');
           } else if (result.mode === 'downgrade_at_period_end') {
             var periodEnd = result.current_period_end
-              ? new Date(result.current_period_end * 1000).toLocaleDateString()
+              ? _fmtDate(new Date(result.current_period_end * 1000))
               : 'period end';
             showToast('✓ Downgrade scheduled. Current tier active until ' + periodEnd);
           } else {
@@ -10971,7 +11024,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         }
 
         const cards = rows.map(r => {
-          const date = r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '—';
+          const date = _fmtDate(r.created_at);
           const offered  = Array.isArray(r.offered_cards)  ? r.offered_cards  : [];
           const received = Array.isArray(r.received_cards) ? r.received_cards : [];
           const offVal = r.offered_value  != null ? '$' + Number(r.offered_value).toFixed(2)  : '—';
@@ -11297,7 +11350,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           .order('created_at', { ascending: false });
         const rows = (data || []).map(function(r) {
           const status = r.claimed_at
-            ? `<span style="color:var(--accent)">Claimed ${new Date(r.claimed_at).toLocaleDateString()}</span>${r.expires_at ? ' &middot; expires ' + new Date(r.expires_at).toLocaleDateString() : ''}`
+            ? `<span style="color:var(--accent)">Claimed ${_fmtDate(r.claimed_at)}</span>${r.expires_at ? ' &middot; expires ' + _fmtDate(r.expires_at) : ''}`
             : '<span style="color:var(--muted)">Unclaimed</span>';
           return `<tr><td style="padding:8px;font-family:'Courier New',monospace">${r.code}</td><td style="padding:8px;color:var(--accent)">${(r.granted_tier||'').toUpperCase()}</td><td style="padding:8px;font-size:.74rem">${status}</td></tr>`;
         }).join('') || '<tr><td colspan="3" style="padding:14px;color:var(--muted);text-align:center">No invites generated yet.</td></tr>';
@@ -13569,7 +13622,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ${photoSrc ? `<img src="${photoSrc}" style="height:60px;width:auto;border:1px solid var(--border);flex-shrink:0">` : ''}
             <div style="flex:1;min-width:200px">
               <div style="color:var(--text);font-size:.9rem;margin-bottom:4px">${cardName}</div>
-              <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">Order #${order.id.slice(0,8).toUpperCase()} · ${new Date(order.created_at).toLocaleDateString()}</div>
+              <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">Order #${order.id.slice(0,8).toUpperCase()} · ${_fmtDate(order.created_at)}</div>
               <div style="font-size:.78rem;margin-bottom:6px">
                 <span style="color:${statusColor[status] || 'var(--muted)'}">● ${statusLabel[status] || status}</span>
               </div>
@@ -14384,7 +14437,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           + recent.map(o => {
               const listing = (listings || []).find(l => String(l.id) === String(o.listing_id));
               const itemName = listing ? listing.name : (o.card_name || '(item removed)');
-              const date  = o.created_at ? new Date(o.created_at).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '—';
+              const date  = _fmtDate(o.created_at);
               const st    = o.status || 'pending_payment';
               const lbl   = statusLabel[st] || st;
               const col   = statusColor[st] || 'var(--muted)';
@@ -15068,7 +15121,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             const listing = listings.find(l => String(l.id) === String(o.listing_id));
             return `<tr>
               <td style="color:var(--text)">${listing ? listing.name : 'Unknown Card'}</td>
-              <td style="color:var(--muted);font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
+              <td style="color:var(--muted);font-size:.8rem">${_fmtDate(o.created_at)}</td>
               <td style="color:var(--teal)">$${(o.amount||0).toFixed(2)}</td>
               <td><span class="badge badge-open" style="font-size:.6rem">${o.status||'—'}</span></td>
             </tr>`;
@@ -15085,7 +15138,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               const payout = o.seller_payout || 0;
               return `<tr>
                 <td style="color:var(--text)">${listing ? listing.name : 'Unknown Card'}</td>
-                <td style="color:var(--muted);font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
+                <td style="color:var(--muted);font-size:.8rem">${_fmtDate(o.created_at)}</td>
                 <td style="color:var(--green)">$${payout.toFixed(2)}</td>
                 <td><span class="badge" style="background:rgba(210,120,40,.1);color:var(--green);font-size:.6rem">${o.status||'—'}</span></td>
               </tr>`;
@@ -18336,6 +18389,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
     function _fmtDate(s) {
       if (!s) return '—';
+      // Sitewide compact format — delegates to _pbCompactDate so M/D/YY
+      // is consistent across the app. _pbCompactDate handles weird
+      // input shapes (YYYY/MM/DD, ISO, Date objects) and returns ''.
+      var compact = typeof _pbCompactDate === 'function' ? _pbCompactDate(s) : '';
+      if (compact) return compact;
       try { return new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
       catch(_) { return s; }
     }
@@ -26019,6 +26077,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     function _fmtBetaDate(s) {
       if (!s) return '';
+      // Same M/D/YY compact format used sitewide. Fall back to ISO if
+      // _pbCompactDate isn't loaded yet (shouldn't happen — both are in
+      // the same script block — but defensive).
+      if (typeof _pbCompactDate === 'function') {
+        var compact = _pbCompactDate(s);
+        if (compact) return compact;
+      }
       try { return new Date(s).toISOString().slice(0,10); } catch(_) { return ''; }
     }
 
@@ -26278,7 +26343,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           var expiresAt   = sub.data[0].expires_at;
           if (status) {
             status.style.color = 'var(--accent)';
-            var when = expiresAt ? new Date(expiresAt).toLocaleDateString() : 'later';
+            var when = expiresAt ? _fmtDate(expiresAt) : 'later';
             status.textContent = 'Welcome to ' + grantedTier.toUpperCase() + ' tier — active until ' + when + '.';
           }
           try {
@@ -30643,32 +30708,58 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // Sets page helpers
     var _setsOwnedBySet = {};
 
+    // Compact date helper — M/D/YY. Accepts any of:
+    //   "YYYY/MM/DD"  (pokemontcg.io)
+    //   "YYYY-MM-DD"  (ISO catalog dates)
+    //   Date object
+    // Returns empty string for falsy / placeholder ('0000/00/00') inputs.
+    function _pbCompactDate(s) {
+      if (!s) return '';
+      var raw = typeof s === 'string' ? s : null;
+      if (raw === '0000/00/00') return '';
+      var d;
+      if (raw) {
+        // Normalize separator so both YYYY/MM/DD and YYYY-MM-DD parse.
+        d = new Date(raw.replace(/-/g, '/'));
+      } else {
+        d = new Date(s);
+      }
+      if (isNaN(d)) return '';
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      var y  = String(d.getFullYear()).slice(-2);
+      return m + '/' + day + '/' + y;
+    }
+
+    // Sort sets newest → oldest. Tries releaseDate first (EN sets from
+    // pokemontcg.io); falls back to set_code descending for catalog
+    // sets that don't carry a real release date.
+    function _pbSortSetsNewestFirst(sets) {
+      return sets.slice().sort(function(a, b) {
+        var da = a.releaseDate && a.releaseDate !== '0000/00/00' ? a.releaseDate : '';
+        var db = b.releaseDate && b.releaseDate !== '0000/00/00' ? b.releaseDate : '';
+        if (da || db) return (db || '').localeCompare(da || '');
+        return (b.set_code || b.id || '').localeCompare(a.set_code || a.id || '');
+      });
+    }
+
     function _renderSetRow(s) {
       const owned    = _setsOwnedBySet[s.name] || 0;
       const total    = s.total || s.printedTotal || 1;
       const pct      = Math.min(100, Math.round((owned / total) * 100));
-      // Seafoam-teal progression. Complete sets get green; partial sets
-      // stay teal so the page reads consistently against the backdrop.
       const barColor = pct >= 100 ? 'var(--green)' : 'var(--sets-teal)';
       const logoHtml = s.images && s.images.logo
-        ? `<img src="${s.images.logo}" alt="" style="height:28px;width:auto;object-fit:contain;flex-shrink:0;max-width:90px" onerror="this.style.display='none'">`
-        : `<div style="width:40px;height:28px;flex-shrink:0"></div>`;
-      // Catalog-only sets carry a placeholder '0000/00/00' release date
-      // (the catalog_sets_summary RPC doesn't return a real one). Hide
-      // the placeholder so the meta row reads as "Catalog · 122 cards"
-      // instead of "Catalog · 0000/00/00 · 122 cards".
-      const _date = s.releaseDate && s.releaseDate !== '0000/00/00' ? s.releaseDate : '';
-      const _metaParts = [s.series || '', _date, `${total} cards`].filter(Boolean);
-      return `<div onclick="loadSetDetail('${_escJsAttr(s.id)}','${_escJsAttr(s.name)}')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-        ${logoHtml}
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.name)}</div>
-          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${_metaParts.join(' · ')}</div>
-          <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
-          </div>
+        ? `<img src="${s.images.logo}" alt="" onerror="this.style.display='none'">`
+        : '';
+      const _date = _pbCompactDate(s.releaseDate);
+      const _metaParts = [s.series || '', _date].filter(Boolean);
+      return `<div class="sets-tile" onclick="loadSetDetail('${_escJsAttr(s.id)}','${_escJsAttr(s.name)}')">
+        <div class="sets-tile-logo">${logoHtml}</div>
+        <div class="sets-tile-body">
+          <div class="sets-tile-name">${_escHtml(s.name)}</div>
+          <div class="sets-tile-meta">${_metaParts.join(' · ') || '&nbsp;'}</div>
+          <div class="sets-tile-bar"><div style="width:${pct}%;background:${barColor}"></div></div>
         </div>
-        <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${owned}/${total}</div>
       </div>`;
     }
 
@@ -30678,18 +30769,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const o   = owned[s.set_code] || 0;
       const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
       const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
-      return `<div onclick="loadJpSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}')"
-        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
-        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-        <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[JP]</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
-          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${_escHtml(s.set_code)} · ${s.total} cards</div>
-          <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
-          </div>
+      const _date = _pbCompactDate(s.release_date || s.releaseDate);
+      const _metaParts = [_escHtml(s.set_code), _date].filter(Boolean);
+      return `<div class="sets-tile" onclick="loadJpSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}')">
+        <div class="sets-tile-logo"><span class="sets-tile-tag">[JP]</span></div>
+        <div class="sets-tile-body">
+          <div class="sets-tile-name">${_escHtml(s.set_name)}</div>
+          <div class="sets-tile-meta">${_metaParts.join(' · ')}</div>
+          <div class="sets-tile-bar"><div style="width:${pct}%;background:${barColor}"></div></div>
         </div>
-        <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${o}/${s.total}</div>
       </div>`;
     }
 
@@ -30699,18 +30787,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const o   = owned[s.set_code] || 0;
       const pct = s.total > 0 ? Math.min(100, Math.round(o / s.total * 100)) : 0;
       const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
-      return `<div onclick="loadTcgSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}','${_escJsAttr(gameKey)}')"
-        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
-        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-        <div style="width:40px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--copper);letter-spacing:.04em;border:1px solid var(--copper-dim);border-radius:2px;background:var(--copper-glow)">[${cfg.label}]</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(s.set_name)}</div>
-          <div style="font-size:.62rem;color:var(--muted);margin-top:2px">${_escHtml(s.set_code)} · ${s.total} cards</div>
-          <div style="margin-top:5px;height:5px;border-radius:3px;background:var(--border);overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
-          </div>
+      const _date = _pbCompactDate(s.release_date || s.releaseDate);
+      const _metaParts = [_escHtml(s.set_code), _date].filter(Boolean);
+      return `<div class="sets-tile" onclick="loadTcgSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}','${_escJsAttr(gameKey)}')">
+        <div class="sets-tile-logo"><span class="sets-tile-tag">[${cfg.label}]</span></div>
+        <div class="sets-tile-body">
+          <div class="sets-tile-name">${_escHtml(s.set_name)}</div>
+          <div class="sets-tile-meta">${_metaParts.join(' · ')}</div>
+          <div class="sets-tile-bar"><div style="width:${pct}%;background:${barColor}"></div></div>
         </div>
-        <div style="font-size:.72rem;font-weight:700;color:${barColor};flex-shrink:0;min-width:44px;text-align:right">${o}/${s.total}</div>
       </div>`;
     }
 
@@ -31374,6 +31459,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         }
 
         const totalOwned = Object.values(_setsOwnedBySet).reduce((a, b) => a + b, 0);
+        // Sort newest → oldest before rendering, so the grid reads
+        // top-left = newest, going right and down (natural English
+        // reading order, matches user expectation).
+        sets = _pbSortSetsNewestFirst(sets);
+        if (_setsCache) _setsCache.sets = sets;
         const rows = sets.map(s => _renderSetRow(s)).join('');
 
         el.innerHTML = `
@@ -31856,6 +31946,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const sets = _jpSetsCache.sets;
         const totalOwned = Object.values(jpOwned).reduce((a, b) => a + b, 0);
 
+        sets = _pbSortSetsNewestFirst(sets);
         const rows = sets.map(s => _renderJpSetRow(s, jpOwned)).join('');
 
         el.innerHTML = `<div style="padding:16px 0 8px">
@@ -32355,6 +32446,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         });
         const totalOwned = Object.values(owned).reduce((a, b) => a + b, 0);
 
+        sets = _pbSortSetsNewestFirst(sets);
         const rows = sets.map(s => _renderTcgSetRow(s, gameKey, owned)).join('');
 
         el.innerHTML = `<div style="padding:16px 0 8px">
