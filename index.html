@@ -794,8 +794,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* MEMBERSHIP MODAL */
     .billing-toggle{display:flex;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:18px;gap:4px}
-    .billing-opt{flex:1;text-align:center;padding:8px;border-radius:7px;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--muted);transition:all .15s}
-    .billing-opt.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+    /* Both buttons sit dark by default — explicit background so the
+       browser's UA white button style doesn't leak through on the
+       inactive one. Active state flips to copper so the selection is
+       obvious without one button looking like a completely different
+       UI element. */
+    .billing-opt{flex:1;text-align:center;padding:8px;border-radius:7px;cursor:pointer;font-size:.85rem;font-weight:600;background:var(--surface);color:var(--muted);border:1px solid var(--border);transition:all .15s}
+    .billing-opt.active{background:var(--copper);color:#0a0a0a;border-color:var(--copper);box-shadow:0 1px 4px rgba(0,0,0,.3)}
     .perks-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
     .perk-item{display:flex;align-items:flex-start;gap:10px;font-size:.85rem}
     .perk-icon{color:var(--gold);font-size:1rem;flex-shrink:0;margin-top:1px}
