@@ -27291,25 +27291,62 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       document.body.appendChild(overlay);
 
       // Pull profile + a count of active listings, in parallel.
+      // Multi-tier fallback chain to survive any of:
+      //   (a) RLS on `profiles` denying cross-user SELECT,
+      //   (b) optional columns (bio, social_links, banner_url,
+      //       vacation_mode_until) not yet migrated on this DB,
+      //   (c) the public_profiles_display view not yet extended.
+      // We log the actual error to the console at each step so an
+      // unexpected failure surfaces a diagnosable message instead of
+      // the generic "Could not load profile" toast.
       let profile = null;
       let activeListings = 0;
-      try {
-        const [pRes, lRes] = await Promise.all([
-          // Pulls both the legacy shop_* columns and the newer bio /
-          // social_links / banner_url. Falls back gracefully if the
-          // newer ones don't exist yet (handled below).
-          sb.from('profiles')
+      async function _fetchSellerProfile() {
+        // 1) Read from public_profiles_display first. RLS on `profiles`
+        //    denies cross-user SELECT (no public-read policy), but the
+        //    view is grant-readable to anon/authenticated and exposes
+        //    only intentionally-public columns. After the
+        //    migration_public_profiles_seller_columns.sql migration
+        //    runs, this view includes shop_*, bio, social_links,
+        //    banner_url, seller_rating, vacation_mode_until.
+        try {
+          const r = await sb.from('public_profiles_display')
             .select('id, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, avatar_url, banner_url, subscription_tier, seller_rating, bio, social_links, vacation_mode_until')
-            .eq('id', sellerId).maybeSingle()
-            .then(async r => (r.error && /column/.test(r.error.message || ''))
-              ? await sb.from('profiles').select('id, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, avatar_url, subscription_tier').eq('id', sellerId).maybeSingle()
-              : r),
+            .eq('id', sellerId).maybeSingle();
+          if (r.data) return r.data;
+          if (r.error) console.warn('[openSellerProfile] wide view select error:', r.error);
+        } catch (e) { console.warn('[openSellerProfile] wide view select threw:', e); }
+        // 2) Narrower view fallback — covers a DB that has the view
+        //    but hasn't yet had the column-extension migration applied.
+        //    The pre-extension view only exposes the basics.
+        try {
+          const r = await sb.from('public_profiles_display')
+            .select('id, username, avatar_url, subscription_tier')
+            .eq('id', sellerId).maybeSingle();
+          if (r.data) return r.data;
+          if (r.error) console.warn('[openSellerProfile] narrow view error:', r.error);
+        } catch (e) { console.warn('[openSellerProfile] narrow view threw:', e); }
+        // 3) Last resort — direct profiles read. Only works for the
+        //    current user reading their own row (RLS owner check) but
+        //    keeps "view own shop preview" functional.
+        try {
+          const r = await sb.from('profiles')
+            .select('id, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, avatar_url, subscription_tier')
+            .eq('id', sellerId).maybeSingle();
+          if (r.data) return r.data;
+          if (r.error) console.warn('[openSellerProfile] profiles fallback error:', r.error);
+        } catch (e) { console.warn('[openSellerProfile] profiles fallback threw:', e); }
+        return null;
+      }
+      try {
+        const [p, lRes] = await Promise.all([
+          _fetchSellerProfile(),
           sb.from('listings').select('id', { count: 'exact', head: true })
             .eq('seller_id', sellerId).eq('status', 'active'),
         ]);
-        profile = pRes.data;
+        profile = p;
         activeListings = lRes.count || 0;
-      } catch (_) {}
+      } catch (e) { console.warn('[openSellerProfile] outer Promise.all threw:', e); }
 
       if (!profile) {
         overlay.querySelector('.modal').innerHTML =
