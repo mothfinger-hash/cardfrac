@@ -429,7 +429,18 @@ def parse_console_page(slug, html_text):
         name_m = NAME_RE.search(chunk)
         if not name_m:
             continue
-        product_url = name_m.group(1)
+        # Decode HTML entities in the href before storing. PC's set
+        # page ships paths like `/game/one-piece-starter-deck-22-ace-&amp;-newgate/...`
+        # with the `&` HTML-encoded. Browsers automatically decode entity
+        # references in href attributes; requests does NOT. If we stored
+        # the raw `&amp;`, the next scraper fetch would send the literal
+        # text in the URL path, PC's router can't match it, and PC
+        # redirects to /search-products?type=prices → no Ungraded markup
+        # → no_price. Same applies to `&#43;` (the `+` glyph used in
+        # Gundam rarity codes like LR+, R++). This was the root cause
+        # of "scraping worked before we switched to the API" — the
+        # original API path bypassed URL encoding entirely.
+        product_url = html.unescape(name_m.group(1))
         # html.unescape decodes entities that the PriceCharting page
         # ships in product titles (Goku&#39;s Energy, Pok&eacute;dex,
         # &amp;, &rsquo;, etc.) so we don't write the encoded form into
@@ -605,6 +616,12 @@ def main():
                     help="Show what would be enriched, don't PATCH.")
     ap.add_argument("--create-missing", action="store_true",
                     help="Insert new catalog rows for PC cards that don't match any pokedata row.")
+    ap.add_argument("--force-refresh-urls", action="store_true",
+                    help="Overwrite price_source_url even when it's already set. "
+                         "Use to clear out stale URLs from older script versions "
+                         "(e.g. ones that stored raw HTML-entity-encoded paths). "
+                         "Without this flag, rows that already have BOTH a "
+                         "pricecharting_id and a price_source_url are skipped.")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--debug-unmatched", type=int, default=0,
                     help="With --dry-run, print first N PC rows that "
@@ -675,13 +692,19 @@ def main():
                 # null. "already" means BOTH columns are populated.
                 has_pcid = bool(match.get("pricecharting_id"))
                 has_url  = bool(match.get("price_source_url"))
-                if has_pcid and has_url:
+                # With --force-refresh-urls we always overwrite the URL
+                # (the canonical source is PC's current set page). Use
+                # this when the previously-stored URL is suspected stale
+                # — e.g. after the HTML-entity-encoding bug was fixed and
+                # we need to replace the broken `&amp;` URLs in bulk.
+                force_url = args.force_refresh_urls
+                if has_pcid and has_url and not force_url:
                     n_already += 1
                     continue
                 payload = {}
                 if not has_pcid:
                     payload["pricecharting_id"] = pc["pricecharting_id"]
-                if not has_url:
+                if not has_url or force_url:
                     payload["price_source_url"] = pc["product_url"]
                 if args.dry_run:
                     cols = "+".join(payload.keys())

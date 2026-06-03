@@ -93,6 +93,14 @@ on:
         options:
           - 'false'
           - 'true'
+      force_refresh_urls:
+        description: 'Phase 1: overwrite existing price_source_url (use to fix entity-encoded URLs from older runs)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   refresh:
@@ -158,6 +166,14 @@ jobs:
           fi
           WORKERS="${{ github.event.inputs.workers || '3' }}"
 
+          # Optional one-shot — overwrites every URL even if one is
+          # already set. Useful for purging legacy entity-encoded URLs.
+          # Off by default; scheduled runs never force-refresh.
+          FORCE_URLS=""
+          if [ "${{ github.event.inputs.force_refresh_urls || 'false' }}" = "true" ]; then
+            FORCE_URLS="--force-refresh-urls"
+          fi
+
           # Default scheduled runs use --force-scrape because PC's
           # JSON API returns empty price fields for these TCGs. The
           # manual `mode` input lets us flip back to API for testing.
@@ -179,6 +195,7 @@ jobs:
             # same Cloudflare-friendly pacing as the scraper.
             python3 -u sync_pc_singles_enrich.py \
               --tcg "$tcg" \
+              $FORCE_URLS \
               $ENRICH_DRY \
               || echo "[$tcg] enrich errored — continuing to scrape anyway"
 
