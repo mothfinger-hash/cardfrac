@@ -1209,6 +1209,85 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* ══ ADD CARD DEVICE PAGE ═══════════════════════════════════════════════ */
     #addCardPage.page{padding:12px 0;background:var(--bg);min-height:calc(100vh - 56px)}
     #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
+    /* New mobile shell — phondex backdrop dropped. Renders as a
+       hologram-bordered card with a 2×2 button grid + CRT results
+       area beneath it. The dim layer already comes from the overlay
+       backdrop in `body.pb-addcard-overlay::before`. */
+    .ac-mob-clean .ac-mob-shell{
+      position:relative;
+      width:min(420px, 92vw);
+      max-height:calc(100svh - 80px);
+      padding:18px 16px 14px;
+      background:linear-gradient(180deg, rgba(15,26,40,.96), rgba(10,18,28,.96));
+      border:1.5px solid var(--accent);
+      border-radius:var(--r-md,12px);
+      box-shadow:0 0 24px rgba(26,199,160,.22), 0 8px 28px rgba(0,0,0,.6);
+      overflow:hidden;
+      display:flex;flex-direction:column;gap:12px;
+    }
+    .ac-mob-clean .ac-mob-title{
+      font-family:'Orbitron', monospace;
+      font-weight:900;
+      font-size:.95rem;
+      letter-spacing:.16em;
+      color:var(--accent);
+      text-align:center;
+      padding-bottom:8px;
+      border-bottom:1px solid rgba(26,199,160,.25);
+    }
+    .ac-mob-clean .ac-nav-grid{
+      display:grid !important;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    .ac-mob-clean .ac-nav-grid .ac-ni{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:6px;padding:18px 10px;
+      border:1px solid rgba(26,199,160,.45);
+      background:rgba(26,199,160,.08);
+      border-radius:var(--r-sm,8px);
+      color:var(--accent);
+      cursor:pointer;
+      transition:background .12s, transform .12s, border-color .12s;
+    }
+    .ac-mob-clean .ac-nav-grid .ac-ni:hover,
+    .ac-mob-clean .ac-nav-grid .ac-ni.on{
+      background:rgba(26,199,160,.18);
+      border-color:var(--accent);
+    }
+    .ac-mob-clean .ac-nav-grid .ac-ni:active{ transform:scale(.97); }
+    .ac-mob-clean .ac-nav-grid .ac-ni-ico{
+      font-size:1.4rem; line-height:1;
+    }
+    .ac-mob-clean .ac-nav-grid .ac-ni-lbl{
+      font-family:'Space Mono', monospace;
+      font-size:.7rem; letter-spacing:.08em;
+      font-weight:700;
+    }
+    .ac-mob-clean #acCrtMob{
+      flex:1;min-height:140px;
+      background:rgba(0,0,0,.5);
+      border:1px solid rgba(26,199,160,.25);
+      border-radius:var(--r-sm,8px);
+      overflow:hidden;
+      position:relative;
+    }
+    .ac-mob-clean #acMobGrid{
+      padding:8px;
+      max-height:100%;
+      overflow-y:auto;
+    }
+    /* Hide the new clean shell on desktop — desktop still uses the
+       pdex layout. */
+    @media (min-width: 769px){
+      .ac-mob-clean{ display:none !important; }
+    }
+    /* And on mobile, hide the desktop pdex variant + the legacy
+       phondex mobile container (we kept it disabled rather than
+       deleted so any deep-linking script that touched it doesn't 500). */
+    @media (max-width: 768px){
+      .ac-pdex-wrap{ display:none !important; }
+    }
     /* Overlay mode — Add Card pops up on top of the current page
        (binder, dashboard, etc.) instead of replacing it. The existing
        pdex CRT visual already lives inside #addCardPage; we just
@@ -3202,6 +3281,26 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .binder-card.ghost-card{opacity:.52;border:1px dashed var(--muted);position:relative}
     .binder-card.ghost-card:hover{opacity:.75;border-color:var(--teal);transform:translateY(-2px)}
     .want-badge{background:rgba(26,199,160,.15);border:1px solid rgba(26,199,160,.5);color:var(--teal);font-size:.55rem;padding:2px 5px;position:absolute;bottom:4px;right:4px}
+    /* Ghost (wishlist) cards in per-binder view — savings progress
+       overlays the image instead of stretching a footer area below
+       it, so ghost + owned cards share the same bounding box.
+       Identical to the dashboard tile foot pattern. */
+    .ghost-overlay{
+      position:absolute;left:0;right:0;bottom:0;z-index:2;
+      background:linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,.4) 60%, rgba(0,0,0,0));
+      padding:16px 6px 5px;pointer-events:none;
+    }
+    .ghost-overlay-bar{
+      height:5px;border-radius:3px;background:rgba(255,255,255,.18);
+      overflow:hidden;margin-bottom:3px;
+    }
+    .ghost-overlay-fill{
+      height:100%;background:var(--teal);border-radius:3px;transition:width .4s;
+    }
+    .ghost-overlay-pct{
+      font-size:.58rem;font-weight:700;color:var(--teal);text-align:center;
+      text-shadow:1px 1px 0 #000;letter-spacing:.04em;
+    }
     .ghost-shimmer{position:absolute;inset:0;background:linear-gradient(135deg,transparent 40%,rgba(26,199,160,.07) 50%,transparent 60%);pointer-events:none}
     /* Savings progress */
     .savings-bar-wrap{background:var(--surface2);height:8px;border-radius:4px;overflow:hidden;margin:6px 0}
@@ -4980,8 +5079,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 .badge-hex {
   width: 96px; height: 96px; position: relative;
   clip-path: polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
+  background: #0a0a0a;
   transition: filter .2s, transform .2s;
+  overflow: hidden;
 }
+.badge-hex svg { width: 96px; height: 96px; display: block; }
 .badge-tile.earned .badge-hex {
   filter: drop-shadow(0 0 10px rgba(26,199,160,.5));
 }
@@ -7539,7 +7641,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <label class="ac-ghost" style="cursor:pointer;text-align:center">&#9654; SCAN A CARD
                 <input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none">
               </label>
-              <button class="ac-ghost" onclick="openMultiScan()">&#9638; SCAN MULTIPLE</button>
+              <button class="ac-ghost" onclick="openMultiScan()">&#9638; SCAN BULK</button>
               <button class="ac-ghost" onclick="openManualAddModal()">+ ADD MANUALLY</button>
             </div>
           </div>
@@ -7562,40 +7664,45 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       </div>
     </div>
 
-    <!-- ══ MOBILE: phondex device ══════════════════════════════════════════ -->
-    <div class="ac-mob-wrap">
-      <div class="ac-device">
-        <img class="ac-device-img" src="phondex.webp" alt="PathBinder" decoding="async">
-        <div class="ac-led-m"></div>
-        <div class="ac-phone-screen">
-          <div class="ac-scanlines" style="z-index:50"></div>
+    <!-- ══ MOBILE: 2×2 hologram grid (no phondex background) ═══════════════
+         Phondex backdrop dropped in favor of a cleaner CRT overlay that
+         floats over the dimmed binder. Order: Search, Manual, Scan,
+         Scan Bulk — left-to-right, top-to-bottom (2×2 reading order).
+         ────────────────────────────────────────────────────────────── -->
+    <div class="ac-mob-wrap ac-mob-clean">
+      <div class="ac-mob-shell">
+        <div class="ac-scanlines" style="z-index:50;border-radius:inherit"></div>
 
-          <!-- top nav: static — sits above the CRT div so it's unaffected by the tube-on animation -->
-          <div class="ac-nav">
-            <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
-              <span class="ac-ni-ico">◎</span>
-              <span class="ac-ni-lbl">Search</span>
-            </div>
-            <div class="ac-ni" onclick="acNavClick(this);document.getElementById('acMobScanInput').click()">
-              <span class="ac-ni-ico">⬡</span>
-              <span class="ac-ni-lbl">Scan</span>
-            </div>
-            <input id="acMobScanInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFromAddCard(this)">
-            <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
-              <span class="ac-ni-ico">▣</span>
-              <span class="ac-ni-lbl">Scan Bulk</span>
-            </div>
-            <div class="ac-ni" onclick="acNavClick(this);openManualAddModal()">
-              <span class="ac-ni-ico">＋</span>
-              <span class="ac-ni-lbl">Manual</span>
-            </div>
-          </div>
+        <!-- Hologram header — matches the desktop CRT title -->
+        <div class="ac-mob-title">ADD CARD</div>
 
-          <!-- CRT div: only wraps the results grid so the tube-on flash doesn't shake the nav -->
-          <div class="ac-crt" id="acCrtMob">
-            <!-- scrollable results grid -->
-            <div class="ac-mob-grid" id="acMobGrid"></div>
+        <!-- 2×2 button grid. IDs + onclicks preserved so existing JS
+             handlers (acMobToggleSearch, acNavClick, openMultiScan,
+             openManualAddModal, scanFromAddCard) work unchanged. -->
+        <div class="ac-nav ac-nav-grid">
+          <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
+            <span class="ac-ni-ico">◎</span>
+            <span class="ac-ni-lbl">Search</span>
           </div>
+          <div class="ac-ni" onclick="acNavClick(this);openManualAddModal()">
+            <span class="ac-ni-ico">＋</span>
+            <span class="ac-ni-lbl">Manual</span>
+          </div>
+          <div class="ac-ni" onclick="acNavClick(this);document.getElementById('acMobScanInput').click()">
+            <span class="ac-ni-ico">⬡</span>
+            <span class="ac-ni-lbl">Scan</span>
+          </div>
+          <input id="acMobScanInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFromAddCard(this)">
+          <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
+            <span class="ac-ni-ico">▣</span>
+            <span class="ac-ni-lbl">Scan Bulk</span>
+          </div>
+        </div>
+
+        <!-- CRT div: wraps the results grid so the tube-on flash
+             doesn't shake the button grid -->
+        <div class="ac-crt" id="acCrtMob">
+          <div class="ac-mob-grid" id="acMobGrid"></div>
         </div>
       </div>
     </div>
@@ -9457,6 +9564,56 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         _atcRefreshVariantChips();
       }
     }
+
+    // Global click-outside-to-close for any .modal-overlay. Bound once
+    // at script init so newly-created modals don't have to wire their
+    // own backdrop handlers. Also handles the Add Card overlay
+    // (different mechanism but same UX expectation).
+    (function _wireBackdropDismiss() {
+      if (window._backdropDismissWired) return;
+      window._backdropDismissWired = true;
+      document.addEventListener('click', function(e) {
+        // Only fire when the click TARGET is the overlay itself, not
+        // any child content. That's the standard modal-backdrop
+        // pattern: clicking inside the modal content shouldn't close it.
+        if (e.target && e.target.classList && e.target.classList.contains('modal-overlay')) {
+          const id = e.target.id;
+          if (id && typeof closeModal === 'function') {
+            try { closeModal(id); } catch (_) { e.target.classList.remove('open'); }
+          } else {
+            e.target.classList.remove('open');
+          }
+        }
+        // Add Card overlay — body class gates it, click on backdrop
+        // (which is body::before, not directly clickable) falls
+        // through to body. So instead: catch clicks on body while
+        // overlay is open AND outside #addCardPage content.
+        if (document.body.classList.contains('pb-addcard-overlay')) {
+          const page = document.getElementById('addCardPage');
+          if (page && !page.contains(e.target) && !e.target.closest('.pb-addcard-overlay-close')) {
+            // Also ignore clicks bubbling from popovers / scanner / nested modals
+            // that may have opened on top. Cheapest check: only close when the
+            // target is body or html.
+            if (e.target === document.body || e.target === document.documentElement) {
+              if (typeof closeAddCardOverlay === 'function') closeAddCardOverlay();
+            }
+          }
+        }
+      }, true); // capture phase so it runs before stopPropagation handlers
+      // Esc closes the topmost open modal.
+      document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        const open = document.querySelectorAll('.modal-overlay.open');
+        if (open.length) {
+          const last = open[open.length - 1];
+          if (last.id && typeof closeModal === 'function') {
+            try { closeModal(last.id); } catch(_) { last.classList.remove('open'); }
+          } else {
+            last.classList.remove('open');
+          }
+        }
+      });
+    })();
     // Convenience wrapper for landing page CTA buttons
     function openAuthModal(tab) {
       if (tab === 'signup') {
@@ -21687,19 +21844,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''} onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
-                ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>`
+                ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>
+                   ${(!isAllCards) ? `<div class="ghost-overlay">
+                     ${goal > 0
+                       ? `<div class="ghost-overlay-bar"><div class="ghost-overlay-fill" style="width:${pct}%"></div></div>
+                          <div class="ghost-overlay-pct">${pct}% · $${saved.toFixed(0)}/$${goal.toFixed(0)}</div>`
+                       : '<div class="ghost-overlay-pct">Wishlist</div>'}
+                   </div>` : ''}`
                 : (isSealed
                     ? ''   // sealed: no badge per spec
                     : `<span class="binder-card-badge ${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>`)}
             </div>
-            ${(isAllCards || isGhost) ? `<div class="binder-card-info">
-              ${isAllCards
-                ? `<div class="binder-card-name">${item.card_name}</div>
-                   ${effectiveView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}`
-                : '' /* Per-binder owned cards skip the wrapper entirely
-                        (handled by the outer conditional above) so the
-                        card box doesn't carry empty bottom padding.    */
-              }
+            ${isAllCards ? `<div class="binder-card-info">
+              <div class="binder-card-name">${item.card_name}</div>
+              ${effectiveView !== '3x3' && !isGhost ? `<div class="binder-card-set">${item.set_name || ''}</div>` : ''}
               ${isGhost
                 ? (goal > 0
                     ? `<div class="savings-bar-wrap"><div class="savings-bar-fill" style="width:${pct}%"></div></div>
@@ -21719,10 +21877,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                     })()}
                   </div>`
               }
-            </div>` : '' /* Per-binder owned cards: drop the info wrapper
-                            so the card's bottom padding matches the side
-                            padding. Card-detail modal still shows name +
-                            price + trend on tap.                          */
+            </div>` : '' /* Per-binder view: drop the info wrapper entirely
+                            so owned + ghost cards share the same bounding
+                            box. Ghost savings info overlays the image
+                            instead (.ghost-overlay above). Card-detail
+                            modal still shows name + price + trend on tap. */
             }
           </div>`;
         }).join('')}</div>`;
@@ -28656,6 +28815,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         var { error } = await sb.from('fair_trade_sessions').insert({
           id: id, side_a: sideA, side_b: [], cash_a: cashA, cash_b: 0,
           name_a: myName, name_b: 'Guest',
+          // Optional user_id stamping — only when the trader is signed
+          // in. Lets the partner add a follow button later. Tolerant
+          // of older schemas: the property is dropped silently if the
+          // column doesn't exist.
+          user_id_a: (currentUser && currentUser.id) || null,
           expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
         });
         if (error) {
@@ -28665,7 +28829,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         _ftSession = { id: id, role: 'a', lastSeenA: JSON.stringify(sideA), lastSeenB: '[]',
                        lastCashA: cashA, lastCashB: 0, pollInterval: null, bJoined: false,
-                       nameA: myName, nameB: 'Guest' };
+                       nameA: myName, nameB: 'Guest',
+                       userIdA: (currentUser && currentUser.id) || null, userIdB: null };
         _ftLocked = { A: false, B: false };
         _ftAnalyzingFromLock = false;
         _ftStartPolling();
@@ -28725,7 +28890,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                        lastSeenB: JSON.stringify(data.side_b || []),
                        lastCashA: data.cash_a || 0, lastCashB: data.cash_b || 0,
                        pollInterval: null, bJoined: true,
-                       nameA: data.name_a || 'Player A', nameB: myName };
+                       nameA: data.name_a || 'Player A', nameB: myName,
+                       userIdA: data.user_id_a || null,
+                       userIdB: (currentUser && currentUser.id) || null };
         _ftLocked = { A: !!data.locked_a, B: !!data.locked_b };
         _ftAnalyzingFromLock = false;
 
@@ -28734,6 +28901,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           await sb.from('fair_trade_sessions').update({
             joined_b: true,
             name_b:   myName,
+            user_id_b: (currentUser && currentUser.id) || null,
             expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
           }).eq('id', id);
         } catch(_) {}
@@ -28815,6 +28983,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (role === 'a' && !_ftSession.bJoined && data.joined_b) {
           _ftSession.bJoined = true;
           _ftSession.nameB = data.name_b || 'Guest';
+          _ftSession.userIdB = data.user_id_b || null;
           showToast(_ftSession.nameB + ' has joined the trade!');
           try { checkBadge_linked(); } catch(_) {}
           var banner = document.getElementById('ftSessionBanner');
@@ -28863,6 +29032,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (!_ftSession) return;
       clearTimeout(_ftSyncDebounce);
       _ftSyncDebounce = setTimeout(_ftSyncSession, 400);
+    }
+
+    // Toggle follow/unfollow on the trade partner. Updates the
+    // banner in place so the heart flips state without a full
+    // re-render losing scroll position elsewhere on the page.
+    async function _ftToggleFollow(targetId) {
+      if (!targetId || !currentUser) return;
+      const already = window._followingIds && window._followingIds.has(targetId);
+      const ok = already
+        ? await unfollowUser(targetId)
+        : await followUser(targetId);
+      if (ok && typeof _ftRenderSessionBanner === 'function') {
+        try { _ftRenderSessionBanner(); } catch(_) {}
+      }
     }
 
     function _ftStartPolling() {
@@ -28947,6 +29130,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               '<span style="font-size:.78rem;color:var(--text);font-weight:600">' + myName + '</span>' +
               '<span style="font-size:.65rem;color:var(--muted)">(you)</span>' +
             '</div>' +
+            // Partner row — name + follow heart when they're an
+            // authenticated user. Hollow heart when not following,
+            // filled when following. Hidden entirely if the partner
+            // is anonymous (no user_id), self, or hasn't joined yet.
+            (function() {
+              var theirUid = role === 'a' ? _ftSession.userIdB : _ftSession.userIdA;
+              if (!theirUid || !currentUser || theirUid === currentUser.id) return '';
+              if (!bHasJoined && role === 'a') return '';
+              var following = !!(window._followingIds && window._followingIds.has(theirUid));
+              var heart = following ? '♥' : '♡';
+              return '<div style="display:flex;align-items:center;gap:7px;margin-top:5px">' +
+                '<span style="font-size:.78rem;color:var(--text);font-weight:600;cursor:pointer" onclick="openSellerProfile(\'' + theirUid + '\')">' + theirName + '</span>' +
+                '<button onclick="_ftToggleFollow(\'' + theirUid + '\')" title="' + (following ? 'Unfollow' : 'Follow') + '"' +
+                  ' style="background:none;border:none;color:var(--copper);font-size:1rem;cursor:pointer;line-height:1;padding:0 2px;font-weight:' + (following ? '900' : '400') + '">' + heart + '</button>' +
+              '</div>';
+            })() +
             '<div style="font-size:.72rem;color:var(--muted);margin-top:4px">' + statusMsg + '</div>' +
             (role === 'b' ? '<div style="font-size:.68rem;color:var(--muted);margin-top:2px">' + nameA + '\'s side is read-only on your screen</div>' : '') +
           '</div>' +
