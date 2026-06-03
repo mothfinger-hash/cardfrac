@@ -15,6 +15,17 @@ name: Refresh Prices — Small TCGs
 # TCGplayer free-API sync either (sync_tcgplayer_via_free_apis.py
 # explicitly skips them — no upstream intermediary exists).
 #
+# Why --force-scrape (HTML) instead of the JSON API path:
+#   First run (2026-06-03) returned `no_price` for 99.7% of rows via
+#   the JSON API — PC's /api/product endpoint responds 200 OK with
+#   loose-price / cib-price / new-price all empty for these niche /
+#   foreign TCG categories. The product pages on the public website
+#   DO show prices to humans, so HTML scraping is the only way to
+#   actually capture them. --force-scrape bypasses the API entirely
+#   and parses each product page. Requires `price_source_url` to be
+#   populated on the catalog row; missing-URL rows are skipped with
+#   a clear bucket in the run summary.
+#
 # Schedule rationale:
 #   - Gundam / One Piece have active competitive scenes and visible
 #     price movement week-to-week. Nightly keeps comps fresh.
@@ -56,6 +67,14 @@ on:
         description: 'Parallel scrape workers per TCG (default 3 — keep low to avoid Cloudflare 403s)'
         required: false
         default: '3'
+      mode:
+        description: 'scrape (HTML, the right answer) | api (JSON, returns empty for these TCGs)'
+        required: false
+        default: 'scrape'
+        type: choice
+        options:
+          - 'scrape'
+          - 'api'
       dry_run:
         description: 'Dry-run: fetch + parse, no DB writes'
         required: false
@@ -127,14 +146,23 @@ jobs:
           fi
           WORKERS="${{ github.event.inputs.workers || '3' }}"
 
+          # Default scheduled runs use --force-scrape because PC's
+          # JSON API returns empty price fields for these TCGs. The
+          # manual `mode` input lets us flip back to API for testing.
+          MODE_FLAG="--force-scrape"
+          if [ "${{ github.event.inputs.mode || 'scrape' }}" = "api" ]; then
+            MODE_FLAG=""
+          fi
+
           for tcg in ${{ steps.pick.outputs.tcgs }}; do
             echo ""
             echo "═══════════════════════════════════════════════════════"
-            echo "  Refreshing: $tcg"
+            echo "  Refreshing: $tcg (mode: ${MODE_FLAG:-api})"
             echo "═══════════════════════════════════════════════════════"
             python3 -u refresh_catalog_prices.py \
               --tcg "$tcg" \
               --workers "$WORKERS" \
               --resume \
+              $MODE_FLAG \
               $DRY || echo "[$tcg] errored — continuing to next TCG"
           done
