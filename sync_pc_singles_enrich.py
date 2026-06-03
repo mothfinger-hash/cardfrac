@@ -412,10 +412,16 @@ def _extract_card_number(name_raw, product_url):
     return None, None
 
 
-def parse_console_page(slug, html):
+def parse_console_page(slug, html_text):
     """Yield rows on a per-set console page. Returns dicts with:
-      pricecharting_id, name, card_number_guess, product_url"""
-    chunks = ROW_SPLIT.split(html)[1:]
+      pricecharting_id, name, card_number_guess, product_url
+
+    Note: parameter is named `html_text` (not `html`) so the imported
+    `html` stdlib module stays accessible inside this scope. An earlier
+    version shadowed the module with the parameter name and crashed
+    with `AttributeError: 'str' object has no attribute 'unescape'`
+    the first time it tried to decode HTML entities."""
+    chunks = ROW_SPLIT.split(html_text)[1:]
     for chunk in chunks:
         id_m = ID_RE.search(chunk)
         if not id_m:
@@ -644,14 +650,18 @@ def main():
     _lock = threading.Lock()
 
     def process_set(slug):
+        # Note: local var named `html_text` (not `html`) so the imported
+        # `html` stdlib module remains accessible if any helper in this
+        # scope needs html.unescape later. Same defensive pattern as
+        # parse_console_page below.
         try:
-            html = fetch(f"{PC_BASE}/console/{slug}")
+            html_text = fetch(f"{PC_BASE}/console/{slug}")
         except Exception as e:
             return [(slug, "fail", f"fetch: {e}", 0, 0)]
         by_name = build_catalog_index(catalog_rows, slug, cfg)
         n_enr = 0; n_unm = 0; n_already = 0
         unmatched_samples = []   # for --debug-unmatched
-        for pc in parse_console_page(slug, html):
+        for pc in parse_console_page(slug, html_text):
             match = find_catalog_match(pc, by_name)
             if match:
                 if match.get("pricecharting_id"):
