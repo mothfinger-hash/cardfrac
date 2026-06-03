@@ -10049,6 +10049,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // bulk loader and the profile+listings hydration — next user
       // gets fresh data, no stale "already loaded" short-circuits.
       try { _userDataLoadedFor = null; } catch(_) {}
+      try { _initialUserDataLoaded = false; } catch(_) {}
       try { _profileListingsHydratedFor = null; } catch(_) {}
       updateCartBar();
       // Wipe personal localStorage so the next user signing in on this
@@ -10400,12 +10401,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         // server-side checkout block is the canonical guard; this is
         // just so the listings don't tease buyers who'd then get
         // turned away at checkout.
-        const sellerProfile = (window._browseSellerCache || {})[l.seller_id || l.sellerId];
+        const sellerProfile = (window._browseSellerCache || {})[listing.seller_id || listing.sellerId];
         if (sellerProfile && sellerProfile.vacation_mode_until) {
           if (new Date(sellerProfile.vacation_mode_until) > new Date()) return false;
         }
         // Hide listings from users the current user has blocked.
-        if (window._blockedUserIds && window._blockedUserIds.has(l.seller_id || l.sellerId)) {
+        if (window._blockedUserIds && window._blockedUserIds.has(listing.seller_id || listing.sellerId)) {
           return false;
         }
 
@@ -12147,7 +12148,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // three clear next-actions instead of dumping a wall of $0/0/0.
       // Once the user has ANY data, the regular dashboard renders.
       const _bindersLen = (typeof binders !== 'undefined' && Array.isArray(binders)) ? binders.length : 0;
-      const _isBrandNew = collectionItems.length === 0
+      // Gate the welcome card on actual data hydration. Without this,
+      // returning users briefly flash the "Welcome to PathBinder"
+      // empty-state during the async loadUserDataOnce() window — every
+      // array is technically empty for ~200-800ms before the fetches
+      // resolve. _initialUserDataLoaded flips true once loadCollection
+      // / loadOrders / loadPortfolioSnapshots / loadBinders settle, at
+      // which point the brand-new check is meaningful. While it's still
+      // false we fall through to the normal dashboard render which
+      // shows skeleton/zero rows that get filled in as data arrives.
+      const _isBrandNew = (typeof _initialUserDataLoaded === 'undefined' || _initialUserDataLoaded)
+                       && collectionItems.length === 0
                        && myListingItems.length === 0
                        && orders.length === 0
                        && _bindersLen === 0;
@@ -34400,6 +34411,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // tracks which user id we already hydrated for; the helper below
     // short-circuits the second caller.
     let _userDataLoadedFor = null;
+    // Flips true after the first loadUserDataOnce() resolves for the
+    // current user. Read by renderDashboard's "Welcome to PathBinder"
+    // first-run gate so returning users don't see the welcome card
+    // flash during the async hydration window. Reset to false on
+    // sign-out alongside _userDataLoadedFor.
+    let _initialUserDataLoaded = false;
     async function loadUserDataOnce() {
       if (!currentUser) return;
       if (_userDataLoadedFor === currentUser.id) return;
@@ -34410,6 +34427,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         loadPortfolioSnapshots().catch(() => {}),
         loadBinders().catch(() => {})
       ]);
+      _initialUserDataLoaded = true;
+      // Re-render the dashboard now that real data is in memory — the
+      // first paint (if any) would've shown the empty-state welcome card.
+      try { renderDashboard(); } catch(_) {}
     }
     // Same idea for the profile + listings hydration that runs in
     // both initApp AND onAuthStateChange. With this guard the
@@ -34762,6 +34783,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             // profile gets fetched fresh.
             try { _syncDoneFor = null; } catch(_) {}
             try { _userDataLoadedFor = null; } catch(_) {}
+            try { _initialUserDataLoaded = false; } catch(_) {}
             try { _profileListingsHydratedFor = null; } catch(_) {}
           }
           localStorage.setItem('pathbinder_last_user_id', session.user.id);
