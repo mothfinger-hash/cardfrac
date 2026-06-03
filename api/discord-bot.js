@@ -1661,6 +1661,7 @@ async function handleDuel(interaction) {
   const bPk = pkMap[opp.id]        || null;
 
   const aName = challenger.global_name || challenger.username || 'Challenger';
+  const bName = opp.global_name        || opp.username        || 'Opponent';
 
   // Log the duel — single insert, marked pending and immediately
   // resolved by resolveDuelMatch below.
@@ -1678,6 +1679,7 @@ async function handleDuel(interaction) {
     game, rounds,
     aPk, bPk,
     duelLogId,
+    aName, bName,
   });
   if (resolved.error) {
     return publicReply({ content: resolved.error });
@@ -1768,7 +1770,9 @@ async function handleDuelComponent(interaction) {
 // duelLogId: if known (from immediate-run insert), updates that row
 //   directly. Otherwise (accept path), updates the most recent pending
 //   row for the (challenger, opponent) pair.
-async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, bPk, duelLogId }) {
+// aName / bName: display names. Optional — falls back to <@id> mention
+//   form if absent (the legacy accept-button path doesn't have them).
+async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, bPk, duelLogId, aName, bName }) {
   const pulls = await Promise.all(
     Array.from({ length: rounds * 2 }, () => pullDuelCard(game))
   );
@@ -1791,20 +1795,23 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
     roundLines.push(`**R${i + 1}** ${mark}  ${a.name} ($${av.toFixed(2)})  vs  ${b.name} ($${bv.toFixed(2)})`);
   }
 
-  const aMention = `<@${challengerId}>`;
-  const bMention = `<@${opponentId}>`;
+  // Plain display names for the embed (Discord doesn't always render
+  // <@id> mentions inside embed titles / field names, which is why
+  // they were showing up as raw <@id> strings earlier).
+  const aLabel = aName || `<@${challengerId}>`;
+  const bLabel = bName || `<@${opponentId}>`;
 
   let resultLine;
   let winnerColor;
   let winnerId = null;
   let aOutcome = 'tie', bOutcome = 'tie';
   if (aWins > bWins) {
-    resultLine = `${aMention} wins **${aWins}-${bWins}**!`;
+    resultLine = `**${aLabel}** wins **${aWins}-${bWins}**!`;
     winnerColor = 0x1AC7A0;
     winnerId = challengerId;
     aOutcome = 'win'; bOutcome = 'loss';
   } else if (bWins > aWins) {
-    resultLine = `${bMention} wins **${bWins}-${aWins}**!`;
+    resultLine = `**${bLabel}** wins **${bWins}-${aWins}**!`;
     winnerColor = 0xC97A3E;
     winnerId = opponentId;
     aOutcome = 'loss'; bOutcome = 'win';
@@ -1824,16 +1831,16 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
     const aRes = await applyDuelResult(aPk, aOutcome, aXp);
     const bRes = await applyDuelResult(bPk, bOutcome, bXp);
     if (aRes && aRes.evolution) {
-      evolutionLines.push(`✦ ${aMention}'s **${aPk.pokemon_name}** evolved into **${aRes.evolution.name}**!`);
+      evolutionLines.push(`✦ ${aLabel}'s **${aPk.pokemon_name}** evolved into **${aRes.evolution.name}**!`);
     }
     if (bRes && bRes.evolution) {
-      evolutionLines.push(`✦ ${bMention}'s **${bPk.pokemon_name}** evolved into **${bRes.evolution.name}**!`);
+      evolutionLines.push(`✦ ${bLabel}'s **${bPk.pokemon_name}** evolved into **${bRes.evolution.name}**!`);
     }
     xpFooter = `XP: ${aPk.pokemon_name} +${aXp} · ${bPk.pokemon_name} +${bXp}`;
   } else {
     const missing = [];
-    if (!aPk) missing.push(aMention);
-    if (!bPk) missing.push(bMention);
+    if (!aPk) missing.push(aLabel);
+    if (!bPk) missing.push(bLabel);
     xpFooter = `Run /starter to start earning XP. (${missing.join(' and ')} not registered.)`;
   }
 
@@ -1857,22 +1864,45 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
       .eq('status', 'pending');
   }
 
+  // Head-to-head record. Pulls every resolved duel between this pair
+  // (including the one we just updated) and counts wins per side.
+  // Shows nothing on the very first match — only meaningful from #2
+  // onward.
+  let h2hLine = '';
+  try {
+    const h2h = await sb.from('bot_duel_log')
+      .select('winner_discord_id')
+      .eq('status', 'accepted')
+      .or(`and(challenger_discord_id.eq.${challengerId},opponent_discord_id.eq.${opponentId}),and(challenger_discord_id.eq.${opponentId},opponent_discord_id.eq.${challengerId})`);
+    if (!h2h.error && Array.isArray(h2h.data) && h2h.data.length > 1) {
+      let aH2h = 0, bH2h = 0, tH2h = 0;
+      h2h.data.forEach(r => {
+        if (r.winner_discord_id === challengerId)      aH2h++;
+        else if (r.winner_discord_id === opponentId)   bH2h++;
+        else                                            tH2h++;
+      });
+      h2hLine = `Head-to-head: **${aLabel}** ${aH2h}W · **${bLabel}** ${bH2h}W` + (tH2h ? ` · ${tH2h}T` : '');
+    }
+  } catch (_) { /* never let h2h failure block the embed */ }
+
   const aTotal = aCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
   const bTotal = bCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
   const aBest = aCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const bBest = bCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const SHARED_URL = 'https://pathbinder.gg/?page=dashboard';
-  // Build description: rounds, result, then any evolution celebrations.
+  // Build description: rounds, result, then any evolution celebrations,
+  // then the head-to-head record line if there's history to show.
   const descParts = [roundLines.join('\n'), resultLine];
   if (evolutionLines.length) descParts.push(evolutionLines.join('\n'));
+  if (h2hLine)                descParts.push(h2hLine);
   const embeds = [{
     url: SHARED_URL,
     title: rounds === 1 ? 'Card Duel' : `Card Duel — Best of ${rounds}`,
     description: descParts.join('\n\n'),
     color: winnerColor,
     fields: [
-      { name: `${aMention} total`, value: `$${aTotal.toFixed(2)}`, inline: true },
-      { name: `${bMention} total`, value: `$${bTotal.toFixed(2)}`, inline: true },
+      { name: `${aLabel} total`, value: `$${aTotal.toFixed(2)}`, inline: true },
+      { name: `${bLabel} total`, value: `$${bTotal.toFixed(2)}`, inline: true },
     ],
     image: aBest && aBest.image_url ? { url: aBest.image_url } : undefined,
     footer: { text: xpFooter },
