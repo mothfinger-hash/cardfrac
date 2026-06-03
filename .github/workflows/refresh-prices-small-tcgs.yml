@@ -37,9 +37,19 @@ name: Refresh Prices — Small TCGs
 #   - --resume skips rows that already got a snapshot today, so same-
 #     day re-runs are cheap and idempotent.
 #
+# Two-phase pipeline:
+#   1. Enrichment — sync_pc_singles_enrich.py re-discovers current PC
+#      product URLs from /console/<set-slug> for each TCG. Replaces
+#      stale URLs in catalog.price_source_url. Most rows already have
+#      a fresh URL so the script is mostly a no-op after the first run.
+#      Cheap: a few minutes per TCG.
+#   2. Refresh — refresh_catalog_prices.py --force-scrape walks each
+#      catalog row, hits its (now-fresh) URL, parses the price, writes
+#      to catalog.current_value + catalog_price_history.
+#
 # Cron tiers:
-#   03:00 UTC daily      →  onepiece, gundam
-#   04:00 UTC Sundays    →  dbz, pokemon_topps
+#   03:00 UTC daily      →  onepiece, gundam   (enrich + refresh)
+#   04:00 UTC Sundays    →  dbz, pokemon_topps (enrich + refresh)
 #
 # Both fire before the 07:00 UTC bulk-CSV sweep so the entire catalog
 # is fresh by Sunday morning.
@@ -87,7 +97,7 @@ on:
 jobs:
   refresh:
     runs-on: self-hosted
-    timeout-minutes: 240   # 4 hours — generous for sequential per-row scrapes
+    timeout-minutes: 360   # 6 hours — enrich + scrape per TCG, 4 TCGs sequential
 
     env:
       PYTHONUNBUFFERED: '1'
@@ -132,7 +142,7 @@ jobs:
           fi
           echo "tcgs=$TCGS" >> "$GITHUB_OUTPUT"
 
-      - name: Run per-row scrape
+      - name: Enrich URLs + run per-row scrape
         env:
           SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -141,8 +151,10 @@ jobs:
           PRICECHARTING_API_KEY: ${{ secrets.PRICECHARTING_API_KEY }}
         run: |
           DRY=""
+          ENRICH_DRY=""
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
             DRY="--dry-run"
+            ENRICH_DRY="--dry-run"
           fi
           WORKERS="${{ github.event.inputs.workers || '3' }}"
 
@@ -157,12 +169,27 @@ jobs:
           for tcg in ${{ steps.pick.outputs.tcgs }}; do
             echo ""
             echo "═══════════════════════════════════════════════════════"
-            echo "  Refreshing: $tcg (mode: ${MODE_FLAG:-api})"
+            echo "  Phase 1/2  ENRICH URLs for: $tcg"
+            echo "═══════════════════════════════════════════════════════"
+            # Re-discovers current PC product URLs from /console/<slug>
+            # and stamps them on catalog rows whose URL is stale or
+            # missing. Idempotent — running on a fully-enriched catalog
+            # is a few seconds of "nothing to do". The script uses its
+            # own internal worker count (default 3) and respects the
+            # same Cloudflare-friendly pacing as the scraper.
+            python3 -u sync_pc_singles_enrich.py \
+              --tcg "$tcg" \
+              $ENRICH_DRY \
+              || echo "[$tcg] enrich errored — continuing to scrape anyway"
+
+            echo ""
+            echo "═══════════════════════════════════════════════════════"
+            echo "  Phase 2/2  REFRESH PRICES for: $tcg (mode: ${MODE_FLAG:-api})"
             echo "═══════════════════════════════════════════════════════"
             python3 -u refresh_catalog_prices.py \
               --tcg "$tcg" \
               --workers "$WORKERS" \
               --resume \
               $MODE_FLAG \
-              $DRY || echo "[$tcg] errored — continuing to next TCG"
+              $DRY || echo "[$tcg] refresh errored — continuing to next TCG"
           done
