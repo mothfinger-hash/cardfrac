@@ -1,0 +1,139 @@
+name: Refresh Prices — Small TCGs
+
+# Per-row PriceCharting scrape for the four TCGs that DON'T have a
+# working bulk-CSV path:
+#
+#   onepiece, gundam       →  nightly  (volatile, active community)
+#   dbz, pokemon_topps     →  weekly   (low volatility, set-and-forget)
+#
+# Why per-row instead of bulk CSV: PriceCharting's `download-custom`
+# endpoint either doesn't accept these categories (returns its default
+# 3DO catalog as a fallback) or returns them with sparse pricing. The
+# fix is to fall back to the legacy per-row HTTP scraper
+# (refresh_catalog_prices.py) which walks the catalog and hits each
+# product page individually. None of these four are covered by the
+# TCGplayer free-API sync either (sync_tcgplayer_via_free_apis.py
+# explicitly skips them — no upstream intermediary exists).
+#
+# Schedule rationale:
+#   - Gundam / One Piece have active competitive scenes and visible
+#     price movement week-to-week. Nightly keeps comps fresh.
+#   - DBZ / Pokemon Topps are legacy / niche — prices barely move.
+#     Weekly Sunday run is plenty and saves PC requests.
+#   - Per-TCG sequential execution avoids hammering PC from parallel
+#     threads. --workers 10 is the scraper's polite ceiling.
+#   - --resume skips rows that already got a snapshot today, so same-
+#     day re-runs are cheap and idempotent.
+#
+# Cron tiers:
+#   03:00 UTC daily      →  onepiece, gundam
+#   04:00 UTC Sundays    →  dbz, pokemon_topps
+#
+# Both fire before the 07:00 UTC bulk-CSV sweep so the entire catalog
+# is fresh by Sunday morning.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'    # nightly  → OP + Gundam
+    - cron: '0 4 * * 0'    # weekly   → DBZ + Topps
+  workflow_dispatch:
+    inputs:
+      tcg:
+        description: 'Which TCGs to refresh'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'nightly'          # onepiece + gundam
+          - 'weekly'           # dbz + pokemon_topps
+          - 'onepiece'
+          - 'gundam'
+          - 'dbz'
+          - 'pokemon_topps'
+      workers:
+        description: 'Parallel scrape workers per TCG (default 10)'
+        required: false
+        default: '10'
+      dry_run:
+        description: 'Dry-run: fetch + parse, no DB writes'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  refresh:
+    runs-on: self-hosted
+    timeout-minutes: 240   # 4 hours — generous for sequential per-row scrapes
+
+    env:
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show Python version
+        run: python3 --version
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip --user
+          python3 -m pip install requests --user
+
+      # Pick TCG set based on trigger:
+      #   - 03:00 UTC daily cron        →  onepiece + gundam
+      #   - 04:00 UTC Sunday cron       →  dbz + pokemon_topps
+      #   - workflow_dispatch (manual)  →  user-selected tier
+      - name: Determine TCG set
+        id: pick
+        run: |
+          INPUT="${{ github.event.inputs.tcg || '' }}"
+          SCHEDULE="${{ github.event.schedule }}"
+
+          if [ "$SCHEDULE" = "0 3 * * *" ]; then
+            TCGS="onepiece gundam"
+            echo "Triggered by nightly cron → $TCGS"
+          elif [ "$SCHEDULE" = "0 4 * * 0" ]; then
+            TCGS="dbz pokemon_topps"
+            echo "Triggered by weekly Sunday cron → $TCGS"
+          else
+            case "$INPUT" in
+              all)            TCGS="onepiece gundam dbz pokemon_topps" ;;
+              nightly)        TCGS="onepiece gundam" ;;
+              weekly)         TCGS="dbz pokemon_topps" ;;
+              "")             TCGS="onepiece gundam dbz pokemon_topps" ;;
+              *)              TCGS="$INPUT" ;;
+            esac
+            echo "Manual trigger → $TCGS"
+          fi
+          echo "tcgs=$TCGS" >> "$GITHUB_OUTPUT"
+
+      - name: Run per-row scrape
+        env:
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Optional — speeds up requests on PC product pages that
+          # support the JSON-API path (those with a pricecharting_id).
+          PRICECHARTING_API_KEY: ${{ secrets.PRICECHARTING_API_KEY }}
+        run: |
+          DRY=""
+          if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
+            DRY="--dry-run"
+          fi
+          WORKERS="${{ github.event.inputs.workers || '10' }}"
+
+          for tcg in ${{ steps.pick.outputs.tcgs }}; do
+            echo ""
+            echo "═══════════════════════════════════════════════════════"
+            echo "  Refreshing: $tcg"
+            echo "═══════════════════════════════════════════════════════"
+            python3 -u refresh_catalog_prices.py \
+              --tcg "$tcg" \
+              --workers "$WORKERS" \
+              --resume \
+              $DRY || echo "[$tcg] errored — continuing to next TCG"
+          done
