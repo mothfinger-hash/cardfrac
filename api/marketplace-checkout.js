@@ -125,10 +125,17 @@ module.exports = async function handler(req, res) {
     try {
       const { data: profile } = await sb
         .from('profiles')
-        .select('stripe_connect_account_id, subscription_tier, is_vendor, is_premium, verified_high_value')
+        .select('stripe_connect_account_id, subscription_tier, is_vendor, is_premium, verified_high_value, vacation_mode_until')
         .eq('id', sellerId)
         .maybeSingle();
       if (profile) {
+        // Hard block: seller paused their shop. Refuse the checkout
+        // so a buyer who sees a stale browse cache can't sneak through.
+        if (profile.vacation_mode_until && new Date(profile.vacation_mode_until) > new Date()) {
+          return res.status(409).json({
+            error: 'This seller has paused their shop. Please try again later.',
+          });
+        }
         if (profile.stripe_connect_account_id) {
           sellerConnectId = profile.stripe_connect_account_id;
         }

@@ -117,6 +117,50 @@ async function handleSubscriptionUpdated(subscription) {
   else console.log(`[webhook] plan changed: user ${profile.id} → ${tier}`);
 }
 
+// ── Renewal failure: grace period instead of immediate downgrade ──────────────
+// On invoice.payment_failed (recurring renewal), stamp a 3-day grace
+// timestamp on the profile. Tier-gated checks should respect both
+// subscription_tier AND subscription_grace_until — if grace is in
+// effect the user keeps their paid features even though Stripe says
+// the sub is past_due. Gives them a window to fix their card or talk
+// to us on Discord before listings vanish.
+async function handleInvoicePaymentFailed(invoice) {
+  const customerId = invoice.customer;
+  if (!customerId) return;
+
+  // Only act on recurring-sub invoices, not one-off charges.
+  const subscriptionId = invoice.subscription || (invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.subscription);
+  if (!subscriptionId) return;
+
+  const { data: profile } = await sb.from('profiles')
+    .select('id, subscription_tier').eq('stripe_customer_id', customerId).maybeSingle();
+  if (!profile) return;
+
+  // Skip free-tier users (no paid features to preserve).
+  if (!profile.subscription_tier || profile.subscription_tier === 'free') return;
+
+  const graceUntil = new Date(Date.now() + 3 * 86400000).toISOString();
+  await sb.from('profiles')
+    .update({ subscription_grace_until: graceUntil })
+    .eq('id', profile.id);
+  console.log(`[webhook] grace started: user ${profile.id} until ${graceUntil}`);
+}
+
+// On invoice.payment_succeeded (renewal recovered, or first invoice
+// after fixing card), clear any grace timestamp so future failures
+// start a fresh window.
+async function handleInvoicePaymentSucceeded(invoice) {
+  const customerId = invoice.customer;
+  if (!customerId) return;
+  const { data: profile } = await sb.from('profiles')
+    .select('id, subscription_grace_until').eq('stripe_customer_id', customerId).maybeSingle();
+  if (!profile || !profile.subscription_grace_until) return;
+  await sb.from('profiles')
+    .update({ subscription_grace_until: null })
+    .eq('id', profile.id);
+  console.log(`[webhook] grace cleared: user ${profile.id} (renewal recovered)`);
+}
+
 // ── Cancellation: downgrade to free when sub is cancelled / expires ───────────
 async function handleSubscriptionDeleted(subscription) {
   const customerId = subscription.customer;
@@ -374,6 +418,13 @@ module.exports = async function handler(req, res) {
         obj.amount_refunded >= obj.amount ? 'refund_full' : 'refund_partial',
         obj
       );
+      break;
+
+    case 'invoice.payment_failed':
+      await handleInvoicePaymentFailed(obj);
+      break;
+    case 'invoice.payment_succeeded':
+      await handleInvoicePaymentSucceeded(obj);
       break;
 
     default:

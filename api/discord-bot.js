@@ -1890,9 +1890,17 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
   const aBest = aCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const bBest = bCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const SHARED_URL = 'https://pathbinder.gg/?page=dashboard';
-  // Build description: rounds, result, then any evolution celebrations,
-  // then the head-to-head record line if there's history to show.
-  const descParts = [roundLines.join('\n'), resultLine];
+  // Pokémon roster line — shows BOTH duelists' pokemon + level so
+  // readers know what's on the field. When only one (or neither) has
+  // a starter, render whatever side IS registered and tag the other
+  // as "no starter" so it's obvious why XP isn't moving.
+  let rosterLine = '';
+  const aRoster = aPk ? `**${aPk.pokemon_name}** (Lv. ${aPk.level})` : '*no starter*';
+  const bRoster = bPk ? `**${bPk.pokemon_name}** (Lv. ${bPk.level})` : '*no starter*';
+  rosterLine = `${aLabel}: ${aRoster}  vs  ${bLabel}: ${bRoster}`;
+
+  // Build description: roster, rounds, result, evolutions, h2h.
+  const descParts = [rosterLine, roundLines.join('\n'), resultLine];
   if (evolutionLines.length) descParts.push(evolutionLines.join('\n'));
   if (h2hLine)                descParts.push(h2hLine);
   const embeds = [{

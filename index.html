@@ -1209,6 +1209,31 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* ══ ADD CARD DEVICE PAGE ═══════════════════════════════════════════════ */
     #addCardPage.page{padding:12px 0;background:var(--bg);min-height:calc(100vh - 56px)}
     #addCardPage.page.active{display:flex;align-items:flex-start;justify-content:center}
+    /* Overlay mode — Add Card pops up on top of the current page
+       (binder, dashboard, etc.) instead of replacing it. The existing
+       pdex CRT visual already lives inside #addCardPage; we just
+       reposition the page as a fixed overlay and dim the backdrop. */
+    body.pb-addcard-overlay::before{
+      content:'';position:fixed;inset:0;z-index:8998;background:rgba(0,0,0,.78);
+    }
+    #addCardPage.pb-overlay{
+      position:fixed!important;inset:0!important;z-index:8999!important;
+      display:flex!important;align-items:center!important;justify-content:center!important;
+      background:transparent!important;min-height:0!important;padding:0!important;
+      animation:pbAddCardOverlayIn .22s ease-out;
+    }
+    @keyframes pbAddCardOverlayIn{
+      from{opacity:0;transform:scale(.96)}
+      to  {opacity:1;transform:scale(1)}
+    }
+    .pb-addcard-overlay-close{
+      position:fixed;top:16px;right:16px;z-index:9001;
+      width:38px;height:38px;border-radius:var(--r-pill,999px);
+      background:rgba(0,0,0,.85);border:1.5px solid var(--accent);
+      color:var(--accent);font-size:1.2rem;font-weight:700;line-height:1;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;
+    }
+    .pb-addcard-overlay-close:hover{ background:var(--accent); color:var(--text-on-accent); }
     .ac-pdex-wrap{display:flex;align-items:center;justify-content:center;width:100%}
     .ac-mob-wrap{display:none;align-items:flex-start;justify-content:center;width:100%}
     /* Device sizing — DO NOT change these to fix scroll issues.
@@ -5545,9 +5570,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <span class="nav-tab-ico"><img src="icons/my_binder.svg" alt="" aria-hidden="true"></span>
           <span class="nav-tab-lbl">My Binder</span>
         </button>
-        <button class="nav-tab" data-page="addCard" data-label="Add Card" onclick="showPage('addCard');setMobileNav('addCard')">
+        <button class="nav-tab" data-label="Scan Card" onclick="openScanCard()">
           <span class="nav-tab-ico"><img src="icons/add_card.svg" alt="" aria-hidden="true"></span>
-          <span class="nav-tab-lbl">Add Card</span>
+          <span class="nav-tab-lbl">Scan Card</span>
         </button>
         <button class="nav-tab" data-page="sets" data-label="Sets" onclick="showPage('sets');setMobileNav('sets')">
           <span class="nav-tab-ico"><img src="icons/sets.svg" alt="" aria-hidden="true"></span>
@@ -5651,8 +5676,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <button class="top-nav-tab" id="topNavTabCollection" onclick="showPage('collection');setTopNavActive('collection')">
         <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="3" rx="1"/><rect x="2" y="10.5" width="20" height="3" rx="1"/><rect x="2" y="18" width="20" height="3" rx="1"/></svg>My Binder
       </button>
-      <button class="top-nav-tab" id="topNavTabAddCard" onclick="showPage('addCard');setTopNavActive('addCard')">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Card
+      <button class="top-nav-tab" id="topNavTabScanCard" onclick="openScanCard()">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Scan Card
       </button>
       <button class="top-nav-tab" id="topNavTabSets" onclick="showPage('sets');setTopNavActive('sets')">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l5 3"/></svg>Sets
@@ -7121,7 +7146,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <option value="1st_edition_holo">1st Edition Holo</option>
           </select>
           <select id="sortByFilter" onchange="applyBrowseFilters()" style="padding:7px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;outline:none;cursor:pointer">
+            <option value="default">Featured (tier · rating)</option>
             <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="updated">Recently updated</option>
             <option value="price-high">Price: High → Low</option>
             <option value="price-low">Price: Low → High</option>
           </select>
@@ -8570,7 +8598,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     let browseVariantFilter = 'all';
     // Marketplace product-type filter — 'all' (default) | 'single' | 'sealed'
     let browseProductTypeFilter = 'all';
-    let browseSortFilter = 'newest';
+    let browseSortFilter = 'default';
     let binderView = '3x3';
     let binderPage = 0;
     let browseTabFilter = 'all';
@@ -8970,6 +8998,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         try { return localStorage.getItem('pb_unc_mode') === '1'; }
         catch (_) { return false; }
       })();
+      // Shop tier (and Vendor — anyone with active listings) can pause
+      // their shop. Read the current pause-until timestamp off the
+      // profile so the input pre-fills with the active value.
+      const canPauseShop = currentUser && (
+        currentUser.subscription_tier === 'shop' ||
+        currentUser.subscription_tier === 'vendor'
+      );
+      const pauseUntilRaw = currentUser && currentUser.vacation_mode_until;
+      const pauseActive   = pauseUntilRaw && new Date(pauseUntilRaw) > new Date();
+      // Format yyyy-mm-dd for the date input.
+      const pauseInputValue = pauseActive
+        ? new Date(pauseUntilRaw).toISOString().slice(0, 10)
+        : '';
+      const maxPauseDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+      const minPauseDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
       const prefsBlock = ''
         + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
         +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:10px;text-transform:uppercase">'
@@ -8993,7 +9036,80 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         +   '</div>'
         + '</div>';
 
-      body.innerHTML = emailRow + prefsBlock + deletionBlock;
+      // Shop pause / vacation mode — vendor+ only. Listings hidden
+      // from browse + checkout blocked server-side until the picked
+      // date. Capped at 14 days out (max two weeks per spec).
+      let shopBlock = '';
+      if (canPauseShop) {
+        shopBlock = ''
+          + '<div style="border:1px solid var(--copper-dim);background:rgba(184,115,51,.04);padding:14px 16px;margin-top:14px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);margin-bottom:10px;text-transform:uppercase">'
+          +     '◇ Shop pause' + (pauseActive ? ' — ACTIVE' : '')
+          +   '</div>'
+          +   '<div style="font-size:.72rem;color:var(--text);margin-bottom:10px;line-height:1.5">'
+          +     (pauseActive
+                  ? 'Your shop is paused until <strong>' + _fmtDate(pauseUntilRaw) + '</strong>. Listings are hidden from browse and checkout is blocked. Clear the date to resume immediately.'
+                  : 'Hide your listings from the marketplace + block purchases until the date you pick. Max 14 days out.')
+          +   '</div>'
+          +   '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+          +     '<input type="date" id="settingShopPauseDate" value="' + pauseInputValue + '" min="' + minPauseDate + '" max="' + maxPauseDate + '"'
+          +     ' style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:\'Space Mono\',monospace;font-size:.78rem">'
+          +     '<button type="button" onclick="_saveShopPause()"'
+          +     ' style="padding:8px 14px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;cursor:pointer">Save</button>'
+          +     (pauseActive
+                  ? '<button type="button" onclick="_clearShopPause()"'
+                  +   ' style="padding:8px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.75rem;cursor:pointer">Resume now</button>'
+                  : '')
+          +   '</div>'
+          + '</div>';
+      }
+
+      // Social entry points — Follows list + Messages inbox. The DM
+      // badge surfaces the live unread count.
+      const unreadBadge = window._dmUnreadCount > 0
+        ? '<span data-dm-badge style="background:var(--accent);color:var(--text-on-accent);font-size:.6rem;font-weight:800;padding:2px 7px;border-radius:var(--r-pill,999px);margin-left:6px">'
+            + (window._dmUnreadCount > 9 ? '9+' : window._dmUnreadCount) + '</span>'
+        : '';
+      const followsBlock = ''
+        + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
+        +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">'
+        +     '◇ Social'
+        +   '</div>'
+        +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +     '<button type="button" onclick="closeModal(\'accountSettingsModal\');openMyFollowsModal()"'
+        +       ' style="padding:8px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Manage follows →</button>'
+        +     '<button type="button" onclick="closeModal(\'accountSettingsModal\');openInboxModal()"'
+        +       ' style="padding:8px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Messages →' + unreadBadge + '</button>'
+        +   '</div>'
+        + '</div>';
+
+      body.innerHTML = emailRow + prefsBlock + shopBlock + followsBlock + deletionBlock;
+    }
+
+    async function _saveShopPause() {
+      const el = document.getElementById('settingShopPauseDate');
+      const val = el && el.value;
+      if (!val) { showToast('Pick a date first'); return; }
+      const d = new Date(val + 'T23:59:59');
+      if (isNaN(d) || d < new Date()) { showToast('Pick a future date'); return; }
+      const cap = new Date(Date.now() + 14 * 86400000 + 86400000);
+      if (d > cap) { showToast('Max 14 days out'); return; }
+      const upd = await sb.from('profiles')
+        .update({ vacation_mode_until: d.toISOString() })
+        .eq('id', currentUser.id);
+      if (upd.error) { showToast('Save failed: ' + upd.error.message); return; }
+      currentUser.vacation_mode_until = d.toISOString();
+      showToast('Shop paused until ' + _fmtDate(d));
+      renderAccountSettingsModal();
+    }
+    async function _clearShopPause() {
+      const upd = await sb.from('profiles')
+        .update({ vacation_mode_until: null })
+        .eq('id', currentUser.id);
+      if (upd.error) { showToast('Failed: ' + upd.error.message); return; }
+      currentUser.vacation_mode_until = null;
+      showToast('Shop resumed');
+      renderAccountSettingsModal();
     }
 
     // Toggle Discord-panel visibility from Account Settings. Writes the
@@ -9940,6 +10056,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     function showPage(pageId) {
+      // Add Card is no longer a standalone page — it pops up as an
+      // overlay on top of whatever the user was already on (binder
+      // most often). Sign-in still required since the search results
+      // need a binder to save into.
+      if (pageId === 'addCard') {
+        if (!currentUser) { openModal('loginModal'); return; }
+        openAddCardOverlay();
+        return;
+      }
       // SPA 404 fallback — if the requested page id doesn't map to a
       // <div id="<id>Page"> element, route to landing (signed-out) or
       // collection (signed-in) and toast a hint. Avoids the silent
@@ -10107,18 +10232,76 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         if (browseProductTypeFilter === 'sealed'  && (pt === 'single' || isProduct)) return false;
         if (browseProductTypeFilter === 'product' && !isProduct) return false;
 
+        // Hide listings from sellers who have paused their shop. The
+        // server-side checkout block is the canonical guard; this is
+        // just so the listings don't tease buyers who'd then get
+        // turned away at checkout.
+        const sellerProfile = (window._browseSellerCache || {})[l.seller_id || l.sellerId];
+        if (sellerProfile && sellerProfile.vacation_mode_until) {
+          if (new Date(sellerProfile.vacation_mode_until) > new Date()) return false;
+        }
+        // Hide listings from users the current user has blocked.
+        if (window._blockedUserIds && window._blockedUserIds.has(l.seller_id || l.sellerId)) {
+          return false;
+        }
+
         return true;
       });
 
+      // Tier rank for the default "Featured" sort — Shop/Vendor/
+      // Enthusiast surface above everyone else, then within a tier we
+      // sort by seller_rating (4.8 over 3.2), then fall back to
+      // recency. Cache-friendly: reads the tier off the listing if
+      // it's been denormalized, otherwise off the in-memory profiles
+      // cache (_browseSellerCache, hydrated on browse load).
+      const TIER_RANK = { shop: 4, vendor: 3, enthusiast: 2, collector: 1, free: 0 };
+      function _sellerSignals(listing) {
+        // Prefer denormalized fields on the listing itself if a sync
+        // process has populated them. Otherwise look up the seller's
+        // profile from whatever cache we have.
+        var tier = String(listing.seller_tier || '').toLowerCase();
+        var rating = Number(listing.seller_rating || 0);
+        if (!tier || !rating) {
+          var prof = (window._browseSellerCache || {})[listing.seller_id];
+          if (prof) {
+            if (!tier)   tier   = String(prof.subscription_tier || '').toLowerCase();
+            if (!rating) rating = Number(prof.seller_rating || 0);
+          }
+        }
+        return { tierRank: TIER_RANK[tier] || 0, rating: rating };
+      }
       filtered.sort((a, b) => {
         const aPrice = a.list_price || a.value || 0;
         const bPrice = b.list_price || b.value || 0;
         if (browseSortFilter === 'price-high') return bPrice - aPrice;
-        if (browseSortFilter === 'price-low') return aPrice - bPrice;
-        return 0; // newest — keep DB order
+        if (browseSortFilter === 'price-low')  return aPrice - bPrice;
+        if (browseSortFilter === 'oldest') {
+          return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        }
+        if (browseSortFilter === 'updated') {
+          var au = new Date(a.updated_at || a.created_at || 0);
+          var bu = new Date(b.updated_at || b.created_at || 0);
+          return bu - au;
+        }
+        if (browseSortFilter === 'default') {
+          // Featured: higher tier first, then higher rating, then newer.
+          var sa = _sellerSignals(a), sb = _sellerSignals(b);
+          if (sa.tierRank !== sb.tierRank) return sb.tierRank - sa.tierRank;
+          if (sa.rating   !== sb.rating)   return sb.rating   - sa.rating;
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        }
+        return 0; // newest — keep DB order (already sorted DESC by created_at)
       });
 
-      const showClearBtn = browseSearchQuery !== '' || browseGameTypeFilter !== 'all' || browseSortFilter !== 'newest' || browseProductTypeFilter !== 'all';
+      // Log non-empty searches to marketplace_searches for onboarding-
+      // niche analytics. Debounced so typing "char" → "chari" → "charizard"
+      // logs once, not three times. Result count helps us spot zero-
+      // result queries (the highest-signal data we can collect).
+      if (browseSearchQuery && browseSearchQuery.trim().length >= 2) {
+        _logMarketplaceSearch(browseSearchQuery.trim(), filtered.length);
+      }
+
+      const showClearBtn = browseSearchQuery !== '' || browseGameTypeFilter !== 'all' || browseSortFilter !== 'default' || browseProductTypeFilter !== 'all';
       const clearBtn = document.getElementById('clearFiltersBtn');
       if (clearBtn) clearBtn.style.display = showClearBtn ? 'block' : 'none';
 
@@ -10253,8 +10436,34 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       browseSearchQuery = (document.getElementById('browseSearchInput') || {}).value || '';
       browseGameTypeFilter = (document.getElementById('gameTypeFilter') || {}).value || 'all';
       browseVariantFilter = (document.getElementById('variantFilter') || {}).value || 'all';
-      browseSortFilter = (document.getElementById('sortByFilter') || {}).value || 'newest';
+      browseSortFilter = (document.getElementById('sortByFilter') || {}).value || 'default';
       renderBrowse();
+    }
+
+    // Debounced + deduped insert into marketplace_searches. Holds the
+    // last query for 800ms so typing "char"→"chari"→"charizard" logs
+    // once with the final value; only the most recent (query, count)
+    // is committed. Skips repeated identical (query, count) pairs to
+    // avoid double-logging when the user just changes a filter without
+    // editing the search text.
+    var _marketplaceSearchTimer = null;
+    var _marketplaceSearchLast  = '';
+    function _logMarketplaceSearch(query, resultCount) {
+      clearTimeout(_marketplaceSearchTimer);
+      _marketplaceSearchTimer = setTimeout(function() {
+        var key = (query + '|' + resultCount).toLowerCase();
+        if (key === _marketplaceSearchLast) return;
+        _marketplaceSearchLast = key;
+        try {
+          sb.from('marketplace_searches').insert({
+            user_id:      (currentUser && currentUser.id) || null,
+            query:        query,
+            game_type:    browseGameTypeFilter,
+            product_type: browseProductTypeFilter,
+            result_count: resultCount,
+          });
+        } catch (_) { /* never block the UI on analytics */ }
+      }, 800);
     }
 
     function clearBrowseFilters() {
@@ -10264,7 +10473,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       browseProductTypeFilter = 'all';
       const si = document.getElementById('browseSearchInput'); if(si) si.value='';
       const gt = document.getElementById('gameTypeFilter'); if(gt) gt.value='all';
-      const sf = document.getElementById('sortByFilter'); if(sf) sf.value='newest';
+      const sf = document.getElementById('sortByFilter'); if(sf) sf.value='default';
       document.querySelectorAll('.game-pill').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.game-pill')[0]?.classList.add('active');
       // Reset product-type pills back to "All" active state.
@@ -10391,7 +10600,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             </div>
             <h1 style="margin-bottom:6px">${listing.name}</h1>
             <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px">
-              Listed by <strong style="color:var(--text)">${sellerName}</strong>${renderBetaBadge(listing.seller_id)}
+              Listed by <a href="javascript:void(0)" onclick="openSellerProfile('${listing.seller_id || ''}')" style="color:var(--text);font-weight:700;text-decoration:none;border-bottom:1px dotted var(--muted);cursor:pointer">${sellerName}</a>${renderBetaBadge(listing.seller_id)}
               ${sellerRating ? `<span style="color:var(--gold);margin-left:6px">★ ${sellerRating.toFixed(1)}</span>` : ''}
             </div>
 
@@ -26867,6 +27076,593 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // $X" + "(±N% vs market)" on every listing card, even when the seller
     // didn't run a live PC lookup at listing time. Runs once per
     // listings-load, fully async; renderBrowse re-renders after enrichment.
+    // Seller-profile modal — clickable from any "Listed by X" link
+    // anywhere in the app. Pulls live data; renders username, tier
+    // badge, avatar, listings count, rating, optional bio+socials
+    // (vendor/shop only). Block/Unblock + Follow buttons hooked up
+    // to their respective systems. Builds a fresh DOM node each open
+    // so a stale modal can't linger from a previous render.
+    async function openSellerProfile(sellerId) {
+      if (!sellerId) return;
+      // Wipe any prior instance.
+      document.getElementById('sellerProfileSheet')?.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'sellerProfileSheet';
+      overlay.className = 'modal-overlay show';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)';
+      overlay.innerHTML = '<div class="modal" style="width:100%;max-width:440px;padding:22px 20px;max-height:92vh;overflow-y:auto"><div style="text-align:center;padding:20px;color:var(--muted)">Loading…</div></div>';
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+
+      // Pull profile + a count of active listings, in parallel.
+      let profile = null;
+      let activeListings = 0;
+      try {
+        const [pRes, lRes] = await Promise.all([
+          // Pulls both the legacy shop_* columns and the newer bio /
+          // social_links / banner_url. Falls back gracefully if the
+          // newer ones don't exist yet (handled below).
+          sb.from('profiles')
+            .select('id, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, avatar_url, banner_url, subscription_tier, seller_rating, bio, social_links, vacation_mode_until')
+            .eq('id', sellerId).maybeSingle()
+            .then(async r => (r.error && /column/.test(r.error.message || ''))
+              ? await sb.from('profiles').select('id, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, avatar_url, subscription_tier').eq('id', sellerId).maybeSingle()
+              : r),
+          sb.from('listings').select('id', { count: 'exact', head: true })
+            .eq('seller_id', sellerId).eq('status', 'active'),
+        ]);
+        profile = pRes.data;
+        activeListings = lRes.count || 0;
+      } catch (_) {}
+
+      if (!profile) {
+        overlay.querySelector('.modal').innerHTML =
+          '<div style="text-align:center;padding:20px;color:var(--muted)">Could not load profile.</div>' +
+          '<button onclick="document.getElementById(\'sellerProfileSheet\').remove()" style="width:100%;padding:10px;margin-top:14px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer">Close</button>';
+        return;
+      }
+
+      const tier   = (profile.subscription_tier || 'free').toLowerCase();
+      const isVS   = tier === 'vendor' || tier === 'shop';
+      const name   = profile.shop_name || profile.username || 'Seller';
+      const rating = Number(profile.seller_rating) || 0;
+      const paused = profile.vacation_mode_until && new Date(profile.vacation_mode_until) > new Date();
+      const blocked = window._blockedUserIds && window._blockedUserIds.has(sellerId);
+      const isSelf = currentUser && currentUser.id === sellerId;
+
+      // Avatar: vendor+ render uploaded photo; everyone else gets the
+      // monogram circle the dashboard already uses.
+      const monogram = name.slice(0, 1).toUpperCase();
+      const avatarHtml = (isVS && profile.avatar_url)
+        ? `<img src="${_escHtml(profile.avatar_url)}" alt="" style="width:72px;height:72px;border-radius:var(--r-pill,999px);object-fit:cover;border:2px solid var(--accent)">`
+        : `<div style="width:72px;height:72px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:1.6rem;border:2px solid var(--shadow)">${monogram}</div>`;
+
+      // Banner — vendor+ only.
+      const bannerHtml = (isVS && profile.banner_url)
+        ? `<div style="margin:-22px -20px 14px;height:90px;background:url('${_escHtml(profile.banner_url)}') center/cover"></div>`
+        : '';
+
+      // Social links — render only what's filled in. Sources from both
+      // the new social_links JSONB (preferred) and the legacy
+      // shop_instagram / shop_website / shop_tagline columns.
+      const socialLinksHtml = (() => {
+        if (!isVS) return '';
+        const links = {};
+        // Legacy first so new social_links overrides if both present.
+        if (profile.shop_website)   links.website   = profile.shop_website;
+        if (profile.shop_instagram) links.instagram = profile.shop_instagram;
+        if (profile.social_links) {
+          const obj = typeof profile.social_links === 'string'
+            ? (function(){ try { return JSON.parse(profile.social_links); } catch(_) { return {}; } })()
+            : profile.social_links;
+          Object.assign(links, obj || {});
+        }
+        const keys = ['website','twitter','instagram','youtube','tiktok','discord'];
+        const rendered = keys.filter(k => links[k]).map(k =>
+          `<a href="${_escHtml(links[k])}" target="_blank" rel="noopener" style="color:var(--accent);font-size:.7rem;text-decoration:none;padding:4px 9px;border:1px solid var(--accent);border-radius:var(--r-pill,999px);margin-right:6px;display:inline-block">${k}</a>`
+        ).join('');
+        return rendered ? `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">${rendered}</div>` : '';
+      })();
+      // Bio sources from new bio column first, then legacy shop_description / shop_tagline.
+      const effectiveBio = profile.bio || profile.shop_description || profile.shop_tagline || '';
+
+      const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+      const tierBadgeBg = tier === 'shop' ? 'var(--gold)' : tier === 'vendor' ? 'var(--copper)' : tier === 'enthusiast' ? 'var(--accent)' : 'var(--muted)';
+
+      const isFollowing = window._followingIds && window._followingIds.has(sellerId);
+      const followBtn = (!isSelf && currentUser)
+        ? (isFollowing
+            ? `<button onclick="unfollowUser('${sellerId}').then(()=>openSellerProfile('${sellerId}'))" style="flex:1;padding:9px;border:1px solid var(--muted);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ FOLLOWING</button>`
+            : `<button onclick="followUser('${sellerId}').then(()=>openSellerProfile('${sellerId}'))" style="flex:1;padding:9px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">+ FOLLOW</button>`)
+        : '';
+      const messageBtn = (!isSelf && currentUser)
+        ? `<button onclick="document.getElementById('sellerProfileSheet').remove();openMessageThread('${sellerId}')" style="flex:1;padding:9px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">MESSAGE</button>`
+        : '';
+      const blockBtn = (!isSelf && currentUser)
+        ? (blocked
+            ? `<button onclick="unblockUser('${sellerId}').then(()=>openSellerProfile('${sellerId}'))" style="flex:1;padding:9px;border:1px solid var(--muted);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">UNBLOCK</button>`
+            : `<button onclick="if(confirm('Block ${_escJsAttr(name)}?')) blockUser('${sellerId}').then(()=>document.getElementById('sellerProfileSheet').remove())" style="flex:1;padding:9px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono',monospace;font-size:.75rem;cursor:pointer;letter-spacing:.04em">BLOCK</button>`)
+        : '';
+
+      overlay.querySelector('.modal').innerHTML = ''
+        + bannerHtml
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'
+        +   '<div style="display:flex;gap:14px;align-items:center;min-width:0;flex:1">'
+        +     avatarHtml
+        +     '<div style="min-width:0;flex:1">'
+        +       '<div style="font-family:\'Orbitron\',monospace;font-weight:800;font-size:1rem;color:var(--text);overflow:hidden;text-overflow:ellipsis">' + _escHtml(name) + '</div>'
+        +       '<div style="margin-top:4px"><span style="background:' + tierBadgeBg + ';color:var(--text-on-accent);font-size:.55rem;font-weight:800;letter-spacing:.1em;padding:2px 8px;border-radius:var(--r-pill,999px);text-transform:uppercase">' + tierLabel + '</span>'
+        +         (paused ? '<span style="margin-left:6px;background:var(--copper);color:var(--text-on-accent);font-size:.55rem;font-weight:800;letter-spacing:.1em;padding:2px 8px;border-radius:var(--r-pill,999px)">PAUSED</span>' : '')
+        +       '</div>'
+        +     '</div>'
+        +   '</div>'
+        +   '<button onclick="document.getElementById(\'sellerProfileSheet\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px;color:var(--muted)">×</button>'
+        + '</div>'
+        + '<div style="display:flex;gap:14px;font-size:.72rem;color:var(--muted);margin-bottom:14px;padding-top:10px;border-top:1px solid var(--border)">'
+        +   '<div><span style="color:var(--text);font-weight:700">' + activeListings + '</span> active listing' + (activeListings === 1 ? '' : 's') + '</div>'
+        +   (rating > 0 ? '<div><span style="color:var(--gold)">★</span> <span style="color:var(--text);font-weight:700">' + rating.toFixed(1) + '</span></div>' : '')
+        + '</div>'
+        + (isVS && effectiveBio
+            ? '<div style="font-size:.78rem;color:var(--text);line-height:1.5;margin-bottom:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--r-sm,6px)">' + _escHtml(effectiveBio) + '</div>'
+            : '')
+        + socialLinksHtml
+        + '<div style="display:flex;gap:8px;margin-top:18px">'
+        +   (activeListings > 0
+              ? '<button onclick="document.getElementById(\'sellerProfileSheet\').remove();showPage(\'browse\');setTimeout(function(){var s=document.getElementById(\'browseSearchInput\');if(s){s.value=\'' + _escJsAttr(name) + '\';applyBrowseFilters();}},120)" style="flex:1;padding:9px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">VIEW LISTINGS</button>'
+              : '')
+        +   messageBtn
+        +   followBtn
+        +   blockBtn
+        + '</div>';
+    }
+    // (Follow placeholder removed — real followUser / unfollowUser
+    // helpers are wired into the seller-profile modal directly.)
+
+    // ─── Direct messages ────────────────────────────────────────
+    // Three entry points:
+    //   - openInboxModal()         — list of every conversation, click → thread
+    //   - openMessageThread(uid)   — single thread with that user
+    //   - openComposeMessage(uid)  — quick compose (used by "Message seller")
+    // All three render fresh DOM, no static HTML to keep in sync.
+    // Unread badge surfaces in the account dropdown via _dmUnreadCount.
+    window._dmUnreadCount = 0;
+    async function _hydrateDmUnread() {
+      if (!currentUser) { window._dmUnreadCount = 0; return; }
+      try {
+        const r = await sb.from('dm_unread_counts')
+          .select('unread').eq('user_id', currentUser.id).maybeSingle();
+        window._dmUnreadCount = (r.data && r.data.unread) || 0;
+        _refreshDmBadge();
+      } catch (_) {}
+    }
+    function _refreshDmBadge() {
+      // Updates any nav badge element wired to the count. Future:
+      // a small dot on the avatar circle in the topbar.
+      const els = document.querySelectorAll('[data-dm-badge]');
+      els.forEach(el => {
+        if (window._dmUnreadCount > 0) {
+          el.textContent = window._dmUnreadCount > 9 ? '9+' : String(window._dmUnreadCount);
+          el.style.display = '';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    async function openInboxModal() {
+      if (!currentUser) { showToast('Sign in first'); openModal('loginModal'); return; }
+      document.getElementById('dmInboxSheet')?.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'dmInboxSheet';
+      overlay.className = 'modal-overlay show';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)';
+      overlay.innerHTML = '<div class="modal" style="width:100%;max-width:480px;padding:22px 20px;max-height:92vh;overflow-y:auto"><div style="text-align:center;padding:20px;color:var(--muted)">Loading…</div></div>';
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+
+      let inbox = [];
+      try {
+        const r = await sb.rpc('dm_inbox', { p_user_id: currentUser.id });
+        if (!r.error && Array.isArray(r.data)) inbox = r.data;
+      } catch (_) {}
+
+      // Profile lookup for avatars + names
+      let profiles = {};
+      const partnerIds = inbox.map(x => x.partner_id);
+      if (partnerIds.length) {
+        try {
+          const p = await sb.from('profiles')
+            .select('id, username, shop_name, avatar_url, subscription_tier')
+            .in('id', partnerIds);
+          if (!p.error && Array.isArray(p.data)) {
+            p.data.forEach(x => { profiles[x.id] = x; });
+          }
+        } catch (_) {}
+      }
+
+      const rowsHtml = inbox.length
+        ? inbox.map(row => {
+            const p = profiles[row.partner_id] || {};
+            const name = p.shop_name || p.username || 'Unknown';
+            const monogram = name.slice(0, 1).toUpperCase();
+            const avatar = p.avatar_url
+              ? `<img src="${_escHtml(p.avatar_url)}" style="width:40px;height:40px;border-radius:var(--r-pill,999px);object-fit:cover">`
+              : `<div style="width:40px;height:40px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:.85rem">${monogram}</div>`;
+            const preview = String(row.last_message || '').slice(0, 60) + (row.last_message && row.last_message.length > 60 ? '…' : '');
+            const youSent = row.last_sender === currentUser.id;
+            return `<div onclick="document.getElementById('dmInboxSheet').remove();openMessageThread('${row.partner_id}')"
+              style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:var(--r-sm,6px);margin-bottom:6px;background:var(--surface2);cursor:pointer">
+              ${avatar}
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                  <div style="font-size:.78rem;font-weight:${row.unread_count > 0 ? '800' : '700'};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(name)}</div>
+                  <div style="font-size:.6rem;color:var(--muted);flex-shrink:0">${_fmtDate(row.last_at)}</div>
+                </div>
+                <div style="font-size:.7rem;color:${row.unread_count > 0 ? 'var(--text)' : 'var(--muted)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">
+                  ${youSent ? '<span style="color:var(--muted)">You: </span>' : ''}${_escHtml(preview)}
+                </div>
+              </div>
+              ${row.unread_count > 0 ? `<span style="background:var(--accent);color:var(--text-on-accent);font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:var(--r-pill,999px);min-width:18px;text-align:center">${row.unread_count}</span>` : ''}
+            </div>`;
+          }).join('')
+        : '<div style="text-align:center;padding:40px 20px;color:var(--muted);font-size:.8rem">No messages yet.</div>';
+
+      overlay.querySelector('.modal').innerHTML = ''
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+        +   '<div style="font-family:\'Orbitron\',monospace;font-weight:800;font-size:.95rem;color:var(--text)">Messages</div>'
+        +   '<button onclick="document.getElementById(\'dmInboxSheet\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px;color:var(--muted)">×</button>'
+        + '</div>'
+        + rowsHtml;
+    }
+
+    async function openMessageThread(partnerId) {
+      if (!currentUser) { showToast('Sign in first'); openModal('loginModal'); return; }
+      if (partnerId === currentUser.id) return;
+      document.getElementById('dmThreadSheet')?.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'dmThreadSheet';
+      overlay.className = 'modal-overlay show';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)';
+      overlay.innerHTML = '<div class="modal" style="width:100%;max-width:480px;padding:22px 20px;max-height:92vh;display:flex;flex-direction:column;gap:10px"><div style="text-align:center;padding:20px;color:var(--muted)">Loading…</div></div>';
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+
+      // Fetch thread + partner profile in parallel.
+      const [partnerRes, msgsRes] = await Promise.all([
+        sb.from('profiles').select('id, username, shop_name, avatar_url, subscription_tier').eq('id', partnerId).maybeSingle(),
+        sb.from('direct_messages')
+          .select('id, sender_id, recipient_id, body, created_at, read_at')
+          .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${partnerId}),and(sender_id.eq.${partnerId},recipient_id.eq.${currentUser.id})`)
+          .order('created_at', { ascending: true }).limit(200),
+      ]);
+
+      const partner = partnerRes.data || { username: 'Unknown' };
+      const partnerName = partner.shop_name || partner.username || 'Unknown';
+      const msgs = msgsRes.data || [];
+
+      // Mark unread-to-me as read.
+      const unreadIds = msgs.filter(m => m.recipient_id === currentUser.id && !m.read_at).map(m => m.id);
+      if (unreadIds.length) {
+        try {
+          await sb.from('direct_messages').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
+          window._dmUnreadCount = Math.max(0, window._dmUnreadCount - unreadIds.length);
+          _refreshDmBadge();
+        } catch (_) {}
+      }
+
+      const bubbles = msgs.map(m => {
+        const mine = m.sender_id === currentUser.id;
+        const bubbleColor = mine ? 'var(--accent)' : 'var(--surface2)';
+        const textColor   = mine ? 'var(--text-on-accent)' : 'var(--text)';
+        return `<div style="display:flex;justify-content:${mine ? 'flex-end' : 'flex-start'};margin-bottom:6px">
+          <div style="max-width:78%;padding:8px 12px;border-radius:14px;background:${bubbleColor};color:${textColor};font-size:.78rem;line-height:1.4;word-wrap:break-word;white-space:pre-wrap">${_escHtml(m.body)}</div>
+        </div>`;
+      }).join('') || '<div style="text-align:center;padding:30px 10px;color:var(--muted);font-size:.78rem">No messages yet. Send the first one below.</div>';
+
+      overlay.querySelector('.modal').innerHTML = ''
+        + '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px">'
+        +   `<div style="display:flex;gap:8px;align-items:center;cursor:pointer" onclick="document.getElementById('dmThreadSheet').remove();openSellerProfile('${partnerId}')">`
+        +     `<div style="font-family:'Orbitron',monospace;font-weight:800;font-size:.85rem;color:var(--text)">${_escHtml(partnerName)}</div>`
+        +   '</div>'
+        +   '<div style="display:flex;gap:6px;align-items:center">'
+        +     '<button onclick="document.getElementById(\'dmThreadSheet\').remove();openInboxModal()" style="background:none;border:none;color:var(--muted);font-size:.7rem;cursor:pointer;letter-spacing:.04em">Inbox</button>'
+        +     '<button onclick="document.getElementById(\'dmThreadSheet\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px;color:var(--muted)">×</button>'
+        +   '</div>'
+        + '</div>'
+        + `<div id="dmBubbles" style="flex:1;overflow-y:auto;padding:8px 4px;min-height:200px;max-height:50vh">${bubbles}</div>`
+        + '<div style="display:flex;gap:6px;border-top:1px solid var(--border);padding-top:10px">'
+        +   `<textarea id="dmComposeBody" rows="2" placeholder="Type a message…" maxlength="4000" style="flex:1;padding:8px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.78rem;resize:none;border-radius:var(--r-sm,6px);outline:none"></textarea>`
+        +   `<button onclick="_dmSend('${partnerId}')" style="padding:8px 14px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;border-radius:var(--r-sm,6px)">Send</button>`
+        + '</div>';
+
+      // Auto-scroll to the latest message.
+      setTimeout(() => {
+        const bub = document.getElementById('dmBubbles');
+        if (bub) bub.scrollTop = bub.scrollHeight;
+        const ta = document.getElementById('dmComposeBody');
+        if (ta) ta.focus();
+      }, 30);
+    }
+
+    async function _dmSend(partnerId) {
+      const ta = document.getElementById('dmComposeBody');
+      if (!ta) return;
+      const body = (ta.value || '').trim();
+      if (!body) { showToast('Type something first'); return; }
+      ta.disabled = true;
+      const ins = await sb.from('direct_messages').insert({
+        sender_id:    currentUser.id,
+        recipient_id: partnerId,
+        body,
+      });
+      ta.disabled = false;
+      if (ins.error) {
+        // The RLS policy blocks INSERT when the recipient has blocked
+        // the sender — show a friendly message rather than the raw
+        // policy error.
+        if (/policy/i.test(ins.error.message || '')) {
+          showToast('You can\'t message this user.');
+        } else {
+          showToast('Send failed: ' + ins.error.message);
+        }
+        return;
+      }
+      ta.value = '';
+      // Re-render thread to show the new message + scroll.
+      openMessageThread(partnerId);
+    }
+
+    // Lightweight compose dialog for "Message seller" buttons —
+    // delegates to openMessageThread which handles everything else.
+    function openComposeMessage(partnerId) {
+      openMessageThread(partnerId);
+    }
+
+    // ─── My Follows view ────────────────────────────────────────
+    // Modal listing every user the current user follows, in their
+    // chosen rank order. ↑/↓ arrows swap adjacent rows and persist
+    // via reorderFollows(). Click a row to open that user's profile.
+    // Built fresh each open (no static HTML to maintain).
+    async function openMyFollowsModal() {
+      if (!currentUser) { showToast('Sign in first'); return; }
+      document.getElementById('myFollowsSheet')?.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'myFollowsSheet';
+      overlay.className = 'modal-overlay show';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)';
+      overlay.innerHTML = '<div class="modal" style="width:100%;max-width:480px;padding:22px 20px;max-height:92vh;overflow-y:auto"><div style="text-align:center;padding:20px;color:var(--muted)">Loading…</div></div>';
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+
+      // Refresh from server in case follows changed elsewhere.
+      await _hydrateFollows();
+      const meta = window._followingMeta;
+      const ids = Array.from(meta.keys()).sort((a, b) =>
+        (meta.get(a).sort_order || 0) - (meta.get(b).sort_order || 0)
+      );
+
+      let profiles = {};
+      if (ids.length) {
+        try {
+          const r = await sb.from('profiles')
+            .select('id, username, shop_name, avatar_url, subscription_tier')
+            .in('id', ids);
+          if (!r.error && Array.isArray(r.data)) {
+            r.data.forEach(p => { profiles[p.id] = p; });
+          }
+        } catch (_) {}
+      }
+
+      const renderRows = () => ids.map((id, i) => {
+        const p = profiles[id] || {};
+        const name = p.shop_name || p.username || 'Unknown';
+        const monogram = name.slice(0, 1).toUpperCase();
+        const tier = (p.subscription_tier || 'free').toLowerCase();
+        const avatar = p.avatar_url
+          ? `<img src="${_escHtml(p.avatar_url)}" style="width:36px;height:36px;border-radius:var(--r-pill,999px);object-fit:cover">`
+          : `<div style="width:36px;height:36px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:.85rem">${monogram}</div>`;
+        return `<div data-fid="${id}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm,6px);margin-bottom:6px;background:var(--surface2)">
+          <span style="font-family:'Space Mono',monospace;font-size:.65rem;color:var(--muted);min-width:24px">${String(i + 1).padStart(2, '0')}</span>
+          ${avatar}
+          <div style="flex:1;min-width:0;cursor:pointer" onclick="document.getElementById('myFollowsSheet').remove();openSellerProfile('${id}')">
+            <div style="font-size:.78rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(name)}</div>
+            <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">${tier}</div>
+          </div>
+          <button onclick="_moveFollow('${id}', -1)" ${i === 0 ? 'disabled' : ''} title="Move up"
+            style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 8px;font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer;${i === 0 ? 'opacity:.3;cursor:not-allowed' : ''}">↑</button>
+          <button onclick="_moveFollow('${id}', +1)" ${i === ids.length - 1 ? 'disabled' : ''} title="Move down"
+            style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 8px;font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer;${i === ids.length - 1 ? 'opacity:.3;cursor:not-allowed' : ''}">↓</button>
+          <button onclick="if(confirm('Unfollow ${_escJsAttr(name)}?')) unfollowUser('${id}').then(()=>openMyFollowsModal())" title="Unfollow"
+            style="background:none;border:1px solid rgba(255,60,60,.4);color:rgba(255,100,100,.85);padding:4px 8px;font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer">×</button>
+        </div>`;
+      }).join('');
+
+      overlay.querySelector('.modal').innerHTML = ''
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+        +   '<div style="font-family:\'Orbitron\',monospace;font-weight:800;font-size:.95rem;color:var(--text)">My Follows</div>'
+        +   '<button onclick="document.getElementById(\'myFollowsSheet\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px;color:var(--muted)">×</button>'
+        + '</div>'
+        + '<div style="font-size:.7rem;color:var(--muted);margin-bottom:14px">Use ↑ / ↓ to rank your favorite sellers — top of the list is your fastest access.</div>'
+        + (ids.length
+            ? `<div id="myFollowsList">${renderRows()}</div>`
+            : '<div style="text-align:center;padding:40px 20px;color:var(--muted);font-size:.8rem">You aren\'t following anyone yet. Click "Follow" on a seller\'s profile to get started.</div>');
+    }
+    // Swap an entry by ±1 position. Re-renders the modal in place so
+    // the visual order tracks the underlying sort_order writes.
+    async function _moveFollow(id, delta) {
+      const meta = window._followingMeta;
+      let ids = Array.from(meta.keys()).sort((a, b) =>
+        (meta.get(a).sort_order || 0) - (meta.get(b).sort_order || 0)
+      );
+      const idx = ids.indexOf(id);
+      if (idx < 0) return;
+      const newIdx = idx + delta;
+      if (newIdx < 0 || newIdx >= ids.length) return;
+      ids.splice(idx, 1);
+      ids.splice(newIdx, 0, id);
+      await reorderFollows(ids);
+      openMyFollowsModal(); // rebuild w/ new order
+    }
+
+    // ─── Follow system ───────────────────────────────────────────
+    // Set of user IDs the current user is following, plus a Map
+    // keyed by user id holding { sort_order, nickname }. Loaded once
+    // on sign-in. Used by the seller profile (Follow button state)
+    // and the My Follows view (drag-rankable list).
+    window._followingIds   = new Set();
+    window._followingMeta  = new Map();
+    async function _hydrateFollows() {
+      if (!currentUser) {
+        window._followingIds = new Set();
+        window._followingMeta = new Map();
+        return;
+      }
+      try {
+        const r = await sb.from('follows')
+          .select('followed_id, sort_order, nickname')
+          .eq('follower_id', currentUser.id)
+          .order('sort_order', { ascending: true });
+        if (!r.error && Array.isArray(r.data)) {
+          window._followingIds = new Set(r.data.map(x => x.followed_id));
+          window._followingMeta = new Map(r.data.map(x => [x.followed_id, x]));
+        }
+      } catch (_) {}
+    }
+    async function followUser(targetId) {
+      if (!currentUser) { showToast('Sign in first'); return false; }
+      if (targetId === currentUser.id) { showToast('You can\'t follow yourself'); return false; }
+      // New follows go to the end of the list — sort_order = current
+      // max + 1 so they don't displace existing rank decisions.
+      let nextOrder = 0;
+      if (window._followingMeta.size) {
+        nextOrder = Math.max(...Array.from(window._followingMeta.values()).map(x => x.sort_order || 0)) + 1;
+      }
+      const ins = await sb.from('follows').insert({
+        follower_id: currentUser.id,
+        followed_id: targetId,
+        sort_order:  nextOrder,
+      });
+      if (ins.error) {
+        // Likely a duplicate (already following). Treat as success.
+        if (!/duplicate|unique/i.test(ins.error.message || '')) {
+          showToast('Follow failed: ' + ins.error.message);
+          return false;
+        }
+      }
+      window._followingIds.add(targetId);
+      window._followingMeta.set(targetId, { sort_order: nextOrder, nickname: null });
+      showToast('Following');
+      return true;
+    }
+    async function unfollowUser(targetId) {
+      if (!currentUser) return false;
+      const del = await sb.from('follows')
+        .delete().eq('follower_id', currentUser.id).eq('followed_id', targetId);
+      if (del.error) { showToast('Unfollow failed: ' + del.error.message); return false; }
+      window._followingIds.delete(targetId);
+      window._followingMeta.delete(targetId);
+      showToast('Unfollowed');
+      return true;
+    }
+    // Persist a new sort order — called by the drag handler in the
+    // My Follows view. Takes an array of followed_ids in the desired
+    // order, writes new sort_order values for each.
+    async function reorderFollows(orderedIds) {
+      if (!currentUser || !Array.isArray(orderedIds)) return;
+      // Updates run in parallel — small list, no contention concern.
+      await Promise.all(orderedIds.map((id, idx) =>
+        sb.from('follows')
+          .update({ sort_order: idx })
+          .eq('follower_id', currentUser.id)
+          .eq('followed_id', id)
+      ));
+      // Update local cache so the next render reflects the new order.
+      orderedIds.forEach((id, idx) => {
+        const m = window._followingMeta.get(id);
+        if (m) m.sort_order = idx;
+      });
+    }
+
+    // Set of user IDs the current user has blocked. Loaded once on
+    // sign-in, mutated in-place when a user clicks Block. Cleared on
+    // sign-out. Used to filter listings + messaging.
+    window._blockedUserIds = new Set();
+    async function _hydrateBlockedUsers() {
+      if (!currentUser) { window._blockedUserIds = new Set(); return; }
+      try {
+        const r = await sb.from('blocked_users')
+          .select('blocked_id').eq('blocker_id', currentUser.id);
+        if (!r.error && Array.isArray(r.data)) {
+          window._blockedUserIds = new Set(r.data.map(x => x.blocked_id));
+        }
+      } catch (_) { /* table may not exist yet — silent */ }
+    }
+    // Block / unblock helpers — both update the in-memory cache so
+    // browse refilters immediately, no page reload required.
+    async function blockUser(targetId, reason) {
+      if (!currentUser) { showToast('Sign in first'); return false; }
+      if (targetId === currentUser.id) { showToast('You can\'t block yourself'); return false; }
+      const ins = await sb.from('blocked_users').insert({
+        blocker_id: currentUser.id, blocked_id: targetId, reason: reason || null,
+      });
+      if (ins.error) { showToast('Block failed: ' + ins.error.message); return false; }
+      window._blockedUserIds.add(targetId);
+      showToast('Blocked');
+      if (typeof renderBrowse === 'function') { try { renderBrowse(); } catch(_) {} }
+      return true;
+    }
+    async function unblockUser(targetId) {
+      if (!currentUser) return false;
+      const del = await sb.from('blocked_users')
+        .delete().eq('blocker_id', currentUser.id).eq('blocked_id', targetId);
+      if (del.error) { showToast('Unblock failed: ' + del.error.message); return false; }
+      window._blockedUserIds.delete(targetId);
+      showToast('Unblocked');
+      if (typeof renderBrowse === 'function') { try { renderBrowse(); } catch(_) {} }
+      return true;
+    }
+
+    // Pulls subscription_tier + seller_rating for every unique seller
+    // in the current listings array and caches it on
+    // window._browseSellerCache, keyed by user id. The "Featured" sort
+    // (default browse order) reads from this cache to rank listings.
+    // Best-effort — if the seller_rating column doesn't exist yet
+    // (pre-launch schema), the field is undefined, the sort falls
+    // through to tier-only and then created_at.
+    async function _hydrateBrowseSellerCache() {
+      if (!Array.isArray(listings) || !listings.length) return;
+      window._browseSellerCache = window._browseSellerCache || {};
+      const cache = window._browseSellerCache;
+      const ids = Array.from(new Set(
+        listings.map(l => l.seller_id || l.sellerId).filter(id => id && !cache[id])
+      ));
+      if (!ids.length) return;
+      try {
+        // Tolerant column list — request seller_rating; if it doesn't
+        // exist server-side the request 404s on that column and we
+        // re-try without it.
+        let q = await sb.from('profiles')
+          .select('id, subscription_tier, seller_rating, vacation_mode_until').in('id', ids);
+        if (q.error && /column/.test(q.error.message || '')) {
+          // Step down through optional columns. seller_rating was the
+          // historical optional; vacation_mode_until is the newer one.
+          q = await sb.from('profiles')
+            .select('id, subscription_tier, vacation_mode_until').in('id', ids);
+          if (q.error && /column/.test(q.error.message || '')) {
+            q = await sb.from('profiles').select('id, subscription_tier').in('id', ids);
+          }
+        }
+        if (!q.error && Array.isArray(q.data)) {
+          q.data.forEach(p => { cache[p.id] = p; });
+          // Re-render browse if it's the active page so the freshly
+          // hydrated cache takes effect immediately.
+          if (typeof renderBrowse === 'function' && document.getElementById('browseGrid')) {
+            try { renderBrowse(); } catch(_) {}
+          }
+        }
+      } catch (_) { /* silent — sort falls back to recency */ }
+    }
+
     async function _enrichListingsWithMarketPrice() {
       if (!Array.isArray(listings) || !listings.length) return;
       const needs = listings.filter(l =>
@@ -33554,6 +34350,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           // for any row where the seller didn't fill one in at listing time.
           // Runs async + non-blocking so initial render isn't gated by it.
           _enrichListingsWithMarketPrice().catch(() => {});
+          // Hydrate the seller-signals cache so the "Featured" sort
+          // (default browse order = tier × seller_rating) has data to
+          // rank by. Single round trip for every unique seller in the
+          // current listing set.
+          _hydrateBrowseSellerCache().catch(() => {});
+          // Load the current user's block list so browse + messaging
+          // can filter them out. No-op for signed-out users.
+          _hydrateBlockedUsers().catch(() => {});
+          // Load follows so the Follow button on seller profiles
+          // shows the right state without an extra round-trip.
+          _hydrateFollows().catch(() => {});
+          // Pull the unread message count so the Messages entry can
+          // show a badge if anything's waiting.
+          _hydrateDmUnread().catch(() => {});
         }
 
         // 2. If logged in, fetch user-specific data in parallel
@@ -34449,9 +35259,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <img src="icons/my_binder.svg" alt="" aria-hidden="true">
       Binder
     </button>
-    <button class="mobile-nav-btn" id="mobileNavAddCard" onclick="showPage('addCard'); setMobileNav('addCard')">
+    <button class="mobile-nav-btn" id="mobileNavScanCard" onclick="openScanCard()">
       <img src="icons/add_card.svg" alt="" aria-hidden="true">
-      Add Card
+      Scan Card
     </button>
     <button class="mobile-nav-btn" id="mobileNavSets" onclick="showPage('sets'); setMobileNav('sets')">
       <img src="icons/sets.svg" alt="" aria-hidden="true">
@@ -34581,6 +35391,71 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     // Called directly from the "Scan a Card" label on the Add Card page.
     // Opens the results sheet and kicks off the match pipeline.
+    // ─── Add Card overlay ───────────────────────────────────────
+    // Pops the existing pdex-themed addCardPage on top of whatever
+    // page the user was on (binder by default). No route change —
+    // close to return to context. Keyboard: Esc closes.
+    function openAddCardOverlay() {
+      const page = document.getElementById('addCardPage');
+      if (!page) return;
+      page.classList.add('active', 'pb-overlay');
+      document.body.classList.add('pb-addcard-overlay');
+      // Inject the close button if it's not already there.
+      if (!document.querySelector('.pb-addcard-overlay-close')) {
+        const btn = document.createElement('button');
+        btn.className = 'pb-addcard-overlay-close';
+        btn.innerHTML = '×';
+        btn.setAttribute('aria-label', 'Close');
+        btn.onclick = closeAddCardOverlay;
+        document.body.appendChild(btn);
+      }
+      // Esc-to-close handler — bind once, but the body class gate
+      // makes it a no-op when the overlay isn't open.
+      if (!window._addCardEscWired) {
+        window._addCardEscWired = true;
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && document.body.classList.contains('pb-addcard-overlay')) {
+            closeAddCardOverlay();
+          }
+        });
+      }
+      // Refresh any "active" highlighting since we're not actually on
+      // the addCard route.
+      if (typeof setMobileNav === 'function') {
+        try { setMobileNav('collection'); } catch(_) {}
+      }
+    }
+    function closeAddCardOverlay() {
+      const page = document.getElementById('addCardPage');
+      if (page) page.classList.remove('active', 'pb-overlay');
+      document.body.classList.remove('pb-addcard-overlay');
+      const btn = document.querySelector('.pb-addcard-overlay-close');
+      if (btn) btn.remove();
+    }
+
+    // ─── Scan Card nav action ───────────────────────────────────
+    // Replaces what used to be the "Add Card" nav slot — opens a file
+    // picker (camera on mobile) directly, kicking off the scanner
+    // flow without dropping the user into the full Add Card UI. The
+    // existing scanFromAddCard handles result rendering + the
+    // openCardScanner modal, which works independently of whether
+    // the addCard page is visible.
+    function openScanCard() {
+      if (!currentUser) { openModal('loginModal'); return; }
+      let input = document.getElementById('navScanCardInput');
+      if (!input) {
+        input = document.createElement('input');
+        input.type = 'file';
+        input.id = 'navScanCardInput';
+        input.accept = 'image/*';
+        input.setAttribute('capture', 'environment');
+        input.style.display = 'none';
+        input.addEventListener('change', function() { scanFromAddCard(this); });
+        document.body.appendChild(input);
+      }
+      input.click();
+    }
+
     function scanFromAddCard(input) {
       const file = input.files[0];
       if (!file) return;
