@@ -657,28 +657,48 @@ def main():
         try:
             html_text = fetch(f"{PC_BASE}/console/{slug}")
         except Exception as e:
-            return [(slug, "fail", f"fetch: {e}", 0, 0)]
+            return [(slug, "fail", f"fetch: {e}", 0, 0, 0)]
         by_name = build_catalog_index(catalog_rows, slug, cfg)
-        n_enr = 0; n_unm = 0; n_already = 0
+        n_enr = 0; n_unm = 0; n_already = 0; n_url_only = 0
         unmatched_samples = []   # for --debug-unmatched
         for pc in parse_console_page(slug, html_text):
             match = find_catalog_match(pc, by_name)
             if match:
-                if match.get("pricecharting_id"):
+                # We patch BOTH pricecharting_id and price_source_url
+                # if they're missing. Older versions of this script
+                # short-circuited on `match.get("pricecharting_id")`,
+                # which left thousands of rows URL-less forever — the
+                # legacy API-only enrichment had stamped the PCID but
+                # never wrote a URL, so --force-scrape later skipped
+                # every one of them. Now we treat the two columns
+                # independently: each gets written only if currently
+                # null. "already" means BOTH columns are populated.
+                has_pcid = bool(match.get("pricecharting_id"))
+                has_url  = bool(match.get("price_source_url"))
+                if has_pcid and has_url:
                     n_already += 1
                     continue
-                payload = {
-                    "pricecharting_id": pc["pricecharting_id"],
-                    "price_source_url": pc["product_url"],
-                }
+                payload = {}
+                if not has_pcid:
+                    payload["pricecharting_id"] = pc["pricecharting_id"]
+                if not has_url:
+                    payload["price_source_url"] = pc["product_url"]
                 if args.dry_run:
-                    print(f"     [dry] {match['id']:<35} → {pc['pricecharting_id']}  ({pc['name'][:40]})")
+                    cols = "+".join(payload.keys())
+                    print(f"     [dry] {match['id']:<35} → {cols:<40}  ({pc['name'][:40]})")
                 else:
                     try:
                         pg_patch(match["id"], payload)
                     except Exception as e:
-                        return [(slug, "fail", f"patch {match['id']}: {e}", 0, 0)]
-                n_enr += 1
+                        return [(slug, "fail", f"patch {match['id']}: {e}", 0, 0, 0)]
+                # Bucket which kind of enrichment we did so the per-set
+                # summary tells the operator whether the existing
+                # catalog was mostly URL-deficient (the common case
+                # post-bugfix) vs missing both.
+                if has_pcid and not has_url:
+                    n_url_only += 1
+                else:
+                    n_enr += 1
             else:
                 n_unm += 1
                 if args.debug_unmatched and len(unmatched_samples) < args.debug_unmatched:
@@ -716,7 +736,7 @@ def main():
                         try:
                             pg_post(payload)
                         except Exception as e:
-                            return [(slug, "fail", f"insert: {e}", 0, 0)]
+                            return [(slug, "fail", f"insert: {e}", 0, 0, 0)]
         # Surface unmatched samples for debugging
         if unmatched_samples:
             print(f"\n  [{slug}] first {len(unmatched_samples)} unmatched PC rows:")
@@ -728,23 +748,28 @@ def main():
                 for k in sample_keys:
                     sample = by_name["by_name"][k][0]
                     print(f"     CATALOG    name='{sample.get('name', '')[:55]}'  num={sample.get('card_number')}")
-        return [(slug, "ok", f"enriched={n_enr} already={n_already} unmatched={n_unm}", n_enr, n_unm)]
+        return [(slug, "ok",
+                 f"new={n_enr} url_only={n_url_only} already={n_already} unmatched={n_unm}",
+                 n_enr, n_unm, n_url_only)]
 
     print(f"\n  Processing {len(slugs)} sets with {args.workers} workers…\n")
+    stats.setdefault("url_only", 0)
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futs = {pool.submit(process_set, s): s for s in slugs}
         for f in as_completed(futs):
             results = f.result()
-            for slug, status, detail, n_enr, n_unm in results:
+            for slug, status, detail, n_enr, n_unm, n_url_only in results:
                 with _lock:
                     if status == "ok":
                         stats["enriched"] += n_enr
                         stats["unmatched"] += n_unm
+                        stats["url_only"]  += n_url_only
                     else:
                         stats["failed"] += 1
                     print(f"     {slug:<55}  {status:<6}  {detail}")
 
-    print(f"\n  Done. enriched={stats['enriched']} unmatched={stats['unmatched']} failed={stats['failed']}")
+    print(f"\n  Done. new={stats['enriched']} url_only={stats['url_only']} "
+          f"unmatched={stats['unmatched']} failed={stats['failed']}")
 
 
 if __name__ == "__main__":
