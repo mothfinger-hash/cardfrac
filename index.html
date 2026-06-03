@@ -1242,7 +1242,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
     .ac-mob-clean .ac-nav-grid .ac-ni{
       display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:6px;padding:18px 10px;
+      /* Tightened ~20% vertically vs the previous 18px/6px pass —
+         buttons are square-ish now rather than chunky tiles, so the
+         results grid below them gets more room without sacrificing
+         tap-target size. */
+      gap:4px;padding:12px 10px;
       border:1px solid rgba(26,199,160,.45);
       background:rgba(26,199,160,.08);
       border-radius:var(--r-sm,8px);
@@ -7000,17 +7004,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             <option value="dbz">Dragon Ball Z</option>
           </select>
         </div>
-        <!-- EN / JP toggle — Pokemon only. Hidden by acSetMobGame for
-             other TCGs (catalog only has multi-language Pokemon coverage). -->
-        <div id="acMobLangRow" style="display:flex;gap:0;margin-bottom:16px;border:1px solid rgba(26,199,160,.22);border-radius:4px;overflow:hidden">
-          <button id="acLangEN" onclick="acSetSearchLang('EN')"
-            style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:rgba(26,199,160,.12);color:#1AC7A0;border:none;cursor:pointer;transition:all .18s">
-            ENGLISH
-          </button>
-          <button id="acLangJA" onclick="acSetSearchLang('JA')"
-            style="flex:1;padding:7px 0;font-family:inherit;font-size:.6rem;letter-spacing:.1em;font-weight:700;background:transparent;color:rgba(26,199,160,.45);border:none;border-left:1px solid rgba(26,199,160,.22);cursor:pointer;transition:all .18s">
-            JAPANESE
-          </button>
+        <!-- Pokemon language dropdown — hidden by acSetMobGame for
+             other TCGs (catalog only has multi-language Pokemon coverage).
+             Was an EN/JA toggle; now a native select so CN/KR/Topps
+             fit without crowding the mobile screen. -->
+        <div id="acMobLangRow" style="margin-bottom:16px">
+          <select id="acMobLangSelect" onchange="acSetSearchLang(this.value)"
+            style="width:100%;padding:8px 10px;background:rgba(26,199,160,.06);color:#1AC7A0;font-family:inherit;font-size:.78rem;letter-spacing:.08em;font-weight:700;border:1px solid rgba(26,199,160,.35);border-radius:4px;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#1AC7A0 50%),linear-gradient(135deg,#1AC7A0 50%,transparent 50%);background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat">
+            <option value="EN">English</option>
+            <option value="JA">Japanese</option>
+            <option value="CN">Chinese</option>
+            <option value="KR">Korean</option>
+            <option value="TOPPS">Topps</option>
+          </select>
         </div>
         <input
           id="acMobInput"
@@ -7630,6 +7636,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                   <button type="button" role="option" class="ac-lang-opt" data-lang="JA" onclick="acDeskSetLang('JA')">Japanese</button>
                   <button type="button" role="option" class="ac-lang-opt" data-lang="CN" onclick="acDeskSetLang('CN')">Chinese</button>
                   <button type="button" role="option" class="ac-lang-opt" data-lang="KR" onclick="acDeskSetLang('KR')">Korean</button>
+                  <button type="button" role="option" class="ac-lang-opt" data-lang="TOPPS" onclick="acDeskSetLang('TOPPS')">Topps</button>
                 </div>
               </div>
               <input class="ac-fi" id="cardSearchInput" type="text"
@@ -7641,7 +7648,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               <label class="ac-ghost" style="cursor:pointer;text-align:center">&#9654; SCAN A CARD
                 <input type="file" accept="image/*" onchange="scanFromAddCard(this)" style="display:none">
               </label>
-              <button class="ac-ghost" onclick="openMultiScan()">&#9638; SCAN BULK</button>
+              <button class="ac-ghost" onclick="openMultiScan()">&#9638; MULTI SCAN</button>
               <button class="ac-ghost" onclick="openManualAddModal()">+ ADD MANUALLY</button>
             </div>
           </div>
@@ -7695,7 +7702,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <input id="acMobScanInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFromAddCard(this)">
           <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
             <span class="ac-ni-ico">▣</span>
-            <span class="ac-ni-lbl">Scan Bulk</span>
+            <span class="ac-ni-lbl">Multi Scan</span>
           </div>
         </div>
 
@@ -21841,7 +21848,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             style="cursor:grab">
             <div class="binder-card-img-wrap">
               ${item.card_image_url
-                ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''} onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
+                ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''} onload="_userPhotoAspectFit(this)" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>
@@ -23685,12 +23692,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     function acSetSearchLang(lang) {
       acSearchLanguage = lang;
-      const enBtn = document.getElementById('acLangEN');
-      const jaBtn = document.getElementById('acLangJA');
-      const inp   = document.getElementById('acMobInput');
-      if (enBtn) { enBtn.style.background = lang === 'EN' ? 'rgba(26,199,160,.12)' : 'transparent'; enBtn.style.color = lang === 'EN' ? '#1AC7A0' : 'rgba(26,199,160,.45)'; }
-      if (jaBtn) { jaBtn.style.background = lang === 'JA' ? 'rgba(26,199,160,.12)' : 'transparent'; jaBtn.style.color = lang === 'JA' ? '#1AC7A0' : 'rgba(26,199,160,.45)'; }
-      if (inp)   inp.placeholder = lang === 'JA' ? 'Pikachu, Charizard, Mewtwo...' : 'Charizard, Pikachu, Mewtwo...';
+      // Keep the <select> in sync if this was called programmatically
+      // (e.g. game-type change forcing a reset).
+      const sel = document.getElementById('acMobLangSelect');
+      if (sel && sel.value !== lang) sel.value = lang;
+      const inp = document.getElementById('acMobInput');
+      if (inp) {
+        const placeholders = {
+          EN: 'Charizard, Pikachu, Mewtwo...',
+          JA: 'Pikachu, Charizard, Mewtwo...',
+          CN: 'Pikachu, Charizard...',
+          KR: 'Pikachu, Charizard...',
+          TOPPS: 'Pikachu, Charizard, Mewtwo...',
+        };
+        inp.placeholder = placeholders[lang] || 'Card name...';
+      }
     }
 
     function acSetMobGame(game) {
@@ -23723,8 +23739,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const desk = document.getElementById('cardSearchInput');
       if (desk) desk.value = query;
       if (acMobGame === 'pokemon') {
-        if (acSearchLanguage === 'JA') {
-          searchJapaneseCards(query);
+        if (acSearchLanguage === 'JA' || acSearchLanguage === 'CN' ||
+            acSearchLanguage === 'KR' || acSearchLanguage === 'TOPPS') {
+          // Same catalog-prefix path desktop uses — JA queries route
+          // through the JA-specific helper for trigram ranking, the
+          // others go through searchNonEnglishCatalog.
+          if (acSearchLanguage === 'JA') {
+            searchJapaneseCards(query);
+          } else {
+            searchNonEnglishCatalog(query, acSearchLanguage);
+          }
         } else {
           searchPokemonCards();
         }
@@ -24018,12 +24042,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // EN uses the pokemontcg.io API + EN catalog rows; JA/CN/KR all
     // hit the catalog table filtered by id-prefix (jp-/pd-, cn-, kr-).
     let acDeskLang = 'EN';
-    var _AC_LANG_LABELS = { EN: 'English', JA: 'Japanese', CN: 'Chinese', KR: 'Korean' };
+    var _AC_LANG_LABELS = { EN: 'English', JA: 'Japanese', CN: 'Chinese', KR: 'Korean', TOPPS: 'Topps' };
     var _AC_LANG_PLACEHOLDERS = {
-      EN: 'Charizard...',
-      JA: 'Pikachu, Charizard...',
-      CN: 'Pikachu...',
-      KR: 'Pikachu...'
+      EN:    'Charizard...',
+      JA:    'Pikachu, Charizard...',
+      CN:    'Pikachu...',
+      KR:    'Pikachu...',
+      TOPPS: 'Pikachu, Charizard...'
     };
     function acDeskSetLang(lang) {
       acDeskLang = lang;
@@ -24047,7 +24072,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // JA/CN/KR all route through searchNonEnglishCatalog which
       // filters by id-prefix per language (jp-/pd-, cn-, kr-).
       if (acDeskGame === 'pokemon') {
-        if (acDeskLang === 'JA' || acDeskLang === 'CN' || acDeskLang === 'KR') {
+        if (acDeskLang === 'JA' || acDeskLang === 'CN' || acDeskLang === 'KR' || acDeskLang === 'TOPPS') {
           searchNonEnglishCatalog(query, acDeskLang);
         } else {
           searchPokemonCards();
@@ -24106,11 +24131,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     async function searchNonEnglishCatalog(query, lang) {
       lang = lang || 'JA';
       var LANG_PREFIX = {
-        JA: 'id.like.jp-%,id.like.pd-%',
-        CN: 'id.like.cn-%',
-        KR: 'id.like.kr-%'
+        JA:    'id.like.jp-%,id.like.pd-%',
+        CN:    'id.like.cn-%',
+        KR:    'id.like.kr-%',
+        TOPPS: 'id.like.topps-%'
       };
-      var LANG_LABEL = { JA: 'JP', CN: 'CN', KR: 'KR' };
+      var LANG_LABEL = { JA: 'JP', CN: 'CN', KR: 'KR', TOPPS: 'TOPPS' };
       var prefixFilter = LANG_PREFIX[lang] || LANG_PREFIX.JA;
       var langLabel    = LANG_LABEL[lang]  || 'JP';
       const deskStatus = document.getElementById('acDeskStatus');
