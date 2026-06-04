@@ -107,6 +107,15 @@ const commands = [
         { name: '5 rounds (extended)', value: 5 },
       ] },
   ] },
+  // ── /battle — Pokémon-style move battle (level 5+ starters) ──
+  // Tier 1: random move pick per side (lore-accurate per evolution),
+  // single damage calc, higher damage wins. 2x XP vs /duel.
+  // Both players must have a starter at level 5 or higher.
+  { name: 'battle', type: 1,
+    description: 'Pokémon battle (level 5+ starters required) — 2× XP',
+    options: [
+      { name: 'opponent', description: 'Who to battle', type: 6, required: true },
+    ] },
 
   // ── Pokémon game loop ──────────────────────────
   { name: 'starter', type: 1, description: 'Pick (or change) your starter Pokémon', options: [

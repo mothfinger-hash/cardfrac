@@ -257,6 +257,10 @@ const handler = async (req, res) => {
         const reply = await handleDuelComponent(interaction);
         return res.status(200).json(reply);
       }
+      if (cid.startsWith('battle_accept:') || cid.startsWith('battle_decline:')) {
+        const reply = await handleBattleComponent(interaction);
+        return res.status(200).json(reply);
+      }
       return res.status(200).json(ephemeral('Unknown button.'));
     } catch (e) {
       console.error('[discord-bot] component error:', e);
@@ -473,6 +477,7 @@ async function runSlashHandler(name, interaction) {
     case 'track':         return await handleTrack(interaction);
     case 'untrack':       return await handleUntrack(interaction);
     case 'duel':          return await handleDuel(interaction);
+    case 'battle':        return await handleBattle(interaction);
     case 'starter':       return await handleStarter(interaction);
     case 'profile':       return await handleProfile(interaction);
     default:              return ephemeral(`Unknown command: ${name}`);
@@ -1388,6 +1393,161 @@ function checkEvolution(starterId, currentPokemonId, newLevel) {
   const stage = targetStage === 3 ? ev.stage3 : ev.stage2;
   return { id: stage.id, name: stage.name, fromStage: currentStage, toStage: targetStage };
 }
+// ── /battle move data ──────────────────────────────────────────────
+// Each starter form gets 4 lore-accurate moves with canonical-ish
+// power/accuracy values. Keys are POKEMON NAMES (matching STARTERS +
+// EVOLUTIONS) for easy lookup by current form. Moves trend stronger
+// per evolution stage so leveling up + evolving makes you stronger
+// in /battle, matching real-game progression.
+//
+// Tier 1 scoring: random move pick from each side; damage = power ×
+// (accuracy/100) × random(0.85, 1.0) + (level × 0.5). Higher damage
+// wins. No HP, no type chart, no turn loop — those come in Tier 2.
+const POKEMON_MOVES = {
+  // Gen 1 — Bulbasaur line
+  'Bulbasaur':  [{n:'Vine Whip',  p:45,a:100,t:'grass'},  {n:'Tackle',      p:40,a:100,t:'normal'}, {n:'Leech Seed',  p:25,a:90, t:'grass'},  {n:'Growl',         p:15,a:100,t:'normal'}],
+  'Ivysaur':    [{n:'Razor Leaf', p:55,a:95, t:'grass'},  {n:'Take Down',   p:90,a:85, t:'normal'}, {n:'Sleep Powder',p:35,a:75, t:'grass'},  {n:'Vine Whip',     p:45,a:100,t:'grass'}],
+  'Venusaur':   [{n:'Solar Beam', p:120,a:100,t:'grass'}, {n:'Sludge Bomb', p:90,a:100,t:'poison'},{n:'Petal Blizzard',p:90,a:100,t:'grass'}, {n:'Earthquake',    p:100,a:100,t:'ground'}],
+  // Gen 1 — Charmander line
+  'Charmander': [{n:'Ember',      p:40,a:100,t:'fire'},   {n:'Scratch',     p:40,a:100,t:'normal'}, {n:'Smokescreen', p:20,a:100,t:'normal'}, {n:'Dragon Rage',   p:40,a:100,t:'dragon'}],
+  'Charmeleon': [{n:'Flamethrower',p:90,a:100,t:'fire'},  {n:'Slash',       p:70,a:100,t:'normal'}, {n:'Dragon Breath',p:60,a:100,t:'dragon'},{n:'Ember',         p:40,a:100,t:'fire'}],
+  'Charizard':  [{n:'Fire Blast', p:110,a:85, t:'fire'},  {n:'Air Slash',   p:75,a:95, t:'flying'}, {n:'Dragon Claw', p:80,a:100,t:'dragon'}, {n:'Heat Wave',     p:95,a:90, t:'fire'}],
+  // Gen 1 — Squirtle line
+  'Squirtle':   [{n:'Water Gun',  p:40,a:100,t:'water'},  {n:'Tackle',      p:40,a:100,t:'normal'}, {n:'Withdraw',    p:20,a:100,t:'water'},  {n:'Bubble',        p:40,a:100,t:'water'}],
+  'Wartortle':  [{n:'Bite',       p:60,a:100,t:'dark'},   {n:'Water Pulse', p:60,a:100,t:'water'},  {n:'Aqua Jet',    p:40,a:100,t:'water'},  {n:'Rapid Spin',    p:50,a:100,t:'normal'}],
+  'Blastoise':  [{n:'Hydro Pump', p:110,a:80, t:'water'}, {n:'Skull Bash',  p:130,a:100,t:'normal'},{n:'Ice Beam',    p:90,a:100,t:'ice'},    {n:'Flash Cannon',  p:80,a:100,t:'steel'}],
+  // Gen 2 — Chikorita line
+  'Chikorita':  [{n:'Vine Whip',  p:45,a:100,t:'grass'},  {n:'Tackle',      p:40,a:100,t:'normal'}, {n:'Razor Leaf',  p:55,a:95, t:'grass'},  {n:'Reflect',       p:25,a:100,t:'psychic'}],
+  'Bayleef':    [{n:'Magical Leaf',p:60,a:100,t:'grass'}, {n:'Body Slam',   p:85,a:100,t:'normal'}, {n:'Synthesis',   p:30,a:100,t:'grass'},  {n:'Razor Leaf',    p:55,a:95, t:'grass'}],
+  'Meganium':   [{n:'Petal Dance',p:120,a:100,t:'grass'}, {n:'Earthquake',  p:100,a:100,t:'ground'},{n:'Body Slam',   p:85,a:100,t:'normal'}, {n:'Solar Beam',    p:120,a:100,t:'grass'}],
+  // Gen 2 — Cyndaquil line
+  'Cyndaquil':  [{n:'Ember',      p:40,a:100,t:'fire'},   {n:'Tackle',      p:40,a:100,t:'normal'}, {n:'Smokescreen', p:20,a:100,t:'normal'}, {n:'Quick Attack',  p:40,a:100,t:'normal'}],
+  'Quilava':    [{n:'Flame Wheel',p:60,a:100,t:'fire'},   {n:'Quick Attack',p:40,a:100,t:'normal'}, {n:'Lava Plume',  p:80,a:100,t:'fire'},   {n:'Swift',         p:60,a:100,t:'normal'}],
+  'Typhlosion': [{n:'Eruption',   p:120,a:100,t:'fire'},  {n:'Flamethrower',p:90,a:100,t:'fire'},   {n:'Thunder Punch',p:75,a:100,t:'electric'},{n:'Wild Charge', p:90,a:100,t:'electric'}],
+  // Gen 2 — Totodile line
+  'Totodile':   [{n:'Water Gun',  p:40,a:100,t:'water'},  {n:'Scratch',     p:40,a:100,t:'normal'}, {n:'Bite',        p:60,a:100,t:'dark'},   {n:'Rage',          p:20,a:100,t:'normal'}],
+  'Croconaw':   [{n:'Crunch',     p:80,a:100,t:'dark'},   {n:'Water Pulse', p:60,a:100,t:'water'},  {n:'Slash',       p:70,a:100,t:'normal'}, {n:'Aqua Tail',     p:90,a:90, t:'water'}],
+  'Feraligatr': [{n:'Hydro Pump', p:110,a:80, t:'water'}, {n:'Crunch',      p:80,a:100,t:'dark'},   {n:'Ice Fang',    p:65,a:95, t:'ice'},    {n:'Aqua Tail',     p:90,a:90, t:'water'}],
+  // Gen 3 — Treecko line
+  'Treecko':    [{n:'Pound',      p:40,a:100,t:'normal'}, {n:'Absorb',      p:20,a:100,t:'grass'},  {n:'Quick Attack',p:40,a:100,t:'normal'}, {n:'Mega Drain',    p:40,a:100,t:'grass'}],
+  'Grovyle':    [{n:'Leaf Blade', p:90,a:100,t:'grass'},  {n:'Slash',       p:70,a:100,t:'normal'}, {n:'Quick Attack',p:40,a:100,t:'normal'}, {n:'Pursuit',       p:40,a:100,t:'dark'}],
+  'Sceptile':   [{n:'Leaf Storm', p:130,a:90, t:'grass'}, {n:'Dragon Claw', p:80,a:100,t:'dragon'}, {n:'Leaf Blade',  p:90,a:100,t:'grass'},  {n:'Earthquake',    p:100,a:100,t:'ground'}],
+  // Gen 3 — Torchic line
+  'Torchic':    [{n:'Ember',      p:40,a:100,t:'fire'},   {n:'Peck',        p:35,a:100,t:'flying'}, {n:'Scratch',     p:40,a:100,t:'normal'}, {n:'Sand Attack',   p:15,a:100,t:'ground'}],
+  'Combusken':  [{n:'Double Kick',p:30,a:100,t:'fighting'},{n:'Flame Charge',p:50,a:100,t:'fire'},  {n:'Peck',        p:35,a:100,t:'flying'}, {n:'Bulk Up',       p:25,a:100,t:'fighting'}],
+  'Blaziken':   [{n:'Blaze Kick', p:85,a:90, t:'fire'},   {n:'Sky Uppercut',p:85,a:90, t:'fighting'},{n:'Brave Bird', p:120,a:100,t:'flying'},{n:'Flare Blitz',   p:120,a:100,t:'fire'}],
+  // Gen 3 — Mudkip line
+  'Mudkip':     [{n:'Water Gun',  p:40,a:100,t:'water'},  {n:'Tackle',      p:40,a:100,t:'normal'}, {n:'Mud-Slap',    p:20,a:100,t:'ground'}, {n:'Foresight',     p:15,a:100,t:'normal'}],
+  'Marshtomp':  [{n:'Mud Shot',   p:55,a:95, t:'ground'}, {n:'Water Pulse', p:60,a:100,t:'water'},  {n:'Mud Bomb',    p:65,a:85, t:'ground'}, {n:'Rock Slide',    p:75,a:90, t:'rock'}],
+  'Swampert':   [{n:'Hydro Pump', p:110,a:80, t:'water'}, {n:'Earthquake',  p:100,a:100,t:'ground'},{n:'Hammer Arm',  p:100,a:90, t:'fighting'},{n:'Muddy Water', p:90,a:85, t:'water'}],
+  // Gen 4 — Turtwig line
+  'Turtwig':    [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Absorb',      p:20,a:100,t:'grass'},  {n:'Withdraw',    p:20,a:100,t:'water'},  {n:'Razor Leaf',    p:55,a:95, t:'grass'}],
+  'Grotle':     [{n:'Bite',       p:60,a:100,t:'dark'},   {n:'Razor Leaf',  p:55,a:95, t:'grass'},  {n:'Body Slam',   p:85,a:100,t:'normal'}, {n:'Mega Drain',    p:40,a:100,t:'grass'}],
+  'Torterra':   [{n:'Wood Hammer',p:120,a:100,t:'grass'}, {n:'Earthquake',  p:100,a:100,t:'ground'},{n:'Crunch',      p:80,a:100,t:'dark'},   {n:'Stone Edge',    p:100,a:80, t:'rock'}],
+  // Gen 4 — Chimchar line
+  'Chimchar':   [{n:'Scratch',    p:40,a:100,t:'normal'}, {n:'Ember',       p:40,a:100,t:'fire'},   {n:'Leer',        p:15,a:100,t:'normal'}, {n:'Taunt',         p:20,a:100,t:'dark'}],
+  'Monferno':   [{n:'Mach Punch', p:40,a:100,t:'fighting'},{n:'Flame Wheel',p:60,a:100,t:'fire'},   {n:'Feint',       p:30,a:100,t:'normal'}, {n:'Fury Swipes',   p:50,a:80, t:'normal'}],
+  'Infernape':  [{n:'Close Combat',p:120,a:100,t:'fighting'},{n:'Flare Blitz',p:120,a:100,t:'fire'},{n:'U-Turn',      p:70,a:100,t:'bug'},    {n:'Stone Edge',    p:100,a:80, t:'rock'}],
+  // Gen 4 — Piplup line
+  'Piplup':     [{n:'Pound',      p:40,a:100,t:'normal'}, {n:'Bubble',      p:40,a:100,t:'water'},  {n:'Peck',        p:35,a:100,t:'flying'}, {n:'Growl',         p:15,a:100,t:'normal'}],
+  'Prinplup':   [{n:'Metal Claw', p:50,a:95, t:'steel'},  {n:'Bubble Beam', p:65,a:100,t:'water'},  {n:'Peck',        p:35,a:100,t:'flying'}, {n:'Pluck',         p:60,a:100,t:'flying'}],
+  'Empoleon':   [{n:'Hydro Pump', p:110,a:80, t:'water'}, {n:'Drill Peck',  p:80,a:100,t:'flying'}, {n:'Flash Cannon',p:80,a:100,t:'steel'},  {n:'Aqua Jet',      p:40,a:100,t:'water'}],
+  // Gen 5 — Snivy line
+  'Snivy':      [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Vine Whip',   p:45,a:100,t:'grass'},  {n:'Leer',        p:15,a:100,t:'normal'}, {n:'Wrap',          p:15,a:90, t:'normal'}],
+  'Servine':    [{n:'Leaf Tornado',p:65,a:90, t:'grass'}, {n:'Slam',        p:80,a:75, t:'normal'}, {n:'Leech Seed',  p:25,a:90, t:'grass'},  {n:'Vine Whip',     p:45,a:100,t:'grass'}],
+  'Serperior':  [{n:'Leaf Storm', p:130,a:90, t:'grass'}, {n:'Coil',        p:30,a:100,t:'poison'}, {n:'Aqua Tail',   p:90,a:90, t:'water'},  {n:'Dragon Pulse',  p:85,a:100,t:'dragon'}],
+  // Gen 5 — Tepig line
+  'Tepig':      [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Ember',       p:40,a:100,t:'fire'},   {n:'Tail Whip',   p:15,a:100,t:'normal'}, {n:'Defense Curl',  p:20,a:100,t:'normal'}],
+  'Pignite':    [{n:'Flame Charge',p:50,a:100,t:'fire'},  {n:'Arm Thrust',  p:40,a:100,t:'fighting'},{n:'Heat Crash', p:80,a:100,t:'fire'},   {n:'Rollout',       p:30,a:90, t:'rock'}],
+  'Emboar':     [{n:'Heat Crash', p:120,a:100,t:'fire'},  {n:'Hammer Arm',  p:100,a:90, t:'fighting'},{n:'Wild Charge',p:90,a:100,t:'electric'},{n:'Head Smash', p:150,a:80, t:'rock'}],
+  // Gen 5 — Oshawott line
+  'Oshawott':   [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Water Gun',   p:40,a:100,t:'water'},  {n:'Tail Whip',   p:15,a:100,t:'normal'}, {n:'Focus Energy', p:20,a:100,t:'normal'}],
+  'Dewott':     [{n:'Razor Shell',p:75,a:95, t:'water'},  {n:'Fury Cutter', p:40,a:95, t:'bug'},    {n:'Aqua Jet',    p:40,a:100,t:'water'},  {n:'Water Pulse',  p:60,a:100,t:'water'}],
+  'Samurott':   [{n:'Hydro Pump', p:110,a:80, t:'water'}, {n:'Megahorn',    p:120,a:85, t:'bug'},   {n:'Slash',       p:70,a:100,t:'normal'}, {n:'Aqua Jet',     p:40,a:100,t:'water'}],
+  // Gen 6 — Chespin line
+  'Chespin':    [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Vine Whip',   p:45,a:100,t:'grass'},  {n:'Rollout',     p:30,a:90, t:'rock'},   {n:'Bite',          p:60,a:100,t:'dark'}],
+  'Quilladin':  [{n:'Pin Missile',p:25,a:95, t:'bug'},    {n:'Needle Arm',  p:60,a:100,t:'grass'},  {n:'Take Down',   p:90,a:85, t:'normal'}, {n:'Bite',          p:60,a:100,t:'dark'}],
+  'Chesnaught': [{n:'Wood Hammer',p:120,a:100,t:'grass'}, {n:'Hammer Arm',  p:100,a:90, t:'fighting'},{n:'Spiky Shield',p:30,a:100,t:'grass'},{n:'Body Slam',     p:85,a:100,t:'normal'}],
+  // Gen 6 — Fennekin line
+  'Fennekin':   [{n:'Scratch',    p:40,a:100,t:'normal'}, {n:'Ember',       p:40,a:100,t:'fire'},   {n:'Tail Whip',   p:15,a:100,t:'normal'}, {n:'Howl',          p:20,a:100,t:'normal'}],
+  'Braixen':    [{n:'Psybeam',    p:65,a:100,t:'psychic'},{n:'Flame Charge',p:50,a:100,t:'fire'},   {n:'Magical Leaf',p:60,a:100,t:'grass'},  {n:'Lucky Chant',   p:25,a:100,t:'normal'}],
+  'Delphox':    [{n:'Mystical Fire',p:75,a:100,t:'fire'}, {n:'Psyshock',    p:80,a:100,t:'psychic'},{n:'Future Sight',p:120,a:100,t:'psychic'},{n:'Flamethrower',p:90,a:100,t:'fire'}],
+  // Gen 6 — Froakie line
+  'Froakie':    [{n:'Pound',      p:40,a:100,t:'normal'}, {n:'Bubble',      p:40,a:100,t:'water'},  {n:'Quick Attack',p:40,a:100,t:'normal'}, {n:'Lick',          p:30,a:100,t:'ghost'}],
+  'Frogadier':  [{n:'Water Pulse',p:60,a:100,t:'water'},  {n:'Smokescreen', p:20,a:100,t:'normal'}, {n:'Round',       p:60,a:100,t:'normal'}, {n:'Bounce',        p:85,a:85, t:'flying'}],
+  'Greninja':   [{n:'Water Shuriken',p:15,a:100,t:'water'},{n:'Night Slash',p:70,a:100,t:'dark'},   {n:'Hydro Pump',  p:110,a:80, t:'water'}, {n:'Ice Beam',      p:90,a:100,t:'ice'}],
+  // Gen 7 — Rowlet line
+  'Rowlet':     [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Leafage',     p:40,a:100,t:'grass'},  {n:'Peck',        p:35,a:100,t:'flying'}, {n:'Astonish',      p:30,a:100,t:'ghost'}],
+  'Dartrix':    [{n:'Razor Leaf', p:55,a:95, t:'grass'},  {n:'Pluck',       p:60,a:100,t:'flying'}, {n:'Synthesis',   p:30,a:100,t:'grass'},  {n:'Ominous Wind',  p:60,a:100,t:'ghost'}],
+  'Decidueye':  [{n:'Spirit Shackle',p:80,a:100,t:'ghost'},{n:'Leaf Blade', p:90,a:100,t:'grass'},  {n:'Brave Bird',  p:120,a:100,t:'flying'},{n:'Phantom Force',p:90,a:100,t:'ghost'}],
+  // Gen 7 — Litten line
+  'Litten':     [{n:'Scratch',    p:40,a:100,t:'normal'}, {n:'Ember',       p:40,a:100,t:'fire'},   {n:'Lick',        p:30,a:100,t:'ghost'},  {n:'Leer',          p:15,a:100,t:'normal'}],
+  'Torracat':   [{n:'Fire Fang',  p:65,a:95, t:'fire'},   {n:'Bite',        p:60,a:100,t:'dark'},   {n:'Lick',        p:30,a:100,t:'ghost'},  {n:'Double Kick',   p:30,a:100,t:'fighting'}],
+  'Incineroar': [{n:'Darkest Lariat',p:85,a:100,t:'dark'},{n:'Flare Blitz', p:120,a:100,t:'fire'},  {n:'Cross Chop',  p:100,a:80, t:'fighting'},{n:'Throat Chop',p:80,a:100,t:'dark'}],
+  // Gen 7 — Popplio line
+  'Popplio':    [{n:'Pound',      p:40,a:100,t:'normal'}, {n:'Water Gun',   p:40,a:100,t:'water'},  {n:'Disarming Voice',p:40,a:100,t:'fairy'},{n:'Growl',        p:15,a:100,t:'normal'}],
+  'Brionne':    [{n:'Bubble Beam',p:65,a:100,t:'water'},  {n:'Disarming Voice',p:40,a:100,t:'fairy'},{n:'Aqua Jet',  p:40,a:100,t:'water'},  {n:'Encore',        p:20,a:100,t:'normal'}],
+  'Primarina':  [{n:'Sparkling Aria',p:90,a:100,t:'water'},{n:'Moonblast',  p:95,a:100,t:'fairy'},  {n:'Hydro Pump',  p:110,a:80, t:'water'}, {n:'Psychic',       p:90,a:100,t:'psychic'}],
+  // Gen 8 — Grookey line
+  'Grookey':    [{n:'Scratch',    p:40,a:100,t:'normal'}, {n:'Branch Poke', p:40,a:100,t:'grass'},  {n:'Growl',       p:15,a:100,t:'normal'}, {n:'Taunt',         p:20,a:100,t:'dark'}],
+  'Thwackey':   [{n:'Razor Leaf', p:55,a:95, t:'grass'},  {n:'Knock Off',   p:65,a:100,t:'dark'},   {n:'Double Hit',  p:35,a:90, t:'normal'}, {n:'Screech',       p:20,a:85, t:'normal'}],
+  'Rillaboom':  [{n:'Drum Beating',p:80,a:100,t:'grass'}, {n:'Wood Hammer', p:120,a:100,t:'grass'}, {n:'Earthquake',  p:100,a:100,t:'ground'},{n:'High Horsepower',p:95,a:95,t:'ground'}],
+  // Gen 8 — Scorbunny line
+  'Scorbunny':  [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Ember',       p:40,a:100,t:'fire'},   {n:'Quick Attack',p:40,a:100,t:'normal'}, {n:'Double Kick',   p:30,a:100,t:'fighting'}],
+  'Raboot':     [{n:'Flame Charge',p:50,a:100,t:'fire'},  {n:'Double Kick', p:30,a:100,t:'fighting'},{n:'Headbutt',   p:70,a:100,t:'normal'}, {n:'Quick Attack',  p:40,a:100,t:'normal'}],
+  'Cinderace':  [{n:'Pyro Ball',  p:120,a:90, t:'fire'},  {n:'High Jump Kick',p:130,a:90,t:'fighting'},{n:'Iron Head',p:80,a:100,t:'steel'},  {n:'Bounce',        p:85,a:85, t:'flying'}],
+  // Gen 8 — Sobble line
+  'Sobble':     [{n:'Pound',      p:40,a:100,t:'normal'}, {n:'Water Gun',   p:40,a:100,t:'water'},  {n:'Growl',       p:15,a:100,t:'normal'}, {n:'Bind',          p:15,a:85, t:'normal'}],
+  'Drizzile':   [{n:'Water Pulse',p:60,a:100,t:'water'},  {n:'U-Turn',      p:70,a:100,t:'bug'},    {n:'Sucker Punch',p:70,a:100,t:'dark'},   {n:'Liquidation',   p:85,a:100,t:'water'}],
+  'Inteleon':   [{n:'Snipe Shot', p:80,a:100,t:'water'},  {n:'Hydro Pump',  p:110,a:80, t:'water'}, {n:'Ice Beam',    p:90,a:100,t:'ice'},    {n:'Air Slash',     p:75,a:95, t:'flying'}],
+  // Gen 9 — Sprigatito line
+  'Sprigatito': [{n:'Scratch',    p:40,a:100,t:'normal'}, {n:'Leafage',     p:40,a:100,t:'grass'},  {n:'Tail Whip',   p:15,a:100,t:'normal'}, {n:'Bite',          p:60,a:100,t:'dark'}],
+  'Floragato':  [{n:'Magical Leaf',p:60,a:100,t:'grass'}, {n:'Bite',        p:60,a:100,t:'dark'},   {n:'U-Turn',      p:70,a:100,t:'bug'},    {n:'Slash',         p:70,a:100,t:'normal'}],
+  'Meowscarada':[{n:'Flower Trick',p:70,a:100,t:'grass'}, {n:'Night Slash', p:70,a:100,t:'dark'},   {n:'U-Turn',      p:70,a:100,t:'bug'},    {n:'Play Rough',    p:90,a:90, t:'fairy'}],
+  // Gen 9 — Fuecoco line
+  'Fuecoco':    [{n:'Tackle',     p:40,a:100,t:'normal'}, {n:'Ember',       p:40,a:100,t:'fire'},   {n:'Leer',        p:15,a:100,t:'normal'}, {n:'Astonish',      p:30,a:100,t:'ghost'}],
+  'Crocalor':   [{n:'Bite',       p:60,a:100,t:'dark'},   {n:'Incinerate',  p:60,a:100,t:'fire'},   {n:'Flame Charge',p:50,a:100,t:'fire'},   {n:'Yawn',          p:25,a:100,t:'normal'}],
+  'Skeledirge': [{n:'Torch Song', p:80,a:100,t:'fire'},   {n:'Shadow Ball', p:80,a:100,t:'ghost'},  {n:'Earth Power', p:90,a:100,t:'ground'}, {n:'Hyper Voice',   p:90,a:100,t:'normal'}],
+  // Gen 9 — Quaxly line
+  'Quaxly':     [{n:'Pound',      p:40,a:100,t:'normal'}, {n:'Water Gun',   p:40,a:100,t:'water'},  {n:'Sing',        p:25,a:55, t:'normal'}, {n:'Wing Attack',   p:60,a:100,t:'flying'}],
+  'Quaxwell':   [{n:'Aqua Step',  p:80,a:100,t:'water'},  {n:'Wing Attack', p:60,a:100,t:'flying'}, {n:'Double Hit',  p:35,a:90, t:'normal'}, {n:'Work Up',       p:20,a:100,t:'normal'}],
+  'Quaquaval':  [{n:'Aqua Step',  p:80,a:100,t:'water'},  {n:'Brick Break', p:75,a:100,t:'fighting'},{n:'Close Combat',p:120,a:100,t:'fighting'},{n:'Liquidation',p:85,a:100,t:'water'}],
+};
+
+// Element-style icons for the embed flavor — one glyph per move type.
+const TYPE_ICONS = {
+  fire:'🔥', water:'💧', grass:'🌿', electric:'⚡', ice:'❄️',
+  fighting:'👊', poison:'☠️', ground:'🌎', flying:'🪶', psychic:'🔮',
+  bug:'🐛', rock:'🪨', ghost:'👻', dragon:'🐉', dark:'🌑',
+  steel:'⚙️', fairy:'✨', normal:'⭐',
+};
+
+// Lookup helper — returns the moveset for the pokemon's CURRENT form
+// (resolves starter_id + level → current form name, falls back to a
+// generic moveset if data is somehow missing).
+function getMovesForPokemon(pk) {
+  const name = (pk && pk.pokemon_name) || '';
+  return POKEMON_MOVES[name] || [
+    {n:'Tackle', p:40, a:100, t:'normal'},
+    {n:'Growl',  p:15, a:100, t:'normal'},
+  ];
+}
+
+// Single damage calculation. Used by /battle (Tier 1 — no HP, no
+// type chart). Damage = power × (accuracy/100) × random(0.85, 1.0)
+// + level × 0.5. The level term gives high-level pokemon a meaningful
+// edge without making low-level battles deterministic.
+function calcBattleDamage(move, level) {
+  const accFactor = Math.min(1, (move.a || 100) / 100);
+  const variance  = 0.85 + Math.random() * 0.15;
+  const base      = (move.p || 0) * accFactor * variance;
+  const levelBonus = (level || 1) * 0.5;
+  // Accuracy roll — if it misses entirely, damage is zero (suspense).
+  if (Math.random() * 100 > (move.a || 100)) return 0;
+  return Math.round(base + levelBonus);
+}
+
+
 function findStarter(query) {
   if (!query) return null;
   const q = String(query).toLowerCase().trim();
@@ -1797,6 +1957,219 @@ async function handleDuelComponent(interaction) {
 }
 
 // Shared duel runner: pulls cards, scores rounds, awards XP if both
+// ─── /battle — Pokémon-style move battle (Tier 1) ──────────────────
+// Both players must have a starter at level 5+. Each side gets a
+// random move from their current form's moveset, damage is computed,
+// higher damage wins. Same Accept-button flow as /duel and writes to
+// the same bot_duel_log table (so /profile and history queries pick
+// up battles too). Battles award 2x the XP of a duel — they're
+// intended as the "main event" once you've grown your starter.
+const BATTLE_LEVEL_MIN = 5;
+const BATTLE_XP_MULTIPLIER = 2;
+
+async function handleBattle(interaction) {
+  const u = (interaction.member && interaction.member.user) || interaction.user;
+  const opp = optUser(interaction, 'opponent');
+  if (!opp || !opp.id) return ephemeral('Pick an opponent.');
+  if (opp.id === u.id) return ephemeral('Battling yourself is not allowed.');
+  if (opp.bot)         return ephemeral('Bots don\'t train pokemon. Pick a real opponent.');
+
+  // Both must have starters at level 5+.
+  const pkRes = await sb.from('bot_pokemon')
+    .select('*').in('discord_user_id', [u.id, opp.id]);
+  const pks = (pkRes.data || []);
+  const aPk = pks.find(p => p.discord_user_id === u.id);
+  const bPk = pks.find(p => p.discord_user_id === opp.id);
+  if (!aPk) return ephemeral('Pick your starter first — run /starter.');
+  if (!bPk) return ephemeral(`<@${opp.id}> hasn't picked a starter yet — they need to run /starter first.`);
+  if ((aPk.level || 1) < BATTLE_LEVEL_MIN) {
+    return ephemeral(`Your **${aPk.pokemon_name}** is only level ${aPk.level || 1} — needs to be level ${BATTLE_LEVEL_MIN} to battle. Try /duel to grind XP first.`);
+  }
+  if ((bPk.level || 1) < BATTLE_LEVEL_MIN) {
+    return ephemeral(`<@${opp.id}>'s **${bPk.pokemon_name}** is only level ${bPk.level || 1} — needs to be level ${BATTLE_LEVEL_MIN} to battle.`);
+  }
+
+  // Same cooldowns as /duel (per-challenger + per-pair).
+  const cdChallenger = await sb.from('bot_duel_log')
+    .select('created_at').eq('challenger_discord_id', u.id)
+    .order('created_at', { ascending: false }).limit(1);
+  if (cdChallenger.data && cdChallenger.data[0]) {
+    const ageSec = (Date.now() - new Date(cdChallenger.data[0].created_at).getTime()) / 1000;
+    if (ageSec < DUEL_CD_CHALLENGER_SEC) {
+      return ephemeral(`Slow down — wait ${Math.ceil(DUEL_CD_CHALLENGER_SEC - ageSec)}s before sending another challenge.`);
+    }
+  }
+  const cdPair = await sb.from('bot_duel_log')
+    .select('created_at')
+    .or(`and(challenger_discord_id.eq.${u.id},opponent_discord_id.eq.${opp.id}),and(challenger_discord_id.eq.${opp.id},opponent_discord_id.eq.${u.id})`)
+    .order('created_at', { ascending: false }).limit(1);
+  if (cdPair.data && cdPair.data[0]) {
+    const ageSec = (Date.now() - new Date(cdPair.data[0].created_at).getTime()) / 1000;
+    if (ageSec < DUEL_CD_PAIR_SEC) {
+      return ephemeral(`That pair was just challenged — wait ${Math.ceil(DUEL_CD_PAIR_SEC - ageSec)}s.`);
+    }
+  }
+
+  // Log a pending battle so the Accept button knows which row to resolve.
+  await sb.from('bot_duel_log').insert({
+    challenger_discord_id: u.id,
+    opponent_discord_id:   opp.id,
+    game: 'pokemon_battle',
+    rounds: 1,
+    status: 'pending',
+  });
+
+  const aName = (interaction.member && interaction.member.user && interaction.member.user.username) || u.username || 'Trainer';
+  const bName = opp.username || 'Trainer';
+  return {
+    type: INTERACTION_RESPONSE_TYPE.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content: `<@${opp.id}>  ⚔️  **${aName}** challenges you to a Pokémon battle!\n` +
+               `**${aPk.pokemon_name}** (Lv ${aPk.level}) vs **${bPk.pokemon_name}** (Lv ${bPk.level})`,
+      components: [{
+        type: 1,
+        components: [
+          { type: 2, style: 3, label: 'Accept Battle',  custom_id: `battle_accept:${u.id}:${opp.id}` },
+          { type: 2, style: 4, label: 'Decline',        custom_id: `battle_decline:${u.id}:${opp.id}` },
+        ],
+      }],
+      allowed_mentions: { users: [opp.id] },
+    },
+  };
+}
+
+async function handleBattleComponent(interaction) {
+  const cid = (interaction.data && interaction.data.custom_id) || '';
+  const parts = cid.split(':');                  // [action, challengerId, opponentId]
+  const action       = parts[0];
+  const challengerId = parts[1];
+  const opponentId   = parts[2];
+  const clickerId    = (interaction.member && interaction.member.user && interaction.member.user.id) ||
+                       (interaction.user && interaction.user.id);
+
+  // Only the opponent can accept/decline.
+  if (clickerId !== opponentId) {
+    return ephemeral('Only the challenged trainer can accept or decline this battle.');
+  }
+
+  if (action === 'battle_decline') {
+    await sb.from('bot_duel_log')
+      .update({ status: 'declined', resolved_at: new Date().toISOString() })
+      .eq('challenger_discord_id', challengerId).eq('opponent_discord_id', opponentId)
+      .eq('status', 'pending');
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: { content: `<@${opponentId}> declined the battle.`, components: [] },
+    };
+  }
+
+  // Accept — pull both pokemon, resolve, build the result embed.
+  const pkRes = await sb.from('bot_pokemon').select('*').in('discord_user_id', [challengerId, opponentId]);
+  const pks   = pkRes.data || [];
+  const aPk   = pks.find(p => p.discord_user_id === challengerId);
+  const bPk   = pks.find(p => p.discord_user_id === opponentId);
+  if (!aPk || !bPk) {
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: { content: 'Both trainers need an active starter — battle aborted.', embeds: [], components: [] },
+    };
+  }
+
+  const result = await resolveBattleMatch({ challengerId, opponentId, aPk, bPk });
+  if (result.error) {
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: { content: result.error, embeds: [], components: [] },
+    };
+  }
+  return {
+    type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+    data: {
+      content: `<@${challengerId}> vs <@${opponentId}> — battle complete!`,
+      embeds: result.embeds,
+      components: [],
+      allowed_mentions: { users: [] },
+    },
+  };
+}
+
+async function resolveBattleMatch({ challengerId, opponentId, aPk, bPk }) {
+  const aMoves = getMovesForPokemon(aPk);
+  const bMoves = getMovesForPokemon(bPk);
+  const aMove  = aMoves[Math.floor(Math.random() * aMoves.length)];
+  const bMove  = bMoves[Math.floor(Math.random() * bMoves.length)];
+  const aDmg   = calcBattleDamage(aMove, aPk.level || 1);
+  const bDmg   = calcBattleDamage(bMove, bPk.level || 1);
+
+  let resultLine, winnerColor, winnerId = null, aOutcome = 'tie', bOutcome = 'tie';
+  if (aDmg > bDmg) {
+    resultLine = `**${aPk.pokemon_name}** wins! **${aDmg}** damage vs ${bDmg}`;
+    winnerColor = 0x1AC7A0;
+    winnerId = challengerId; aOutcome = 'win'; bOutcome = 'loss';
+  } else if (bDmg > aDmg) {
+    resultLine = `**${bPk.pokemon_name}** wins! **${bDmg}** damage vs ${aDmg}`;
+    winnerColor = 0xC97A3E;
+    winnerId = opponentId; aOutcome = 'loss'; bOutcome = 'win';
+  } else {
+    resultLine = `Both trainers dealt **${aDmg}** damage — it's a draw!`;
+    winnerColor = 0xFFC857;
+  }
+
+  // XP — battles award 2x duel XP. Evolutions still trigger normally
+  // through applyDuelResult.
+  const aXp = calcXpAwarded(aOutcome, aPk.level, bPk.level) * BATTLE_XP_MULTIPLIER;
+  const bXp = calcXpAwarded(bOutcome, bPk.level, aPk.level) * BATTLE_XP_MULTIPLIER;
+  const aRes = await applyDuelResult(aPk, aOutcome, aXp);
+  const bRes = await applyDuelResult(bPk, bOutcome, bXp);
+  const evolutionLines = [];
+  if (aRes && aRes.evolution) evolutionLines.push(`✦ ${aPk.pokemon_name} evolved into **${aRes.evolution.name}**!`);
+  if (bRes && bRes.evolution) evolutionLines.push(`✦ ${bPk.pokemon_name} evolved into **${bRes.evolution.name}**!`);
+
+  // Write back to bot_duel_log so /profile shows the battle.
+  await sb.from('bot_duel_log').update({
+    status: 'accepted',
+    winner_discord_id: winnerId,
+    challenger_xp_gained: aXp,
+    opponent_xp_gained:   bXp,
+    resolved_at: new Date().toISOString(),
+    result_summary: {
+      aMove: aMove.n, aDmg, aType: aMove.t,
+      bMove: bMove.n, bDmg, bType: bMove.t,
+      battleMode: 'tier1_random_move',
+    },
+  })
+  .eq('challenger_discord_id', challengerId)
+  .eq('opponent_discord_id',   opponentId)
+  .eq('status', 'pending')
+  .eq('game', 'pokemon_battle');
+
+  const aIcon = TYPE_ICONS[aMove.t] || '⭐';
+  const bIcon = TYPE_ICONS[bMove.t] || '⭐';
+  const SHARED_URL = 'https://pathbinder.gg/?page=dashboard';
+  const desc = [
+    `**${aPk.pokemon_name}** (Lv ${aPk.level}) used **${aMove.n}** ${aIcon}`,
+    `**${bPk.pokemon_name}** (Lv ${bPk.level}) used **${bMove.n}** ${bIcon}`,
+    '',
+    resultLine,
+  ];
+  if (evolutionLines.length) desc.push('', evolutionLines.join('\n'));
+  return {
+    embeds: [{
+      url: SHARED_URL,
+      title: '⚔️ Pokémon Battle',
+      description: desc.join('\n'),
+      color: winnerColor,
+      fields: [
+        { name: `${aPk.pokemon_name} dmg`, value: `**${aDmg}**`, inline: true },
+        { name: `${bPk.pokemon_name} dmg`, value: `**${bDmg}**`, inline: true },
+      ],
+      footer: { text: `XP: ${aPk.pokemon_name} +${aXp} · ${bPk.pokemon_name} +${bXp}` },
+    }],
+  };
+}
+
+
+// ─── (existing duel resolver below) ────────────────────────────────
 // players have starters, updates the duel log row, returns embed
 // data. Called from BOTH the immediate-run path in /duel (no
 // invitation) and the Accept-button path in handleDuelComponent.
