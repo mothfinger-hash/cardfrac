@@ -4808,6 +4808,23 @@ nav {
 .lp-hero-logo { display:block; height:42px; width:auto; max-width:220px; margin-bottom:14px; }
 @media(max-width:1100px) { .lp-hero { padding:20px 28px 16px; } }
 @media(max-width:900px) { .lp-hero { grid-template-columns:1fr; gap:16px; padding:20px 16px; } }
+/* Mobile: brand (logo+tagline) on the LEFT, headline+sub on the RIGHT,
+   side by side. Desktop keeps display:contents so the wrapper is a
+   no-op and the children stack vertically as before. */
+.lp-hero-toprow { display: contents; }
+@media (max-width:600px) {
+  .lp-hero-toprow {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1.1fr);
+    gap: 14px;
+    align-items: start;
+    margin-bottom: 14px;
+  }
+  .lp-hero-toprow .lp-hero-logo { height: auto; max-width: 100%; margin-bottom: 8px; }
+  .lp-hero-toprow .lp-eyebrow { font-size: .58rem; }
+  .lp-hero-toprow .lp-headline { font-size: clamp(14px, 4.6vw, 22px); margin-bottom: 6px; }
+  .lp-hero-toprow .lp-hero-sub { font-size: .58rem; max-width: 100%; margin-bottom: 0; }
+}
 .lp-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.18em; color:var(--accent); margin-bottom:10px; }
 .lp-headline { font-family:'Orbitron',monospace; font-weight:900; font-size:clamp(20px,3vw,36px); line-height:1.06; letter-spacing:.04em; text-transform:uppercase; color:var(--text); margin:0 0 10px; }
 .lp-headline span { color:var(--accent); }
@@ -5653,6 +5670,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return data;
     }
   </script>
+  <!-- Vercel Speed Insights — auto-instruments Core Web Vitals (LCP,
+       INP, CLS, TTFB) and reports them to the project's Speed Insights
+       dashboard. Script is served from Vercel's edge at request time,
+       no npm package or build step required. `defer` keeps it from
+       blocking initial paint; the runtime is <5KB so the bandwidth
+       cost is negligible. Disable by removing this line. -->
+  <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body class="on-landing">
   <div id="binderSidebar"></div>
@@ -6995,7 +7019,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         <div style="margin-bottom:12px">
           <div style="font-size:.5rem;letter-spacing:.14em;color:rgba(26,199,160,.45);margin-bottom:5px">GAME</div>
           <select id="acMobGame" onchange="acSetMobGame(this.value)"
-            style="width:100%;padding:9px 10px;background:rgba(255,255,255,.04);color:rgba(225,238,252,.9);font-family:inherit;font-size:.72rem;letter-spacing:.06em;border:1px solid rgba(26,199,160,.22);border-radius:4px;outline:none">
+            style="width:100%;padding:9px 30px 9px 10px;background-color:rgba(255,255,255,.04);color:rgba(225,238,252,.9);font-family:inherit;font-size:.72rem;letter-spacing:.06em;border:1px solid rgba(26,199,160,.22);border-radius:4px;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#1AC7A0 50%),linear-gradient(135deg,#1AC7A0 50%,transparent 50%);background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat">
             <option value="pokemon">Pokémon</option>
             <option value="magic">Magic: The Gathering</option>
             <option value="yugioh">Yu-Gi-Oh!</option>
@@ -7035,10 +7059,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     <!-- HERO -->
     <section class="lp-hero" id="lpBinder">
       <div>
-        <img src="pathbinder.svg" alt="PathBinder" class="lp-hero-logo" decoding="async">
-        <div class="lp-eyebrow">&gt;&gt; POWER TO COLLECTORS &gt;&gt;</div>
-        <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
-        <p class="lp-hero-sub">The ultimate cockpit for card collectors. Track your collection, find missing cards, grow your value, and trade with confidence.</p>
+        <!-- Top row: on mobile (<600px) the brand (logo + tagline) sits
+             on the LEFT and the headline + sub sit on the RIGHT, side by
+             side. On desktop the .lp-hero-toprow wrapper uses
+             `display:contents` so the children behave as if the wrapper
+             didn't exist (stacked above the buttons / stats). -->
+        <div class="lp-hero-toprow">
+          <div class="lp-hero-brand">
+            <img src="pathbinder.svg" alt="PathBinder" class="lp-hero-logo" decoding="async">
+            <div class="lp-eyebrow">&gt;&gt; POWER TO COLLECTORS &gt;&gt;</div>
+          </div>
+          <div class="lp-hero-tagline">
+            <h1 class="lp-headline">ORGANIZE.<br>TRACK.<br>TRADE.<br><span>LEVEL UP.</span></h1>
+            <p class="lp-hero-sub">The ultimate cockpit for card collectors. Track your collection, find missing cards, grow your value, and trade with confidence.</p>
+          </div>
+        </div>
         <div class="lp-cta-row">
           <button class="lp-cta-primary" onclick="openAuthModal('signup')">START FREE</button>
           <button class="lp-cta-secondary" onclick="showPage('browse');setMobileNav('browse')">Browse Market</button>
@@ -21864,9 +21899,20 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
             : 'Raw';
           const val  = (item.current_value || item._compEstimate || item.purchase_price || 0) * (item.quantity || 1);
-          const goal = item.savings_goal || 0;
-          const saved= item.amount_saved || 0;
-          const pct  = goal > 0 ? Math.min(100, (saved / goal * 100)).toFixed(0) : 0;
+          // Ghost-card savings progress is tracked against the card's
+          // CURRENT MARKET PRICE, not the user's savings_goal field. The
+          // older behavior used savings_goal as the denominator which
+          // caused "100% · $20/$20" displays even when the card actually
+          // costs $50 — meaningless because the user didn't really save
+          // enough to buy the card. Using the live market price keeps
+          // the progress bar honest as PriceCharting updates daily.
+          // Per-unit target (savings is a wishlist concept, quantity=1).
+          const target = item.current_value || item._compEstimate || item.purchase_price || 0;
+          const saved  = item.amount_saved || 0;
+          const pct    = target > 0 ? Math.min(100, (saved / target * 100)).toFixed(0) : 0;
+          // Legacy `goal` reference kept defined for any downstream code
+          // that still reads it — points at the same target value now.
+          const goal   = target;
 
           // Sealed products keep the same card-shape slot as singles
           // (so the grid stays uniform) but their image gets
@@ -31775,8 +31821,32 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       </div>`;
     }
 
+    // Robust card-number → integer for sort comparison. The previous
+    // implementation used `parseInt(s)` which returns NaN for any value
+    // that doesn't START with a digit — so "OP01-001", "SWSH001",
+    // "T-1", "TG12", etc. all collapsed to 0 and the sort became a
+    // no-op. This pulls the LAST digit run (after any letter prefix
+    // and after stripping the optional "/total" suffix), which gives
+    // the correct card index for every format we ingest:
+    //   "1"          → 1
+    //   "10"         → 10
+    //   "OP01-001"   → 1   (set prefix stripped)
+    //   "SWSH001"    → 1
+    //   "TG12"       → 12
+    //   "001/265"    → 1   (total stripped via slash)
+    //   "T-1"        → 1
+    function _cardNumValue(s) {
+      if (s == null) return 0;
+      var str = String(s);
+      var slash = str.indexOf('/');
+      if (slash > 0) str = str.slice(0, slash);
+      var matches = str.match(/\d+/g);
+      if (!matches) return 0;
+      return parseInt(matches[matches.length - 1], 10) || 0;
+    }
+
     function _buildSetCardRows(cards, ownedMap, sort, ownedFirst) {
-      const numCmp = (a,b) => (parseInt(a.number)||0) - (parseInt(b.number)||0);
+      const numCmp = (a,b) => _cardNumValue(a.number) - _cardNumValue(b.number);
       let sorted = [...cards];
       if (sort === 'rarity-asc')  sorted.sort((a,b) => _rarityRank(a.rarity) - _rarityRank(b.rarity) || numCmp(a,b));
       else if (sort === 'rarity-desc') sorted.sort((a,b) => _rarityRank(b.rarity) - _rarityRank(a.rarity) || numCmp(a,b));
@@ -31910,11 +31980,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     function _buildCatalogSetCardRows(cards, ownedMap, openFn) {
-      // Card-number sort with numeric-first parsing (handles "T-1", "057a", etc.)
+      // Card-number sort. Uses the same _cardNumValue helper as
+      // _buildSetCardRows so the two paths order identically — pulls
+      // the last digit run, strips "/total" suffixes, and tolerates
+      // letter prefixes ("OP01-001", "SWSH001", "T-1" all sort
+      // numerically by their card index, not by the alphabetic prefix).
       const numCmp = (a, b) => {
-        const an = parseInt(a.card_number);
-        const bn = parseInt(b.card_number);
-        if (!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+        const av = _cardNumValue(a.card_number);
+        const bv = _cardNumValue(b.card_number);
+        if (av !== bv) return av - bv;
+        // Tiebreak on raw string so "1a" / "1b" stay deterministic.
         return String(a.card_number || '').localeCompare(String(b.card_number || ''));
       };
       let sorted = cards.slice();
