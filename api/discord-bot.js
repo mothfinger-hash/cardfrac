@@ -1433,7 +1433,7 @@ function calcXpAwarded(outcome, myLevel, oppLevel) {
 // challenges to multiple targets in rapid succession. 30s per-pair
 // stops back-and-forth spam between two specific users.
 const DUEL_CD_CHALLENGER_SEC = 10;
-const DUEL_CD_PAIR_SEC       = 30;
+const DUEL_CD_PAIR_SEC       = 15;
 
 // Pull one random priced single from the catalog (shared between the
 // /duel invitation flow and the accept-button handler).
@@ -1807,16 +1807,26 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
   const aCards = pulls.slice(0, rounds);
   const bCards = pulls.slice(rounds);
 
-  let aWins = 0, bWins = 0;
+  // Scoring model: TOTAL VALUE of pulled cards across all rounds.
+  // The per-round arrow markers (◀ ▶ =) are kept as entertainment so
+  // readers can see which side pulled the bigger card each round, but
+  // they don't determine the winner — only the sum at the end does.
+  // (Previously we awarded based on round wins, which produced
+  // counter-intuitive outcomes like "Mothfinger pulled $7.34 of cards
+  // but lost because Duffalo edged out 2-of-3 rounds with cheap pulls".)
+  let aRoundsWon = 0, bRoundsWon = 0;   // kept for the per-round arrows + log payload
+  let aTotal = 0, bTotal = 0;
   const roundLines = [];
   for (let i = 0; i < rounds; i++) {
     const a = aCards[i], b = bCards[i];
     const av = Number(a.current_value) || 0;
     const bv = Number(b.current_value) || 0;
+    aTotal += av;
+    bTotal += bv;
     let mark;
-    if (av > bv)      { aWins++; mark = '◀'; }
-    else if (bv > av) { bWins++; mark = '▶'; }
-    else              { mark = '=';          }
+    if (av > bv)      { aRoundsWon++; mark = '◀'; }
+    else if (bv > av) { bRoundsWon++; mark = '▶'; }
+    else              { mark = '=';                }
     roundLines.push(`**R${i + 1}** ${mark}  ${a.name} ($${av.toFixed(2)})  vs  ${b.name} ($${bv.toFixed(2)})`);
   }
 
@@ -1830,18 +1840,18 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
   let winnerColor;
   let winnerId = null;
   let aOutcome = 'tie', bOutcome = 'tie';
-  if (aWins > bWins) {
-    resultLine = `**${aLabel}** wins **${aWins}-${bWins}**!`;
+  if (aTotal > bTotal) {
+    resultLine = `**${aLabel}** wins! **$${aTotal.toFixed(2)}** vs $${bTotal.toFixed(2)}`;
     winnerColor = 0x1AC7A0;
     winnerId = challengerId;
     aOutcome = 'win'; bOutcome = 'loss';
-  } else if (bWins > aWins) {
-    resultLine = `**${bLabel}** wins **${bWins}-${aWins}**!`;
+  } else if (bTotal > aTotal) {
+    resultLine = `**${bLabel}** wins! **$${bTotal.toFixed(2)}** vs $${aTotal.toFixed(2)}`;
     winnerColor = 0xC97A3E;
     winnerId = opponentId;
     aOutcome = 'loss'; bOutcome = 'win';
   } else {
-    resultLine = `It\'s a tie at **${aWins}-${bWins}** — split the pot.`;
+    resultLine = `It\'s a tie at **$${aTotal.toFixed(2)}** each — split the pot.`;
     winnerColor = 0xFFC857;
   }
 
@@ -1878,7 +1888,20 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
     challenger_xp_gained: aXp,
     opponent_xp_gained:   bXp,
     resolved_at: new Date().toISOString(),
-    result_summary: { aWins, bWins, rounds, game },
+    // Persist both the round wins (entertainment) and the totals
+    // (the actual scoring) so historical duels remain analyzable even
+    // if the scoring model changes again in the future. aWins/bWins
+    // are kept as keys for backward compatibility with any consumers
+    // (leaderboards, /profile) that still read those.
+    result_summary: {
+      aWins:   aRoundsWon,
+      bWins:   bRoundsWon,
+      aTotal:  Number(aTotal.toFixed(2)),
+      bTotal:  Number(bTotal.toFixed(2)),
+      rounds,
+      game,
+      scoringModel: 'total_value',
+    },
   });
   if (duelLogId) {
     await update.eq('id', duelLogId);
@@ -1910,8 +1933,9 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
     }
   } catch (_) { /* never let h2h failure block the embed */ }
 
-  const aTotal = aCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
-  const bTotal = bCards.reduce((s, c) => s + Number(c.current_value || 0), 0);
+  // aTotal/bTotal already computed in the per-round loop above (they
+  // determine the winner). Just compute the best-card per side for
+  // the embed images.
   const aBest = aCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const bBest = bCards.slice().sort((x, y) => Number(y.current_value) - Number(x.current_value))[0];
   const SHARED_URL = 'https://pathbinder.gg/?page=dashboard';
@@ -1934,6 +1958,11 @@ async function resolveDuelMatch({ challengerId, opponentId, game, rounds, aPk, b
     description: descParts.join('\n\n'),
     color: winnerColor,
     fields: [
+      // Totals are the win condition under the current scoring model
+      // (sum of pulled card values). "X total" reads as the verdict;
+      // whoever's number is higher won the duel. The per-round arrow
+      // markers in the description above are kept as flavor so you
+      // can see which side drew the bigger card each round.
       { name: `${aLabel} total`, value: `$${aTotal.toFixed(2)}`, inline: true },
       { name: `${bLabel} total`, value: `$${bTotal.toFixed(2)}`, inline: true },
     ],
