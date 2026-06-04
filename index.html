@@ -10313,13 +10313,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       setTopNavActive(pageId);
       if (pageId === 'account') {
         renderAccount();
-        // If there are pending trade offers, land directly on the Trade Offers tab
+        // If there are pending trade offers, land directly on the Trade
+        // Offers tab. Otherwise fall through to the Dashboard tab.
+        // switchAccountTab() is responsible for stamping
+        // body[data-page-bg="dashboard"] which paints dashboard.webp —
+        // without an explicit call here, first-time landings on the
+        // account page had no background image until the user switched
+        // tabs and came back. Always firing it on entry fixes that
+        // initial-paint gap.
         const pendingOffers = currentUser
           ? tradeOffers.filter(o => o.toUserId === currentUser.id && o.status === 'pending').length
           : 0;
-        if (pendingOffers > 0) {
-          switchAccountTab('tradeOffers');
-        }
+        switchAccountTab(pendingOffers > 0 ? 'tradeOffers' : 'dashboard');
       }
       if (pageId === 'landing') {
         updateHeroStats();
