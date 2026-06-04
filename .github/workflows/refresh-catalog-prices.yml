@@ -48,9 +48,9 @@ on:
           - 'pokemon'
           - 'all'
       workers:
-        description: 'Parallel Supabase write workers (default 10)'
+        description: 'Parallel Supabase write workers (default 20 — Supabase handles 30+ fine)'
         required: false
-        default: '10'
+        default: '20'
       limit:
         description: 'Cap catalog rows scanned (0 = no cap; useful for smoke tests)'
         required: false
@@ -67,7 +67,13 @@ on:
 jobs:
   refresh:
     runs-on: self-hosted
-    timeout-minutes: 60   # CSV path finishes in ~15 min, generous safety margin
+    # Bumped to 180 min because the catalog has grown past 159K eligible
+    # rows. At 10 workers + Supabase round-trip latency we're seeing
+    # ~75% completion in 60 min; 180 gives generous headroom for the
+    # all-tcgs path including 4 CSV downloads and the per-row write phase.
+    # Pokemon-only midday run still finishes in <15 min so the cap
+    # doesn't matter for that schedule.
+    timeout-minutes: 180
 
     # PYTHONUNBUFFERED keeps print() output flowing to the GitHub
     # Actions log in real time. Without it Python block-buffers stdout
@@ -147,6 +153,6 @@ jobs:
           fi
           python3 -u refresh_catalog_prices_csv.py \
             ${{ steps.args.outputs.value }} \
-            --workers "${{ github.event.inputs.workers || '10' }}" \
+            --workers "${{ github.event.inputs.workers || '20' }}" \
             $LIMIT_FLAG \
             $DRY_RUN_FLAG
