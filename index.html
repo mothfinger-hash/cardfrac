@@ -7456,6 +7456,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <div id="binderShelfRow" class="binder-shelf-row"></div>
     </div>
 
+    <!-- Free-plan "x/200 cards added" status line. Renders ABOVE the
+         binder controls so the limit is visible before users start
+         searching/sorting. Hidden for paid tiers (renderer empties it). -->
+    <div id="collectionSummary" class="coll-summary"></div>
+
     <!-- Binder controls panel -->
     <div class="pb-panel" style="margin-bottom:12px">
       <div class="pb-panel-h">
@@ -7586,9 +7591,6 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
       </div>
     </div>
-
-      <!-- Portfolio Summary -->
-      <div id="collectionSummary" class="coll-summary"></div>
 
       <!-- Binder Grid -->
       <div id="collectionContent">
@@ -21726,23 +21728,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (summary) {
         if (!tierAtLeast('collector')) {
           const owned = ownedItems.reduce((s, c) => s + (c.quantity || 1), 0);
-          const pct = Math.min(100, (owned / 200) * 100);
           const barColor = owned >= 200 ? '#e74c3c' : owned >= 160 ? 'var(--gold)' : '#1D9E75';
-          // Single-line free-plan banner. Label, count, and progress bar
-          // sit inline on one row; over-limit / approaching-limit nudges
-          // append after the bar so the whole strip still fits at one
-          // line on mobile (the upgrade link wraps to a second line only
-          // when it has to). Border rounded to match the rest of the UI;
-          // the "// FREE PLAN" prefix was dropped per design ask.
+          // Single-line free-plan status. Sits ABOVE the binder controls
+          // panel, left-aligned, no bounding box (per design ask). Just
+          // a label + count + optional upgrade nudge — the progress bar
+          // and surface card were dropped to keep the strip skinny.
           summary.innerHTML = `
-            <div style="margin-bottom:10px;padding:8px 14px;border:1px solid var(--border);background:var(--surface2);border-radius:var(--r-md);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-              <span style="font-size:.72rem;color:var(--muted);letter-spacing:.06em;white-space:nowrap">FREE PLAN — CARD SLOTS</span>
-              <span style="font-size:.72rem;color:${barColor};font-weight:700;white-space:nowrap">${owned} / 200</span>
-              <div style="flex:1;min-width:80px;height:4px;background:var(--border);border-radius:var(--r-pill);overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${barColor};border-radius:var(--r-pill);transition:width .4s"></div>
-              </div>
-              ${owned >= 200 ? `<span style="font-size:.68rem;color:#e74c3c;white-space:nowrap">Limit reached — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` :
-                owned >= 160 ? `<span style="font-size:.68rem;color:var(--gold);white-space:nowrap">${200 - owned} left — <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` : ''}
+            <div style="padding:4px 0 8px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-family:'Space Mono','Share Tech Mono',monospace">
+              <span style="font-size:.72rem;color:var(--muted);letter-spacing:.06em">FREE PLAN</span>
+              <span style="font-size:.72rem;color:${barColor};font-weight:700">${owned} / 200 cards added</span>
+              ${owned >= 200 ? `<span style="font-size:.68rem;color:#e74c3c">— limit reached, <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` :
+                owned >= 160 ? `<span style="font-size:.68rem;color:var(--gold)">— ${200 - owned} left, <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` : ''}
             </div>`;
         } else {
           summary.innerHTML = '';
