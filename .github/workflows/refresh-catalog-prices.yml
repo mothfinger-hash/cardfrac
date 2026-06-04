@@ -86,7 +86,13 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip --user
-          python3 -m pip install requests --user
+          # `brotli` is required for urllib3 v2 + Python 3.9 to decode
+          # brotli-compressed responses. Without it, advertising
+          # `Accept-Encoding: gzip, deflate, br` causes PC's CSV
+          # downloads to come back as garbage bytes when PC opportunistically
+          # picks brotli — symptom is suspiciously-small CSV files that
+          # silently produce zero history rows for the affected categories.
+          python3 -m pip install requests brotli --user
 
       # Pick scope based on trigger:
       #   - 07:00 UTC cron (2 AM EST)  → all TCGs (every category)

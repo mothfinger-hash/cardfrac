@@ -105,17 +105,13 @@ HEADERS = {
     ),
     "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    # IMPORTANT: do NOT advertise 'br' (brotli). The self-hosted Mac
-    # runner's Python 3.9 + urllib3 v2 combination doesn't decode
-    # brotli cleanly — if we ask for it, PC sends brotli back, requests
-    # silently fails the decode, and we get a 16KB stub of garbled text
-    # instead of the real 130KB+ product page. Symptom: every scrape
-    # row returns no_price because the parser can't find "Ungraded" in
-    # the garbage output. gzip + deflate are handled natively by
-    # urllib3 — keep those, they're enough for 99% of pages.
-    # Verified 2026-06-03: dropping 'br' takes one specific OP card from
-    # len=16579 / ungraded=0 to len=134044 / ungraded=4 / parsed=$0.07.
-    "Accept-Encoding": "gzip, deflate",
+    # Brotli is supported as long as the `brotli` package is installed
+    # on the runner (workflow installs it explicitly — see
+    # refresh-catalog-prices.yml / refresh-prices-small-tcgs.yml).
+    # If brotli is missing, urllib3 v2 returns garbled bytes silently —
+    # _decode_guard() below catches that case and raises loudly so we
+    # never silently bucket 100% of rows as no_price again.
+    "Accept-Encoding": "gzip, deflate, br",
     "Referer":         "https://www.pricecharting.com/",
     "Sec-Fetch-Dest":  "document",
     "Sec-Fetch-Mode":  "navigate",
@@ -145,6 +141,28 @@ RETRY_STATUSES = (403, 429, 502, 503, 504)
 MAX_RETRIES    = 5
 _session       = requests.Session()
 _session.headers.update(HEADERS)
+
+# ─── Brotli decode self-check ─────────────────────────────────────────────────
+# We advertise `Accept-Encoding: gzip, deflate, br` because PC opportunistically
+# compresses with brotli. If the runner's Python doesn't have the `brotli`
+# package installed, urllib3 will silently return undecoded bytes — the script
+# then "works" but every scrape returns no_price because the parser can't find
+# anything in the garbled output. Catch that at startup, before doing any work.
+def _assert_brotli_available():
+    if "br" not in HEADERS.get("Accept-Encoding", ""):
+        return  # not advertising brotli, nothing to verify
+    try:
+        import brotli  # noqa: F401
+    except ImportError:
+        sys.exit(
+            "FATAL: Accept-Encoding advertises 'br' (brotli) but the `brotli` "
+            "package is not installed on this runner. Either install it with "
+            "`pip3 install brotli --user --break-system-packages` OR remove "
+            "'br' from HEADERS['Accept-Encoding']. Without one of these, PC "
+            "will serve brotli-compressed responses that urllib3 cannot decode, "
+            "and every row will silently bucket as no_price."
+        )
+_assert_brotli_available()
 
 # ─── Circuit breaker for sustained WAF blocking ───────────────────────────────
 # If PriceCharting's Cloudflare WAF flags our IP partway through a run,

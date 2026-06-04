@@ -124,15 +124,14 @@ _DL_HEADERS = {
     ),
     "Accept":          "text/csv,application/csv,text/plain,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    # IMPORTANT: do NOT advertise 'br' (brotli). The self-hosted Mac
-    # runner's Python 3.9 + urllib3 v2 combo can't decode brotli without
-    # the optional `brotli` package — if we ask for it, PC opportunistically
-    # serves brotli, requests writes garbage bytes to disk, and the CSV
-    # comes back either suspiciously small (<50KB) or unparseable. Symptom:
-    # MTG / YGO bulk-CSV writes 0 history rows for months because PC happens
-    # to serve those categories with brotli more often than Pokemon. Same
-    # fix as in refresh_catalog_prices.py — keep gzip + deflate, drop br.
-    "Accept-Encoding": "gzip, deflate",
+    # Brotli is supported when the `brotli` package is installed on the
+    # runner (workflows install it explicitly). The module-level
+    # _assert_brotli_available() check below fails loudly at startup if
+    # it's missing — without that guard, PC opportunistically sends
+    # brotli, urllib3 returns undecoded bytes, the resulting CSV is
+    # garbage, and the downloader silently writes zero history rows for
+    # the affected categories (the long-standing MTG/YGO refresh gap).
+    "Accept-Encoding": "gzip, deflate, br",
     "Referer":         "https://www.pricecharting.com/",
     "Sec-Fetch-Dest":  "document",
     "Sec-Fetch-Mode":  "navigate",
@@ -142,6 +141,23 @@ _DL_HEADERS = {
 }
 _dl_session = requests.Session()
 _dl_session.headers.update(_DL_HEADERS)
+
+# Fail loudly at import time if we're advertising brotli but the runtime
+# can't decode it — keeps the silent-garbage failure mode from coming
+# back. Importers of this module (refresh_catalog_prices_csv.py + the
+# enrichment runner) both pull download_category_csv, so guarding here
+# covers every entry point.
+def _assert_brotli_available():
+    if "br" not in _DL_HEADERS.get("Accept-Encoding", ""):
+        return
+    try:
+        import brotli  # noqa: F401
+    except ImportError:
+        sys.exit(
+            "FATAL: Accept-Encoding advertises 'br' (brotli) but the `brotli` "
+            "package is not installed. Run: pip3 install brotli --user --break-system-packages"
+        )
+_assert_brotli_available()
 
 
 # ── CSV column name variants ──────────────────────────────────────────────────

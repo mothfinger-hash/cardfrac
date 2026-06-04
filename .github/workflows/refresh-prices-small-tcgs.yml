@@ -120,7 +120,12 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip --user
-          python3 -m pip install requests --user
+          # `brotli` is required for urllib3 v2 + Python 3.9 to decode
+          # brotli-compressed responses from PriceCharting. Without it,
+          # ~10% of /game/<set>/<card> requests return undecodable garbage
+          # bytes that contain no Ungraded markup, silently bucketed as
+          # no_price. See refresh_catalog_prices.py HEADERS comment.
+          python3 -m pip install requests brotli --user
 
       # Pick TCG set based on trigger:
       #   - 03:00 UTC daily cron        →  onepiece + gundam

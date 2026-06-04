@@ -68,7 +68,10 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip --user
-          python3 -m pip install requests --user
+          # `brotli` lets urllib3 transparently decode brotli responses
+          # so we can safely advertise `br` in Accept-Encoding. Without
+          # it, PC serves brotli and the CSV bytes come back garbled.
+          python3 -m pip install requests brotli --user
 
       - name: Run CSV enrichment
         env:
