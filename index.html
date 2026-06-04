@@ -7203,6 +7203,30 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
   </div>
 
   <div id="browsePage" class="page">
+    <!-- Coming Soon placeholder shown to all non-admin users while the
+         marketplace stays in private beta. Toggled by renderBrowse():
+         non-admins see this, admins see #browseRealContent below.
+         Hidden by default so SSR / first paint doesn't flash for admins. -->
+    <div id="browseComingSoon" style="display:none;text-align:center;padding:80px 24px 60px;max-width:560px;margin:0 auto">
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.14em;color:var(--copper);margin-bottom:14px;text-transform:uppercase">◈ Marketplace</div>
+      <h2 style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--text);margin:0 0 14px;letter-spacing:.05em">Coming Soon</h2>
+      <p style="font-size:.88rem;color:var(--muted);line-height:1.65;margin:0 0 28px">
+        The PathBinder marketplace is in private beta and not yet open
+        to all collectors. We're getting it polished for launch —
+        check back soon.
+      </p>
+      <p style="font-size:.78rem;color:var(--muted);line-height:1.6;margin:0 0 24px">
+        In the meantime, you can keep building your collection, organize binders,
+        and track set completion. We'll surface the marketplace here the moment
+        it goes live.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button onclick="showPage('collection');setMobileNav('collection')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Open Binder</button>
+        <button onclick="showPage('sets');setMobileNav('sets')" class="pb-panel-link" style="border-color:var(--border);color:var(--muted)">Browse Sets</button>
+      </div>
+    </div>
+
+    <div id="browseRealContent">
     <!-- Compact action row replaces the old hero header. Title + sub copy
          removed per design pass — the panel below already says "Filter &
          Search" which is enough orientation. Buttons stay so users can
@@ -7268,6 +7292,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     </div>
 
     <div class="card-grid" id="browseGrid"></div>
+    </div><!-- /#browseRealContent -->
   </div>
 
   <div id="explorePage" class="page">
@@ -10349,6 +10374,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     function renderBrowse() {
       const grid = document.getElementById('browseGrid');
       if (!grid) return;
+
+      // Coming Soon gate — marketplace is admin-only for now. Non-admins
+      // (including logged-out visitors) see the placeholder panel and
+      // the real marketplace UI stays hidden. Admins see everything.
+      // We toggle via display:'' instead of removing the markup so the
+      // grid + filter state is preserved across page switches.
+      const _isMpAdmin   = !!(currentUser && currentUser.is_admin);
+      const _comingSoon  = document.getElementById('browseComingSoon');
+      const _realContent = document.getElementById('browseRealContent');
+      if (_comingSoon)  _comingSoon.style.display  = _isMpAdmin ? 'none' : '';
+      if (_realContent) _realContent.style.display = _isMpAdmin ? '' : 'none';
+      if (!_isMpAdmin) return;   // nothing to render for non-admins
 
       let filtered = listings.filter(listing => {
         const isSold = listing.status === 'sold';
@@ -16542,6 +16579,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
     function openListCardModal(prefill) {
       if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
+      // Coming Soon gate — the marketplace is admin-only during the
+      // pre-launch window. Non-admins shouldn't be able to create
+      // listings either, since their listings would never become
+      // visible to other shoppers. Match the renderBrowse() gate so
+      // the rules stay in lockstep.
+      if (!currentUser.is_admin) {
+        showToast('Marketplace coming soon');
+        return;
+      }
       // Marketplace selling is gated by subscription tier with per-tier
       // listing caps:
       //   free / collector : cannot sell (cap = 0)
