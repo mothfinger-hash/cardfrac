@@ -88,8 +88,24 @@ const commands = [
   ] },
   { name: 'duel', type: 1, description: 'Challenge someone to a card duel — they accept, then play', options: [
     { name: 'opponent', description: 'Who to duel', type: 6, required: true },
-    { name: 'game',     description: 'pokemon (default), magic, yugioh, onepiece, gundam, dbz', type: 3, required: false },
-    { name: 'rounds',   description: '3 (default, best of 3) | 1 (single pull)', type: 4, required: false },
+    // `choices` renders as a clickable picker in Discord (effectively
+    // a dropdown of buttons) so users don't have to type the game name.
+    // Max 25 choices per option, well within our 6-game list.
+    { name: 'game', description: 'Which TCG to draw cards from (default Pokemon)',
+      type: 3, required: false, choices: [
+        { name: 'Pokémon',       value: 'pokemon'  },
+        { name: 'Magic',         value: 'magic'    },
+        { name: 'Yu-Gi-Oh!',     value: 'yugioh'   },
+        { name: 'One Piece',     value: 'onepiece' },
+        { name: 'Gundam',        value: 'gundam'   },
+        { name: 'Dragon Ball Z', value: 'dbz'      },
+      ] },
+    { name: 'rounds', description: 'How many rounds (default 3)',
+      type: 4, required: false, choices: [
+        { name: '1 round (quick)',     value: 1 },
+        { name: '3 rounds (best of)',  value: 3 },
+        { name: '5 rounds (extended)', value: 5 },
+      ] },
   ] },
 
   // ── Pokémon game loop ──────────────────────────

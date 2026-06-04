@@ -1438,23 +1438,48 @@ const DUEL_CD_PAIR_SEC       = 30;
 // Pull one random priced single from the catalog (shared between the
 // /duel invitation flow and the accept-button handler).
 async function pullDuelCard(game) {
-  const alpha = '0123456789abcdef';
-  const ch = alpha[Math.floor(Math.random() * alpha.length)];
+  // Previous implementation used `id LIKE '%<random hex char>%'` as a
+  // randomizer, which for small TCG pools (Gundam ~50 eligible singles)
+  // could return zero rows just because the chosen char didn't appear
+  // in any id. That's why /duel game:gundam reported "couldn't pull
+  // enough priced cards" even though Gundam had 83% history coverage.
+  // Also, the old filter `product_type IN (single, null)` excluded
+  // every sealed-* row — for Gundam ~80% of today's priced rows are
+  // sealed products, leaving a tiny single pool. Now we:
+  //   1. COUNT eligible rows for the game (no hex filter)
+  //   2. Pick a random offset
+  //   3. Fetch the row at that offset
+  // Singles and sealed both count — sealed boosters/decks have
+  // current_value just like singles, and they make for fun "you drew
+  // a $200 booster box" duel reveals.
+  const baseFilter = {
+    game_type: game,
+  };
+
+  // Count first so we know the pool size and can fail fast with a
+  // useful error if it's truly empty (e.g. dbz/topps before their
+  // weekly scrape runs).
+  const countRes = await sb.from('catalog')
+    .select('id', { count: 'exact', head: true })
+    .eq('game_type', game)
+    .not('image_url', 'is', null)
+    .not('current_value', 'is', null)
+    .gt('current_value', 0);
+  const total = countRes.count || 0;
+  if (total === 0) return null;
+
+  // Random offset into the eligible pool. Postgres + PostgREST handle
+  // .range() as inclusive on both ends; range(N, N) → 1 row at offset N.
+  const offset = Math.floor(Math.random() * total);
   const r = await sb.from('catalog')
     .select('id,name,set_name,card_number,image_url,current_value,product_type')
     .eq('game_type', game)
     .not('image_url', 'is', null)
     .not('current_value', 'is', null)
     .gt('current_value', 0)
-    .or('product_type.eq.single,product_type.is.null')
-    .like('id', `%${ch}%`)
-    .limit(80);
-  const list = (r.data || []).filter(x =>
-    Number(x.current_value) > 0 &&
-    (x.product_type === 'single' || x.product_type == null)
-  );
-  if (!list.length) return null;
-  return list[Math.floor(Math.random() * list.length)];
+    .order('id', { ascending: true })
+    .range(offset, offset);
+  return (r.data && r.data[0]) || null;
 }
 
 
