@@ -105,7 +105,17 @@ HEADERS = {
     ),
     "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
+    # IMPORTANT: do NOT advertise 'br' (brotli). The self-hosted Mac
+    # runner's Python 3.9 + urllib3 v2 combination doesn't decode
+    # brotli cleanly — if we ask for it, PC sends brotli back, requests
+    # silently fails the decode, and we get a 16KB stub of garbled text
+    # instead of the real 130KB+ product page. Symptom: every scrape
+    # row returns no_price because the parser can't find "Ungraded" in
+    # the garbage output. gzip + deflate are handled natively by
+    # urllib3 — keep those, they're enough for 99% of pages.
+    # Verified 2026-06-03: dropping 'br' takes one specific OP card from
+    # len=16579 / ungraded=0 to len=134044 / ungraded=4 / parsed=$0.07.
+    "Accept-Encoding": "gzip, deflate",
     "Referer":         "https://www.pricecharting.com/",
     "Sec-Fetch-Dest":  "document",
     "Sec-Fetch-Mode":  "navigate",
