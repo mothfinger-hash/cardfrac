@@ -1647,8 +1647,12 @@ async function handleDuel(interaction) {
     return ephemeral('Bots don\'t pull cards. Pick a real opponent.');
   }
   const game     = (optString(interaction, 'game')   || 'pokemon').toLowerCase();
-  const roundsIn = Number(optString(interaction, 'rounds'));
-  const rounds   = roundsIn === 1 ? 1 : 3;
+  // Allowed rounds: 1 (quick), 3 (best-of-three, default), 5 (extended).
+  // Previous version clamped to `roundsIn === 1 ? 1 : 3` which silently
+  // demoted 5 → 3. Now we accept any of the three registered choices
+  // and default to 3 for unknowns/missing.
+  const roundsIn = optInt(interaction, 'rounds');
+  const rounds   = (roundsIn === 1 || roundsIn === 5) ? roundsIn : 3;
 
   // Cooldown checks — per-challenger first, then per-pair. The pair
   // check uses an OR so it catches challenges in either direction (so
@@ -1749,8 +1753,13 @@ async function handleDuelComponent(interaction) {
   }
 
   // Accept — actually pull cards and resolve the duel.
-  const game   = parts[3] || 'pokemon';
-  const rounds = Number(parts[4]) === 1 ? 1 : 3;
+  // Custom_id encodes rounds as parts[4]. Allowed values: 1, 3, 5
+  // (matches the slash command's choices). Default to 3 for any
+  // unknown value — older custom_ids that predate the 5-round option
+  // gracefully fall back instead of crashing.
+  const game     = parts[3] || 'pokemon';
+  const roundsIn = Number(parts[4]);
+  const rounds   = (roundsIn === 1 || roundsIn === 5) ? roundsIn : 3;
 
   // Fetch both players' pokemon — by the time we reach here both should
   // exist (handleDuel only uses buttons when both have starters), but
@@ -2088,6 +2097,19 @@ function optBool(interaction, name) {
   const o = opts.find(x => x.name === name);
   if (!o || o.value === undefined || o.value === null) return null;
   return Boolean(o.value);
+}
+
+// Pull an INTEGER (type 4) slash-command option. Returns the integer
+// value when set, null when omitted. Use for numeric params like
+// /duel rounds — optString + Number() works but loses type info and
+// is easy to misuse (e.g. `Number(optString())` then a strict ===
+// comparison against literal numbers).
+function optInt(interaction, name) {
+  const opts = (interaction.data && interaction.data.options) || [];
+  const o = opts.find(x => x.name === name);
+  if (!o || o.value === undefined || o.value === null) return null;
+  const n = Number(o.value);
+  return Number.isFinite(n) ? n : null;
 }
 
 // Pull a USER (type 6) option. Discord sends the user's id as the value;
