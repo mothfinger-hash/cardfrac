@@ -124,7 +124,15 @@ _DL_HEADERS = {
     ),
     "Accept":          "text/csv,application/csv,text/plain,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
+    # IMPORTANT: do NOT advertise 'br' (brotli). The self-hosted Mac
+    # runner's Python 3.9 + urllib3 v2 combo can't decode brotli without
+    # the optional `brotli` package — if we ask for it, PC opportunistically
+    # serves brotli, requests writes garbage bytes to disk, and the CSV
+    # comes back either suspiciously small (<50KB) or unparseable. Symptom:
+    # MTG / YGO bulk-CSV writes 0 history rows for months because PC happens
+    # to serve those categories with brotli more often than Pokemon. Same
+    # fix as in refresh_catalog_prices.py — keep gzip + deflate, drop br.
+    "Accept-Encoding": "gzip, deflate",
     "Referer":         "https://www.pricecharting.com/",
     "Sec-Fetch-Dest":  "document",
     "Sec-Fetch-Mode":  "navigate",
