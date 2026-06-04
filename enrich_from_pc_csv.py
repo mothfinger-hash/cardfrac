@@ -99,17 +99,16 @@ KNOWN_CATEGORIES = [
     "magic-cards",
     "yugioh-cards",
     "one-piece-cards",
-    # Added 2026-05-29 to close the 5,783-row gap the bulk-CSV refresh
-    # left after the first full run. ~2,500 of those rows are DBZ
-    # ("h&v" prefix = Heroes & Villains era from Score Entertainment)
-    # plus Gundam (gun-gd03-* set). Activating these three slugs is
-    # expected to drop unmatched rows from 3.5% → < 2%. If any of
-    # these slugs is rejected by PC's endpoint (returns a default 3DO
-    # catalog — see download_category_csv's sanity check), comment it
-    # out and rerun.
-    "gundam-card-game",
-    "dragon-ball-z-cards",
-    "dragon-ball-super-cards",
+    # NOTE: gundam-card-game, dragon-ball-z-cards, dragon-ball-super-cards,
+    # pokemon-topps were tried here but PC's download-custom endpoint
+    # doesn't actually serve them — it silently falls back to the
+    # default 3DO video-game catalog. The sanity check in
+    # download_category_csv catches the fallback and raises, so each
+    # of those slugs costs ~30s of wasted retries per workflow run.
+    # These four TCGs are now refreshed by the per-row HTTP scraper
+    # in refresh-prices-small-tcgs.yml (workflow uses the per-row
+    # script for gundam/dbz/onepiece/pokemon_topps; bulk-CSV path
+    # handles only the four working categories above).
 ]
 
 # Browser-realistic headers. Without these PC's Cloudflare WAF tends to
