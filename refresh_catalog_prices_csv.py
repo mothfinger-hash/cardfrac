@@ -372,10 +372,19 @@ def main():
                 try:
                     paths.append(download_category_csv(c, tmpdir))
                 except Exception as e:
-                    print(f"  FAILED to download {c}: {e}", flush=True)
-                    print(f"  Partial downloads kept at: {tmpdir}", flush=True)
-                    print(f"  Resume: --csv-dir {tmpdir}", flush=True)
-                    return
+                    # Previously this `return`'d, which silently aborted
+                    # the entire run if any one category failed — meaning
+                    # the per-category sanity-check raise (e.g. PC serving
+                    # the default 3DO catalog for an unrecognized slug)
+                    # would prevent ALL the other categories' downloads
+                    # from being processed. Now we just skip the broken
+                    # category and continue with the rest. The verifier
+                    # at the end of main() will FAIL the workflow if any
+                    # expected game ended up with zero history writes,
+                    # so a silent loss of one category still surfaces.
+                    print(f"  FAILED to download {c}: {e}  — skipping this category, "
+                          f"continuing with the others", flush=True)
+                    continue
 
         if not paths:
             sys.exit("No CSV files found / downloaded.")
