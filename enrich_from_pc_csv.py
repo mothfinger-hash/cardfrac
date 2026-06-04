@@ -493,9 +493,58 @@ def _peek_first_row_genre(csv_path):
         return None
 
 
+# ─── 7-day CSV cache ─────────────────────────────────────────────────────────
+# Persistent location for downloaded CSVs so a re-run within the same day
+# doesn't have to re-pull from PC, AND so any future bug (encoding,
+# matching, schema) can be retried against bytes-on-disk instead of
+# burning bandwidth. We keep one folder per UTC date; anything older
+# than 7 days gets pruned at the top of every download call.
+# Stored on the runner under XDG_CACHE_HOME (default ~/.cache).
+CSV_CACHE_ROOT = os.path.join(
+    os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+    "pathbinder-pc-csvs",
+)
+CSV_CACHE_MAX_DAYS = 7
+
+def _prune_csv_cache(root=CSV_CACHE_ROOT, max_days=CSV_CACHE_MAX_DAYS):
+    """Delete date-named subdirs older than max_days. Idempotent."""
+    if not os.path.isdir(root):
+        return
+    from datetime import datetime, timezone, timedelta
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=max_days)
+    for entry in os.listdir(root):
+        path = os.path.join(root, entry)
+        if not os.path.isdir(path):
+            continue
+        try:
+            entry_date = datetime.strptime(entry, "%Y-%m-%d").date()
+        except ValueError:
+            continue  # ignore non-date dirs
+        if entry_date < cutoff:
+            import shutil
+            try:
+                shutil.rmtree(path)
+                print(f"  [cache] pruned {entry} (older than {max_days}d)")
+            except Exception as e:
+                print(f"  [cache] WARN failed to prune {entry}: {e}")
+
+def _cache_path_for(category):
+    """Today's cache filename for `category` (UTC date)."""
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return os.path.join(CSV_CACHE_ROOT, today, f"{category}.csv")
+
+
 def download_category_csv(category, target_dir, max_retries=3):
     """Download a PC bulk CSV for the given category slug. Saves to
     `target_dir/<category>.csv` and returns the path.
+
+    Caching:
+      - Successful downloads also get copied to
+        ~/.cache/pathbinder-pc-csvs/<YYYY-MM-DD>/<category>.csv
+        so a re-run within the same day skips PC entirely (uses the
+        cached copy). The cache is pruned to the last 7 days at the
+        top of every call, so disk usage stays bounded.
 
     Resumable + Cloudflare-tolerant:
       - If the target file already exists with non-trivial size, skip
@@ -512,6 +561,17 @@ def download_category_csv(category, target_dir, max_retries=3):
     # assume the previous run succeeded for this category.
     if os.path.exists(target_path) and os.path.getsize(target_path) > 1024:
         print(f"  {category}: already downloaded ({os.path.getsize(target_path)/1024:.0f} KB), skipping.")
+        return target_path
+
+    # Cache lookup: if today's CSV exists in cache, copy it into the
+    # run's tempdir and skip the network call.
+    _prune_csv_cache()
+    cache_path = _cache_path_for(category)
+    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 50 * 1024:
+        import shutil
+        os.makedirs(target_dir, exist_ok=True)
+        shutil.copy(cache_path, target_path)
+        print(f"  {category}: cache hit ({os.path.getsize(cache_path)/1024:.0f} KB from {cache_path})")
         return target_path
 
     last_err = None
@@ -557,7 +617,17 @@ def download_category_csv(category, target_dir, max_retries=3):
                                     f"Check the slug on pricecharting.com.")
                         # Don't retry — this isn't a transient error.
                         raise RuntimeError(last_err)
-                    print(f"  → {target_path} ({total_bytes/1024:.0f} KB)")
+                    # Sanity checks passed — copy into the 7-day cache so
+                    # a same-day re-run or future bug retry doesn't have
+                    # to re-download from PC.
+                    try:
+                        import shutil
+                        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                        shutil.copy(target_path, cache_path)
+                        print(f"  → {target_path} ({total_bytes/1024:.0f} KB)  [cached: {cache_path}]")
+                    except Exception as e:
+                        # Cache write failure is non-fatal — log and continue.
+                        print(f"  → {target_path} ({total_bytes/1024:.0f} KB)  [cache write failed: {e}]")
                     return target_path
 
                 if r.status_code in (403, 429, 503):

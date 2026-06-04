@@ -149,6 +149,90 @@ _sb_session.headers.update({
 })
 
 
+# ─── Post-run sanity check ──────────────────────────────────────────────────
+# Verifies that today's catalog_price_history writes actually landed at
+# scale across each game_type that should be refreshed. Catches the exact
+# failure mode we just hit: workflow returns green checkmark because the
+# script "succeeded", but zero history rows were actually written for one
+# or more games (CSV download silently corrupted, matcher returned empty,
+# etc.). Compares today vs the most recent prior day; if today is below
+# a configurable fraction of the prior day's count for any expected game,
+# raises so the workflow exits non-zero and you get a notification.
+def _count_history(date_str, game_type):
+    """Return the count of catalog_price_history rows for a given date
+    + game_type, using PostgREST's count=exact header (cheap HEAD)."""
+    r = _sb_session.head(
+        f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog_price_history"
+        f"?game_type=eq.{game_type}&recorded_at=eq.{date_str}",
+        headers={"Prefer": "count=exact"}, timeout=30,
+    )
+    rng = r.headers.get("Content-Range", "*/0")
+    try:
+        return int(rng.split("/")[-1])
+    except ValueError:
+        return 0
+
+
+def verify_history_writes(games, min_pct_of_prior=0.50, min_absolute=100):
+    """Fail loudly if today's history row count for any expected game is
+    suspiciously low. `games` is the list of game_type values the run
+    was supposed to update. `min_pct_of_prior` is the floor below the
+    most-recent-prior-day's count that triggers an alarm. `min_absolute`
+    is a hard floor — a game with <100 rows today is always suspicious
+    regardless of yesterday's count.
+
+    Raises RuntimeError on failure (so the calling main() can sys.exit
+    non-zero and GitHub Actions marks the workflow red)."""
+    from datetime import date, timedelta
+    today = date.today().isoformat()
+    failures = []
+
+    print(f"\n  Verifying history writes for {today}…", flush=True)
+    for g in games:
+        today_n = _count_history(today, g)
+        # Find the most recent prior day with data (skip days where this
+        # game wasn't refreshed for unrelated reasons).
+        prior_n = 0
+        prior_date = None
+        for delta in range(1, 8):
+            d = (date.today() - timedelta(days=delta)).isoformat()
+            n = _count_history(d, g)
+            if n > 0:
+                prior_n = n
+                prior_date = d
+                break
+
+        floor_pct = int(prior_n * min_pct_of_prior)
+        floor_abs = min_absolute
+        ok = (today_n >= floor_pct) and (today_n >= floor_abs)
+
+        status = "OK" if ok else "FAIL"
+        print(
+            f"    {g:<16s} today={today_n:>7,}  "
+            f"prior({prior_date or '-'})={prior_n:>7,}  "
+            f"floor(50%)={floor_pct:>7,}  → {status}",
+            flush=True,
+        )
+        if not ok:
+            failures.append((g, today_n, prior_n, prior_date))
+
+    if failures:
+        msg_lines = ["History write verification FAILED for one or more games:"]
+        for g, t, p, pd in failures:
+            msg_lines.append(
+                f"  {g}: today={t:,}  prior({pd or 'none'})={p:,}  "
+                f"(< {int(min_pct_of_prior*100)}% of prior OR < {min_absolute} absolute)"
+            )
+        msg_lines.append(
+            "This usually means the CSV download for one category returned garbage "
+            "(brotli, Cloudflare challenge, slug mismatch) and the matcher silently "
+            "matched zero rows. Check the per-category bytes/match counts above. "
+            "Workflow exits non-zero so GitHub Actions surfaces the alert."
+        )
+        raise RuntimeError("\n".join(msg_lines))
+    print(f"  All games verified OK.", flush=True)
+
+
 def load_catalog_rows(game_type, limit=None):
     """Pull every catalog row that has a pricecharting_id we can look
     up. Pages with keyset (id > last_seen) so we don't hit Supabase
@@ -382,6 +466,28 @@ def main():
                 print(f"    [{g}]", flush=True)
                 for rid, pcid in unmatched_samples[g][:5]:
                     print(f"      {rid:<28s} pc_id={pcid}", flush=True)
+
+        # ── Verify writes actually landed ────────────────────────────
+        # Skip in dry-run (no writes to verify). Only check games we
+        # were supposed to refresh on this invocation — anything else
+        # may have stale-by-design data.
+        if not args.dry_run:
+            # Map --game arg to the set of game_type values we expect
+            # to see writes for. 'all' = every game with catalog rows.
+            if args.game and args.game != "all":
+                expected_games = [args.game]
+            else:
+                # Pull distinct game_type values from catalog so we
+                # check whatever exists, not a hardcoded list. Cheap.
+                expected_games = ['pokemon', 'magic', 'yugioh', 'onepiece']
+            try:
+                verify_history_writes(expected_games)
+            except RuntimeError as e:
+                # Print the error AND re-raise so the workflow fails red.
+                print(f"\n  {'='*60}", flush=True)
+                print(f"  ALERT: {e}", flush=True)
+                print(f"  {'='*60}", flush=True)
+                raise
 
     finally:
         # Tidy up downloaded CSVs unless asked to keep them.
