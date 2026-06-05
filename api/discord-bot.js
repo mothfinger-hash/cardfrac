@@ -261,6 +261,10 @@ const handler = async (req, res) => {
         const reply = await handleBattleComponent(interaction);
         return res.status(200).json(reply);
       }
+      if (cid.startsWith('battle2_accept:') || cid.startsWith('battle2_decline:') || cid.startsWith('battle2_move:')) {
+        const reply = await handleBattleFullComponent(interaction);
+        return res.status(200).json(reply);
+      }
       return res.status(200).json(ephemeral('Unknown button.'));
     } catch (e) {
       console.error('[discord-bot] component error:', e);
@@ -477,7 +481,14 @@ async function runSlashHandler(name, interaction) {
     case 'track':         return await handleTrack(interaction);
     case 'untrack':       return await handleUntrack(interaction);
     case 'duel':          return await handleDuel(interaction);
-    case 'battle':        return await handleBattle(interaction);
+    case 'battle': {
+      // Route to Tier 1 (quick) or Tier 2 (full) based on the
+      // `mode` choice. Defaults to 'quick' so old links/tests still
+      // work — opting into the multi-turn experience is explicit.
+      const mode = (optString(interaction, 'mode') || 'quick').toLowerCase();
+      if (mode === 'full') return await handleBattleFull(interaction);
+      return await handleBattle(interaction);
+    }
     case 'starter':       return await handleStarter(interaction);
     case 'profile':       return await handleProfile(interaction);
     default:              return ephemeral(`Unknown command: ${name}`);
@@ -1514,6 +1525,138 @@ const POKEMON_MOVES = {
   'Quaquaval':  [{n:'Aqua Step',  p:80,a:100,t:'water'},  {n:'Brick Break', p:75,a:100,t:'fighting'},{n:'Close Combat',p:120,a:100,t:'fighting'},{n:'Liquidation',p:85,a:100,t:'water'}],
 };
 
+// Primary + optional secondary type for each starter form. Used by
+// Tier 2 /battle for type-effectiveness math. Format: [primary] or
+// [primary, secondary]. Tier 1 doesn't read this, only Tier 2.
+const POKEMON_TYPES = {
+  // Gen 1
+  'Bulbasaur':['grass','poison'], 'Ivysaur':['grass','poison'], 'Venusaur':['grass','poison'],
+  'Charmander':['fire'], 'Charmeleon':['fire'], 'Charizard':['fire','flying'],
+  'Squirtle':['water'], 'Wartortle':['water'], 'Blastoise':['water'],
+  // Gen 2
+  'Chikorita':['grass'], 'Bayleef':['grass'], 'Meganium':['grass'],
+  'Cyndaquil':['fire'], 'Quilava':['fire'], 'Typhlosion':['fire'],
+  'Totodile':['water'], 'Croconaw':['water'], 'Feraligatr':['water'],
+  // Gen 3
+  'Treecko':['grass'], 'Grovyle':['grass'], 'Sceptile':['grass'],
+  'Torchic':['fire'], 'Combusken':['fire','fighting'], 'Blaziken':['fire','fighting'],
+  'Mudkip':['water'], 'Marshtomp':['water','ground'], 'Swampert':['water','ground'],
+  // Gen 4
+  'Turtwig':['grass'], 'Grotle':['grass'], 'Torterra':['grass','ground'],
+  'Chimchar':['fire'], 'Monferno':['fire','fighting'], 'Infernape':['fire','fighting'],
+  'Piplup':['water'], 'Prinplup':['water'], 'Empoleon':['water','steel'],
+  // Gen 5
+  'Snivy':['grass'], 'Servine':['grass'], 'Serperior':['grass'],
+  'Tepig':['fire'], 'Pignite':['fire','fighting'], 'Emboar':['fire','fighting'],
+  'Oshawott':['water'], 'Dewott':['water'], 'Samurott':['water'],
+  // Gen 6
+  'Chespin':['grass'], 'Quilladin':['grass'], 'Chesnaught':['grass','fighting'],
+  'Fennekin':['fire'], 'Braixen':['fire'], 'Delphox':['fire','psychic'],
+  'Froakie':['water'], 'Frogadier':['water'], 'Greninja':['water','dark'],
+  // Gen 7
+  'Rowlet':['grass','flying'], 'Dartrix':['grass','flying'], 'Decidueye':['grass','ghost'],
+  'Litten':['fire'], 'Torracat':['fire'], 'Incineroar':['fire','dark'],
+  'Popplio':['water'], 'Brionne':['water'], 'Primarina':['water','fairy'],
+  // Gen 8
+  'Grookey':['grass'], 'Thwackey':['grass'], 'Rillaboom':['grass'],
+  'Scorbunny':['fire'], 'Raboot':['fire'], 'Cinderace':['fire'],
+  'Sobble':['water'], 'Drizzile':['water'], 'Inteleon':['water'],
+  // Gen 9
+  'Sprigatito':['grass'], 'Floragato':['grass'], 'Meowscarada':['grass','dark'],
+  'Fuecoco':['fire'], 'Crocalor':['fire'], 'Skeledirge':['fire','ghost'],
+  'Quaxly':['water'], 'Quaxwell':['water'], 'Quaquaval':['water','fighting'],
+};
+
+// Canonical Pokemon type-effectiveness chart, sparse-encoded — only
+// non-1× entries appear. Read as TYPE_CHART[attackingType][defendingType]
+// = multiplier. Missing pair → 1× (neutral).
+// 2 = super effective, 0.5 = not very effective, 0 = no effect.
+const TYPE_CHART = {
+  normal:   { rock:0.5, ghost:0,   steel:0.5 },
+  fire:     { fire:0.5, water:0.5, grass:2,   ice:2, bug:2, rock:0.5, dragon:0.5, steel:2 },
+  water:    { fire:2,   water:0.5, grass:0.5, ground:2, rock:2, dragon:0.5 },
+  electric: { water:2,  electric:0.5, grass:0.5, ground:0, flying:2, dragon:0.5 },
+  grass:    { fire:0.5, water:2,   grass:0.5, poison:0.5, ground:2, flying:0.5, bug:0.5, rock:2, dragon:0.5, steel:0.5 },
+  ice:      { fire:0.5, water:0.5, grass:2,   ice:0.5, ground:2, flying:2, dragon:2, steel:0.5 },
+  fighting: { normal:2, ice:2, poison:0.5, flying:0.5, psychic:0.5, bug:0.5, rock:2, ghost:0, dark:2, steel:2, fairy:0.5 },
+  poison:   { grass:2, poison:0.5, ground:0.5, rock:0.5, ghost:0.5, steel:0, fairy:2 },
+  ground:   { fire:2, electric:2, grass:0.5, poison:2, flying:0, bug:0.5, rock:2, steel:2 },
+  flying:   { electric:0.5, grass:2, fighting:2, bug:2, rock:0.5, steel:0.5 },
+  psychic:  { fighting:2, poison:2, psychic:0.5, dark:0, steel:0.5 },
+  bug:      { fire:0.5, grass:2, fighting:0.5, poison:0.5, flying:0.5, psychic:2, ghost:0.5, dark:2, steel:0.5, fairy:0.5 },
+  rock:     { fire:2, ice:2, fighting:0.5, ground:0.5, flying:2, bug:2, steel:0.5 },
+  ghost:    { normal:0, psychic:2, ghost:2, dark:0.5 },
+  dragon:   { dragon:2, steel:0.5, fairy:0 },
+  dark:     { fighting:0.5, psychic:2, ghost:2, dark:0.5, fairy:0.5 },
+  steel:    { fire:0.5, water:0.5, electric:0.5, ice:2, rock:2, steel:0.5, fairy:2 },
+  fairy:    { fire:0.5, fighting:2, poison:0.5, dragon:2, dark:2, steel:0.5 },
+};
+
+// Look up a Pokémon's types by name. Returns at least one type
+// (defaults to 'normal' if a form is somehow missing from
+// POKEMON_TYPES — the Tier 2 battle still runs, just without a
+// type bonus for that side).
+function getPokemonTypes(name) {
+  return POKEMON_TYPES[name] || ['normal'];
+}
+
+// Multiplier when a move of `attackType` hits a defender with up
+// to two types. Multipliers stack (2× × 2× = 4×, 0.5× × 0.5× = 0.25×).
+function typeEffectiveness(attackType, defenderTypes) {
+  const chart = TYPE_CHART[attackType] || {};
+  let mult = 1;
+  for (const t of defenderTypes) {
+    if (t in chart) mult *= chart[t];
+  }
+  return mult;
+}
+
+// HP scales with level so leveling up makes you genuinely sturdier.
+// Lv 1 = 45 HP, Lv 10 = 135, Lv 36 (final evo) = 395. Tuned so a
+// neutral 60-power move does ~50-80 damage = 2-3 hits per battle.
+function pokemonHp(level) {
+  return (Math.max(1, level | 0) * 10) + 35;
+}
+
+// Tier 2 damage formula. Considers level, move power, accuracy
+// (miss roll), type effectiveness, and a small variance.
+// Returns { dmg, missed, effectiveness } — missed=true means the
+// accuracy roll failed and dmg = 0.
+function calcBattleDamageFull(move, attackerLevel, defenderTypes) {
+  const acc = Math.min(100, Math.max(1, move.a || 100));
+  if (Math.random() * 100 > acc) {
+    return { dmg: 0, missed: true, effectiveness: 1 };
+  }
+  const effectiveness = typeEffectiveness(move.t, defenderTypes);
+  const variance = 0.85 + Math.random() * 0.15;
+  // Scaled-down Gen 1 formula. The /5 normalizes power so a Lv 10
+  // Flamethrower does ~70 dmg before effectiveness vs the ~135 HP of
+  // a Lv 10 defender. Tunable.
+  const base = ((attackerLevel || 1) / 5 + 2) * (move.p || 1) * 0.4;
+  const dmg = Math.max(1, Math.round(base * variance * effectiveness));
+  return { dmg, missed: false, effectiveness };
+}
+
+// ASCII-ish HP bar for the embed. Pokemon-style coloring isn't
+// possible in Discord embeds without using ANSI code blocks, so we
+// use Unicode block characters and let the embed color carry the
+// "warning" signal (green → yellow → red as HP drops).
+function hpBar(current, max, width = 10) {
+  const pct = Math.max(0, Math.min(1, current / max));
+  const filled = Math.round(pct * width);
+  return '▰'.repeat(filled) + '▱'.repeat(width - filled);
+}
+
+// Color for the battle embed based on the lower of the two HP
+// percentages — drops from teal → gold → red as either side gets
+// close to KO. Just visual flavor.
+function hpEmbedColor(aHp, aMax, bHp, bMax) {
+  const minPct = Math.min(aHp / aMax, bHp / bMax);
+  if (minPct < 0.25) return 0xE74C3C; // red
+  if (minPct < 0.50) return 0xFFC857; // gold
+  return 0x1AC7A0;                     // teal
+}
+
 // Element-style icons for the embed flavor — one glyph per move type.
 const TYPE_ICONS = {
   fire:'🔥', water:'💧', grass:'🌿', electric:'⚡', ice:'❄️',
@@ -2166,6 +2309,362 @@ async function resolveBattleMatch({ challengerId, opponentId, aPk, bPk }) {
       footer: { text: `XP: ${aPk.pokemon_name} +${aXp} · ${bPk.pokemon_name} +${bXp}` },
     }],
   };
+}
+
+
+// ─── /battle mode:full — Tier 2 multi-turn battles ────────────────
+// HP bars, type effectiveness, pick-a-move buttons each turn.
+// Persists battle state in `bot_battle_state` so each button click
+// can read/update across the multi-turn flow. Lifecycle:
+//   1. /battle mode:full opponent:@user
+//      → INSERT row { status:'pending', current_turn:'challenger' }
+//      → message with Accept / Decline buttons
+//   2. Opponent clicks Accept
+//      → UPDATE status='in_progress', show challenger's move buttons
+//   3. Active player clicks a move
+//      → calc damage, update opponent HP, log turn
+//      → if HP<=0: status='finished', award XP, show winner embed
+//      → else: swap current_turn, show next player's move buttons
+//   4. Either player clicks "Forfeit"
+//      → status='finished', other side wins
+//
+// Battle ends silently after 20 turns to prevent unlimited HP-pong;
+// at 20-turn limit, whichever side has more HP% wins.
+const BATTLE_FULL_XP_MULTIPLIER = 3;     // 3× duel XP (more engagement)
+const BATTLE_FULL_MAX_TURNS    = 20;
+
+// Helper — encode a Discord button row with up to 5 buttons.
+function _btnRow(buttons) {
+  return { type: 1, components: buttons };
+}
+
+// Helper — build the 4 move buttons for whichever player's turn it is.
+// custom_id schema: battle2_move:<battle_id>:<role>:<moveIndex>
+//   role: 'a' (challenger) | 'b' (opponent)
+// Only the player whose role === current_turn can usefully click;
+// the click handler validates by interaction.user.id.
+function _battleMoveButtons(battleId, role, moves) {
+  return _btnRow(moves.map((m, i) => ({
+    type: 2,
+    style: 1,   // primary blue
+    label: `${m.n} (${m.p})`,
+    custom_id: `battle2_move:${battleId}:${role}:${i}`,
+  })));
+}
+
+// Helper — render the standing battle embed (HP bars, current turn,
+// last-action recap). Called after every state change.
+function _renderBattleEmbed(state) {
+  const aP = state.challenger_pokemon;
+  const bP = state.opponent_pokemon;
+  const aHp = state.challenger_hp, aMax = state.challenger_max_hp;
+  const bHp = state.opponent_hp,   bMax = state.opponent_max_hp;
+  const finished = state.status === 'finished';
+  const desc = [
+    `**${aP.name}** (Lv ${aP.level})`,
+    `${hpBar(aHp, aMax)}  \`${aHp}/${aMax} HP\``,
+    '',
+    `**${bP.name}** (Lv ${bP.level})`,
+    `${hpBar(bHp, bMax)}  \`${bHp}/${bMax} HP\``,
+  ];
+  // Last 3 log entries surfaced inline for in-progress recap.
+  const log = Array.isArray(state.log) ? state.log : [];
+  if (log.length) {
+    desc.push('', '__Last actions:__');
+    const tail = log.slice(-3);
+    for (const e of tail) {
+      const icon = TYPE_ICONS[e.moveType] || '⭐';
+      let line = `> ${e.actorName} used **${e.moveName}** ${icon}`;
+      if (e.missed) {
+        line += ' — but it missed!';
+      } else {
+        const eff = e.effectiveness;
+        const effTag = eff === 0          ? ' (no effect)'
+                     : eff >= 2           ? ' — super effective!'
+                     : eff <= 0.5 && eff > 0 ? ' — not very effective…'
+                     : '';
+        line += ` (${e.damage} dmg${effTag})`;
+      }
+      desc.push(line);
+    }
+  }
+  if (finished) {
+    desc.push('');
+    if (state.winner_discord_id === state.challenger_id) {
+      desc.push(`🏆  **${aP.name}** wins the battle!`);
+    } else if (state.winner_discord_id === state.opponent_id) {
+      desc.push(`🏆  **${bP.name}** wins the battle!`);
+    } else {
+      desc.push(`🤝  Draw — neither side could finish the other.`);
+    }
+  } else {
+    const turnName = state.current_turn === 'challenger' ? aP.name : bP.name;
+    desc.push('', `▶ **${turnName}**'s turn — pick a move:`);
+  }
+  return {
+    title: '⚔️ Pokémon Battle' + (finished ? ' — Complete' : ` — Turn ${(state.turn_count || 0) + 1}`),
+    description: desc.join('\n'),
+    color: hpEmbedColor(aHp, aMax, bHp, bMax),
+    footer: finished
+      ? { text: `XP: ${aP.name} +${state.challenger_xp_gained} · ${bP.name} +${state.opponent_xp_gained}` }
+      : { text: 'Battles end at 0 HP or after 20 turns.' },
+  };
+}
+
+async function handleBattleFull(interaction) {
+  const u = (interaction.member && interaction.member.user) || interaction.user;
+  const opp = optUser(interaction, 'opponent');
+  if (!opp || !opp.id) return ephemeral('Pick an opponent.');
+  if (opp.id === u.id) return ephemeral('Battling yourself is not allowed.');
+  if (opp.bot)         return ephemeral('Bots don\'t train pokemon. Pick a real opponent.');
+
+  // Both must have starters at level 5+.
+  const pkRes = await sb.from('bot_pokemon').select('*').in('discord_user_id', [u.id, opp.id]);
+  const pks = pkRes.data || [];
+  const aPk = pks.find(p => p.discord_user_id === u.id);
+  const bPk = pks.find(p => p.discord_user_id === opp.id);
+  if (!aPk) return ephemeral('Pick your starter first — run /starter.');
+  if (!bPk) return ephemeral(`<@${opp.id}> hasn't picked a starter yet — they need to run /starter first.`);
+  if ((aPk.level || 1) < BATTLE_LEVEL_MIN) {
+    return ephemeral(`Your **${aPk.pokemon_name}** is only level ${aPk.level || 1} — needs to be level ${BATTLE_LEVEL_MIN} to battle.`);
+  }
+  if ((bPk.level || 1) < BATTLE_LEVEL_MIN) {
+    return ephemeral(`<@${opp.id}>'s **${bPk.pokemon_name}** is only level ${bPk.level || 1} — needs to be level ${BATTLE_LEVEL_MIN} to battle.`);
+  }
+
+  // Cooldown reuse from /duel — same per-challenger and per-pair gates.
+  const cdChallenger = await sb.from('bot_duel_log')
+    .select('created_at').eq('challenger_discord_id', u.id)
+    .order('created_at', { ascending: false }).limit(1);
+  if (cdChallenger.data && cdChallenger.data[0]) {
+    const ageSec = (Date.now() - new Date(cdChallenger.data[0].created_at).getTime()) / 1000;
+    if (ageSec < DUEL_CD_CHALLENGER_SEC) {
+      return ephemeral(`Slow down — wait ${Math.ceil(DUEL_CD_CHALLENGER_SEC - ageSec)}s.`);
+    }
+  }
+
+  // Build snapshot payloads for both pokemon. Saves us joining
+  // bot_pokemon on every move click.
+  const snapshot = (pk) => ({
+    starter_id:    pk.starter_id,
+    name:          pk.pokemon_name,
+    level:         pk.level || 1,
+    types:         getPokemonTypes(pk.pokemon_name),
+    current_form_id: pk.original_pokemon_id || pk.starter_id,
+  });
+  const aSnap = snapshot(aPk);
+  const bSnap = snapshot(bPk);
+  const aHp = pokemonHp(aSnap.level);
+  const bHp = pokemonHp(bSnap.level);
+
+  // Persist pending battle. Accept handler will flip status to in_progress.
+  const ins = await sb.from('bot_battle_state').insert({
+    challenger_id:      u.id,
+    opponent_id:        opp.id,
+    challenger_pokemon: aSnap,
+    opponent_pokemon:   bSnap,
+    challenger_hp:      aHp,
+    opponent_hp:        bHp,
+    challenger_max_hp:  aHp,
+    opponent_max_hp:    bHp,
+    current_turn:       'challenger',
+    status:             'pending',
+    channel_id:         interaction.channel_id || null,
+    guild_id:           interaction.guild_id || null,
+  }).select('id').single();
+  if (ins.error) {
+    return ephemeral(`Failed to start battle: ${ins.error.message}`);
+  }
+  const battleId = ins.data.id;
+
+  return {
+    type: INTERACTION_RESPONSE_TYPE.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content: `<@${opp.id}>  ⚔️  **${aSnap.name}** (Lv ${aSnap.level}) challenges **${bSnap.name}** (Lv ${bSnap.level}) to a full Pokémon battle!`,
+      components: [_btnRow([
+        { type: 2, style: 3, label: 'Accept Battle', custom_id: `battle2_accept:${battleId}` },
+        { type: 2, style: 4, label: 'Decline',       custom_id: `battle2_decline:${battleId}` },
+      ])],
+      allowed_mentions: { users: [opp.id] },
+    },
+  };
+}
+
+async function handleBattleFullComponent(interaction) {
+  const cid    = (interaction.data && interaction.data.custom_id) || '';
+  const parts  = cid.split(':');
+  const action = parts[0];
+  const clickerId = (interaction.member && interaction.member.user && interaction.member.user.id) ||
+                    (interaction.user && interaction.user.id);
+
+  // ── Accept / Decline ──
+  if (action === 'battle2_accept' || action === 'battle2_decline') {
+    const battleId = parts[1];
+    const stRes = await sb.from('bot_battle_state').select('*').eq('id', battleId).single();
+    if (stRes.error || !stRes.data) {
+      return { type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+        data: { content: 'Battle no longer exists.', components: [], embeds: [] } };
+    }
+    const state = stRes.data;
+    if (clickerId !== state.opponent_id) {
+      return ephemeral('Only the challenged trainer can accept or decline.');
+    }
+    if (state.status !== 'pending') {
+      return ephemeral('That battle was already resolved.');
+    }
+    if (action === 'battle2_decline') {
+      await sb.from('bot_battle_state').update({ status: 'declined', updated_at: new Date().toISOString() }).eq('id', battleId);
+      return { type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+        data: { content: `<@${state.opponent_id}> declined the battle.`, components: [], embeds: [] } };
+    }
+    // Accept — flip to in_progress and show challenger's move picker.
+    await sb.from('bot_battle_state').update({
+      status: 'in_progress', updated_at: new Date().toISOString(),
+    }).eq('id', battleId);
+    state.status = 'in_progress';
+    const aMoves = getMovesForPokemon({ pokemon_name: state.challenger_pokemon.name });
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: {
+        content: `<@${state.challenger_id}> vs <@${state.opponent_id}>`,
+        embeds: [_renderBattleEmbed(state)],
+        components: [_battleMoveButtons(battleId, 'a', aMoves)],
+        allowed_mentions: { users: [] },
+      },
+    };
+  }
+
+  // ── Move click ──
+  if (action === 'battle2_move') {
+    const battleId  = parts[1];
+    const role      = parts[2];                   // 'a' (challenger) | 'b' (opponent)
+    const moveIdx   = parseInt(parts[3], 10) | 0;
+
+    const stRes = await sb.from('bot_battle_state').select('*').eq('id', battleId).single();
+    if (stRes.error || !stRes.data) {
+      return { type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+        data: { content: 'Battle state lost.', components: [], embeds: [] } };
+    }
+    const state = stRes.data;
+    if (state.status !== 'in_progress') return ephemeral('This battle is over.');
+
+    // Validate clicker matches current_turn player.
+    const expectedRole = state.current_turn === 'challenger' ? 'a' : 'b';
+    const expectedId   = state.current_turn === 'challenger' ? state.challenger_id : state.opponent_id;
+    if (role !== expectedRole || clickerId !== expectedId) {
+      return ephemeral(`Not your turn — it's ${state.current_turn === 'challenger' ? `<@${state.challenger_id}>` : `<@${state.opponent_id}>`}'s move.`);
+    }
+
+    // Apply the move. Attacker = current_turn side, defender = the other.
+    const attackerPk = role === 'a' ? state.challenger_pokemon : state.opponent_pokemon;
+    const defenderPk = role === 'a' ? state.opponent_pokemon   : state.challenger_pokemon;
+    const attackerMoves = getMovesForPokemon({ pokemon_name: attackerPk.name });
+    const move = attackerMoves[moveIdx] || attackerMoves[0];
+
+    const result = calcBattleDamageFull(move, attackerPk.level, defenderPk.types);
+    const logEntry = {
+      actorName:     attackerPk.name,
+      moveName:      move.n,
+      moveType:      move.t,
+      damage:        result.dmg,
+      effectiveness: result.effectiveness,
+      missed:        result.missed,
+      turn:          (state.turn_count || 0) + 1,
+    };
+
+    // Apply damage to defender.
+    let newAHp = state.challenger_hp, newBHp = state.opponent_hp;
+    if (role === 'a') newBHp = Math.max(0, newBHp - result.dmg);
+    else              newAHp = Math.max(0, newAHp - result.dmg);
+
+    const newTurnCount = (state.turn_count || 0) + 1;
+    const nextTurn = state.current_turn === 'challenger' ? 'opponent' : 'challenger';
+    const newLog = [...(state.log || []), logEntry];
+
+    // Check end conditions.
+    let finished = false, winnerId = null;
+    if (newAHp <= 0 && newBHp <= 0) {
+      // Mutual KO — defender just dropped to 0 too. Attacker wins
+      // (they got the last hit in). Real Pokémon doesn't allow simul
+      // KO since moves are sequential; this matches our turn model.
+      finished = true;
+      winnerId = role === 'a' ? state.challenger_id : state.opponent_id;
+    } else if (newAHp <= 0) {
+      finished = true; winnerId = state.opponent_id;
+    } else if (newBHp <= 0) {
+      finished = true; winnerId = state.challenger_id;
+    } else if (newTurnCount >= BATTLE_FULL_MAX_TURNS) {
+      finished = true;
+      // Higher HP% wins; tie if exactly equal.
+      const aPct = newAHp / state.challenger_max_hp;
+      const bPct = newBHp / state.opponent_max_hp;
+      if (aPct > bPct)      winnerId = state.challenger_id;
+      else if (bPct > aPct) winnerId = state.opponent_id;
+      else                  winnerId = null;
+    }
+
+    // Build the update payload. Compute XP only if finished.
+    const patch = {
+      challenger_hp: newAHp,
+      opponent_hp:   newBHp,
+      current_turn:  nextTurn,
+      turn_count:    newTurnCount,
+      log:           newLog,
+      updated_at:    new Date().toISOString(),
+    };
+    if (finished) {
+      patch.status = 'finished';
+      patch.winner_discord_id = winnerId;
+      // Award XP — winner gets 3× duel XP, loser gets 0.5× (still
+      // grinding-friendly so people don't lose battles for net-negative XP).
+      // Need to look up bot_pokemon rows to update XP/level.
+      const pkRes = await sb.from('bot_pokemon').select('*')
+        .in('discord_user_id', [state.challenger_id, state.opponent_id]);
+      const pks = pkRes.data || [];
+      const aPkRow = pks.find(p => p.discord_user_id === state.challenger_id);
+      const bPkRow = pks.find(p => p.discord_user_id === state.opponent_id);
+      let aOutcome = 'tie', bOutcome = 'tie';
+      if (winnerId === state.challenger_id) { aOutcome = 'win';  bOutcome = 'loss'; }
+      else if (winnerId === state.opponent_id) { aOutcome = 'loss'; bOutcome = 'win'; }
+      const aXp = calcXpAwarded(aOutcome, aPkRow?.level || 1, bPkRow?.level || 1) * BATTLE_FULL_XP_MULTIPLIER;
+      const bXp = calcXpAwarded(bOutcome, bPkRow?.level || 1, aPkRow?.level || 1) * BATTLE_FULL_XP_MULTIPLIER;
+      patch.challenger_xp_gained = aXp;
+      patch.opponent_xp_gained   = bXp;
+      if (aPkRow) await applyDuelResult(aPkRow, aOutcome, aXp);
+      if (bPkRow) await applyDuelResult(bPkRow, bOutcome, bXp);
+    }
+
+    await sb.from('bot_battle_state').update(patch).eq('id', battleId);
+    Object.assign(state, patch);
+
+    if (finished) {
+      return {
+        type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+        data: {
+          content: `<@${state.challenger_id}> vs <@${state.opponent_id}> — battle complete!`,
+          embeds: [_renderBattleEmbed(state)],
+          components: [],
+          allowed_mentions: { users: [] },
+        },
+      };
+    }
+
+    // Continue — show next player's move buttons.
+    const nextRole = nextTurn === 'challenger' ? 'a' : 'b';
+    const nextPk   = nextTurn === 'challenger' ? state.challenger_pokemon : state.opponent_pokemon;
+    const nextMoves = getMovesForPokemon({ pokemon_name: nextPk.name });
+    return {
+      type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
+      data: {
+        content: `<@${state.challenger_id}> vs <@${state.opponent_id}>`,
+        embeds: [_renderBattleEmbed(state)],
+        components: [_battleMoveButtons(battleId, nextRole, nextMoves)],
+        allowed_mentions: { users: [] },
+      },
+    };
+  }
+
+  return ephemeral('Unknown battle action.');
 }
 
 

@@ -108,13 +108,21 @@ const commands = [
       ] },
   ] },
   // ── /battle — Pokémon-style move battle (level 5+ starters) ──
-  // Tier 1: random move pick per side (lore-accurate per evolution),
-  // single damage calc, higher damage wins. 2x XP vs /duel.
-  // Both players must have a starter at level 5 or higher.
+  // Two modes:
+  //   quick (Tier 1) — random move pick per side, single damage roll,
+  //                    higher damage wins. ~5 sec, 2× duel XP.
+  //   full  (Tier 2) — HP bars, type effectiveness, pick-a-move each
+  //                    turn, first to 0 HP loses. ~1-3 min, 3× duel XP.
+  // Both players must have a starter at level 5+.
   { name: 'battle', type: 1,
-    description: 'Pokémon battle (level 5+ starters required) — 2× XP',
+    description: 'Pokémon battle (level 5+ starters required)',
     options: [
       { name: 'opponent', description: 'Who to battle', type: 6, required: true },
+      { name: 'mode', description: 'quick (one-roll, default) | full (multi-turn with HP + types)',
+        type: 3, required: false, choices: [
+          { name: 'Quick (one roll, 2× XP)',                  value: 'quick' },
+          { name: 'Full (multi-turn HP + type chart, 3× XP)', value: 'full'  },
+        ] },
     ] },
 
   // ── Pokémon game loop ──────────────────────────
