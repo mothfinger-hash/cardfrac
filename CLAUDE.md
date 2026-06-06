@@ -227,6 +227,18 @@ Received" action just flips paid→completed for UX, not for money flow.
 - `listings` carries the same `variant` column so marketplace listings
   can disambiguate finish (a Normal Charizard and a Reverse Holo
   Charizard are different products with different prices).
+- `listings.api_card_id` (and `listings.card_number`) link a
+  marketplace listing back to the canonical `catalog` row — same
+  shape as `collection_items.api_card_id`. Nullable: sealed-product
+  and non-TCG product listings (Funko, manga) don't have a catalog
+  row. All NEW TCG single listings must populate it. The
+  binder-detail "+ List for Sale" button passes `apiCardId` +
+  `cardNumber` + `variant` through `openListCardModal`'s prefill,
+  which stashes them in `_lcPrefillCatalog` for the insert. Schema
+  is in `migration_listings_catalog_link.sql` (also includes a
+  best-effort name+game backfill for pre-existing listings, and
+  re-runs the inventory listed_online_qty backfill that the original
+  shop-inventory migration couldn't do).
 
 ### Variants (Normal / Reverse Holo / Holo / 1st Edition Holo)
 
@@ -279,6 +291,59 @@ When adding a new finish (e.g. `'cosmos_holo'`, `'reverse_holo_promo'`):
   (`create if not exists`, `create or replace`, `drop policy if exists`).
 - Beta testers have their own table `beta_testers` with a public-read
   view `public_beta_testers` that exposes only `(user_id, tier)`.
+
+### Shop inventory (Vendor+ tier)
+
+Vendor and Shop tiers see an Inventory tab on the Account page that
+splits each `collection_items.quantity` into:
+
+- **`on_shelf_qty`** — units physically in the shop
+- **`listed_online_qty`** — units currently active on the PathBinder
+  marketplace (sum of `listings.quantity` for that `(user_id,
+  api_card_id, variant)`)
+- **`shop_sku`** — optional user-defined SKU / barcode
+
+Invariant: `on_shelf_qty + listed_online_qty <= quantity`. The
+difference covers units reserved in an in-progress order or
+intentionally held back.
+
+In-store sales go through a dedicated append-only ledger,
+`shop_sales` (id, user_id, collection_item_id, api_card_id, variant,
+qty, unit_price, total_price, payment_method, notes, sold_at,
+created_at). An INSERT trigger `apply_shop_sale_to_inventory`
+decrements `on_shelf_qty` AND `quantity` on the matching
+`collection_items` row in the same transaction — clients do not
+update the counters themselves.
+
+Schema is in `migration_shop_inventory.sql`. RLS scopes
+`shop_sales` to the row owner and gates INSERT on
+`subscription_tier IN ('vendor','shop')`.
+
+UI surfaces, by phase:
+
+1. **Step 1 (shipped):** read-only Inventory tab + Add Card defaults
+   `on_shelf_qty = quantity` for vendor+ users.
+2. **Step 2 (not built):** Mark-N-Sold modal per row → writes
+   `shop_sales`. Sales log view with date filters + CSV export.
+3. **Step 3 (not built):** POS scan mode — scan a card →
+   record sale via the same `shop_sales` insert path.
+4. **Step 4 (not built):** Listing flow auto-decrement on create/
+   cancel/ship, so marketplace activity keeps the channel split
+   truthful without the user manually moving units around.
+
+Touch points to remember when extending:
+
+- `saveToCollection` (search for `_insertBase.on_shelf_qty`) defaults
+  on-shelf to `quantity` for vendor+. Has a graceful schema-error
+  fallback that strips `on_shelf_qty` when the migration isn't
+  installed.
+- `renderInventory` / `_invRowHtml` / `_invSummaryTile` render the
+  read-only table.
+- `_showInventoryTab` toggles `.js-vendor-only` elements based on
+  `tierAtLeast('vendor')`. Called from `renderAccount`.
+- POS / sale-recording should NEVER touch Stripe — see Stripe ToS
+  section above. In-store sales are cash/card-on-shop's-own-terminal;
+  PathBinder just logs them for the shop's records.
 
 ## Adding a new TCG
 

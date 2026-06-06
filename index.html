@@ -6899,6 +6899,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <label>Shipping ($)</label>
           <input class="atc-input" id="lcShipping" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 5.00" style="width:100%" oninput="updateListingFeePreview()" />
         </div>
+        <!-- Vendor+ only — list multiple copies of the same card on
+             one listing row. Hidden for enthusiast (40-listing cap
+             discourages bulk anyway) and free / collector. Defaults
+             to 1 when hidden / left blank, matching the historical
+             1-listing = 1-card model. -->
+        <div class="form-group js-vendor-only" id="lcQuantityWrap" style="display:none">
+          <label>Quantity</label>
+          <input class="atc-input" id="lcQuantity" type="number" min="1" step="1" inputmode="numeric" value="1" placeholder="1" style="width:100%" />
+        </div>
       </div>
 
       <!-- Photo Upload -->
@@ -7362,6 +7371,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <button class="account-tab" onclick="switchAccountTab('myListings')">My Listings</button>
       <button class="account-tab" onclick="switchAccountTab('myOrders')">Orders<span class="badge-count" id="orderNotification" style="display:none">0</span></button>
       <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales Archive</button>
+      <!-- Inventory tab — shown only to vendor+ users via JS gating in
+           switchAccountTab / renderAccount. Tracks in-store vs. listed
+           stock alongside total qty. See migration_shop_inventory.sql. -->
+      <button class="account-tab js-vendor-only" id="tab-inventory" onclick="switchAccountTab('inventory')" style="display:none">Inventory</button>
       <button class="account-tab" onclick="switchAccountTab('payments')">Payments</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
@@ -7416,6 +7429,29 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         </div>
         <div class="pb-panel-body">
           <div id="salesArchiveContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory (Vendor+) — step 1 read-only view of in-store +
+         listed-online stock split. POS / sales-log come in later steps. -->
+    <div id="inventory" class="account-content">
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">⬡</span>
+            Inventory
+          </div>
+          <div class="pb-panel-actions">
+            <input id="inventorySearch" type="text" placeholder="Search card / set / SKU…" oninput="renderInventory()"
+                   style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.72rem;padding:5px 10px;outline:none;min-width:200px">
+            <button class="pb-panel-link" onclick="renderInventory(true)" title="Refresh from server">↻</button>
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="inventoryContent">
+            <div style="text-align:center;padding:40px;color:var(--muted);font-size:.78rem">Loading inventory…</div>
+          </div>
         </div>
       </div>
     </div>
@@ -11746,6 +11782,8 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       renderHistory();
       renderWatchlist();
       updateOrderNotification();
+      // Vendor+ users see an Inventory tab; everyone else has it hidden.
+      try { _showInventoryTab(); } catch(_) {}
     }
 
     function switchAccountTab(tab) {
@@ -11764,7 +11802,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // at #accountPage's bottom edge.
       const accountPageEl = document.getElementById('accountPage');
       if (accountPageEl) accountPageEl.setAttribute('data-tab', tab);
-      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','payments','watchlist','history','tradeHistory'];
+      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','payments','watchlist','history','tradeHistory','inventory'];
       if (BG_TABS.indexOf(tab) >= 0) {
         document.body.setAttribute('data-page-bg', tab);
       } else {
@@ -11776,6 +11814,142 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (tab === 'payments') renderPayments();
       if (tab === 'tradeHistory') renderTradeHistory();
       if (tab === 'badges') renderBadges();
+      if (tab === 'inventory') renderInventory();
+    }
+
+    // ── Inventory tab (Vendor+) ──────────────────────────────────────
+    // Shows the per-row split of TOTAL quantity into "on shelf"
+    // (physical units in the shop) and "listed online" (units active
+    // on PathBinder). Step 1 ships as read-only; Step 2 adds the
+    // Mark-N-Sold modal + shop_sales writes; Step 3 adds POS scan.
+    function _showInventoryTab() {
+      try {
+        const visible = typeof tierAtLeast === 'function' && tierAtLeast('vendor');
+        document.querySelectorAll('.js-vendor-only').forEach(function(el) {
+          el.style.display = visible ? '' : 'none';
+        });
+      } catch(_) {}
+    }
+
+    async function renderInventory(forceRefresh) {
+      const wrap = document.getElementById('inventoryContent');
+      if (!wrap) return;
+      if (!currentUser) { wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Sign in to view inventory.</div>'; return; }
+      if (typeof tierAtLeast !== 'function' || !tierAtLeast('vendor')) {
+        wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">'
+          + 'Inventory tracking is a Vendor+ feature.<br>'
+          + '<button onclick="openPricingModalWithPromo(\'vendor\')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);margin-top:14px;display:inline-block">Upgrade to Vendor →</button>'
+          + '</div>';
+        return;
+      }
+      // Source: in-memory collectionItems already kept in sync by
+      // loadCollection(). If the migration columns aren't present
+      // (older client / unrun migration), gracefully degrade to
+      // showing quantity in the on-shelf column and zero listed.
+      const items = (collectionItems || []).filter(function(c) {
+        return !c.is_ghost && !c.sold_offline;
+      });
+      const term = (document.getElementById('inventorySearch')?.value || '').trim().toLowerCase();
+      const filtered = !term ? items : items.filter(function(c) {
+        const hay = ((c.card_name||'') + ' ' + (c.set_name||'') + ' ' + (c.set_code||'') + ' ' + (c.shop_sku||'')).toLowerCase();
+        return hay.indexOf(term) >= 0;
+      });
+
+      // Totals across the entire filtered set (not just the page)
+      let totalUnits = 0, totalOnShelf = 0, totalListed = 0, totalValue = 0;
+      filtered.forEach(function(c) {
+        const q  = c.quantity || 1;
+        const os = (c.on_shelf_qty != null) ? c.on_shelf_qty : q;
+        const ll = c.listed_online_qty || 0;
+        const v  = (c.current_value || c._compEstimate || c.purchase_price || 0) * q;
+        totalUnits   += q;
+        totalOnShelf += os;
+        totalListed  += ll;
+        totalValue   += v;
+      });
+
+      const summary = ''
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
+        +   _invSummaryTile('Cards',     filtered.length.toLocaleString(), 'var(--muted)')
+        +   _invSummaryTile('Units',     totalUnits.toLocaleString(),      'var(--text)')
+        +   _invSummaryTile('On Shelf',  totalOnShelf.toLocaleString(),    'var(--accent)')
+        +   _invSummaryTile('Listed',    totalListed.toLocaleString(),     'var(--copper, #d97e3e)')
+        +   _invSummaryTile('Est. Value','$' + totalValue.toFixed(2),       'var(--green)')
+        + '</div>';
+
+      if (filtered.length === 0) {
+        wrap.innerHTML = summary
+          + '<div style="padding:40px;text-align:center;color:var(--muted);font-size:.78rem">'
+          + (term ? 'No matches.' : 'Your inventory is empty. Add cards via the binder and they\'ll appear here.')
+          + '</div>';
+        return;
+      }
+
+      // Sort by line value desc so the most-valuable rows surface first.
+      filtered.sort(function(a, b) {
+        const av = (a.current_value || a._compEstimate || a.purchase_price || 0) * (a.quantity || 1);
+        const bv = (b.current_value || b._compEstimate || b.purchase_price || 0) * (b.quantity || 1);
+        return bv - av;
+      });
+
+      const PAGE = 200;  // cap initial render so 10k-row shops don't lock the UI
+      const rows = filtered.slice(0, PAGE).map(_invRowHtml).join('');
+      const moreNote = filtered.length > PAGE
+        ? '<div style="padding:14px;text-align:center;color:var(--muted);font-size:.7rem">Showing top ' + PAGE.toLocaleString() + ' of ' + filtered.length.toLocaleString() + '. Use search to narrow.</div>'
+        : '';
+
+      wrap.innerHTML = summary
+        + '<div style="overflow-x:auto;border:1px solid var(--border);background:var(--surface);border-radius:8px">'
+        +   '<table style="width:100%;border-collapse:collapse;font-family:\'Space Mono\',monospace;font-size:.72rem">'
+        +     '<thead>'
+        +       '<tr style="background:var(--surface2);color:var(--muted);letter-spacing:.06em">'
+        +         '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">CARD</th>'
+        +         '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">SET</th>'
+        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">ON SHELF</th>'
+        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">LISTED</th>'
+        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">TOTAL</th>'
+        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">UNIT $</th>'
+        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">LINE $</th>'
+        +       '</tr>'
+        +     '</thead>'
+        +     '<tbody>' + rows + '</tbody>'
+        +   '</table>'
+        + '</div>'
+        + moreNote;
+    }
+
+    function _invSummaryTile(label, value, color) {
+      return ''
+        + '<div style="padding:10px 12px;border:1px solid var(--border);background:var(--surface)">'
+        +   '<div style="font-size:.58rem;color:var(--muted);letter-spacing:.08em">' + label + '</div>'
+        +   '<div style="font-size:1rem;color:' + color + ';font-weight:700;font-family:\'Orbitron\',monospace;margin-top:4px">' + value + '</div>'
+        + '</div>';
+    }
+
+    function _invRowHtml(c) {
+      const q  = c.quantity || 1;
+      const os = (c.on_shelf_qty != null) ? c.on_shelf_qty : q;
+      const ll = c.listed_online_qty || 0;
+      const unit = (c.current_value || c._compEstimate || c.purchase_price || 0);
+      const line = unit * q;
+      const name = _escHtml(c.card_name || '?');
+      const setN = _escHtml(c.set_name || c.set_code || '');
+      const variant = (c.variant && c.variant !== 'normal')
+        ? ' <span style="font-size:.55rem;color:var(--copper, #d97e3e);letter-spacing:.06em">' + _escHtml(c.variant.toUpperCase().replace('_',' ')) + '</span>'
+        : '';
+      const img = c.card_image_url
+        ? '<img src="' + _escHtml(c.card_image_url) + '" alt="" loading="lazy" style="width:32px;height:44px;object-fit:cover;background:var(--surface2);vertical-align:middle;margin-right:8px">'
+        : '';
+      return ''
+        + '<tr style="border-top:1px solid var(--border)">'
+        +   '<td style="padding:8px 12px;color:var(--text)">' + img + name + variant + '</td>'
+        +   '<td style="padding:8px 12px;color:var(--muted)">' + setN + '</td>'
+        +   '<td style="padding:8px 12px;text-align:right;color:var(--accent);font-weight:700">' + os + '</td>'
+        +   '<td style="padding:8px 12px;text-align:right;color:var(--copper, #d97e3e);font-weight:700">' + ll + '</td>'
+        +   '<td style="padding:8px 12px;text-align:right;color:var(--text)">' + q + '</td>'
+        +   '<td style="padding:8px 12px;text-align:right;color:var(--muted)">$' + unit.toFixed(2) + '</td>'
+        +   '<td style="padding:8px 12px;text-align:right;color:var(--green);font-weight:700">$' + line.toFixed(2) + '</td>'
+        + '</tr>';
     }
 
     function switchOrdersTab(tab) {
@@ -16580,6 +16754,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // ('single', default) or a sealed product ('booster_box', 'etb', etc.).
     // Drives photo count requirement, condition options, modal copy.
     let lcProductType = 'single';
+    // Catalog-link payload populated by openListCardModal's prefill.
+    // Read in the listings.insert() call below so api_card_id +
+    // card_number + variant land on the new row. Null for sealed /
+    // non-TCG / fully-manual listings — column is nullable.
+    let _lcPrefillCatalog = { apiCardId: null, cardNumber: null, variant: null };
 
     // Re-renders the fee + payout callout inside the listing modal. Pulls
     // the seller's commission rate from their current tier (server-side
@@ -16695,6 +16874,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
       lcPhotos = [];
       lcProductType = (prefill && prefill.productType) ? prefill.productType : 'single';
+      // Stash the catalog link fields so the listing insert can
+      // populate listings.api_card_id / card_number / variant.
+      // These fields are pre-filled by the "List for Sale" button
+      // on the binder detail modal (where we know the catalog row)
+      // and by the marketplace search-then-list flow. Manual /
+      // typed listings leave them null, which the schema allows.
+      _lcPrefillCatalog = {
+        apiCardId:  (prefill && prefill.apiCardId)  || null,
+        cardNumber: (prefill && prefill.cardNumber) || null,
+        variant:    (prefill && prefill.variant)    || null,
+      };
       // Three modes the modal supports:
       //   - 'single' (TCG single card)         → NM/LP/HP/Graded conditions
       //   - 'sealed' / 'tcg_sealed'            → Sealed / Damaged Box / Loose
@@ -16712,6 +16902,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // Shipping default is now empty — the seller decides. Was previously
       // hard-coded to $5.00 which baked an assumption into every listing.
       document.getElementById('lcShipping').value = '';
+      // Quantity defaults to 1; only vendor+ can change it.
+      const qtyEl = document.getElementById('lcQuantity');
+      if (qtyEl) qtyEl.value = '1';
+      const qtyWrap = document.getElementById('lcQuantityWrap');
+      if (qtyWrap) {
+        const canBulk = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
+        qtyWrap.style.display = canBulk ? '' : 'none';
+      }
       document.getElementById('lcDescription').value = '';
       document.getElementById('lcMarketPriceResult').style.display = 'none';
       document.getElementById('lcPhotoError').style.display = 'none';
@@ -16906,9 +17104,29 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const gradeDisplay = condition === 'Graded' ? `${gradingCo} ${gradeNum}` : condition;
 
       const variantSel = document.getElementById('lcVariant');
-      const lcVariant  = (variantSel && variantSel.value) || 'normal';
+      // Variant resolution priority: explicit dropdown > prefill > 'normal'.
+      // The dropdown only exists when the listing flow knows about
+      // variants for this card; otherwise the prefill value (e.g. the
+      // user owns a Reverse Holo in their binder and clicked "List for
+      // Sale") wins.
+      const lcVariant  = (variantSel && variantSel.value)
+                      || (_lcPrefillCatalog && _lcPrefillCatalog.variant)
+                      || 'normal';
 
-      const { data, error } = await sb.from('listings').insert({
+      // Catalog link — null when the user typed everything by hand or
+      // the source didn't carry a catalog id (sealed product, non-TCG).
+      // Schema allows NULL; downstream features that need the link
+      // (inventory auto-decrement, "view all listings of this card")
+      // simply skip rows where it's missing.
+      // Quantity — vendor+ may list multiple of the same card on one
+      // row. Below vendor tier, the input is hidden and we fall back
+      // to 1 (matches historical 1-listing = 1-card behavior). Hard
+      // cap at 999 per row to prevent typo'd "list 10000 charizards"
+      // events from blowing past the seller's actual stock.
+      const _qtyRaw = parseInt(document.getElementById('lcQuantity')?.value, 10);
+      const _qty    = Math.min(999, Math.max(1, isFinite(_qtyRaw) ? _qtyRaw : 1));
+
+      const _insertListing = {
         name,
         game_type: game,
         grade: gradeDisplay,
@@ -16919,10 +17137,29 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         seller_name: currentUser.shop_name || currentUser.username || currentUser.name || null,
         is_vendor_listing: true,
         total_slots: 1,
+        quantity: _qty,
         photos: photoUrls,
         product_type: productType,
         variant: lcVariant,
-      }).select().single();
+        api_card_id: (_lcPrefillCatalog && _lcPrefillCatalog.apiCardId)  || null,
+        card_number: (_lcPrefillCatalog && _lcPrefillCatalog.cardNumber) || null,
+      };
+      let { data, error } = await sb.from('listings').insert(_insertListing).select().single();
+      // Schema-error fallback — older envs without the catalog-link
+      // migration installed should still be able to list (with the
+      // legacy fuzzy-match path). Drops api_card_id + card_number
+      // and retries.
+      if (error && /api_card_id|card_number|quantity|column|schema cache/i.test((error.message || '') + (error.details || ''))) {
+        // Strip every column that might be missing in an env still
+        // running pre-sync migrations. Quantity falls back to the
+        // implicit 1-row=1-card model.
+        const { api_card_id: _a, card_number: _cn, quantity: _q, ..._noLink } = _insertListing;
+        const r2 = await sb.from('listings').insert(_noLink).select().single();
+        data = r2.data; error = r2.error;
+        if (!error) {
+          console.log('%c[PathBinder] Run migration_listings_catalog_link.sql + migration_listings_schema_sync.sql to enable the listings catalog link and quantity support.', 'color:#FF9800;font-weight:bold');
+        }
+      }
 
       // Restore the mode-appropriate label — was hard-coded to 'List Card'
       // before, which silently flipped the button back to card mode after
@@ -23192,7 +23429,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                 ? 'Sealed'
                 : (item.condition === 'graded' ? 'Graded' : 'NM');
               const _pt = _isSealedItem ? (item.product_type || 'booster_box') : 'single';
-              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${_cond}',productType:'${_pt}'})"
+              // Carry the catalog link forward — apiCardId + cardNumber +
+              // variant — so the listing INSERT can populate
+              // listings.api_card_id and the inventory backfill /
+              // Step 4 auto-decrement can match this listing back to
+              // the right collection_items row.
+              const _api = _escJsAttr(item.api_card_id || '');
+              const _cnm = _escJsAttr(item.card_number || '');
+              const _var = _escJsAttr(item.variant || 'normal');
+              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${_cond}',productType:'${_pt}',apiCardId:'${_api}',cardNumber:'${_cnm}',variant:'${_var}'})"
               style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>`;
             })()}
             <button onclick="openSoldOfflineModal('${item.id}')"
@@ -25558,6 +25803,18 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         variant:         pendingCollectionCard.variant || 'normal',
       };
 
+      // Vendor+ tier: every card added defaults to "on the shelf",
+      // so the Inventory tab can immediately count it as in-store
+      // stock. Free / Collector / Enthusiast users don't see the
+      // inventory tab; on_shelf_qty stays 0 for them and the column
+      // is effectively dormant. Wrapped in try so old clients
+      // running against a pre-migration schema still save fine.
+      try {
+        if (typeof tierAtLeast === 'function' && tierAtLeast('vendor')) {
+          _insertBase.on_shelf_qty = quantity;
+        }
+      } catch(_) {}
+
       // Apply admin overrides (image / set / number / rarity / name)
       // before insert so corrections flow into the saved row.
       applyOverrideToInsertRow(_insertBase);
@@ -25571,16 +25828,26 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return str.toLowerCase().includes('language') || str.toLowerCase().includes('schema cache') || str.toLowerCase().includes('column');
       };
       if (_isSchemaErr(error)) {
-        // Try without language first
-        const { language: _l, ..._noLang } = _insertBase;
-        const r2 = await sb.from('collection_items').insert(_noLang).select('id').single();
+        // First try: drop on_shelf_qty (shop inventory migration may
+        // not be installed in this env yet — keeps Add Card working).
+        const { on_shelf_qty: _osq, ..._noShelf } = _insertBase;
+        let r2 = await sb.from('collection_items').insert(_noShelf).select('id').single();
+        if (_isSchemaErr(r2.error)) {
+          // Try without language too
+          const { language: _l, ..._noLang } = _noShelf;
+          r2 = await sb.from('collection_items').insert(_noLang).select('id').single();
+        }
         if (!r2.error) {
           newRow = r2.data; error = null;
-          console.log('%c[PathBinder] Add this column in Supabase SQL editor:\nalter table collection_items add column if not exists language text default \'EN\';', 'color:#FF9800;font-weight:bold');
-          showToast('Card added! (Run SQL migration to enable language tracking — see console)');
+          if (_insertBase.on_shelf_qty !== undefined) {
+            console.log('%c[PathBinder] Run migration_shop_inventory.sql to enable in-store inventory tracking.', 'color:#FF9800;font-weight:bold');
+          } else {
+            console.log('%c[PathBinder] Add this column in Supabase SQL editor:\nalter table collection_items add column if not exists language text default \'EN\';', 'color:#FF9800;font-weight:bold');
+            showToast('Card added! (Run SQL migration to enable language tracking — see console)');
+          }
         } else if (_isSchemaErr(r2.error)) {
-          // Try also without rarity
-          const { language: _l2, rarity: _r2, ..._bare } = _insertBase;
+          // Strip language + rarity as the last-ditch fallback.
+          const { on_shelf_qty: _osq2, language: _l2, rarity: _r2, ..._bare } = _insertBase;
           const r3 = await sb.from('collection_items').insert(_bare).select('id').single();
           newRow = r3.data; error = r3.error;
           if (!error) showToast('Card added! (Run SQL migrations for language + rarity columns — see console)');
