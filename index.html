@@ -1696,6 +1696,33 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .ft-stack-wrap.is-shuffling .ft-stack-back-1 { transform: rotate(0deg);  z-index: 2; }
     .ft-stack-wrap.is-shuffling .ft-stack-back-2,
     .ft-stack-wrap.is-shuffling .ft-stack-back-3 { opacity: 0; }
+
+    /* ─── Per-unit card stack (Vendor+ binder detail) ───────────────
+       Reuses the trade analyzer's ft-stack pattern. Each "unit" of a
+       qty>1 collection_items row is one slide; the user swipes / taps
+       arrows to navigate. The corner badge shows that unit's
+       individual condition. */
+    .pb-unit-stack-wrap{position:relative;width:100%;max-width:300px;margin:0 auto 14px;touch-action:pan-y}
+    .pb-unit-stack-frame{position:relative;width:100%;aspect-ratio:245/342}
+    .pb-unit-slide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:10px;overflow:hidden;background:var(--surface2);box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .25s ease, opacity .25s ease}
+    .pb-unit-slide img{width:100%;height:100%;object-fit:contain;display:block}
+    .pb-unit-slide.is-back-1{transform:translate(7px,7px) rotate(3deg);opacity:.5;z-index:1}
+    .pb-unit-slide.is-back-2{transform:translate(14px,14px) rotate(6deg);opacity:.25;z-index:0}
+    .pb-unit-slide.is-front{z-index:3}
+    .pb-unit-badge{position:absolute;top:8px;left:8px;z-index:4;padding:3px 8px;background:rgba(0,0,0,.78);color:var(--accent);font-family:'Space Mono',monospace;font-size:.6rem;font-weight:700;letter-spacing:.08em;border:1px solid var(--accent);border-radius:4px;text-transform:uppercase}
+    .pb-unit-badge.is-graded{color:var(--gold);border-color:var(--gold)}
+    .pb-unit-ordinal{position:absolute;top:8px;right:8px;z-index:4;padding:3px 8px;background:rgba(0,0,0,.78);color:var(--muted);font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;border:1px solid var(--border);border-radius:4px}
+    .pb-unit-edit{position:absolute;bottom:8px;right:8px;z-index:4;padding:5px 10px;background:rgba(0,0,0,.78);color:var(--accent);font-family:'Space Mono',monospace;font-size:.6rem;font-weight:700;letter-spacing:.08em;border:1px solid var(--accent);border-radius:4px;cursor:pointer}
+    .pb-unit-edit:hover{background:var(--accent);color:var(--text-on-accent)}
+    .pb-unit-nav{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px}
+    .pb-unit-nav-btn{padding:4px 14px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer;border-radius:4px}
+    .pb-unit-nav-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+    .pb-unit-nav-btn:disabled{opacity:.35;cursor:not-allowed}
+    .pb-unit-dots{display:flex;gap:5px;justify-content:center;flex:1}
+    .pb-unit-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:background .15s}
+    .pb-unit-dot.is-active{background:var(--accent)}
+    .pb-unit-dot.is-sold{background:var(--red,#FF4D3D)}
+    .pb-unit-dot.is-listed{background:var(--copper,#d97e3e)}
     /* Back-1 transition matches the front's swipe duration so they
        arrive together. Back-2/3 transition opacity (transform stays
        constant), and the JS snap cleanup leaves their opacity transition
@@ -6702,6 +6729,50 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <div style="display:flex;gap:10px">
         <button id="msSubmitBtn" onclick="submitMarkSold()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Record Sale</button>
         <button onclick="closeModal('markSoldModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT UNIT MODAL (Vendor+ per-unit overrides) ─────────────────
+       Opened from the per-unit swipe stack on the binder detail
+       modal. Saves to public.collection_item_units. Blank fields
+       inherit from the parent collection_items row. -->
+  <div class="modal-overlay" id="editUnitModal">
+    <div class="modal" style="max-width:420px">
+      <button class="modal-close" onclick="closeModal('editUnitModal')">×</button>
+      <h3 id="editUnitTitle">Edit Unit</h3>
+      <p class="modal-sub" id="editUnitCardLabel" style="color:var(--accent);text-transform:none;opacity:.85"></p>
+      <p style="font-size:.7rem;color:var(--muted);margin-bottom:14px">Leave a field blank to inherit from the card's default. Overrides only apply to this individual physical copy.</p>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Condition</label>
+        <select class="atc-input" id="euCondition" style="width:100%">
+          <option value="">(inherit)</option>
+          <option value="NM">NM — Near Mint</option>
+          <option value="LP">LP — Lightly Played</option>
+          <option value="MP">MP — Moderately Played</option>
+          <option value="HP">HP — Heavily Played</option>
+          <option value="DMG">DMG — Damaged</option>
+          <option value="graded">Graded / Slabbed</option>
+        </select>
+      </div>
+      <div class="atc-grid" style="margin-bottom:12px" id="euGradedRow">
+        <div class="form-group">
+          <label>Grade</label>
+          <input class="atc-input" id="euGradeValue" type="number" min="0" max="10" step="0.5" placeholder="e.g. 9.5" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>Cert #</label>
+          <input class="atc-input" id="euCertNumber" type="text" placeholder="(optional)" style="width:100%">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Notes</label>
+        <textarea class="atc-input" id="euNotes" rows="2" placeholder="Wear, signed, custom slab, etc." style="width:100%;resize:vertical"></textarea>
+      </div>
+      <div id="euError" style="display:none;color:var(--red);font-size:.75rem;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px">
+        <button id="euSubmitBtn" onclick="saveUnitEdit()" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Save Unit</button>
+        <button onclick="closeModal('editUnitModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
   </div>
@@ -12151,6 +12222,279 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         })
         .eq('id', row.id);
       if (r.error) console.warn('[inv] ship error:', r.error.message);
+    }
+
+    // ── Per-unit metadata (Vendor+) ─────────────────────────────────
+    // When a collection_items row carries qty > 1, vendor+ users can
+    // mark each physical card with its own condition, notes, and
+    // photo via collection_item_units. Lazy: rows are created on
+    // first edit. Free / Collector / Enthusiast tiers never touch
+    // this table — the consolidated row model still holds for them.
+    async function _loadUnitsForItem(itemId) {
+      if (!itemId) return [];
+      try {
+        const r = await sb.from('collection_item_units')
+          .select('*')
+          .eq('collection_item_id', itemId)
+          .order('ordinal', { ascending: true });
+        if (r.error) {
+          // Schema-missing fallback — let the caller treat it as
+          // "no units" so opens don't blow up before the migration runs.
+          if (/relation .* does not exist|collection_item_units|schema cache/i.test(r.error.message || '')) {
+            return [];
+          }
+          console.warn('[units] load error:', r.error.message);
+          return [];
+        }
+        return r.data || [];
+      } catch (e) {
+        console.warn('[units] load threw:', e && e.message);
+        return [];
+      }
+    }
+
+    // Creates N rows (ordinals 1..qty) for the given item if none
+    // exist yet. Each row inherits NULL (= parent values). Returns
+    // the loaded units array. Idempotent — safe to call repeatedly.
+    async function _ensureUnitsForItem(item) {
+      if (!item || !item.id) return [];
+      const qty = item.quantity || 1;
+      if (qty < 2) return [];
+      const existing = await _loadUnitsForItem(item.id);
+      if (existing.length >= qty) return existing;
+      // Top up missing ordinals — handles "had 3 units, added 2 more
+      // to qty, now need 5" without overwriting existing edits.
+      const have = new Set(existing.map(function(u){ return u.ordinal; }));
+      const toCreate = [];
+      for (let i = 1; i <= qty; i++) {
+        if (!have.has(i)) toCreate.push({ collection_item_id: item.id, ordinal: i, status: 'in_stock' });
+      }
+      if (toCreate.length === 0) return existing;
+      try {
+        const r = await sb.from('collection_item_units').insert(toCreate);
+        if (r.error) console.warn('[units] insert error:', r.error.message);
+      } catch (e) {
+        console.warn('[units] insert threw:', e && e.message);
+      }
+      return _loadUnitsForItem(item.id);
+    }
+
+    async function _updateUnit(unitId, patch) {
+      if (!unitId || !patch) return null;
+      try {
+        const r = await sb.from('collection_item_units')
+          .update(patch)
+          .eq('id', unitId)
+          .select()
+          .single();
+        if (r.error) {
+          console.warn('[units] update error:', r.error.message);
+          return null;
+        }
+        return r.data;
+      } catch (e) {
+        console.warn('[units] update threw:', e && e.message);
+        return null;
+      }
+    }
+
+    // Resolve a unit's effective display values. Per-unit overrides
+    // win; falls back to the parent collection_items row for any
+    // NULL fields. The badge label uses the standard condition copy
+    // (NM / LP / HP / PSA 10 etc.).
+    function _resolveUnitDisplay(unit, parent) {
+      const u = unit || {};
+      const p = parent || {};
+      const condition = u.condition || p.condition || 'NM';
+      const grade     = (u.grade_value != null) ? u.grade_value : p.grade_value;
+      const isGraded  = condition === 'graded' || (grade && grade > 0);
+      const condLabel = isGraded
+        ? ('Graded ' + (grade != null ? grade : ''))
+        : String(condition || 'NM').toUpperCase();
+      return {
+        condition:      condition,
+        grade_value:    grade,
+        cert_number:    u.cert_number   != null ? u.cert_number   : p.cert_number,
+        notes:          u.notes         != null ? u.notes         : p.notes,
+        card_image_url: u.card_image_url || p.card_image_url || '',
+        condLabel:      condLabel.trim(),
+        isGraded:       isGraded,
+      };
+    }
+
+    // ── Per-unit swipe stack (mount + render) ──────────────────────
+    // Lives inside the binder detail modal for vendor+ users when
+    // qty > 1. Replaces the single photo slot with a stacked deck.
+    // State is per-modal-open (cached on window so the navigation
+    // buttons + edit modal can read it back).
+    let _binderUnitStackState = null;  // { itemId, units, index, item }
+
+    async function _mountUnitStackIntoBinderDetail(item) {
+      const slotWrap = document.getElementById('binderUnitStack_' + item.id);
+      const fallback = document.getElementById('binderPhotoSlot_' + item.id);
+      if (!slotWrap) return;
+      const units = await _ensureUnitsForItem(item);
+      if (!units || units.length === 0) return;  // schema missing / qty=1 race — keep fallback
+
+      // Hide the fallback single-photo slot — the stack replaces it.
+      if (fallback) fallback.style.display = 'none';
+
+      _binderUnitStackState = {
+        itemId: item.id,
+        item:   item,
+        units:  units,
+        index:  0,
+      };
+      _renderUnitStack();
+      _attachUnitStackSwipe(slotWrap);
+    }
+
+    function _renderUnitStack() {
+      const s = _binderUnitStackState;
+      if (!s) return;
+      const slotWrap = document.getElementById('binderUnitStack_' + s.itemId);
+      if (!slotWrap) return;
+      const current = s.units[s.index];
+      const display = _resolveUnitDisplay(current, s.item);
+      const total = s.units.length;
+      // Back-card shadows (visual stack depth). We render up to 2
+      // ghost layers to suggest there are more cards behind. They
+      // don't reflect actual unit data — purely a visual cue.
+      const back1 = total > 1 ? '<div class="pb-unit-slide is-back-1"><img src="' + _escHtml(display.card_image_url || '') + '" alt=""></div>' : '';
+      const back2 = total > 2 ? '<div class="pb-unit-slide is-back-2"><img src="' + _escHtml(display.card_image_url || '') + '" alt=""></div>' : '';
+
+      const badgeClass = display.isGraded ? 'pb-unit-badge is-graded' : 'pb-unit-badge';
+      const front = ''
+        + '<div class="pb-unit-slide is-front" onclick="(' + JSON.stringify(display.card_image_url || '') + ').length ? openImageLightbox(' + JSON.stringify(display.card_image_url || '') + ') : null">'
+        +   '<img src="' + _escHtml(display.card_image_url || '') + '" alt="" onerror="this.style.display=\'none\'">'
+        +   '<span class="' + badgeClass + '">' + _escHtml(display.condLabel) + '</span>'
+        +   '<span class="pb-unit-ordinal">' + (s.index + 1) + ' / ' + total + '</span>'
+        +   '<button class="pb-unit-edit" onclick="event.stopPropagation();openEditUnitModal(' + JSON.stringify(current.id) + ')">EDIT</button>'
+        + '</div>';
+
+      const dots = s.units.map(function(u, i) {
+        let cls = 'pb-unit-dot';
+        if (u.status === 'sold')   cls += ' is-sold';
+        if (u.status === 'listed') cls += ' is-listed';
+        if (i === s.index)         cls += ' is-active';
+        return '<span class="' + cls + '" onclick="_setUnitStackIndex(' + i + ')" title="Unit ' + (i+1) + (u.status !== 'in_stock' ? ' (' + u.status + ')' : '') + '"></span>';
+      }).join('');
+
+      slotWrap.innerHTML = ''
+        + '<div class="pb-unit-stack-wrap">'
+        +   '<div class="pb-unit-stack-frame">'
+        +     back2 + back1 + front
+        +   '</div>'
+        +   '<div class="pb-unit-nav">'
+        +     '<button class="pb-unit-nav-btn" onclick="_advanceUnitStack(-1)"' + (s.index === 0 ? ' disabled' : '') + '>‹</button>'
+        +     '<div class="pb-unit-dots">' + dots + '</div>'
+        +     '<button class="pb-unit-nav-btn" onclick="_advanceUnitStack(1)"' + (s.index === total - 1 ? ' disabled' : '') + '>›</button>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function _advanceUnitStack(delta) {
+      const s = _binderUnitStackState;
+      if (!s) return;
+      const next = s.index + delta;
+      if (next < 0 || next >= s.units.length) return;
+      s.index = next;
+      _renderUnitStack();
+    }
+
+    function _setUnitStackIndex(i) {
+      const s = _binderUnitStackState;
+      if (!s) return;
+      if (i < 0 || i >= s.units.length) return;
+      s.index = i;
+      _renderUnitStack();
+    }
+
+    // Lightweight horizontal-swipe handler. Threshold = 40px so
+    // small vertical scrolls don't trigger an accidental advance.
+    function _attachUnitStackSwipe(wrap) {
+      if (!wrap || wrap._pbSwipeBound) return;
+      wrap._pbSwipeBound = true;
+      let startX = 0, startY = 0, tracking = false;
+      wrap.addEventListener('touchstart', function(e) {
+        if (!e.touches || e.touches.length !== 1) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        tracking = true;
+      }, { passive: true });
+      wrap.addEventListener('touchend', function(e) {
+        if (!tracking) return;
+        tracking = false;
+        const t = (e.changedTouches && e.changedTouches[0]) || null;
+        if (!t) return;
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;  // not a horizontal swipe
+        _advanceUnitStack(dx < 0 ? 1 : -1);
+      }, { passive: true });
+    }
+
+    // ── Edit Unit modal handlers ────────────────────────────────────
+    let _euContext = { unitId: null, parent: null, unit: null };
+
+    function openEditUnitModal(unitId) {
+      const s = _binderUnitStackState;
+      if (!s) return;
+      const unit = s.units.find(function(u) { return String(u.id) === String(unitId); });
+      if (!unit) return;
+      _euContext = { unitId: unitId, parent: s.item, unit: unit };
+
+      const titleEl = document.getElementById('editUnitTitle');
+      if (titleEl) titleEl.textContent = 'Edit Unit ' + (unit.ordinal || '?') + ' / ' + s.units.length;
+      const labelEl = document.getElementById('editUnitCardLabel');
+      if (labelEl) labelEl.textContent = s.item.card_name || '?';
+
+      const condEl = document.getElementById('euCondition');
+      if (condEl) condEl.value = unit.condition || '';
+      const gradeEl = document.getElementById('euGradeValue');
+      if (gradeEl) gradeEl.value = unit.grade_value != null ? unit.grade_value : '';
+      const certEl = document.getElementById('euCertNumber');
+      if (certEl) certEl.value = unit.cert_number || '';
+      const notesEl = document.getElementById('euNotes');
+      if (notesEl) notesEl.value = unit.notes || '';
+
+      const errEl = document.getElementById('euError');
+      if (errEl) errEl.style.display = 'none';
+
+      openModal('editUnitModal');
+    }
+
+    async function saveUnitEdit() {
+      const ctx = _euContext;
+      if (!ctx || !ctx.unitId) { showToast('Unit context lost'); return; }
+      const _err = function(msg) {
+        const errEl = document.getElementById('euError');
+        if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+      };
+      const conditionRaw = document.getElementById('euCondition').value;
+      const gradeRaw     = document.getElementById('euGradeValue').value.trim();
+      const certRaw      = document.getElementById('euCertNumber').value.trim();
+      const notesRaw     = document.getElementById('euNotes').value.trim();
+      const patch = {
+        condition:   conditionRaw || null,
+        grade_value: (gradeRaw && isFinite(parseFloat(gradeRaw))) ? parseFloat(gradeRaw) : null,
+        cert_number: certRaw || null,
+        notes:       notesRaw || null,
+      };
+      const btn = document.getElementById('euSubmitBtn');
+      if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+      const updated = await _updateUnit(ctx.unitId, patch);
+      if (btn) { btn.textContent = '✓ Save Unit'; btn.disabled = false; }
+      if (!updated) { _err('Save failed — see console'); return; }
+      // Update in-memory stack state + re-render.
+      const s = _binderUnitStackState;
+      if (s) {
+        const idx = s.units.findIndex(function(u) { return String(u.id) === String(ctx.unitId); });
+        if (idx >= 0) s.units[idx] = updated;
+        _renderUnitStack();
+      }
+      closeModal('editUnitModal');
+      showToast('Unit ' + (updated.ordinal || '') + ' updated');
     }
 
     // ── Mark N Sold modal ───────────────────────────────────────────
@@ -24081,8 +24425,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       document.getElementById('binderDetailContent').innerHTML = `
 
         <!-- Photo(s) — front always shown; back appears below it when set.
-             The .pb-detail-photo-slot CSS class handles sizing/centering. -->
-        <div class="pb-detail-photo-slot" ${item.card_image_url ? `style="cursor:zoom-in"` : ''}
+             For vendor+ users with qty > 1, a swipeable per-unit stack
+             is mounted into #binderUnitStack_${item.id} after open;
+             see _mountUnitStackIntoBinderDetail below. The plain photo
+             stays as the fallback (and as what every other tier sees). -->
+        <div id="binderUnitStack_${item.id}"></div>
+        <div class="pb-detail-photo-slot" id="binderPhotoSlot_${item.id}"
+             ${item.card_image_url ? `style="cursor:zoom-in"` : ''}
              onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
           ${(item.card_image_url || item.api_card_id)
             ? `<img src="${item.card_image_url || 'data:,'}"
@@ -24230,6 +24579,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // hits the catalog for has_reverse_holo. Hidden when the
       // printing has no RH variant or game isn't Pokemon.
       setTimeout(function() { _renderBinderVariantChips(item); }, 0);
+      // Per-unit swipe stack — vendor+ only, qty > 1. Loads units
+      // lazily and replaces the single photo slot with a stack.
+      // Free / Collector / Enthusiast skip this and see the plain
+      // photo slot that's already rendered.
+      try {
+        const isVendorPlus = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
+        if (isVendorPlus && (item.quantity || 1) > 1) {
+          setTimeout(function() { _mountUnitStackIntoBinderDetail(item); }, 0);
+        }
+      } catch(_) {}
       if (hasPriceTracking()) {
         // Load chart asynchronously after modal is visible
         setTimeout(() => loadAndDrawCardChart(item.id), 80);

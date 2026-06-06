@@ -292,6 +292,45 @@ When adding a new finish (e.g. `'cosmos_holo'`, `'reverse_holo_promo'`):
 - Beta testers have their own table `beta_testers` with a public-read
   view `public_beta_testers` that exposes only `(user_id, tier)`.
 
+### Per-unit metadata (Vendor+ tier)
+
+Vendor and Shop tiers can mark each physical copy of a multi-quantity
+card with its own condition / grade / cert / notes / photo. Lives in
+`public.collection_item_units` (see `migration_collection_item_units.sql`).
+
+Model:
+
+- One row per physical card. `collection_item_id` references the
+  parent `collection_items` row; `ordinal` is the 1..N stack position.
+- Every override column is **NULL = inherit from parent**. The vendor
+  only fills in what differs unit-to-unit.
+- `status` is `in_stock` (default) / `sold` / `listed` / `reserved`.
+  The parent's `quantity` is still the aggregate "how many do I own."
+
+Lazy creation: rows are NOT backfilled at migration time. The first
+time a vendor opens the per-unit stack on a card with `qty > 1`,
+`_ensureUnitsForItem` creates N inheriting rows. Cards that never
+get opened stay in the consolidated single-row world.
+
+UI: `_mountUnitStackIntoBinderDetail` swaps the binder detail modal's
+single photo slot for a swipeable stack (CSS in `.pb-unit-stack-*`,
+JS helpers `_renderUnitStack` / `_advanceUnitStack` /
+`_attachUnitStackSwipe`). Each slide shows the unit's effective
+condition badge (top-left) + ordinal (top-right) + EDIT button
+(bottom-right). The Edit Unit modal saves a patch via `_updateUnit`.
+
+Touch points to remember when extending:
+
+- `_resolveUnitDisplay(unit, parent)` computes the effective values
+  (override OR parent). Use this everywhere a unit needs to be
+  rendered consistently with parent fallbacks.
+- The stack only mounts when `tierAtLeast('vendor')` AND `qty > 1`.
+  Lower tiers see the original single photo slot.
+- Future Phase B: `shop_sales` will gain a nullable `unit_id` and
+  the Mark N Sold modal will surface a "pick specific unit" link
+  (defaults to FIFO oldest in_stock unit). Listings stay aggregate
+  per the v1 scope decision.
+
 ### Shop inventory (Vendor+ tier)
 
 Vendor and Shop tiers see an Inventory tab on the Account page that
