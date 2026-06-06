@@ -1714,11 +1714,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .pb-unit-ordinal{position:absolute;top:8px;right:8px;z-index:4;padding:3px 8px;background:rgba(0,0,0,.78);color:var(--muted);font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;border:1px solid var(--border);border-radius:4px}
     .pb-unit-edit{position:absolute;bottom:8px;right:8px;z-index:4;padding:5px 10px;background:rgba(0,0,0,.78);color:var(--accent);font-family:'Space Mono',monospace;font-size:.6rem;font-weight:700;letter-spacing:.08em;border:1px solid var(--accent);border-radius:4px;cursor:pointer}
     .pb-unit-edit:hover{background:var(--accent);color:var(--text-on-accent)}
-    .pb-unit-nav{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px}
-    .pb-unit-nav-btn{padding:4px 14px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer;border-radius:4px}
-    .pb-unit-nav-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
-    .pb-unit-nav-btn:disabled{opacity:.35;cursor:not-allowed}
-    .pb-unit-dots{display:flex;gap:5px;justify-content:center;flex:1}
+    /* Floating circular nav buttons — overlap the left/right edges
+       of the stack at vertical center, teal-filled. Hover scales the
+       button slightly so taps feel responsive. Disabled state dims
+       so the user knows when they've hit the end of the stack. */
+    .pb-unit-nav-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:10;width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono',monospace;font-size:1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.5);transition:transform .12s, background .12s, opacity .12s;padding:0;line-height:1}
+    .pb-unit-nav-arrow.pb-unit-nav-prev{left:-12px}
+    .pb-unit-nav-arrow.pb-unit-nav-next{right:-12px}
+    .pb-unit-nav-arrow:hover:not(:disabled){transform:translateY(-50%) scale(1.08)}
+    .pb-unit-nav-arrow:active:not(:disabled){transform:translateY(-50%) scale(.95)}
+    .pb-unit-nav-arrow:disabled{background:var(--surface2);color:var(--muted);cursor:not-allowed;opacity:.4;box-shadow:none}
+    .pb-unit-dots{display:flex;gap:6px;justify-content:center;margin-top:8px}
     .pb-unit-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:background .15s}
     .pb-unit-dot.is-active{background:var(--accent)}
     .pb-unit-dot.is-sold{background:var(--red,#FF4D3D)}
@@ -12337,7 +12343,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (!units || units.length === 0) return;  // schema missing / qty=1 race — keep fallback
 
       // Hide the fallback single-photo slot — the stack replaces it.
-      if (fallback) fallback.style.display = 'none';
+      // The .pb-detail-photo-slot CSS has `display: block !important`
+      // which beats inline style.display, so we have to set the
+      // property with `important` priority. (Without this the stack
+      // and the single photo both render — see the v442 bug report.)
+      if (fallback) fallback.style.setProperty('display', 'none', 'important');
 
       _binderUnitStackState = {
         itemId: item.id,
@@ -12364,12 +12374,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const back2 = total > 2 ? '<div class="pb-unit-slide is-back-2"><img src="' + _escHtml(display.card_image_url || '') + '" alt=""></div>' : '';
 
       const badgeClass = display.isGraded ? 'pb-unit-badge is-graded' : 'pb-unit-badge';
+      // Inline onclick handlers need single-quoted args because the
+      // attribute itself is wrapped in double quotes. JSON.stringify
+      // emits "..."-quoted strings which then collide with the
+      // attribute boundary and break the handler entirely (which is
+      // what made the EDIT button silently no-op in v442). Use
+      // _escJsAttr (already used elsewhere for the same reason) to
+      // escape any embedded single quotes in the value.
+      const imgUrlAttr = _escJsAttr(display.card_image_url || '');
+      const unitIdAttr = _escJsAttr(current.id);
       const front = ''
-        + '<div class="pb-unit-slide is-front" onclick="(' + JSON.stringify(display.card_image_url || '') + ').length ? openImageLightbox(' + JSON.stringify(display.card_image_url || '') + ') : null">'
+        + '<div class="pb-unit-slide is-front"' + (display.card_image_url ? " onclick=\"openImageLightbox('" + imgUrlAttr + "')\"" : '') + '>'
         +   '<img src="' + _escHtml(display.card_image_url || '') + '" alt="" onerror="this.style.display=\'none\'">'
         +   '<span class="' + badgeClass + '">' + _escHtml(display.condLabel) + '</span>'
         +   '<span class="pb-unit-ordinal">' + (s.index + 1) + ' / ' + total + '</span>'
-        +   '<button class="pb-unit-edit" onclick="event.stopPropagation();openEditUnitModal(' + JSON.stringify(current.id) + ')">EDIT</button>'
+        +   "<button class=\"pb-unit-edit\" onclick=\"event.stopPropagation();openEditUnitModal('" + unitIdAttr + "')\">EDIT</button>"
         + '</div>';
 
       const dots = s.units.map(function(u, i) {
@@ -12380,16 +12399,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         return '<span class="' + cls + '" onclick="_setUnitStackIndex(' + i + ')" title="Unit ' + (i+1) + (u.status !== 'in_stock' ? ' (' + u.status + ')' : '') + '"></span>';
       }).join('');
 
+      // Arrows are positioned absolute on .pb-unit-stack-wrap so they
+      // overlay the left/right edges of the card; dots sit below as
+      // a separate row.
+      const prevDis = s.index === 0          ? ' disabled' : '';
+      const nextDis = s.index === total - 1  ? ' disabled' : '';
       slotWrap.innerHTML = ''
         + '<div class="pb-unit-stack-wrap">'
+        +   '<button class="pb-unit-nav-arrow pb-unit-nav-prev" onclick="_advanceUnitStack(-1)"' + prevDis + ' aria-label="Previous unit">‹</button>'
         +   '<div class="pb-unit-stack-frame">'
         +     back2 + back1 + front
         +   '</div>'
-        +   '<div class="pb-unit-nav">'
-        +     '<button class="pb-unit-nav-btn" onclick="_advanceUnitStack(-1)"' + (s.index === 0 ? ' disabled' : '') + '>‹</button>'
-        +     '<div class="pb-unit-dots">' + dots + '</div>'
-        +     '<button class="pb-unit-nav-btn" onclick="_advanceUnitStack(1)"' + (s.index === total - 1 ? ' disabled' : '') + '>›</button>'
-        +   '</div>'
+        +   '<button class="pb-unit-nav-arrow pb-unit-nav-next" onclick="_advanceUnitStack(1)"' + nextDis + ' aria-label="Next unit">›</button>'
+        +   '<div class="pb-unit-dots">' + dots + '</div>'
         + '</div>';
     }
 
@@ -36400,24 +36422,40 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         // If a different user signed in on this device than was last
-        // cached, wipe the personal localStorage keys so we don't
+        // active, wipe the personal localStorage keys so we don't
         // inherit the previous user's avatar / badges. Common case:
         // someone signs up on a device that previously had another
         // PathBinder account without going through the sign-out flow.
         // syncUserDataFromCloud will re-populate from this user's
         // profiles row a few hundred ms later.
+        //
+        // Belt-and-suspenders: detect account switch via BOTH the
+        // localStorage key (survives reloads) AND the in-memory
+        // currentUser.id (catches fast sign-in→sign-in flips where
+        // the localStorage key wasn't written yet). Without the
+        // in-memory check, a stale currentUser from the previous
+        // session can survive the SIGNED_IN handler if updateAuthUI
+        // fires before profileRes.data lands — which is exactly the
+        // bug pattern that produced the swapped-username display.
         try {
-          const lastUid = localStorage.getItem('pathbinder_last_user_id');
-          if (lastUid && lastUid !== session.user.id) {
+          const lastUid    = localStorage.getItem('pathbinder_last_user_id');
+          const memoryUid  = currentUser && currentUser.id;
+          const isSwitch   = (lastUid && lastUid !== session.user.id)
+                          || (memoryUid && memoryUid !== session.user.id);
+          if (isSwitch) {
             localStorage.removeItem('pathbinder_avatar_pfp_v1');
             localStorage.removeItem('pathbinder_avatar_v2');
             localStorage.removeItem('pathbinder_badges_v1');
             // Different user — reset the sync guard so this new user's
-            // profile gets fetched fresh.
+            // profile gets fetched fresh. Also blow away the previous
+            // currentUser so updateAuthUI below paints the new identity
+            // immediately (the stale one would otherwise flash for a
+            // few hundred ms until profileRes.data lands).
             try { _syncDoneFor = null; } catch(_) {}
             try { _userDataLoadedFor = null; } catch(_) {}
             try { _initialUserDataLoaded = false; } catch(_) {}
             try { _profileListingsHydratedFor = null; } catch(_) {}
+            currentUser = null;
           }
           localStorage.setItem('pathbinder_last_user_id', session.user.id);
         } catch(_) {}
@@ -36503,6 +36541,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         tradeOffers = [];
         collectionItems = [];
         orders = [];
+        // Wipe per-user localStorage on sign-out too, so the next
+        // sign-in (potentially a different account on the same
+        // device) starts from a clean slate even if SIGNED_IN's
+        // switch-detection somehow misses. Public listings cache
+        // stays untouched — that's not user-specific.
+        try {
+          localStorage.removeItem('pathbinder_last_user_id');
+          localStorage.removeItem('pathbinder_avatar_pfp_v1');
+          localStorage.removeItem('pathbinder_avatar_v2');
+          localStorage.removeItem('pathbinder_badges_v1');
+        } catch(_) {}
+        // Reset the dedup guards so a same-tab re-sign-in fetches
+        // fresh profile + listings rather than skipping on the
+        // assumption "we already did this user."
+        try { _syncDoneFor = null; } catch(_) {}
+        try { _userDataLoadedFor = null; } catch(_) {}
+        try { _initialUserDataLoaded = false; } catch(_) {}
+        try { _profileListingsHydratedFor = null; } catch(_) {}
         updateAuthUI();
         renderAllContent();
         showPage('landing'); setMobileNav('');
