@@ -5374,7 +5374,7 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 /* ─── 23. SITE-WIDE PANEL LANGUAGE ──────────────────────────────── */
 /* Same DNA as the dashboard panels, usable on any page */
 /* === ANCIENT CARD SYSTEM (pb-panel) === */
-.pb-panel{position:relative;background:var(--bg);border:1px solid rgba(26,199,160,0.35);overflow:visible;margin-bottom:20px}
+.pb-panel{position:relative;background:var(--bg);border:1px solid rgba(26,199,160,0.35);border-radius:8px;overflow:visible;margin-bottom:20px}
 .pb-panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(26,199,160,0.2);background:none;flex-shrink:0}
 .pb-panel-title{font-family:'Orbitron',monospace;font-weight:800;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px}
 .pb-panel-title-ico{width:22px;height:22px;background:transparent;color:var(--accent);display:grid;place-items:center;font-size:13px;flex-shrink:0;border:1px solid rgba(26,199,160,0.35)}
@@ -32177,8 +32177,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
       const _date = _pbCompactDate(s.release_date || s.releaseDate);
       const _metaParts = [_escHtml(s.set_code), _date].filter(Boolean);
+      // Mirror scripts populate set_metadata with logo_url / symbol_url
+      // for Pokemon + MTG. Yu-Gi-Oh has no logo mirror yet, so the
+      // [YGO] tag stays as the fallback. Either column is acceptable —
+      // Scryfall's icon doubles as both, and pokemontcg.io ships a
+      // wider logo + a compact symbol.
+      const logoSrc  = s.logo_url || s.symbol_url || '';
+      const logoHtml = logoSrc
+        ? `<img src="${_escHtml(logoSrc)}" alt="" onerror="this.parentNode.innerHTML='<span class=\\'sets-tile-tag\\'>[${cfg.label}]</span>'">`
+        : `<span class="sets-tile-tag">[${cfg.label}]</span>`;
       return `<div class="sets-tile" onclick="loadTcgSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}','${_escJsAttr(gameKey)}')">
-        <div class="sets-tile-logo"><span class="sets-tile-tag">[${cfg.label}]</span></div>
+        <div class="sets-tile-logo">${logoHtml}</div>
         <div class="sets-tile-body">
           <div class="sets-tile-name">${_escHtml(s.set_name)}</div>
           <div class="sets-tile-meta">${_metaParts.join(' · ')}</div>
@@ -33757,7 +33766,21 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         try {
           let sets = await _fetchTcgSetsViaRpc(prefix);
           if (!sets) sets = await _fetchTcgSetsViaPagination(prefix);
+          // Enrich with release_date + logo_url from set_metadata. Without
+          // this the background refresh writes a stripped sets array back
+          // to localStorage, which silently overwrites any release_date /
+          // logo_url the foreground path had previously written — i.e.
+          // mirrored set metadata never propagates after the first cache.
+          try { await _enrichTcgSetsWithReleaseDate(sets, prefix); } catch(_) {}
           sets.sort(function(a, b) {
+            // Match the foreground sort: release_date DESC first, then
+            // catalog recency, then alpha. Otherwise the background
+            // refresh subtly re-orders the list out from under the user.
+            const ad = a.release_date || '';
+            const bd = b.release_date || '';
+            if (ad && bd && ad !== bd) return bd.localeCompare(ad);
+            if (ad && !bd) return -1;
+            if (bd && !ad) return  1;
             const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
             if (dt !== 0) return dt;
             return (a.set_name || '').localeCompare(b.set_name || '');
@@ -33787,7 +33810,10 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         const now = Date.now();
         const MEM_TTL = 600000;            // 10 min — session memory
         const LS_TTL  = 24 * 60 * 60 * 1000; // 24h — persistent
-        const LS_KEY  = 'pathbinder_tcg_sets_' + gameKey + '_v2';
+        // _v3 — busted on 2026-06-06 to force a fresh fetch+enrich for
+        // every user, picking up the newly-mirrored MTG logo_urls and
+        // YGO release_dates that _v2 caches were missing.
+        const LS_KEY  = 'pathbinder_tcg_sets_' + gameKey + '_v3';
         let cachedBlock = _tcgSetsCache[gameKey];
 
         if (!cachedBlock || (now - cachedBlock.timestamp > MEM_TTL)) {
@@ -35512,6 +35538,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       overflow-y: auto;
       overflow-x: hidden;
       border: 1px solid var(--border);
+      border-radius: 8px;
       background: var(--surface);
       /* Smooth momentum scroll on trackpads / touch */
       -webkit-overflow-scrolling: touch;
