@@ -323,13 +323,41 @@ UI surfaces, by phase:
 
 1. **Step 1 (shipped):** read-only Inventory tab + Add Card defaults
    `on_shelf_qty = quantity` for vendor+ users.
-2. **Step 2 (not built):** Mark-N-Sold modal per row → writes
-   `shop_sales`. Sales log view with date filters + CSV export.
-3. **Step 3 (not built):** POS scan mode — scan a card →
-   record sale via the same `shop_sales` insert path.
-4. **Step 4 (not built):** Listing flow auto-decrement on create/
-   cancel/ship, so marketplace activity keeps the channel split
-   truthful without the user manually moving units around.
+2. **Step 2 (shipped):** `$ SOLD` button per row → Mark N Sold modal
+   (qty / unit price / payment method / notes / sold_at) → writes
+   `shop_sales`, trigger decrements `on_shelf_qty` + `quantity` in
+   the same transaction. Sales Log tab (vendor+, sibling of
+   Inventory) with date-range filter + summary tiles + CSV export
+   (`pathbinder-sales-YYYY-MM-DD.csv`).
+3. **Step 3 (shipped):** POS scan mode — `⊞ POS SCAN` button on the
+   Inventory header sets `window._posSaleMode = true` and opens the
+   existing card scanner. `confirmScanMatch` short-circuits when
+   the flag is set, routing to `_posSaleFromMatch(cardId)` which
+   finds the matching `collection_items` row (prefer Normal variant
+   with on-shelf stock) and opens the Mark N Sold modal. After
+   submit, the modal closes and the scanner reopens for the next
+   sale until the vendor taps EXIT POS. `closeCardScanner` clears
+   POS mode on direct close (X / backdrop); `_posSaleFromMatch`
+   inlines the hide so the loop survives across the modal handoff.
+4. **Step 4 (shipped):** Cross-channel reconciliation. Two halves:
+   - **Bookkeeping hooks** — on listing insert, `_invOnListingCreated`
+     moves N from `on_shelf_qty` → `listed_online_qty`. On
+     `deactivateListing`, `_invOnListingReleased` reverses it. On
+     `saveTracking` (order → shipped), `_invOnListingShipped`
+     decrements both `listed_online_qty` and `quantity`.
+   - **POS pre-flight** — `_posPreflightListings` runs at
+     `submitMarkSold` when `qty > on_shelf_qty`. If a paid-but-
+     unshipped order exists against any matching listing the sale
+     is BLOCKED with "ship the order instead." If only active
+     unsold listings exist, the delist confirmation modal prompts:
+     "Pull N from your listing(s)?" with a don't-ask-again checkbox
+     that flips `localStorage['pb_auto_delist_on_pos'] = '1'`. On
+     confirm, `_executeDelistAndSell` pulls from the smallest
+     listing first (clears single-card listings cleanly) — partial
+     pulls reduce `listings.quantity`, full pulls flip to inactive.
+     Then `_invOnListingReleased` puts the pulled units back on
+     shelf and the `shop_sales` insert fires normally. Vendor never
+     deals with money flow — Stripe is untouched.
 
 Touch points to remember when extending:
 

@@ -6650,6 +6650,89 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     </div>
   </div>
 
+  <!-- MARK N SOLD MODAL (Vendor+ in-store sale) ──────────────────────
+       Records an in-store sale of N units against shop_sales. The
+       trigger apply_shop_sale_to_inventory decrements on_shelf_qty
+       and quantity on the matching collection_items row. Unlike the
+       binary "Sold Offline" flag above, this is a quantity-aware
+       ledger insert — the row stays in inventory if there's still
+       stock on the shelf. -->
+  <div class="modal-overlay" id="markSoldModal">
+    <div class="modal" style="max-width:440px">
+      <button class="modal-close" onclick="closeModal('markSoldModal')">×</button>
+      <h3>Record In-Store Sale</h3>
+      <p class="modal-sub" id="msCardLabel" style="color:var(--accent);text-transform:none;opacity:.85"></p>
+      <p style="font-size:.72rem;color:var(--muted);margin-bottom:14px" id="msAvailLabel"></p>
+      <div class="atc-grid" style="margin-bottom:12px">
+        <div class="form-group">
+          <label>Quantity *</label>
+          <input type="number" class="atc-input" id="msQty" min="1" step="1" value="1" inputmode="numeric" style="width:100%" oninput="_msRecalcTotal()" />
+        </div>
+        <div class="form-group">
+          <label>Unit Price ($) *</label>
+          <input type="number" class="atc-input" id="msUnitPrice" min="0" step="any" inputmode="decimal" placeholder="0.00" style="width:100%" oninput="_msRecalcTotal()" />
+        </div>
+      </div>
+      <div class="atc-grid" style="margin-bottom:12px">
+        <div class="form-group">
+          <label>Total</label>
+          <div id="msTotalDisplay" style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--green);font-family:'Orbitron',monospace;font-size:.95rem;font-weight:700;letter-spacing:.04em">$0.00</div>
+        </div>
+        <div class="form-group">
+          <label>Sale Date</label>
+          <input type="date" class="atc-input" id="msSoldAt" style="width:100%" />
+        </div>
+      </div>
+      <div class="atc-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Payment</label>
+          <select class="atc-input" id="msPaymentMethod" style="width:100%">
+            <option value="card">Card</option>
+            <option value="cash">Cash</option>
+            <option value="trade">Trade</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Notes (optional)</label>
+        <input type="text" class="atc-input" id="msNotes" placeholder="Buyer name, condition note, etc." style="width:100%" />
+      </div>
+      <div id="msError" style="display:none;color:var(--red);font-size:.75rem;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px">
+        <button id="msSubmitBtn" onclick="submitMarkSold()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Record Sale</button>
+        <button onclick="closeModal('markSoldModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELIST CONFIRMATION MODAL (POS cross-channel reconciliation) ──
+       Step 4 — when a POS sale would exceed on_shelf_qty and dip
+       into units currently listed on the marketplace, this modal
+       prompts the vendor to pull the needed quantity from their
+       active listing(s) before recording the sale. If the listed
+       units are already paid-for-pending-ship, the sale is BLOCKED
+       upstream (different error toast); this modal only appears for
+       active-but-unsold listings. Don't-ask-again preference is
+       stored in localStorage. -->
+  <div class="modal-overlay" id="delistConfirmModal">
+    <div class="modal" style="max-width:440px">
+      <button class="modal-close" onclick="closeModal('delistConfirmModal')">×</button>
+      <h3>Pull from Online Listing?</h3>
+      <p class="modal-sub" id="delistCardLabel" style="color:var(--accent);text-transform:none;opacity:.85"></p>
+      <p style="font-size:.78rem;color:var(--muted);margin-bottom:14px" id="delistExplain"></p>
+      <div id="delistDetail" style="background:var(--surface2);border:1px solid var(--border);padding:10px 12px;margin-bottom:14px;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--text)"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.72rem;color:var(--muted);margin-bottom:18px;cursor:pointer">
+        <input type="checkbox" id="delistDontAsk" style="margin:0;cursor:pointer">
+        <span>Don't ask again on this device</span>
+      </label>
+      <div style="display:flex;gap:10px">
+        <button id="delistConfirmBtn" onclick="confirmDelistAndSell()" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Pull &amp; Sell</button>
+        <button onclick="closeModal('delistConfirmModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- VENDOR APPLICATION MODAL -->
   <div class="modal-overlay" id="vendorApplicationModal">
     <div class="modal" style="max-width:520px">
@@ -7371,10 +7454,13 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       <button class="account-tab" onclick="switchAccountTab('myListings')">My Listings</button>
       <button class="account-tab" onclick="switchAccountTab('myOrders')">Orders<span class="badge-count" id="orderNotification" style="display:none">0</span></button>
       <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales Archive</button>
-      <!-- Inventory tab — shown only to vendor+ users via JS gating in
-           switchAccountTab / renderAccount. Tracks in-store vs. listed
-           stock alongside total qty. See migration_shop_inventory.sql. -->
+      <!-- Inventory + Sales Log tabs — shown only to vendor+ users via
+           JS gating in switchAccountTab / renderAccount. Inventory
+           tracks in-store vs. listed stock; Sales Log lists every
+           shop_sales row with date filters + CSV export. See
+           migration_shop_inventory.sql. -->
       <button class="account-tab js-vendor-only" id="tab-inventory" onclick="switchAccountTab('inventory')" style="display:none">Inventory</button>
+      <button class="account-tab js-vendor-only" id="tab-salesLog"  onclick="switchAccountTab('salesLog')"  style="display:none">Sales Log</button>
       <button class="account-tab" onclick="switchAccountTab('payments')">Payments</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <button class="account-tab" onclick="switchAccountTab('history')">History</button>
@@ -7433,6 +7519,35 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       </div>
     </div>
 
+    <!-- Sales Log (Vendor+) — every shop_sales row with date filters
+         and CSV export. Inserts to shop_sales come from the Mark N Sold
+         modal (step 2) and the POS scan flow (step 3). -->
+    <div id="salesLog" class="account-content">
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">▤</span>
+            Sales Log
+          </div>
+          <div class="pb-panel-actions" style="flex-wrap:wrap;gap:6px">
+            <label style="font-size:.62rem;color:var(--muted);letter-spacing:.06em;display:flex;align-items:center;gap:6px">FROM
+              <input id="slFrom" type="date" onchange="renderSalesLog()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.7rem;padding:4px 8px;outline:none">
+            </label>
+            <label style="font-size:.62rem;color:var(--muted);letter-spacing:.06em;display:flex;align-items:center;gap:6px">TO
+              <input id="slTo" type="date" onchange="renderSalesLog()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.7rem;padding:4px 8px;outline:none">
+            </label>
+            <button class="pb-panel-link" onclick="renderSalesLog(true)" title="Refresh from server">↻</button>
+            <button class="pb-panel-link" onclick="exportSalesLogCsv()" title="Download CSV" style="border-color:var(--accent);color:var(--accent)">↧ CSV</button>
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="salesLogContent">
+            <div style="text-align:center;padding:40px;color:var(--muted);font-size:.78rem">Loading sales…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Inventory (Vendor+) — step 1 read-only view of in-store +
          listed-online stock split. POS / sales-log come in later steps. -->
     <div id="inventory" class="account-content">
@@ -7445,6 +7560,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           <div class="pb-panel-actions">
             <input id="inventorySearch" type="text" placeholder="Search card / set / SKU…" oninput="renderInventory()"
                    style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.72rem;padding:5px 10px;outline:none;min-width:200px">
+            <!-- POS Sale: opens the existing card scanner in a special
+                 mode that routes matches into the Mark N Sold modal
+                 instead of "Add to Binder." Lets a shop ring up sales
+                 by camera-scanning each card. -->
+            <button class="pb-panel-link" onclick="openPosSaleScanner()" title="Scan a card to record an in-store sale" style="border-color:var(--accent);color:var(--accent)">⊞ POS SCAN</button>
             <button class="pb-panel-link" onclick="renderInventory(true)" title="Refresh from server">↻</button>
           </div>
         </div>
@@ -11802,7 +11922,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       // at #accountPage's bottom edge.
       const accountPageEl = document.getElementById('accountPage');
       if (accountPageEl) accountPageEl.setAttribute('data-tab', tab);
-      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','payments','watchlist','history','tradeHistory','inventory'];
+      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','payments','watchlist','history','tradeHistory','inventory','salesLog'];
       if (BG_TABS.indexOf(tab) >= 0) {
         document.body.setAttribute('data-page-bg', tab);
       } else {
@@ -11815,6 +11935,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (tab === 'tradeHistory') renderTradeHistory();
       if (tab === 'badges') renderBadges();
       if (tab === 'inventory') renderInventory();
+      if (tab === 'salesLog')  renderSalesLog();
     }
 
     // ── Inventory tab (Vendor+) ──────────────────────────────────────
@@ -11910,6 +12031,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">TOTAL</th>'
         +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">UNIT $</th>'
         +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">LINE $</th>'
+        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">ACTION</th>'
         +       '</tr>'
         +     '</thead>'
         +     '<tbody>' + rows + '</tbody>'
@@ -11940,6 +12062,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       const img = c.card_image_url
         ? '<img src="' + _escHtml(c.card_image_url) + '" alt="" loading="lazy" style="width:32px;height:44px;object-fit:cover;background:var(--surface2);vertical-align:middle;margin-right:8px">'
         : '';
+      // Sold button — disabled when on_shelf_qty is 0 so vendors can't
+      // accidentally try to record a sale against zero stock (the
+      // trigger would reject anyway, but a disabled button is faster
+      // feedback). Pre-fills the modal with this row's id + current
+      // value so the common case is one click to confirm.
+      const soldBtn = os > 0
+        ? '<button onclick="openMarkSoldModal(\'' + _escJsAttr(c.id) + '\')" style="padding:5px 10px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:\'Space Mono\',monospace;font-size:.65rem;letter-spacing:.06em;cursor:pointer;border-radius:4px">$ SOLD</button>'
+        : '<button disabled style="padding:5px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.65rem;letter-spacing:.06em;cursor:not-allowed;border-radius:4px">OUT</button>';
       return ''
         + '<tr style="border-top:1px solid var(--border)">'
         +   '<td style="padding:8px 12px;color:var(--text)">' + img + name + variant + '</td>'
@@ -11949,7 +12079,586 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         +   '<td style="padding:8px 12px;text-align:right;color:var(--text)">' + q + '</td>'
         +   '<td style="padding:8px 12px;text-align:right;color:var(--muted)">$' + unit.toFixed(2) + '</td>'
         +   '<td style="padding:8px 12px;text-align:right;color:var(--green);font-weight:700">$' + line.toFixed(2) + '</td>'
+        +   '<td style="padding:8px 12px;text-align:right">' + soldBtn + '</td>'
         + '</tr>';
+    }
+
+    // ── Shop inventory bookkeeping (Step 4) ─────────────────────────
+    // Shared helpers that move stock between on_shelf_qty and
+    // listed_online_qty on the matching collection_items row as
+    // marketplace activity happens. Called from the listing
+    // create/cancel paths and the order ship path. Vendor+ tier
+    // only — for everyone else the columns are dormant and these
+    // helpers no-op.
+    async function _invFindCollectionRow(userId, apiCardId, variant) {
+      if (!userId || !apiCardId) return null;
+      const v = variant || 'normal';
+      const r = await sb.from('collection_items')
+        .select('id, quantity, on_shelf_qty, listed_online_qty')
+        .eq('user_id', userId)
+        .eq('api_card_id', apiCardId)
+        .eq('variant', v)
+        .limit(1)
+        .maybeSingle();
+      if (r.error) { console.warn('[inv] lookup error:', r.error.message); return null; }
+      return r.data || null;
+    }
+
+    // Listing created → move qty from on_shelf → listed_online.
+    async function _invOnListingCreated(userId, apiCardId, variant, qty) {
+      if (!apiCardId || !qty) return;
+      const row = await _invFindCollectionRow(userId, apiCardId, variant);
+      if (!row) return;
+      const moved = Math.min(qty, row.on_shelf_qty || 0);
+      if (moved <= 0) return;
+      const r = await sb.from('collection_items')
+        .update({
+          on_shelf_qty:      Math.max(0, (row.on_shelf_qty || 0) - moved),
+          listed_online_qty: (row.listed_online_qty || 0) + moved,
+        })
+        .eq('id', row.id);
+      if (r.error) console.warn('[inv] move on-list error:', r.error.message);
+    }
+
+    // Listing cancelled / qty reduced → move qty from listed_online → on_shelf.
+    async function _invOnListingReleased(userId, apiCardId, variant, qty) {
+      if (!apiCardId || !qty) return;
+      const row = await _invFindCollectionRow(userId, apiCardId, variant);
+      if (!row) return;
+      const released = Math.min(qty, row.listed_online_qty || 0);
+      if (released <= 0) return;
+      const r = await sb.from('collection_items')
+        .update({
+          on_shelf_qty:      (row.on_shelf_qty || 0) + released,
+          listed_online_qty: Math.max(0, (row.listed_online_qty || 0) - released),
+        })
+        .eq('id', row.id);
+      if (r.error) console.warn('[inv] release error:', r.error.message);
+    }
+
+    // Listing shipped → that unit is gone for good. Decrement
+    // listed_online AND quantity (the inventory's source of truth).
+    async function _invOnListingShipped(userId, apiCardId, variant, qty) {
+      if (!apiCardId || !qty) return;
+      const row = await _invFindCollectionRow(userId, apiCardId, variant);
+      if (!row) return;
+      const dropped = Math.min(qty, row.listed_online_qty || 0, row.quantity || 0);
+      if (dropped <= 0) return;
+      const r = await sb.from('collection_items')
+        .update({
+          listed_online_qty: Math.max(0, (row.listed_online_qty || 0) - dropped),
+          quantity:          Math.max(0, (row.quantity || 0) - dropped),
+        })
+        .eq('id', row.id);
+      if (r.error) console.warn('[inv] ship error:', r.error.message);
+    }
+
+    // ── Mark N Sold modal ───────────────────────────────────────────
+    // Step 2 of shop inventory: vendors record an in-store sale that
+    // decrements on_shelf_qty + quantity via the shop_sales trigger.
+    // The modal is reused later (Step 3) by the POS scan path.
+    let _msContext = { itemId: null, item: null };
+
+    function openMarkSoldModal(itemId) {
+      if (!currentUser) return;
+      if (typeof tierAtLeast !== 'function' || !tierAtLeast('vendor')) {
+        showToast('Vendor tier required to record in-store sales');
+        return;
+      }
+      const item = (collectionItems || []).find(function(c) { return String(c.id) === String(itemId); });
+      if (!item) { showToast('Item not found'); return; }
+      const onShelf = (item.on_shelf_qty != null) ? item.on_shelf_qty : (item.quantity || 1);
+      if (onShelf <= 0) { showToast('No stock on shelf for this card'); return; }
+
+      _msContext = { itemId: itemId, item: item };
+
+      const label = (item.card_name || '?') + (item.variant && item.variant !== 'normal'
+        ? ' · ' + String(item.variant).toUpperCase().replace('_', ' ') : '');
+      const labelEl = document.getElementById('msCardLabel');
+      if (labelEl) labelEl.textContent = label;
+
+      const listed = item.listed_online_qty || 0;
+      const availEl = document.getElementById('msAvailLabel');
+      if (availEl) {
+        var parts = ['On shelf: ' + onShelf];
+        if (listed > 0) parts.push(listed + ' listed online');
+        if (item.set_name) parts.push(item.set_name);
+        availEl.textContent = parts.join('  ·  ');
+      }
+
+      const qtyEl = document.getElementById('msQty');
+      if (qtyEl) {
+        qtyEl.value = '1';
+        // Allow up to on_shelf + listed_online; selling more than the
+        // shelf qty triggers the delist prompt at submit time. Cap is
+        // a hard ceiling so the qty never exceeds what the vendor
+        // actually owns.
+        qtyEl.max = Math.max(1, onShelf + listed);
+      }
+      const unitPriceEl = document.getElementById('msUnitPrice');
+      if (unitPriceEl) {
+        const suggested = item.current_value || item._compEstimate || item.purchase_price || 0;
+        unitPriceEl.value = suggested ? suggested.toFixed(2) : '';
+      }
+      const dateEl = document.getElementById('msSoldAt');
+      if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+      const payEl = document.getElementById('msPaymentMethod');
+      if (payEl) payEl.value = 'card';
+      const notesEl = document.getElementById('msNotes');
+      if (notesEl) notesEl.value = '';
+      const errEl = document.getElementById('msError');
+      if (errEl) errEl.style.display = 'none';
+
+      _msRecalcTotal();
+      openModal('markSoldModal');
+    }
+
+    function _msRecalcTotal() {
+      const q  = parseInt(document.getElementById('msQty')?.value, 10) || 0;
+      const up = parseFloat(document.getElementById('msUnitPrice')?.value) || 0;
+      const totalEl = document.getElementById('msTotalDisplay');
+      if (totalEl) totalEl.textContent = '$' + (q * up).toFixed(2);
+    }
+
+    async function submitMarkSold() {
+      if (!_msContext || !_msContext.item || !currentUser) {
+        showToast('Sale context missing — close and reopen'); return;
+      }
+      const item = _msContext.item;
+      const qty  = parseInt(document.getElementById('msQty').value, 10);
+      const unit = parseFloat(document.getElementById('msUnitPrice').value);
+      const dateStr = document.getElementById('msSoldAt').value;
+      const payment = document.getElementById('msPaymentMethod').value || 'card';
+      const notes   = document.getElementById('msNotes').value.trim() || null;
+      const onShelf = (item.on_shelf_qty != null) ? item.on_shelf_qty : (item.quantity || 1);
+
+      const errEl = document.getElementById('msError');
+      const _err = function(msg) {
+        if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+      };
+      if (errEl) errEl.style.display = 'none';
+
+      if (!isFinite(qty) || qty < 1)     { _err('Quantity must be at least 1'); return; }
+      if (!isFinite(unit) || unit < 0)   { _err('Enter a valid unit price'); return; }
+
+      const btn = document.getElementById('msSubmitBtn');
+      const total = +(qty * unit).toFixed(2);
+      const soldAtIso = dateStr
+        ? new Date(dateStr + 'T12:00:00').toISOString()  // midday avoids tz-edge shifting the date
+        : new Date().toISOString();
+
+      // ── Cross-channel pre-flight ──────────────────────────────────
+      // If the requested qty exceeds on_shelf, the difference has to
+      // come out of an active listing (or get blocked if there's an
+      // online order in flight). Pre-flight checks for both cases
+      // and either branches into the delist prompt or aborts.
+      if (qty > onShelf) {
+        const shortfall = qty - onShelf;
+        const preflight = await _posPreflightListings(item, shortfall);
+        if (preflight.blocked) {
+          _err(preflight.message || 'Cannot complete sale');
+          return;
+        }
+        if (preflight.needsPrompt) {
+          // Stash the in-flight sale context so the delist modal can
+          // pick it up after the user confirms or cancels.
+          _msPendingSale = {
+            qty: qty, unit: unit, total: total, soldAtIso: soldAtIso,
+            payment: payment, notes: notes, item: item, shortfall: shortfall,
+            listings: preflight.listings,
+          };
+          // Auto-delist skip: vendor previously checked "don't ask again".
+          if (localStorage.getItem('pb_auto_delist_on_pos') === '1') {
+            return _executeDelistAndSell();
+          }
+          _openDelistConfirm(preflight, shortfall, item);
+          return;
+        }
+        // preflight.ok but no listings either → must be a stale state;
+        // fall through and let the trigger reject with a clear message.
+      }
+
+      if (btn) { btn.textContent = 'Recording…'; btn.disabled = true; }
+
+      const payload = {
+        user_id:            currentUser.id,
+        collection_item_id: item.id,
+        api_card_id:        item.api_card_id || null,
+        variant:            item.variant || 'normal',
+        qty:                qty,
+        unit_price:         +unit.toFixed(2),
+        total_price:        total,
+        payment_method:     payment,
+        notes:              notes,
+        sold_at:            soldAtIso,
+      };
+
+      try {
+        const r = await sb.from('shop_sales').insert(payload).select().single();
+        if (r.error) {
+          // Trigger raises clean exceptions like
+          // "shop_sales: only 2 on shelf, cannot sell 3" — surface them.
+          _err(r.error.message.replace(/^shop_sales:\s*/, ''));
+          if (btn) { btn.textContent = '✓ Record Sale'; btn.disabled = false; }
+          return;
+        }
+        // Re-pull collection so the inventory tile + row qty refresh.
+        // loadCollection() is the same path the binder uses, so the
+        // updated on_shelf_qty / quantity propagate everywhere.
+        try { await loadCollection(); } catch(_) {}
+        // Re-render inventory if the user is still on that tab.
+        try { if (document.getElementById('inventory')?.classList.contains('active')) renderInventory(); } catch(_) {}
+        // Re-render sales log if open.
+        try { if (document.getElementById('salesLog')?.classList.contains('active')) renderSalesLog(true); } catch(_) {}
+
+        closeModal('markSoldModal');
+        showToast('Recorded $' + total.toFixed(2) + ' sale');
+
+        // POS-mode loop — reopen the scanner for the next sale
+        // instead of dropping the vendor back to the Inventory tab.
+        // Persists POS mode until they explicitly tap EXIT POS.
+        if (window._posSaleMode) {
+          setTimeout(function() {
+            try {
+              openCardScanner();
+              _setPosBanner(true);
+              // Re-trigger camera so the workflow is "scan, confirm,
+              // sale, next scan" without intermediate taps.
+              const inp = document.getElementById('navScanCardInput');
+              if (inp) inp.click();
+            } catch(_) {}
+          }, 300);
+        }
+      } catch (e) {
+        _err((e && e.message) || 'Unexpected error');
+        if (btn) { btn.textContent = '✓ Record Sale'; btn.disabled = false; }
+      }
+    }
+
+    // ── POS cross-channel pre-flight (Step 4) ───────────────────────
+    // Called by submitMarkSold when the requested qty exceeds the
+    // on_shelf number. Pulls every active listing for this user +
+    // card + variant, plus every paid-but-unshipped order against
+    // those listings. Returns one of three outcomes:
+    //   { blocked: true,  message }      — paid order awaiting ship
+    //   { needsPrompt: true, listings }  — listings exist, can delist
+    //   { ok: true }                     — no listings either; let the
+    //                                      DB trigger surface the issue
+    let _msPendingSale = null;
+
+    async function _posPreflightListings(item, shortfall) {
+      try {
+        const lr = await sb.from('listings')
+          .select('id, quantity, value, status, variant')
+          .eq('seller_id', currentUser.id)
+          .eq('api_card_id', item.api_card_id)
+          .eq('variant', item.variant || 'normal')
+          .in('status', ['active','available']);
+        const listings = lr.data || [];
+        if (listings.length === 0) {
+          return { ok: true };
+        }
+        // Check for paid-but-unshipped orders against these listings.
+        // We block aggressively — even one unshipped order means the
+        // POS sale would create a double-sell.
+        const listingIds = listings.map(function(l){ return l.id; });
+        const or = await sb.from('orders')
+          .select('id, status, listing_id')
+          .in('listing_id', listingIds)
+          .in('status', ['paid','pending_payment']);
+        const pendingOrders = or.data || [];
+        if (pendingOrders.length > 0) {
+          return {
+            blocked:  true,
+            message:  'This card has been paid for online. Ship the order instead of selling in-store.',
+            orders:   pendingOrders,
+          };
+        }
+        return { needsPrompt: true, listings: listings, shortfall: shortfall };
+      } catch (e) {
+        console.warn('[pos] preflight error:', e && e.message);
+        return { ok: true };  // fail-open: trigger still guards on_shelf invariant
+      }
+    }
+
+    function _openDelistConfirm(preflight, shortfall, item) {
+      const labelEl = document.getElementById('delistCardLabel');
+      if (labelEl) labelEl.textContent = item.card_name || '?';
+      const totalListed = preflight.listings.reduce(function(s,l){ return s + (l.quantity||1); }, 0);
+      const explainEl = document.getElementById('delistExplain');
+      if (explainEl) {
+        explainEl.textContent = 'This sale needs ' + shortfall + ' more unit'
+          + (shortfall === 1 ? '' : 's') + ' than you have on shelf. We\'ll pull '
+          + shortfall + ' from your active marketplace listing'
+          + (preflight.listings.length === 1 ? '' : 's') + '.';
+      }
+      const detailEl = document.getElementById('delistDetail');
+      if (detailEl) {
+        detailEl.innerHTML = preflight.listings.map(function(l) {
+          return '· Listing #' + String(l.id).slice(0,8) + ' — qty ' + (l.quantity||1) + ' @ $' + Number(l.value||0).toFixed(2);
+        }).join('<br>') + '<br><br>Total listed: ' + totalListed + ' unit' + (totalListed === 1 ? '' : 's');
+      }
+      const dontAskEl = document.getElementById('delistDontAsk');
+      if (dontAskEl) dontAskEl.checked = false;
+      openModal('delistConfirmModal');
+    }
+
+    async function confirmDelistAndSell() {
+      // Persist the don't-ask-again preference before tearing down.
+      const dontAskEl = document.getElementById('delistDontAsk');
+      if (dontAskEl && dontAskEl.checked) {
+        try { localStorage.setItem('pb_auto_delist_on_pos', '1'); } catch(_) {}
+      }
+      closeModal('delistConfirmModal');
+      await _executeDelistAndSell();
+    }
+
+    // Pulls `shortfall` units across the cached active listings (in
+    // ascending qty order — exhaust the smallest first so single-card
+    // listings clear out cleanly), records the sale, and reopens the
+    // scanner if POS mode is still active.
+    async function _executeDelistAndSell() {
+      const ctx = _msPendingSale;
+      if (!ctx) { showToast('Sale context lost — try again'); return; }
+      _msPendingSale = null;
+
+      const sortedListings = (ctx.listings || []).slice().sort(function(a,b) {
+        return (a.quantity||1) - (b.quantity||1);
+      });
+      let remaining = ctx.shortfall;
+      for (let i = 0; i < sortedListings.length && remaining > 0; i++) {
+        const l    = sortedListings[i];
+        const lQty = l.quantity || 1;
+        const pull = Math.min(lQty, remaining);
+        if (pull >= lQty) {
+          // Listing fully consumed → flip to inactive.
+          const r = await sb.from('listings').update({ status: 'inactive' }).eq('id', l.id);
+          if (r.error) { showToast('Couldn\'t pull listing #' + String(l.id).slice(0,8) + ': ' + r.error.message); return; }
+          // Mirror the local cache so renderBrowse / renderMyListings
+          // stay in sync without a full reload.
+          listings = (listings || []).filter(function(x) { return String(x.id) !== String(l.id); });
+        } else {
+          // Partial pull — reduce qty in place, listing stays active.
+          const newQty = lQty - pull;
+          const r = await sb.from('listings').update({ quantity: newQty }).eq('id', l.id);
+          if (r.error) { showToast('Couldn\'t adjust listing #' + String(l.id).slice(0,8) + ': ' + r.error.message); return; }
+          const idx = (listings || []).findIndex(function(x) { return String(x.id) === String(l.id); });
+          if (idx >= 0) listings[idx].quantity = newQty;
+        }
+        // Move the pulled units from listed_online → on_shelf so the
+        // sale insert below can decrement them legally.
+        try {
+          await _invOnListingReleased(currentUser.id, ctx.item.api_card_id, ctx.item.variant || 'normal', pull);
+        } catch (e) {
+          console.warn('[pos] release after pull failed:', e && e.message);
+        }
+        remaining -= pull;
+      }
+
+      // Refresh collection so the now-bumped on_shelf_qty is in the
+      // local cache before the shop_sales insert fires its trigger
+      // check.
+      try { await loadCollection(); } catch(_) {}
+
+      // Re-run the sale insert using the stashed context.
+      const payload = {
+        user_id:            currentUser.id,
+        collection_item_id: ctx.item.id,
+        api_card_id:        ctx.item.api_card_id || null,
+        variant:            ctx.item.variant || 'normal',
+        qty:                ctx.qty,
+        unit_price:         +ctx.unit.toFixed(2),
+        total_price:        ctx.total,
+        payment_method:     ctx.payment,
+        notes:              ctx.notes,
+        sold_at:            ctx.soldAtIso,
+      };
+      const r = await sb.from('shop_sales').insert(payload).select().single();
+      if (r.error) {
+        showToast('Sale insert failed: ' + r.error.message.replace(/^shop_sales:\s*/, ''));
+        return;
+      }
+      try { await loadCollection(); } catch(_) {}
+      try { if (document.getElementById('inventory')?.classList.contains('active')) renderInventory(); } catch(_) {}
+      try { if (document.getElementById('salesLog')?.classList.contains('active')) renderSalesLog(true); } catch(_) {}
+      showToast('Pulled ' + ctx.shortfall + ' from listings · sale recorded ($' + ctx.total.toFixed(2) + ')');
+
+      // POS loop — reopen scanner if we got here via a scan.
+      if (window._posSaleMode) {
+        setTimeout(function() {
+          try {
+            openCardScanner();
+            _setPosBanner(true);
+            const inp = document.getElementById('navScanCardInput');
+            if (inp) inp.click();
+          } catch(_) {}
+        }, 300);
+      }
+    }
+
+    // ── Sales Log tab ───────────────────────────────────────────────
+    // Fetches shop_sales rows for the active user, optionally
+    // bounded by the date range filters. Cached in a module-level
+    // array so the CSV export uses the same dataset the user sees.
+    let _salesLogRows = [];
+    let _salesLogInflight = null;
+
+    async function _fetchSalesLog(fromIso, toIso) {
+      if (!currentUser) return [];
+      let q = sb.from('shop_sales')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('sold_at', { ascending: false })
+        .limit(2000);
+      if (fromIso) q = q.gte('sold_at', fromIso);
+      if (toIso)   q = q.lte('sold_at', toIso);
+      const r = await q;
+      if (r.error) {
+        console.warn('[sales-log] fetch error:', r.error.message);
+        return [];
+      }
+      return r.data || [];
+    }
+
+    async function renderSalesLog(forceRefresh) {
+      const wrap = document.getElementById('salesLogContent');
+      if (!wrap) return;
+      if (!currentUser) { wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Sign in to view sales.</div>'; return; }
+      if (typeof tierAtLeast !== 'function' || !tierAtLeast('vendor')) {
+        wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">'
+          + 'Sales tracking is a Vendor+ feature.<br>'
+          + '<button onclick="openPricingModalWithPromo(\'vendor\')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);margin-top:14px;display:inline-block">Upgrade to Vendor →</button>'
+          + '</div>';
+        return;
+      }
+
+      const fromStr = document.getElementById('slFrom')?.value || '';
+      const toStr   = document.getElementById('slTo')?.value   || '';
+      const fromIso = fromStr ? new Date(fromStr + 'T00:00:00').toISOString() : null;
+      const toIso   = toStr   ? new Date(toStr   + 'T23:59:59').toISOString() : null;
+
+      if (forceRefresh || _salesLogRows.length === 0 || _salesLogInflight === null) {
+        wrap.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:.78rem">Loading sales…</div>';
+        _salesLogInflight = _fetchSalesLog(fromIso, toIso);
+        _salesLogRows = await _salesLogInflight;
+        _salesLogInflight = null;
+      }
+      const rows = _salesLogRows;
+
+      // Resolve card name + image for each sale row by looking up the
+      // matching collection_items row (id match). Sales whose
+      // collection row was deleted gracefully show api_card_id.
+      const itemById = {};
+      (collectionItems || []).forEach(function(c) { itemById[c.id] = c; });
+
+      let totalRev = 0, totalQty = 0;
+      const byMethod = { card: 0, cash: 0, trade: 0, other: 0 };
+      rows.forEach(function(s) {
+        totalRev += Number(s.total_price) || 0;
+        totalQty += Number(s.qty) || 0;
+        const m = s.payment_method || 'other';
+        byMethod[m] = (byMethod[m] || 0) + (Number(s.total_price) || 0);
+      });
+
+      const summary = ''
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
+        +   _invSummaryTile('Sales',    rows.length.toLocaleString(),     'var(--text)')
+        +   _invSummaryTile('Units',    totalQty.toLocaleString(),         'var(--accent)')
+        +   _invSummaryTile('Revenue', '$' + totalRev.toFixed(2),          'var(--green)')
+        +   _invSummaryTile('Card',    '$' + (byMethod.card||0).toFixed(2),'var(--muted)')
+        +   _invSummaryTile('Cash',    '$' + (byMethod.cash||0).toFixed(2),'var(--muted)')
+        + '</div>';
+
+      if (rows.length === 0) {
+        wrap.innerHTML = summary
+          + '<div style="padding:40px;text-align:center;color:var(--muted);font-size:.78rem">'
+          + 'No sales recorded yet. Use the $ SOLD button in the Inventory tab to log your first one.'
+          + '</div>';
+        return;
+      }
+
+      const body = rows.map(function(s) {
+        const it = itemById[s.collection_item_id] || {};
+        const name = _escHtml(it.card_name || s.api_card_id || '?');
+        const variant = (s.variant && s.variant !== 'normal')
+          ? ' <span style="font-size:.55rem;color:var(--copper, #d97e3e);letter-spacing:.06em">' + _escHtml(String(s.variant).toUpperCase().replace('_',' ')) + '</span>'
+          : '';
+        const setN = _escHtml(it.set_name || '');
+        const dateLabel = _pbCompactDate ? _pbCompactDate(s.sold_at) : String(s.sold_at).slice(0,10);
+        return ''
+          + '<tr style="border-top:1px solid var(--border)">'
+          +   '<td style="padding:8px 12px;color:var(--muted);font-size:.7rem">' + dateLabel + '</td>'
+          +   '<td style="padding:8px 12px;color:var(--text)">' + name + variant + '</td>'
+          +   '<td style="padding:8px 12px;color:var(--muted)">' + setN + '</td>'
+          +   '<td style="padding:8px 12px;text-align:right;color:var(--text)">' + (s.qty || 0) + '</td>'
+          +   '<td style="padding:8px 12px;text-align:right;color:var(--muted)">$' + Number(s.unit_price||0).toFixed(2) + '</td>'
+          +   '<td style="padding:8px 12px;text-align:right;color:var(--green);font-weight:700">$' + Number(s.total_price||0).toFixed(2) + '</td>'
+          +   '<td style="padding:8px 12px;color:var(--muted);font-size:.65rem;letter-spacing:.06em">' + _escHtml(String(s.payment_method||'').toUpperCase()) + '</td>'
+          + '</tr>';
+      }).join('');
+
+      wrap.innerHTML = summary
+        + '<div style="overflow-x:auto;border:1px solid var(--border);background:var(--surface);border-radius:8px">'
+        +   '<table style="width:100%;border-collapse:collapse;font-family:\'Space Mono\',monospace;font-size:.72rem">'
+        +     '<thead><tr style="background:var(--surface2);color:var(--muted);letter-spacing:.06em">'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">DATE</th>'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">CARD</th>'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">SET</th>'
+        +       '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">QTY</th>'
+        +       '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">UNIT $</th>'
+        +       '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">TOTAL $</th>'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">PAY</th>'
+        +     '</tr></thead>'
+        +     '<tbody>' + body + '</tbody>'
+        +   '</table>'
+        + '</div>';
+    }
+
+    function exportSalesLogCsv() {
+      if (!_salesLogRows || _salesLogRows.length === 0) {
+        showToast('No sales to export');
+        return;
+      }
+      const itemById = {};
+      (collectionItems || []).forEach(function(c) { itemById[c.id] = c; });
+
+      // CSV is meant to be opened in Excel / Sheets / handed to an
+      // accountant, so keep the columns plain-language. Notes can
+      // contain commas + quotes, so quote every cell defensively.
+      const header = ['sold_at','card_name','set_name','variant','qty','unit_price','total_price','payment_method','notes','api_card_id'];
+      const esc = function(v) {
+        if (v == null) return '';
+        const s = String(v).replace(/"/g, '""');
+        return '"' + s + '"';
+      };
+      const lines = [header.map(esc).join(',')];
+      _salesLogRows.forEach(function(s) {
+        const it = itemById[s.collection_item_id] || {};
+        lines.push([
+          (s.sold_at || '').slice(0, 19).replace('T', ' '),
+          it.card_name || '',
+          it.set_name  || '',
+          s.variant    || 'normal',
+          s.qty        || 0,
+          Number(s.unit_price  || 0).toFixed(2),
+          Number(s.total_price || 0).toFixed(2),
+          s.payment_method || '',
+          s.notes      || '',
+          s.api_card_id || '',
+        ].map(esc).join(','));
+      });
+
+      const csv  = lines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = 'pathbinder-sales-' + stamp + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
     }
 
     function switchOrdersTab(tab) {
@@ -16024,8 +16733,25 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // ─── Marketplace actions ───────────────────────────────────────────
     async function deactivateListing(listingId) {
       if (!confirm('Remove this listing from the marketplace?')) return;
+      // Snapshot the listing before deactivating so the bookkeeping
+      // hook has the api_card_id / variant / quantity it needs to
+      // release the units back to on_shelf_qty. Local cache is the
+      // fast path; falls back to a one-shot select if it's missing.
+      let snap = (listings || []).find(function(l) { return String(l.id) === String(listingId); });
+      if (!snap) {
+        const sr = await sb.from('listings').select('api_card_id, variant, quantity').eq('id', listingId).maybeSingle();
+        snap = sr.data || null;
+      }
       const { error } = await sb.from('listings').update({ status: 'inactive' }).eq('id', listingId);
       if (error) { showToast('Error: ' + error.message); return; }
+      // Step 4 bookkeeping — release the held units back onto the shelf.
+      if (snap && snap.api_card_id && currentUser) {
+        try {
+          await _invOnListingReleased(currentUser.id, snap.api_card_id, snap.variant || 'normal', snap.quantity || 1);
+        } catch (e) {
+          console.warn('[inv] release on deactivate failed:', e && e.message);
+        }
+      }
       // Remove from local state entirely so it disappears from both views
       listings = listings.filter(l => String(l.id) !== String(listingId));
       renderMyListings();
@@ -16640,6 +17366,24 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (error) { showToast('Error: ' + error.message); return; }
       const o = orders.find(o => o.id === orderId);
       if (o) { o.tracking_number = trackingNumber; o.tracking_carrier = carrier; o.status = 'shipped'; }
+
+      // Step 4 bookkeeping — the unit has physically left the shop.
+      // Drop listed_online_qty AND quantity on the matching collection
+      // row. Pulls the listing snapshot to get api_card_id / variant /
+      // qty so the right collection row gets decremented.
+      try {
+        if (o && o.listing_id && currentUser && o.seller_id === currentUser.id) {
+          const sr = await sb.from('listings').select('api_card_id, variant, quantity').eq('id', o.listing_id).maybeSingle();
+          const snap = sr.data;
+          if (snap && snap.api_card_id) {
+            const orderQty = (o.quantity || 1);
+            await _invOnListingShipped(currentUser.id, snap.api_card_id, snap.variant || 'normal', orderQty);
+          }
+        }
+      } catch (e) {
+        console.warn('[inv] ship bookkeeping failed:', e && e.message);
+      }
+
       closeModal('addTrackingModal');
       showToast('Tracking added! Buyer has been notified.');
       renderOrders();
@@ -17158,6 +17902,19 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         data = r2.data; error = r2.error;
         if (!error) {
           console.log('%c[PathBinder] Run migration_listings_catalog_link.sql + migration_listings_schema_sync.sql to enable the listings catalog link and quantity support.', 'color:#FF9800;font-weight:bold');
+        }
+      }
+
+      // Step 4 bookkeeping — move N units from on_shelf → listed_online
+      // on the matching collection_items row. No-ops cleanly for
+      // listings without an api_card_id (sealed / non-TCG) or for
+      // sellers who don't have a matching collection row (rare but
+      // possible if they listed without first adding to binder).
+      if (!error && data && data.api_card_id) {
+        try {
+          await _invOnListingCreated(currentUser.id, data.api_card_id, data.variant || 'normal', data.quantity || 1);
+        } catch (e) {
+          console.warn('[inv] post-list bookkeeping failed:', e && e.message);
         }
       }
 
@@ -36258,6 +37015,15 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (fallback) { fallback.style.display = 'none'; fallback.querySelector('input') && (fallback.querySelector('input').value = ''); }
       const nameResults = document.getElementById('scannerNameResults');
       if (nameResults) nameResults.innerHTML = '';
+      // If POS mode was active and the user closed the scanner directly
+      // (without using EXIT POS), tear down the banner so the next
+      // normal scan doesn't show a stale "POS SALE MODE" header. The
+      // POS-mode flag itself stays set so the next-sale loop in
+      // submitMarkSold doesn't fire mid-close; explicit reopens via
+      // openPosSaleScanner reset it anyway.
+      const banner = document.getElementById('posScannerBanner');
+      if (banner) banner.remove();
+      window._posSaleMode = false;
     }
 
     // ── Auto-scan — frame stability detection ────────────────────────────────
@@ -37929,6 +38695,12 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     }
 
     async function confirmScanMatch(cardId, cardName) {
+      // POS mode short-circuit: skip the binder-add path and route
+      // to the Mark N Sold modal so the shop can ring up the sale
+      // directly. Set by openPosSaleScanner(); cleared by exitPosMode().
+      if (window._posSaleMode) {
+        return _posSaleFromMatch(cardId, cardName);
+      }
       // Fetch full card data from catalog then quick-save directly to
       // the binder. The legacy "Add to Binder" modal is bypassed so the
       // user doesn't lose progress if the page reloads under memory
@@ -37950,6 +38722,96 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
 
       await quickAddScannedCard(card);
+    }
+
+    // ── POS Sale mode ───────────────────────────────────────────────
+    // Reuses the existing card scanner. When _posSaleMode is true,
+    // confirmScanMatch routes here instead of saving to the binder.
+    // Looks up the matching collection_items row, opens the Mark N
+    // Sold modal pre-filled with that row, and after submission
+    // reopens the scanner for the next sale. Persists until the user
+    // taps "EXIT POS" or closes the scanner.
+    function openPosSaleScanner() {
+      if (!currentUser) { openModal('loginModal'); return; }
+      if (typeof tierAtLeast !== 'function' || !tierAtLeast('vendor')) {
+        showToast('Vendor tier required for POS scan');
+        return;
+      }
+      window._posSaleMode = true;
+      _setPosBanner(true);
+      openCardScanner();
+      // Auto-trigger the camera so the user goes straight to capture
+      // (matches the "ADD CARD" mobile UX where tapping scan opens
+      // the file picker in capture mode).
+      try {
+        const input = document.getElementById('navScanCardInput');
+        if (input) input.click();
+        else openScanCard();
+      } catch(_) { openScanCard(); }
+    }
+
+    function exitPosMode() {
+      window._posSaleMode = false;
+      _setPosBanner(false);
+      closeCardScanner();
+      try { if (document.getElementById('inventory')?.classList.contains('active')) renderInventory(); } catch(_) {}
+    }
+
+    // Paints / clears the POS-mode chrome on the scanner modal so the
+    // user always knows what mode they're scanning in. Defensive
+    // about the modal not existing — the scanner DOM is built lazily.
+    function _setPosBanner(on) {
+      const modal = document.getElementById('scannerModal');
+      if (!modal) return;
+      let banner = document.getElementById('posScannerBanner');
+      if (!on) { if (banner) banner.remove(); return; }
+      if (banner) return;
+      banner = document.createElement('div');
+      banner.id = 'posScannerBanner';
+      banner.style.cssText = 'position:absolute;top:0;left:0;right:0;background:var(--green);color:var(--surface);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:"Space Mono",monospace;font-size:.72rem;font-weight:700;letter-spacing:.08em;z-index:10';
+      banner.innerHTML = '<span>$ POS SALE MODE — scan a card to record sale</span>'
+        + '<button onclick="exitPosMode()" style="padding:4px 10px;border:1px solid var(--surface);background:transparent;color:var(--surface);font-family:inherit;font-size:.68rem;font-weight:700;cursor:pointer;letter-spacing:.08em">EXIT POS</button>';
+      modal.appendChild(banner);
+    }
+
+    async function _posSaleFromMatch(cardId, cardName) {
+      if (!currentUser) return;
+      // Find every collection_items row this user has for this catalog
+      // id. There may be multiple — one per variant — so prefer:
+      //   1) variant === 'normal' (or null) WITH on_shelf_qty > 0
+      //   2) any other variant WITH on_shelf_qty > 0
+      //   3) any row regardless of stock (we'll show "out of stock")
+      const candidates = (collectionItems || []).filter(function(c) {
+        return c.api_card_id === cardId && !c.is_ghost && !c.sold_offline;
+      });
+      if (candidates.length === 0) {
+        showToast('Not in your inventory: ' + (cardName || 'this card'));
+        return;
+      }
+      const _shelfOf = function(c) { return (c.on_shelf_qty != null) ? c.on_shelf_qty : (c.quantity || 0); };
+      const _isNormal = function(c) { return !c.variant || c.variant === 'normal'; };
+
+      let pick = candidates.find(function(c) { return _isNormal(c) && _shelfOf(c) > 0; });
+      if (!pick) pick = candidates.find(function(c) { return _shelfOf(c) > 0; });
+      if (!pick) pick = candidates[0];
+
+      if (_shelfOf(pick) <= 0) {
+        showToast('Out of stock: ' + (pick.card_name || cardName));
+        return;
+      }
+
+      // Close the scanner sheet — Mark N Sold takes over. We hide the
+      // scanner modal INLINE rather than calling closeCardScanner()
+      // because that helper clears window._posSaleMode (so it doesn't
+      // stick across normal scans) and we need the flag to survive
+      // through the modal submit so the loop in submitMarkSold can
+      // reopen the scanner for the next sale.
+      try { document.getElementById('scanPreviewSheet')?.remove(); } catch(_) {}
+      const _sm = document.getElementById('scannerModal');
+      if (_sm) _sm.style.display = 'none';
+      const _banner = document.getElementById('posScannerBanner');
+      if (_banner) _banner.remove();
+      openMarkSoldModal(pick.id);
     }
 
     // ── Upload the captured scan photo to card-photos storage ─────────────────
