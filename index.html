@@ -33639,6 +33639,40 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       }
     }
 
+    // ── Enrich TCG sets with release_date from set_metadata ───────────
+    // The mirror scripts (mirror_mtg_set_logos.py via Scryfall,
+    // mirror_ygo_set_metadata.py via YGOPRODeck, mirror_set_logos.py
+    // via pokemontcg.io) populate set_metadata rows keyed by
+    // `<prefix><set_code>` (e.g. 'mtg-lci', 'ygo-lob'). We pull every
+    // metadata row for that prefix in one query and join client-side
+    // so the per-set release_date + logo_url land on each set object
+    // for the sort comparator + UI render to use.
+    async function _enrichTcgSetsWithReleaseDate(sets, prefix) {
+      if (!Array.isArray(sets) || sets.length === 0) return;
+      const idPrefix = prefix.endsWith('-') ? prefix : (prefix + '-');
+      try {
+        const { data } = await sb.from('set_metadata')
+          .select('id, release_date, logo_url, symbol_url')
+          .like('id', idPrefix + '%');
+        if (!Array.isArray(data) || data.length === 0) return;
+        const lookup = new Map();
+        for (const m of data) {
+          // Strip the prefix off to get the bare set_code so we can
+          // index by what the catalog actually stores.
+          const code = String(m.id).slice(idPrefix.length);
+          lookup.set(code.toLowerCase(), m);
+        }
+        for (const s of sets) {
+          const code = String(s.set_code || '').toLowerCase();
+          const meta = lookup.get(code);
+          if (!meta) continue;
+          if (meta.release_date) s.release_date = meta.release_date;
+          if (meta.logo_url)     s.logo_url     = meta.logo_url;
+          if (meta.symbol_url)   s.symbol_url   = meta.symbol_url;
+        }
+      } catch (_) { /* metadata enrichment is best-effort */ }
+    }
+
     // ── Non-Pokemon TCG sets: RPC fast path + pagination fallback ──
     // The RPC (catalog_sets_summary_v2) returns one row per (set_code,
     // set_name) with total / has_singles / has_sealed / max_created_at
@@ -33788,9 +33822,25 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
               console.warn('[sets] catalog_sets_summary_v2 RPC not installed — falling back to slow client-side pagination. Run migration_catalog_sets_summary_v2.sql to enable the fast path.');
               sets = await _fetchTcgSetsViaPagination(cfg.prefix);
             }
+            // Enrich with release_date from set_metadata. Mirror scripts
+            // (mirror_mtg_set_logos.py via Scryfall, mirror_ygo_set_metadata.py
+            // via YGOPRODeck, mirror_set_logos.py via pokemontcg.io)
+            // populate set_metadata rows keyed by `<prefix><set_code>`,
+            // which matches our catalog's set_code with the cfg.prefix
+            // glued on. Sets without metadata fall back to max_created_at
+            // sort so partially-covered TCGs still order sensibly.
+            try { await _enrichTcgSetsWithReleaseDate(sets, cfg.prefix); } catch(_) {}
             sets.sort((a, b) => {
+              // Primary: release_date DESC (newest first)
+              const ad = a.release_date || '';
+              const bd = b.release_date || '';
+              if (ad && bd && ad !== bd) return bd.localeCompare(ad);
+              if (ad && !bd) return -1;
+              if (bd && !ad) return  1;
+              // Secondary: catalog insertion recency (proxy for "newly added")
               const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
               if (dt !== 0) return dt;
+              // Tertiary: alphabetical
               return (a.set_name || '').localeCompare(b.set_name || '');
             });
             _tcgSetsCache[gameKey] = { timestamp: now, sets };
@@ -37989,8 +38039,38 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     //     no leading zero, and total < 20.
     //   • Prefer candidates with a leading zero (collector numbers
     //     almost always pad: "027/350", "001/168") or total >= 20.
-    function parseCardNumber(text) {
+    function parseCardNumber(text, tcg) {
       if (!text) return null;
+      // ── Yu-Gi-Oh card numbers are formatted differently (no fraction):
+      //   SET-LANG###[A-Z]   e.g. LDS3-EN001, MAGO-EN012, ROTD-EN045b
+      //   TP#-###            tournament packs e.g. TP8-016
+      // YGO never uses "###/###" fraction notation, so when the scanner
+      // tells us this is a YGO card, look for the SET-LANG pattern first.
+      if (tcg === 'yugioh') {
+        const ygoRe = /\b([A-Z]{2,5})-(EN|FR|DE|JP|IT|SP|KR|TC|CH)(\d{3,4})([A-Z])?\b/i;
+        const ygoM  = text.match(ygoRe);
+        if (ygoM) {
+          return {
+            full:   `${ygoM[1]}-${ygoM[2]}${ygoM[3]}${ygoM[4]||''}`.toUpperCase(),
+            num:    String(parseInt(ygoM[3], 10)),
+            numRaw: ygoM[3],
+            total:  null,
+            setCode: ygoM[1].toUpperCase(),
+          };
+        }
+        const tpRe = /\b(TP\d+)-(\d{3})\b/i;
+        const tpM  = text.match(tpRe);
+        if (tpM) {
+          return {
+            full:   `${tpM[1]}-${tpM[2]}`.toUpperCase(),
+            num:    String(parseInt(tpM[2], 10)),
+            numRaw: tpM[2],
+            total:  null,
+            setCode: tpM[1].toUpperCase(),
+          };
+        }
+        // fall through to the fraction parser as last resort
+      }
       const re = /\b([A-Z]{0,4}\d+)\s*[\/\\|]\s*([A-Z]{0,4}\d+)\b/g;
       let m;
       let fallback = null;
@@ -38114,6 +38194,16 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (/\b\d+\s*\/\s*\d+\b/.test(text) && /\bcreature\b/i.test(t)) scores.magic += 1; // P/T
       // "Mana Value" or older "Converted Mana Cost"
       if (/(mana\s*value|converted\s*mana\s*cost)/i.test(t)) scores.magic += 1;
+      // Copyright + artist credit lines are MTG-exclusive in their format:
+      //   "™ & © 1993-2024 Wizards of the Coast"
+      //   "Illus. John Avon" / "Illus: Rebecca Guay"
+      // Token cards in particular often have very little text other than
+      // these footer lines, so they're the only reliable TCG signal.
+      if (/wizards\s+of\s+the\s+coast/i.test(t)) scores.magic += 2;
+      if (/™\s*&?\s*©/i.test(text) || /tm\s*&?\s*©/i.test(t)) scores.magic += 1;
+      if (/\billus[\.:]\s*[A-Z]/i.test(text))   scores.magic += 1;
+      // Token cards: footer reads "TOKEN" or "0/0 Token Creature - …"
+      if (/\btoken\b.*\bcreature\b/i.test(t))   scores.magic += 2;
 
       // Yu-Gi-Oh signals (ATK/DEF format, attribute words, level stars)
       if (/\batk\s*\/?\s*\d/i.test(text))      scores.yugioh += 2;
@@ -38256,7 +38346,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       return null;
     }
 
-    function parseCardName(text) {
+    function parseCardName(text, tcg) {
       if (!text) return null;
       text = normalizeOcr(text);  // normalise smart quotes/dashes before parsing
       const lines = text.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
@@ -38266,6 +38356,50 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       if (lang === 'JA') return parseJapaneseCardName(lines);
       if (lang === 'ZH') return parseChineseCardName(lines);
       if (lang === 'KO') return parseKoreanCardName(lines);
+
+      // ── ALL-CAPS branch (YGO + MTG tokens) ───────────────────────────────
+      // Both Yu-Gi-Oh and Magic-the-Gathering tokens print the card name in
+      // SOLID CAPS ("BLUE-EYES WHITE DRAGON", "LASERBEAK", "ANGEL WARRIOR").
+      // The default NAME_RE rejects all-caps as background noise (HAT, ATS,
+      // OLUME, MUTE) which is the right call for Pokemon — but it strips
+      // out the actual card names on YGO + MTG-token scans.
+      //
+      // Heuristic: if we know the scan is yugioh, scan the first ~8 lines
+      // for the first ALL-CAPS line that isn't an attribute label, type
+      // line, set code, or token keyword. For MTG tokens, the scan TCG is
+      // still 'magic', so we additionally activate this branch when any
+      // early line matches the MTG token signature ("Token Creature -").
+      const ALLCAPS_RE   = /^[A-Z][A-Z0-9\s\-'&!?.,]{1,40}$/;
+      const YGO_SKIP     = /^(EARTH|FIRE|WATER|WIND|LIGHT|DARK|DIVINE|MONSTER|SPELL|TRAP|EFFECT|FUSION|SYNCHRO|XYZ|LINK|RITUAL|PENDULUM|ATK|DEF|LEVEL|RANK|YU-?GI-?OH|TM|TCG|NORMAL\s+MONSTER|SPELL\s+CARD|TRAP\s+CARD|CONTINUOUS|QUICK-PLAY|FIELD\s+SPELL|EQUIP\s+SPELL|COUNTER\s+TRAP)$/;
+      const TOKEN_SKIP   = /^(TOKEN|FLYING|TRAMPLE|HEXPROOF|LIFELINK|VIGILANCE|DEATHTOUCH|HASTE|REACH|MENACE|FIRST\s+STRIKE|DOUBLE\s+STRIKE|INDESTRUCTIBLE|FLASH|DEFENDER|WARD|PROTECTION|TOUGHNESS|POWER|SHROUD|CREATURE|ARTIFACT|ENCHANTMENT|LAND|INSTANT|SORCERY|PLANESWALKER|BATTLE)$/;
+      const looksLikeMtgToken = lines.slice(0, 6).some(function(l){
+        return /token\s+(legendary\s+)?(artifact\s+|enchantment\s+)?creature/i.test(l);
+      });
+      var wantAllCaps = (tcg === 'yugioh') || looksLikeMtgToken;
+      if (wantAllCaps) {
+        for (let i = 0; i < Math.min(8, lines.length); i++) {
+          const raw = lines[i];
+          if (!raw || raw.length < 2 || raw.length > 40) continue;
+          if (!ALLCAPS_RE.test(raw)) continue;
+          // Reject pure-digit OCR fragments ("0123") and isolated set codes
+          if (/^[A-Z]{2,5}-?\d{3,4}$/.test(raw)) continue;
+          // Reject the YGO / MTG-token keyword vocabulary
+          if (YGO_SKIP.test(raw)) continue;
+          if (TOKEN_SKIP.test(raw)) continue;
+          // Reject MTG type lines even when all-caps
+          if (/^(TOKEN\s+)?(LEGENDARY\s+|SNOW\s+|BASIC\s+|TRIBAL\s+)?(ARTIFACT\s+|ENCHANTMENT\s+|LAND\s+|CREATURE|SORCERY|INSTANT|PLANESWALKER|BATTLE|VEHICLE)(\s*[-—–:].+)?$/.test(raw)) continue;
+          // Require at least one letter; reject lines that are mostly
+          // punctuation / noise.
+          if (!/[A-Z]{2,}/.test(raw)) continue;
+          // Title-case for the catalog ilike search ("BLUE-EYES WHITE
+          // DRAGON" → "Blue-eyes White Dragon"). Catalog stores names in
+          // proper case so a literal all-caps query never matches.
+          const titled = raw.toLowerCase().replace(/(^|[\s\-'])([a-z])/g, function(_, p, c){
+            return p + c.toUpperCase();
+          });
+          return _cleanCardName(titled);
+        }
+      }
 
       const SUFFIX    = /^(VSTAR|VMAX|GX|EX|V|VUNION|TAG\s*TEAM)$/i;
       const STAGE_PRE = /^(Basic|Stage\s*[12])\s+/i;  // stage as prefix on same line
@@ -38437,20 +38571,22 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
           }
         }
 
+        // Detect language + TCG FIRST so the parsers can route by game.
+        // Yu-Gi-Oh has SHOUTED card names ("BLUE-EYES WHITE DRAGON") and
+        // a SET-LANG### card-number format (not Pokemon's ###/### fraction).
+        // MTG tokens also print names in solid caps. Both cases need a
+        // game hint passed into parseCardName/parseCardNumber.
+        const ocrLang     = detectOcrLanguage(fullText);    // 'JA' | 'ZH' | 'KO' | 'EN'
+        const isJpOcr     = ocrLang === 'JA';                // back-compat alias
+        // Non-EN routes to Pokemon (only Pokemon has multi-lang catalog).
+        const scanTcg = (ocrLang === 'EN') ? detectScanTcg(fullText) : 'pokemon';
+
         // parseCardNumber now returns { full, num, numRaw, total }
-        const parsed     = parseCardNumber(fullText);
+        const parsed     = parseCardNumber(fullText, scanTcg);
         const numStripped = parsed ? parsed.num    : null;  // "94"
         const numRaw      = parsed ? parsed.numRaw : null;  // "094"
         const numTotal    = parsed ? parsed.total  : null;  // "165" — set base size fingerprint
-        const cardName    = parseCardName(fullText);
-        const ocrLang     = detectOcrLanguage(fullText);    // 'JA' | 'ZH' | 'KO' | 'EN'
-        const isJpOcr     = ocrLang === 'JA';                // back-compat alias
-        // Detect the TCG so the search scopes to the right game. Non-EN
-        // languages always route to Pokemon — only Pokemon has multi-lang
-        // catalog coverage; a JP MTG card scan is exceedingly rare and
-        // would still benefit from the Pokemon JP catalog as a fallback
-        // rather than searching the empty MTG-JP set.
-        const scanTcg = (ocrLang === 'EN') ? detectScanTcg(fullText) : 'pokemon';
+        const cardName    = parseCardName(fullText, scanTcg);
 
         // Derive extra name variants for trainer-card mismatches:
         //   "N'Zekrom" → expandedName="N's Zekrom", pokemonBase="Zekrom"
@@ -38787,8 +38923,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
             return t.length >= 3 && !STOP.has(t);
           });
           if (queryTokens.length) {
+            // Yu-Gi-Oh + MTG token scans frequently produce OCR names that
+            // *look* like the card title but are noisy enough that strict
+            // token overlap throws away high-confidence CLIP matches —
+            // e.g. CLIP says "Laserbeak" at 0.93 but OCR mis-read it as
+            // "LASERBE AK" so the cleaned token doesn't overlap. For those
+            // TCGs we relax the filter: any CLIP candidate ≥ 0.90 stays
+            // even without OCR confirmation.
+            const relaxClipFloor = (typeof scanTcg !== 'undefined' && scanTcg !== 'pokemon') ? 0.90 : Infinity;
             filtered = merged.filter(function(m) {
               if (m._ocr) return true;  // came from an OCR-anchored query
+              if ((m.similarity || 0) >= relaxClipFloor) return true; // high-confidence CLIP
               const rn = (m.name || '').toLowerCase();
               if (!rn) return false;
               // Keep if any meaningful query token appears in the
