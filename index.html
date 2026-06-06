@@ -8803,11 +8803,11 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     // ── Subscription tier system ──────────────────────────────────────────────
     // Tiers (in order): 'free' | 'collector' | 'enthusiast' | 'vendor' | 'shop'
     //
-    // The old 'vendor' tier ($25/mo) was renamed to 'enthusiast' ($20/mo) and
-    // gained a 40-listing/mo marketplace cap. A NEW 'vendor' tier ($75/mo)
-    // sits between enthusiast and shop — adds 150-listing cap, non-TCG product
-    // listing, and product scanner access. Shop stays unchanged ($200/mo
-    // unlimited).
+    // The old 'vendor' tier ($25/mo) was renamed to 'enthusiast' (now
+    // $10/mo as of 2026-06-05) and gained a 40-listing/mo marketplace cap.
+    // A NEW 'vendor' tier ($50/mo) sits between enthusiast and shop —
+    // adds 150-listing cap, non-TCG product listing, and product scanner
+    // access. Shop is the top tier ($150/mo, unlimited).
     //
     // Migration: existing rows with subscription_tier='vendor' are renamed
     // to 'enthusiast' via migration_tier_rename_vendor_to_enthusiast.sql.
@@ -12428,9 +12428,9 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
                  products to autofill their listings. -->
             ${(() => {
               // Product scanner moved from shop-only to vendor+ as part of
-              // the new tier structure. Vendor tier ($75/mo) and Shop tier
-              // both unlock the non-TCG product scanner. Admins always
-              // qualify regardless of tier.
+              // the new tier structure. Vendor tier ($50/mo) and Shop tier
+              // ($150/mo) both unlock the non-TCG product scanner. Admins
+              // always qualify regardless of tier.
               if (!hasProductScanner() && !(currentUser && currentUser.is_admin)) return '';
               return `<div class="ndash-panel ndash-scan-wrap" data-panel-id="scan-product-cta" style="position:relative;margin-top:10px">
                 <div style="position:absolute;top:7px;right:8px;z-index:3;display:flex;align-items:center">
@@ -20022,10 +20022,14 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
       },
       {
         // Yearly discount scales with tier price: Collector 0% (no annual),
-        // Enthusiast 17%, Vendor 20%, Shop 25%. Matches the pre-rename
-        // pattern (old Vendor $25 → $239.99 = 20% off; Shop $200 → $1,800
-        // = 25% off). Bigger savings as price climbs.
-        id: 'enthusiast', label: 'Enthusiast', jpLabel: '愛好家', monthly: 20, annual: 199.99,
+        // Enthusiast 0% (no annual — entry tier should be commitment-free),
+        // Vendor 20%, Shop 25%. Bigger savings as price climbs.
+        // 2026-06-05 price drop: Enthusiast 20→10, Vendor 75→50, Shop 200→150
+        // — easier ramp for early users; we can revisit when seller volume
+        // is up. NOTE: Stripe price IDs in env vars must be updated to
+        // match these new amounts (existing subscribers stay grandfathered
+        // at their original price; new sign-ups hit the new prices).
+        id: 'enthusiast', label: 'Enthusiast', jpLabel: '愛好家', monthly: 10, annual: null,
         ctaLabel: 'Start Enthusiast', ctaAction: 'checkout_enthusiast',
         badge: null,
         features: [
@@ -20048,7 +20052,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         locked: ['Sealed product listings (boxes/ETBs/tins)','Non-TCG product listings','Product scanner (Funko/Manga/etc.)','150 listing slots','Monthly revenue chart','Top cards & channel analytics','Full P&L report PDF'],
       },
       {
-        id: 'vendor', label: 'Vendor', jpLabel: 'ベンダー', monthly: 75, annual: 719.99,
+        id: 'vendor', label: 'Vendor', jpLabel: 'ベンダー', monthly: 50, annual: 480,
         ctaLabel: 'Start Vendor', ctaAction: 'checkout_vendor',
         badge: null,
         features: [
@@ -20066,7 +20070,7 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
         locked: ['Unlimited listings','White-label storefront page','Full P&L report PDF','Dedicated account manager','Featured placement'],
       },
       {
-        id: 'shop', label: 'Shop', jpLabel: 'ショップ', monthly: 200, annual: 1800,
+        id: 'shop', label: 'Shop', jpLabel: 'ショップ', monthly: 150, annual: 1350,
         ctaLabel: 'Contact us', ctaAction: 'shop_intake',
         badge: null,
         features: [
