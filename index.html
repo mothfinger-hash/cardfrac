@@ -1268,6 +1268,17 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       font-size:.7rem; letter-spacing:.08em;
       font-weight:700;
     }
+    /* Compact (label-only) variant. The icon span was dropped from the
+       4 nav buttons, so the row no longer needs vertical room for two
+       lines. Cuts padding ~50% and shrinks the row by ~24px, giving
+       the card results grid below more usable area. */
+    .ac-mob-clean .ac-nav-grid.ac-nav-compact .ac-ni{
+      padding:8px 10px;
+      gap:0;
+    }
+    .ac-mob-clean .ac-nav-grid.ac-nav-compact .ac-ni-lbl{
+      font-size:.72rem;
+    }
     .ac-mob-clean #acCrtMob{
       flex:1;min-height:140px;
       background:rgba(0,0,0,.5);
@@ -7747,23 +7758,23 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
 
         <!-- 2×2 button grid. IDs + onclicks preserved so existing JS
              handlers (acMobToggleSearch, acNavClick, openMultiScan,
-             openManualAddModal, scanFromAddCard) work unchanged. -->
-        <div class="ac-nav ac-nav-grid">
+             openManualAddModal, scanFromAddCard) work unchanged.
+             Glyphs removed per design pass — labels alone are clearer
+             and the row shrinks vertically, giving the card grid more
+             room. 'Manual' renamed to 'Custom' to signal the wider
+             use case (fan art, prototypes, anything not in catalog). -->
+        <div class="ac-nav ac-nav-grid ac-nav-compact">
           <div class="ac-ni on" id="acNavSearch" onclick="acMobToggleSearch()">
-            <span class="ac-ni-ico">◎</span>
             <span class="ac-ni-lbl">Search</span>
           </div>
           <div class="ac-ni" onclick="acNavClick(this);openManualAddModal()">
-            <span class="ac-ni-ico">＋</span>
-            <span class="ac-ni-lbl">Manual</span>
+            <span class="ac-ni-lbl">Custom</span>
           </div>
           <div class="ac-ni" onclick="acNavClick(this);document.getElementById('acMobScanInput').click()">
-            <span class="ac-ni-ico">⬡</span>
             <span class="ac-ni-lbl">Scan</span>
           </div>
           <input id="acMobScanInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFromAddCard(this)">
           <div class="ac-ni" onclick="acNavClick(this);openMultiScan()">
-            <span class="ac-ni-ico">▣</span>
             <span class="ac-ni-lbl">Multi Scan</span>
           </div>
         </div>
