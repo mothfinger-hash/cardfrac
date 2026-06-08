@@ -2339,7 +2339,11 @@
       // YGO never uses "###/###" fraction notation, so when the scanner
       // tells us this is a YGO card, look for the SET-LANG pattern first.
       if (tcg === 'yugioh') {
-        const ygoRe = /\b([A-Z]{2,5})-(EN|FR|DE|JP|IT|SP|KR|TC|CH)(\d{3,4})([A-Z])?\b/i;
+        // YGO set codes can contain digits (RA05, LDS3, etc.) — the
+        // previous `[A-Z]{2,5}` rejected anything with digits in the
+        // prefix, so RA05-EN085 (Blue-Eyes from Quarter Century Bonanza)
+        // never parsed. Allow up to 3 trailing digits in the prefix.
+        const ygoRe = /\b([A-Z]{2,5}\d{0,3})-(EN|FR|DE|JP|IT|SP|KR|TC|CH)(\d{3,4})([A-Z])?\b/i;
         const ygoM  = text.match(ygoRe);
         if (ygoM) {
           return {
@@ -2390,7 +2394,23 @@
           total:  String(totalInt),
         };
       }
-      if (!fallback) return null;
+      // Topps / merchandise card numbers — bare "#NN" in the corner.
+      // No fraction, no set total. Only used when nothing better was
+      // found, so it doesn't override real card numbers that have a
+      // total component.
+      if (!fallback) {
+        const toppsMatch = text.match(/^\s*#(\d{1,3})\b/m);
+        if (toppsMatch) {
+          const n = parseInt(toppsMatch[1], 10);
+          return {
+            full:   '#' + toppsMatch[1],
+            num:    String(n),
+            numRaw: toppsMatch[1],
+            total:  null,
+          };
+        }
+        return null;
+      }
       // No "proper" collector number found — fall back to whatever the
       // first P/T-shaped match was, but mark it. The caller's downstream
       // search will probably miss anyway, but it preserves the old
@@ -2738,6 +2758,44 @@
       // desk pads, keyboards, and labels behind the card.
       const NAME_RE   = /^(?=.*[a-zà-ö])[A-ZÀ-Ö][a-zA-ZÀ-ö0-9\s\-'éèê&]+$/;
 
+      // ── Topps / vintage merchandise layout ──────────────────────────
+      // Topps Pokemon cards (the 1999-2001 sticker/foil set) print the
+      // card in the layout:
+      //   #45
+      //   POKEMON   (often OCR'd as PokeMON / PokeMoy / Pok'emon)
+      //   VILEPLUME
+      // The standard parser misses this because:
+      //   - The card name is ALL-CAPS (NAME_RE requires a lowercase
+      //     letter to filter out background noise)
+      //   - SKIP catches "Pokemon" but if the OCR mangles it to PokeMoy
+      //     or similar, SKIP misses it and the brand line gets returned
+      //     as the name instead.
+      // Detect the layout signature first: a #XX number line in the
+      // first 4 lines AND a Pokemon-like brand line nearby. Then look
+      // for the all-caps name line that follows.
+      const TOPPS_NUM   = /^#\d{1,3}$/;
+      const POKEMON_ISH = /^pok[eé\']?[mM][oO0aäAÄ][nNyY][!\.]?$/i;
+      const TOPPS_NAME  = /^[A-Z][A-Z'\-\s]{2,18}$/;  // ALL CAPS, no digits
+      let toppsNumIdx   = -1;
+      let toppsBrandIdx = -1;
+      for (let i = 0; i < Math.min(6, lines.length); i++) {
+        if (toppsNumIdx   < 0 && TOPPS_NUM.test(lines[i]))   toppsNumIdx   = i;
+        if (toppsBrandIdx < 0 && POKEMON_ISH.test(lines[i])) toppsBrandIdx = i;
+      }
+      if (toppsNumIdx >= 0 && toppsBrandIdx >= 0) {
+        // Look for the all-caps name line after the brand line.
+        for (let j = toppsBrandIdx + 1; j < Math.min(toppsBrandIdx + 5, lines.length); j++) {
+          if (TOPPS_NAME.test(lines[j])) {
+            // Title-case it so the catalog ilike search matches
+            // ("VILEPLUME" → "Vileplume").
+            const titled = lines[j].toLowerCase().replace(/(^|[\s\-'])([a-z])/g, function(_, p, c) {
+              return p + c.toUpperCase();
+            });
+            return _cleanCardName(titled);
+          }
+        }
+      }
+
       for (let i = 0; i < Math.min(12, lines.length); i++) {
         const line = lines[i];
 
@@ -2750,13 +2808,34 @@
           if (namePart.endsWith('&') && i + 1 < lines.length) {
             namePart = namePart + ' ' + lines[i + 1].trim();
           }
-          if (namePart.length > 1) return _cleanCardName(namePart);
+          // Validate that what's left after stripping the stage prefix
+          // isn't itself a keyword. "Basic Pokémon" is a TYPE LABEL on
+          // old-school Wizards cards (Chansey, Magmar, Geodude…) — stripping
+          // "Basic " leaves "Pokémon" which is in SKIP. Without this check
+          // the parser returned "Pokémon" as the card name for every Base
+          // Set basic. Same guard for "Basic Trainer" etc.
+          if (namePart.length > 1 && !SKIP.test(namePart) && !EVOLVE_PREFIX.test(namePart)) {
+            return _cleanCardName(namePart);
+          }
+          // Fall through to the next pattern instead of returning — the
+          // actual name probably sits on the line below ("Basic Pokémon
+          // \n Chansey \n 120 HP"). The fallback loop handles it.
         }
 
         // Pattern: "VSTAR Lugia" — type suffix before name, flip to "Lugia VSTAR"
         const prefixMatch = line.match(/^(VSTAR|VMAX|GX|EX|V)\s+([A-ZÀ-Ö][a-zA-ZÀ-ö\s\-'éèê&]+)$/);
         if (prefixMatch) {
-          return _cleanCardName(prefixMatch[2].trim()) + ' ' + prefixMatch[1].toUpperCase();
+          // Strip OCR-noise trailing suffix words that get captured into
+          // the name match: "VSTAR Charizard STAR" → m[2] = "Charizard
+          // STAR" where the trailing STAR is just OCR repeating the
+          // prefix from the card's display art. Drop any of the same
+          // suffix words off the end so we don't double-stamp the name.
+          const cleanedName = prefixMatch[2]
+            .replace(/\s+(STAR|MAX|VSTAR|VMAX|VUNION)\s*$/i, '')
+            .trim();
+          if (cleanedName.length > 0) {
+            return _cleanCardName(cleanedName) + ' ' + prefixMatch[1].toUpperCase();
+          }
         }
 
         // Pattern: "Lugia\nVSTAR" — name then suffix on next line
@@ -2776,9 +2855,27 @@
         // The next line is where HP often glues onto the name in OCR
         // ("Mega Pyroar ex340", "Mega Floette ex 250") — _cleanCardName
         // strips trailing digit runs so the search query stays clean.
-        if (STAGE.test(line) && i + 1 < lines.length) {
-          const next = lines[i + 1].trim();
-          if (NAME_RE.test(next) && next.length > 1 && next.length < 40) return _cleanCardName(next);
+        //
+        // Stage-2 cards lay out as STAGE 2 / Evolves from X / RealName
+        // on three lines, so the "next" line after STAGE is often the
+        // "Evolves from" line. Walk forward through up to 3 lines and
+        // skip anything matching EVOLVE_PREFIX or SKIP. Original code
+        // returned the first next line unconditionally, which is why
+        // Fossil Gengar parsed as "Evolves from Haunter".
+        if (STAGE.test(line)) {
+          for (let k = 1; k <= 3 && i + k < lines.length; k++) {
+            const next = lines[i + k].trim();
+            if (!next) continue;
+            if (SKIP.test(next)) continue;
+            if (EVOLVE_PREFIX.test(next)) continue;
+            if (MAGIC_TYPE_LINE.test(next)) continue;
+            if (NAME_RE.test(next) && next.length > 1 && next.length < 40) {
+              return _cleanCardName(next);
+            }
+            // First non-skip line was bad too — stop scanning so we
+            // don't accidentally grab an attack name from deeper down.
+            break;
+          }
         }
 
         // Fallback: first valid title-case line that isn't a keyword
@@ -2898,11 +2995,12 @@
         // Non-EN routes to Pokemon (only Pokemon has multi-lang catalog).
         const scanTcg = (ocrLang === 'EN') ? detectScanTcg(fullText) : 'pokemon';
 
-        // parseCardNumber now returns { full, num, numRaw, total }
+        // parseCardNumber now returns { full, num, numRaw, total, setCode? }
         const parsed     = parseCardNumber(fullText, scanTcg);
         const numStripped = parsed ? parsed.num    : null;  // "94"
         const numRaw      = parsed ? parsed.numRaw : null;  // "094"
         const numTotal    = parsed ? parsed.total  : null;  // "165" — set base size fingerprint
+        const parsedSetCode = parsed ? parsed.setCode || null : null;  // YGO: "RA05", "LDS3", etc.
         const cardName    = parseCardName(fullText, scanTcg);
 
         // Derive extra name variants for trainer-card mismatches:
@@ -3036,7 +3134,7 @@
         })();
         const _hasNumVariants = _cardNumVariants.length > 0;
 
-        const [clipRes, nameNumRes, nameNumRawRes, baseNameNumRes, baseNameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes] = await Promise.all([
+        const [clipRes, nameNumRes, nameNumRawRes, baseNameNumRes, baseNameNumRawRes, numRes, numRawRes, nameRes, baseNameRes, setTotalRes, setConfirmRes, expandedRes, trainerPokemonRes, jpNumRes, ygoSetCodeRes] = await Promise.all([
           _runClipMatch(),
           // A — exact cardName + any card_number variant
           (_hasNumVariants && cardName)
@@ -3106,6 +3204,25 @@
                                    : '';
                 return q().or(prefixFilter).or(orFilter).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }));
               })()
+            : Promise.resolve({ data: [] }),
+          // L — YGO set-code + card-number lookup. Triggered when the
+          //     OCR captured a YGO set-coded number like "RA05-EN085".
+          //     YGO catalog rows store the set as set_code='RA05' and
+          //     card_number='085' (or zero-padded). Without this query
+          //     YGO cards with no name match (Blue-Eyes White Dragon,
+          //     OCR'd as "BLUE-EYES WHITE DRAGON GE" — garbled "ULTRA"
+          //     suffix breaks the name search) get zero hits because
+          //     YGO doesn't have a name+num fallback path. Try both
+          //     padded ("085") and unpadded ("85") forms.
+          (scanTcg === 'yugioh' && parsedSetCode && numStripped)
+            ? (() => {
+                const numFmts = [numStripped];
+                if (numRaw && numRaw !== numStripped) numFmts.push(numRaw);
+                const orFilter = numFmts.filter((v,i,a) => a.indexOf(v) === i)
+                  .map(n => 'card_number.eq.' + n).join(',');
+                return q().eq('set_code', parsedSetCode).or(orFilter).limit(10)
+                  .then(r => r || { data: [] }).catch(() => ({ data: [] }));
+              })()
             : Promise.resolve({ data: [] })
         ]);
 
@@ -3149,6 +3266,8 @@
         const expandedHits   = expandedRes.data     || [];  // trainer name expanded (N's Zekrom)
         const trainerPokHits = trainerPokemonRes.data || []; // Pokémon name only (Zekrom)
         const jpNumHits      = (jpNumRes && jpNumRes.data) || [];  // JP catalog by card number
+        // L — YGO set-coded number lookup (RA05-EN085 → set_code='RA05' + card_number='085')
+        const ygoSetHits     = (ygoSetCodeRes && ygoSetCodeRes.data) || [];
 
         // H — set_codes that contain a card numbered exactly numTotal (e.g. '165')
         // These are confirmed to be the right-sized set for this card's numbering system.
