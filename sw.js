@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v458';
+const CACHE = 'pathbinder-v460';
 
 const PRECACHE = [
   '/offline.html',
@@ -633,6 +633,9 @@ const PRECACHE = [
   // renderer + cyberpunk palette + hat mask. Loaded at idle for
   // PFP painting, or on demand if user opens the avatar editor.
   '/pb-avatar.js',
+  // /pb-photo.js — lazy-loaded Card Photo Update modal (~18 KB).
+  // Crop + bg removal. Fires when user clicks Edit Photo on a card.
+  '/pb-photo.js',
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap'
 ];
 

@@ -3465,18 +3465,22 @@
       // escape any embedded single quotes in the value.
       const imgUrlAttr = _escJsAttr(display.card_image_url || '');
       const unitIdAttr = _escJsAttr(current.id);
-      // Entry animation class — set by _animateUnitStackTransition
-      // when an arrow tap or swipe triggers a re-render. is-enter-right
-      // slides in from the right (the user advanced forward → new
-      // card flies in from the right). is-enter-left for backwards.
-      // Consumed on this render then cleared so the next render
-      // doesn't accidentally replay the entry on an unrelated update.
-      let enterClass = '';
-      if (s._enterDir === 1)  enterClass = ' is-enter-right';
-      if (s._enterDir === -1) enterClass = ' is-enter-left';
+      // Entry animation — set by _animateUnitStackTransition when an
+      // arrow tap or swipe triggers a re-render. The new front renders
+      // OFF-SCREEN (translateX(±110%)) and a post-render rAF nudges it
+      // back to translateX(0), triggering a CSS transition. Inline-style
+      // approach because v458's CSS keyframes were getting pre-empted
+      // by the innerHTML replace mid-animation.
+      const enterDir = s._enterDir || 0;
       s._enterDir = 0;
+      let frontInitialTransform = '';
+      if (enterDir === 1)  frontInitialTransform = 'translateX(110%) rotate(4deg)';
+      if (enterDir === -1) frontInitialTransform = 'translateX(-110%) rotate(-4deg)';
+      const frontStyleAttr = frontInitialTransform
+        ? ' style="transform:' + frontInitialTransform + ';opacity:0;transition:transform .3s cubic-bezier(.2,.7,.3,1),opacity .3s cubic-bezier(.2,.7,.3,1)"'
+        : '';
       const front = ''
-        + '<div class="pb-unit-slide is-front' + enterClass + '"' + (display.card_image_url ? " onclick=\"openImageLightbox('" + imgUrlAttr + "')\"" : '') + '>'
+        + '<div class="pb-unit-slide is-front"' + frontStyleAttr + (display.card_image_url ? " onclick=\"openImageLightbox('" + imgUrlAttr + "')\"" : '') + '>'
         +   '<img src="' + _escHtml(display.card_image_url || '') + '" alt="" onerror="this.style.display=\'none\'" loading="lazy" decoding="async">'
         +   '<span class="' + badgeClass + '">' + _escHtml(display.condLabel) + '</span>'
         +   '<span class="pb-unit-ordinal">' + (s.index + 1) + ' / ' + total + '</span>'
@@ -3505,11 +3509,48 @@
         +   '<button class="pb-unit-nav-arrow pb-unit-nav-next" onclick="_advanceUnitStack(1)"' + nextDis + ' aria-label="Next unit">›</button>'
         +   '<div class="pb-unit-dots">' + dots + '</div>'
         + '</div>';
+
+      // If the new front was rendered off-screen for an entry animation,
+      // nudge it back to translateX(0) on the next paint frame. The CSS
+      // transition inline-styled above handles the motion.
+      if (frontInitialTransform) {
+        const newFront = slotWrap.querySelector('.pb-unit-slide.is-front');
+        if (newFront) {
+          // Two rAFs: the first ensures the initial off-screen state
+          // is committed; the second triggers the transition to 0.
+          // Single rAF was sometimes coalesced with the initial paint
+          // and skipped the animation.
+          requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+              newFront.style.transform = 'translateX(0) rotate(0deg)';
+              newFront.style.opacity   = '1';
+            });
+          });
+        }
+      }
     }
 
     // Animation guard — coalesce rapid arrow taps so we don't queue
     // up overlapping exit/enter cycles. Tracks the in-flight transition.
+    // Has a safety release so the lock cannot get stuck forever.
     let _unitStackAnimating = false;
+    let _unitStackAnimResetTimer = null;
+    function _setStackAnimating(on) {
+      _unitStackAnimating = !!on;
+      if (_unitStackAnimResetTimer) {
+        clearTimeout(_unitStackAnimResetTimer);
+        _unitStackAnimResetTimer = null;
+      }
+      // Safety: even if transitionend never fires (DOM yanked, browser
+      // tab backgrounded, animation cancelled), the lock auto-clears
+      // after 600ms so the user is never stuck.
+      if (on) {
+        _unitStackAnimResetTimer = setTimeout(function() {
+          _unitStackAnimating = false;
+          _unitStackAnimResetTimer = null;
+        }, 600);
+      }
+    }
 
     function _advanceUnitStack(delta) {
       const s = _binderUnitStackState;
@@ -3519,7 +3560,7 @@
       if (next < 0 || next >= s.units.length) return;
       _animateUnitStackTransition(delta, function() {
         s.index = next;
-        _renderUnitStack(delta);
+        _renderUnitStack();
       });
     }
 
@@ -3532,34 +3573,59 @@
       if (delta === 0) return;
       _animateUnitStackTransition(delta, function() {
         s.index = i;
-        _renderUnitStack(delta);
+        _renderUnitStack();
       });
     }
 
-    // Plays the exit animation on the current front slide, then runs
-    // afterExit to swap the index + re-render. The render path checks
-    // _binderUnitStackState._enterDir to apply the matching enter class
-    // to the new front slide so the new card slides in from the side
-    // opposite to the exit direction.
+    // Plays the exit animation on the current front slide via inline
+    // transform + the existing CSS transition (transform .25s ease).
+    // Uses transitionend to know when to swap — avoids the
+    // "setTimeout ran but the browser hadn't actually started the
+    // animation" race that made v458 look like nothing happened.
+    // The new front gets _enterDir set so _renderUnitStack starts it
+    // off-screen and animates back to translateX(0).
     function _animateUnitStackTransition(delta, afterExit) {
       const s = _binderUnitStackState;
-      if (!s) { afterExit(); return; }
+      if (!s) { afterExit(); _setStackAnimating(false); return; }
       const slot = document.getElementById('binderUnitStack_' + s.itemId);
-      if (!slot) { afterExit(); return; }
+      if (!slot) { afterExit(); _setStackAnimating(false); return; }
       const front = slot.querySelector('.pb-unit-slide.is-front');
-      if (!front) { afterExit(); return; }
-      _unitStackAnimating = true;
-      front.classList.add(delta > 0 ? 'is-exit-left' : 'is-exit-right');
+      if (!front) { afterExit(); _setStackAnimating(false); return; }
+      _setStackAnimating(true);
+      // Promote the slide's transition speed slightly so the user
+      // actually SEES the exit. The base rule sets .25s ease but the
+      // is-front rule overrides z-index only; transform inherits the
+      // base transition. Override here for a clearer beat.
+      front.style.transition = 'transform .28s cubic-bezier(.5,0,.6,1), opacity .28s cubic-bezier(.5,0,.6,1)';
+      // Force a reflow so the browser registers the starting transform
+      // (translateX(0)) before we set the destination. Without this,
+      // the browser sometimes coalesces the change with the next paint
+      // and skips the animation entirely.
+      front.style.transform = 'translateX(0) rotate(0deg)';
+      void front.offsetHeight;
+      // Set the exit destination — the slide flies off-screen in the
+      // direction OPPOSITE to where the new card will come in.
+      const exitX  = delta > 0 ? '-110%' : '110%';
+      const exitRot = delta > 0 ? '-4deg' : '4deg';
+      front.style.transform = 'translateX(' + exitX + ') rotate(' + exitRot + ')';
+      front.style.opacity   = '0';
       // Hint the next render to play the entry animation from the
       // opposite side.
       s._enterDir = delta;
-      const EXIT_MS = 250;
-      setTimeout(function() {
+      let fired = false;
+      const swap = function() {
+        if (fired) return;
+        fired = true;
+        try { front.removeEventListener('transitionend', swap); } catch(_) {}
         afterExit();
-        // _unitStackAnimating clears AFTER the enter animation duration
-        // so a rapid second tap doesn't interrupt mid-enter.
-        setTimeout(function() { _unitStackAnimating = false; }, 280);
-      }, EXIT_MS);
+        // Tiny grace period so the enter animation gets a clean start
+        // before another tap can interrupt.
+        setTimeout(function() { _setStackAnimating(false); }, 280);
+      };
+      front.addEventListener('transitionend', swap, { once: true });
+      // Belt-and-suspenders: transitionend doesn't fire if the element
+      // gets removed from the DOM mid-transition. Fall back to a timer.
+      setTimeout(swap, 320);
     }
 
     // Lightweight horizontal-swipe handler. Threshold = 40px so
@@ -18294,425 +18360,57 @@
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    // ── Card Photo Update Modal (crop + optional bg removal) ──────────────
-    var _cpItemId   = null;
-    var _cpCropper  = null;
-    var _cpBgBusy   = false;
-    var _cpOrigBlob = null;
-    var _cpSide     = 'front';   // 'front' | 'back' — which photo we're editing
-    var _cpDirty    = false;     // true if user has changed something un-saved
 
-    async function _cpLoadCropperJs() {
-      if (window.Cropper) return;
-      if (!document.getElementById('cropperCss')) {
-        var link  = document.createElement('link');
-        link.id   = 'cropperCss';
-        link.rel  = 'stylesheet';
-        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css';
-        document.head.appendChild(link);
-      }
-      await new Promise(function(resolve, reject) {
-        var s  = document.createElement('script');
-        s.src  = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js';
-        s.onload  = resolve;
-        s.onerror = reject;
+    // ── Card Photo Update Modal — lazy-loaded ───────────────────────
+    // The actual modal (crop + bg removal, ~18 KB) lives in
+    // /pb-photo.js and only loads when the user clicks Edit Photo
+    // on a binder card. Once loaded, the top-level `function name()`
+    // declarations in pb-photo.js become window globals and
+    // overwrite the stubs below.
+    var _photoLoadedFlag = false;
+    var _photoLoadPromise = null;
+    function _ensurePhotoModal() {
+      if (_photoLoadedFlag) return Promise.resolve();
+      if (_photoLoadPromise) return _photoLoadPromise;
+      _photoLoadPromise = new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = '/pb-photo.js';
+        s.onload  = function() { _photoLoadedFlag = true; resolve(); };
+        s.onerror = function(e) { _photoLoadPromise = null; reject(e); };
         document.head.appendChild(s);
       });
+      return _photoLoadPromise;
     }
-
-    function openCardPhotoModal(itemId, side) {
-      _cpItemId = itemId;
-      _cpSide   = (side === 'back') ? 'back' : 'front';
-      _cpDirty  = false;
-      cpResetFile();
-      _cpUpdateSideTabs();
-      openModal('cardPhotoModal');
-      // Pre-load the existing photo for the chosen side so the user
-      // can re-crop / rotate / remove-bg without re-uploading anything.
-      _cpTryLoadExisting();
+    // Idle prefetch — after page interactive. User would likely take
+    // > 4s to navigate to a card detail and click Edit Photo anyway.
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(function() { _ensurePhotoModal().catch(function(){}); }, { timeout: 7000 });
+    } else {
+      setTimeout(function() { _ensurePhotoModal().catch(function(){}); }, 5000);
     }
-
-    function closeCardPhotoModal() {
-      if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
-      _cpDirty = false;
-      // Clear any in-flight animated-dots timers so they don't keep
-      // running after the modal closes.
-      var btn    = document.getElementById('cpSaveBtn');
-      var status = document.getElementById('cpStatus');
-      var bgBtn  = document.getElementById('cpBgBtn');
-      [btn, status, bgBtn].forEach(function(el) {
-        if (!el) return;
-        var t = _processingTimers.get(el);
-        if (t) { clearInterval(t); _processingTimers.delete(el); }
-      });
-      if (btn)   { btn.textContent = 'Save Photo'; btn.disabled = false; }
-      if (bgBtn) { bgBtn.textContent = 'Remove Background'; bgBtn.disabled = false; }
-      if (status) status.textContent = '';
-      closeModal('cardPhotoModal');
-    }
-
-    // Switch between Front/Back tabs. If there are unsaved edits we ask
-    // the user before discarding them.
-    function cpSwitchSide(side) {
-      if (side !== 'front' && side !== 'back') return;
-      if (side === _cpSide) return;
-      if (_cpDirty) {
-        if (!confirm('Discard unsaved edits to the ' + _cpSide + ' photo?')) return;
-      }
-      _cpSide  = side;
-      _cpDirty = false;
-      cpResetFile();
-      _cpUpdateSideTabs();
-      _cpTryLoadExisting();
-    }
-
-    function _cpUpdateSideTabs() {
-      var f = document.getElementById('cpSideFront');
-      var b = document.getElementById('cpSideBack');
-      function activate(el) {
-        if (!el) return;
-        el.style.borderColor = 'var(--accent)';
-        el.style.background  = 'rgba(26,199,160,.10)';
-        el.style.color       = 'var(--accent)';
-      }
-      function deactivate(el) {
-        if (!el) return;
-        el.style.borderColor = 'var(--border)';
-        el.style.background  = 'transparent';
-        el.style.color       = 'var(--muted)';
-      }
-      if (_cpSide === 'front') { activate(f); deactivate(b); }
-      else                     { activate(b); deactivate(f); }
-      var hint = document.getElementById('cpUploadHint');
-      if (hint) {
-        hint.textContent = 'Click or drag a new ' + _cpSide + ' photo here';
-      }
-    }
-
-    // Pre-load the existing photo (for whichever side is selected) into
-    // the cropper. If there isn't one, the upload zone stays visible.
-    async function _cpTryLoadExisting() {
-      if (!_cpItemId) return;
-      var item = collectionItems.find(function(c) { return String(c.id) === String(_cpItemId); });
-      if (!item) return;
-      var url = (_cpSide === 'back') ? item.card_back_image_url : item.card_image_url;
-      if (!url) return;
-      try {
-        var res = await fetch(url, { mode: 'cors', cache: 'no-store' });
-        if (!res.ok) return;
-        var blob = await res.blob();
-        var name = 'existing-' + _cpSide + '.' + ((blob.type || '').split('/')[1] || 'png');
-        var file = new File([blob], name, { type: blob.type || 'image/png' });
-        await cpLoadFile(file);
-        var st = document.getElementById('cpStatus');
-        if (st) st.textContent = 'Editing your saved ' + _cpSide + ' photo — adjust and save, or pick a different one';
-      } catch(e) {
-        // CORS or network failure — silently fall back to upload-zone state.
-        console.warn('[cpTryLoadExisting]', e);
-      }
-    }
-
-    function cpHandleDrop(e) {
-      e.preventDefault();
-      var dz = document.getElementById('cpUploadZone');
-      if (dz) dz.style.borderColor = 'var(--border)';
-      var file = e.dataTransfer && e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) { _cpDirty = true; cpLoadFile(file); }
-    }
-
-    // Wrapper used by the <input> onchange so we can flag dirty state
-    // before delegating to cpLoadFile.
-    function cpFileInputChange(input) {
-      var f = input && input.files && input.files[0];
-      if (!f) return;
-      _cpDirty = true;
-      cpLoadFile(f);
-    }
-
-    async function cpLoadFile(file) {
-      if (!file) return;
-      _cpOrigBlob = file;
-      await _cpLoadCropperJs();
-
-      document.getElementById('cpUploadZone').style.display = 'none';
-      document.getElementById('cpCropZone').style.display   = '';
-      document.getElementById('cpSaveBtn').style.display    = '';
-
-      var btn = document.getElementById('cpBgBtn');
-      if (btn) { btn.textContent = 'Remove Background'; btn.disabled = false; btn.dataset.done = ''; btn.style.borderColor = 'var(--teal)'; btn.style.color = 'var(--teal)'; }
-      document.getElementById('cpStatus').textContent = '';
-
-      if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
-
-      var img = document.getElementById('cpCropImg');
-      img.src = URL.createObjectURL(file);
-      img.onload = function() {
-        _cpCropper = new Cropper(img, {
-          viewMode:     1,
-          aspectRatio:  NaN,
-          autoCropArea: 0.92,
-          background:   true,
-          movable:      true,
-          zoomable:     true,
-          rotatable:    true,   // was false — silently broke the Rotate 90° button
-          guides:       true,
-        });
+    // Entry-point stubs — each one lazy-loads then re-dispatches via
+    // the (now real) window.<name>. Inline HTML handlers continue to
+    // call these names unchanged.
+    function _makePhotoStub(fnName) {
+      return async function() {
+        await _ensurePhotoModal();
+        var real = window[fnName];
+        if (typeof real !== 'function' || real === arguments.callee) {
+          console.error('[photo] stub for ' + fnName + ' could not resolve real fn');
+          return;
+        }
+        return real.apply(this, arguments);
       };
     }
-
-    function cpRotate() {
-      if (_cpCropper) { _cpCropper.rotate(90); _cpDirty = true; }
-    }
-
-    function cpResetFile() {
-      if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
-      var fi = document.getElementById('cpFileInput');
-      if (fi) fi.value = '';
-      var uz = document.getElementById('cpUploadZone');
-      if (uz) uz.style.display = '';
-      var cz = document.getElementById('cpCropZone');
-      if (cz) cz.style.display = 'none';
-      var sb2 = document.getElementById('cpSaveBtn');
-      if (sb2) sb2.style.display = 'none';
-      var st = document.getElementById('cpStatus');
-      if (st) st.textContent = '';
-      _cpOrigBlob = null;
-    }
-
-    async function cpRemoveBg() {
-      if (_cpBgBusy) return;
-      _cpBgBusy = true;
-      var btn    = document.getElementById('cpBgBtn');
-      var status = document.getElementById('cpStatus');
-      var img    = document.getElementById('cpCropImg');
-
-      // Grab the current crop so bg-removal sees the same framing
-      var sourceBlob = _cpOrigBlob;
-      if (_cpCropper) {
-        var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
-        sourceBlob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
-      }
-
-      // Library is pre-loaded as a module at page start (window._imglyRemoveBg)
-      var removeBg2 = window._imglyRemoveBg;
-      if (!removeBg2) {
-        if (status) status.textContent = 'Background removal unavailable — CDN blocked. Try refreshing.';
-        if (btn)    { btn.textContent = 'Remove Background'; btn.disabled = false; }
-        _cpBgBusy = false;
-        return;
-      }
-
-      if (btn)    { btn.disabled = true; _setProcessingText(btn, 'Processing…'); }
-      if (status) _setProcessingText(status, 'Loading AI model (~50 MB, cached after first use)…');
-
-      try {
-        var result = await removeBg2(sourceBlob, {
-          publicPath: window._imglyPublicPath || 'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/',
-          progress: function(k, cur, tot) {
-            // Use _setProcessingText so it cancels the loading-model
-            // animation timer; ending with … keeps the dots animating
-            // through each percentage update.
-            if (tot && status) _setProcessingText(status, 'Removing background ' + Math.round(cur / tot * 100) + '%…');
-          }
-        });
-
-        // Replace cropper source with the bg-removed PNG. We INTENTIONALLY
-        // do NOT restore the previous getData() — getCroppedCanvas already
-        // baked the user's rotation/scale and crop region into `result`,
-        // so the new image's natural orientation is correct. Re-applying
-        // a saved rotate value caused the photo to rotate twice on every
-        // bg-removal pass.
-        // autoCropArea is 1.0 here (vs 0.92 in cpLoadFile) because the
-        // bg-removed image IS the user's previous crop result — shrinking
-        // back to 92% would silently cut a margin off and feel like the
-        // crop got reset.
-        _cpOrigBlob = result;
-        if (_cpCropper) { _cpCropper.destroy(); _cpCropper = null; }
-        img.src = URL.createObjectURL(result);
-        img.onload = function() {
-          _cpCropper = new Cropper(img, {
-            viewMode:     1,
-            aspectRatio:  NaN,
-            autoCropArea: 1.0,
-            background:   true,
-            movable:      true,
-            zoomable:     true,
-            rotatable:    true,
-            guides:       true,
-          });
-        };
-        // Use _setProcessingText for both completion lines so the loading
-        // animation timer gets cleared — otherwise it keeps overwriting
-        // the success text with animated dots indefinitely.
-        if (btn) {
-          _setProcessingText(btn, 'Background Removed');
-          btn.dataset.done = '1';
-          btn.style.borderColor = 'var(--accent)';
-          btn.style.color = 'var(--accent)';
-        }
-        if (status) _setProcessingText(status, 'Adjust crop if needed, then save');
-        _cpDirty = true;
-      } catch (err) {
-        console.error('[BG Remove]', err);
-        // Surface a more diagnostic message — most failures are network
-        // (CDN model download blocked) or memory (mobile Safari OOM
-        // on large photos). Generic "failed" left users guessing.
-        var msg = (err && err.message) ? String(err.message) : '';
-        var hint = /network|fetch|load|CORS|abort/i.test(msg)
-          ? ' (model download blocked — check connection or extension)'
-          : /memory|allocat|wasm/i.test(msg)
-          ? ' (out of memory — try a smaller photo)'
-          : '';
-        if (status) _setProcessingText(status, 'Background removal failed — original photo kept' + hint);
-        if (btn)    { _setProcessingText(btn, 'Remove Background'); btn.disabled = false; }
-      }
-      _cpBgBusy = false;
-    }
-
-    async function cpSavePhoto() {
-      if (!_cpItemId || !_cpCropper) return;
-      var btn    = document.getElementById('cpSaveBtn');
-      var status = document.getElementById('cpStatus');
-
-      // Animated "Saving …" → "Saving ..>" → "Saving ...>" feedback so
-      // the user can tell something is happening even when the network
-      // is slow. _setProcessingText only animates strings ending with …
-      // or .. — finish messages render as-is.
-      function setBusy(msg) {
-        if (btn)    _setProcessingText(btn, msg);
-        if (status) _setProcessingText(status, msg);
-      }
-      function setDoneText(msg) {
-        if (btn)    _setProcessingText(btn, msg);    // clears the timer
-        if (status) _setProcessingText(status, msg);
-      }
-      function reEnable(label) {
-        if (btn) { _setProcessingText(btn, label || 'Save Photo'); btn.disabled = false; }
-      }
-
-      if (btn) btn.disabled = true;
-      setBusy('Saving…');
-
-      // Commit any in-progress crop drag to the cropper's internal
-      // state before extracting — Cropper.js sometimes lags one frame
-      // behind a fast click+drop, leaving the visual crop box ahead
-      // of the data backing it.
-      try { _cpCropper.crop(); } catch(_) {}
-
-      // Log the crop region we're about to export so it's easy to
-      // confirm the saved image actually matches the visible crop.
-      try {
-        var d = _cpCropper.getData();
-        console.log('[cpSavePhoto] crop region (px):', d);
-      } catch(_) {}
-
-      // Helper — wrap any promise with a timeout so a hung upload
-      // can't leave the UI stuck on "Saving" forever.
-      function withTimeout(p, ms, label) {
-        return Promise.race([
-          p,
-          new Promise(function(_, rej) {
-            setTimeout(function() { rej(new Error((label || 'Operation') + ' timed out after ' + (ms / 1000) + 's')); }, ms);
-          })
-        ]);
-      }
-
-      try {
-        // Export the cropped region as webp (smaller than PNG); fall
-        // back to PNG only if the browser can't encode webp from canvas
-        setBusy('Encoding image…');
-        var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
-        var blob = await new Promise(function(res) { canvas.toBlob(res, 'image/webp', 0.85); });
-        var ext = 'webp', contentType = 'image/webp';
-        if (!blob) {
-          blob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
-          ext = 'png'; contentType = 'image/png';
-        }
-        if (!blob) throw new Error('Failed to encode the image');
-
-        setBusy('Uploading…');
-        var path = 'collection/' + currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ext;
-        var upResult = await withTimeout(
-          sb.storage.from('card-photos').upload(path, blob, { upsert: false, contentType: contentType }),
-          60000, 'Upload'
-        );
-        if (upResult.error) throw upResult.error;
-
-        // Generate + upload variants from the already-cropped canvas
-        // (cheaper than re-decoding). Fire-and-forget so user flow
-        // doesn't wait on the variant encodes/uploads.
-        try {
-          var _cropW = canvas.width;
-          var _cropH = canvas.height;
-          var _vsizes = [200, 400].filter(function(s) { return s < _cropW; });
-          var _variantBlobs = {};
-          for (var _i = 0; _i < _vsizes.length; _i++) {
-            (function(w) {
-              var th = Math.round(_cropH * (w / _cropW));
-              var vc = document.createElement('canvas');
-              vc.width = w; vc.height = th;
-              vc.getContext('2d').drawImage(canvas, 0, 0, w, th);
-              vc.toBlob(function(vb) {
-                if (!vb) return;
-                var vpath = path.replace(/(\.[^.]+)?$/, '-' + w + '.webp');
-                sb.storage.from('card-photos').upload(vpath, vb, {
-                  upsert: false, contentType: 'image/webp',
-                }).then(function(r) {
-                  if (r.error) console.warn('[variant upload error]', vpath, r.error.message);
-                }).catch(function(e) { console.warn('[variant upload threw]', vpath, e); });
-              }, 'image/webp', 0.8);
-            })(_vsizes[_i]);
-          }
-        } catch (_vErr) { console.warn('[variants from canvas failed]', _vErr); }
-
-        var urlData = sb.storage.from('card-photos').getPublicUrl(path);
-        var publicUrl = urlData.data && urlData.data.publicUrl;
-
-        // Save to either card_image_url (front) or card_back_image_url (back)
-        // depending on the active side tab.
-        setBusy('Updating record…');
-        var updateField = (_cpSide === 'back') ? 'card_back_image_url' : 'card_image_url';
-        var patch = {};
-        patch[updateField] = publicUrl;
-        var dbResult = await withTimeout(
-          sb.from('collection_items').update(patch).eq('id', _cpItemId),
-          15000, 'Save'
-        );
-        if (dbResult.error) {
-          var msg = (dbResult.error.message || '').toLowerCase();
-          if (_cpSide === 'back' && (msg.indexOf('column') !== -1 || msg.indexOf('schema') !== -1)) {
-            var sql = "alter table collection_items\n  add column if not exists card_back_image_url text;";
-            console.log('%cBack-Photo SQL Migration:', 'color:orange;font-weight:bold');
-            console.log(sql);
-            setDoneText('Database needs migration — see console for SQL');
-            showToast('Run the back-photo SQL migration in Supabase first (see console)');
-            reEnable();
-            return;
-          }
-          throw dbResult.error;
-        }
-
-        // Update local cache so the binder view reflects it immediately
-        var local = collectionItems.find(function(c) { return String(c.id) === String(_cpItemId); });
-        if (local) local[updateField] = publicUrl;
-        _cpDirty = false;
-        renderCollection();
-
-        // Clear any animation timers before closing
-        setDoneText('Saved');
-        showToast((_cpSide === 'back' ? 'Back' : 'Front') + ' photo updated!');
-        closeCardPhotoModal();
-        openBinderCardDetail(_cpItemId);
-      } catch (err) {
-        console.error('[cpSavePhoto]', err);
-        var em = (err && err.message) ? err.message : String(err);
-        setDoneText('Save failed — ' + em);
-        reEnable();
-      }
-    }
-    // ── End Card Photo Update Modal ───────────────────────────────────────
+    [
+      'openCardPhotoModal', 'closeCardPhotoModal', 'cpSwitchSide',
+      'cpHandleDrop', 'cpFileInputChange', 'cpRotate', 'cpResetFile',
+      'cpRemoveBg', 'cpSavePhoto'
+    ].forEach(function(n) { window[n] = _makePhotoStub(n); });
 
     // ── Card Report Modal (user-submitted error reports) ──────────────────
+
+
     var _crItem = null;
 
     // Stash the original modal markup once so we can restore it after the

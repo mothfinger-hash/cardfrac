@@ -633,8 +633,14 @@
                     && (c.variant || 'normal') === v.key
                     && String(c.id) !== String(item.id)) { targetId = c.id; break; }
               }
+              // _variantChipNavLock blocks the OWNED-chip's navigation
+              // for ~1.5s after a successful _addVariantOfCard. Without
+              // this guard, a user who taps "+ Reverse Holo" twice in
+              // quick succession ends up navigating to the new qty=1
+              // row immediately after creating it — which looked like
+              // the stack had collapsed back to a solo card modal.
               onClick = targetId
-                ? 'onclick="closeModal(\'binderDetailModal\');setTimeout(function(){openBinderCardDetail(\'' + targetId + '\')},80)"'
+                ? 'onclick="if(window._variantChipNavLock)return;closeModal(\'binderDetailModal\');setTimeout(function(){openBinderCardDetail(\'' + targetId + '\')},80)"'
                 : '';
             } else {
               onClick = 'onclick="_addVariantOfCard(\'' + item.id + '\',\'' + v.key + '\')"';
@@ -679,6 +685,11 @@
       // Refresh local cache so the chip re-render sees the new row
       try { collectionItems.push(res.data); } catch(_) {}
       showToast('Added ' + (variant === 'reverse_holo' ? 'Reverse Holo' : variant) + ' variant');
+      // Block the now-OWNED chip from navigating for a beat so a rapid
+      // double-tap doesn't ricochet into the new qty=1 row. The chip
+      // renders with the navigation onclick guarded by this flag.
+      window._variantChipNavLock = true;
+      setTimeout(function() { window._variantChipNavLock = false; }, 1500);
       // STAY on the current card's detail modal. Previously we auto-
       // navigated to the new variant row, which had qty=1 and therefore
       // no unit stack — the visible effect was "the stack collapsed".
