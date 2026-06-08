@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v449';
+const CACHE = 'pathbinder-v454';
 
 const PRECACHE = [
   '/offline.html',
@@ -620,6 +620,10 @@ const PRECACHE = [
   // Precaching keeps repeat-visit FCP fast (no network round-trip
   // after first install). Cache invalidates when CACHE version bumps.
   '/pb-app.js',
+  // /pb-styles.css — the externalized inline-styles bundle (~320 KB).
+  // Same precache strategy: HTML parses fast, CSS comes from cache
+  // on repeat visits, render-block is near-instant.
+  '/pb-styles.css',
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap'
 ];
 
