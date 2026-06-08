@@ -2409,6 +2409,21 @@
             total:  null,
           };
         }
+        // Pokemon Center promos use the layout "MEP EN 010" — a 2-5
+        // letter set code, a space-separated language tag, then a 2-3
+        // digit number. Covers the Mewtwo Center set (MEP) and any
+        // future TCG release that follows the same convention.
+        const promoMatch = text.match(/\b([A-Z]{2,5})\s+(EN|JP|FR|DE|IT|SP|KR|TC|CH)\s+(\d{2,3})\b/);
+        if (promoMatch) {
+          const n = parseInt(promoMatch[3], 10);
+          return {
+            full:    `${promoMatch[1]} ${promoMatch[2]} ${promoMatch[3]}`,
+            num:     String(n),
+            numRaw:  promoMatch[3],
+            total:   null,
+            setCode: promoMatch[1],
+          };
+        }
         return null;
       }
       // No "proper" collector number found — fall back to whatever the
@@ -2579,10 +2594,19 @@
     // ── Extract card name from Japanese OCR text ──────────────────────────────
     // JP layout: card type (グッズ), furigana fragments (1-3 kana), then the actual name
     function parseJapaneseCardName(lines) {
-      // Known JP card-type keywords to skip
-      const JP_SKIP = /^(グッズ|トレーナーズ|サポート|スタジアム|ポケモン|エネルギー|どうぐ|HP\d+|\d+|エイチピー|むしょく|ひこう|ほのお|みず|くさ|かみなり|エスパー|ファイト|あく|はがね|ドラゴン|フェアリー|アマルスへ進化|進化|特性|とくせい|弱点|抵抗力|にげる|Illus|©|www\.)$/;
-      // Skip short pure-kana lines (≤4 chars) — these are furigana
-      const isFurigana = (s) => s.length <= 4 && /^[぀-ヿ]+$/.test(s);
+      // Known JP card-type keywords to skip. たね = "Basic" stage label;
+      // LEGEND = legendary stage label; BASIC matches the English label
+      // OCR sometimes catches on the Pokemon card top-banner.
+      const JP_SKIP = /^(たね|LEGEND|BASIC|グッズ|トレーナーズ|サポート|スタジアム|ポケモン|エネルギー|どうぐ|HP\d+|\d+|エイチピー|むしょく|ひこう|ほのお|みず|くさ|かみなり|エスパー|ファイト|あく|はがね|ドラゴン|フェアリー|アマルスへ進化|進化|特性|とくせい|弱点|抵抗力|にげる|Illus|©|www\.)$/;
+      // Furigana detection — true furigana are small HIRAGANA subscripts
+      // printed above kanji (U+3041–U+3096). Short KATAKANA lines are
+      // typically card names (ピッピ = Pippi/Clefable, コダック = Psyduck,
+      // ナマズン etc.) not furigana, so don't blanket-skip them.
+      // Restrict the test to lines that contain hiragana — pure-katakana
+      // lines now pass through to the name-acceptance check below.
+      const isFurigana = (s) => s.length <= 4
+        && /^[぀-ヿ]+$/.test(s)
+        && /[ぁ-ゖ]/.test(s);
 
       for (let i = 0; i < Math.min(15, lines.length); i++) {
         const line = lines[i];
@@ -2656,6 +2680,42 @@
         }
       }
       return null;
+    }
+
+    // ── Topps layout detector ───────────────────────────────────────
+    // Returns { name, num } when the OCR line shape matches a Topps
+    // Pokemon card (#NN line, Pokemon brand line, then an ALL-CAPS
+    // card name). Used by parseCardName for the name extraction AND
+    // by runMatch to scope the catalog search to topps- ids so we
+    // don't surface random Pokemon TCG cards numbered 45.
+    function detectToppsLayout(lines) {
+      if (!Array.isArray(lines)) {
+        if (typeof lines === 'string') lines = lines.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+        else return null;
+      }
+      const TOPPS_NUM   = /^#\d{1,3}$/;
+      const POKEMON_ISH = /^pok[eé\']?[mM][oO0aäAÄ][nNyY][!\.]?$/i;
+      const TOPPS_NAME  = /^[A-Z][A-Z'\-\s]{2,18}$/;
+      let toppsNumIdx   = -1;
+      let toppsBrandIdx = -1;
+      let toppsNum      = null;
+      for (let i = 0; i < Math.min(6, lines.length); i++) {
+        if (toppsNumIdx < 0 && TOPPS_NUM.test(lines[i])) {
+          toppsNumIdx = i;
+          toppsNum = lines[i].replace('#', '');
+        }
+        if (toppsBrandIdx < 0 && POKEMON_ISH.test(lines[i])) toppsBrandIdx = i;
+      }
+      if (toppsNumIdx < 0 || toppsBrandIdx < 0) return null;
+      for (let j = toppsBrandIdx + 1; j < Math.min(toppsBrandIdx + 5, lines.length); j++) {
+        if (TOPPS_NAME.test(lines[j])) {
+          const titled = lines[j].toLowerCase().replace(/(^|[\s\-'])([a-z])/g, function(_, p, c) {
+            return p + c.toUpperCase();
+          });
+          return { name: titled, num: toppsNum };
+        }
+      }
+      return { name: null, num: toppsNum };
     }
 
     function parseCardName(text, tcg) {
@@ -2770,31 +2830,12 @@
       //   - SKIP catches "Pokemon" but if the OCR mangles it to PokeMoy
       //     or similar, SKIP misses it and the brand line gets returned
       //     as the name instead.
-      // Detect the layout signature first: a #XX number line in the
-      // first 4 lines AND a Pokemon-like brand line nearby. Then look
-      // for the all-caps name line that follows.
-      const TOPPS_NUM   = /^#\d{1,3}$/;
-      const POKEMON_ISH = /^pok[eé\']?[mM][oO0aäAÄ][nNyY][!\.]?$/i;
-      const TOPPS_NAME  = /^[A-Z][A-Z'\-\s]{2,18}$/;  // ALL CAPS, no digits
-      let toppsNumIdx   = -1;
-      let toppsBrandIdx = -1;
-      for (let i = 0; i < Math.min(6, lines.length); i++) {
-        if (toppsNumIdx   < 0 && TOPPS_NUM.test(lines[i]))   toppsNumIdx   = i;
-        if (toppsBrandIdx < 0 && POKEMON_ISH.test(lines[i])) toppsBrandIdx = i;
-      }
-      if (toppsNumIdx >= 0 && toppsBrandIdx >= 0) {
-        // Look for the all-caps name line after the brand line.
-        for (let j = toppsBrandIdx + 1; j < Math.min(toppsBrandIdx + 5, lines.length); j++) {
-          if (TOPPS_NAME.test(lines[j])) {
-            // Title-case it so the catalog ilike search matches
-            // ("VILEPLUME" → "Vileplume").
-            const titled = lines[j].toLowerCase().replace(/(^|[\s\-'])([a-z])/g, function(_, p, c) {
-              return p + c.toUpperCase();
-            });
-            return _cleanCardName(titled);
-          }
-        }
-      }
+      // Uses the shared detectToppsLayout() helper so runMatch can also
+      // know to scope its catalog search to topps- ids — without that
+      // scope a Topps Vileplume scan returns Pokemon TCG cards numbered
+      // 45 from any random set instead of the actual Topps Vileplume.
+      const toppsDetect = detectToppsLayout(lines);
+      if (toppsDetect && toppsDetect.name) return _cleanCardName(toppsDetect.name);
 
       for (let i = 0; i < Math.min(12, lines.length); i++) {
         const line = lines[i];
@@ -2900,6 +2941,15 @@
       // Drop everything from the first run of digits onward
       var m = name.match(/^([^\d]+?)(?:\s+\d|HP\s*\d|\d).*$/i);
       if (m && m[1].trim().length >= 3) name = m[1];
+      // OCR sometimes doubles the trailing letter on "ex" cards — the
+      // visual "X" (large pictograph) is captured as both the printed
+      // X and a phantom shadow x. Common with Mega Charizard X
+      // → "Mega Charizard Xx", Pikachu X → "Pikachu Xx" etc. Strip
+      // the phantom lowercase letter when it duplicates an uppercase
+      // single-letter trailing suffix.
+      name = name.replace(/\b([A-Z])\1?[a-z]\s*$/, function(m, cap){
+        return cap;
+      });
       return name.trim();
     }
 
@@ -2997,10 +3047,22 @@
 
         // parseCardNumber now returns { full, num, numRaw, total, setCode? }
         const parsed     = parseCardNumber(fullText, scanTcg);
-        const numStripped = parsed ? parsed.num    : null;  // "94"
-        const numRaw      = parsed ? parsed.numRaw : null;  // "094"
+        let numStripped = parsed ? parsed.num    : null;  // "94"
+        let numRaw      = parsed ? parsed.numRaw : null;  // "094"
         const numTotal    = parsed ? parsed.total  : null;  // "165" — set base size fingerprint
         const parsedSetCode = parsed ? parsed.setCode || null : null;  // YGO: "RA05", "LDS3", etc.
+
+        // Topps layout detection — when a card has the #NN / Pokemon /
+        // ALL-CAPS NAME signature, restrict the catalog search to
+        // topps- id rows so we don't surface unrelated Pokemon TCG
+        // cards that happen to share the same collector number.
+        const _toppsHit = detectToppsLayout(fullText);
+        const isTopps   = !!(_toppsHit && _toppsHit.num);
+        // If parseCardNumber missed (no fraction), use the Topps num.
+        if (isTopps && !numStripped) {
+          numStripped = _toppsHit.num;
+          numRaw = _toppsHit.num;
+        }
         const cardName    = parseCardName(fullText, scanTcg);
 
         // Derive extra name variants for trainer-card mismatches:
@@ -3022,9 +3084,18 @@
         // hit Pokemon rows whose card_number happens to match and surface
         // 100+ false positives. Defaults to pokemon when uncertain — the
         // majority use case + matches the Pokemon-specific OCR parser.
-        const q = () => sb.from('catalog')
-          .select('id,name,set_name,set_code,card_number,rarity,image_url')
-          .eq('game_type', scanTcg);
+        // q() — the factory for every catalog SQL query in this match
+        // pipeline. Adds a `topps-` id prefix scope when the OCR layout
+        // signature said this is a Topps card, otherwise the search
+        // would return unrelated Pokemon TCG cards that happen to
+        // share the same collector number.
+        const q = () => {
+          let qb = sb.from('catalog')
+            .select('id,name,set_name,set_code,card_number,rarity,image_url')
+            .eq('game_type', scanTcg);
+          if (isTopps) qb = qb.like('id', 'topps-%');
+          return qb;
+        };
 
         // Derive a shorter base name for broader fallback searching:
         //   "Lugia VSTAR"            → "Lugia"
