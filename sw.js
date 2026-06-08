@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v454';
+const CACHE = 'pathbinder-v458';
 
 const PRECACHE = [
   '/offline.html',
@@ -624,6 +624,15 @@ const PRECACHE = [
   // Same precache strategy: HTML parses fast, CSS comes from cache
   // on repeat visits, render-block is near-instant.
   '/pb-styles.css',
+  // /pb-scanner.js — lazy-loaded scanner subsystem (~200 KB). Loaded
+  // on first scanner-button click OR at browser idle (whichever first).
+  // Precaching means even the first scanner click on a return visit
+  // is instant — no network round-trip.
+  '/pb-scanner.js',
+  // /pb-avatar.js — lazy-loaded avatar engine (~43 KB). Sprite-based
+  // renderer + cyberpunk palette + hat mask. Loaded at idle for
+  // PFP painting, or on demand if user opens the avatar editor.
+  '/pb-avatar.js',
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap'
 ];
 
