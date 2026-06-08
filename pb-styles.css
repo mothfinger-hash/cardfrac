@@ -5664,9 +5664,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
     #multiScanModal { background: rgba(0,4,10,.75) !important; backdrop-filter: blur(2px); }
 
     /* Match cards inside scanner — hologram tinted */
-    .scan-match-card{display:flex;align-items:center;gap:12px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.22);padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:all .18s}
+    /* Single-scan results: 2-column grid on wider screens so the
+       user can compare candidates side-by-side. Single column under
+       ~520px so each match still has room. */
+    #scannerResults{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px}
+    .scan-match-card{display:flex;align-items:center;gap:12px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.22);padding:10px 14px;margin-bottom:0;cursor:pointer;transition:all .18s}
     .scan-match-card:hover{border-color:rgba(26,199,160,.6);background:rgba(26,199,160,.08);box-shadow:0 0 12px rgba(26,199,160,.1)}
-    .scan-match-thumb{width:52px;height:68px;object-fit:contain;background:rgba(26,199,160,.04);padding:4px;flex-shrink:0}
+    /* Thumbnails bumped 2x (was 52×68) so multi-scan results are easy
+       to tell apart at a glance — the previous size made it hard to
+       identify which scanned card matched what when reviewing several
+       results in a row. */
+    .scan-match-thumb{width:104px;height:136px;object-fit:contain;background:rgba(26,199,160,.04);padding:4px;flex-shrink:0}
     .scan-match-info{flex:1}
     .scan-match-name{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;font-weight:700;color:rgba(220,235,252,.9);margin-bottom:3px}
     .scan-match-sim{font-family:'Space Mono','Share Tech Mono',monospace;font-size:.6rem;color:rgba(26,199,160,.6)}

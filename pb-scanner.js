@@ -3664,13 +3664,18 @@
       var container = document.getElementById('msReviewView');
       var matched   = _multiScanResults.filter(function(r) { return r.selectedMatch; });
 
+      // Thumbnails bumped 2x (was 42×58) — at the old size it was tough
+       // to tell which scanned card matched what when reviewing multiple
+       // results. 84×116 keeps the row compact enough to fit two side-
+       // by-side on desktop via the grid wrapper below.
+      var THUMB_STYLE = 'width:84px;height:116px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0';
       var rows = _multiScanResults.map(function(r, i) {
         var m         = r.selectedMatch;
-        var thumbHTML = '<img src="' + r.thumb + '" style="width:42px;height:58px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0" loading="lazy" decoding="async">';
+        var thumbHTML = '<img src="' + r.thumb + '" style="' + THUMB_STYLE + '" loading="lazy" decoding="async">';
 
         if (!m) {
           // No match — tap row to open candidate sheet (search mode)
-          return '<div onclick="openMsCandidateSheet(' + i + ')" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">'
+          return '<div onclick="openMsCandidateSheet(' + i + ')" style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:6px;cursor:pointer">'
             + thumbHTML
             + '<div style="flex:1;min-width:0">'
             + '<div style="font-size:.75rem;color:var(--muted)">No match found</div>'
@@ -3682,11 +3687,11 @@
 
         // Matched card — show result, tap to change
         var conf = m._exact ? 'EXACT' : m._ocr ? 'OCR' : Math.round((m.similarity||0)*100)+'% visual';
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:6px">'
           // Tap the card info area to open the sheet
           + '<div onclick="openMsCandidateSheet(' + i + ')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">'
           + thumbHTML
-          + (m.image_url ? '<img src="' + m.image_url + '" style="width:42px;height:58px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0" onerror="this.style.display=\'none\'" loading="lazy" decoding="async">' : '')
+          + (m.image_url ? '<img src="' + m.image_url + '" style="' + THUMB_STYLE + '" onerror="this.style.display=\'none\'" loading="lazy" decoding="async">' : '')
           + '<div style="flex:1;min-width:0">'
           + '<div style="font-size:.8rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + m.name + '</div>'
           + '<div style="font-size:.65rem;color:var(--muted)">' + (m.set_name||m.set_code||'') + ' · #' + (m.card_number||'?') + '</div>'
@@ -3698,10 +3703,14 @@
           + '</div>';
       });
 
+      // Side-by-side review grid: 2 cards per row on wider screens,
+      // single column under ~600px so each row stays readable.
       container.innerHTML = '<div style="font-size:.72rem;color:var(--muted);margin-bottom:14px">'
         + matched.length + ' of ' + _multiScanResults.length + ' cards matched. Tap any card to change its match.'
         + '</div>'
-        + rows.join('');
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:10px">'
+        + rows.join('')
+        + '</div>';
 
       populateBinderDropdown('msBinder', currentBinderId);
       document.getElementById('msProgressView').style.display = 'none';
