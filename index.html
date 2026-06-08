@@ -33,7 +33,10 @@
   <link rel="preload" href="phondex.webp" as="image">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Space+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
-  <script defer src="/pb-app.js"></script>
+<!-- pb-app.js used to live here in the head; moved to AFTER supabase-js
+       below so the deferred bundle runs after window.supabase exists.
+       Without this re-order, the bundle's `sb = supabase.createClient`
+       call fires before the library loads → null deref → black screen. -->
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -5648,7 +5651,17 @@ body.on-binder .binder-frame > .pb-panel .ac-rail{display:none !important}
   </style>
   <!-- ═══════════════════════════════════════════════════════════════ -->
 
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase-js is loaded synchronously (no `defer`) so it's
+       GUARANTEED to be parsed and executed before pb-app.js runs.
+       Defer order is normally reliable, but if the CDN response
+       fails (ad blocker, jsdelivr 4xx, network blip), a deferred
+       supabase tag silently drops out of the queue and the next
+       deferred script runs against window.supabase = undefined.
+       That's the black-screen bug the v446→v447 deploy hit. The
+       cost of synchronous load is ~50ms of parse blocking, which
+       is vastly cheaper than the original 1.8 MB inline bundle. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="/pb-app.js"></script>
   <!-- SheetJS and QRCodeJS loaded lazily on first use to keep initial page load fast -->
   
   
