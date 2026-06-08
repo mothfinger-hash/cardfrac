@@ -3081,7 +3081,7 @@
       // at #accountPage's bottom edge.
       const accountPageEl = document.getElementById('accountPage');
       if (accountPageEl) accountPageEl.setAttribute('data-tab', tab);
-      const BG_TABS = ['dashboard','myListings','myOrders','salesArchive','payments','watchlist','history','tradeHistory','inventory','salesLog'];
+      const BG_TABS = ['dashboard','myListings','myStore','myOrders','sales','salesArchive','payments','watchlist','purchases','history','tradeHistory','inventory','salesLog'];
       if (BG_TABS.indexOf(tab) >= 0) {
         document.body.setAttribute('data-page-bg', tab);
       } else {
@@ -3089,12 +3089,23 @@
       }
       if (tab === 'myOrders') renderOrders();
       if (tab === 'myListings') renderMyListings();
-      if (tab === 'salesArchive') renderSalesArchive();
+      if (tab === 'salesArchive') renderSalesArchive();  // legacy
       if (tab === 'payments') renderPayments();
       if (tab === 'tradeHistory') renderTradeHistory();
       if (tab === 'badges') renderBadges();
       if (tab === 'inventory') renderInventory();
-      if (tab === 'salesLog')  renderSalesLog();
+      if (tab === 'salesLog')  renderSalesLog();          // legacy
+      // Unified Sales tab — consolidates the old Sales Log + Sales
+      // Archive into one view with source-filter chips.
+      if (tab === 'sales')     renderSales();
+      // Renamed History → Purchases. Old #history div is hidden but
+      // we keep the renderHistory() function and proxy to it.
+      if (tab === 'purchases') renderPurchases();
+      // My Store — lazy-loads pb-store.js the first time the tab is
+      // activated. Stub at the bottom of pb-app.js handles the load.
+      if (tab === 'myStore') {
+        _ensureStore().then(function() { window.renderMyStore && window.renderMyStore(); });
+      }
     }
 
     // ── Inventory tab (Vendor+) ──────────────────────────────────────
@@ -4080,6 +4091,314 @@
         return [];
       }
       return r.data || [];
+    }
+
+    // ── Unified Sales tab (renderSales) ────────────────────────────
+    // Replaces the legacy "Sales Archive" + "Sales Log" split with a
+    // single tab that pulls from all three sources:
+    //   • shop_sales            (in-store sales — Vendor+ only)
+    //   • orders                (marketplace sales — Enthusiast+)
+    //   • collection_items where sold_offline=true (offline — Enthusiast+)
+    //
+    // Source filter chips at the top let the user narrow to one. Free
+    // tier sees the chips disabled with a "Vendor+" tier badge so the
+    // affordance is visible (upsell hook). renderSales() reads the
+    // current chip and the date inputs (#salesFrom / #salesTo) to
+    // decide what to query, then renders a unified table.
+    let _salesActiveSource = 'all';        // 'all' | 'in-store' | 'marketplace' | 'offline'
+    let _salesCachedRows   = [];           // currently displayed merged rows
+
+    function _setSalesSource(src) {
+      // Tier gates — if the user clicked a chip they don't have access
+      // to, surface the pricing modal (matches the inventory upsell
+      // pattern) instead of swallowing the click silently.
+      if (src === 'in-store' && (typeof tierAtLeast !== 'function' || !tierAtLeast('vendor'))) {
+        if (typeof openPricingModalWithPromo === 'function') openPricingModalWithPromo('vendor');
+        return;
+      }
+      if ((src === 'marketplace' || src === 'offline') &&
+          (typeof tierAtLeast !== 'function' || !tierAtLeast('enthusiast'))) {
+        if (typeof openPricingModalWithPromo === 'function') openPricingModalWithPromo('enthusiast');
+        return;
+      }
+      _salesActiveSource = src;
+      // Re-paint chip active states without a full rerender of the chips
+      // bar (the chips live in HTML, we just toggle classes).
+      const chips = document.querySelectorAll('#salesFilterChips .sales-chip');
+      chips.forEach(function(c) {
+        c.classList.toggle('is-active', c.getAttribute('data-source') === src);
+      });
+      renderSales();
+    }
+
+    // Decorate chips with tier badges + disabled state based on the
+    // current user. Called from renderSales each render so tier
+    // changes (e.g. after upgrade) propagate without a reload.
+    function _paintSalesChipGates() {
+      const wrap = document.getElementById('salesFilterChips');
+      if (!wrap) return;
+      const isVendor = typeof tierAtLeast === 'function' && tierAtLeast('vendor');
+      const isEnthusiast = typeof tierAtLeast === 'function' && tierAtLeast('enthusiast');
+      wrap.querySelectorAll('.sales-chip').forEach(function(c) {
+        const src = c.getAttribute('data-source');
+        let locked = false, badge = '';
+        if (src === 'in-store' && !isVendor)     { locked = true; badge = 'Vendor+'; }
+        if ((src === 'marketplace' || src === 'offline') && !isEnthusiast) { locked = true; badge = 'Enthusiast+'; }
+        c.classList.toggle('is-locked', locked);
+        // Replace any existing tier badge inside the chip
+        const oldBadge = c.querySelector('.sales-chip-tier');
+        if (oldBadge) oldBadge.remove();
+        if (badge) {
+          const span = document.createElement('span');
+          span.className = 'sales-chip-tier';
+          span.textContent = badge;
+          c.appendChild(span);
+        }
+      });
+    }
+
+    async function renderSales(forceRefresh) {
+      const wrap = document.getElementById('salesContent');
+      if (!wrap) return;
+      if (!currentUser) {
+        wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Sign in to view sales.</div>';
+        return;
+      }
+      _paintSalesChipGates();
+
+      const src      = _salesActiveSource;
+      const fromStr  = document.getElementById('salesFrom')?.value || '';
+      const toStr    = document.getElementById('salesTo')?.value   || '';
+      const fromIso  = fromStr ? new Date(fromStr + 'T00:00:00').toISOString() : null;
+      const toIso    = toStr   ? new Date(toStr   + 'T23:59:59').toISOString() : null;
+      const isVendor      = typeof tierAtLeast === 'function' && tierAtLeast('vendor');
+      const isEnthusiast  = typeof tierAtLeast === 'function' && tierAtLeast('enthusiast');
+
+      // Decide which sources to query based on chip + tier.
+      const wantInStore     = (src === 'all' || src === 'in-store')    && isVendor;
+      const wantMarketplace = (src === 'all' || src === 'marketplace') && isEnthusiast;
+      const wantOffline     = (src === 'all' || src === 'offline')     && isEnthusiast;
+
+      const [shopSalesRows, orderRows] = await Promise.all([
+        wantInStore     ? _fetchSalesLog(fromIso, toIso) : Promise.resolve([]),
+        wantMarketplace ? _fetchMarketplaceSales(fromIso, toIso) : Promise.resolve([]),
+      ]);
+      // Offline sales live on collection_items (sold_offline=true) — already
+      // loaded into the local collectionItems array. Filter in memory.
+      const offlineRows = wantOffline
+        ? (collectionItems || []).filter(function(c) {
+            if (!c.sold_offline || !c.offline_sale_date) return false;
+            const d = c.offline_sale_date;
+            if (fromStr && d < fromStr) return false;
+            if (toStr   && d > toStr)   return false;
+            return true;
+          })
+        : [];
+
+      // Resolve catalog metadata for the in-store rows (already keyed
+      // by collection_item_id — same trick renderSalesLog used).
+      const itemById = {};
+      (collectionItems || []).forEach(function(c) { itemById[c.id] = c; });
+
+      // Normalize all three sources into one shape: { date, source,
+      // name, set, variant, qty, unit_price, total, payment_method,
+      // notes, _raw }.
+      const rows = [];
+      shopSalesRows.forEach(function(s) {
+        const it = itemById[s.collection_item_id] || {};
+        rows.push({
+          date:           s.sold_at,
+          source:         'in-store',
+          name:           it.card_name || s.api_card_id || '?',
+          set_name:       it.set_name || '',
+          variant:        s.variant || 'normal',
+          qty:            s.qty || 1,
+          unit_price:     Number(s.unit_price) || 0,
+          total:          Number(s.total_price) || 0,
+          payment_method: s.payment_method || '',
+          notes:          s.notes || '',
+          _raw:           s,
+        });
+      });
+      orderRows.forEach(function(o) {
+        rows.push({
+          date:           o.shipped_at || o.completed_at || o.created_at,
+          source:         'marketplace',
+          name:           o.listing_name || o.item_name || '?',
+          set_name:       o.listing_set || '',
+          variant:        o.listing_variant || 'normal',
+          qty:            o.quantity || 1,
+          unit_price:     Number(o.unit_price || o.seller_payout || 0),
+          total:          Number(o.seller_payout || o.total_amount || 0),
+          payment_method: 'card',
+          notes:          o.notes || '',
+          _raw:           o,
+        });
+      });
+      offlineRows.forEach(function(c) {
+        rows.push({
+          date:           c.offline_sale_date,
+          source:         'offline',
+          name:           c.card_name || '?',
+          set_name:       c.set_name || '',
+          variant:        c.variant || 'normal',
+          qty:            c.quantity || 1,
+          unit_price:     Number(c.offline_sale_price || 0),
+          total:          Number(c.offline_sale_price || 0),
+          payment_method: '',
+          notes:          c.offline_buyer || '',
+          _raw:           c,
+        });
+      });
+
+      // Sort newest first
+      rows.sort(function(a, b) {
+        return String(b.date || '').localeCompare(String(a.date || ''));
+      });
+      _salesCachedRows = rows;
+
+      // Summary
+      let totalRev = 0, totalQty = 0;
+      const byMethod = { card: 0, cash: 0, trade: 0, other: 0 };
+      const bySource = { 'in-store': 0, marketplace: 0, offline: 0 };
+      rows.forEach(function(r) {
+        totalRev += r.total;
+        totalQty += r.qty;
+        const m = r.payment_method || 'other';
+        byMethod[m] = (byMethod[m] || 0) + r.total;
+        bySource[r.source] = (bySource[r.source] || 0) + r.total;
+      });
+      const summary = ''
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
+        +   _invSummaryTile('Sales',       String(rows.length),         'var(--text)')
+        +   _invSummaryTile('Units',       String(totalQty),            'var(--accent)')
+        +   _invSummaryTile('Revenue',     '$' + totalRev.toFixed(2),   'var(--green)')
+        +   _invSummaryTile('In-Store',    '$' + bySource['in-store'].toFixed(2),    'var(--muted)')
+        +   _invSummaryTile('Marketplace', '$' + bySource['marketplace'].toFixed(2), 'var(--muted)')
+        +   _invSummaryTile('Offline',     '$' + bySource['offline'].toFixed(2),     'var(--muted)')
+        + '</div>';
+
+      if (rows.length === 0) {
+        wrap.innerHTML = summary
+          + '<div style="padding:40px;text-align:center;color:var(--muted);font-size:.78rem">'
+          + (isVendor || isEnthusiast
+              ? 'No sales recorded in this range.'
+              : 'Sales tracking is a paid feature. Upgrade to Enthusiast or Vendor to start logging sales.')
+          + '</div>';
+        return;
+      }
+
+      // Table
+      const body = rows.map(function(r) {
+        const variant = (r.variant && r.variant !== 'normal')
+          ? ' <span style="font-size:.55rem;color:var(--copper, #d97e3e);letter-spacing:.06em">' + _escHtml(String(r.variant).toUpperCase().replace(/_/g,' ')) + '</span>'
+          : '';
+        const dateLabel = (typeof _pbCompactDate === 'function') ? _pbCompactDate(r.date) : String(r.date || '').slice(0,10);
+        const srcLabel = r.source === 'in-store'    ? '<span style="color:var(--accent)">IN-STORE</span>'
+                      :  r.source === 'marketplace' ? '<span style="color:var(--copper, #d97e3e)">MARKET</span>'
+                      :                                '<span style="color:var(--muted)">OFFLINE</span>';
+        return ''
+          + '<tr style="border-top:1px solid var(--border)">'
+          +   '<td style="padding:8px 12px;color:var(--muted);font-size:.7rem">' + dateLabel + '</td>'
+          +   '<td style="padding:8px 12px;font-size:.62rem;letter-spacing:.06em">' + srcLabel + '</td>'
+          +   '<td style="padding:8px 12px;color:var(--text)">' + _escHtml(r.name) + variant + '</td>'
+          +   '<td style="padding:8px 12px;color:var(--muted)">' + _escHtml(r.set_name) + '</td>'
+          +   '<td style="padding:8px 12px;text-align:right;color:var(--text)">' + r.qty + '</td>'
+          +   '<td style="padding:8px 12px;text-align:right;color:var(--muted)">$' + r.unit_price.toFixed(2) + '</td>'
+          +   '<td style="padding:8px 12px;text-align:right;color:var(--green);font-weight:700">$' + r.total.toFixed(2) + '</td>'
+          +   '<td style="padding:8px 12px;color:var(--muted);font-size:.65rem;letter-spacing:.06em">' + _escHtml(String(r.payment_method||'').toUpperCase()) + '</td>'
+          + '</tr>';
+      }).join('');
+      wrap.innerHTML = summary
+        + '<div style="overflow-x:auto;border:1px solid var(--border);background:var(--surface);border-radius:8px">'
+        +   '<table style="width:100%;border-collapse:collapse;font-family:\'Space Mono\',monospace;font-size:.72rem">'
+        +     '<thead><tr style="background:var(--surface2);color:var(--muted);letter-spacing:.06em">'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">DATE</th>'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">SOURCE</th>'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">CARD</th>'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">SET</th>'
+        +       '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">QTY</th>'
+        +       '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">UNIT $</th>'
+        +       '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">TOTAL $</th>'
+        +       '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">PAY</th>'
+        +     '</tr></thead>'
+        +     '<tbody>' + body + '</tbody>'
+        +   '</table>'
+        + '</div>';
+    }
+
+    // Marketplace order fetch — used by renderSales for the marketplace
+    // source. Pulls completed/shipped/paid seller orders in the date
+    // range. Mirrors what the old renderSalesArchive did but isolated
+    // so renderSales can call it cleanly.
+    async function _fetchMarketplaceSales(fromIso, toIso) {
+      if (!currentUser) return [];
+      let q = sb.from('orders')
+        .select('*')
+        .eq('seller_id', currentUser.id)
+        .in('status', ['paid','shipped','completed'])
+        .order('created_at', { ascending: false })
+        .limit(2000);
+      if (fromIso) q = q.gte('created_at', fromIso);
+      if (toIso)   q = q.lte('created_at', toIso);
+      const r = await q;
+      if (r.error) {
+        console.warn('[sales] marketplace fetch error:', r.error.message);
+        return [];
+      }
+      return r.data || [];
+    }
+
+    // Unified CSV export — dumps whatever is in _salesCachedRows.
+    function exportSalesCsv() {
+      const rows = _salesCachedRows || [];
+      if (!rows.length) { if (typeof showToast === 'function') showToast('No sales to export'); return; }
+      const header = ['sold_at','source','card_name','set_name','variant','qty','unit_price','total','payment_method','notes'];
+      const esc = function(v) {
+        if (v == null) return '';
+        const s = String(v).replace(/"/g, '""');
+        return '"' + s + '"';
+      };
+      const lines = [header.map(esc).join(',')];
+      rows.forEach(function(r) {
+        lines.push([
+          (String(r.date||'')).slice(0,19).replace('T',' '),
+          r.source,
+          r.name,
+          r.set_name,
+          r.variant || 'normal',
+          r.qty,
+          r.unit_price.toFixed(2),
+          r.total.toFixed(2),
+          r.payment_method,
+          r.notes,
+        ].map(esc).join(','));
+      });
+      const csv  = lines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = 'pathbinder-sales-' + (new Date().toISOString().slice(0,10)) + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    }
+
+    // Purchases = old "Activity History" buyer-side feed.
+    // Thin wrapper that delegates to the existing renderHistory() so
+    // we don't duplicate its logic — just retargets the output to
+    // the new #purchasesContent div.
+    function renderPurchases() {
+      const purchasesDiv = document.getElementById('purchasesContent');
+      const historyDiv   = document.getElementById('historyContent');
+      // Render into the old container then move the resulting HTML.
+      // renderHistory expects #historyContent — let it run, then copy.
+      try {
+        if (typeof renderHistory === 'function') renderHistory();
+        if (purchasesDiv && historyDiv) purchasesDiv.innerHTML = historyDiv.innerHTML;
+      } catch (e) {
+        console.warn('[purchases] renderHistory failed:', e && e.message);
+      }
     }
 
     async function renderSalesLog(forceRefresh) {
@@ -18381,6 +18700,30 @@
       });
       return _photoLoadPromise;
     }
+
+    // ── My Store — lazy-loaded ─────────────────────────────────────
+    // Vendor+ POS-style storefront view of all active marketplace
+    // listings. Code lives in /pb-store.js — loaded on demand the
+    // first time the My Store tab is activated. Free tiers never
+    // download it. Lower-tier users can't see the tab at all
+    // (gated via .js-vendor-only on the tab button).
+    var _storeLoadedFlag = false;
+    var _storeLoadPromise = null;
+    function _ensureStore() {
+      if (_storeLoadedFlag) return Promise.resolve();
+      if (_storeLoadPromise) return _storeLoadPromise;
+      _storeLoadPromise = new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = '/pb-store.js';
+        s.onload  = function() { _storeLoadedFlag = true; resolve(); };
+        s.onerror = function(e) { _storeLoadPromise = null; reject(e); };
+        document.head.appendChild(s);
+      });
+      return _storeLoadPromise;
+    }
+    // No idle prefetch — the My Store tab is only relevant to
+    // vendor+ users, and they'll typically navigate there from the
+    // tab strip rather than on first page load.
     // Idle prefetch — after page interactive. User would likely take
     // > 4s to navigate to a card detail and click Edit Photo anyway.
     if (typeof requestIdleCallback === 'function') {

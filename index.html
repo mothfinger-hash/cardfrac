@@ -2293,18 +2293,26 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     <div class="account-tabs">
       <button class="account-tab active" onclick="switchAccountTab('dashboard')">Dashboard</button>
       <button class="account-tab" onclick="switchAccountTab('myListings')">My Listings</button>
+      <!-- My Store — Square-style POS view of the vendor's active
+           listings. Lives in /pb-store.js (lazy-loaded). Vendor+ only;
+           hidden via .js-vendor-only gating in renderAccount. -->
+      <button class="account-tab js-vendor-only" id="tab-myStore" onclick="switchAccountTab('myStore')" style="display:none">My Store</button>
       <button class="account-tab" onclick="switchAccountTab('myOrders')">Orders<span class="badge-count" id="orderNotification" style="display:none">0</span></button>
-      <button class="account-tab" onclick="switchAccountTab('salesArchive')">Sales Archive</button>
-      <!-- Inventory + Sales Log tabs — shown only to vendor+ users via
-           JS gating in switchAccountTab / renderAccount. Inventory
-           tracks in-store vs. listed stock; Sales Log lists every
-           shop_sales row with date filters + CSV export. See
-           migration_shop_inventory.sql. -->
+      <!-- Unified Sales tab — consolidates the old "Sales Log" (in-store /
+           shop_sales) + "Sales Archive" (marketplace orders + legacy
+           sold-offline rows). Sub-filter chips inside the tab handle
+           the tier gates (In-Store needs Vendor+, Marketplace + Offline
+           need Enthusiast+). Free users see the chips disabled with a
+           tier badge as an upsell hook. -->
+      <button class="account-tab" onclick="switchAccountTab('sales')">Sales</button>
+      <!-- Inventory tab — vendor+ only. Tracks in-store vs. listed stock.
+           See migration_shop_inventory.sql. -->
       <button class="account-tab js-vendor-only" id="tab-inventory" onclick="switchAccountTab('inventory')" style="display:none">Inventory</button>
-      <button class="account-tab js-vendor-only" id="tab-salesLog"  onclick="switchAccountTab('salesLog')"  style="display:none">Sales Log</button>
       <button class="account-tab" onclick="switchAccountTab('payments')">Payments</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
-      <button class="account-tab" onclick="switchAccountTab('history')">History</button>
+      <!-- "Purchases" — was "History"; renamed for clarity now that
+           Sales is unified separately. -->
+      <button class="account-tab" onclick="switchAccountTab('purchases')">Purchases</button>
       <button class="account-tab" onclick="switchAccountTab('tradeHistory')">Trades</button>
       <button class="account-tab" onclick="switchAccountTab('badges')">Badges</button>
     </div>
@@ -2328,6 +2336,38 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       </div>
     </div>
 
+    <!-- My Store — POS-style storefront grid. The actual renderer lives
+         in /pb-store.js (lazy-loaded). Content area is just the empty
+         shell until renderMyStore() populates it. -->
+    <div id="myStore" class="account-content">
+      <div class="pb-panel">
+        <div class="pb-panel-h">
+          <div class="pb-panel-title">
+            <span class="pb-panel-title-ico">▦</span>
+            My Store
+          </div>
+          <div class="pb-panel-actions" style="flex-wrap:wrap;gap:6px">
+            <input id="storeSearch" type="text" placeholder="Search card / set…" oninput="renderMyStore()"
+                   style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.72rem;padding:5px 10px;outline:none;min-width:200px">
+            <select id="storeSort" onchange="renderMyStore()"
+                    style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none">
+              <option value="value_desc">Price: High → Low</option>
+              <option value="value_asc">Price: Low → High</option>
+              <option value="name_asc">Name A → Z</option>
+              <option value="recent">Recently Listed</option>
+            </select>
+            <button class="pb-panel-link" onclick="renderMyStore(true)" title="Refresh">↻</button>
+            <button class="pb-panel-link" onclick="openListCardModal()" style="border-color:var(--accent);color:var(--accent)">+ List a Card</button>
+          </div>
+        </div>
+        <div class="pb-panel-body">
+          <div id="myStoreContent">
+            <div style="text-align:center;padding:40px;color:var(--muted);font-size:.78rem">Loading store…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="myOrders" class="account-content">
       <div class="pb-panel">
         <div class="pb-panel-h">
@@ -2346,48 +2386,50 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       </div>
     </div>
 
-    <div id="salesArchive" class="account-content">
+    <!-- Unified Sales tab — replaces the legacy "Sales Archive" +
+         "Sales Log" tabs. Source filter chips inside the panel toggle
+         between All / In-Store (Vendor+) / Marketplace / Offline.
+         Free / Collector users see In-Store disabled with a tier
+         badge; everything else renders empty for those tiers. -->
+    <div id="sales" class="account-content">
       <div class="pb-panel">
         <div class="pb-panel-h">
           <div class="pb-panel-title">
             <span class="pb-panel-title-ico">▣</span>
-            Sales Archive
-          </div>
-        </div>
-        <div class="pb-panel-body">
-          <div id="salesArchiveContent"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Sales Log (Vendor+) — every shop_sales row with date filters
-         and CSV export. Inserts to shop_sales come from the Mark N Sold
-         modal (step 2) and the POS scan flow (step 3). -->
-    <div id="salesLog" class="account-content">
-      <div class="pb-panel">
-        <div class="pb-panel-h">
-          <div class="pb-panel-title">
-            <span class="pb-panel-title-ico">▤</span>
-            Sales Log
+            Sales
           </div>
           <div class="pb-panel-actions" style="flex-wrap:wrap;gap:6px">
             <label style="font-size:.62rem;color:var(--muted);letter-spacing:.06em;display:flex;align-items:center;gap:6px">FROM
-              <input id="slFrom" type="date" onchange="renderSalesLog()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.7rem;padding:4px 8px;outline:none">
+              <input id="salesFrom" type="date" onchange="renderSales()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.7rem;padding:4px 8px;outline:none">
             </label>
             <label style="font-size:.62rem;color:var(--muted);letter-spacing:.06em;display:flex;align-items:center;gap:6px">TO
-              <input id="slTo" type="date" onchange="renderSalesLog()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.7rem;padding:4px 8px;outline:none">
+              <input id="salesTo" type="date" onchange="renderSales()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.7rem;padding:4px 8px;outline:none">
             </label>
-            <button class="pb-panel-link" onclick="renderSalesLog(true)" title="Refresh from server">↻</button>
-            <button class="pb-panel-link" onclick="exportSalesLogCsv()" title="Download CSV" style="border-color:var(--accent);color:var(--accent)">↧ CSV</button>
+            <button class="pb-panel-link" onclick="renderSales(true)" title="Refresh from server">↻</button>
+            <button class="pb-panel-link" onclick="exportSalesCsv()" title="Download CSV" style="border-color:var(--accent);color:var(--accent)">↧ CSV</button>
           </div>
         </div>
+        <!-- Source filter chips — In-Store needs Vendor+; Marketplace
+             and Offline need Enthusiast+. Lower tiers see the chip
+             disabled with a tier badge. -->
+        <div id="salesFilterChips" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-bottom:1px solid var(--border)">
+          <button class="sales-chip is-active" data-source="all"        onclick="_setSalesSource('all')">All</button>
+          <button class="sales-chip"           data-source="in-store"   onclick="_setSalesSource('in-store')">In-Store</button>
+          <button class="sales-chip"           data-source="marketplace" onclick="_setSalesSource('marketplace')">Marketplace</button>
+          <button class="sales-chip"           data-source="offline"    onclick="_setSalesSource('offline')">Offline</button>
+        </div>
         <div class="pb-panel-body">
-          <div id="salesLogContent">
+          <div id="salesContent">
             <div style="text-align:center;padding:40px;color:var(--muted);font-size:.78rem">Loading sales…</div>
           </div>
         </div>
       </div>
     </div>
+    <!-- Legacy salesArchive + salesLog content divs — kept hidden so
+         any stale code that still references them doesn't break. New
+         unified tab is #sales above. -->
+    <div id="salesArchive" class="account-content" style="display:none"><div id="salesArchiveContent"></div></div>
+    <div id="salesLog" class="account-content" style="display:none"><div id="salesLogContent"></div></div>
 
     <!-- Inventory (Vendor+) — step 1 read-only view of in-store +
          listed-online stock split. POS / sales-log come in later steps. -->
@@ -2445,19 +2487,24 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       </div>
     </div>
 
-    <div id="history" class="account-content">
+    <!-- Purchases (was "Activity History") — buyer-side records of
+         everything the user has bought through PathBinder. -->
+    <div id="purchases" class="account-content">
       <div class="pb-panel">
         <div class="pb-panel-h">
           <div class="pb-panel-title">
             <span class="pb-panel-title-ico">◷</span>
-            Activity History
+            Purchases
           </div>
         </div>
         <div class="pb-panel-body">
-          <div id="historyContent"></div>
+          <div id="purchasesContent"></div>
         </div>
       </div>
     </div>
+    <!-- Legacy #history div — kept hidden so any old links / handlers
+         that target it still resolve. New tab is #purchases above. -->
+    <div id="history" class="account-content" style="display:none"><div id="historyContent"></div></div>
 
     <div id="tradeHistory" class="account-content">
       <div class="pb-panel">

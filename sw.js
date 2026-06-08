@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v466';
+const CACHE = 'pathbinder-v468';
 
 const PRECACHE = [
   '/offline.html',
@@ -636,6 +636,10 @@ const PRECACHE = [
   // /pb-photo.js — lazy-loaded Card Photo Update modal (~18 KB).
   // Crop + bg removal. Fires when user clicks Edit Photo on a card.
   '/pb-photo.js',
+  // /pb-store.js — lazy-loaded My Store POS view (vendor+ only).
+  // Square-style grid of active listings. Only loads when the user
+  // activates the My Store tab.
+  '/pb-store.js',
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap'
 ];
 
