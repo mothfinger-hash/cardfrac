@@ -29,8 +29,11 @@
        preloaded here, but they're only consumed on the fairTrade page —
        JIT-preloaded by showPage('fairTrade') so they don't generate
        "preloaded but not used" warnings on every other route. -->
-  <link rel="preload" href="weblogo.webp" as="image">
-  <link rel="preload" href="phondex.webp" as="image">
+<!-- weblogo.webp + phondex.webp preload tags were dropped — both
+       were no longer referenced anywhere else in the codebase, so the
+       browser was downloading them on every visit and then warning
+       that they went unused. Removing the orphan preloads also
+       clears the "preloaded but not used" console noise. -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Space+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <!-- PDF export (jsPDF + autoTable) — loaded lazily on first export -->
 <!-- pb-app.js used to live here in the head; moved to AFTER supabase-js
