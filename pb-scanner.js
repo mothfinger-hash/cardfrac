@@ -1819,6 +1819,14 @@
       const _scanQty = Math.max(1, Math.min(99, Number(window._scanAddQty) || 1));
       window._scanAddQty = 1; // reset so the next scan starts at 1
 
+      // For Vendor+ tier users, default on_shelf_qty to the scanned
+      // quantity. The DB column has a NOT NULL DEFAULT 0, so omitting
+      // it (the previous behavior) caused every scan-added card to
+      // land with 0 on-shelf even though the vendor owned it — which
+      // then made POS scan refuse the sale with "Out of stock" the
+      // next time the same card was scanned. The Add-to-Binder modal
+      // already applied this default; the scanner just forgot to.
+      const _isVendor = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
       const _insertBase = {
         user_id:          currentUser.id,
         api_card_id:      card.id || null,
@@ -1832,6 +1840,7 @@
         grade_value:      gradeValue,
         cert_number:      certNumber,
         quantity:         _scanQty,
+        on_shelf_qty:     _isVendor ? _scanQty : undefined,
         purchase_price:   null,
         purchase_date:    null,
         price_source_url: null,
@@ -1855,14 +1864,25 @@
                str.toLowerCase().includes('column');
       };
       if (_isSchemaErr(error)) {
-        const { language: _l, ..._noLang } = _insertBase;
-        const r2 = await sb.from('collection_items').insert(_noLang).select('id').single();
-        if (!r2.error) { newRow = r2.data; error = null; }
-        else if (_isSchemaErr(r2.error)) {
-          const { language: _l2, rarity: _r2, ..._bare } = _insertBase;
-          const r3 = await sb.from('collection_items').insert(_bare).select('id').single();
-          newRow = r3.data; error = r3.error;
-        } else { newRow = r2.data; error = r2.error; }
+        // Strip on_shelf_qty first — it's the newest column and most
+        // likely to be missing on an older DB that hasn't run the
+        // shop-inventory migration. The cascade goes:
+        //   1. drop on_shelf_qty
+        //   2. drop language
+        //   3. drop language + rarity (oldest schema)
+        const { on_shelf_qty: _osq, ..._noShelf } = _insertBase;
+        const r1 = await sb.from('collection_items').insert(_noShelf).select('id').single();
+        if (!r1.error) { newRow = r1.data; error = null; }
+        else if (_isSchemaErr(r1.error)) {
+          const { language: _l, ..._noLang } = _noShelf;
+          const r2 = await sb.from('collection_items').insert(_noLang).select('id').single();
+          if (!r2.error) { newRow = r2.data; error = null; }
+          else if (_isSchemaErr(r2.error)) {
+            const { rarity: _r2, ..._bare } = _noLang;
+            const r3 = await sb.from('collection_items').insert(_bare).select('id').single();
+            newRow = r3.data; error = r3.error;
+          } else { newRow = r2.data; error = r2.error; }
+        } else { newRow = r1.data; error = r1.error; }
       }
 
       if (error) {
