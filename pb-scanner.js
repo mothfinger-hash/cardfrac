@@ -1414,14 +1414,20 @@
         if (candidates.length === 0) return [];
         var game  = extracted.game_type || null;
         var ptype = extracted.product_subtype || null;
-        // Build the catalog base query
+        // Build the catalog base query. No product_type filter —
+        // earlier I had .neq('product_type','single') and that
+        // quietly dropped every catalog row where the column was
+        // NULL (Postgres treats NULL != 'single' as NULL, which
+        // filters the row out). Plenty of sealed rows in catalog
+        // have NULL product_type because the sealed sync hasn't
+        // tagged them yet or because they came from a sync path
+        // that didn't set it. The name/set_name match is specific
+        // enough that single cards don't accidentally surface —
+        // a single card named "Chaos Rising Booster Pack" doesn't
+        // exist in any TCG.
         function _base() {
-          // product_type single must be excluded — we're scanning
-          // packaging, not cards.
           return sb.from('catalog')
-            .select('id,name,set_name,set_code,card_number,rarity,image_url,product_type,game_type')
-            .neq('product_type', 'single')
-            .neq('product_type', 'tcg_single');
+            .select('id,name,set_name,set_code,card_number,rarity,image_url,product_type,game_type');
         }
         // Run all three tiers per candidate, searching BOTH `name`
         // AND `set_name` columns. Subset/parent-set layouts are
@@ -1464,6 +1470,11 @@
         allRows.forEach(function(r) {
           if (r && r.id && !seenRow.has(r.id)) { seenRow.add(r.id); rows.push(r); }
         });
+
+        console.log('[sealed match] candidates=' + JSON.stringify(candidates)
+          + ' game=' + game + ' ptype=' + ptype
+          + ' → ' + rows.length + ' catalog rows');
+
         if (rows.length === 0) return [];
 
         // Score by extra token overlap in name + set_name, so the
@@ -1909,7 +1920,8 @@
       if (!pick) return;
       var sc = document.getElementById('productScannerModal');
       if (sc) sc.remove();
-      // quickAddScannedCard expects a row in the shape catalog returns.
+      // quickAddScannedCard expects a catalog row shape — pick is
+      // already that shape from _matchSealedInCatalog.
       try { await quickAddScannedCard(pick); } catch (e) {
         console.error('[sealed add] failed:', e);
         showToast('Could not add: ' + (e.message || 'unknown'));
