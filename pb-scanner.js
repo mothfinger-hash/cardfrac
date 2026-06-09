@@ -1486,16 +1486,32 @@
           var r3 = await _base().or(orClause).limit(15);
           if (!r3.error && r3.data) Array.prototype.push.apply(allRows, r3.data);
         }
-        // De-dupe by id
+        // De-dupe by id, then drop single-card rows. We can't filter
+        // single cards in the SQL query because Postgres treats
+        // `product_type != 'single'` as NULL when product_type IS
+        // NULL — which would silently exclude every NULL-typed
+        // sealed row (and there are a lot of those in catalog from
+        // older sync runs). So we cast a wider net at the DB and
+        // strip singles in JS, where `!== 'single'` evaluates
+        // cleanly across NULL/undefined/blank.
         var seenRow = new Set();
         var rows = [];
+        var droppedSingles = 0;
         allRows.forEach(function(r) {
-          if (r && r.id && !seenRow.has(r.id)) { seenRow.add(r.id); rows.push(r); }
+          if (!r || !r.id) return;
+          if (seenRow.has(r.id)) return;
+          var pt = String(r.product_type || '').toLowerCase();
+          if (pt === 'single' || pt === 'tcg_single') {
+            droppedSingles++;
+            return;
+          }
+          seenRow.add(r.id);
+          rows.push(r);
         });
 
         console.log('[sealed match] candidates=' + JSON.stringify(candidates)
           + ' game=' + game + ' ptype=' + ptype
-          + ' → ' + rows.length + ' catalog rows');
+          + ' → ' + rows.length + ' catalog rows (dropped ' + droppedSingles + ' singles)');
 
         if (rows.length === 0) return [];
 
