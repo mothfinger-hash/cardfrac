@@ -1653,36 +1653,48 @@
             <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:4px">${m.name || 'Unknown Card'}${jpBadge}</div>
             ${setInfo ? `<div style="font-size:.63rem;color:var(--muted)">${setInfo}</div>` : ''}
           </div>
-          <!-- actions —
-               qty stepper left, ADD button right. Stepper mutates
-               window._scanAddQty; quickAddScannedCard reads that
-               value into _insertBase.quantity. Saves having to open
-               the binder card detail and increment quantity manually
-               after every duplicate scan. Default 1, capped at 99
-               (matches the existing collection_items qty input). -->
+          <!-- actions — flex with two modes:
+               * Normal scan: qty stepper + ADD TO COLLECTION + WISHLIST.
+                 Stepper mutates window._scanAddQty; quickAddScannedCard
+                 reads that into _insertBase.quantity. Saves opening the
+                 binder card detail to increment after every duplicate.
+               * POS scan mode (_posSaleMode): collapsed to a single
+                 RECORD SALE button — the action routes to the Mark N
+                 Sold modal via confirmScanMatch's POS short-circuit.
+                 Wishlist + qty are hidden because they don't apply when
+                 the vendor is ringing up a sale (sale qty lives in the
+                 Mark N Sold modal itself). -->
           <div style="display:flex;flex-direction:column;gap:8px">
-            <div style="display:flex;gap:8px;align-items:stretch">
-              <div style="display:flex;align-items:center;border:1px solid var(--accent);border-radius:4px;background:var(--surface2,var(--surface));overflow:hidden;font-family:'Space Mono','Share Tech Mono',monospace">
-                <button type="button" onclick="_scanQtyAdjust(-1)"
-                  style="padding:0 12px;height:100%;border:none;background:transparent;color:var(--accent);font-size:1rem;font-weight:700;cursor:pointer;line-height:1"
-                  aria-label="Decrease quantity">−</button>
-                <span id="scanQtyVal"
-                  style="min-width:28px;text-align:center;color:var(--text);font-size:.85rem;font-weight:700;padding:0 4px;user-select:none">1</span>
-                <button type="button" onclick="_scanQtyAdjust(1)"
-                  style="padding:0 12px;height:100%;border:none;background:transparent;color:var(--accent);font-size:1rem;font-weight:700;cursor:pointer;line-height:1"
-                  aria-label="Increase quantity">+</button>
-              </div>
+            ${window._posSaleMode ? `
               <button onclick="document.getElementById('scanPreviewSheet').remove();confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')"
-                style="flex:1;padding:11px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;font-weight:700;cursor:pointer;letter-spacing:.06em;transition:opacity .12s"
+                style="width:100%;padding:14px;background:var(--copper);color:var(--surface);border:1px solid var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.08em;transition:opacity .12s;box-shadow:0 0 18px var(--copper-glow)"
                 onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-                ADD TO COLLECTION
+                RECORD SALE
               </button>
-            </div>
-            <button onclick="document.getElementById('scanPreviewSheet').remove();openAddToWishlistModal({cardName:'${(m.name||'').replace(/'/g,"\\'")}',setName:'${(m.set_name||'').replace(/'/g,"\\'")}',cardNumber:'${m.card_number||''}',cardImageUrl:'${m.image_url||''}',rarity:'${m.rarity||''}'})"
-              style="width:100%;padding:9px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.06em;transition:all .15s"
-              onmouseover="this.style.borderColor='var(--copper)';this.style.background='var(--copper-glow)'" onmouseout="this.style.borderColor='var(--copper-dim)';this.style.background='transparent'">
-              ADD TO WISHLIST
-            </button>
+            ` : `
+              <div style="display:flex;gap:8px;align-items:stretch">
+                <div style="display:flex;align-items:center;border:1px solid var(--accent);border-radius:4px;background:var(--surface2,var(--surface));overflow:hidden;font-family:'Space Mono','Share Tech Mono',monospace">
+                  <button type="button" onclick="_scanQtyAdjust(-1)"
+                    style="padding:0 12px;height:100%;border:none;background:transparent;color:var(--accent);font-size:1rem;font-weight:700;cursor:pointer;line-height:1"
+                    aria-label="Decrease quantity">−</button>
+                  <span id="scanQtyVal"
+                    style="min-width:28px;text-align:center;color:var(--text);font-size:.85rem;font-weight:700;padding:0 4px;user-select:none">1</span>
+                  <button type="button" onclick="_scanQtyAdjust(1)"
+                    style="padding:0 12px;height:100%;border:none;background:transparent;color:var(--accent);font-size:1rem;font-weight:700;cursor:pointer;line-height:1"
+                    aria-label="Increase quantity">+</button>
+                </div>
+                <button onclick="document.getElementById('scanPreviewSheet').remove();confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')"
+                  style="flex:1;padding:11px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;font-weight:700;cursor:pointer;letter-spacing:.06em;transition:opacity .12s"
+                  onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                  ADD TO COLLECTION
+                </button>
+              </div>
+              <button onclick="document.getElementById('scanPreviewSheet').remove();openAddToWishlistModal({cardName:'${(m.name||'').replace(/'/g,"\\'")}',setName:'${(m.set_name||'').replace(/'/g,"\\'")}',cardNumber:'${m.card_number||''}',cardImageUrl:'${m.image_url||''}',rarity:'${m.rarity||''}'})"
+                style="width:100%;padding:9px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.06em;transition:all .15s"
+                onmouseover="this.style.borderColor='var(--copper)';this.style.background='var(--copper-glow)'" onmouseout="this.style.borderColor='var(--copper-dim)';this.style.background='transparent'">
+                ADD TO WISHLIST
+              </button>
+            `}
             <button onclick="document.getElementById('scanPreviewSheet').remove()"
               style="width:100%;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;cursor:pointer">
               BACK TO RESULTS
@@ -1975,8 +1987,8 @@
       if (banner) return;
       banner = document.createElement('div');
       banner.id = 'posScannerBanner';
-      banner.style.cssText = 'position:absolute;top:0;left:0;right:0;background:var(--green);color:var(--surface);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:"Space Mono",monospace;font-size:.72rem;font-weight:700;letter-spacing:.08em;z-index:10';
-      banner.innerHTML = '<span>$ POS SALE MODE — scan a card to record sale</span>'
+      banner.style.cssText = 'position:absolute;top:0;left:0;right:0;background:var(--copper);color:var(--surface);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:"Space Mono",monospace;font-size:.72rem;font-weight:700;letter-spacing:.08em;z-index:10;box-shadow:0 0 18px var(--copper-glow)';
+      banner.innerHTML = '<span>POS SALE MODE — scan a card to record sale</span>'
         + '<button onclick="exitPosMode()" style="padding:4px 10px;border:1px solid var(--surface);background:transparent;color:var(--surface);font-family:inherit;font-size:.68rem;font-weight:700;cursor:pointer;letter-spacing:.08em">EXIT POS</button>';
       modal.appendChild(banner);
     }

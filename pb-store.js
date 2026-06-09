@@ -277,6 +277,16 @@
   }
 
   // ── Renderer ────────────────────────────────────────────────────
+  // How many tiles to paint per page. A vendor with 5,000 cards
+  // generating 5,000 tile HTML strings + a single innerHTML assignment
+  // locks mobile Safari for tens of seconds with no progress shown —
+  // that was the "loading for 30 seconds" symptom. Cap the initial
+  // paint at PAGE_SIZE; users can tap "Show more" to add another
+  // batch. Search/sort still operate over the full filtered list,
+  // they just render the first PAGE_SIZE results.
+  const PAGE_SIZE = 120;
+  let _renderedCount = PAGE_SIZE;
+
   async function renderMyStore(forceRefresh) {
     _injectStoreStyles();
     const wrap = document.getElementById('myStoreContent');
@@ -298,6 +308,7 @@
     // Optional force-refresh — re-pull collection from server so the
     // grid reflects any sales/edits made on another device.
     if (forceRefresh) {
+      wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);font-size:.78rem">Refreshing inventory…</div>';
       try { if (typeof loadCollection === 'function') await loadCollection(); } catch(_) {}
     }
 
@@ -346,9 +357,95 @@
       return;
     }
 
-    const tiles = filtered.map(_tileHtml).join('');
-    wrap.innerHTML = summary + '<div class="pbs-grid">' + tiles + '</div>';
+    // Paint the summary tiles immediately + a placeholder for the grid,
+    // then yield to the event loop so the user sees progress while the
+    // tile HTML is being assembled. Without this, a vendor with 5k+
+    // cards saw "Loading store…" until the entire grid HTML was built
+    // and assigned — 30+ seconds on mobile, no intermediate paint.
+    wrap.innerHTML = summary
+      + '<div style="padding:24px;text-align:center;color:var(--muted);font-size:.72rem;letter-spacing:.06em">'
+      +   'Rendering ' + Math.min(filtered.length, _renderedCount).toLocaleString()
+      +   (filtered.length > _renderedCount ? ' of ' + filtered.length.toLocaleString() : '')
+      +   ' cards…'
+      + '</div>';
+    await new Promise(function(r) { setTimeout(r, 0); });
+
+    const visible = filtered.slice(0, _renderedCount);
+    const tiles   = visible.map(_tileHtml).join('');
+    // Infinite-scroll sentinel — a 1px-tall <div id="pbs-sentinel"> at
+    // the bottom of the grid. _attachStoreScrollLoader hooks an
+    // IntersectionObserver on it that bumps _renderedCount and
+    // re-renders when it crosses the viewport. Replaces the manual
+    // "Show more" button so the vendor can just keep scrolling.
+    const hasMore   = filtered.length > visible.length;
+    const remaining = hasMore ? (filtered.length - visible.length) : 0;
+    const sentinel  = hasMore
+      ? '<div id="pbs-sentinel" data-remaining="' + remaining + '" '
+        +     'style="grid-column:1 / -1;text-align:center;padding:18px 0;color:var(--muted);font-size:.7rem;letter-spacing:.06em">'
+        +   'Loading ' + remaining.toLocaleString() + ' more…'
+        + '</div>'
+      : '';
+    wrap.innerHTML = summary + '<div class="pbs-grid">' + tiles + sentinel + '</div>';
+    if (hasMore) _attachStoreScrollLoader(filtered);
   }
+
+  // Bumps the page size and re-renders so the next batch lands in the
+  // grid. Each crossing adds another PAGE_SIZE tiles — keeps the main
+  // thread free between batches instead of painting the entire
+  // inventory at once. Still exposed as window._storeShowMore for
+  // older code paths / manual debugging.
+  window._storeShowMore = function() {
+    _renderedCount += PAGE_SIZE;
+    renderMyStore();
+  };
+
+  // IntersectionObserver that watches the bottom-of-grid sentinel.
+  // When the user scrolls within ~600px of the sentinel, we render
+  // the next batch. The observer disconnects on each re-render and
+  // is reattached to the new sentinel — easier than tracking a single
+  // long-lived observer across DOM swaps.
+  let _storeObserver = null;
+  function _attachStoreScrollLoader(filteredRef) {
+    try {
+      if (_storeObserver) { _storeObserver.disconnect(); _storeObserver = null; }
+      const sentinel = document.getElementById('pbs-sentinel');
+      if (!sentinel) return;
+      if (typeof IntersectionObserver !== 'function') {
+        // Old browser fallback — keep behavior somewhat usable by
+        // swapping the sentinel into a clickable "Load more" so the
+        // vendor isn't stranded without scroll-triggered loading.
+        sentinel.style.cursor = 'pointer';
+        sentinel.onclick = function() { window._storeShowMore(); };
+        return;
+      }
+      _storeObserver = new IntersectionObserver(function(entries) {
+        if (!entries.some(function(e) { return e.isIntersecting; })) return;
+        if (_storeObserver) { _storeObserver.disconnect(); _storeObserver = null; }
+        _renderedCount += PAGE_SIZE;
+        renderMyStore();
+      }, { rootMargin: '600px 0px' });
+      _storeObserver.observe(sentinel);
+    } catch(e) {
+      // Any observer failure shouldn't break the visible grid; the
+      // sentinel just stops auto-loading.
+      console.warn('[Store] scroll loader failed:', e);
+    }
+  }
+
+  // Debounced search/sort handler — typing in #storeSearch fires
+  // input on every keystroke, and a vendor with thousands of cards
+  // rebuilding the grid 5+ times per keystroke locks mobile. The
+  // 180ms debounce coalesces the keystrokes; sort changes go through
+  // immediately since they're discrete clicks.
+  let _storeRenderTimer = null;
+  window._storeRenderDebounced = function() {
+    _renderedCount = PAGE_SIZE; // reset on every new search
+    if (_storeRenderTimer) clearTimeout(_storeRenderTimer);
+    _storeRenderTimer = setTimeout(function() {
+      _storeRenderTimer = null;
+      renderMyStore();
+    }, 180);
+  };
 
   function _summaryTile(label, value, color) {
     return ''
