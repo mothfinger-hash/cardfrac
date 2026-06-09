@@ -1297,27 +1297,85 @@
         if (FMT[i][0].test(rawLc)) { out.product_subtype = FMT[i][1]; break; }
       }
 
-      // ── Set / series name — find the most prominent ALL-CAPS line
-      //     that isn't a stopword. Pokemon sealed boxes typically
-      //     have set names in big type (CHAOS RISING, EVOLVING SKIES,
-      //     PALDEAN FATES, etc.). MTG / OP / YGO follow the same
-      //     convention.
-      var STOPLINES = /^(pok[eé]mon|magic\s*the\s*gathering|mtg|yu-?gi-?oh|one\s*piece|trading\s*card\s*game|tcg|game|cards?|additional\s*game\s*cards?|expansion|series)$/i;
-      var lines = text.split('\n')
-        .map(function(l) { return l.trim(); })
-        .filter(function(l) {
-          if (!l || l.length < 3) return false;
-          if (STOPLINES.test(l)) return false;
-          // mostly-uppercase + ≤4 words, no digits
-          var letters = l.replace(/[^A-Za-z]/g, '');
-          if (letters.length < 3) return false;
-          var upperLetters = letters.replace(/[^A-Z]/g, '');
-          var wordCount = l.split(/\s+/).length;
-          return wordCount <= 5 && upperLetters.length / letters.length >= 0.6;
+      // ── Set / series name candidates — extract MULTIPLE prominent
+      //     all-caps phrases and score them by length + known
+      //     set-name buzzword density. Pokemon boxes often have
+      //     multiple all-caps lines: brand row (POKEMON), tagline
+      //     (MEGA EVOLUTION), and set name (CHAOS RISING). OCR can
+      //     also garble short lines into noise ("KU GAM" from
+      //     "GU GAM" / "CARD GAME"), so we can't trust "the first
+      //     line that's all-caps". Instead we score and pick the
+      //     best one for the headline `set_name`, then keep the rest
+      //     as fallback `set_name_candidates` for the catalog query
+      //     to fan out across.
+      var STOPLINES = /^(pok[eé]mon|magic\s*the\s*gathering|mtg|yu-?gi-?oh|one\s*piece|trading\s*card\s*game|tcg|game|cards?|additional\s*game\s*cards?|expansion|series|edition|\d+\s*\+?\s*$)$/i;
+      // Recognized set-name buzzwords across Pokemon / MTG / OP /
+      // YGO / Gundam. Hitting any of these signals "this line is
+      // very likely a real set name" — boosts the candidate's score
+      // above garbled OCR fragments. Maintained as a flat list so
+      // adding new releases is one-line additions.
+      var SET_BUZZWORDS = [
+        'evolution','evolutions','rising','ascent','arena','fates','flames','horizons',
+        'paradox','obsidian','paldean','scarlet','violet','stellar','crown','crowned',
+        'temporal','prismatic','surging','sparks','sword','shield','rebel','clash',
+        'darkness','ablaze','vivid','voltage','battle','styles','chilling','reign',
+        'evolving','skies','fusion','strike','brilliant','stars','astral','radiance',
+        'lost','origin','silver','tempest','crown','zenith','journey','together',
+        'mega','base','jungle','fossil','rocket','gym','neo','genesis','discovery',
+        'destiny','aquapolis','expedition','ruby','sapphire','dragon','majesty',
+        'celebrations','classic','hidden','unbroken','bonds','cosmic','eclipse',
+        'champions','path','vivid','chaos','dark','ancient','origins','primal',
+        'phantom','forces','flashfire','xy','black','white','bw','sun','moon','sm',
+        'sv','swsh',
+        // MTG
+        'commander','foundations','duskmourn','outlaws','thunder','junction','murders',
+        'karlov','manor','ravnica','kamigawa','dominaria','innistrad','strixhaven',
+        // OP
+        'romance','dawn','paramount','pillars','kingdoms','intrigue','warlords','legacy',
+        'master','azure','seven','will','carrying','newtype','phantom','steel','requiem',
+        // YGO
+        'magnificent','mavens','quarter','century','tactical','masters','dimension',
+        'force','legendary','duelists','toon','chaos','phantom','rage',
+        // Gundam (generic terms)
+        'mobile','suit','newtype','crossover','phantom',
+      ];
+      var BUZZ = new Set(SET_BUZZWORDS);
+      var candidates = [];
+      text.split('\n').forEach(function(l) {
+        var line = l.trim();
+        if (!line || line.length < 3) return;
+        if (STOPLINES.test(line)) return;
+        var letters = line.replace(/[^A-Za-z]/g, '');
+        if (letters.length < 3) return;
+        var upperLetters = letters.replace(/[^A-Z]/g, '');
+        var upperRatio = upperLetters.length / letters.length;
+        var wordCount = line.split(/\s+/).length;
+        // Mostly-upper, reasonable word count.
+        if (wordCount > 5 || upperRatio < 0.6) return;
+        // Score:
+        //   +5 per buzzword hit (strongest signal — known set vocabulary)
+        //   +2 per word (longer phrases beat single-word garbage)
+        //   +1 for length > 10 (real set names tend to be longer)
+        //   -3 per all-uppercase 2-letter "word" (OCR garbage like "KU")
+        var score = 0;
+        var toks = line.toLowerCase().match(/[a-z]+/g) || [];
+        toks.forEach(function(t) {
+          if (BUZZ.has(t)) score += 5;
+          if (t.length === 2 && /^[A-Z]+$/.test(t.toUpperCase())) score -= 3;
         });
-      if (lines.length) {
-        // First all-caps line that's not the brand row.
-        out.set_name = lines[0].replace(/\s+/g, ' ').trim();
+        score += wordCount * 2;
+        if (letters.length > 10) score += 1;
+        if (score > 0) candidates.push({ line: line.replace(/\s+/g, ' ').trim(), score: score });
+      });
+      candidates.sort(function(a, b) { return b.score - a.score; });
+      if (candidates.length) {
+        out.set_name = candidates[0].line;
+        // Keep the next few as fallback search terms — the catalog
+        // query will fan out across all of them. "MEGA EVOLUTION" and
+        // "CHAOS RISING" both being present on the same box means the
+        // catalog row could match either depending on how the upstream
+        // sealed sync named it.
+        out.set_name_candidates = candidates.slice(0, 4).map(function(c) { return c.line; });
       }
 
       // ── Pack quantity ("36 PACKS", "10 ADDITIONAL CARDS") —
@@ -1344,8 +1402,16 @@
     //   3. name ilike set_name (drop game_type — last resort)
     async function _matchSealedInCatalog(extracted) {
       try {
-        if (!extracted || !extracted.set_name) return [];
-        var name  = extracted.set_name;
+        if (!extracted) return [];
+        // Fan out across ALL set-name candidates so a misranked
+        // headline ("KU GAM" outranking "CHAOS RISING") doesn't kill
+        // the whole search. We try each candidate against the same
+        // three-tier filter cascade, then de-dupe matched rows by
+        // id and score by combined name-token overlap.
+        var candidates = (extracted.set_name_candidates && extracted.set_name_candidates.length)
+          ? extracted.set_name_candidates
+          : (extracted.set_name ? [extracted.set_name] : []);
+        if (candidates.length === 0) return [];
         var game  = extracted.game_type || null;
         var ptype = extracted.product_subtype || null;
         // Build the catalog base query
@@ -1357,31 +1423,47 @@
             .neq('product_type', 'single')
             .neq('product_type', 'tcg_single');
         }
+        // Run all three tiers per candidate in parallel, collect
+        // every row that any candidate matched, then dedupe by id.
+        var allRows = [];
+        for (var ci = 0; ci < candidates.length; ci++) {
+          var name = candidates[ci];
+          // Tier 1 — strictest filter
+          if (game && ptype) {
+            var r1 = await _base().eq('game_type', game).eq('product_type', ptype)
+              .ilike('name', '%' + name + '%').limit(15);
+            if (!r1.error && r1.data) Array.prototype.push.apply(allRows, r1.data);
+          }
+          // Tier 2 — drop product_type
+          if (game) {
+            var r2 = await _base().eq('game_type', game)
+              .ilike('name', '%' + name + '%').limit(15);
+            if (!r2.error && r2.data) Array.prototype.push.apply(allRows, r2.data);
+          }
+          // Tier 3 — drop game_type
+          if (allRows.length === 0 && ci === candidates.length - 1) {
+            var r3 = await _base().ilike('name', '%' + name + '%').limit(15);
+            if (!r3.error && r3.data) Array.prototype.push.apply(allRows, r3.data);
+          }
+        }
+        // De-dupe by id
+        var seenRow = new Set();
         var rows = [];
-        // Tier 1 — strictest filter
-        if (game && ptype) {
-          var r1 = await _base().eq('game_type', game).eq('product_type', ptype)
-            .ilike('name', '%' + name + '%').limit(15);
-          if (!r1.error && r1.data) rows = r1.data;
-        }
-        // Tier 2 — drop product_type
-        if (rows.length === 0 && game) {
-          var r2 = await _base().eq('game_type', game)
-            .ilike('name', '%' + name + '%').limit(15);
-          if (!r2.error && r2.data) rows = r2.data;
-        }
-        // Tier 3 — drop game_type
-        if (rows.length === 0) {
-          var r3 = await _base().ilike('name', '%' + name + '%').limit(15);
-          if (!r3.error && r3.data) rows = r3.data;
-        }
+        allRows.forEach(function(r) {
+          if (r && r.id && !seenRow.has(r.id)) { seenRow.add(r.id); rows.push(r); }
+        });
         if (rows.length === 0) return [];
 
         // Score by extra token overlap in name + set_name, so the
         // "Pokemon TCG: Chaos Rising Booster Pack" row beats
         // "Chaos Rising Build & Battle" when ptype is booster_pack.
-        var qToks = String(name).toLowerCase().match(/[a-z0-9]{3,}/g) || [];
-        var qSet  = new Set(qToks);
+        // Tokens come from ALL candidate phrases so a row that
+        // contains "Chaos" but not "Mega Evolution" still scores on
+        // the Chaos hit alone.
+        var qSet = new Set();
+        candidates.forEach(function(cand) {
+          (String(cand).toLowerCase().match(/[a-z0-9]{3,}/g) || []).forEach(function(t) { qSet.add(t); });
+        });
         rows.forEach(function(r) {
           var hay = ((r.name || '') + ' ' + (r.set_name || '')).toLowerCase();
           var hayToks = hay.match(/[a-z0-9]{3,}/g) || [];
@@ -1690,6 +1772,14 @@
             _row('Scale',  extracted.scale, true);
           } else if (ptype === 'sealed') {
             if (extracted.set_name) html += '<div style="font-size:.75rem;color:var(--text)"><strong>Set:</strong> ' + _escHtml(extracted.set_name) + '</div>';
+            // Show the other candidate phrases so it's clear what
+            // we're searching the catalog against — useful when the
+            // first-ranked "Set" turns out to be OCR garbage and the
+            // real hit comes from a lower-ranked candidate.
+            if (extracted.set_name_candidates && extracted.set_name_candidates.length > 1) {
+              var others = extracted.set_name_candidates.slice(1).join(' · ');
+              _row('Also tried', others);
+            }
             _row('TCG',          (extracted.game_type || '').replace('mtg','Magic').replace('pokemon','Pokemon').replace('onepiece','One Piece').replace('yugioh','Yu-Gi-Oh').replace('gundam','Gundam').replace('dbz','Dragon Ball'));
             _row('Format',       (extracted.product_subtype || '').replace(/_/g,' ').replace(/\b\w/g, function(s){return s.toUpperCase();}));
             _row('Contents',     extracted.contents_qty ? extracted.contents_qty + ' cards/packs' : '');

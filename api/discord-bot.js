@@ -39,7 +39,17 @@ const nacl = require('tweetnacl');
 // order, whitespace) would break the signature verification. Must be
 // exported at the TOP of the module — Vercel reads this at build time
 // before the handler runs.
-module.exports.config = { api: { bodyParser: false } };
+//
+// maxDuration: 60 — Discord's deferred-ack model lets us send the
+// "thinking…" ack immediately and PATCH the real response anytime
+// within 15 minutes. Vercel's default function maxDuration on the
+// Hobby plan is 10s — if the deferred handler takes longer than
+// that, Vercel KILLS the function before the PATCH goes out and
+// the user is left staring at "PathBot is thinking…" forever. 60s
+// is comfortably above what any /movers-style RPC needs even with
+// a cold-start cache miss, and well under the 15-min Discord cap.
+// On Vercel Pro you can go up to 300s; on Hobby this caps at 60s.
+module.exports.config = { api: { bodyParser: false }, maxDuration: 60 };
 
 // Lazy-loaded Supabase client. @supabase/supabase-js is the largest
 // dep in this bundle (~300KB) and adds ~300-500ms to cold-start time
@@ -128,6 +138,18 @@ const TIER_ROLE_ENV = {
 // not the parsed object. Vercel exposes the raw body via the `req`
 // stream when bodyParser is off.
 const handler = async (req, res) => {
+  // Warm-up ping from the Vercel cron (vercel.json crons entry hits
+  // ?warm=1 every 4 minutes). The whole point is to keep this Lambda
+  // hot so user-triggered slash commands don't pay cold-start cost
+  // and trip Discord's 3-second deferred-ack window. Respond instantly
+  // without touching Supabase or the signature path.
+  if (req.method === 'GET' && req.query && req.query.warm === '1') {
+    return res.status(200).json({
+      ok: true,
+      service: 'pathbinder-discord-bot',
+      warmed_at: new Date().toISOString(),
+    });
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Discord interactions are POST-only' });
   }
@@ -213,16 +235,49 @@ const handler = async (req, res) => {
     if (willDefer) {
       // Send the deferred ack immediately. The handler keeps running
       // because we don't return — Vercel waits for the awaits below
-      // to settle before terminating the function.
+      // to settle before terminating the function (capped at the
+      // module's maxDuration, set to 60s above).
+      const _deferStart = Date.now();
+      console.log('[discord-bot] /' + name + ' DEFER ack sent');
       res.status(200).json({
         type: INTERACTION_RESPONSE_TYPE.DEFERRED_CHANNEL_MESSAGE,
         data: deferEphemeral ? { flags: EPHEMERAL } : {},
       });
+      // WATCHDOG: race the handler against a 50s timer (under the
+      // 60s maxDuration). Whichever wins, the user sees a real
+      // message — not "PathBot is thinking…" forever.
+      //
+      // Background: without this, if the handler's work exceeds
+      // maxDuration, Vercel SIGKILL's the function and the PATCH
+      // call inside the catch block never fires — leaving Discord
+      // showing "thinking…" until the 15-min interaction token
+      // expires. The watchdog guarantees we PATCH SOMETHING within
+      // the function's lifetime, even if it's a timeout message.
+      const HANDLER_BUDGET_MS = 50000;
+      let watchdogFired = false;
+      const watchdog = new Promise(function(resolve) {
+        setTimeout(function() {
+          watchdogFired = true;
+          resolve({ __watchdog: true });
+        }, HANDLER_BUDGET_MS);
+      });
       try {
-        const reply = await runSlashHandler(name, interaction);
-        await patchOriginalInteractionResponse(interaction, reply);
+        const result = await Promise.race([runSlashHandler(name, interaction), watchdog]);
+        if (watchdogFired) {
+          const _ms = Date.now() - _deferStart;
+          console.error('[discord-bot] /' + name + ' watchdog tripped at ' + _ms + 'ms — handler still running');
+          await patchOriginalInteractionResponse(interaction,
+            ephemeral('That command is taking too long. The catalog might be under heavy load — try again in a moment.'));
+        } else {
+          const _handlerMs = Date.now() - _deferStart;
+          console.log('[discord-bot] /' + name + ' handler done in ' + _handlerMs + 'ms, PATCHing…');
+          await patchOriginalInteractionResponse(interaction, result);
+          const _totalMs = Date.now() - _deferStart;
+          console.log('[discord-bot] /' + name + ' PATCH done, total ' + _totalMs + 'ms');
+        }
       } catch (e) {
-        console.error('[discord-bot] deferred handler error:', name, e);
+        const _failMs = Date.now() - _deferStart;
+        console.error('[discord-bot] /' + name + ' deferred handler error at ' + _failMs + 'ms:', e && e.stack || e);
         await patchOriginalInteractionResponse(interaction,
           ephemeral('Sorry, that command hit an error. The team has been notified.'));
       }
@@ -302,7 +357,8 @@ module.exports = handler;
 // Re-attach config — assigning module.exports above overwrote the
 // config property we set at the top. Vercel reads it from
 // module.exports.config so both have to live on the same object.
-module.exports.config = { api: { bodyParser: false } };
+// maxDuration MUST match the top-of-file declaration; see that comment.
+module.exports.config = { api: { bodyParser: false }, maxDuration: 60 };
 
 
 // ─── Command handlers ──────────────────────────────────────────────
