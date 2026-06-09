@@ -2654,6 +2654,33 @@
             total:  null,
           };
         }
+        // Pokemon Black Star Promos use a no-separator format:
+        // SWSH260, SM200, BW101, XY84, HGSS01, DPP56. Two-to-five
+        // letter prefix directly followed by 1-4 digits, optionally
+        // preceded by the era rotation symbol (which OCR reads as
+        // "F", "E", "D" etc — single uppercase letter + space). The
+        // dedicated MEP/SVP triple-token pattern below misses these
+        // because there's no language code between the set and the
+        // number. Catalog rows for these promos store card_number
+        // as the bare digits ("260") in some syncs and the full
+        // string ("SWSH260") in others, so _cardNumVariants gets the
+        // SETCODE-NUMBER form added later via setCode+numRaw.
+        if (tcg === 'pokemon' || !tcg) {
+          const bspPrefixes = '(SWSH|SM|BW|XY|HGSS|DPP|POP|HS|RC|NP|DV|MCD)';
+          const bspRe = new RegExp('\\b' + bspPrefixes + '\\s*(\\d{1,4})\\b', 'i');
+          const bspM  = text.match(bspRe);
+          if (bspM) {
+            const setCode = bspM[1].toUpperCase();
+            return {
+              full:    setCode + bspM[2],
+              num:     String(parseInt(bspM[2], 10)),
+              numRaw:  bspM[2],
+              total:   null,
+              setCode: setCode,
+            };
+          }
+        }
+
         // Pokemon Center promos use the layout "MEP EN 010" — a 2-5
         // letter set code, a space-separated language tag, then a 2-3
         // digit number. Covers the Mewtwo Center set (MEP), Scarlet &
@@ -3543,6 +3570,14 @@
             // 'OP12-8' from a 1-digit number should also try 'OP12-008'.
             if (numStripped && numStripped.length < 3) {
               out.add(parsedSetCode + '-' + numStripped.padStart(3, '0'));
+            }
+            // SETCODE+NUMBER with NO separator — Pokemon Black Star
+            // Promos store card_number as 'SWSH260', 'XY84', 'BW101'
+            // glued together. Cover that storage layout too so the
+            // num-only / name+num queries actually hit.
+            out.add(parsedSetCode + numRaw);
+            if (numStripped && numStripped !== numRaw) {
+              out.add(parsedSetCode + numStripped);
             }
           }
           return Array.from(out);
