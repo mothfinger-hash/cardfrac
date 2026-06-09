@@ -3718,12 +3718,22 @@
         const _rawSetTotal  = setTotalRes.data || [];
         let setTotalHits = [];
         if (_rawSetTotal.length > 0) {
-          const _ids = _rawSetTotal.map(function(h){ return h.id; });
-          const verifyRes = await sb.from('catalog')
-            .select('id,name,set_name,set_code,card_number,rarity,image_url')
-            .in('id', _ids)
-            .eq('game_type', _effectiveTcg);
-          setTotalHits = verifyRes.data || [];
+          // POS mode: pre-filter against inventory ids BEFORE the verify
+          // round-trip so Postgres only has to look up rows the user
+          // actually owns. Without this scope, setTotalHits leaked the
+          // entire catalog's matches for cards numbered N in a set of
+          // size T — Forretress / Exploud / Caterpie / Victreebel
+          // surfaced in POS results even though the vendor had none
+          // of them in stock.
+          let _ids = _rawSetTotal.map(function(h){ return h.id; });
+          if (_posIdSet) _ids = _ids.filter(function(id){ return _posIdSet.has(id); });
+          if (_ids.length > 0) {
+            const verifyRes = await sb.from('catalog')
+              .select('id,name,set_name,set_code,card_number,rarity,image_url')
+              .in('id', _ids)
+              .eq('game_type', _effectiveTcg);
+            setTotalHits = verifyRes.data || [];
+          }
         }
         const nameNumHits    = [
           ...(nameNumRes.data       || []),
@@ -3887,6 +3897,14 @@
           }
           seen.add(m.id);
         });
+        // Final POS inventory guard. Every query path SHOULD have
+        // already filtered through q() or applied _posIdSet manually
+        // (setTotalHits verify, clipMatches filter). This is a
+        // belt-and-suspenders pass so any future query addition can't
+        // silently leak non-inventory cards into the results.
+        if (_posIdSet) {
+          merged = merged.filter(function(m) { return m && m.id && _posIdSet.has(m.id); });
+        }
         merged.sort(function(a, b) { return b.similarity - a.similarity; });
 
         // Collapse near-duplicates that survived addHits' id-based seen
