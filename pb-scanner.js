@@ -1451,30 +1451,40 @@
             .replace(/\s+/g, ' ')
             .trim();
         }
+        // Per-candidate cascade. Every candidate gets at LEAST a
+        // name-only search (tier 3), because the OCR'd brand line
+        // — "POKEMON", "MAGIC", etc — frequently gets garbled into
+        // unrecognizable noise ("KU GAM" for "POKEMON"), leaving
+        // game_type null and the earlier tier filters with nothing
+        // to lock onto. Skipping the tier-3 search for non-last
+        // candidates means the GOOD candidates (CHAOS RISING) get
+        // dropped while the OCR garbage (KU GAM) is the only thing
+        // that hits the catalog. Now everything searches, every
+        // time — duplicates get de-duped below by id.
         var allRows = [];
         for (var ci = 0; ci < candidates.length; ci++) {
           var name = candidates[ci];
           var safe = _escOr(name);
+          if (!safe || safe.length < 3) continue;
           var orClause = 'name.ilike.*' + safe + '*,set_name.ilike.*' + safe + '*';
-          // Tier 1 — strictest filter
+          // Tier 1 — game + ptype (most specific, only when both known)
           if (game && ptype) {
             var r1 = await _base().eq('game_type', game).eq('product_type', ptype)
               .or(orClause).limit(15);
             if (!r1.error && r1.data) Array.prototype.push.apply(allRows, r1.data);
           }
-          // Tier 2 — drop product_type
+          // Tier 2 — game only
           if (game) {
             var r2 = await _base().eq('game_type', game)
               .or(orClause).limit(15);
             if (!r2.error && r2.data) Array.prototype.push.apply(allRows, r2.data);
           }
-          // Tier 3 — drop game_type (only as a last resort, after
-          // all candidates exhausted, since cross-TCG name overlap
-          // is real — "Booster Box" alone matches every game).
-          if (allRows.length === 0 && ci === candidates.length - 1) {
-            var r3 = await _base().or(orClause).limit(15);
-            if (!r3.error && r3.data) Array.prototype.push.apply(allRows, r3.data);
-          }
+          // Tier 3 — name only (always runs). This is the safety
+          // net for when the brand row OCR'd as garbage. Scoring
+          // below penalizes weak matches so we still rank the
+          // good ones at the top.
+          var r3 = await _base().or(orClause).limit(15);
+          if (!r3.error && r3.data) Array.prototype.push.apply(allRows, r3.data);
         }
         // De-dupe by id
         var seenRow = new Set();
