@@ -1438,12 +1438,24 @@
         // both columns so either layout surfaces. Escape commas in
         // the search term because PostgREST treats `,` as a clause
         // separator inside `.or(...)`.
-        function _escOr(s) { return String(s || '').replace(/,/g, ''); }
+        // PostgREST's filter URL syntax uses `*` as the ilike
+        // wildcard, NOT `%`. supabase-js's .ilike(col, '%foo%')
+        // converts internally, but .or() takes raw PostgREST text
+        // — so we have to write `*foo*` ourselves or the literal
+        // percent signs get matched verbatim and we never find
+        // anything. Same goes for commas (PostgREST clause
+        // separator) and parens (group delimiter).
+        function _escOr(s) {
+          return String(s || '')
+            .replace(/[,()]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
         var allRows = [];
         for (var ci = 0; ci < candidates.length; ci++) {
           var name = candidates[ci];
           var safe = _escOr(name);
-          var orClause = 'name.ilike.%' + safe + '%,set_name.ilike.%' + safe + '%';
+          var orClause = 'name.ilike.*' + safe + '*,set_name.ilike.*' + safe + '*';
           // Tier 1 — strictest filter
           if (game && ptype) {
             var r1 = await _base().eq('game_type', game).eq('product_type', ptype)
