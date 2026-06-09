@@ -3093,7 +3093,7 @@
       if (tab === 'payments') renderPayments();
       if (tab === 'tradeHistory') renderTradeHistory();
       if (tab === 'badges') renderBadges();
-      if (tab === 'inventory') renderInventory();
+      // 'inventory' tab retired — view lives in #myStore now.
       if (tab === 'salesLog')  renderSalesLog();          // legacy
       // Unified Sales tab — consolidates the old Sales Log + Sales
       // Archive into one view with source-filter chips.
@@ -3114,6 +3114,11 @@
     // on PathBinder). Step 1 ships as read-only; Step 2 adds the
     // Mark-N-Sold modal + shop_sales writes; Step 3 adds POS scan.
     function _showInventoryTab() {
+      // Name kept for backward compat — toggles ALL vendor-only
+      // elements based on tier. The Inventory tab itself was
+      // retired (merged into My Store) but other vendor-only
+      // elements (My Store tab button, listing-cap pills, etc.)
+      // still use the .js-vendor-only class.
       try {
         const visible = typeof tierAtLeast === 'function' && tierAtLeast('vendor');
         document.querySelectorAll('.js-vendor-only').forEach(function(el) {
@@ -3122,135 +3127,15 @@
       } catch(_) {}
     }
 
-    async function renderInventory(forceRefresh) {
-      const wrap = document.getElementById('inventoryContent');
-      if (!wrap) return;
-      if (!currentUser) { wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Sign in to view inventory.</div>'; return; }
-      if (typeof tierAtLeast !== 'function' || !tierAtLeast('vendor')) {
-        wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">'
-          + 'Inventory tracking is a Vendor+ feature.<br>'
-          + '<button onclick="openPricingModalWithPromo(\'vendor\')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);margin-top:14px;display:inline-block">Upgrade to Vendor →</button>'
-          + '</div>';
-        return;
-      }
-      // Source: in-memory collectionItems already kept in sync by
-      // loadCollection(). If the migration columns aren't present
-      // (older client / unrun migration), gracefully degrade to
-      // showing quantity in the on-shelf column and zero listed.
-      const items = (collectionItems || []).filter(function(c) {
-        return !c.is_ghost && !c.sold_offline;
-      });
-      const term = (document.getElementById('inventorySearch')?.value || '').trim().toLowerCase();
-      const filtered = !term ? items : items.filter(function(c) {
-        const hay = ((c.card_name||'') + ' ' + (c.set_name||'') + ' ' + (c.set_code||'') + ' ' + (c.shop_sku||'')).toLowerCase();
-        return hay.indexOf(term) >= 0;
-      });
-
-      // Totals across the entire filtered set (not just the page)
-      let totalUnits = 0, totalOnShelf = 0, totalListed = 0, totalValue = 0;
-      filtered.forEach(function(c) {
-        const q  = c.quantity || 1;
-        const os = (c.on_shelf_qty != null) ? c.on_shelf_qty : q;
-        const ll = c.listed_online_qty || 0;
-        const v  = (c.current_value || c._compEstimate || c.purchase_price || 0) * q;
-        totalUnits   += q;
-        totalOnShelf += os;
-        totalListed  += ll;
-        totalValue   += v;
-      });
-
-      const summary = ''
-        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
-        +   _invSummaryTile('Cards',     filtered.length.toLocaleString(), 'var(--muted)')
-        +   _invSummaryTile('Units',     totalUnits.toLocaleString(),      'var(--text)')
-        +   _invSummaryTile('On Shelf',  totalOnShelf.toLocaleString(),    'var(--accent)')
-        +   _invSummaryTile('Listed',    totalListed.toLocaleString(),     'var(--copper, #d97e3e)')
-        +   _invSummaryTile('Est. Value','$' + totalValue.toFixed(2),       'var(--green)')
-        + '</div>';
-
-      if (filtered.length === 0) {
-        wrap.innerHTML = summary
-          + '<div style="padding:40px;text-align:center;color:var(--muted);font-size:.78rem">'
-          + (term ? 'No matches.' : 'Your inventory is empty. Add cards via the binder and they\'ll appear here.')
-          + '</div>';
-        return;
-      }
-
-      // Sort by line value desc so the most-valuable rows surface first.
-      filtered.sort(function(a, b) {
-        const av = (a.current_value || a._compEstimate || a.purchase_price || 0) * (a.quantity || 1);
-        const bv = (b.current_value || b._compEstimate || b.purchase_price || 0) * (b.quantity || 1);
-        return bv - av;
-      });
-
-      const PAGE = 200;  // cap initial render so 10k-row shops don't lock the UI
-      const rows = filtered.slice(0, PAGE).map(_invRowHtml).join('');
-      const moreNote = filtered.length > PAGE
-        ? '<div style="padding:14px;text-align:center;color:var(--muted);font-size:.7rem">Showing top ' + PAGE.toLocaleString() + ' of ' + filtered.length.toLocaleString() + '. Use search to narrow.</div>'
-        : '';
-
-      wrap.innerHTML = summary
-        + '<div style="overflow-x:auto;border:1px solid var(--border);background:var(--surface);border-radius:8px">'
-        +   '<table style="width:100%;border-collapse:collapse;font-family:\'Space Mono\',monospace;font-size:.72rem">'
-        +     '<thead>'
-        +       '<tr style="background:var(--surface2);color:var(--muted);letter-spacing:.06em">'
-        +         '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">CARD</th>'
-        +         '<th style="text-align:left;padding:10px 12px;font-weight:600;font-size:.62rem">SET</th>'
-        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">ON SHELF</th>'
-        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">LISTED</th>'
-        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">TOTAL</th>'
-        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">UNIT $</th>'
-        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">LINE $</th>'
-        +         '<th style="text-align:right;padding:10px 12px;font-weight:600;font-size:.62rem">ACTION</th>'
-        +       '</tr>'
-        +     '</thead>'
-        +     '<tbody>' + rows + '</tbody>'
-        +   '</table>'
-        + '</div>'
-        + moreNote;
-    }
-
+    // renderInventory + _invRowHtml retired — the inventory view lives
+    // in /pb-store.js now (My Store tab). Only _invSummaryTile stays
+    // because renderSales still uses it for its summary tiles row.
     function _invSummaryTile(label, value, color) {
       return ''
         + '<div style="padding:10px 12px;border:1px solid var(--border);background:var(--surface)">'
         +   '<div style="font-size:.58rem;color:var(--muted);letter-spacing:.08em">' + label + '</div>'
         +   '<div style="font-size:1rem;color:' + color + ';font-weight:700;font-family:\'Orbitron\',monospace;margin-top:4px">' + value + '</div>'
         + '</div>';
-    }
-
-    function _invRowHtml(c) {
-      const q  = c.quantity || 1;
-      const os = (c.on_shelf_qty != null) ? c.on_shelf_qty : q;
-      const ll = c.listed_online_qty || 0;
-      const unit = (c.current_value || c._compEstimate || c.purchase_price || 0);
-      const line = unit * q;
-      const name = _escHtml(c.card_name || '?');
-      const setN = _escHtml(c.set_name || c.set_code || '');
-      const variant = (c.variant && c.variant !== 'normal')
-        ? ' <span style="font-size:.55rem;color:var(--copper, #d97e3e);letter-spacing:.06em">' + _escHtml(c.variant.toUpperCase().replace('_',' ')) + '</span>'
-        : '';
-      const img = c.card_image_url
-        ? '<img src="' + _escHtml(c.card_image_url) + '" alt="" loading="lazy" style="width:32px;height:44px;object-fit:cover;background:var(--surface2);vertical-align:middle;margin-right:8px">'
-        : '';
-      // Sold button — disabled when on_shelf_qty is 0 so vendors can't
-      // accidentally try to record a sale against zero stock (the
-      // trigger would reject anyway, but a disabled button is faster
-      // feedback). Pre-fills the modal with this row's id + current
-      // value so the common case is one click to confirm.
-      const soldBtn = os > 0
-        ? '<button onclick="openMarkSoldModal(\'' + _escJsAttr(c.id) + '\')" style="padding:5px 10px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:\'Space Mono\',monospace;font-size:.65rem;letter-spacing:.06em;cursor:pointer;border-radius:4px">$ SOLD</button>'
-        : '<button disabled style="padding:5px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.65rem;letter-spacing:.06em;cursor:not-allowed;border-radius:4px">OUT</button>';
-      return ''
-        + '<tr style="border-top:1px solid var(--border)">'
-        +   '<td style="padding:8px 12px;color:var(--text)">' + img + name + variant + '</td>'
-        +   '<td style="padding:8px 12px;color:var(--muted)">' + setN + '</td>'
-        +   '<td style="padding:8px 12px;text-align:right;color:var(--accent);font-weight:700">' + os + '</td>'
-        +   '<td style="padding:8px 12px;text-align:right;color:var(--copper, #d97e3e);font-weight:700">' + ll + '</td>'
-        +   '<td style="padding:8px 12px;text-align:right;color:var(--text)">' + q + '</td>'
-        +   '<td style="padding:8px 12px;text-align:right;color:var(--muted)">$' + unit.toFixed(2) + '</td>'
-        +   '<td style="padding:8px 12px;text-align:right;color:var(--green);font-weight:700">$' + line.toFixed(2) + '</td>'
-        +   '<td style="padding:8px 12px;text-align:right">' + soldBtn + '</td>'
-        + '</tr>';
     }
 
     // ── Shop inventory bookkeeping (Step 4) ─────────────────────────
@@ -3879,8 +3764,10 @@
         // loadCollection() is the same path the binder uses, so the
         // updated on_shelf_qty / quantity propagate everywhere.
         try { await loadCollection(); } catch(_) {}
-        // Re-render inventory if the user is still on that tab.
-        try { if (document.getElementById('inventory')?.classList.contains('active')) renderInventory(); } catch(_) {}
+        // Re-render My Store (was Inventory) if the vendor is still
+        // on that tab so the stock counts and SOLD button state
+        // reflect the new sale immediately.
+        try { if (document.getElementById('myStore')?.classList.contains('active') && typeof window.renderMyStore === 'function') window.renderMyStore(); } catch(_) {}
         // Re-render sales log if open.
         try { if (document.getElementById('salesLog')?.classList.contains('active')) renderSalesLog(true); } catch(_) {}
 
@@ -4105,18 +3992,18 @@
     // affordance is visible (upsell hook). renderSales() reads the
     // current chip and the date inputs (#salesFrom / #salesTo) to
     // decide what to query, then renders a unified table.
-    let _salesActiveSource = 'all';        // 'all' | 'in-store' | 'marketplace' | 'offline'
+    // _salesActiveSource — 'all' | 'in-store' | 'marketplace'
+    // (Offline + In-Store collapsed into 'in-store' — both are
+    // off-platform sales just from different schemas.)
+    let _salesActiveSource = 'all';
     let _salesCachedRows   = [];           // currently displayed merged rows
 
     function _setSalesSource(src) {
-      // Tier gates — if the user clicked a chip they don't have access
-      // to, surface the pricing modal (matches the inventory upsell
-      // pattern) instead of swallowing the click silently.
-      if (src === 'in-store' && (typeof tierAtLeast !== 'function' || !tierAtLeast('vendor'))) {
-        if (typeof openPricingModalWithPromo === 'function') openPricingModalWithPromo('vendor');
-        return;
-      }
-      if ((src === 'marketplace' || src === 'offline') &&
+      // Tier gate — In-Store (shop_sales + legacy sold_offline) and
+      // Marketplace both require Enthusiast+. Vendor+ users get the
+      // richer shop_sales data within In-Store; Enthusiast users
+      // still see their legacy offline sales.
+      if ((src === 'in-store' || src === 'marketplace') &&
           (typeof tierAtLeast !== 'function' || !tierAtLeast('enthusiast'))) {
         if (typeof openPricingModalWithPromo === 'function') openPricingModalWithPromo('enthusiast');
         return;
@@ -4137,15 +4024,15 @@
     function _paintSalesChipGates() {
       const wrap = document.getElementById('salesFilterChips');
       if (!wrap) return;
-      const isVendor = typeof tierAtLeast === 'function' && tierAtLeast('vendor');
       const isEnthusiast = typeof tierAtLeast === 'function' && tierAtLeast('enthusiast');
       wrap.querySelectorAll('.sales-chip').forEach(function(c) {
         const src = c.getAttribute('data-source');
         let locked = false, badge = '';
-        if (src === 'in-store' && !isVendor)     { locked = true; badge = 'Vendor+'; }
-        if ((src === 'marketplace' || src === 'offline') && !isEnthusiast) { locked = true; badge = 'Enthusiast+'; }
+        if ((src === 'in-store' || src === 'marketplace') && !isEnthusiast) {
+          locked = true;
+          badge = 'Enthusiast+';
+        }
         c.classList.toggle('is-locked', locked);
-        // Replace any existing tier badge inside the chip
         const oldBadge = c.querySelector('.sales-chip-tier');
         if (oldBadge) oldBadge.remove();
         if (badge) {
@@ -4174,13 +4061,16 @@
       const isVendor      = typeof tierAtLeast === 'function' && tierAtLeast('vendor');
       const isEnthusiast  = typeof tierAtLeast === 'function' && tierAtLeast('enthusiast');
 
-      // Decide which sources to query based on chip + tier.
-      const wantInStore     = (src === 'all' || src === 'in-store')    && isVendor;
+      // Decide which sources to query based on chip + tier. In-Store
+      // pulls from BOTH shop_sales (Vendor+ richer data) AND
+      // collection_items.sold_offline (legacy Enthusiast+ flag) —
+      // they're conceptually the same off-platform sale.
+      const wantShopSales   = (src === 'all' || src === 'in-store')    && isVendor;
+      const wantOffline     = (src === 'all' || src === 'in-store')    && isEnthusiast;
       const wantMarketplace = (src === 'all' || src === 'marketplace') && isEnthusiast;
-      const wantOffline     = (src === 'all' || src === 'offline')     && isEnthusiast;
 
       const [shopSalesRows, orderRows] = await Promise.all([
-        wantInStore     ? _fetchSalesLog(fromIso, toIso) : Promise.resolve([]),
+        wantShopSales   ? _fetchSalesLog(fromIso, toIso) : Promise.resolve([]),
         wantMarketplace ? _fetchMarketplaceSales(fromIso, toIso) : Promise.resolve([]),
       ]);
       // Offline sales live on collection_items (sold_offline=true) — already
@@ -4235,10 +4125,13 @@
           _raw:           o,
         });
       });
+      // Legacy sold_offline rows tagged as 'in-store' so they merge
+      // visually with shop_sales rows. The user doesn't care which
+      // schema fed the row — they're all off-platform sales.
       offlineRows.forEach(function(c) {
         rows.push({
           date:           c.offline_sale_date,
-          source:         'offline',
+          source:         'in-store',
           name:           c.card_name || '?',
           set_name:       c.set_name || '',
           variant:        c.variant || 'normal',
@@ -4260,7 +4153,7 @@
       // Summary
       let totalRev = 0, totalQty = 0;
       const byMethod = { card: 0, cash: 0, trade: 0, other: 0 };
-      const bySource = { 'in-store': 0, marketplace: 0, offline: 0 };
+      const bySource = { 'in-store': 0, marketplace: 0 };
       rows.forEach(function(r) {
         totalRev += r.total;
         totalQty += r.qty;
@@ -4275,7 +4168,6 @@
         +   _invSummaryTile('Revenue',     '$' + totalRev.toFixed(2),   'var(--green)')
         +   _invSummaryTile('In-Store',    '$' + bySource['in-store'].toFixed(2),    'var(--muted)')
         +   _invSummaryTile('Marketplace', '$' + bySource['marketplace'].toFixed(2), 'var(--muted)')
-        +   _invSummaryTile('Offline',     '$' + bySource['offline'].toFixed(2),     'var(--muted)')
         + '</div>';
 
       if (rows.length === 0) {

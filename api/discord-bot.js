@@ -1960,9 +1960,16 @@ async function handleDuel(interaction) {
   // Cooldown checks — per-challenger first, then per-pair. The pair
   // check uses an OR so it catches challenges in either direction (so
   // you can't dodge it by swapping who challenges).
+  //
+  // We deliberately ignore 'pending' rows: those are either duels that
+  // errored out before firing (resolveDuelMatch returned no cards) or
+  // /battle invites the opponent never accepted. In neither case did
+  // the previous challenge actually run, so it would feel awful to
+  // make the user wait 15s before retrying.
   const cdChallenger = await sb.from('bot_duel_log')
     .select('created_at')
     .eq('challenger_discord_id', challenger.id)
+    .neq('status', 'pending')
     .order('created_at', { ascending: false }).limit(1);
   if (cdChallenger.data && cdChallenger.data[0]) {
     const ageSec = (Date.now() - new Date(cdChallenger.data[0].created_at).getTime()) / 1000;
@@ -1972,6 +1979,7 @@ async function handleDuel(interaction) {
   }
   const cdPair = await sb.from('bot_duel_log')
     .select('created_at')
+    .neq('status', 'pending')
     .or(`and(challenger_discord_id.eq.${challenger.id},opponent_discord_id.eq.${opp.id}),and(challenger_discord_id.eq.${opp.id},opponent_discord_id.eq.${challenger.id})`)
     .order('created_at', { ascending: false }).limit(1);
   if (cdPair.data && cdPair.data[0]) {
@@ -2014,6 +2022,13 @@ async function handleDuel(interaction) {
     aName, bName,
   });
   if (resolved.error) {
+    // The duel never actually fired (e.g. game catalog had no priced
+    // cards). Delete the pending log row so it doesn't sit around;
+    // the cooldown query already ignores pending rows but the cleanup
+    // keeps the table tidy.
+    if (duelLogId) {
+      try { await sb.from('bot_duel_log').delete().eq('id', duelLogId); } catch(_) {}
+    }
     return publicReply({ content: resolved.error });
   }
   return publicReply({
@@ -2082,6 +2097,16 @@ async function handleDuelComponent(interaction) {
     duelLogId: null, // looked up by challenger+opponent+pending below
   });
   if (resolved.error) {
+    // Clean up the pending row that handleDuel inserted — the cooldown
+    // query already ignores pending rows, but this stops dead rows
+    // from piling up in bot_duel_log when the catalog has no pulls.
+    try {
+      await sb.from('bot_duel_log')
+        .delete()
+        .eq('challenger_discord_id', challengerId)
+        .eq('opponent_discord_id',   opponentId)
+        .eq('status', 'pending');
+    } catch(_) {}
     return {
       type: INTERACTION_RESPONSE_TYPE.UPDATE_MESSAGE,
       data: { content: resolved.error, embeds: [], components: [] },
@@ -2132,9 +2157,12 @@ async function handleBattle(interaction) {
     return ephemeral(`<@${opp.id}>'s **${bPk.pokemon_name}** is only level ${bPk.level || 1} — needs to be level ${BATTLE_LEVEL_MIN} to battle.`);
   }
 
-  // Same cooldowns as /duel (per-challenger + per-pair).
+  // Same cooldowns as /duel (per-challenger + per-pair). Pending rows
+  // are excluded — see /duel for the rationale (abandoned invites and
+  // failed-to-fire duels shouldn't penalize the challenger).
   const cdChallenger = await sb.from('bot_duel_log')
     .select('created_at').eq('challenger_discord_id', u.id)
+    .neq('status', 'pending')
     .order('created_at', { ascending: false }).limit(1);
   if (cdChallenger.data && cdChallenger.data[0]) {
     const ageSec = (Date.now() - new Date(cdChallenger.data[0].created_at).getTime()) / 1000;
@@ -2144,6 +2172,7 @@ async function handleBattle(interaction) {
   }
   const cdPair = await sb.from('bot_duel_log')
     .select('created_at')
+    .neq('status', 'pending')
     .or(`and(challenger_discord_id.eq.${u.id},opponent_discord_id.eq.${opp.id}),and(challenger_discord_id.eq.${opp.id},opponent_discord_id.eq.${u.id})`)
     .order('created_at', { ascending: false }).limit(1);
   if (cdPair.data && cdPair.data[0]) {
@@ -2432,9 +2461,12 @@ async function handleBattleFull(interaction) {
     return ephemeral(`<@${opp.id}>'s **${bPk.pokemon_name}** is only level ${bPk.level || 1} — needs to be level ${BATTLE_LEVEL_MIN} to battle.`);
   }
 
-  // Cooldown reuse from /duel — same per-challenger and per-pair gates.
+  // Cooldown reuse from /duel — same per-challenger gate. Pending
+  // rows are excluded so abandoned invites or failed-to-fire duels
+  // don't penalize the challenger.
   const cdChallenger = await sb.from('bot_duel_log')
     .select('created_at').eq('challenger_discord_id', u.id)
+    .neq('status', 'pending')
     .order('created_at', { ascending: false }).limit(1);
   if (cdChallenger.data && cdChallenger.data[0]) {
     const ageSec = (Date.now() - new Date(cdChallenger.data[0].created_at).getTime()) / 1000;

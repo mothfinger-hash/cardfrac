@@ -2305,9 +2305,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
            need Enthusiast+). Free users see the chips disabled with a
            tier badge as an upsell hook. -->
       <button class="account-tab" onclick="switchAccountTab('sales')">Sales</button>
-      <!-- Inventory tab — vendor+ only. Tracks in-store vs. listed stock.
-           See migration_shop_inventory.sql. -->
-      <button class="account-tab js-vendor-only" id="tab-inventory" onclick="switchAccountTab('inventory')" style="display:none">Inventory</button>
+<!-- Inventory tab was retired: functionality lives in My Store. -->
       <button class="account-tab" onclick="switchAccountTab('payments')">Payments</button>
       <button class="account-tab" onclick="switchAccountTab('watchlist')">Watchlist</button>
       <!-- "Purchases" — was "History"; renamed for clarity now that
@@ -2336,9 +2334,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       </div>
     </div>
 
-    <!-- My Store — POS-style storefront grid. The actual renderer lives
-         in /pb-store.js (lazy-loaded). Content area is just the empty
-         shell until renderMyStore() populates it. -->
+    <!-- My Store — POS-style storefront grid + inventory view in one
+         place. Renderer lives in /pb-store.js (lazy-loaded). Header
+         actions include a POS SCAN button that flips the scanner into
+         POS sale mode (openPosSaleScanner in pb-scanner.js). -->
     <div id="myStore" class="account-content">
       <div class="pb-panel">
         <div class="pb-panel-h">
@@ -2357,7 +2356,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
               <option value="recent">Recently Listed</option>
             </select>
             <button class="pb-panel-link" onclick="renderMyStore(true)" title="Refresh">↻</button>
-            <button class="pb-panel-link" onclick="openListCardModal()" style="border-color:var(--accent);color:var(--accent)">+ List a Card</button>
+            <!-- POS SCAN — opens the camera scanner in POS sale mode
+                 so the vendor can ring up cards by scanning. Stub
+                 lives in pb-app.js; loads pb-scanner.js on demand. -->
+            <button class="pb-panel-link" onclick="openPosSaleScanner()" title="Scan a card to record a sale" style="border-color:var(--accent);color:var(--accent)">POS SCAN</button>
+            <button class="pb-panel-link" onclick="openListCardModal()" style="border-color:var(--accent);color:var(--accent)">List a Card</button>
           </div>
         </div>
         <div class="pb-panel-body">
@@ -2412,11 +2415,16 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <!-- Source filter chips — In-Store needs Vendor+; Marketplace
              and Offline need Enthusiast+. Lower tiers see the chip
              disabled with a tier badge. -->
+        <!-- Offline + In-Store merged into one chip. Both represent
+             off-platform sales — the only difference is the schema
+             behind them (shop_sales for Vendor+ POS ring-ups,
+             collection_items.sold_offline for the legacy Collector+
+             "mark sold" flag). The user only cares about the
+             distinction "did this sell on PathBinder or not." -->
         <div id="salesFilterChips" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-bottom:1px solid var(--border)">
           <button class="sales-chip is-active" data-source="all"        onclick="_setSalesSource('all')">All</button>
           <button class="sales-chip"           data-source="in-store"   onclick="_setSalesSource('in-store')">In-Store</button>
           <button class="sales-chip"           data-source="marketplace" onclick="_setSalesSource('marketplace')">Marketplace</button>
-          <button class="sales-chip"           data-source="offline"    onclick="_setSalesSource('offline')">Offline</button>
         </div>
         <div class="pb-panel-body">
           <div id="salesContent">
@@ -2433,31 +2441,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     <!-- Inventory (Vendor+) — step 1 read-only view of in-store +
          listed-online stock split. POS / sales-log come in later steps. -->
-    <div id="inventory" class="account-content">
-      <div class="pb-panel">
-        <div class="pb-panel-h">
-          <div class="pb-panel-title">
-            <span class="pb-panel-title-ico">⬡</span>
-            Inventory
-          </div>
-          <div class="pb-panel-actions">
-            <input id="inventorySearch" type="text" placeholder="Search card / set / SKU…" oninput="renderInventory()"
-                   style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.72rem;padding:5px 10px;outline:none;min-width:200px">
-            <!-- POS Sale: opens the existing card scanner in a special
-                 mode that routes matches into the Mark N Sold modal
-                 instead of "Add to Binder." Lets a shop ring up sales
-                 by camera-scanning each card. -->
-            <button class="pb-panel-link" onclick="openPosSaleScanner()" title="Scan a card to record an in-store sale" style="border-color:var(--accent);color:var(--accent)">⊞ POS SCAN</button>
-            <button class="pb-panel-link" onclick="renderInventory(true)" title="Refresh from server">↻</button>
-          </div>
-        </div>
-        <div class="pb-panel-body">
-          <div id="inventoryContent">
-            <div style="text-align:center;padding:40px;color:var(--muted);font-size:.78rem">Loading inventory…</div>
-          </div>
-        </div>
-      </div>
-    </div>
+<!-- Inventory container retired — merged into #myStore. -->
 
     <div id="payments" class="account-content">
       <div class="pb-panel">

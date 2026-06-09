@@ -1,39 +1,40 @@
 // =========================================================
 // PathBinder — My Store (lazy-loaded)
 //
-// Square-style POS view of the vendor's active marketplace
-// listings. Renders each listing as a card tile in a responsive
-// grid, with the price prominently displayed. Tapping a tile
-// opens the binder detail modal (which already includes
-// TCGplayer + PriceCharting external links via
-// _renderBinderExtrasPlaceholder).
+// POS-style storefront view that unifies what used to be split
+// between My Store and the Inventory tab. Shows the vendor's
+// full owned inventory as a tile grid with:
+//   • Card image + name + set
+//   • On-shelf qty (in-store stock)
+//   • Listed qty + price (when on the marketplace)
+//   • Variant tag
+//   • $ SOLD action — opens Mark N Sold modal for that row
+//   • + LIST action — opens List Card modal for unlisted cards
 //
-// Only loads on demand — vendor+ users get a stub in pb-app.js
-// that lazy-loads this file the first time the My Store tab is
-// activated. Free / Collector / Enthusiast users never download
-// the file at all.
+// Header includes a ⊞ POS SCAN button that flips the scanner
+// into POS sale mode (existing openPosSaleScanner from pb-scanner.js).
+//
+// Tapping a tile opens the binder detail modal, which already
+// surfaces TCGplayer + PriceCharting links via
+// _renderBinderExtrasPlaceholder.
+//
+// Lazy-loaded — vendor+ users get a stub in pb-app.js that pulls
+// this file the first time the My Store tab is activated.
 // =========================================================
 
 (function() {
   'use strict';
 
   // ── Styles ──────────────────────────────────────────────────────
-  // Injected on first run so we don't add to pb-styles.css. Keeps
-  // the My Store CSS self-contained with the rest of the module.
   function _injectStoreStyles() {
     if (document.getElementById('pb-store-styles')) return;
     const css = `
-      /* My Store grid — responsive Square-style POS tiles. Auto-fit
-         minmax fits 5-6 columns on a wide desktop down to 2 on phones. */
       .pbs-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
         gap: 12px;
         padding: 4px 0;
       }
-      /* Each tile is a card-shaped frame with price overlay + name strip
-         underneath. Hover lifts and brightens the accent border so the
-         vendor can tell which one their finger is on. */
       .pbs-tile {
         position: relative;
         display: flex;
@@ -59,26 +60,21 @@
         overflow: hidden;
       }
       .pbs-tile-img-wrap img {
-        width: 100%;
-        height: 100%;
+        width: 100%; height: 100%;
         object-fit: cover;
         display: block;
       }
-      .pbs-tile-img-wrap .pbs-img-placeholder {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
+      .pbs-img-placeholder {
+        display: flex; align-items: center; justify-content: center;
+        width: 100%; height: 100%;
         color: var(--muted);
         font-family: 'Space Mono', monospace;
         font-size: 2rem;
       }
-      /* Price badge — top-right corner of the image, Square POS feel. */
+      /* Price badge — top-right when listed. Shows the listing.value. */
       .pbs-price {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        top: 8px; right: 8px;
         background: rgba(0,0,0,.82);
         color: var(--green);
         font-family: 'Orbitron', monospace;
@@ -90,27 +86,43 @@
         box-shadow: 0 2px 6px rgba(0,0,0,.5);
         letter-spacing: .02em;
       }
-      /* Quantity pill — top-left when listing.quantity > 1. Indicates
-         the vendor has multiple of the same card listed on one row. */
-      .pbs-qty {
+      /* When the card isn't listed, swap the price badge for an
+         "UNLISTED" tag so the vendor sees what needs attention. */
+      .pbs-unlisted {
         position: absolute;
-        top: 8px;
-        left: 8px;
+        top: 8px; right: 8px;
+        background: rgba(0,0,0,.82);
+        color: var(--muted);
+        font-family: 'Space Mono', monospace;
+        font-weight: 700;
+        font-size: .56rem;
+        padding: 3px 7px;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        letter-spacing: .08em;
+      }
+      /* Top-left chip: on-shelf / total split. "5/8" = 5 on shelf of
+         8 total owned. Helps the vendor see at a glance which cards
+         are running low. */
+      .pbs-stock {
+        position: absolute;
+        top: 8px; left: 8px;
         background: rgba(0,0,0,.82);
         color: var(--text);
         font-family: 'Space Mono', monospace;
         font-weight: 700;
-        font-size: .68rem;
+        font-size: .66rem;
         padding: 3px 7px;
         border-radius: 4px;
         border: 1px solid var(--border);
         letter-spacing: .04em;
       }
-      /* Variant tag (REVERSE HOLO etc.) — bottom-left of the image, copper-tinted. */
+      .pbs-stock.is-low    { color: var(--yellow,#FFD23F); border-color: var(--yellow,#FFD23F); }
+      .pbs-stock.is-empty  { color: var(--red,#C8002A); border-color: var(--red,#C8002A); }
+      /* Variant tag — bottom-left, copper-tinted. */
       .pbs-variant {
         position: absolute;
-        bottom: 8px;
-        left: 8px;
+        bottom: 8px; left: 8px;
         background: rgba(0,0,0,.82);
         color: var(--copper, #d97e3e);
         font-family: 'Space Mono', monospace;
@@ -122,6 +134,31 @@
         letter-spacing: .08em;
         text-transform: uppercase;
       }
+      /* Action button row — overlaid on the bottom of the image so
+         the vendor can ring up / list without opening the detail. */
+      .pbs-actions {
+        position: absolute;
+        bottom: 8px; right: 8px;
+        display: flex; gap: 4px;
+        z-index: 2;
+      }
+      .pbs-action-btn {
+        background: rgba(0,0,0,.82);
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        font-family: 'Space Mono', monospace;
+        font-weight: 800;
+        font-size: .65rem;
+        padding: 4px 9px;
+        border-radius: 4px;
+        cursor: pointer;
+        letter-spacing: .06em;
+        transition: all .12s;
+      }
+      .pbs-action-btn:hover { background: var(--accent); color: var(--text-on-accent); }
+      .pbs-action-btn:disabled { opacity: .45; cursor: not-allowed; }
+      .pbs-action-btn.is-list { color: var(--copper, #d97e3e); border-color: var(--copper, #d97e3e); }
+      .pbs-action-btn.is-list:hover { background: var(--copper, #d97e3e); color: var(--surface); }
       .pbs-tile-body {
         padding: 8px 10px 10px;
         display: flex;
@@ -129,7 +166,7 @@
         gap: 4px;
       }
       .pbs-tile-name {
-        font-family: 'Space Mono', 'Share Tech Mono', monospace;
+        font-family: 'Space Mono', monospace;
         font-size: .8rem;
         color: var(--text);
         font-weight: 700;
@@ -147,7 +184,7 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      /* Summary tiles row across the top of the store view */
+      /* Summary tiles row */
       .pbs-summary {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -172,11 +209,11 @@
         font-weight: 700;
         margin-top: 4px;
       }
-      /* Phone breakpoint — bigger gap looks better in single column */
       @media (max-width: 480px) {
         .pbs-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
         .pbs-price { font-size: .8rem; padding: 3px 7px; }
         .pbs-tile-name { font-size: .72rem; }
+        .pbs-action-btn { font-size: .58rem; padding: 3px 7px; }
       }
     `;
     const style = document.createElement('style');
@@ -185,36 +222,58 @@
     document.head.appendChild(style);
   }
 
-  // ── Data fetch + cache ──────────────────────────────────────────
-  // The store view reuses the in-memory `listings` array that other
-  // parts of pb-app.js maintain (renderMyListings, renderBrowse,
-  // etc.). On force-refresh we re-pull straight from Supabase so
-  // any price edits made elsewhere come through.
-  let _storeListingsCache = null;
-  let _storeFetchInflight = null;
-
-  async function _fetchStoreListings(force) {
-    if (!force && _storeListingsCache) return _storeListingsCache;
-    if (_storeFetchInflight) return _storeFetchInflight;
-    _storeFetchInflight = (async function() {
-      try {
-        const r = await sb.from('listings')
-          .select('*')
-          .eq('seller_id', currentUser.id)
-          .in('status', ['active', 'available'])
-          .order('created_at', { ascending: false })
-          .limit(500);
-        if (r.error) {
-          console.warn('[store] fetch error:', r.error.message);
-          return [];
-        }
-        _storeListingsCache = r.data || [];
-        return _storeListingsCache;
-      } finally {
-        _storeFetchInflight = null;
-      }
-    })();
-    return _storeFetchInflight;
+  // ── Build a unified per-card view from collection_items + listings.
+  // Each entry in the returned array represents one (api_card_id,
+  // variant) pair, with stock + listing info merged in.
+  function _buildStoreEntries() {
+    if (typeof collectionItems === 'undefined') return [];
+    // Active marketplace listings keyed by api_card_id|variant so we
+    // can attach the price / listing id to the matching inventory row.
+    const listingMap = {};
+    if (typeof listings !== 'undefined' && Array.isArray(listings)) {
+      listings.forEach(function(l) {
+        if (!l || l.status === 'inactive' || l.status === 'sold') return;
+        if (!l.api_card_id) return;
+        const key = String(l.api_card_id) + '|' + (l.variant || 'normal');
+        if (!listingMap[key]) listingMap[key] = [];
+        listingMap[key].push(l);
+      });
+    }
+    return collectionItems
+      .filter(function(c) {
+        return c && !c.is_ghost && !c.sold_offline;
+      })
+      .map(function(c) {
+        const key = String(c.api_card_id || '') + '|' + (c.variant || 'normal');
+        const matchingListings = listingMap[key] || [];
+        // Use the first listing's value for the displayed price; sum
+        // their quantities to get total listed.
+        let listedQty = 0, listedValue = null, listingId = null;
+        matchingListings.forEach(function(l) {
+          listedQty += (l.quantity || 1);
+          if (listedValue == null) {
+            listedValue = Number(l.value) || 0;
+            listingId = l.id;
+          }
+        });
+        const totalQty   = c.quantity || 0;
+        const onShelfQty = (c.on_shelf_qty != null) ? c.on_shelf_qty : totalQty;
+        return {
+          collection_item_id: c.id,
+          api_card_id:        c.api_card_id,
+          name:               c.card_name || '?',
+          set_name:           c.set_name || '',
+          card_number:        c.card_number || '',
+          card_image_url:     c.card_image_url || '',
+          variant:            c.variant || 'normal',
+          totalQty:           totalQty,
+          onShelfQty:         onShelfQty,
+          listedQty:          listedQty,
+          listedValue:        listedValue,
+          listingId:          listingId,
+          _raw:               c,
+        };
+      });
   }
 
   // ── Renderer ────────────────────────────────────────────────────
@@ -236,50 +295,53 @@
         + '</div>';
       return;
     }
+    // Optional force-refresh — re-pull collection from server so the
+    // grid reflects any sales/edits made on another device.
+    if (forceRefresh) {
+      try { if (typeof loadCollection === 'function') await loadCollection(); } catch(_) {}
+    }
 
-    const listings = await _fetchStoreListings(forceRefresh);
+    const entries = _buildStoreEntries();
     const term = (document.getElementById('storeSearch')?.value || '').trim().toLowerCase();
     const sort = document.getElementById('storeSort')?.value || 'value_desc';
 
-    // Filter
-    let filtered = listings;
+    let filtered = entries;
     if (term) {
-      filtered = listings.filter(function(l) {
-        const hay = ((l.name || '') + ' ' + (l.set_name || '') + ' ' + (l.set_code || '') + ' ' + (l.card_number || '')).toLowerCase();
+      filtered = entries.filter(function(e) {
+        const hay = (e.name + ' ' + e.set_name + ' ' + e.card_number).toLowerCase();
         return hay.indexOf(term) >= 0;
       });
     }
-
-    // Sort
     filtered = filtered.slice().sort(function(a, b) {
-      if (sort === 'value_asc')  return (a.value || 0) - (b.value || 0);
-      if (sort === 'name_asc')   return String(a.name || '').localeCompare(String(b.name || ''));
-      if (sort === 'recent')     return String(b.created_at || '').localeCompare(String(a.created_at || ''));
-      return (b.value || 0) - (a.value || 0); // value_desc default
+      if (sort === 'value_asc')  return (a.listedValue || 0) - (b.listedValue || 0);
+      if (sort === 'name_asc')   return String(a.name).localeCompare(String(b.name));
+      if (sort === 'recent')     return String(b._raw && b._raw.created_at || '').localeCompare(String(a._raw && a._raw.created_at || ''));
+      return (b.listedValue || 0) - (a.listedValue || 0);
     });
 
     // Summary
-    let totalValue = 0;
-    let totalUnits = 0;
-    filtered.forEach(function(l) {
-      const qty = l.quantity || 1;
-      totalValue += (Number(l.value) || 0) * qty;
-      totalUnits += qty;
+    let totalUnits = 0, totalOnShelf = 0, totalListed = 0, totalValue = 0;
+    filtered.forEach(function(e) {
+      totalUnits   += e.totalQty;
+      totalOnShelf += e.onShelfQty;
+      totalListed  += e.listedQty;
+      if (e.listedValue) totalValue += e.listedValue * e.listedQty;
     });
-
     const summary = ''
       + '<div class="pbs-summary">'
-      +   _summaryTile('Listings', String(filtered.length), 'var(--text)')
-      +   _summaryTile('Units',    String(totalUnits),       'var(--accent)')
-      +   _summaryTile('Value',    '$' + totalValue.toFixed(2), 'var(--green)')
+      +   _summaryTile('Cards',     String(filtered.length),  'var(--text)')
+      +   _summaryTile('Units',     String(totalUnits),       'var(--text)')
+      +   _summaryTile('On Shelf',  String(totalOnShelf),     'var(--accent)')
+      +   _summaryTile('Listed',    String(totalListed),      'var(--copper, #d97e3e)')
+      +   _summaryTile('Listed $',  '$' + totalValue.toFixed(2), 'var(--green)')
       + '</div>';
 
     if (filtered.length === 0) {
       wrap.innerHTML = summary
         + '<div style="padding:40px;text-align:center;color:var(--muted);font-size:.78rem">'
         + (term
-            ? 'No matching listings.'
-            : 'No active listings yet. Click <strong style="color:var(--accent)">+ List a Card</strong> to start your store.')
+            ? 'No matching cards.'
+            : 'No inventory yet. Add cards via the binder to start your store.')
         + '</div>';
       return;
     }
@@ -296,102 +358,92 @@
       + '</div>';
   }
 
-  function _tileHtml(l) {
-    // Source the image from listing.photos[0] (vendor's uploaded
-    // photo) preferentially; fall back to nothing rather than the
-    // catalog stock photo because vendors typically want to see
-    // THEIR card, not a generic mockup.
-    const photo = (Array.isArray(l.photos) && l.photos[0]) || '';
-    const name  = l.name || '?';
-    const setLine = [l.set_name, l.card_number ? '#' + l.card_number : '']
+  function _tileHtml(e) {
+    const photo = e.card_image_url || '';
+    const setLine = [e.set_name, e.card_number ? '#' + e.card_number : '']
       .filter(Boolean).join(' · ');
-    const price = (typeof l.value === 'number') ? l.value : Number(l.value) || 0;
-    const qty   = (l.quantity || 1);
-    const variantTag = (l.variant && l.variant !== 'normal')
-      ? '<span class="pbs-variant">' + _esc(String(l.variant).replace(/_/g, ' ')) + '</span>'
-      : '';
-    const qtyPill = qty > 1
-      ? '<span class="pbs-qty">×' + qty + '</span>'
+    const isListed = (e.listedQty > 0);
+    const stockClass = e.onShelfQty === 0 ? ' is-empty'
+                     : e.onShelfQty <= 2  ? ' is-low'
+                     : '';
+    const variantTag = (e.variant && e.variant !== 'normal')
+      ? '<span class="pbs-variant">' + _esc(String(e.variant).replace(/_/g, ' ')) + '</span>'
       : '';
     const imgEl = photo
-      ? '<img src="' + _esc(photo) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+      ? '<img src="' + _esc(photo) + '" alt="" loading="lazy" decoding="async" '
+        +    'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
       : '';
-    const placeholder = '<div class="pbs-img-placeholder"' + (photo ? ' style="display:none"' : '') + '>?</div>';
-    // _escJsAttr is defined in pb-app.js — safe to reference because
-    // pb-store.js is only loaded after the main bundle has parsed.
-    const id = _escJsAttr(l.id);
+    const placeholder = '<div class="pbs-img-placeholder"'
+      + (photo ? ' style="display:none"' : '') + '>?</div>';
+    const priceOrUnlisted = isListed
+      ? '<span class="pbs-price">$' + (e.listedValue || 0).toFixed(2) + '</span>'
+      : '<span class="pbs-unlisted">UNLISTED</span>';
+    const itemId = _escJsAttr(e.collection_item_id);
+    // SOLD always available (disabled when nothing on shelf).
+    // LIST shown only when the card isn't already listed. Plain text
+    // labels — no $/+ glyphs — to keep the tile overlay clean.
+    const soldBtn = '<button class="pbs-action-btn" title="Record in-store sale"'
+      + (e.onShelfQty <= 0 ? ' disabled' : '')
+      + ' onclick="event.stopPropagation();openMarkSoldModal(\'' + itemId + '\')">SOLD</button>';
+    const listBtn = !isListed
+      ? '<button class="pbs-action-btn is-list" title="List on marketplace" '
+        + 'onclick="event.stopPropagation();_storeOpenListFor(\'' + itemId + '\')">LIST</button>'
+      : '';
     return ''
-      + '<div class="pbs-tile" onclick="openStoreCardDetail(\'' + id + '\')">'
+      + '<div class="pbs-tile" onclick="openStoreCardDetail(\'' + itemId + '\')">'
       +   '<div class="pbs-tile-img-wrap">'
       +     imgEl + placeholder
-      +     qtyPill
-      +     '<span class="pbs-price">$' + price.toFixed(2) + '</span>'
+      +     '<span class="pbs-stock' + stockClass + '">' + e.onShelfQty + '/' + e.totalQty + '</span>'
+      +     priceOrUnlisted
       +     variantTag
+      +     '<div class="pbs-actions">' + soldBtn + listBtn + '</div>'
       +   '</div>'
       +   '<div class="pbs-tile-body">'
-      +     '<div class="pbs-tile-name">' + _esc(name) + '</div>'
+      +     '<div class="pbs-tile-name">' + _esc(e.name) + '</div>'
       +     (setLine ? '<div class="pbs-tile-meta">' + _esc(setLine) + '</div>' : '')
       +   '</div>'
       + '</div>';
   }
 
-  // ── Card detail dispatch ────────────────────────────────────────
-  // Tapping a tile resolves the listing to a collection_items row
-  // (when api_card_id + variant match an owned row) so the
-  // existing binder detail modal fires with TCGplayer + PriceCharting
-  // external links via _renderBinderExtrasPlaceholder.
-  //
-  // If no collection row is linked (legacy listings without
-  // api_card_id), we fall back to opening the public marketplace
-  // listing detail so the vendor at least sees their own card.
-  async function openStoreCardDetail(listingId) {
-    const listings = _storeListingsCache || [];
-    const l = listings.find(function(x) { return String(x.id) === String(listingId); });
-    if (!l) {
-      console.warn('[store] listing not found:', listingId);
-      return;
-    }
-    // Prefer the collection row so we get the rich detail modal.
-    if (l.api_card_id && typeof collectionItems !== 'undefined') {
-      const variant = l.variant || 'normal';
-      const owned = collectionItems.find(function(c) {
-        return String(c.api_card_id) === String(l.api_card_id)
-            && (c.variant || 'normal') === variant
-            && !c.is_ghost && !c.sold_offline;
-      });
-      if (owned && typeof openBinderCardDetail === 'function') {
-        return openBinderCardDetail(owned.id);
-      }
-    }
-    // Fallback: open the marketplace listing detail view.
-    if (typeof openListingDetail === 'function') {
-      return openListingDetail(listingId);
-    }
-    // Last resort — show a toast pointing at the listing.
-    if (typeof showToast === 'function') {
-      showToast('Listing: ' + (l.name || listingId));
+  // ── Action dispatchers ──────────────────────────────────────────
+  // Tap on a tile body opens the binder detail modal (rich detail
+  // with TCGplayer + PriceCharting links).
+  function openStoreCardDetail(itemId) {
+    if (typeof openBinderCardDetail === 'function') {
+      return openBinderCardDetail(itemId);
     }
   }
 
-  // ── Helpers (local copies to keep the module self-contained) ────
-  // _esc / _escJsAttr already exist in pb-app.js as globals; we just
-  // reference them. But _esc is defined here as a local fallback in
-  // case the loader order ever changes.
+  // + LIST overlay button — open the list-card modal pre-filled with
+  // the catalog metadata so the vendor doesn't have to re-enter the
+  // name / number.
+  function _storeOpenListFor(itemId) {
+    const item = (collectionItems || []).find(function(c){ return String(c.id) === String(itemId); });
+    if (!item) return;
+    if (typeof openListCardModal !== 'function') return;
+    openListCardModal({
+      cardName:   item.card_name,
+      gameType:   item.game_type || 'Pokémon',
+      apiCardId:  item.api_card_id || '',
+      cardNumber: item.card_number || '',
+      variant:    item.variant || 'normal',
+      condition:  item.condition === 'graded' ? 'Graded' : 'NM',
+      productType: 'single',
+    });
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────
   function _esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  // Use the pb-app.js version if loaded, otherwise our local copy.
-  if (typeof window._escHtml === 'function') { /* let pb-app define */ }
 
-  // ── Expose to window (replaces the lazy-load stub in pb-app.js) ─
+  // ── Expose to window ────────────────────────────────────────────
   window.renderMyStore = renderMyStore;
   window.openStoreCardDetail = openStoreCardDetail;
-  // Invalidation hook — other code (e.g. a listing edit) can call
-  // window._invalidateStoreCache() to force the next render to
-  // re-fetch from Supabase instead of showing stale prices.
-  window._invalidateStoreCache = function() { _storeListingsCache = null; };
+  window._storeOpenListFor   = _storeOpenListFor;
+  window._invalidateStoreCache = function() { /* no cache to clear */ };
 
-  console.log('[store] /pb-store.js loaded');
+  console.log('[store] /pb-store.js loaded (inventory + listings merged)');
 })();

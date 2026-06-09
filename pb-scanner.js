@@ -1611,20 +1611,27 @@
 
       const sheet = document.createElement('div');
       sheet.id = 'scanPreviewSheet';
-      sheet.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:flex-end;justify-content:center';
+      // Center the preview sheet on screen. Earlier code anchored it
+       // to the bottom with align-items:flex-end (legacy bottom-sheet
+       // pattern); switching to center makes the modal look correct
+       // on desktop too.
+      sheet.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;padding:20px';
       sheet.innerHTML = `
         <div onclick="document.getElementById('scanPreviewSheet').remove()" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>
-        <div style="position:relative;width:100%;max-width:480px;background:var(--surface);border-top:2px solid var(--copper-dim);border-left:2px solid var(--copper-dim);border-right:2px solid var(--copper-dim);border-radius:6px 6px 0 0;padding:20px 18px 28px;max-height:85svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">
+        <div style="position:relative;width:100%;max-width:480px;background:var(--surface);border:2px solid var(--copper-dim);border-radius:6px;padding:20px 18px 28px;max-height:85svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">
           <!-- close -->
           <button onclick="document.getElementById('scanPreviewSheet').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>
           <!-- label -->
           <div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);margin-bottom:14px">◈ CARD DETAIL</div>
-          <!-- image -->
+          <!-- image — onerror handler swaps in a clean NO-IMAGE block.
+               (The previous version had its loading="lazy" attribute
+               mangled INTO the escaped HTML string, which leaked a
+               "NO IMAGE" pill next to a successfully-loaded image.) -->
           ${m.image_url ? `<div style="display:flex;justify-content:center;margin-bottom:14px">
-            <img src="${m.image_url}" alt="${m.name || ''}"
-              style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 20px var(--copper-glow)"
+            <img src="${m.image_url}" alt="${m.name || ''}" loading="lazy" decoding="async"
+              style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 20px var(--copper-glow);cursor:zoom-in"
               onclick="openImageLightbox('${m.image_url}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:180px;height:252px;background:rgba(184,115,51,.06);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\' loading="lazy" decoding="async"><span style=\\'font-size:2rem;opacity:.25\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=&quot;width:180px;height:252px;background:rgba(184,115,51,.06);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px&quot;><span style=&quot;font-size:2rem;opacity:.25&quot;>⬡</span><span style=&quot;font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)&quot;>NO IMAGE</span></div>'">
           </div>` : ''}
           <!-- info -->
           <div style="text-align:center;margin-bottom:16px">
@@ -2793,7 +2800,13 @@
       const SUFFIX    = /^(VSTAR|VMAX|GX|EX|V|VUNION|TAG\s*TEAM)$/i;
       const STAGE_PRE = /^(Basic|Stage\s*[12])\s+/i;  // stage as prefix on same line
       const STAGE     = /^(Basic|Stage\s*[12]|STAGE)$/i; // stage alone on its own line (incl. bare STAGE from OCR-truncated label)
-      const SKIP      = /^(Basic|Stage\s*[12]|STAGE|VMAX|VSTAR|GX|EX|V|VUNION|TAG\s*TEAM|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule|DX|VOLUME|RASH|TRASH|HATS?|MUTE|MAX|MIN|MOD)$/i;
+      // "Basic Pokémon", "Stage 2 Pokémon" etc. are type-label lines
+      // that the v464 STAGE_PRE guard correctly stops returning. But
+      // the fallback later in this loop accepts any title-case line
+      // not in SKIP — so the whole "Basic Pokémon" string slipped
+      // through and became the parsed name on Base Set Chansey. List
+      // them explicitly so the fallback rejects them too.
+      const SKIP      = /^(Basic|Basic\s+Pok[eé]mon|Stage\s*[12](\s+Pok[eé]mon)?|STAGE|VMAX|VSTAR|GX|EX|V|VUNION|TAG\s*TEAM|HP|\d+|Trainer|Item|Stadium|Supporter|Energy|Pok[eé]mon|Weakness|Resistance|Retreat|Illustrator|Regulation|©|www\.|Evolves|Ability|Rule|DX|VOLUME|RASH|TRASH|HATS?|MUTE|MAX|MIN|MOD)$/i;
       // Evolution prefix lines on Stage 1 / Stage 2 cards: "Evolves from
       // Eevee", "Evolves from Kadabra", "Put Venusaur on the Stage I card".
       // The fallback parser was returning these as the card name on
@@ -3854,18 +3867,13 @@
       var container = document.getElementById('msReviewView');
       var matched   = _multiScanResults.filter(function(r) { return r.selectedMatch; });
 
-      // Thumbnails bumped 2x (was 42×58) — at the old size it was tough
-       // to tell which scanned card matched what when reviewing multiple
-       // results. 84×116 keeps the row compact enough to fit two side-
-       // by-side on desktop via the grid wrapper below.
-      var THUMB_STYLE = 'width:84px;height:116px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0';
       var rows = _multiScanResults.map(function(r, i) {
         var m         = r.selectedMatch;
-        var thumbHTML = '<img src="' + r.thumb + '" style="' + THUMB_STYLE + '" loading="lazy" decoding="async">';
+        var thumbHTML = '<img src="' + r.thumb + '" style="width:42px;height:58px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0" loading="lazy" decoding="async">';
 
         if (!m) {
           // No match — tap row to open candidate sheet (search mode)
-          return '<div onclick="openMsCandidateSheet(' + i + ')" style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:6px;cursor:pointer">'
+          return '<div onclick="openMsCandidateSheet(' + i + ')" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">'
             + thumbHTML
             + '<div style="flex:1;min-width:0">'
             + '<div style="font-size:.75rem;color:var(--muted)">No match found</div>'
@@ -3877,30 +3885,24 @@
 
         // Matched card — show result, tap to change
         var conf = m._exact ? 'EXACT' : m._ocr ? 'OCR' : Math.round((m.similarity||0)*100)+'% visual';
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:6px">'
-          // Tap the card info area to open the sheet
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
           + '<div onclick="openMsCandidateSheet(' + i + ')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">'
           + thumbHTML
-          + (m.image_url ? '<img src="' + m.image_url + '" style="' + THUMB_STYLE + '" onerror="this.style.display=\'none\'" loading="lazy" decoding="async">' : '')
+          + (m.image_url ? '<img src="' + m.image_url + '" style="width:42px;height:58px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0" onerror="this.style.display=\'none\'" loading="lazy" decoding="async">' : '')
           + '<div style="flex:1;min-width:0">'
           + '<div style="font-size:.8rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + m.name + '</div>'
           + '<div style="font-size:.65rem;color:var(--muted)">' + (m.set_name||m.set_code||'') + ' · #' + (m.card_number||'?') + '</div>'
           + '<div style="font-size:.62rem;color:var(--accent2);margin-top:1px">' + conf + ' · <span style="color:var(--muted)">tap to change</span></div>'
           + '</div>'
           + '</div>'
-          // Checkbox stays separate so it doesn't trigger the sheet
           + '<input type="checkbox" ' + (r.included?'checked':'') + ' onchange="event.stopPropagation();_multiScanResults[' + i + '].included=this.checked;updateMsAddBtn()" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent2);flex-shrink:0">'
           + '</div>';
       });
 
-      // Side-by-side review grid: 2 cards per row on wider screens,
-      // single column under ~600px so each row stays readable.
       container.innerHTML = '<div style="font-size:.72rem;color:var(--muted);margin-bottom:14px">'
         + matched.length + ' of ' + _multiScanResults.length + ' cards matched. Tap any card to change its match.'
         + '</div>'
-        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:10px">'
-        + rows.join('')
-        + '</div>';
+        + rows.join('');
 
       populateBinderDropdown('msBinder', currentBinderId);
       document.getElementById('msProgressView').style.display = 'none';
