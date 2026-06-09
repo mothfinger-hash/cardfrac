@@ -1674,17 +1674,27 @@
     // a lightweight overlay rather than a full modal because the
     // scanner is already in modal-stack territory and a nested
     // openModal/closeModal call fights the scanner's overlay state.
-    function _promptVariantChoice(cardName) {
+    // baseFinish: 'normal' (default — non-holo card with RH variant)
+    //          or 'holo' (Rare Holo / Rare Holo EX / etc — base print is
+    //             already holo, RH is a SEPARATE foil pattern). Picker
+    //             labels and the returned value flex accordingly so a
+    //             holo Gengar saves as variant='holo', not 'normal'.
+    // z-index is 100030 so the picker sits ABOVE the scan results sheet
+    // (100010) and the scanner camera (100020). Old value of 30001 left
+    // the picker invisible behind the results sheet.
+    function _promptVariantChoice(cardName, baseFinish) {
+      baseFinish = (baseFinish === 'holo') ? 'holo' : 'normal';
+      const baseLabel = baseFinish === 'holo' ? 'Holo' : 'Normal';
       return new Promise(function(resolve) {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:30001;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:18px';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:100030;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:18px';
         overlay.innerHTML =
           '<div style="background:var(--surface);border:1px solid var(--accent);box-shadow:0 0 32px rgba(26,199,160,.25);padding:22px 24px;max-width:360px;width:100%;font-family:\'Space Mono\',\'Share Tech Mono\',monospace;border-radius:var(--r-lg,12px)">'
         +   '<div style="font-size:.6rem;letter-spacing:.12em;color:var(--accent);margin-bottom:6px">◈ WHICH FINISH?</div>'
         +   '<div style="font-size:.85rem;color:var(--text);margin-bottom:14px;line-height:1.4">' + _escHtml(cardName) + '</div>'
         +   '<div style="font-size:.7rem;color:var(--muted);margin-bottom:14px;line-height:1.5">This card has a Reverse Holo printing. Which one did you scan?</div>'
         +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-        +     '<button data-pick="normal"       style="flex:1;padding:10px 14px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:inherit;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-sm,6px)">Normal</button>'
+        +     '<button data-pick="' + baseFinish + '"  style="flex:1;padding:10px 14px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:inherit;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-sm,6px)">' + baseLabel + '</button>'
         +     '<button data-pick="reverse_holo" style="flex:1;padding:10px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-sm,6px)">Reverse Holo</button>'
         +   '</div>'
         +   '<button data-pick="cancel" style="margin-top:12px;width:100%;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.68rem;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-sm,6px)">Cancel</button>'
@@ -1736,9 +1746,21 @@
       // BEFORE the silent insert — otherwise a scan auto-saves as
       // Normal and they'd have to manually flip it later. Cancel from
       // the prompt aborts the add (the user can re-scan).
-      let scanVariant = 'normal';
+      //
+      // Default base finish is 'normal'. If the catalog row's rarity
+      // is "Rare Holo" / "Rare Holo EX" / "Rare Holo V" / etc, the
+      // base printing is already holo and the picker should offer
+      // Holo vs Reverse Holo (not Normal). Excludes "Reverse Holo"
+      // rarity (the row IS the RH printing) and "Rare Secret" (which
+      // sometimes contains holo descriptors but is its own variant
+      // tier we don't disambiguate at scan time).
+      const _rar = String(card.rarity || '');
+      const _baseFinish = (/\bholo\b/i.test(_rar) && !/reverse/i.test(_rar) && !/secret/i.test(_rar))
+        ? 'holo'
+        : 'normal';
+      let scanVariant = _baseFinish;
       if (card.has_reverse_holo) {
-        const pick = await _promptVariantChoice(card.name || 'this card');
+        const pick = await _promptVariantChoice(card.name || 'this card', _baseFinish);
         if (pick === null) { showToast('Add cancelled'); return; }
         scanVariant = pick;
       }
@@ -2064,6 +2086,101 @@
             // smaller than PNG for photographs of cards.
             var resizedUrl = canvas.toDataURL('image/jpeg', quality);
             resolve(resizedUrl.split(',')[1] || '');
+          } catch (e) { reject(e); }
+        };
+        img.onerror = function () { reject(new Error('image load failed')); };
+        img.src = dataURL;
+      });
+    }
+
+    // Stitches the TOP and BOTTOM of a card image into a single
+    // composite, dropping most of the middle artwork. The point isn't
+    // to save bytes — it's to focus GCV's text-detection budget onto
+    // the two regions that actually carry textual content:
+    //
+    //   Top ~38%  — card name, HP, stage, "Evolves from X"
+    //   Middle    — DROPPED (mostly artwork, generates OCR noise and
+    //               eats budget that Vision then can't spend on the
+    //               bottom of the card)
+    //   Bottom ~30% — attack name, rules text, set code + card number,
+    //               illustrator credit. The set code is the smallest
+    //               text on the whole card, so we 2× upscale the
+    //               bottom region in the composite.
+    //
+    // Why this works: the original failure mode was Vision running
+    // out at "…for each card" mid-rules-text before it ever reached
+    // the set code at y≈0.93. By removing the middle artwork (which
+    // generates spurious detections like fake characters in holo
+    // sparkles) AND upscaling the bottom band, we give Vision a
+    // higher signal-to-noise ratio over the regions we care about.
+    //
+    // One OCR call total — strictly cheaper than the old full-image
+    // pass, and reliably catches MEP EN 023 / OP12-108 / SVP EN 212.
+    async function _stitchForOcr(dataURL, topRatio, bottomRatio, bottomUpscale) {
+      topRatio      = topRatio      || 0.38;
+      bottomRatio   = bottomRatio   || 0.30;
+      bottomUpscale = bottomUpscale || 2;
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var W    = img.naturalWidth;
+            var H    = img.naturalHeight;
+            var topH = Math.round(H * topRatio);
+            var botH = Math.round(H * bottomRatio);
+            var botY = H - botH;
+            // 2× upscale just the bottom region.
+            var botOutH = botH * bottomUpscale;
+            var botOutW = W    * bottomUpscale;
+            // Top stays native — width is W. Bottom gets blown up to
+            // botOutW which may exceed W. We want the composite to
+            // share a single width so we leave the top at W and
+            // downscale the bottom width back to W on draw.
+            var gap = 12;
+            var outW = W;
+            var outH = topH + gap + botOutH * (W / botOutW);   // scaled bot height at width W
+            var botDrawH = Math.round(botOutH * (W / botOutW));
+            var canvas = document.createElement('canvas');
+            canvas.width  = outW;
+            canvas.height = topH + gap + botDrawH;
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            // Top band — drawn at native scale.
+            ctx.drawImage(img, 0, 0,    W, topH,
+                                0, 0,    outW, topH);
+            // Bottom band — upscaled by `bottomUpscale` via the
+            // intermediate canvas trick: draw the source bottom to
+            // the dest with botDrawH height, but at higher resolution
+            // by first rendering into an off-screen 2× canvas.
+            var off = document.createElement('canvas');
+            off.width  = botOutW;
+            off.height = botOutH;
+            var octx = off.getContext('2d');
+            octx.imageSmoothingEnabled = true;
+            octx.imageSmoothingQuality = 'high';
+            octx.drawImage(img, 0, botY,  W, botH,
+                                 0, 0,     botOutW, botOutH);
+            // Now blit the upscaled bottom into the composite. The
+            // intermediate upscale ensures tiny source pixels get
+            // proper bilinear interpolation before being placed.
+            ctx.drawImage(off, 0, 0,           botOutW, botOutH,
+                               0, topH + gap,  outW,    botDrawH);
+            // Cap at 1500px max dim so phone photos don't blow the
+            // Vercel proxy's body limit. Most cards land well under.
+            var maxDim = 1500;
+            var scale  = Math.min(1, maxDim / Math.max(canvas.width, canvas.height));
+            if (scale < 1) {
+              var sw = Math.round(canvas.width  * scale);
+              var sh = Math.round(canvas.height * scale);
+              var c2 = document.createElement('canvas');
+              c2.width = sw; c2.height = sh;
+              c2.getContext('2d').drawImage(canvas, 0, 0, sw, sh);
+              canvas = c2;
+            }
+            resolve(canvas.toDataURL('image/jpeg', 0.9));
           } catch (e) { reject(e); }
         };
         img.onerror = function () { reject(new Error('image load failed')); };
@@ -3048,11 +3165,24 @@
       if (!silent) setScanStatus('Reading card text…');
       try {
         // Step 1: OCR the full image + start CLIP embedding in parallel
-        // Full-image OCR is more reliable than zone crops because it doesn't
-        // assume the card fills the entire frame.
+        // OCR a top+bottom STITCHED composite of the card image (drops
+        // the middle artwork, 2× upscales the bottom band where the
+        // tiny set code lives). One Vision call, but the text-budget
+        // gets spent on the two regions that actually carry text
+        // instead of being wasted on holo sparkle in the artwork.
+        //
+        // If the stitch helper fails (image load error, canvas issue),
+        // fall back to OCRing the original dataURL — same behavior as
+        // before this change.
+        const _stitchedP = _stitchForOcr(dataURL).then(function(stitchedUrl) {
+          return ocrCardText(stitchedUrl);
+        }).catch(function(e) {
+          console.warn('[Scanner] stitched OCR failed, falling back to full image:', e);
+          return ocrCardText(dataURL);
+        });
         const [rawFullText, fullEmbedding] = await Promise.all([
-          ocrCardText(dataURL),
-          window._getClipEmbedding(dataURL)
+          _stitchedP,
+          window._getClipEmbedding(dataURL),
         ]);
 
         // Normalise smart quotes / dashes from GCV before any parsing
@@ -3155,13 +3285,31 @@
         // the space, so the literal ilike on "PikachuV" returns 0 hits.
         // Strip the suffix in the same pattern.
         const SUFFIX_NOSPACE_RE = /([a-z])(VSTAR|VMAX|GX|EX|V|VUNION)$/;
+        // Mega prefix no-space: XY-era M-cards print the M tight against
+        // the Pokemon name ("MVenusaur EX", "MCharizard X"), so OCR
+        // reads them without a space. Catalog stores "M Venusaur-EX"
+        // with the space. Detecting the M+CapitalLetter pattern lets
+        // us derive a queryable baseName "Venusaur" + run a name
+        // variant with the space inserted.
+        const MEGA_NOSPACE_RE = /^M([A-Z][a-z]+)/;
         let baseName = null;
         if (cardName) {
           if (SUFFIX_RE.test(cardName)) {
             baseName = cardName.replace(SUFFIX_RE, '').trim();
+            // ALSO handle "MVenusaur EX" → "M Venusaur" → baseName
+            // becomes the spaced form so it matches catalog "M Venusaur-EX".
+            if (MEGA_NOSPACE_RE.test(baseName)) {
+              baseName = baseName.replace(MEGA_NOSPACE_RE, 'M $1').trim();
+            }
           } else if (SUFFIX_NOSPACE_RE.test(cardName)) {
             // "PikachuV" → "Pikachu"
             baseName = cardName.replace(SUFFIX_NOSPACE_RE, '$1').trim();
+            if (MEGA_NOSPACE_RE.test(baseName)) {
+              baseName = baseName.replace(MEGA_NOSPACE_RE, 'M $1').trim();
+            }
+          } else if (MEGA_NOSPACE_RE.test(cardName)) {
+            // Bare "MVenusaur" without an EX/V/etc suffix — still split.
+            baseName = cardName.replace(MEGA_NOSPACE_RE, 'M $1').trim();
           } else if (cardName.includes('&')) {
             // TAG TEAM: search by first partner name
             baseName = cardName.split('&')[0].trim();
@@ -3246,6 +3394,24 @@
               out.add(numRaw + '/' + numTotal);
               var paddedTotalB = numTotal.length < 3 ? numTotal.padStart(3, '0') : numTotal;
               if (paddedTotalB !== numTotal) out.add(numRaw + '/' + paddedTotalB);
+            }
+          }
+          // SETCODE-NUMBER variants for OP / YGO catalogs. The OP sync
+          // stores card_number as the FULL printed identifier:
+          //   OP12-108, ST-19 has OP02-108, EB-02 has EB02-025
+          // not just the trailing number. Without this entry, a clean
+          // OCR of "OP12-108" still missed every catalog row because
+          // we queried card_number = '108' which exists nowhere.
+          // YGO uses the same shape ('RA05-EN085') and benefits too.
+          if (parsedSetCode && numRaw) {
+            out.add(parsedSetCode + '-' + numRaw);
+            if (numStripped && numStripped !== numRaw) {
+              out.add(parsedSetCode + '-' + numStripped);
+            }
+            // Zero-padded 3-digit form: 'OP12-108' is already padded, but
+            // 'OP12-8' from a 1-digit number should also try 'OP12-008'.
+            if (numStripped && numStripped.length < 3) {
+              out.add(parsedSetCode + '-' + numStripped.padStart(3, '0'));
             }
           }
           return Array.from(out);
@@ -3335,11 +3501,10 @@
           //     gets folded into the padded form via numRaw.
           ((scanTcg === 'yugioh' || scanTcg === 'onepiece') && parsedSetCode && numStripped)
             ? (() => {
-                const numFmts = [numStripped];
-                if (numRaw && numRaw !== numStripped) numFmts.push(numRaw);
-                const orFilter = numFmts.filter((v,i,a) => a.indexOf(v) === i)
-                  .map(n => 'card_number.eq.' + n).join(',');
-                return q().eq('set_code', parsedSetCode).or(orFilter).limit(10)
+                // Reuse the full _cardNumVariants set so this query covers
+                // both bare-number storage ('108') AND full SETCODE-NUMBER
+                // storage ('OP12-108'). The OP catalog uses the latter.
+                return q().eq('set_code', parsedSetCode).in('card_number', _cardNumVariants).limit(10)
                   .then(r => r || { data: [] }).catch(() => ({ data: [] }));
               })()
             : Promise.resolve({ data: [] })
@@ -3447,9 +3612,26 @@
           // accidental substring matches. cardName "Mega Pyroar ex" vs
           // catalog rows "Mega Pyroar" + "Mega Pyroar ex" — the exact
           // one gets +0.20.
+          //
+          // Symmetric stripping: OCR can capture the base form without
+          // the "ex"/"V"/"VMAX" suffix (e.g. Pokemon Center MEP promos
+          // overlap the small "ex" with the big "X" so OCR reads
+          // "Mega Charizard X" while catalog has "Mega Charizard X ex").
+          // We compare BOTH directions — OCR side stripped (existing
+          // baseName) AND catalog side stripped — so a near-match
+          // still wins the bonus and rises above the un-named tied
+          // pile of name-only hits.
           var nameLc = (m.name || '').toLowerCase();
+          var nameStripped = nameLc
+            .replace(/\s+(ex|gx|v|vmax|vstar|tag\s*team|tag-team|prime|crystal|legend)$/i, '')
+            .trim();
           var exactNameBonus = 0;
-          if (nameLc && (nameLc === _cardNameLc || nameLc === _baseNameLc)) {
+          if (nameLc && (
+                nameLc       === _cardNameLc ||
+                nameLc       === _baseNameLc ||
+                nameStripped === _cardNameLc ||
+                nameStripped === _baseNameLc
+             )) {
             exactNameBonus = 0.20;
           }
           var clipEntry = clipMatches.find(function(c){ return c.id === m.id; });
@@ -3464,14 +3646,21 @@
           return base + setConfirmedBoost + exactNameBonus + clipBoost - langPenalty;
         }
 
-        const merged = [];
+        let   merged = [];
         const seen   = new Set();
         function addHits(hits, source) {
           hits.forEach(function(m) {
-            if (!seen.has(m.id)) {
-              merged.push(Object.assign({}, m, { similarity: scoreOcr(m, source), _ocr: true }));
-              seen.add(m.id);
-            }
+            if (seen.has(m.id)) return;
+            // Drop rows with NULL / blank name — older syncs (some JP
+            // pokedata mirrors, partial PC enrich runs) created catalog
+            // rows where the name column never got populated. Those
+            // surface in the UI as "Unknown Card · #22" and clutter
+            // the results sheet without giving the user anything they
+            // could act on. They're a data-cleanup task, not a
+            // scanner problem; we just filter them out at render time.
+            if (!m.name || !String(m.name).trim()) return;
+            merged.push(Object.assign({}, m, { similarity: scoreOcr(m, source), _ocr: true }));
+            seen.add(m.id);
           });
         }
         addHits(setTotalHits,   'setTotal');    // number + RPC set fingerprint
@@ -3493,6 +3682,9 @@
         // hijacking the result.
         clipMatches.forEach(function(m) {
           if (seen.has(m.id)) return;
+          // Same null-name filter as addHits — visual-only candidates
+          // with empty name fields shouldn't display either.
+          if (!m.name || !String(m.name).trim()) return;
           var rn = (m.name || '').toLowerCase();
           var nameMatch = rn && (rn === _cardNameLc || rn === _baseNameLc);
           if (nameMatch && (m.similarity || 0) >= 0.75) {
@@ -3503,6 +3695,59 @@
           seen.add(m.id);
         });
         merged.sort(function(a, b) { return b.similarity - a.similarity; });
+
+        // Collapse near-duplicates that survived addHits' id-based seen
+        // set. Different upstream syncs store the same physical card with
+        // different card_number padding ("98" vs "098") or slightly
+        // different ids (pokedata "swsh1-25" vs PriceCharting
+        // "en-pc-12345"), so the merged list ends up with two rows for
+        // the same Doublade. We collapse on
+        //   (lower(set_code), lower(name), card_number with leading zeros stripped)
+        // and keep the first (highest-scored) survivor. Catalog cleanup
+        // is the proper fix; this stops the bleeding in the UI.
+        var _dedupSeen = new Set();
+        merged = merged.filter(function(m) {
+          var sc = (m.set_code || '').toLowerCase();
+          var nm = (m.name     || '').toLowerCase().trim();
+          var cn = String(m.card_number || '').replace(/^0+/, '') || '0';
+          var k  = sc + '||' + nm + '||' + cn;
+          if (_dedupSeen.has(k)) return false;
+          _dedupSeen.add(k);
+          return true;
+        });
+
+        // Second pass — drop "Miscellaneous Promos" / generic PC bucket
+        // duplicates when the same name + card_number lives in a real
+        // set. PriceCharting dumps Cosmos Holo / pre-release / staff
+        // variants into a "Miscellaneous Promos" pseudo-set; those
+        // surface as a confusing dupe of the canonical printing (e.g.
+        // Gengar BREAKthrough #60 vs Gengar "Miscellaneous Promos" #60
+        // — both are the same Gengar art, different upstream catalog).
+        // If a non-misc counterpart exists, the misc row is dropped.
+        // If ALL matches are misc-bucket, none are dropped (the user
+        // genuinely scanned a promo-only card).
+        var _GENERIC_SET = /miscellaneous|other\s*promo|^promo\s*$/i;
+        var _byNameNum = new Map();
+        merged.forEach(function(m) {
+          var nm = (m.name || '').toLowerCase().trim();
+          var cn = String(m.card_number || '').replace(/^0+/, '') || '0';
+          if (!nm) return;
+          var k = nm + '||' + cn;
+          if (!_byNameNum.has(k)) _byNameNum.set(k, []);
+          _byNameNum.get(k).push(m);
+        });
+        var _dropIds = new Set();
+        _byNameNum.forEach(function(rows) {
+          if (rows.length < 2) return;
+          var hasReal = rows.some(function(r) { return !_GENERIC_SET.test(r.set_name || ''); });
+          if (!hasReal) return;
+          rows.forEach(function(r) {
+            if (_GENERIC_SET.test(r.set_name || '')) _dropIds.add(r.id);
+          });
+        });
+        if (_dropIds.size) {
+          merged = merged.filter(function(m) { return !_dropIds.has(m.id); });
+        }
 
         // When OCR read a card name, drop any CLIP-only candidate whose
         // catalog name doesn't share a token with the parsed name (or
