@@ -1599,11 +1599,26 @@
 
     let _returnToScanner = false;
 
+    // Quantity adjuster for the scan preview sheet. The "+ ADD" flow
+    // reads window._scanAddQty when building the insert, so this
+    // helper just mutates that + repaints the visible number. Capped
+    // 1-99 to match the collection_items quantity input range.
+    window._scanQtyAdjust = function(delta) {
+      var cur = window._scanAddQty || 1;
+      var next = Math.max(1, Math.min(99, cur + delta));
+      window._scanAddQty = next;
+      var el = document.getElementById('scanQtyVal');
+      if (el) el.textContent = String(next);
+    };
+
     // Show a card detail sheet so the user can inspect before confirming
     function previewScanMatch(idx) {
       const m = (window._scanMatches || [])[idx];
       if (!m) return;
       document.getElementById('scanPreviewSheet')?.remove();
+      // Reset stepper to 1 on each preview open — last scan's qty
+      // shouldn't carry over to the next card.
+      window._scanAddQty = 1;
 
       const setInfo = [m.set_name, m.card_number ? `#${m.card_number}` : '', m.rarity].filter(Boolean).join(' · ');
       const jpBadge = m.id && (m.id.startsWith('jp-') || m.id.startsWith('pd-'))
@@ -1638,21 +1653,39 @@
             <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:4px">${m.name || 'Unknown Card'}${jpBadge}</div>
             ${setInfo ? `<div style="font-size:.63rem;color:var(--muted)">${setInfo}</div>` : ''}
           </div>
-          <!-- actions -->
+          <!-- actions —
+               qty stepper left, ADD button right. Stepper mutates
+               window._scanAddQty; quickAddScannedCard reads that
+               value into _insertBase.quantity. Saves having to open
+               the binder card detail and increment quantity manually
+               after every duplicate scan. Default 1, capped at 99
+               (matches the existing collection_items qty input). -->
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button onclick="document.getElementById('scanPreviewSheet').remove();confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')"
-              style="width:100%;padding:11px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.06em;transition:opacity .12s"
-              onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-              + ADD TO COLLECTION
-            </button>
+            <div style="display:flex;gap:8px;align-items:stretch">
+              <div style="display:flex;align-items:center;border:1px solid var(--accent);border-radius:4px;background:var(--surface2,var(--surface));overflow:hidden;font-family:'Space Mono','Share Tech Mono',monospace">
+                <button type="button" onclick="_scanQtyAdjust(-1)"
+                  style="padding:0 12px;height:100%;border:none;background:transparent;color:var(--accent);font-size:1rem;font-weight:700;cursor:pointer;line-height:1"
+                  aria-label="Decrease quantity">−</button>
+                <span id="scanQtyVal"
+                  style="min-width:28px;text-align:center;color:var(--text);font-size:.85rem;font-weight:700;padding:0 4px;user-select:none">1</span>
+                <button type="button" onclick="_scanQtyAdjust(1)"
+                  style="padding:0 12px;height:100%;border:none;background:transparent;color:var(--accent);font-size:1rem;font-weight:700;cursor:pointer;line-height:1"
+                  aria-label="Increase quantity">+</button>
+              </div>
+              <button onclick="document.getElementById('scanPreviewSheet').remove();confirmScanMatch('${m.id}','${(m.name||'').replace(/'/g,"\\'")}')"
+                style="flex:1;padding:11px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;font-weight:700;cursor:pointer;letter-spacing:.06em;transition:opacity .12s"
+                onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                ADD TO COLLECTION
+              </button>
+            </div>
             <button onclick="document.getElementById('scanPreviewSheet').remove();openAddToWishlistModal({cardName:'${(m.name||'').replace(/'/g,"\\'")}',setName:'${(m.set_name||'').replace(/'/g,"\\'")}',cardNumber:'${m.card_number||''}',cardImageUrl:'${m.image_url||''}',rarity:'${m.rarity||''}'})"
               style="width:100%;padding:9px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.06em;transition:all .15s"
               onmouseover="this.style.borderColor='var(--copper)';this.style.background='var(--copper-glow)'" onmouseout="this.style.borderColor='var(--copper-dim)';this.style.background='transparent'">
-              ♡ ADD TO WISHLIST
+              ADD TO WISHLIST
             </button>
             <button onclick="document.getElementById('scanPreviewSheet').remove()"
               style="width:100%;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;cursor:pointer">
-              ← BACK TO RESULTS
+              BACK TO RESULTS
             </button>
           </div>
         </div>`;
@@ -1765,6 +1798,15 @@
         scanVariant = pick;
       }
 
+      // User-set quantity from the preview-sheet stepper. Defaults to
+      // 1 if the stepper wasn't shown (e.g. POS quick-add path) or
+      // was never touched. Cap 1-99 matches the collection_items
+      // qty input. Note: for vendor+ inventory tracking, the same
+      // value is used as on_shelf_qty further down via the existing
+      // shop-inventory backfill in saveToCollection.
+      const _scanQty = Math.max(1, Math.min(99, Number(window._scanAddQty) || 1));
+      window._scanAddQty = 1; // reset so the next scan starts at 1
+
       const _insertBase = {
         user_id:          currentUser.id,
         api_card_id:      card.id || null,
@@ -1777,7 +1819,7 @@
         condition,
         grade_value:      gradeValue,
         cert_number:      certNumber,
-        quantity:         1,
+        quantity:         _scanQty,
         purchase_price:   null,
         purchase_date:    null,
         price_source_url: null,
@@ -2498,8 +2540,53 @@
       // so OP scans were silently returning null and the search fell
       // back to name-only hits (12 Peronas with no way to disambiguate).
       // Tolerates a stray space the OCR sometimes inserts ("OP 06-093").
+      //
+      // No `\b` at the end of the digit capture: OCR routinely sticks
+      // a junk digit on the end ("OP12-1086", "P-0933") because the
+      // ® / © symbols printed beside the card number get misread as
+      // numerals. OP card numbers are always exactly 3 digits, so
+      // we greedy-match exactly three and let any trailing OCR
+      // noise fall away.
+      // ── Gundam Card Game numbers: SETCODE-NUMBER, same shape as OP.
+      //   GD01-001 (booster), ST01-001 (starter), R-092 (resource /
+      //   single-letter promo), P-001 (promo).
+      // Catalog rows store card_number as the full printed string in
+      // some sets and the bare number in others, so the SETCODE-NUMBER
+      // form gets routed into _cardNumVariants below via setCode +
+      // numRaw and the search covers both layouts.
+      if (tcg === 'gundam') {
+        // Booster / starter format: GD01-001, ST01-001, EB02-045
+        const gdSetRe = /\b([A-Z]{1,3})(\d{1,2})\s*-\s*(\d{3,4})/i;
+        const gdSetM  = text.match(gdSetRe);
+        if (gdSetM) {
+          const setCode = (gdSetM[1] + gdSetM[2]).toUpperCase();
+          // Gundam catalog numbers are 3 digits; if OCR gave 4, take
+          // the first 3 (same junk-trailing-digit fix as OP).
+          const num3 = gdSetM[3].slice(0, 3);
+          return {
+            full:    setCode + '-' + num3,
+            num:     String(parseInt(num3, 10)),
+            numRaw:  num3,
+            total:   null,
+            setCode: setCode,
+          };
+        }
+        // Single-letter prefix: R-092 (Resource), P-001 (promo)
+        const gdSimpleRe = /\b([A-Z])\s*-\s*(\d{3})/;
+        const gdSimpleM  = text.match(gdSimpleRe);
+        if (gdSimpleM) {
+          return {
+            full:    gdSimpleM[1].toUpperCase() + '-' + gdSimpleM[2],
+            num:     String(parseInt(gdSimpleM[2], 10)),
+            numRaw:  gdSimpleM[2],
+            total:   null,
+            setCode: gdSimpleM[1].toUpperCase(),
+          };
+        }
+        // fall through if neither pattern matched.
+      }
       if (tcg === 'onepiece') {
-        const opRe = /\b(OP|ST|EB|PRB?)\s*(\d{1,2})\s*-\s*(\d{2,3})\b/i;
+        const opRe = /\b(OP|ST|EB|PRB?)\s*(\d{1,2})\s*-\s*(\d{3})/i;
         const opM  = text.match(opRe);
         if (opM) {
           const setCode = (opM[1] + opM[2]).toUpperCase();
@@ -2511,7 +2598,7 @@
             setCode: setCode,
           };
         }
-        const opPromoRe = /\bP\s*-\s*(\d{3})\b/;
+        const opPromoRe = /\bP\s*-\s*(\d{3})/;
         const opPM = text.match(opPromoRe);
         if (opPM) {
           return {
@@ -2569,13 +2656,27 @@
         }
         // Pokemon Center promos use the layout "MEP EN 010" — a 2-5
         // letter set code, a space-separated language tag, then a 2-3
-        // digit number. Covers the Mewtwo Center set (MEP) and any
-        // future TCG release that follows the same convention.
-        const promoMatch = text.match(/\b([A-Z]{2,5})\s+(EN|JP|FR|DE|IT|SP|KR|TC|CH)\s+(\d{2,3})\b/);
+        // digit number. Covers the Mewtwo Center set (MEP), Scarlet &
+        // Violet promos (SVP), and anything else following the same
+        // convention.
+        //
+        // Language tag is matched as a generic 2-uppercase-letter
+        // group rather than the strict (EN|JP|FR|...) allowlist —
+        // OCR routinely misreads the small bottom-corner text and
+        // turns "EN" into "IN" / "FN" / "EI", which then trips the
+        // strict pattern and the whole card number gets dropped.
+        // The surrounding shape (SETCODE + lang + 2-3 digit number)
+        // is distinctive enough on its own that loosening the middle
+        // is safe in practice — no card rules text matches it.
+        // Normalize the lang code to 'EN' when it doesn't match a
+        // known one, so downstream code stays happy.
+        const promoMatch = text.match(/\b([A-Z]{2,5})\s+([A-Z]{2})\s+(\d{2,3})\b/);
         if (promoMatch) {
+          const KNOWN_LANGS = ['EN','JP','FR','DE','IT','SP','KR','TC','CH','PT','NL','RU'];
+          const langCode = KNOWN_LANGS.indexOf(promoMatch[2]) >= 0 ? promoMatch[2] : 'EN';
           const n = parseInt(promoMatch[3], 10);
           return {
-            full:    `${promoMatch[1]} ${promoMatch[2]} ${promoMatch[3]}`,
+            full:    `${promoMatch[1]} ${langCode} ${promoMatch[3]}`,
             num:     String(n),
             numRaw:  promoMatch[3],
             total:   null,
@@ -3266,11 +3367,41 @@
         // signature said this is a Topps card, otherwise the search
         // would return unrelated Pokemon TCG cards that happen to
         // share the same collector number.
+        // POS sale mode: restrict every catalog query to the user's
+        // own inventory ids. Otherwise the scanner returns all 1.5M
+        // catalog rows numbered '108' (or whatever) and forces the
+        // vendor to pick a card they don't even own — which then
+        // bounces with "Not in your inventory." Pre-filtering at the
+        // SQL layer turns the same scan into a tiny, fast match
+        // against just what they have on shelf.
+        //
+        // Building the id set: collectionItems is already loaded in
+        // memory. We collect api_card_id from rows that aren't ghosts
+        // and aren't already-sold-offline. on_shelf_qty > 0 is the
+        // ideal filter but we leave qty filtering to the downstream
+        // _posSaleFromMatch handler so a vendor can see "out of
+        // stock" matches and decide what to do.
+        const _posIdSet = (window._posSaleMode && currentUser)
+          ? new Set(
+              (collectionItems || [])
+                .filter(function(c) { return c && c.api_card_id && !c.is_ghost && !c.sold_offline; })
+                .map(function(c) { return c.api_card_id; })
+            )
+          : null;
+        const _posIdList = _posIdSet ? Array.from(_posIdSet) : null;
+        if (_posIdList && _posIdList.length === 0) {
+          if (!silent) setScanStatus('Your inventory is empty — add cards before POS scanning');
+          return [];
+        }
         const q = () => {
           let qb = sb.from('catalog')
             .select('id,name,set_name,set_code,card_number,rarity,image_url')
             .eq('game_type', scanTcg);
           if (isTopps) qb = qb.like('id', 'topps-%');
+          // POS scope — only consider rows that exist in this user's
+          // inventory. supabase-js .in() handles arrays of thousands
+          // of ids in a single query.
+          if (_posIdList) qb = qb.in('id', _posIdList);
           return qb;
         };
 
@@ -3499,7 +3630,7 @@
           //     Peronas across sets with no way to disambiguate.
           //     YGO set codes can include a trailing letter ("045b") that
           //     gets folded into the padded form via numRaw.
-          ((scanTcg === 'yugioh' || scanTcg === 'onepiece') && parsedSetCode && numStripped)
+          ((scanTcg === 'yugioh' || scanTcg === 'onepiece' || scanTcg === 'gundam') && parsedSetCode && numStripped)
             ? (() => {
                 // Reuse the full _cardNumVariants set so this query covers
                 // both bare-number storage ('108') AND full SETCODE-NUMBER
@@ -3517,7 +3648,15 @@
           } else throw clipRes.error;
         }
 
-        const clipMatches    = clipRes.data         || [];
+        let   clipMatches    = clipRes.data         || [];
+        // POS mode: strip CLIP candidates that aren't in the user's
+        // inventory. The RPC doesn't take an id-filter param, so we
+        // filter client-side. Same goal as the q() scoping above —
+        // the scanner should only ever surface cards the vendor
+        // actually has on shelf.
+        if (_posIdSet) {
+          clipMatches = clipMatches.filter(function(m) { return m && _posIdSet.has(m.id); });
+        }
         // The setTotal RPC (match_card_in_set_by_total) doesn't take a
         // game_type filter, so it returns matches across ALL TCGs.
         // That was the bug behind "Pikachu V scan returned Forbidden
@@ -3622,8 +3761,15 @@
           // still wins the bonus and rises above the un-named tied
           // pile of name-only hits.
           var nameLc = (m.name || '').toLowerCase();
+          // Strip "-EX" / " EX" / "-GX" / " V" / etc. Pokedata catalogs
+          // are inconsistent: XY-era ex cards use a HYPHEN ("M Slowbro-EX",
+          // "Mewtwo-EX"), Sword & Shield V uses a space ("Pikachu V"),
+          // SV uses lowercase ex with a space ("Charizard ex"). All
+          // three need to collapse to the same base name for the
+          // exact-name bonus to fire against the OCR cardName, which
+          // never has the suffix (OCR clips "ex" off the corner).
           var nameStripped = nameLc
-            .replace(/\s+(ex|gx|v|vmax|vstar|tag\s*team|tag-team|prime|crystal|legend)$/i, '')
+            .replace(/[\s-]+(ex|gx|v|vmax|vstar|tag\s*team|tag-team|prime|crystal|legend)$/i, '')
             .trim();
           var exactNameBonus = 0;
           if (nameLc && (
