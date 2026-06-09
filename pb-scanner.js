@@ -1060,6 +1060,22 @@
     function _posInventoryFallback(fullOcrText, parsedName) {
       try {
         if (typeof collectionItems === 'undefined' || !Array.isArray(collectionItems)) return [];
+        // Detect whether what we're looking at is product packaging
+        // vs a card. Product OCR has packaging-specific phrases
+        // ("ADDITIONAL GAME CARDS", "BOOSTER PACK", "ELITE TRAINER
+        // BOX", quantity glyphs like "10 cards") and lacks card-
+        // specific markers (HP value, STAGE, "Evolves from"). When we
+        // detect product-mode, single-card rows are EXCLUDED from
+        // the inventory pool — they were the noise source on the
+        // Chaos Rising booster scan where tokens like "evolution"
+        // and "chaos" matched random Pokemon ex cards.
+        var rawLc = String(fullOcrText || '').toLowerCase();
+        var productSignals =
+          /\b(additional game cards|booster\s*(?:pack|box|bundle|case)|elite\s*trainer|etb|trainer\s*box|premium\s*collection|build\s*&?\s*battle|sleeved\s*booster|theme\s*deck|tin|mini\s*tin)\b/i.test(rawLc) ||
+          /\bcontains?\s*\d+\s*(?:booster|pack|card)/i.test(rawLc);
+        var cardSignals  =
+          /\b(stage\s*[12]|basic\s*pok[eé]mon|hp\s*\d+|evolves\s*from|weakness|resistance)\b/i.test(rawLc);
+        var productMode = productSignals && !cardSignals;
         // Build a token set from the OCR text + the parsed card name
         // (parsed name catches "Charizard" even if it didn't survive
         // into the dirty fullOcrText slice we see in logs).
@@ -1068,7 +1084,8 @@
           'pokemon','pokémon','tcg','card','cards','tm','copyright','nintendo','game',
           'freak','creatures','gamefreak','illus','illustrator','rare','common','uncommon',
           'inc','llc','ltd','japan','japanese','english','en','jp',
-          'box','pack','booster','elite','trainer','sealed' // generic product words — too broad
+          'box','pack','booster','elite','trainer','sealed', // generic product words — too broad
+          'additional','contains','volume','vol','edition'    // OCR'd off product packaging
         ]);
         function _tok(s) {
           return String(s || '').toLowerCase().match(/[a-z0-9]{3,}/g) || [];
@@ -1078,11 +1095,25 @@
         _tok(parsedName).forEach(function(t) { if (!STOP.has(t)) queryTokens.add(t); });
         if (queryTokens.size === 0) return [];
 
+        // Detect single-card product_type values so we can EXCLUDE
+        // them in product-mode. Anything that isn't a single is
+        // treated as eligible (sealed-*, funko_pop, manga, plush,
+        // statue, poster, tcg_single is the OPPOSITE — exclude that
+        // too). Default to NOT a single when product_type is null
+        // so old un-tagged rows can still surface.
+        function _isSingle(c) {
+          var pt = String(c && c.product_type || '').toLowerCase();
+          return pt === 'single' || pt === 'tcg_single';
+        }
         // Score every inventory row.
         var scored = [];
         collectionItems.forEach(function(c) {
           if (!c || c.is_ghost || c.sold_offline) return;
           if (!c.api_card_id) return; // need an api_card_id for _posSaleFromMatch routing
+          // Product-mode: drop single cards entirely. Chaos Rising
+          // booster scan was leaking single-card matches because
+          // tokens like "evolution"/"chaos" overlap card names.
+          if (productMode && _isSingle(c)) return;
           var nameToks = new Set(_tok(c.card_name));
           var setToks  = new Set(_tok(c.set_name));
           var numToks  = new Set(_tok(c.card_number));
@@ -1125,7 +1156,8 @@
             _posFallback: true,
           });
         }
-        console.log('[Scanner] POS inventory fallback:', out.length, 'matches from', queryTokens.size, 'query tokens');
+        console.log('[Scanner] POS inventory fallback:', out.length, 'matches from', queryTokens.size, 'query tokens',
+          productMode ? '(product-mode — singles excluded)' : '(general — all product types eligible)');
         return out;
       } catch (e) {
         console.warn('[Scanner] POS fallback failed:', e);
@@ -1139,7 +1171,35 @@
     function detectProductType(text) {
       if (!text) return 'other';
       var t = text.toLowerCase();
-      var scores = { funko_pop: 0, manga: 0, poster: 0, plush: 0, statue: 0 };
+      var scores = { funko_pop: 0, manga: 0, poster: 0, plush: 0, statue: 0, sealed: 0 };
+
+      // Sealed TCG product — booster boxes / packs / ETBs / tins /
+      // theme decks across Pokemon / MTG / YGO / OP / Gundam.
+      // Strong brand signals layered with packaging-format keywords.
+      // The packaging-format hits are 2+ each so any single confident
+      // match clears the threshold without needing brand confirmation.
+      if (/\b(booster\s*(?:pack|box|bundle|case|display))\b/i.test(t)) scores.sealed += 3;
+      if (/\b(elite\s*trainer\s*box|etb)\b/i.test(t))                  scores.sealed += 3;
+      if (/\b(ultra\s*premium\s*collection|upc)\b/i.test(t))           scores.sealed += 3;
+      if (/\b(premium\s*collection|special\s*collection|collection\s*box)\b/i.test(t)) scores.sealed += 3;
+      if (/\badditional\s*game\s*cards?\b/i.test(t))                   scores.sealed += 3;
+      if (/\b(theme\s*deck|starter\s*deck|structure\s*deck|battle\s*deck|build[\s-]?(?:and|&)[\s-]?battle)\b/i.test(t)) scores.sealed += 3;
+      if (/\b(mini\s*tin|trainer\s*tin|collector\s*tin|tin\s*box)\b/i.test(t)) scores.sealed += 3;
+      if (/\b(set\s*booster|draft\s*booster|collector\s*booster|jumpstart\s*booster|play\s*booster|commander\s*deck|planeswalker\s*deck|secret\s*lair|fat\s*pack)\b/i.test(t)) scores.sealed += 3;
+      if (/\b(gift\s*bundle|holiday\s*bundle)\b/i.test(t))             scores.sealed += 3;
+      // Brand markers — confirm the TCG. Each one is small (1) so
+      // they don't trip the threshold on their own (a single card
+      // also says "Pokemon"), but they boost a packaging-format hit
+      // from 3 → 4 which beats Funko's brand-only hit at 3.
+      if (/\bpok[eé]mon\b/i.test(t))      scores.sealed += 1;
+      if (/\bmagic.{0,4}the.{0,4}gathering|\bmtg\b/i.test(t)) scores.sealed += 1;
+      if (/\byu-?gi-?oh|\bygo\b/i.test(t)) scores.sealed += 1;
+      if (/\bone\s*piece\b/i.test(t))     scores.sealed += 1;
+      if (/\bgundam\b/i.test(t) && /\bcard\b/i.test(t)) scores.sealed += 1;
+      // Negative signal — if the OCR contains card-specific markers,
+      // dial sealed back so a single-card OCR that happens to say
+      // "Booster" in its rules text doesn't mis-classify.
+      if (/\b(stage\s*[12]|basic\s*pok[eé]mon|hp\s*\d{2,3}|evolves\s*from|weakness\s*[×x]|resistance|retreat\s*cost)\b/i.test(t)) scores.sealed = Math.max(0, scores.sealed - 4);
 
       // Funko — already-strong brand signal
       if (/\bfunko\b/i.test(t))           scores.funko_pop += 3;
@@ -1177,11 +1237,181 @@
       // Pick winner. Threshold 2 to claim — below that we say 'other'
       // and let the shop pick from the listing form.
       var best = 'other', bestN = 0;
-      ['funko_pop','manga','poster','plush','statue'].forEach(function(g) {
+      ['funko_pop','manga','poster','plush','statue','sealed'].forEach(function(g) {
         if (scores[g] > bestN && scores[g] >= 2) { best = g; bestN = scores[g]; }
       });
       try { console.log('[product detect]', JSON.stringify(scores), '→', best); } catch(_) {}
       return best;
+    }
+
+    // Sealed TCG packaging extractor — pulls game type, packaging
+    // format (booster_pack / etb / tin / etc), and set/series name
+    // from the OCR'd box text. Maps cleanly to the catalog's
+    // product_type column populated by sync_sealed_products.py
+    // (see SEALED_PATTERNS in that file for the canonical list).
+    function _extractSealedFromOcr(text) {
+      if (!text) return {};
+      var out = {};
+      var rawLc = text.toLowerCase();
+
+      // ── Game type detection (TCG brand) ─────────────────────────────
+      if (/\bpok[eé]mon\b/i.test(rawLc))               out.game_type = 'pokemon';
+      else if (/\bmagic.{0,4}the.{0,4}gathering|\bmtg\b/i.test(rawLc)) out.game_type = 'mtg';
+      else if (/\byu-?gi-?oh|\bygo\b/i.test(rawLc))    out.game_type = 'yugioh';
+      else if (/\bone\s*piece\b/i.test(rawLc))         out.game_type = 'onepiece';
+      else if (/\bgundam\b/i.test(rawLc))              out.game_type = 'gundam';
+      else if (/\bdragon\s*ball\b/i.test(rawLc))       out.game_type = 'dbz';
+
+      // ── Packaging format (matches catalog.product_type values
+      //     populated by sync_sealed_products.py / SEALED_PATTERNS).
+      //     Most-specific first, generic fallbacks last so MTG's
+      //     "set booster" doesn't get clobbered by bare "booster".
+      var FMT = [
+        [/\b(ultra\s*premium\s*collection|upc)\b/i,                 'utb'],
+        [/\belite\s*trainer\s*box\b|\betb\b/i,                       'etb'],
+        [/\b(premium\s*collection|special\s*collection|collection\s*box)\b/i, 'premium_collection'],
+        [/\bset\s*booster\b/i,           'set_booster'],
+        [/\bdraft\s*booster\b/i,         'draft_booster'],
+        [/\bcollector\s*booster\b/i,     'collector_booster'],
+        [/\bjumpstart\s*booster\b/i,     'jumpstart_booster'],
+        [/\bplay\s*booster\b/i,          'play_booster'],
+        [/\bcommander\s*deck\b/i,        'commander_deck'],
+        [/\bplaneswalker\s*deck\b/i,     'planeswalker_deck'],
+        [/\bsecret\s*lair\b/i,           'secret_lair'],
+        [/\bfat\s*pack\b/i,              'bundle'],
+        [/\bbooster\s*box\b|\bdisplay\s*box\b/i, 'booster_box'],
+        [/\bbooster\s*pack\b/i,          'booster_pack'],
+        [/\bbooster\s*bundle\b/i,        'booster_bundle'],
+        [/\b(gift|holiday)\s*bundle\b/i, 'gift_bundle'],
+        [/\bbundle\b/i,                  'bundle'],
+        [/\b(league\s*battle|battle)\s*deck\b/i, 'battle_deck'],
+        [/\bstructure\s*deck\b/i,        'structure_deck'],
+        [/\bstarter\s*deck\b|\bpreconstructed\s*deck\b/i, 'starter_deck'],
+        [/\btheme\s*deck\b/i,            'theme_deck'],
+        [/\bbuild\s*(?:and|&)\s*battle\b|\bbuild[-\s]?a[-\s]?deck\b/i, 'build_and_battle'],
+        [/\bmini\s*tin\b/i,              'tin_mini'],
+        [/\btin\b/i,                     'tin'],
+        [/\bdeck\b/i,                    'deck'],
+      ];
+      for (var i = 0; i < FMT.length; i++) {
+        if (FMT[i][0].test(rawLc)) { out.product_subtype = FMT[i][1]; break; }
+      }
+
+      // ── Set / series name — find the most prominent ALL-CAPS line
+      //     that isn't a stopword. Pokemon sealed boxes typically
+      //     have set names in big type (CHAOS RISING, EVOLVING SKIES,
+      //     PALDEAN FATES, etc.). MTG / OP / YGO follow the same
+      //     convention.
+      var STOPLINES = /^(pok[eé]mon|magic\s*the\s*gathering|mtg|yu-?gi-?oh|one\s*piece|trading\s*card\s*game|tcg|game|cards?|additional\s*game\s*cards?|expansion|series)$/i;
+      var lines = text.split('\n')
+        .map(function(l) { return l.trim(); })
+        .filter(function(l) {
+          if (!l || l.length < 3) return false;
+          if (STOPLINES.test(l)) return false;
+          // mostly-uppercase + ≤4 words, no digits
+          var letters = l.replace(/[^A-Za-z]/g, '');
+          if (letters.length < 3) return false;
+          var upperLetters = letters.replace(/[^A-Z]/g, '');
+          var wordCount = l.split(/\s+/).length;
+          return wordCount <= 5 && upperLetters.length / letters.length >= 0.6;
+        });
+      if (lines.length) {
+        // First all-caps line that's not the brand row.
+        out.set_name = lines[0].replace(/\s+/g, ' ').trim();
+      }
+
+      // ── Pack quantity ("36 PACKS", "10 ADDITIONAL CARDS") —
+      //     useful both as a distinguishing detail and as a
+      //     packaging-type tiebreaker.
+      var qtyM = text.match(/\b(\d{1,3})\s*(?:additional\s*)?(?:cards?|packs?|boosters?)\b/i);
+      if (qtyM) out.contents_qty = parseInt(qtyM[1], 10);
+
+      return out;
+    }
+
+    // ── Sealed catalog match ────────────────────────────────────────
+    // Takes the structured output of _extractSealedFromOcr and looks
+    // up matching catalog rows. Scopes by game_type when known,
+    // narrows by product_type when extractable, and scores rows by
+    // set-name token overlap. Returns up to 8 candidates shaped like
+    // the regular scan-result rows so showScanResults can render
+    // them with no changes.
+    //
+    // Three-tier lookup strategy (gracefully degrades when an upstream
+    // sealed sync hasn't tagged rows perfectly):
+    //   1. game_type + product_type + name ilike set_name
+    //   2. game_type + name ilike set_name (drop product_type)
+    //   3. name ilike set_name (drop game_type — last resort)
+    async function _matchSealedInCatalog(extracted) {
+      try {
+        if (!extracted || !extracted.set_name) return [];
+        var name  = extracted.set_name;
+        var game  = extracted.game_type || null;
+        var ptype = extracted.product_subtype || null;
+        // Build the catalog base query
+        function _base() {
+          // product_type single must be excluded — we're scanning
+          // packaging, not cards.
+          return sb.from('catalog')
+            .select('id,name,set_name,set_code,card_number,rarity,image_url,product_type,game_type')
+            .neq('product_type', 'single')
+            .neq('product_type', 'tcg_single');
+        }
+        var rows = [];
+        // Tier 1 — strictest filter
+        if (game && ptype) {
+          var r1 = await _base().eq('game_type', game).eq('product_type', ptype)
+            .ilike('name', '%' + name + '%').limit(15);
+          if (!r1.error && r1.data) rows = r1.data;
+        }
+        // Tier 2 — drop product_type
+        if (rows.length === 0 && game) {
+          var r2 = await _base().eq('game_type', game)
+            .ilike('name', '%' + name + '%').limit(15);
+          if (!r2.error && r2.data) rows = r2.data;
+        }
+        // Tier 3 — drop game_type
+        if (rows.length === 0) {
+          var r3 = await _base().ilike('name', '%' + name + '%').limit(15);
+          if (!r3.error && r3.data) rows = r3.data;
+        }
+        if (rows.length === 0) return [];
+
+        // Score by extra token overlap in name + set_name, so the
+        // "Pokemon TCG: Chaos Rising Booster Pack" row beats
+        // "Chaos Rising Build & Battle" when ptype is booster_pack.
+        var qToks = String(name).toLowerCase().match(/[a-z0-9]{3,}/g) || [];
+        var qSet  = new Set(qToks);
+        rows.forEach(function(r) {
+          var hay = ((r.name || '') + ' ' + (r.set_name || '')).toLowerCase();
+          var hayToks = hay.match(/[a-z0-9]{3,}/g) || [];
+          var hits = 0;
+          hayToks.forEach(function(h) { if (qSet.has(h)) hits++; });
+          // Bonus for matching product_type when we know it
+          var ptypeBonus = (ptype && r.product_type === ptype) ? 5 : 0;
+          r._score = hits + ptypeBonus;
+        });
+        rows.sort(function(a, b) { return b._score - a._score; });
+
+        return rows.slice(0, 8).map(function(r, i) {
+          return {
+            id:          r.id,
+            name:        r.name || '?',
+            set_name:    r.set_name || '',
+            set_code:    r.set_code || '',
+            card_number: r.card_number || '',
+            rarity:      r.rarity || null,
+            image_url:   r.image_url || '',
+            similarity:  0.95 - (i * 0.03),
+            _ocr:        true,
+            _sealed:     true,
+            _productType: r.product_type || null,
+          };
+        });
+      } catch (e) {
+        console.warn('[sealed match] catalog lookup failed:', e);
+        return [];
+      }
     }
 
     // ── Per-category extractors ─────────────────────────────────────────
@@ -1386,6 +1616,7 @@
         var ptype = detectProductType(text);
         var extracted;
         switch (ptype) {
+          case 'sealed':    extracted = _extractSealedFromOcr(text); break;
           case 'manga':     extracted = _extractMangaFromOcr(text);  break;
           case 'poster':    extracted = _extractPosterFromOcr(text); break;
           case 'plush':     extracted = _extractPlushFromOcr(text);  break;
@@ -1399,10 +1630,18 @@
         }
         var hasAny = Object.keys(extracted).length > 0;
 
+        // Sealed: kick off catalog match in parallel with the field
+        // display so candidates surface as fast as possible. Stored
+        // on the stash for the action-button handlers.
+        var _sealedCandidatesP = (ptype === 'sealed' && hasAny)
+          ? _matchSealedInCatalog(extracted)
+          : Promise.resolve([]);
+
         // Display label for the detected category
         var TYPE_LABELS = {
           funko_pop: 'FUNKO POP', manga: 'MANGA', poster: 'POSTER / ART PRINT',
-          plush: 'PLUSH', statue: 'STATUE / FIGURE', other: 'OTHER PRODUCT'
+          plush: 'PLUSH', statue: 'STATUE / FIGURE', sealed: 'SEALED TCG PRODUCT',
+          other: 'OTHER PRODUCT'
         };
         var typeLabel = TYPE_LABELS[ptype] || 'PRODUCT';
 
@@ -1449,8 +1688,21 @@
             _row('Series', extracted.series);
             _row('Brand',  extracted.brand);
             _row('Scale',  extracted.scale, true);
+          } else if (ptype === 'sealed') {
+            if (extracted.set_name) html += '<div style="font-size:.75rem;color:var(--text)"><strong>Set:</strong> ' + _escHtml(extracted.set_name) + '</div>';
+            _row('TCG',          (extracted.game_type || '').replace('mtg','Magic').replace('pokemon','Pokemon').replace('onepiece','One Piece').replace('yugioh','Yu-Gi-Oh').replace('gundam','Gundam').replace('dbz','Dragon Ball'));
+            _row('Format',       (extracted.product_subtype || '').replace(/_/g,' ').replace(/\b\w/g, function(s){return s.toUpperCase();}));
+            _row('Contents',     extracted.contents_qty ? extracted.contents_qty + ' cards/packs' : '');
           }
           html += '</div>';
+
+          // Sealed: dedicated catalog-match panel. Renders empty
+          // placeholder first, then fills in when _sealedCandidatesP
+          // resolves. Each candidate is a tap-target that routes to
+          // _confirmSealedAdd / _confirmSealedSale.
+          if (ptype === 'sealed') {
+            html += '<div id="sealedCandidates" style="margin-bottom:12px"><div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">CATALOG MATCHES</div><div style="font-size:.7rem;color:var(--muted);padding:8px 0">Searching catalog…</div></div>';
+          }
         } else {
           html += '<div style="font-size:.7rem;color:var(--muted);margin-bottom:12px">No structured fields recognized — see raw OCR below to copy manually, or pick a category in the listing form.</div>';
         }
@@ -1464,7 +1716,7 @@
         // detected product type so the DONE button can route to the
         // right listing-modal prefill. The File is carried so the
         // listing modal pre-fills its photo slot — no re-upload needed.
-        window._lastProductScan = { extracted: extracted, raw: text, file: file, ptype: ptype };
+        window._lastProductScan = { extracted: extracted, raw: text, file: file, ptype: ptype, candidates: [] };
 
         html += '<div style="display:flex;gap:8px">';
         html += '<button onclick="document.getElementById(\'productScannerFile\').click()" style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">↻ RETAKE</button>';
@@ -1476,8 +1728,92 @@
         html += '</div>';
 
         if (resultEl) resultEl.innerHTML = html;
+
+        // Fill the sealed-candidate panel asynchronously so the user
+        // gets immediate feedback from the extraction step, and the
+        // tappable candidates light up as soon as the catalog query
+        // returns. Three outcomes:
+        //   (a) candidates found → render tappable rows with two
+        //       buttons each: ADD TO BINDER + LIST FOR SALE (or
+        //       RECORD SALE if POS mode is on)
+        //   (b) no catalog match → show "No catalog match" hint
+        //   (c) extractor returned nothing → panel stays hidden
+        if (ptype === 'sealed') {
+          try {
+            const candidates = await _sealedCandidatesP;
+            window._lastProductScan.candidates = candidates;
+            const panel = document.getElementById('sealedCandidates');
+            if (!panel) return;
+            if (!candidates.length) {
+              panel.innerHTML = '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">CATALOG MATCHES</div>'
+                + '<div style="font-size:.7rem;color:var(--muted);padding:8px 0">No matching sealed products found in catalog. Use DONE → LIST to enter manually.</div>';
+              return;
+            }
+            const isPos = !!window._posSaleMode;
+            const rowsHtml = candidates.map(function(c, i) {
+              var img = c.image_url
+                ? '<img src="' + _escHtml(c.image_url) + '" alt="" loading="lazy" style="width:36px;height:50px;object-fit:cover;background:var(--surface2);border:1px solid var(--border)">'
+                : '<div style="width:36px;height:50px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--copper-dim);font-size:.6rem">?</div>';
+              var actions = isPos
+                ? '<button onclick="_confirmSealedSale(' + i + ')" style="padding:6px 10px;border:1px solid var(--copper);background:var(--copper);color:var(--surface);font-family:\'Space Mono\',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.06em">RECORD SALE</button>'
+                : '<button onclick="_confirmSealedAdd(' + i + ')" style="padding:6px 10px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.06em">ADD TO BINDER</button>'
+                  + '<button onclick="_confirmSealedList(' + i + ')" style="padding:6px 10px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.62rem;cursor:pointer;letter-spacing:.06em">LIST</button>';
+              return '<div style="display:flex;gap:10px;align-items:center;padding:8px;border:1px solid var(--border);background:var(--surface2);margin-bottom:6px">'
+                +   img
+                +   '<div style="flex:1;min-width:0">'
+                +     '<div style="font-size:.72rem;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(c.name) + '</div>'
+                +     '<div style="font-size:.6rem;color:var(--muted);margin-top:2px">' + _escHtml(c.set_name || '') + (c._productType ? ' · ' + _escHtml(c._productType.replace(/_/g,' ')) : '') + '</div>'
+                +   '</div>'
+                +   '<div style="display:flex;gap:4px;flex-shrink:0">' + actions + '</div>'
+                + '</div>';
+            }).join('');
+            panel.innerHTML = '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">CATALOG MATCHES — TAP TO ' + (isPos ? 'SELL' : 'ADD') + '</div>' + rowsHtml;
+          } catch (e) {
+            console.warn('[sealed render] failed:', e);
+          }
+        }
       };
       reader.readAsDataURL(file);
+    };
+
+    // Dispatch helpers for the catalog-matched sealed candidates.
+    // ADD TO BINDER routes through the existing quickAddScannedCard
+    // path, which already handles the vendor on_shelf_qty default,
+    // schema fallback, and variant handling. RECORD SALE in POS
+    // routes through _posSaleFromMatch like cards do.
+    window._confirmSealedAdd = async function(idx) {
+      var stash = window._lastProductScan || {};
+      var pick  = (stash.candidates || [])[idx];
+      if (!pick) return;
+      var sc = document.getElementById('productScannerModal');
+      if (sc) sc.remove();
+      // quickAddScannedCard expects a row in the shape catalog returns.
+      try { await quickAddScannedCard(pick); } catch (e) {
+        console.error('[sealed add] failed:', e);
+        showToast('Could not add: ' + (e.message || 'unknown'));
+      }
+    };
+    window._confirmSealedSale = function(idx) {
+      var stash = window._lastProductScan || {};
+      var pick  = (stash.candidates || [])[idx];
+      if (!pick) return;
+      var sc = document.getElementById('productScannerModal');
+      if (sc) sc.remove();
+      _posSaleFromMatch(pick.id, pick.name);
+    };
+    window._confirmSealedList = function(idx) {
+      var stash = window._lastProductScan || {};
+      var pick  = (stash.candidates || [])[idx];
+      if (!pick) return;
+      // Re-stash with the picked catalog row so _applyProductScanToListing
+      // can prefill the listing form with the right name + image.
+      stash.extracted = Object.assign({}, stash.extracted, {
+        picked_id:   pick.id,
+        picked_name: pick.name,
+        picked_set:  pick.set_name,
+      });
+      window._lastProductScan = stash;
+      _applyProductScanToListing();
     };
 
     // Bridge between the product scanner and the marketplace listing
