@@ -288,9 +288,49 @@
   let _renderedCount = PAGE_SIZE;
 
   async function renderMyStore(forceRefresh) {
+    try {
+      return await _renderMyStoreImpl(forceRefresh);
+    } catch (err) {
+      // Visible error instead of the silent "Loading store…" hang.
+      // The global error handler still fires, but this also paints
+      // the actual exception INTO the My Store container so a user
+      // (or me reading their screenshot) can see what blew up
+      // instead of staring at the loading placeholder forever.
+      console.error('[store] renderMyStore failed:', err);
+      const wrap = document.getElementById('myStoreContent');
+      if (wrap) {
+        const msg = (err && err.message) ? err.message : String(err || 'unknown');
+        wrap.innerHTML = '<div style="padding:24px;color:var(--red,#ef4444);font-size:.78rem;font-family:\'Space Mono\',monospace;line-height:1.5">'
+          + '<div style="font-weight:700;letter-spacing:.08em;margin-bottom:8px;color:var(--red,#ef4444)">⚠ Store failed to render</div>'
+          + '<div style="color:var(--muted);font-size:.7rem;word-break:break-word">'
+          +   _esc(msg)
+          + '</div>'
+          + '<button onclick="renderMyStore(true)" class="pb-panel-link" style="margin-top:14px;border-color:var(--accent);color:var(--accent)">Retry</button>'
+          + '</div>';
+      }
+    }
+  }
+
+  async function _renderMyStoreImpl(forceRefresh) {
     _injectStoreStyles();
     const wrap = document.getElementById('myStoreContent');
     if (!wrap) return;
+    // Defensive: collectionItems is a `let` in pb-app.js's script
+    // scope, which classic-script lexical scoping makes visible
+    // here. But if the script load order ever flipped (or a future
+    // refactor moves it into a module/IIFE), the reference would
+    // throw a ReferenceError before _buildStoreEntries' typeof
+    // guard fires. Probe explicitly so we get a clean error message
+    // instead of a TDZ throw deep in the stack.
+    try {
+      // eslint-disable-next-line no-unused-expressions
+      collectionItems;
+    } catch (e) {
+      wrap.innerHTML = '<div style="padding:24px;color:var(--muted);font-size:.78rem;text-align:center">'
+        + 'Inventory data not loaded yet. Try refreshing the page in a moment.'
+        + '</div>';
+      return;
+    }
     if (!currentUser) {
       wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Sign in to view your store.</div>';
       return;

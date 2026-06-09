@@ -3104,7 +3104,36 @@
       // My Store — lazy-loads pb-store.js the first time the tab is
       // activated. Stub at the bottom of pb-app.js handles the load.
       if (tab === 'myStore') {
-        _ensureStore().then(function() { window.renderMyStore && window.renderMyStore(); });
+        _ensureStore()
+          .then(function() {
+            if (typeof window.renderMyStore !== 'function') {
+              const wrap = document.getElementById('myStoreContent');
+              if (wrap) wrap.innerHTML = '<div style="padding:24px;color:var(--muted);font-size:.78rem;text-align:center">Store script loaded but no renderer — try a hard refresh.</div>';
+              return;
+            }
+            return Promise.resolve(window.renderMyStore()).catch(function(err) {
+              console.error('[store] renderMyStore rejected:', err);
+              const wrap = document.getElementById('myStoreContent');
+              if (wrap) {
+                const msg = (err && err.message) ? err.message : String(err || 'unknown');
+                wrap.innerHTML = '<div style="padding:24px;color:var(--red,#ef4444);font-size:.78rem;font-family:\'Space Mono\',monospace">'
+                  + '<div style="font-weight:700;letter-spacing:.08em;margin-bottom:8px">⚠ Store failed to render</div>'
+                  + '<div style="color:var(--muted);font-size:.7rem;word-break:break-word">' + (msg || '') + '</div>'
+                  + '</div>';
+              }
+            });
+          })
+          .catch(function(err) {
+            console.error('[store] _ensureStore failed:', err);
+            const wrap = document.getElementById('myStoreContent');
+            if (wrap) {
+              wrap.innerHTML = '<div style="padding:24px;color:var(--red,#ef4444);font-size:.78rem;font-family:\'Space Mono\',monospace">'
+                + '<div style="font-weight:700;letter-spacing:.08em;margin-bottom:8px">⚠ Couldn\'t load store module</div>'
+                + '<div style="color:var(--muted);font-size:.7rem">Check your connection and refresh the page.</div>'
+                + '<button onclick="location.reload()" class="pb-panel-link" style="margin-top:14px;border-color:var(--accent);color:var(--accent)">Refresh</button>'
+                + '</div>';
+            }
+          });
       }
     }
 
@@ -15250,6 +15279,99 @@
       renderBinder();
     }
 
+    // ── "Since Added" Gain/Loss fallback ────────────────────────────
+    // When item.purchase_price is empty, look up the catalog price
+    // snapshot at-or-before item.created_at and treat that as the
+    // synthetic cost basis. The user sees a real movement number
+    // instead of the static "Add cost basis to track" placeholder.
+    //
+    // Picks the LAST recorded_value where recorded_at <= created_at;
+    // that's the price the catalog held when the card got added.
+    // No history before created_at? Falls back to the earliest known
+    // history point (gives "since first tracked" semantics — still
+    // more useful than nothing). No history at all → leaves the
+    // "Add cost basis" placeholder in place so we don't lie.
+    async function _fillSinceAddedGainLoss(item) {
+      try {
+        if (!item || !item.id) return;
+        // If user already has a cost basis, the synchronous render
+        // already showed the right number — nothing to do.
+        if (item.purchase_price && Number(item.purchase_price) > 0) return;
+        if (!item.api_card_id || !item.created_at) return;
+
+        const labelEl = document.getElementById('binderGainLossLabel_' + item.id);
+        const valueEl = document.getElementById('binderGainLossValue_' + item.id);
+        if (!valueEl) return;
+
+        const addedAt = new Date(item.created_at).toISOString();
+        // First try: snapshot AT-OR-BEFORE the added date.
+        let baselineRow = null;
+        const before = await sb.from('catalog_price_history')
+          .select('recorded_at, recorded_value')
+          .eq('catalog_id', item.api_card_id)
+          .lte('recorded_at', addedAt.slice(0, 10))
+          .order('recorded_at', { ascending: false })
+          .limit(1);
+        if (before.data && before.data[0]) {
+          baselineRow = before.data[0];
+        } else {
+          // Fallback: earliest known snapshot (in case the user added
+          // the card BEFORE any history was tracked). Better than
+          // nothing — gives "since first tracked" semantics.
+          const after = await sb.from('catalog_price_history')
+            .select('recorded_at, recorded_value')
+            .eq('catalog_id', item.api_card_id)
+            .order('recorded_at', { ascending: true })
+            .limit(1);
+          if (after.data && after.data[0]) baselineRow = after.data[0];
+        }
+
+        if (!baselineRow) {
+          // No catalog history exists — leave the placeholder.
+          if (valueEl.textContent === 'Loading…') {
+            valueEl.innerHTML = 'Add cost basis<br>to track';
+          }
+          return;
+        }
+
+        const baselineUnit = Number(baselineRow.recorded_value) || 0;
+        if (baselineUnit <= 0) {
+          if (valueEl.textContent === 'Loading…') {
+            valueEl.innerHTML = 'Add cost basis<br>to track';
+          }
+          return;
+        }
+
+        const qty = item.quantity || 1;
+        const currentUnit = item.current_value || item._compEstimate || 0;
+        const since = (currentUnit - baselineUnit) * qty;
+        const sincePctNum = ((currentUnit - baselineUnit) / baselineUnit) * 100;
+        const sincePct = sincePctNum.toFixed(1);
+        const sign = since >= 0 ? '+' : '';
+
+        if (labelEl) labelEl.textContent = 'Since Added';
+        valueEl.style.fontSize    = '.95rem';
+        valueEl.style.fontWeight  = '';
+        valueEl.style.lineHeight  = '';
+        valueEl.style.color       = '';
+        valueEl.classList.remove('coll-gain-pos', 'coll-gain-neg');
+        valueEl.classList.add(since >= 0 ? 'coll-gain-pos' : 'coll-gain-neg');
+        valueEl.textContent = sign + '$' + Math.abs(since).toFixed(2)
+          + ' (' + sign + sincePct + '%)';
+
+        // Subtle tooltip so the user knows this is synthetic.
+        const tile = document.getElementById('binderGainLossTile_' + item.id);
+        if (tile) {
+          tile.title = 'Tracked since you added this card on '
+            + new Date(item.created_at).toLocaleDateString()
+            + ' (baseline: $' + baselineUnit.toFixed(2) + ').'
+            + ' Add a purchase price to track vs your actual cost basis.';
+        }
+      } catch (e) {
+        console.warn('[gainloss] since-added fallback failed:', e);
+      }
+    }
+
     // ── Per-card price trend chart ────────────────────────────────────────────
     async function loadAndDrawCardChart(itemId) {
       const svg      = document.getElementById(`cardTrendSvg_${itemId}`);
@@ -15909,7 +16031,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
           <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" id="binderEstValueTile_${item.id}" style="font-size:.95rem">${val > 0 ? '$' + val.toFixed(2) : '—'}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Cost Basis</div><div class="coll-stat-value" style="font-size:.95rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
-          <div class="coll-stat-box" ${cost > 0 ? '' : `title="Add a purchase price (cost basis) to track gain/loss"`}><div class="coll-stat-label">Gain/Loss</div><div class="coll-stat-value ${gainPct === null ? '' : (gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg')}" style="font-size:${gainPct === null ? '.6rem' : '.95rem'};${gainPct === null ? 'color:var(--muted);font-weight:400;line-height:1.3' : ''}">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : 'Add cost basis<br>to track'}</div></div>
+          <div class="coll-stat-box" id="binderGainLossTile_${item.id}"><div class="coll-stat-label" id="binderGainLossLabel_${item.id}">Gain/Loss</div><div class="coll-stat-value ${gainPct === null ? '' : (gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg')}" id="binderGainLossValue_${item.id}" style="font-size:${gainPct === null ? '.6rem' : '.95rem'};${gainPct === null ? 'color:var(--muted);font-weight:400;line-height:1.3' : ''}">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : (item.created_at ? 'Loading…' : 'Add cost basis<br>to track')}</div></div>
           <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:.95rem">${qty}</div></div>
         </div>
 
@@ -16014,6 +16136,13 @@
       // hits the catalog for has_reverse_holo. Hidden when the
       // printing has no RH variant or game isn't Pokemon.
       setTimeout(function() { _renderBinderVariantChips(item); }, 0);
+      // "Since Added" Gain/Loss fallback — when the user didn't set
+      // a purchase_price, look up catalog_price_history for the
+      // snapshot at-or-before item.created_at and use THAT as the
+      // synthetic baseline. Updates the Gain/Loss tile in-place with
+      // a "Since Added" label instead of the static "Add cost basis"
+      // placeholder so the user gets something useful by default.
+      setTimeout(function() { _fillSinceAddedGainLoss(item); }, 0);
       // Per-unit swipe stack — vendor+ only, qty > 1. Loads units
       // lazily and replaces the single photo slot with a stack.
       // Free / Collector / Enthusiast skip this and see the plain

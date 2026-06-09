@@ -1039,6 +1039,100 @@
     // Reads the OCR text and picks one of: funko_pop | manga | poster |
     // plush | statue | other. Each branch then routes to a category-
     // specific extractor that knows what fields to surface. Scoring
+    // POS inventory fallback — scores the user's in-memory inventory
+    // against the OCR text by token overlap. Fires when the regular
+    // card-scan path returned nothing AND we're in POS mode AND the
+    // _posIdSet is populated. Designed to catch booster boxes, ETBs,
+    // Funkos, manga, plush — anything whose layout doesn't match
+    // the TCG card template the rest of the scanner is tuned for.
+    //
+    // No DB queries — collectionItems is already loaded in memory
+    // and was scoped to vendor+ inventory by the time we got here.
+    // Score = count of distinct query tokens that appear in
+    // (card_name + set_name + card_number). Ties broken by tokens-in-
+    // card-name-specifically (more anchored than set name).
+    //
+    // Threshold: at least 2 distinct query tokens must match. Single-
+    // token overlap is too noisy (any "POKEMON" word matches every
+    // Pokemon row). Returns up to 8 matches shaped to look like the
+    // catalog rows the regular scanner produces, so the downstream
+    // showScanResults / confirmScanMatch flow doesn't need changes.
+    function _posInventoryFallback(fullOcrText, parsedName) {
+      try {
+        if (typeof collectionItems === 'undefined' || !Array.isArray(collectionItems)) return [];
+        // Build a token set from the OCR text + the parsed card name
+        // (parsed name catches "Charizard" even if it didn't survive
+        // into the dirty fullOcrText slice we see in logs).
+        var STOP = new Set([
+          'the','and','for','from','with','your','this','that','have','will','can',
+          'pokemon','pokémon','tcg','card','cards','tm','copyright','nintendo','game',
+          'freak','creatures','gamefreak','illus','illustrator','rare','common','uncommon',
+          'inc','llc','ltd','japan','japanese','english','en','jp',
+          'box','pack','booster','elite','trainer','sealed' // generic product words — too broad
+        ]);
+        function _tok(s) {
+          return String(s || '').toLowerCase().match(/[a-z0-9]{3,}/g) || [];
+        }
+        var queryTokens = new Set();
+        _tok(fullOcrText).forEach(function(t) { if (!STOP.has(t)) queryTokens.add(t); });
+        _tok(parsedName).forEach(function(t) { if (!STOP.has(t)) queryTokens.add(t); });
+        if (queryTokens.size === 0) return [];
+
+        // Score every inventory row.
+        var scored = [];
+        collectionItems.forEach(function(c) {
+          if (!c || c.is_ghost || c.sold_offline) return;
+          if (!c.api_card_id) return; // need an api_card_id for _posSaleFromMatch routing
+          var nameToks = new Set(_tok(c.card_name));
+          var setToks  = new Set(_tok(c.set_name));
+          var numToks  = new Set(_tok(c.card_number));
+          var nameHits = 0, totalHits = 0;
+          queryTokens.forEach(function(q) {
+            if (nameToks.has(q)) { nameHits++; totalHits++; return; }
+            if (setToks.has(q) || numToks.has(q)) totalHits++;
+          });
+          // Require 2+ distinct query-token matches across name/set/number,
+          // OR a single match that's specifically in the name (the
+          // long-form name overlap is a strong signal even alone for
+          // products like "Squishmallow Pikachu" → "Pikachu" in name).
+          if (totalHits >= 2 || (nameHits >= 1 && nameToks.size <= 4)) {
+            scored.push({
+              row: c,
+              score: totalHits * 10 + nameHits * 5 - (nameToks.size > 12 ? 2 : 0),
+            });
+          }
+        });
+        scored.sort(function(a, b) { return b.score - a.score; });
+
+        // Shape to look like the catalog rows downstream code expects.
+        var seenId = new Set();
+        var out = [];
+        for (var i = 0; i < scored.length && out.length < 8; i++) {
+          var c = scored[i].row;
+          var id = c.api_card_id;
+          if (seenId.has(id)) continue;
+          seenId.add(id);
+          out.push({
+            id:          id,
+            name:        c.card_name || '?',
+            set_name:    c.set_name || '',
+            set_code:    c.set_code || '',
+            card_number: c.card_number || '',
+            rarity:      c.rarity || null,
+            image_url:   c.card_image_url || '',
+            similarity:  0.95 - (i * 0.02), // fake score so they sort top-down
+            _ocr:        true,
+            _posFallback: true,
+          });
+        }
+        console.log('[Scanner] POS inventory fallback:', out.length, 'matches from', queryTokens.size, 'query tokens');
+        return out;
+      } catch (e) {
+        console.warn('[Scanner] POS fallback failed:', e);
+        return [];
+      }
+    }
+
     // approach mirrors the TCG detector — keyword + format signals,
     // highest score wins, falls back to 'other' (manual entry) when
     // none score a confident hit.
@@ -4027,7 +4121,23 @@
           }
           if (filtered.length === 0) filtered = merged; // never strand the user
         }
-        const final = filtered.slice(0, 10);
+        let final = filtered.slice(0, 10);
+
+        // POS-mode product/sealed fallback. If card-scan returned no
+        // matches and we're in POS mode, fall through to OCR-text
+        // scoring against the user's in-memory inventory. The card
+        // pipeline's queries are shaped around TCG card layout
+        // (game_type, card_number, set_code) and a booster box / ETB
+        // / Funko OCR doesn't fit that mold — but the user's
+        // collection_items already have card_name and set_name
+        // populated for every product they sell, so we can score
+        // them client-side by token overlap with the OCR text.
+        // Reuses the existing scan-results UI and the existing
+        // _posSaleFromMatch routing — no new modal, no schema
+        // changes, no new dependencies.
+        if (final.length === 0 && window._posSaleMode && _posIdSet) {
+          final = _posInventoryFallback(fullText, cardName);
+        }
 
         if (!silent) {
           // Reveal name search fallback now that scan is complete

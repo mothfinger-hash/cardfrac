@@ -33,7 +33,6 @@
 // ──────────────────────────────────────────────────────────────────────
 
 const nacl = require('tweetnacl');
-const { createClient } = require('@supabase/supabase-js');
 
 // CRITICAL: tell Vercel NOT to parse the request body. Discord signs
 // the exact bytes of the request, and any JSON re-serialization (key
@@ -42,10 +41,34 @@ const { createClient } = require('@supabase/supabase-js');
 // before the handler runs.
 module.exports.config = { api: { bodyParser: false } };
 
-const sb = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Lazy-loaded Supabase client. @supabase/supabase-js is the largest
+// dep in this bundle (~300KB) and adds ~300-500ms to cold-start time
+// when require()d at module top-level. Moving the require + createClient
+// behind a Proxy means PING interactions (which Discord sends
+// regularly to verify the endpoint is alive) never touch it; the
+// first slash-command request still creates the client on demand
+// before the deferred ack returns. Subsequent invocations on the
+// same warm instance reuse the cached client.
+let _sbCache = null;
+function _ensureSb() {
+  if (_sbCache) return _sbCache;
+  const { createClient } = require('@supabase/supabase-js');
+  _sbCache = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY
+  );
+  return _sbCache;
+}
+// Proxy lets existing `sb.from(...)`, `sb.rpc(...)`, `sb.storage`
+// callsites keep working unchanged — every property access lazily
+// initializes the client and forwards.
+const sb = new Proxy({}, {
+  get(_t, prop) {
+    const client = _ensureSb();
+    const v = client[prop];
+    return typeof v === 'function' ? v.bind(client) : v;
+  },
+});
 
 // Discord interaction types (https://discord.com/developers/docs/interactions/receiving-and-responding)
 const INTERACTION_TYPE = {
