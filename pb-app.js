@@ -10104,11 +10104,14 @@
       'Card Name',      // required
       'Set Name',
       'Card Number',
-      'Condition',      // e.g. Raw, Near Mint, Gem Mint
+      'Condition',      // e.g. Raw, Near Mint, Gem Mint, Sealed
       'Grade',          // numeric grade if graded, e.g. 10 / 9.5 / 9
       'Certification #',// PSA/BGS/CGC cert number
       'Cost',           // your purchase cost (internal reference, not shown publicly)
       'Price',          // asking price in USD — required
+      'Quantity',       // optional — how many units (default 1)
+      'Game',           // optional — pokemon / mtg / yugioh / onepiece / gundam / dbz (default pokemon)
+      'Product Type',   // optional — single / booster_box / booster_pack / etb / tin / theme_deck / etc (default single)
       'Notes'           // optional seller notes visible to buyers
     ];
 
@@ -10130,11 +10133,13 @@
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([
         VENDOR_TEMPLATE_HEADERS,
-        // Example rows matching the standard PathBinder vendor upload form
-        ['Charizard', 'Base Set', '4',  'Gem Mint', '10', '123456789', '450.00', '869.51', 'Near-perfect centering'],
-        ['Pikachu',   'Base Set', '58', 'Raw',      '',   '',          '4.00',   '12.00',  'Lightly played'],
+        // Example rows showing single cards AND sealed products
+        ['Charizard',                    'Base Set',       '4',  'Gem Mint', '10', '123456789', '450.00', '869.51', '1',  'pokemon',  'single',       'Near-perfect centering'],
+        ['Pikachu',                      'Base Set',       '58', 'Raw',      '',   '',          '4.00',   '12.00',  '1',  'pokemon',  'single',       'Lightly played'],
+        ['Pokemon TCG: Chaos Rising Booster Pack', 'Mega Evolution: Chaos Rising', '', 'Sealed', '', '', '3.00', '4.99', '36', 'pokemon', 'booster_pack', 'New from a sealed box'],
+        ['Pokemon TCG: Chaos Rising Elite Trainer Box', 'Mega Evolution: Chaos Rising', '', 'Sealed', '', '', '45.00', '54.99', '6', 'pokemon', 'etb', ''],
       ]);
-      ws['!cols'] = [20,18,10,14,8,16,10,10,32].map(w => ({ wch: w }));
+      ws['!cols'] = [28,22,10,14,8,16,10,10,9,10,16,32].map(w => ({ wch: w }));
       XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
       XLSX.writeFile(wb, 'PathBinder_Vendor_Template.xlsx');
     }
@@ -10212,6 +10217,21 @@
       let success = 0, failed = 0;
       const insertedIds = [];
 
+      const isVendorPlus = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
+      const VALID_GAMES = new Set(['pokemon','mtg','yugioh','onepiece','gundam','dbz']);
+      // Known product_type enum values from sync_sealed_products.py
+      // SEALED_PATTERNS. Anything not in this set falls back to
+      // 'single' so we never write garbage into the column.
+      const VALID_PRODUCT_TYPES = new Set([
+        'single','tcg_single',
+        'booster_pack','booster_box','booster_bundle','set_booster','draft_booster',
+        'collector_booster','jumpstart_booster','play_booster','commander_deck',
+        'planeswalker_deck','secret_lair','etb','utb','premium_collection',
+        'starter_deck','theme_deck','structure_deck','battle_deck','build_and_battle',
+        'tin','tin_mini','bundle','gift_bundle','deck','toolkit','binder_collection',
+        'funko_pop','manga','poster','plush','statue',
+      ]);
+
       for (let i = 0; i < vendorImportRows.length; i++) {
         const r = vendorImportRows[i];
         progEl.textContent = `// Importing ${i + 1} / ${vendorImportRows.length}…`;
@@ -10231,29 +10251,72 @@
         const cost  = parseFloat(r['Cost'])  || 0;
         const price = parseFloat(r['Price']) || 0;
 
+        // Quantity — defaults to 1, clamped 1-9999.
+        let qty = parseInt(String(r['Quantity'] || '1'), 10);
+        if (!Number.isFinite(qty) || qty < 1) qty = 1;
+        if (qty > 9999) qty = 9999;
+
+        // Game type — case-normalized; falls back to pokemon for
+        // backwards compat with the old template (no Game column).
+        const gameRaw = String(r['Game'] || 'pokemon').trim().toLowerCase().replace(/\s+/g, '');
+        const gameType = VALID_GAMES.has(gameRaw) ? gameRaw : 'pokemon';
+
+        // Product type — normalize spaces / hyphens to underscores so
+        // "Booster Pack" / "booster-pack" / "BOOSTER_PACK" all map to
+        // the canonical "booster_pack". Unknown values fall back to
+        // 'single' (the safe default for unmatched rows).
+        const productRaw = String(r['Product Type'] || 'single')
+          .trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const productType = VALID_PRODUCT_TYPES.has(productRaw) ? productRaw : 'single';
+        const isSealed = productType !== 'single' && productType !== 'tcg_single';
+
         // A card is graded if it has a numeric grade value — condition field is descriptive
         const gradeRaw = String(r['Grade'] || '').trim();
         const gradeNum = gradeRaw !== '' ? parseFloat(gradeRaw) : null;
         const isGraded  = gradeNum !== null && !isNaN(gradeNum);
-        const condition = isGraded ? 'graded' : 'raw';
+        // Sealed products default to condition='sealed' (the natural
+        // resting state) when the column is blank, so a vendor doesn't
+        // need to type "Sealed" into every booster box row.
+        const condRaw = String(r['Condition'] || '').trim();
+        const condition = isGraded ? 'graded'
+                        : condRaw  ? condRaw.toLowerCase()
+                        : isSealed ? 'sealed'
+                        :            'raw';
         const gradeVal  = isGraded ? gradeNum : null;
 
-        const { data: newRow, error } = await sb.from('collection_items').insert({
+        const _insertPayload = {
           user_id:        currentUser.id,
           card_name:      cardName,
           set_name:       setName    || null,
           card_number:    cardNumber || null,
-          game_type:      'pokemon',
+          game_type:      gameType,
+          product_type:   productType,
           condition,
           grade_value:    gradeVal,
           cert_number:    certNum    || null,
           purchase_price: cost       || null,
           current_value:  price      || null,
-          quantity:       1,
+          quantity:       qty,
+          on_shelf_qty:   isVendorPlus ? qty : undefined,
           notes:          notes      || null,
           is_ghost:       false,
           sold_offline:   false,
-        }).select('id').single();
+        };
+        let { data: newRow, error } = await sb.from('collection_items')
+          .insert(_insertPayload).select('id').single();
+        // Schema-fallback cascade for older DBs: drop on_shelf_qty,
+        // then product_type, before giving up. Same pattern as
+        // quickAddScannedCard so behavior stays consistent.
+        if (error && /on_shelf_qty/i.test(error.message || '')) {
+          const { on_shelf_qty: _osq, ..._noShelf } = _insertPayload;
+          const r1 = await sb.from('collection_items').insert(_noShelf).select('id').single();
+          error = r1.error; newRow = r1.data;
+        }
+        if (error && /product_type/i.test(error.message || '')) {
+          const { product_type: _pt, on_shelf_qty: _osq2, ..._noPt } = _insertPayload;
+          const r2 = await sb.from('collection_items').insert(_noPt).select('id').single();
+          error = r2.error; newRow = r2.data;
+        }
 
         if (error) { console.error('Import row error:', error.message); failed++; }
         else { success++; if (newRow?.id) insertedIds.push(newRow.id); }

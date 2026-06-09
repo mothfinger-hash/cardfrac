@@ -1808,13 +1808,19 @@
         // listing modal pre-fills its photo slot — no re-upload needed.
         window._lastProductScan = { extracted: extracted, raw: text, file: file, ptype: ptype, candidates: [] };
 
-        html += '<div style="display:flex;gap:8px">';
-        html += '<button onclick="document.getElementById(\'productScannerFile\').click()" style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">↻ RETAKE</button>';
-        // DONE → close the scanner + open the listing modal with the
-        // extracted fields prefilled. Falls back to a plain close when
-        // nothing was extracted (so the user can dismiss the modal
-        // without entering the listing flow).
-        html += '<button onclick="_applyProductScanToListing()" style="flex:1;padding:10px;border:1px solid var(--accent);background:rgba(26,199,160,.1);color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">DONE → LIST</button>';
+        // Action row: RETAKE + ADD TO BINDER + LIST. Two distinct
+        // paths because shops do both jobs: (a) bulk-populating
+        // inventory from incoming product (ADD TO BINDER, no
+        // marketplace listing yet) and (b) listing a one-off for
+        // sale (LIST, opens the marketplace flow).
+        // ADD TO BINDER works even without a catalog match — it
+        // creates an inventory row with the extracted text as the
+        // card_name so the shop's stock count is right, then admin
+        // can link it to a catalog row later when one's synced.
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+        html += '<button onclick="document.getElementById(\'productScannerFile\').click()" style="flex:1 1 80px;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">↻ RETAKE</button>';
+        html += '<button onclick="_addProductToBinder()" style="flex:2 1 140px;padding:10px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.66rem;font-weight:700;cursor:pointer;letter-spacing:.06em">ADD TO BINDER</button>';
+        html += '<button onclick="_applyProductScanToListing()" style="flex:2 1 140px;padding:10px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer;letter-spacing:.06em">LIST FOR SALE</button>';
         html += '</div>';
 
         if (resultEl) resultEl.innerHTML = html;
@@ -1835,8 +1841,22 @@
             const panel = document.getElementById('sealedCandidates');
             if (!panel) return;
             if (!candidates.length) {
+              // No catalog match — give the user a way to add to
+              // inventory manually using the extracted fields as a
+              // pre-fill. Vendors stocking new releases shouldn't be
+              // forced into the marketplace listing form just because
+              // the sealed sync hasn't ingested the set yet.
               panel.innerHTML = '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">CATALOG MATCHES</div>'
-                + '<div style="font-size:.7rem;color:var(--muted);padding:8px 0">No matching sealed products found in catalog. Use DONE → LIST to enter manually.</div>';
+                + '<div style="font-size:.7rem;color:var(--muted);padding:8px 0;line-height:1.5">'
+                +   'No matching sealed products in catalog yet. You can still:'
+                + '</div>'
+                + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px">'
+                +   '<button onclick="_confirmSealedManualAdd()" style="padding:10px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.7rem;font-weight:700;cursor:pointer;letter-spacing:.06em">ADD TO BINDER (MANUAL)</button>'
+                +   '<button onclick="_applyProductScanToListing()" style="padding:10px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.06em">DONE → LIST FOR SALE</button>'
+                + '</div>'
+                + '<div style="font-size:.6rem;color:var(--muted);margin-top:4px;font-style:italic">'
+                +   'ADD TO BINDER skips the catalog and creates the row from the OCR fields directly. You can edit it later.'
+                + '</div>';
               return;
             }
             const isPos = !!window._posSaleMode;
@@ -1891,6 +1911,56 @@
       if (sc) sc.remove();
       _posSaleFromMatch(pick.id, pick.name);
     };
+    // Bottom-row ADD TO BINDER. Used when the user wants to stock a
+    // product regardless of whether the catalog had a matching row.
+    // If a catalog match was selected via the per-row ADD button, it
+    // routes through quickAddScannedCard. If no match exists, it
+    // synthesizes a minimal "manual" product row and inserts a
+    // collection_items entry with NULL api_card_id — the shop's
+    // stock count is right immediately; admin can link it to a
+    // catalog row later when one is synced.
+    window._addProductToBinder = async function() {
+      var stash = window._lastProductScan || {};
+      var ex    = stash.extracted || {};
+      var ptype = stash.ptype || 'other';
+      // If we have a real catalog match in the candidate list, prefer
+      // it — same flow as the per-row button.
+      var pick = (stash.candidates || [])[0];
+      var sc = document.getElementById('productScannerModal');
+      if (sc) sc.remove();
+      if (pick && pick.id) {
+        try { await quickAddScannedCard(pick); } catch (e) {
+          console.error('[add to binder] catalog-match path failed:', e);
+          showToast('Could not add: ' + (e.message || 'unknown'));
+        }
+        return;
+      }
+      // Synthesize a manual product row from extracted text. Falls
+      // back to "Unidentified product" if nothing meaningful was
+      // extracted (the shop can rename it in the binder).
+      var name = ex.set_name
+        || ex.title
+        || ex.character
+        || (ptype !== 'other' ? ptype.replace(/_/g,' ').replace(/\b\w/g, function(s){return s.toUpperCase();}) : 'Unidentified product');
+      var synthetic = {
+        id:           null, // no api_card_id — manual entry
+        name:         name,
+        set_name:     ex.set_name || ex.series || '',
+        set_code:     '',
+        card_number:  '',
+        rarity:       null,
+        image_url:    '', // file blob isn't auto-uploaded for manual rows yet
+        product_type: ptype === 'sealed' ? (ex.product_subtype || 'sealed_other') : ptype,
+      };
+      try {
+        await quickAddScannedCard(synthetic);
+        showToast('Added manually — link to catalog row from binder edit');
+      } catch (e) {
+        console.error('[add to binder] manual path failed:', e);
+        showToast('Could not add: ' + (e.message || 'unknown'));
+      }
+    };
+
     window._confirmSealedList = function(idx) {
       var stash = window._lastProductScan || {};
       var pick  = (stash.candidates || [])[idx];
@@ -1904,6 +1974,74 @@
       });
       window._lastProductScan = stash;
       _applyProductScanToListing();
+    };
+    // Manual add to binder when no catalog match was found. Creates a
+    // collection_items row with api_card_id = null (no catalog
+    // reference yet) using the extracted set name + game type +
+    // packaging format. The vendor can edit the card_name later if
+    // they want; the priority is getting the unit into inventory so
+    // POS can ring it up and the bulk-import CSV can find it.
+    window._confirmSealedManualAdd = async function() {
+      try {
+        if (!currentUser) { showToast('Sign in to add to your binder'); return; }
+        var stash = window._lastProductScan || {};
+        var ex    = stash.extracted || {};
+        if (!ex.set_name) { showToast('Need a set name to add manually'); return; }
+        // Compose a human-readable card_name from the extracted bits.
+        var fmtPretty = (ex.product_subtype || 'sealed')
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, function(s) { return s.toUpperCase(); });
+        var gamePretty = ({
+          pokemon: 'Pokemon', mtg: 'Magic', yugioh: 'Yu-Gi-Oh',
+          onepiece: 'One Piece', gundam: 'Gundam', dbz: 'Dragon Ball',
+        })[ex.game_type || ''] || '';
+        var cardName = [gamePretty, ex.set_name, fmtPretty].filter(Boolean).join(' ');
+        var isVendor = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
+        var qty = Math.max(1, Math.min(99, Number(window._scanAddQty) || 1));
+        window._scanAddQty = 1;
+        var _insertBase = {
+          user_id:        currentUser.id,
+          api_card_id:    null,
+          card_name:      cardName,
+          set_name:       ex.set_name,
+          set_code:       null,
+          card_number:    null,
+          card_image_url: null,
+          game_type:      ex.game_type || 'pokemon',
+          product_type:   ex.product_subtype || 'sealed',
+          condition:      'sealed',
+          quantity:       qty,
+          on_shelf_qty:   isVendor ? qty : undefined,
+          variant:        'normal',
+          binder_id:      (typeof currentBinderId !== 'undefined' ? currentBinderId : null),
+          notes:          'Added via product scanner (no catalog match)',
+        };
+        // Same schema-fallback cascade as quickAddScannedCard — older
+        // DBs may not have on_shelf_qty / product_type yet.
+        var { data: newRow, error } = await sb.from('collection_items').insert(_insertBase).select('id').single();
+        if (error) {
+          var msg = String((error.message || '') + (error.details || '')).toLowerCase();
+          if (msg.indexOf('on_shelf_qty') >= 0) {
+            var { on_shelf_qty: _osq, ..._noShelf } = _insertBase;
+            var r1 = await sb.from('collection_items').insert(_noShelf).select('id').single();
+            error = r1.error; newRow = r1.data;
+          }
+          if (error && /product_type/i.test(error.message || '')) {
+            var { product_type: _pt, ..._noPt } = _insertBase;
+            var r2 = await sb.from('collection_items').insert(_noPt).select('id').single();
+            error = r2.error; newRow = r2.data;
+          }
+        }
+        if (error) { showToast('Add failed: ' + (error.message || 'unknown')); return; }
+        var sc = document.getElementById('productScannerModal');
+        if (sc) sc.remove();
+        try { if (typeof loadCollection === 'function') await loadCollection(); } catch(_) {}
+        try { if (typeof renderBinder === 'function') renderBinder(); } catch(_) {}
+        showToast('Added: ' + cardName);
+      } catch (e) {
+        console.error('[sealed manual add] failed:', e);
+        showToast('Add failed: ' + (e.message || 'unknown'));
+      }
     };
 
     // Bridge between the product scanner and the marketplace listing
