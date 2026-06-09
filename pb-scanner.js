@@ -2374,6 +2374,40 @@
         }
         // fall through to the fraction parser as last resort
       }
+      // ── One Piece TCG card numbers: SETCODE-NUMBER (no fraction).
+      //   OP06-093 (booster), ST01-001 (starter), EB01-001 (extra
+      //   booster), PRB01-001 (premium), P-001 (promo).
+      // The slash-based fraction parser below will never match these,
+      // so OP scans were silently returning null and the search fell
+      // back to name-only hits (12 Peronas with no way to disambiguate).
+      // Tolerates a stray space the OCR sometimes inserts ("OP 06-093").
+      if (tcg === 'onepiece') {
+        const opRe = /\b(OP|ST|EB|PRB?)\s*(\d{1,2})\s*-\s*(\d{2,3})\b/i;
+        const opM  = text.match(opRe);
+        if (opM) {
+          const setCode = (opM[1] + opM[2]).toUpperCase();
+          return {
+            full:    setCode + '-' + opM[3],
+            num:     String(parseInt(opM[3], 10)),
+            numRaw:  opM[3],
+            total:   null,
+            setCode: setCode,
+          };
+        }
+        const opPromoRe = /\bP\s*-\s*(\d{3})\b/;
+        const opPM = text.match(opPromoRe);
+        if (opPM) {
+          return {
+            full:    'P-' + opPM[1],
+            num:     String(parseInt(opPM[1], 10)),
+            numRaw:  opPM[1],
+            total:   null,
+            setCode: 'P',
+          };
+        }
+        // fall through — OCR sometimes garbles the dash; the fraction
+        // parser won't match anyway, so we just return null below.
+      }
       const re = /\b([A-Z]{0,4}\d+)\s*[\/\\|]\s*([A-Z]{0,4}\d+)\b/g;
       let m;
       let fallback = null;
@@ -3289,16 +3323,17 @@
                 return q().or(prefixFilter).or(orFilter).limit(30).then(r => r || { data: [] }).catch(() => ({ data: [] }));
               })()
             : Promise.resolve({ data: [] }),
-          // L — YGO set-code + card-number lookup. Triggered when the
-          //     OCR captured a YGO set-coded number like "RA05-EN085".
-          //     YGO catalog rows store the set as set_code='RA05' and
-          //     card_number='085' (or zero-padded). Without this query
-          //     YGO cards with no name match (Blue-Eyes White Dragon,
-          //     OCR'd as "BLUE-EYES WHITE DRAGON GE" — garbled "ULTRA"
-          //     suffix breaks the name search) get zero hits because
-          //     YGO doesn't have a name+num fallback path. Try both
-          //     padded ("085") and unpadded ("85") forms.
-          (scanTcg === 'yugioh' && parsedSetCode && numStripped)
+          // L — Set-coded number lookup. Triggered when OCR captured a
+          //     SETCODE-NUMBER pattern: YGO (RA05-EN085) or One Piece
+          //     (OP06-093 / ST01-001 / EB01-001). Catalog rows store
+          //     set_code='OP06' (etc.) and card_number='093'. Without
+          //     this query, OP scans had no path from setCode to the
+          //     right row — the slash fraction parser doesn't match
+          //     OP's dash format, so name-only hits returned a dozen
+          //     Peronas across sets with no way to disambiguate.
+          //     YGO set codes can include a trailing letter ("045b") that
+          //     gets folded into the padded form via numRaw.
+          ((scanTcg === 'yugioh' || scanTcg === 'onepiece') && parsedSetCode && numStripped)
             ? (() => {
                 const numFmts = [numStripped];
                 if (numRaw && numRaw !== numStripped) numFmts.push(numRaw);
@@ -3446,7 +3481,27 @@
         addHits(numHits,        'num');          // number only
         addHits(nameHits,       'name');         // full name / base name
         addHits(trainerPokHits, 'trainerPok');  // Pokémon name from trainer card
-        clipMatches.forEach(function(m) { if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); } });
+        // CLIP-only candidates. If the visual match's catalog name
+        // exactly matches the OCR'd card name (or base name), promote
+        // it to an OCR-anchored 'name' hit so it picks up the
+        // exact-name bonus + CLIP multiplier. This rescues catalog-
+        // coverage gaps: when the user's specific JP printing isn't
+        // in catalog but CLIP confidently identifies the Pokemon, the
+        // scanner now surfaces a same-Pokemon match (wrong set) at
+        // the top instead of a random card that just shares the
+        // card number. Threshold 0.75 keeps weak visual matches from
+        // hijacking the result.
+        clipMatches.forEach(function(m) {
+          if (seen.has(m.id)) return;
+          var rn = (m.name || '').toLowerCase();
+          var nameMatch = rn && (rn === _cardNameLc || rn === _baseNameLc);
+          if (nameMatch && (m.similarity || 0) >= 0.75) {
+            merged.push(Object.assign({}, m, { similarity: scoreOcr(m, 'name'), _ocr: true }));
+          } else {
+            merged.push(m);
+          }
+          seen.add(m.id);
+        });
         merged.sort(function(a, b) { return b.similarity - a.similarity; });
 
         // When OCR read a card name, drop any CLIP-only candidate whose
