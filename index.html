@@ -487,6 +487,87 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body class="on-landing">
+  <!-- ── Sync auth-state hint ──────────────────────────────────────────
+       Runs before any page content paints. Probes localStorage for
+       Supabase's persisted auth session; if there's a token we
+       know the user is/was logged in, so we PRE-EMPTIVELY hide the
+       landing page and paint a tiny loading skeleton. initApp() then
+       confirms the session (a few hundred ms later) and reveals the
+       real account page — no more "landing page flash before
+       dashboard appears" on every reload.
+
+       If localStorage has no token: do nothing. Landing page renders
+       immediately, same as before. Signed-out users get the original
+       fast first paint with no overhead. -->
+  <script>
+    (function() {
+      try {
+        // Supabase persists the session under "sb-<projectref>-auth-token".
+        // We don't know the projectref here (different env per deploy)
+        // so we look for any key matching that shape. Fast — localStorage
+        // access is sync, the keys() array is short, and the regex is cheap.
+        var hasSession = false;
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && /^sb-.+-auth-token$/.test(k)) {
+            // Sanity-check that the value contains an access_token field —
+            // an expired/cleared entry sometimes leaves a `null` string.
+            var v = localStorage.getItem(k);
+            if (v && v.indexOf('access_token') > 0) { hasSession = true; break; }
+          }
+        }
+        if (!hasSession) return;
+
+        // We've got a session. Hide the landing page and render a
+        // skeleton so the user sees PathBinder chrome (not the marketing
+        // hero) while initApp() restores. The skeleton uses the same
+        // cyan + copper palette as the rest of the app so it doesn't
+        // feel like a separate page.
+        document.body.classList.remove('on-landing');
+        // Insert the skeleton synchronously — happens before the landing
+        // page DOM nodes are even parsed below this script (deferred
+        // execution of the rest of the body is naturally serialized).
+        var skel = document.createElement('div');
+        skel.id = 'pb-restore-skeleton';
+        skel.setAttribute('aria-hidden', 'true');
+        skel.style.cssText = 'position:fixed;inset:0;z-index:9998;background:#0a0e1a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;font-family:"Space Mono",monospace';
+        skel.innerHTML =
+          '<div style="font-size:.85rem;letter-spacing:.18em;color:#1ac7a0;font-weight:700;text-transform:uppercase">PATHBINDER</div>' +
+          '<div style="display:flex;gap:6px">' +
+            '<span style="width:8px;height:8px;background:#1ac7a0;border-radius:50%;animation:pbDot 1.4s infinite ease-in-out;animation-delay:0s"></span>' +
+            '<span style="width:8px;height:8px;background:#1ac7a0;border-radius:50%;animation:pbDot 1.4s infinite ease-in-out;animation-delay:.2s"></span>' +
+            '<span style="width:8px;height:8px;background:#1ac7a0;border-radius:50%;animation:pbDot 1.4s infinite ease-in-out;animation-delay:.4s"></span>' +
+          '</div>' +
+          '<style>@keyframes pbDot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}</style>';
+        document.body.appendChild(skel);
+
+        // Watch for currentUser to land — initApp's first `currentUser = {...}`
+        // assignment is followed by showPage('account'), which adds the
+        // .active class to #accountPage. As soon as we see that, the
+        // skeleton can fade out. Polling is cheap (16ms) and capped at
+        // 6 seconds so a fundamentally broken session doesn't leave the
+        // user stranded on the skeleton forever — at that point the
+        // skeleton drops and the SPA gets to render whatever it wants.
+        var started = Date.now();
+        var poll = setInterval(function() {
+          var accountActive = document.getElementById('accountPage');
+          var elapsed = Date.now() - started;
+          if ((accountActive && accountActive.classList.contains('active')) || elapsed > 6000) {
+            clearInterval(poll);
+            var s = document.getElementById('pb-restore-skeleton');
+            if (s) {
+              s.style.transition = 'opacity .2s';
+              s.style.opacity = '0';
+              setTimeout(function() { try { s.remove(); } catch(_) {} }, 220);
+            }
+          }
+        }, 16);
+      } catch (_) {
+        // Any error: bail silently. Landing page renders normally —
+        // no worse than the pre-fix behavior.
+      }
+    })();
+  </script>
   <div id="binderSidebar"></div>
   <nav id="appNav">
     <!-- Logo header -->
