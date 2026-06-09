@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v509';
+const CACHE = 'pathbinder-v511';
 
 const PRECACHE = [
   '/offline.html',
@@ -689,6 +689,18 @@ self.addEventListener('activate', e => {
       )
     ).then(() => self.clients.claim())
   );
+});
+
+// Handle SKIP_WAITING messages from the page. The page-side registers
+// an updatefound listener and posts this message when a new SW finishes
+// installing but is stuck waiting for the old controller to die. Without
+// this handler the new SW sits in "waiting" forever until every tab
+// closes; with it, the new SW takes over immediately and the page's
+// controllerchange listener triggers a reload.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Fetch: network-first for API/Supabase calls, cache-first for static assets

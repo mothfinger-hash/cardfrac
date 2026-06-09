@@ -28147,8 +28147,83 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-          .then(reg => console.log('[SW] Registered', reg.scope))
+          .then(reg => {
+            console.log('[SW] Registered', reg.scope);
+
+            // Periodically check for a newer sw.js. The browser's
+            // built-in check fires only on page load, and even then
+            // its Cache-Control discipline can lag.
+            //
+            // Tuning:
+            //   - 5-minute interval (not 60s). A deploy lands in
+            //     <5min for any reasonable iteration speed, and the
+            //     conditional GET cost is fully amortized.
+            //   - Skips when the tab is HIDDEN. No one cares about
+            //     SW updates on a background tab; resume polling
+            //     when the user comes back.
+            // Net cost on a foregrounded tab: ~12 conditional GETs
+            // per hour (~200 bytes each → ~2.5KB/hr). Negligible.
+            const _swCheckInterval = 5 * 60 * 1000;
+            const _maybeCheckSw = () => {
+              if (document.visibilityState !== 'visible') return;
+              reg.update().catch(() => {});
+            };
+            setInterval(_maybeCheckSw, _swCheckInterval);
+            // Also probe once when the tab becomes visible after
+            // being hidden, so a user returning to a backgrounded
+            // tab doesn't have to wait up to 5 more minutes for
+            // the next interval tick.
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') _maybeCheckSw();
+            });
+
+            // When a new SW has been INSTALLED but is waiting for
+            // the old one to die, tell it to take over immediately.
+            // Combined with the install handler's skipWaiting(),
+            // this should be redundant — but sometimes skipWaiting
+            // doesn't fire (caches.open failed, etc) and the
+            // postMessage path is a reliable belt-and-suspenders.
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  console.log('[SW] new SW installed; asking it to skip waiting');
+                  try { newWorker.postMessage({ type: 'SKIP_WAITING' }); } catch(_) {}
+                }
+              });
+            });
+          })
           .catch(err => console.warn('[SW] Registration failed', err));
+
+        // When the controller actually changes (new SW took over),
+        // surface a non-disruptive "Refresh to update" prompt to the
+        // user instead of an auto-reload. Auto-reloading mid-scan or
+        // mid-form-fill is jarring; this lets them pick the moment.
+        // The new SW is already serving fetches under the hood, so
+        // the only thing the reload buys them is fresh inline HTML.
+        let _swUpdateNotified = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (_swUpdateNotified) return;
+          _swUpdateNotified = true;
+          console.log('[SW] controller changed; new SW is active. Showing refresh prompt.');
+          try {
+            // Use the existing toast pattern but wire in a clickable
+            // refresh action. If showToast doesn't support that shape
+            // gracefully, fall back to a plain console nudge.
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.cssText = (toast.style.cssText || '') + ';display:flex;align-items:center;gap:10px;cursor:pointer';
+            toast.innerHTML = '<span>Update available</span>'
+              + '<button onclick="location.reload()" style="padding:4px 10px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.65rem;cursor:pointer;letter-spacing:.06em">REFRESH</button>';
+            document.body.appendChild(toast);
+            // Persist longer than a regular toast — user might be
+            // mid-task and want to finish before refreshing.
+            setTimeout(() => {
+              try { toast.style.animation = 'slideOutLeft .3s ease'; setTimeout(() => toast.remove(), 300); } catch(_) {}
+            }, 15000);
+          } catch(_) {}
+        });
       });
     }
   
