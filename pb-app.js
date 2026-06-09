@@ -10100,19 +10100,37 @@
 
     // ===== VENDOR BULK IMPORT =====
     // Columns match the standard PathBinder vendor upload form
+    // Singles sheet — for individual cards (graded or raw). Mirrors
+    // the original PathBinder vendor template; old CSVs without
+    // Quantity continue to import as qty=1. Game/product_type are
+    // implicit (pokemon/single) so the columns stay clean.
     const VENDOR_TEMPLATE_HEADERS = [
       'Card Name',      // required
       'Set Name',
       'Card Number',
-      'Condition',      // e.g. Raw, Near Mint, Gem Mint, Sealed
+      'Condition',      // e.g. Raw, Near Mint, Gem Mint
       'Grade',          // numeric grade if graded, e.g. 10 / 9.5 / 9
       'Certification #',// PSA/BGS/CGC cert number
       'Cost',           // your purchase cost (internal reference, not shown publicly)
       'Price',          // asking price in USD — required
-      'Quantity',       // optional — how many units (default 1)
-      'Game',           // optional — pokemon / mtg / yugioh / onepiece / gundam / dbz (default pokemon)
-      'Product Type',   // optional — single / booster_box / booster_pack / etb / tin / theme_deck / etc (default single)
+      'Quantity',       // optional — units owned (default 1)
       'Notes'           // optional seller notes visible to buyers
+    ];
+
+    // Sealed sheet — for booster boxes / packs / ETBs / tins / theme
+    // decks / any non-card-single inventory. No Grade / Cert columns
+    // because they don't apply to sealed product. Game + Product Type
+    // ARE required here since sealed lives across every TCG and the
+    // catalog needs the right enum.
+    const VENDOR_TEMPLATE_HEADERS_SEALED = [
+      'Product Name',   // required, e.g. "Pokemon TCG: Chaos Rising Booster Pack"
+      'Set Name',       // required, e.g. "Mega Evolution: Chaos Rising"
+      'Game',           // required — pokemon / mtg / yugioh / onepiece / gundam / dbz
+      'Product Type',   // required — booster_pack / booster_box / etb / tin / theme_deck / etc
+      'Cost',           // your purchase cost
+      'Price',          // asking price in USD
+      'Quantity',       // required — units on shelf
+      'Notes'           // optional
     ];
 
     let vendorImportRows = [];
@@ -10131,16 +10149,34 @@
     function downloadVendorTemplate() {
       if (typeof XLSX === 'undefined') { _loadXLSX(downloadVendorTemplate); showToast('Loading spreadsheet library…'); return; }
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([
+
+      // ── Sheet 1: Singles ──────────────────────────────────────────
+      // Card-shaped inventory. Grade / Cert columns are first-class
+      // here because graded cards are the main use case.
+      const wsSingles = XLSX.utils.aoa_to_sheet([
         VENDOR_TEMPLATE_HEADERS,
-        // Example rows showing single cards AND sealed products
-        ['Charizard',                    'Base Set',       '4',  'Gem Mint', '10', '123456789', '450.00', '869.51', '1',  'pokemon',  'single',       'Near-perfect centering'],
-        ['Pikachu',                      'Base Set',       '58', 'Raw',      '',   '',          '4.00',   '12.00',  '1',  'pokemon',  'single',       'Lightly played'],
-        ['Pokemon TCG: Chaos Rising Booster Pack', 'Mega Evolution: Chaos Rising', '', 'Sealed', '', '', '3.00', '4.99', '36', 'pokemon', 'booster_pack', 'New from a sealed box'],
-        ['Pokemon TCG: Chaos Rising Elite Trainer Box', 'Mega Evolution: Chaos Rising', '', 'Sealed', '', '', '45.00', '54.99', '6', 'pokemon', 'etb', ''],
+        ['Charizard', 'Base Set', '4',  'Gem Mint', '10', '123456789', '450.00', '869.51', '1', 'Near-perfect centering'],
+        ['Pikachu',   'Base Set', '58', 'Raw',      '',   '',          '4.00',   '12.00',  '1', 'Lightly played'],
       ]);
-      ws['!cols'] = [28,22,10,14,8,16,10,10,9,10,16,32].map(w => ({ wch: w }));
-      XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+      wsSingles['!cols'] = [22,18,10,14,8,16,10,10,9,32].map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, wsSingles, 'Singles');
+
+      // ── Sheet 2: Sealed ──────────────────────────────────────────
+      // Booster boxes / packs / ETBs / tins / decks. No grade or cert
+      // columns since sealed product doesn't get graded. Game and
+      // Product Type are required so the catalog has the right enum
+      // values without us guessing.
+      const wsSealed = XLSX.utils.aoa_to_sheet([
+        VENDOR_TEMPLATE_HEADERS_SEALED,
+        ['Pokemon TCG: Chaos Rising Booster Pack',         'Mega Evolution: Chaos Rising', 'pokemon', 'booster_pack', '3.00',  '4.99',  '36', 'Pulled from a sealed booster box'],
+        ['Pokemon TCG: Chaos Rising Elite Trainer Box',    'Mega Evolution: Chaos Rising', 'pokemon', 'etb',          '45.00', '54.99', '6',  ''],
+        ['Pokemon TCG: Scarlet & Violet 151 Booster Box',  'Scarlet & Violet 151',         'pokemon', 'booster_box',  '180.00','249.99','3',  'Sealed cases on hand'],
+        ['Magic the Gathering: Foundations Play Booster',  'Foundations',                  'mtg',     'play_booster', '4.50',  '6.99',  '24', ''],
+        ['One Piece TCG: Pillars of Strength Booster Box', 'Pillars of Strength',          'onepiece','booster_box',  '90.00', '129.99','2',  ''],
+      ]);
+      wsSealed['!cols'] = [40,30,10,16,10,10,10,32].map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, wsSealed, 'Sealed');
+
       XLSX.writeFile(wb, 'PathBinder_Vendor_Template.xlsx');
     }
 
@@ -10163,33 +10199,90 @@
       reader.onload = e => {
         try {
           const wb   = XLSX.read(e.target.result, { type: 'array' });
-          const ws   = wb.Sheets[wb.SheetNames[0]];
-          const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-          if (!data.length) {
+          // Pull both sheets if present. "Singles" / "Sealed" are
+          // the canonical names from the template; we also recognize
+          // the legacy single-sheet "Inventory" name so vendors with
+          // old downloaded templates don't break. Sheets are tagged
+          // with `_sourceSheet` so the import loop knows which
+          // column map applies.
+          const allRows = [];
+          const seenSheet = new Set();
+          function _pullSheet(name, kind) {
+            if (!name || seenSheet.has(name)) return;
+            const ws = wb.Sheets[name];
+            if (!ws) return;
+            seenSheet.add(name);
+            const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            rows.forEach(r => { r._sourceSheet = kind; });
+            Array.prototype.push.apply(allRows, rows);
+          }
+          // Canonical names
+          _pullSheet('Singles', 'singles');
+          _pullSheet('Sealed',  'sealed');
+          // Legacy single-sheet template
+          if (allRows.length === 0) _pullSheet('Inventory', 'singles');
+          // Last-resort: first sheet, treat as singles (covers
+          // vendors who hand-rolled a CSV with their own sheet name)
+          if (allRows.length === 0 && wb.SheetNames[0]) {
+            _pullSheet(wb.SheetNames[0], 'singles');
+          }
+
+          if (!allRows.length) {
             errEl.textContent = 'No data rows found in the file.';
             errEl.style.display = 'block'; return;
           }
 
-          // Validate required columns
-          const firstRow = data[0];
-          const missing = ['Card Name', 'Price'].filter(h => !(h in firstRow));
-          if (missing.length) {
-            errEl.textContent = `Missing required columns: ${missing.join(', ')}. Make sure you're using the PathBinder vendor template.`;
-            errEl.style.display = 'block'; return;
+          // Validate required columns per sheet. Singles needs Card
+          // Name + Price; Sealed needs Product Name + Game + Product
+          // Type + Quantity + Price.
+          const SINGLES_REQUIRED = ['Card Name', 'Price'];
+          const SEALED_REQUIRED  = ['Product Name', 'Game', 'Product Type', 'Quantity', 'Price'];
+          for (const r of allRows) {
+            const req = r._sourceSheet === 'sealed' ? SEALED_REQUIRED : SINGLES_REQUIRED;
+            const firstMissing = req.find(h => !(h in r));
+            if (firstMissing) {
+              errEl.textContent = `Missing required columns on the ${r._sourceSheet === 'sealed' ? 'Sealed' : 'Singles'} sheet: ${firstMissing}. Make sure you're using the latest PathBinder vendor template.`;
+              errEl.style.display = 'block'; return;
+            }
           }
 
-          vendorImportRows = data.filter(r => r['Card Name'] && r['Price']);
+          // Filter empty rows per sheet. Singles needs Card Name +
+          // Price; Sealed needs Product Name + Price.
+          vendorImportRows = allRows.filter(r => {
+            if (r._sourceSheet === 'sealed') {
+              return r['Product Name'] && r['Price'];
+            }
+            return r['Card Name'] && r['Price'];
+          });
 
-          // Preview table
-          const previewCols = ['Card Name','Set Name','Card Number','Condition','Grade','Price'];
-          infoEl.textContent = `// ${vendorImportRows.length} listing(s) ready to import`;
+          // Preview table — unified columns that work for both sheets
+          // by falling back per row. "Product/Card" picks whichever
+          // name column is populated, "Format/Grade" same idea.
+          const singlesCount = vendorImportRows.filter(r => r._sourceSheet !== 'sealed').length;
+          const sealedCount  = vendorImportRows.filter(r => r._sourceSheet === 'sealed').length;
+          const summaryBits = [];
+          if (singlesCount) summaryBits.push(`${singlesCount} single${singlesCount !== 1 ? 's' : ''}`);
+          if (sealedCount)  summaryBits.push(`${sealedCount} sealed`);
+          infoEl.textContent = `// ${summaryBits.join(' · ')} ready to import`;
+          const previewCols = ['Name','Set','Format / Grade','Qty','Price'];
+          function _cellFor(r, col) {
+            const isSealed = r._sourceSheet === 'sealed';
+            switch (col) {
+              case 'Name':           return r[isSealed ? 'Product Name' : 'Card Name'] || '—';
+              case 'Set':            return r['Set Name'] || '—';
+              case 'Format / Grade': return isSealed ? (r['Product Type'] || '—') : (r['Grade'] || r['Condition'] || '—');
+              case 'Qty':            return r['Quantity'] || '1';
+              case 'Price':          return r['Price'] || '—';
+            }
+            return '—';
+          }
           tblEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.75rem">
             <thead><tr style="border-bottom:1px solid var(--border)">${
               previewCols.map(h => `<th style="text-align:left;padding:4px 6px;color:var(--muted)">${h}</th>`).join('')
             }</tr></thead>
             <tbody>${vendorImportRows.slice(0,10).map(r => `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">${
-              previewCols.map(h => `<td style="padding:4px 6px;color:var(--text)">${r[h] || '—'}</td>`).join('')
+              previewCols.map(h => `<td style="padding:4px 6px;color:var(--text)">${_cellFor(r, h)}</td>`).join('')
             }</tr>`).join('')}
             ${vendorImportRows.length > 10 ? `<tr><td colspan="${previewCols.length}" style="padding:6px;color:var(--muted)">… and ${vendorImportRows.length - 10} more</td></tr>` : ''}
             </tbody></table>`;
@@ -10236,9 +10329,10 @@
         const r = vendorImportRows[i];
         progEl.textContent = `// Importing ${i + 1} / ${vendorImportRows.length}…`;
 
-        const cardName   = String(r['Card Name']       || '').trim();
-        const setName    = String(r['Set Name']        || '').trim();
-        const notes      = String(r['Notes']           || '').trim();
+        const sheet = r._sourceSheet === 'sealed' ? 'sealed' : 'singles';
+        const cardName = String((sheet === 'sealed' ? r['Product Name'] : r['Card Name']) || '').trim();
+        const setName  = String(r['Set Name'] || '').trim();
+        const notes    = String(r['Notes']    || '').trim();
 
         // Normalize card number: Excel often stores integers as floats (e.g. 101.0 → "101")
         let cardNumber = String(r['Card Number'] || '').trim();
@@ -10251,38 +10345,41 @@
         const cost  = parseFloat(r['Cost'])  || 0;
         const price = parseFloat(r['Price']) || 0;
 
-        // Quantity — defaults to 1, clamped 1-9999.
+        // Quantity — defaults to 1, clamped 1-9999. Sealed sheet
+        // requires it explicitly (validated above), Singles inherits
+        // the default for backward compat.
         let qty = parseInt(String(r['Quantity'] || '1'), 10);
         if (!Number.isFinite(qty) || qty < 1) qty = 1;
         if (qty > 9999) qty = 9999;
 
-        // Game type — case-normalized; falls back to pokemon for
-        // backwards compat with the old template (no Game column).
-        const gameRaw = String(r['Game'] || 'pokemon').trim().toLowerCase().replace(/\s+/g, '');
+        // Game type — sealed sheet requires it; singles defaults to
+        // pokemon since the singles template doesn't have a Game
+        // column at all.
+        const gameRaw = String(r['Game'] || (sheet === 'sealed' ? '' : 'pokemon'))
+          .trim().toLowerCase().replace(/\s+/g, '');
         const gameType = VALID_GAMES.has(gameRaw) ? gameRaw : 'pokemon';
 
-        // Product type — normalize spaces / hyphens to underscores so
-        // "Booster Pack" / "booster-pack" / "BOOSTER_PACK" all map to
-        // the canonical "booster_pack". Unknown values fall back to
-        // 'single' (the safe default for unmatched rows).
-        const productRaw = String(r['Product Type'] || 'single')
-          .trim().toLowerCase().replace(/[\s-]+/g, '_');
+        // Product type — sealed sheet uses the Product Type column;
+        // singles sheet always means 'single' (no column at all).
+        const productRaw = sheet === 'sealed'
+          ? String(r['Product Type'] || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+          : 'single';
         const productType = VALID_PRODUCT_TYPES.has(productRaw) ? productRaw : 'single';
         const isSealed = productType !== 'single' && productType !== 'tcg_single';
 
-        // A card is graded if it has a numeric grade value — condition field is descriptive
-        const gradeRaw = String(r['Grade'] || '').trim();
+        // Grading only applies on the Singles sheet — sealed sheet
+        // skips grade/cert entirely so no column reads needed.
+        const gradeRaw = sheet === 'singles' ? String(r['Grade'] || '').trim() : '';
         const gradeNum = gradeRaw !== '' ? parseFloat(gradeRaw) : null;
-        const isGraded  = gradeNum !== null && !isNaN(gradeNum);
-        // Sealed products default to condition='sealed' (the natural
-        // resting state) when the column is blank, so a vendor doesn't
-        // need to type "Sealed" into every booster box row.
-        const condRaw = String(r['Condition'] || '').trim();
-        const condition = isGraded ? 'graded'
+        const isGraded = gradeNum !== null && !isNaN(gradeNum);
+        // Sealed sheet → condition='sealed' implicitly.
+        // Singles sheet → respect Condition column, default 'raw'.
+        const condRaw = sheet === 'singles' ? String(r['Condition'] || '').trim() : '';
+        const condition = sheet === 'sealed' ? 'sealed'
+                        : isGraded ? 'graded'
                         : condRaw  ? condRaw.toLowerCase()
-                        : isSealed ? 'sealed'
                         :            'raw';
-        const gradeVal  = isGraded ? gradeNum : null;
+        const gradeVal = isGraded ? gradeNum : null;
 
         const _insertPayload = {
           user_id:        currentUser.id,

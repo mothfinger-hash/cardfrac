@@ -1423,26 +1423,38 @@
             .neq('product_type', 'single')
             .neq('product_type', 'tcg_single');
         }
-        // Run all three tiers per candidate in parallel, collect
-        // every row that any candidate matched, then dedupe by id.
+        // Run all three tiers per candidate, searching BOTH `name`
+        // AND `set_name` columns. Subset/parent-set layouts are
+        // common — "Mega Evolution" is the parent set and "Chaos
+        // Rising" is the subset, so the catalog row could store the
+        // subset name in `name` and the parent in `set_name`, or
+        // vice-versa, depending on how the sync ingested it. We OR
+        // both columns so either layout surfaces. Escape commas in
+        // the search term because PostgREST treats `,` as a clause
+        // separator inside `.or(...)`.
+        function _escOr(s) { return String(s || '').replace(/,/g, ''); }
         var allRows = [];
         for (var ci = 0; ci < candidates.length; ci++) {
           var name = candidates[ci];
+          var safe = _escOr(name);
+          var orClause = 'name.ilike.%' + safe + '%,set_name.ilike.%' + safe + '%';
           // Tier 1 — strictest filter
           if (game && ptype) {
             var r1 = await _base().eq('game_type', game).eq('product_type', ptype)
-              .ilike('name', '%' + name + '%').limit(15);
+              .or(orClause).limit(15);
             if (!r1.error && r1.data) Array.prototype.push.apply(allRows, r1.data);
           }
           // Tier 2 — drop product_type
           if (game) {
             var r2 = await _base().eq('game_type', game)
-              .ilike('name', '%' + name + '%').limit(15);
+              .or(orClause).limit(15);
             if (!r2.error && r2.data) Array.prototype.push.apply(allRows, r2.data);
           }
-          // Tier 3 — drop game_type
+          // Tier 3 — drop game_type (only as a last resort, after
+          // all candidates exhausted, since cross-TCG name overlap
+          // is real — "Booster Box" alone matches every game).
           if (allRows.length === 0 && ci === candidates.length - 1) {
-            var r3 = await _base().ilike('name', '%' + name + '%').limit(15);
+            var r3 = await _base().or(orClause).limit(15);
             if (!r3.error && r3.data) Array.prototype.push.apply(allRows, r3.data);
           }
         }
