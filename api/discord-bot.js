@@ -102,20 +102,21 @@ const INTERACTION_RESPONSE_TYPE = {
 // Listed by whether the eventual response is public or ephemeral (the
 // deferral type has to match, otherwise the final message renders
 // wrong). Anything NOT in either set responds synchronously.
-const DEFER_PUBLIC_SLASH = new Set([
-  'movers', 'showcase', 'random', 'set',
-  'price', 'marketplace', 'usercount', 'leaderboard',
-  // /duel intentionally NOT deferred — it was snappy without it, and
-  // the "Bot is thinking..." preface was extra noise before the
-  // challenge embed showed up.
-]);
-const DEFER_EPHEMERAL_SLASH = new Set([
-  'portfolio', 'wishlist', 'listings', 'sales', 'badge',
-  'track', 'untrack', 'trade-open', 'profile',
-  // /starter intentionally NOT deferred — one read + one upsert is
-  // fast enough that the "Bot is thinking..." flash before the confirm
-  // is more annoying than useful.
-]);
+// Deferral is OFF for every command. With the bot kept warm by the
+// cron, the lazy supabase client cached after first use, and the
+// movers RPC (the heaviest query in the codebase) down to ~380ms
+// after the v8 migration, no handler should need more than 3s. If
+// any handler does exceed that window, Discord shows "did not
+// respond" instead of hanging on "Bot is thinking…" forever — which
+// is at least a recoverable failure mode that surfaces the problem
+// instead of hiding it.
+//
+// If a specific command DOES start exceeding 3s (e.g. an RPC
+// regresses), add it back to one of these sets. The dispatch path
+// honors them — empty sets just mean every command takes the
+// synchronous path.
+const DEFER_PUBLIC_SLASH = new Set([]);
+const DEFER_EPHEMERAL_SLASH = new Set([]);
 // Flags bitfield. 64 = EPHEMERAL (only the caller sees the response).
 const EPHEMERAL = 1 << 6;
 
