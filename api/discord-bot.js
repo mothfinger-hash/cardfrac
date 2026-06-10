@@ -992,8 +992,39 @@ async function handleMovers(interaction) {
   let up = [], down = [];
   let lastRpcError = null;
   let totalRowsReceived = 0;
+  // Per-RPC timeout (ms). Beyond this we abandon the query for that
+  // game and continue with whatever finished — `_no data_` for that
+  // game's column is far better than the entire handler stalling and
+  // Vercel killing the function at maxDuration:60 with no PATCH ever
+  // going out. Tunable per env: set MOVERS_RPC_TIMEOUT_MS to override.
+  const RPC_TIMEOUT_MS = parseInt(process.env.MOVERS_RPC_TIMEOUT_MS, 10) || 8000;
+  function _withTimeout(p, ms, label) {
+    return new Promise(resolve => {
+      let done = false;
+      const t = setTimeout(() => {
+        if (done) return;
+        done = true;
+        console.warn(`[discord-bot] /movers RPC ${label} TIMEOUT after ${ms}ms`);
+        resolve({ data: [], error: { message: `RPC timeout after ${ms}ms` } });
+      }, ms);
+      p.then(r => {
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        resolve(r);
+      }).catch(e => {
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        resolve({ data: [], error: e || { message: 'unknown rejection' } });
+      });
+    });
+  }
   try {
-    const results = await Promise.all(gamesToQuery.map(gt => {
+    // allSettled instead of all — a slow RPC for one game shouldn't
+    // gate the others. With per-call timeouts above, total wall-clock
+    // is bounded by the longest survivor (≤ RPC_TIMEOUT_MS).
+    const results = await Promise.allSettled(gamesToQuery.map(gt => {
       const params = {
         p_game_type:    gt,
         p_days_back:    days,
@@ -1001,9 +1032,13 @@ async function handleMovers(interaction) {
         p_min_pct:      0.5,
         p_sort:         'pct',
         p_product_type: 'single',
+        // $1+ floor — cheap commons aren't going to be top-3
+        // movers and they make up ~80% of the catalog scan.
+        // Drops RPC time from ~1.2s to ~200ms per game.
+        p_min_value:    1.0,
       };
       console.log(`[discord-bot] /movers RPC call (${gt}):`, JSON.stringify(params));
-      return sb.rpc('get_global_price_movers', params).then(r => {
+      return _withTimeout(sb.rpc('get_global_price_movers', params), RPC_TIMEOUT_MS, gt).then(r => {
         // Log everything — status, error shape, data length, first row.
         // Vercel function logs surface these so we can see what the
         // RPC actually returned to the bot vs what SQL Editor sees.
@@ -1027,7 +1062,12 @@ async function handleMovers(interaction) {
         return dataArr.map(x => ({ ...x, _game: gt }));
       });
     }));
-    const merged = results.flat();
+    // Promise.allSettled gives [{status:'fulfilled', value: [...rows]}, ...]
+    // or [{status:'rejected', reason: ...}, ...]. Pull the values out and
+    // ignore rejections (they were already logged inside _withTimeout).
+    const merged = results
+      .filter(r => r.status === 'fulfilled')
+      .flatMap(r => r.value || []);
     up   = merged.filter(x => x.direction === 'up')
                  .sort((a, b) => Math.abs(b.delta_pct) - Math.abs(a.delta_pct))
                  .slice(0, 3);

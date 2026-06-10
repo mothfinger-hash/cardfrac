@@ -1315,29 +1315,120 @@
       // above garbled OCR fragments. Maintained as a flat list so
       // adding new releases is one-line additions.
       var SET_BUZZWORDS = [
-        'evolution','evolutions','rising','ascent','arena','fates','flames','horizons',
-        'paradox','obsidian','paldean','scarlet','violet','stellar','crown','crowned',
-        'temporal','prismatic','surging','sparks','sword','shield','rebel','clash',
-        'darkness','ablaze','vivid','voltage','battle','styles','chilling','reign',
+        // ── POKEMON (English + JP) ──────────────────────────────
+        // Scarlet & Violet era
+        'scarlet','violet','paldea','paldean','evolved','obsidian','flames','rift',
+        'fates','temporal','forces','twilight','masquerade','shrouded','fable',
+        'stellar','crown','crowned','surging','sparks','prismatic','evolutions',
+        'journey','together','destined','rivals','flare','bolt','mega','evolution',
+        'chaos','rising','phantasmal','flames',
+        // Sword & Shield era
+        'sword','shield','rebel','clash','darkness','ablaze','champion','champions',
+        'path','vivid','voltage','shining','battle','styles','chilling','reign',
         'evolving','skies','fusion','strike','brilliant','stars','astral','radiance',
-        'lost','origin','silver','tempest','crown','zenith','journey','together',
-        'mega','base','jungle','fossil','rocket','gym','neo','genesis','discovery',
-        'destiny','aquapolis','expedition','ruby','sapphire','dragon','majesty',
-        'celebrations','classic','hidden','unbroken','bonds','cosmic','eclipse',
-        'champions','path','vivid','chaos','dark','ancient','origins','primal',
-        'phantom','forces','flashfire','xy','black','white','bw','sun','moon','sm',
-        'sv','swsh',
-        // MTG
-        'commander','foundations','duskmourn','outlaws','thunder','junction','murders',
-        'karlov','manor','ravnica','kamigawa','dominaria','innistrad','strixhaven',
-        // OP
-        'romance','dawn','paramount','pillars','kingdoms','intrigue','warlords','legacy',
-        'master','azure','seven','will','carrying','newtype','phantom','steel','requiem',
-        // YGO
-        'magnificent','mavens','quarter','century','tactical','masters','dimension',
-        'force','legendary','duelists','toon','chaos','phantom','rage',
-        // Gundam (generic terms)
-        'mobile','suit','newtype','crossover','phantom',
+        'lost','origin','silver','tempest','zenith','pgo',
+        // Sun & Moon era
+        'sun','moon','guardians','burning','shadows','crimson','invasion',
+        'legends','ultra','prism','forbidden','light','celestial','storm','majesty',
+        'thunder','team','up','detective','pikachu','unbroken','bonds','unified',
+        'minds','hidden','cosmic','eclipse',
+        // XY era
+        'xy','flashfire','furious','fists','phantom','forces','primal','clash',
+        'roaring','ancient','origins','breakthrough','breakpoint','fates','collide',
+        'steam','siege','generations',
+        // Black & White era
+        'plasma','freeze','blast','dragons','exalted','boundaries','crossed',
+        'legendary','treasures','dark','explorers','next','destinies','noble',
+        'victories','emerging','powers','vault','kalos','starter',
+        // HeartGold & SoulSilver, DPP, EX, classic eras
+        'heartgold','soulsilver','undaunted','triumphant','unleashed','call',
+        'diamond','pearl','platinum','rising','rivals','arceus','stormfront',
+        'majestic','great','encounters','secret','wonders','mysterious','treasures',
+        'dragon','frontiers','power','keepers','crystal','guardians','delta',
+        'species','holon','phantoms','emerald','sandstorm','hidden','legends',
+        'firered','leafgreen','team','aqua','magma','vs','tag','team','expedition',
+        'aquapolis','skyridge','base','jungle','fossil','rocket','gym','heroes',
+        'challenge','neo','genesis','discovery','destiny','revelation','legend',
+        // SWSH abbreviations sometimes printed
+        'swsh','sm','sv','xy','bw','dp','ex','hgss',
+        // Pokemon Center / Center-Exclusive / sealed-only specifics
+        'celebrations','classic','collection','etb','elite','trainer','box',
+        'premium','build','battle','ultra','upc','sleeved','jumbo','tin',
+        // ── MAGIC: THE GATHERING ───────────────────────────────
+        // Recent (Standard 2022-2025)
+        'foundations','duskmourn','horror','bloomburrow','outlaws','thunder',
+        'junction','murders','karlov','manor','lost','caverns','ixalan','wilds',
+        'eldraine','march','machine','phyrexia','perfection','brothers','war',
+        'dominaria','united','remastered','jurassic','world','fallout','aftermath',
+        // Modern Horizons era
+        'modern','horizons','commander','masters','double','masters','secret','lair',
+        // Standard sets prior eras
+        'innistrad','midnight','hunt','crimson','vow','neon','dynasty','streets',
+        'new','capenna','adventures','forgotten','realms','strixhaven','school',
+        'mages','kaldheim','zendikar','rising','ikoria','lair','behemoths','theros',
+        'beyond','death','core','set','throne','eldraine','war','spark','allegiance',
+        'guilds','ravnica','dominaria','rivals','ixalan','hour','devastation',
+        'amonkhet','aether','revolt','kaladesh','eldritch','moon','shadows',
+        // Classic / iconic
+        'alpha','beta','unlimited','revised','arabian','nights','antiquities','legends',
+        'fallen','empires','homelands','tempest','stronghold','exodus','urza',
+        'saga','legacy','destiny','mercadian','masques','prophecy','invasion',
+        'planeshift','apocalypse','odyssey','torment','judgment','onslaught',
+        'legions','scourge','mirrodin','darksteel','fifth','dawn','kamigawa',
+        'betrayers','saviors','dissension','dragon','maze',
+        // Universes Beyond / collabs
+        'lord','rings','tales','middle','earth','warhammer','40000','arena',
+        'starter','jumpstart',
+        // ── ONE PIECE TCG ──────────────────────────────────────
+        // Booster sets (OP01-OP15+)
+        'romance','dawn','paramount','war','pillars','strength','kingdoms','intrigue',
+        'awakening','new','era','wings','captain','years','future','two','legends',
+        'emperors','world','royal','blood','revision','pack','legacy','master',
+        'three','captains','time','battle','azure','sea','seven','carrying','will',
+        'adventure','kami','island','passage','grand','line','fist','divine','speed',
+        'phantasmal','dream','five','elders','beyond','memories',
+        // Starter decks
+        'straw','hat','crew','worst','generation','warlords','animal','kingdom',
+        'pirates','film','edition','absolute','justice','big','mom','monkey','luffy',
+        'yamato','navy','uta','gear','edward','newgate','doflamingo','donquixote',
+        'smoker','charlotte','katakuri','blackbeard','red','shanks','green','jewelry',
+        'bonney','blue','buggy','purple','black','marshall','yellow','egghead',
+        // Extra boosters + promos
+        'memorial','anime','heroines','egghead','crew','tournament','judge',
+        'anniversary','cards','reborn','royale',
+        // ── YU-GI-OH! ──────────────────────────────────────────
+        // 25th anniversary era + recent
+        'quarter','century','bonanza','phantom','nightmare','legacy','destruction',
+        'age','overlord','photon','hypernova','cyberstorm','access','rage',
+        'lightning','overdrive','burst','destiny','battle','chaos','dimension',
+        'force','power','elements','darkwing','blast','maze','master','memories',
+        'wild','survivors','animation','chronicle','rage','ra',
+        // Classic structure / iconic sets
+        'magnificent','mavens','tactical','masters','toon','duelists','dragunity',
+        'legion','dinosmasher','fury','master','pendulum','gold','series','astral',
+        'tournament','legendary','collection','ghosts','past','prismatic','god',
+        'speed','duel','starter','battle','city','yugi','kaiba','joey','marik',
+        'metal','raiders','magic','ruler','spell','of','mask','pharaoh','servant',
+        'invasion','chaos','lord','dragons','dark','crisis','flaming','eternity',
+        // ── DIGIMON TCG ────────────────────────────────────────
+        'digimon','release','special','booster','classic','collection','dragon',
+        'roar','ulforce','xtreme','animal','colosseum','double','diamond','battle',
+        'omni','tamer','goddess','draconic','roar','great','legend','blast',
+        'ace','exceed','apocalypse','versus','royal','knights','infernal','ascension',
+        'across','time','genesis','beginning','observer','siege','x','program',
+        'dimensional','phase','beelzemon','impmon','agumon','gabumon','wargreymon',
+        // ── FLESH AND BLOOD ────────────────────────────────────
+        'flesh','blood','welcome','rathe','arcane','rising','crucible','war',
+        'monarch','tales','aria','everfest','uprising','dynasty','outsiders',
+        'dusk','till','dawn','heavy','hitters','part','way','round','table',
+        'bright','lights','high','seas',
+        // ── GUNDAM CARD GAME ───────────────────────────────────
+        'gundam','mobile','suit','newtype','crossover','rise','heroic','beginnings',
+        'dual','impact','beta','phantom','aria','steel','requiem',
+        // ── DRAGON BALL Z (Panini / CCG) ──────────────────────
+        'dragon','ball','awakening','babidi','buu','cell','evolution','frieza',
+        'fusion','heroes','villains','villians','kid','movie','perfection','saiyan',
+        'super','trunks','vengeance','games',
       ];
       var BUZZ = new Set(SET_BUZZWORDS);
       var candidates = [];
