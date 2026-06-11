@@ -2422,6 +2422,175 @@
       if (el) el.textContent = String(next);
     };
 
+    // ── Catalog image contributions (Phase 1) ─────────────────────────
+    // Cached eligibility check. The RPC user_can_contribute_image
+    // hits profiles + collection_items + the contributions table —
+    // not free, so we cache the boolean for the page session. Single
+    // promise pattern: parallel calls dedupe to one round-trip.
+    let _contribEligibilityP = null;
+    function _checkContribEligibility() {
+      if (_contribEligibilityP) return _contribEligibilityP;
+      if (!currentUser) {
+        _contribEligibilityP = Promise.resolve(false);
+        return _contribEligibilityP;
+      }
+      _contribEligibilityP = sb.rpc('user_can_contribute_image', { p_user_id: currentUser.id })
+        .then(r => !!r.data)
+        .catch(() => false);
+      return _contribEligibilityP;
+    }
+    // Invalidate the cache on sign-out so a different user starting a
+    // session in the same tab gets re-evaluated.
+    if (typeof window !== 'undefined') {
+      window._invalidateContribEligibility = function() { _contribEligibilityP = null; };
+    }
+
+    // Renders the "Help fill this in?" prompt into the preview sheet's
+    // contribImageSlot div for catalog rows that lack an image_url,
+    // but ONLY when the current user is eligible. Hidden by default —
+    // the inline script in previewScanMatch's HTML calls this after
+    // the sheet is in the DOM. No flicker for non-eligible users
+    // (the slot's display stays 'none').
+    window._maybeShowContributePrompt = async function(cardId, cardName) {
+      try {
+        if (!cardId || !currentUser) return;
+        const eligible = await _checkContribEligibility();
+        if (!eligible) return;
+        const slot = document.getElementById('contribImageSlot_' + cardId);
+        if (!slot) return;
+        slot.style.display = 'block';
+        slot.innerHTML =
+          '<div style="border:1px dashed var(--copper);background:rgba(184,115,51,.06);'
+        + 'padding:10px 12px;border-radius:4px;font-family:\'Space Mono\',monospace">'
+        +   '<div style="font-size:.6rem;letter-spacing:.1em;color:var(--copper);margin-bottom:4px">◇ HELP FILL THIS IN</div>'
+        +   '<div style="font-size:.65rem;color:var(--muted);line-height:1.5;margin-bottom:8px">'
+        +     'This card has no catalog photo yet. Submit yours to help other collectors — '
+        +     'you\'ll get credit on the card and a Curator badge.'
+        +   '</div>'
+        +   '<button onclick="_openContributeImageFlow(\'' + _escJsAttr(cardId) + '\',\'' + _escJsAttr(cardName) + '\')" '
+        +     'style="width:100%;padding:9px;border:1px solid var(--copper);background:var(--copper);'
+        +     'color:var(--surface);font-family:\'Space Mono\',monospace;font-size:.7rem;font-weight:700;'
+        +     'cursor:pointer;letter-spacing:.06em">SUBMIT MY PHOTO</button>'
+        + '</div>';
+      } catch (e) {
+        console.warn('[contrib] prompt render failed:', e);
+      }
+    };
+
+    // Opens the submission flow. Pre-fills with the current scan
+    // capture (window._scanCapturedDataUrl) so most users hit one
+    // tap and they're done. Optional notes field for "took this in
+    // natural light" type context.
+    window._openContributeImageFlow = function(cardId, cardName) {
+      // Wrap the existing scan capture in a confirmation overlay.
+      // Quality auto-check happens at submit time; here we just show
+      // the user what they're about to send.
+      const dataUrl = window._scanCapturedDataUrl;
+      if (!dataUrl) {
+        showToast('No scan photo available — try scanning again');
+        return;
+      }
+      const overlay = document.createElement('div');
+      overlay.id = 'contributeImageOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:100050;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:20px';
+      overlay.innerHTML =
+        '<div style="position:relative;width:100%;max-width:420px;background:var(--surface);border:2px solid var(--copper);border-radius:6px;padding:22px 20px;max-height:90svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">'
+      +   '<button onclick="document.getElementById(\'contributeImageOverlay\').remove()" '
+      +     'style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>'
+      +   '<div style="font-size:.55rem;letter-spacing:.14em;color:var(--copper);margin-bottom:6px">◇ CONTRIBUTE CATALOG PHOTO</div>'
+      +   '<div style="font-size:.85rem;font-weight:700;color:var(--text);margin-bottom:14px;line-height:1.4">' + _escHtml(cardName || 'this card') + '</div>'
+      +   '<div style="font-size:.65rem;color:var(--muted);line-height:1.5;margin-bottom:12px">'
+      +     'Submit your scan photo for catalog review. First-time contributors are reviewed by an admin within 24h. '
+      +     'Approved photos credit you on the card detail and on your profile.'
+      +   '</div>'
+      +   '<div style="display:flex;justify-content:center;margin-bottom:14px">'
+      +     '<img src="' + dataUrl + '" alt="" style="max-width:200px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px">'
+      +   '</div>'
+      +   '<div style="font-size:.6rem;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">NOTES (OPTIONAL)</div>'
+      +   '<textarea id="contribNotes" placeholder="e.g. natural light, slight crease bottom-left" '
+      +     'style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);'
+      +     'font-family:\'Space Mono\',monospace;font-size:.7rem;padding:8px 10px;border-radius:4px;'
+      +     'box-sizing:border-box;resize:vertical;min-height:60px;outline:none;margin-bottom:14px"></textarea>'
+      +   '<div style="display:flex;gap:8px">'
+      +     '<button onclick="document.getElementById(\'contributeImageOverlay\').remove()" '
+      +       'style="flex:1;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);'
+      +       'font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">CANCEL</button>'
+      +     '<button id="contribSubmitBtn" onclick="_submitContributeImage(\'' + _escJsAttr(cardId) + '\')" '
+      +       'style="flex:2;padding:10px;border:1px solid var(--copper);background:var(--copper);color:var(--surface);'
+      +       'font-family:\'Space Mono\',monospace;font-size:.7rem;font-weight:700;cursor:pointer;letter-spacing:.06em">SUBMIT</button>'
+      +   '</div>'
+      + '</div>';
+      document.body.appendChild(overlay);
+    };
+
+    // Actual submission: quality check → upload to storage → insert
+    // contribution row. Quality bar is intentionally low for Phase 1
+    // (resolution + file size). Watermark + EXIF detection are Phase 2.
+    window._submitContributeImage = async function(cardId) {
+      const btn = document.getElementById('contribSubmitBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'UPLOADING…'; }
+      try {
+        if (!currentUser) { showToast('Sign in to contribute'); return; }
+        const dataUrl = window._scanCapturedDataUrl;
+        if (!dataUrl) { showToast('No scan photo available'); return; }
+        const notes = (document.getElementById('contribNotes')?.value || '').trim() || null;
+
+        // Quality check — measure the image dimensions client-side.
+        // Phase 1 minimum: 600×840 (clean enough for full-resolution
+        // display in card detail without obvious pixelation).
+        const dims = await new Promise(function(resolve, reject) {
+          const img = new Image();
+          img.onload = function() { resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+          img.onerror = function() { reject(new Error('Could not read image')); };
+          img.src = dataUrl;
+        });
+        if (dims.w < 600 || dims.h < 840) {
+          showToast('Photo is too small (need at least 600×840). Try a closer shot.');
+          if (btn) { btn.disabled = false; btn.textContent = 'SUBMIT'; }
+          return;
+        }
+
+        // Convert dataURL → Blob → webp (smaller; high quality).
+        const res  = await fetch(dataUrl);
+        const blob = await res.blob();
+        if (!blob || !blob.size) throw new Error('Empty image data');
+        const conv = await _imgToWebpBlob(blob);
+        const path = 'pending/' + currentUser.id + '/' + Date.now() + '_'
+                   + cardId.replace(/[^a-z0-9\-]/gi, '') + '.' + conv.ext;
+        const up = await sb.storage.from('catalog-contributions').upload(path, conv.blob, {
+          upsert: false, contentType: conv.contentType,
+        });
+        if (up.error) throw up.error;
+        const publicUrl = sb.storage.from('catalog-contributions').getPublicUrl(path).data.publicUrl;
+
+        // Insert contribution row. The INSERT RLS policy enforces
+        // eligibility server-side, so even a tampered client can't
+        // bypass it.
+        const ins = await sb.from('catalog_image_contributions').insert({
+          user_id:      currentUser.id,
+          catalog_id:   cardId,
+          image_url:    publicUrl,
+          image_width:  dims.w,
+          image_height: dims.h,
+          notes:        notes,
+          status:       'pending',
+        }).select('id').single();
+        if (ins.error) throw ins.error;
+
+        // Close the overlay and surface a friendly confirmation.
+        document.getElementById('contributeImageOverlay')?.remove();
+        const slot = document.getElementById('contribImageSlot_' + cardId);
+        if (slot) {
+          slot.innerHTML = '<div style="border:1px solid var(--green);background:rgba(26,199,160,.06);padding:10px 12px;border-radius:4px;font-family:\'Space Mono\',monospace;font-size:.7rem;color:var(--green);text-align:center">✓ Photo submitted for review</div>';
+        }
+        showToast('Thanks! Photo will appear once approved.');
+      } catch (e) {
+        console.error('[contrib] submit failed:', e);
+        showToast('Submission failed: ' + (e.message || 'unknown'));
+        if (btn) { btn.disabled = false; btn.textContent = 'SUBMIT'; }
+      }
+    };
+
     // Show a card detail sheet so the user can inspect before confirming
     function previewScanMatch(idx) {
       const m = (window._scanMatches || [])[idx];
@@ -2458,7 +2627,21 @@
               style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 20px var(--copper-glow);cursor:zoom-in"
               onclick="openImageLightbox('${m.image_url}')"
               onerror="this.parentElement.innerHTML='<div style=&quot;width:180px;height:252px;background:rgba(184,115,51,.06);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px&quot;><span style=&quot;font-size:2rem;opacity:.25&quot;>⬡</span><span style=&quot;font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)&quot;>NO IMAGE</span></div>'">
-          </div>` : ''}
+          </div>` : `
+          <!-- No catalog image for this card. Show the user's own scan
+               capture as a placeholder AND surface a "Help fill this in?"
+               contribute prompt (only when the user is eligible per
+               user_can_contribute_image). The prompt is hidden by
+               default and gets shown async after the eligibility
+               check resolves — keeps the panel from flickering "yes
+               you can contribute" → "actually no" for non-eligible
+               users. -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:14px">
+            ${window._scanCapturedDataUrl ? `<img src="${window._scanCapturedDataUrl}" alt="Your scan"
+              style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 20px var(--copper-glow);opacity:.85">` : `<div style="width:180px;height:252px;background:rgba(184,115,51,.06);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><span style="font-size:2rem;opacity:.25">⬡</span><span style="font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)">NO IMAGE</span></div>`}
+            <div id="contribImageSlot_${m.id}" style="width:100%;display:none;text-align:center"></div>
+          </div>
+          <script>(function(){ if (typeof _maybeShowContributePrompt === 'function') _maybeShowContributePrompt(${JSON.stringify(m.id)}, ${JSON.stringify(m.name || '')}); })();</script>`}
           <!-- info -->
           <div style="text-align:center;margin-bottom:16px">
             <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:4px">${m.name || 'Unknown Card'}${jpBadge}</div>
@@ -2895,6 +3078,160 @@
         return null;
       }
     }
+
+    // ── Catalog image contribution flow ────────────────────────────
+    // Surfaces a "Help fill this in?" prompt on the scan preview
+    // sheet for catalog rows whose image_url is missing, gated by
+    // the user_can_contribute_image() eligibility RPC. The prompt
+    // is wired up via _maybeShowContributePrompt(catalogId, name)
+    // which gets called from previewScanMatch when m.image_url
+    // is empty.
+    //
+    // Eligibility is cached for the duration of the page load —
+    // checking on every scan would hammer the RPC for no gain
+    // (a user's account age and tier don't change between scans
+    // in the same session).
+    let _contribEligibilityCache = null;
+    async function _checkContribEligibility() {
+      if (_contribEligibilityCache !== null) return _contribEligibilityCache;
+      if (!currentUser) { _contribEligibilityCache = false; return false; }
+      try {
+        const r = await sb.rpc('user_can_contribute_image', { p_user_id: currentUser.id });
+        _contribEligibilityCache = !!(r && r.data === true);
+        return _contribEligibilityCache;
+      } catch (e) {
+        console.warn('[contrib] eligibility check failed:', e);
+        _contribEligibilityCache = false;
+        return false;
+      }
+    }
+
+    // Called inline from the preview sheet when m.image_url is empty.
+    // Async — checks eligibility, then paints either the contribute
+    // CTA or nothing into the slot div.
+    window._maybeShowContributePrompt = async function(catalogId, name) {
+      const slot = document.getElementById('contribImageSlot_' + catalogId);
+      if (!slot) return;
+      const ok = await _checkContribEligibility();
+      if (!ok) return; // not eligible — stay hidden
+      slot.style.display = '';
+      slot.innerHTML =
+        '<div style="background:rgba(26,199,160,.08);border:1px solid var(--accent);border-radius:6px;padding:10px 12px;margin-top:8px">'
+        + '<div style="font-size:.62rem;letter-spacing:.1em;color:var(--accent);margin-bottom:4px">◈ NO PHOTO YET</div>'
+        + '<div style="font-size:.7rem;color:var(--text);margin-bottom:8px;line-height:1.5">'
+        +   'This card has no catalog photo. Your scan captures the card cleanly — want to contribute it?'
+        + '</div>'
+        + '<button onclick="_submitCatalogImageContribution(' + JSON.stringify(catalogId) + ',' + JSON.stringify(name || '') + ')" '
+        +   'style="width:100%;padding:8px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.7rem;font-weight:700;cursor:pointer;letter-spacing:.06em">'
+        +   'CONTRIBUTE THIS PHOTO'
+        + '</button>'
+        + '</div>';
+    };
+
+    // Upload + insert flow. Uploads the user's scan capture to the
+    // catalog-contributions storage bucket, then inserts a row into
+    // catalog_image_contributions. Trust tier determines whether the
+    // row is auto-approved (via apply_image_contribution RPC) or sits
+    // pending admin review.
+    window._submitCatalogImageContribution = async function(catalogId, name) {
+      try {
+        if (!currentUser) { showToast('Sign in first'); return; }
+        const dataUrl = window._scanCapturedDataUrl;
+        if (!dataUrl) { showToast('No scan capture to submit'); return; }
+
+        const slot = document.getElementById('contribImageSlot_' + catalogId);
+        if (slot) slot.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:.7rem;text-align:center">Uploading…</div>';
+
+        // dataURL → Blob → webp (same conversion pattern as the user
+        // photo upload). Smaller, faster, and matches what the catalog
+        // serves for existing rows.
+        const res  = await fetch(dataUrl);
+        const blob = await res.blob();
+        if (!blob || !blob.size) { showToast('Could not read scan capture'); return; }
+        const conv = await _imgToWebpBlob(blob);
+
+        // Measure the image so we can store width/height on the
+        // contribution row. Used by the replacement-priority logic
+        // and the admin queue UI.
+        const dims = await new Promise(function(resolve) {
+          const im = new Image();
+          im.onload  = function() { resolve({ w: im.naturalWidth, h: im.naturalHeight }); };
+          im.onerror = function() { resolve({ w: null, h: null }); };
+          im.src = dataUrl;
+        });
+
+        // Upload to catalog-contributions storage bucket. Path is
+        // namespaced by catalog_id so we can find / clean up rejected
+        // submissions easily. Random suffix avoids collisions for
+        // multi-submit cases.
+        const safeId = String(catalogId).replace(/[^a-z0-9-]/gi, '_');
+        const path = safeId + '/' + currentUser.id + '_' + Date.now() + '_'
+                   + Math.random().toString(36).slice(2, 7) + '.' + conv.ext;
+        const up = await sb.storage.from('catalog-contributions').upload(path, conv.blob, {
+          upsert: false, contentType: conv.contentType
+        });
+        if (up && up.error) {
+          console.error('[contrib] upload failed:', up.error);
+          showToast('Upload failed: ' + (up.error.message || 'unknown'));
+          if (slot) _maybeShowContributePrompt(catalogId, name); // restore CTA
+          return;
+        }
+        const publicData = sb.storage.from('catalog-contributions').getPublicUrl(path);
+        const imageUrl = (publicData && publicData.data && publicData.data.publicUrl) || null;
+        if (!imageUrl) { showToast('Upload succeeded but URL fetch failed'); return; }
+
+        // Insert the row. RLS gates this on user_can_contribute_image —
+        // a forged client wouldn't even pass the check.
+        const ins = await sb.from('catalog_image_contributions').insert({
+          user_id:      currentUser.id,
+          catalog_id:   catalogId,
+          image_url:    imageUrl,
+          image_width:  dims.w,
+          image_height: dims.h,
+          status:       'pending',
+        }).select('id').single();
+        if (ins.error) {
+          console.error('[contrib] insert failed:', ins.error);
+          showToast('Submission failed: ' + (ins.error.message || 'unknown'));
+          if (slot) _maybeShowContributePrompt(catalogId, name); // restore CTA
+          return;
+        }
+
+        // Check trust tier. Verified/trusted users skip the admin queue
+        // via apply_image_contribution. First-time contributors land in
+        // pending status and see "awaiting review" messaging.
+        const tierRes = await sb.rpc('user_contribution_trust_tier', { p_user_id: currentUser.id });
+        const trustTier = (tierRes && tierRes.data) || 'first_time';
+        const autoApprove = trustTier === 'verified' || trustTier === 'trusted';
+
+        if (autoApprove) {
+          const applyRes = await sb.rpc('apply_image_contribution', {
+            p_contribution_id: ins.data.id,
+            p_reviewer_id:     null, // null reviewer = auto-approved
+          });
+          if (applyRes && applyRes.error) {
+            console.warn('[contrib] auto-apply failed, will sit pending:', applyRes.error);
+          }
+        }
+
+        // Replace the slot with a success message.
+        if (slot) {
+          slot.innerHTML =
+            '<div style="background:rgba(26,199,160,.08);border:1px solid var(--accent);border-radius:6px;padding:10px 12px;text-align:center">'
+            + '<div style="font-size:.65rem;letter-spacing:.1em;color:var(--accent);margin-bottom:4px">✓ ' + (autoApprove ? 'PHOTO ADDED' : 'SUBMITTED FOR REVIEW') + '</div>'
+            + '<div style="font-size:.66rem;color:var(--muted);line-height:1.5">'
+            +   (autoApprove
+                ? 'Thanks! Your photo is now the catalog image for this card.'
+                : 'Thanks! An admin will review your photo shortly. You\'ll see it on the card once approved.')
+            + '</div>'
+            + '</div>';
+        }
+        showToast(autoApprove ? 'Photo added to catalog' : 'Submitted for review');
+      } catch (e) {
+        console.error('[contrib] submit failed:', e);
+        showToast('Submission failed: ' + (e.message || 'unknown'));
+      }
+    };
 
     // Search catalog by name — shown in scanner when user wants to find exact version
     let _scanSearchTimer = null;
@@ -3598,17 +3935,30 @@
       // Cards are often majority-EN with a small CJK disclaimer block at
       // the bottom (e.g. Obelisk "Cannot be used in official duels"
       // promo, certain English-region cards reprinted from JP plates).
-      // Require both an absolute floor (>=4 chars) AND that the CJK
-      // characters make up a meaningful share of the text (>=15%) so
-      // a tiny disclaimer doesn't override a large EN body.
+      // Require an absolute floor (>=4 chars) plus a ratio test so a
+      // tiny disclaimer doesn't override a large EN body.
+      //
+      // Per-script ratio tuning: kana and hangul are language-EXCLUSIVE
+      // (only ever appear on JA / KO cards respectively), so even a
+      // small share is a strong signal — 5% is enough. Han characters
+      // (CJK Unified Ideographs) appear as both JP kanji and Chinese,
+      // so we keep the stricter 15% bar to avoid mis-flagging an EN
+      // card that has a kanji disclaimer block.
+      //
+      // The asymmetry matters for holo-foil JA cards: OCR routinely
+      // hallucinates pseudo-Latin tokens off sparkle patterns
+      // ("CORE LESCO DIOR Whee", "GAME REAK", etc.), inflating the
+      // total char count and dragging the kana share down to ~10%.
+      // At the old 15% bar those scans incorrectly routed to EN; with
+      // the 5% bar for kana the Japanese signal is preserved.
       var total  = text.length || 1;
-      var meets  = function(arr) { return arr && arr.length >= 4 && (arr.length / total) >= 0.15; };
-      var kana   = text.match(/[ぁ-ゖァ-ヶ]/g);  // JA-exclusive
-      if (meets(kana)) return 'JA';
-      var hangul = text.match(/[가-힯]/g);                 // KO-exclusive
-      if (meets(hangul)) return 'KO';
-      var han    = text.match(/[一-鿿]/g);                 // Han → ZH (kana ruled out)
-      if (meets(han)) return 'ZH';
+      var meets  = function(arr, minPct) { return arr && arr.length >= 4 && (arr.length / total) >= minPct; };
+      var kana   = text.match(/[ぁ-ゖァ-ヶ]/g);   // JA-exclusive (hiragana + katakana)
+      if (meets(kana, 0.05)) return 'JA';
+      var hangul = text.match(/[가-힯]/g);                  // KO-exclusive
+      if (meets(hangul, 0.05)) return 'KO';
+      var han    = text.match(/[一-鿿]/g);                  // Han → ZH (kana ruled out)
+      if (meets(han, 0.15)) return 'ZH';
       return 'EN';
     }
 

@@ -6431,6 +6431,60 @@
     //     sheet showing image / name / set / current price plus an
     //     "add to wishlist" CTA. Mirrors the previewScanMatch sheet
     //     styling so the UX feels consistent with the scanner picker.
+    // Shown in the movers card detail modal when the catalog row has
+    // no image_url. Same eligibility check as the scanner integration;
+    // routes to the existing window._submitCatalogImageContribution
+    // upload flow which already handles bucket + RPC + UI feedback.
+    // Unlike the scanner version, we don't have a scan capture handy
+    // here — we open a file picker so the user can upload from their
+    // device's gallery.
+    window._maybeShowMoversContribute = async function(catalogId, name) {
+      try {
+        const slot = document.getElementById('moversContribSlot_' + catalogId);
+        if (!slot || !currentUser) return;
+        const r = await sb.rpc('user_can_contribute_image', { p_user_id: currentUser.id });
+        if (!r || r.data !== true) return;
+        slot.style.display = '';
+        slot.innerHTML =
+            '<div style="background:rgba(26,199,160,.08);border:1px solid var(--accent);border-radius:6px;padding:10px 12px">'
+          +   '<div style="font-size:.6rem;letter-spacing:.1em;color:var(--accent);margin-bottom:4px">◈ HELP FILL THIS IN?</div>'
+          +   '<div style="font-size:.66rem;color:var(--text);margin-bottom:8px;line-height:1.5">'
+          +     'Got this card in hand? Upload a clean photo and credit goes to you.'
+          +   '</div>'
+          +   '<input type="file" accept="image/*" capture="environment" id="moversContribFile_' + _escJsAttr(catalogId) + '" '
+          +     'onchange="_moversContributeFromFile(this,' + JSON.stringify(catalogId) + ',' + JSON.stringify(name || '') + ')" style="display:none">'
+          +   '<button onclick="document.getElementById(\'moversContribFile_' + _escJsAttr(catalogId) + '\').click()" '
+          +     'style="width:100%;padding:8px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.68rem;font-weight:700;cursor:pointer;letter-spacing:.06em">'
+          +     'CONTRIBUTE PHOTO'
+          +   '</button>'
+          + '</div>';
+      } catch (e) {
+        console.warn('[movers contrib] eligibility check failed:', e);
+      }
+    };
+
+    // File-picker variant of the submission flow used by the scanner.
+    // Reads the file into a dataURL, stashes it on _scanCapturedDataUrl
+    // (the existing scanner upload pipeline reads from there), then
+    // delegates to _submitCatalogImageContribution which already
+    // handles upload + insert + auto-approval.
+    window._moversContributeFromFile = function(fileInput, catalogId, name) {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        window._scanCapturedDataUrl = e.target.result;
+        // Rename the slot id so the scanner submitter's "find the slot
+        // and update" path lands on our movers slot, not a scan slot.
+        const moversSlot = document.getElementById('moversContribSlot_' + catalogId);
+        if (moversSlot) moversSlot.id = 'contribImageSlot_' + catalogId;
+        if (typeof window._submitCatalogImageContribution === 'function') {
+          window._submitCatalogImageContribution(catalogId, name);
+        }
+      };
+      reader.readAsDataURL(f);
+    };
+
     window.openMoversCardDetail = async function(catalogId) {
       if (!catalogId) return;
 
@@ -6483,7 +6537,19 @@
             ? '<div style="display:flex;justify-content:center;margin-bottom:14px">' +
                 '<img src="' + card.image_url + '" alt="' + _escHtml(card.name || '') + '" onclick="openImageLightbox(\'' + safeImg + '\')" style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;cursor:zoom-in;box-shadow:0 0 20px var(--copper-glow)" loading="lazy" decoding="async">' +
               '</div>'
-            : '') +
+            // Catalog row has no image (common for newly-synced rows
+            // from recent sets — the image-mirror job hasn't run yet).
+            // Show a placeholder so the modal isn't a confusing
+            // text-only block, and seed a slot for the contribute
+            // prompt that gets filled async if the user is eligible.
+            : '<div style="display:flex;justify-content:center;margin-bottom:6px">' +
+                '<div style="width:180px;height:252px;background:rgba(184,115,51,.06);border:1px dashed var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">' +
+                  '<span style="font-size:2rem;opacity:.25">⬡</span>' +
+                  '<span style="font-size:.5rem;letter-spacing:.1em;color:var(--copper-dim)">NO IMAGE YET</span>' +
+                '</div>' +
+              '</div>' +
+              '<div id="moversContribSlot_' + _escJsAttr(catalogId) + '" style="display:none;margin-bottom:12px"></div>' +
+              '<script>(function(){ if(typeof _maybeShowMoversContribute===\'function\') _maybeShowMoversContribute(' + JSON.stringify(catalogId) + ',' + JSON.stringify(card.name || '') + '); })();<\/script>') +
           '<div style="text-align:center;margin-bottom:14px">' +
             '<div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:4px">' + _escHtml(card.name || 'Unknown Card') + '</div>' +
             (setInfo ? '<div style="font-size:.65rem;color:var(--muted)">' + _escHtml(setInfo) + '</div>' : '') +
@@ -10848,6 +10914,11 @@
       loadAdminClearCollectionUsers();
       renderAdminBetaTesters();
       renderAdminImageReviewQueue();
+      // Auto-loads the pending catalog photo contributions panel.
+      // No-op when the migration isn't applied (renders a hint).
+      if (typeof renderAdminContributionQueue === 'function') {
+        renderAdminContributionQueue();
+      }
       // Admin moderation panels — disputes, user search, suspended listings.
       loadAdminDisputes();
       loadSuspendedListings();
@@ -11347,6 +11418,136 @@
         </div>`;
       }).join('');
     }
+
+    // ── Catalog Image Contribution Queue ─────────────────────────
+    // Admin queue for user-submitted catalog photos. Each row shows
+    // side-by-side: contributor's photo + card metadata + current
+    // catalog image (likely NULL since this flow only triggers when
+    // image_url is missing). Buttons fire apply_image_contribution
+    // or reject_image_contribution RPCs.
+    async function renderAdminContributionQueue() {
+      const container = document.getElementById('adminContributionQueue');
+      if (!container || !currentUser?.is_admin) return;
+      container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">Loading…</div>';
+
+      // Pull pending submissions with joined catalog + profile rows
+      // so we can show everything without a second round-trip per row.
+      const res = await sb.from('catalog_image_contributions')
+        .select(`
+          id, user_id, catalog_id, image_url, image_width, image_height,
+          submitted_at, notes,
+          profiles:user_id ( username, email, subscription_tier ),
+          catalog:catalog_id ( name, set_name, set_code, card_number, image_url, product_type, game_type )
+        `)
+        .eq('status', 'pending')
+        .order('submitted_at', { ascending: true })
+        .limit(50);
+
+      if (res.error) {
+        const msg = String(res.error.message || '');
+        if (/relation .*catalog_image_contributions.* does not exist/i.test(msg)) {
+          container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Apply <code>migration_catalog_image_contributions.sql</code> in Supabase before using this queue.</div>';
+        } else {
+          container.innerHTML = '<div style="font-size:.6rem;color:var(--red)">Error: ' + _escHtml(msg) + '</div>';
+        }
+        return;
+      }
+
+      const rows = res.data || [];
+      if (!rows.length) {
+        container.innerHTML = '<div style="font-size:.6rem;color:var(--muted)">Queue empty — no pending contributions.</div>';
+        return;
+      }
+
+      container.innerHTML = rows.map(function(r) {
+        const cat   = r.catalog || {};
+        const prof  = r.profiles || {};
+        const dims  = (r.image_width && r.image_height)
+          ? r.image_width + '×' + r.image_height : '—';
+        const tier  = String(prof.subscription_tier || 'free').toUpperCase();
+        const setLine = [cat.set_name, cat.card_number ? '#' + cat.card_number : '']
+          .filter(Boolean).join(' · ');
+        const submittedAgo = (function() {
+          const ms = Date.now() - new Date(r.submitted_at).getTime();
+          const h  = Math.floor(ms / 3600000);
+          if (h < 1) return Math.max(1, Math.floor(ms / 60000)) + 'm ago';
+          if (h < 24) return h + 'h ago';
+          return Math.floor(h / 24) + 'd ago';
+        })();
+        return ''
+        + '<div style="display:flex;gap:12px;padding:12px;border:1px solid var(--accent);background:rgba(26,199,160,.04);border-radius:4px">'
+        +   '<div style="flex-shrink:0">'
+        +     '<div style="font-size:.5rem;color:var(--accent);letter-spacing:.08em;margin-bottom:4px">SUBMITTED</div>'
+        +     '<img src="' + _escHtml(r.image_url) + '" alt="" loading="lazy" style="width:140px;height:auto;border:1px solid var(--accent);border-radius:3px;display:block">'
+        +     '<div style="font-size:.55rem;color:var(--muted);margin-top:4px;text-align:center">' + _escHtml(dims) + '</div>'
+        +   '</div>'
+        +   '<div style="flex:1;min-width:0">'
+        +     '<div style="font-size:.78rem;color:var(--text);font-weight:700;margin-bottom:3px">' + _escHtml(cat.name || '(unknown card)') + '</div>'
+        +     (setLine ? '<div style="font-size:.62rem;color:var(--muted);margin-bottom:8px">' + _escHtml(setLine) + '</div>' : '')
+        +     '<div style="font-size:.58rem;color:var(--muted);margin-bottom:8px;line-height:1.5">'
+        +       '<div><span style="color:var(--accent)">By</span> ' + _escHtml(prof.username || prof.email || r.user_id.slice(0, 8)) + ' (' + _escHtml(tier) + ')</div>'
+        +       '<div><span style="color:var(--accent)">When</span> ' + _escHtml(submittedAgo) + '</div>'
+        +       '<div><span style="color:var(--accent)">Catalog id</span> <code style="color:var(--muted);font-size:.55rem">' + _escHtml(r.catalog_id) + '</code></div>'
+        +       (cat.image_url ? '<div style="color:var(--copper);margin-top:4px">⚠ Catalog row ALREADY has an image — this would replace it.</div>' : '')
+        +       (r.notes ? '<div style="margin-top:4px;color:var(--text)">Note: <em>' + _escHtml(r.notes) + '</em></div>' : '')
+        +     '</div>'
+        +     '<div style="display:flex;gap:6px">'
+        +       '<button onclick="adminApproveContribution(\'' + _escJsAttr(r.id) + '\')" '
+        +         'style="padding:7px 14px;border:1px solid var(--accent);background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.06em">'
+        +         'APPROVE'
+        +       '</button>'
+        +       '<button onclick="adminRejectContribution(\'' + _escJsAttr(r.id) + '\')" '
+        +         'style="padding:7px 14px;border:1px solid rgba(255,80,80,.5);background:transparent;color:rgba(255,100,100,.85);font-family:\'Space Mono\',monospace;font-size:.62rem;cursor:pointer;letter-spacing:.06em">'
+        +         'REJECT'
+        +       '</button>'
+        +       (cat.image_url
+          ? '<a href="' + _escHtml(cat.image_url) + '" target="_blank" rel="noopener" '
+            + 'style="padding:7px 14px;border:1px solid var(--copper-dim);background:transparent;color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.62rem;cursor:pointer;letter-spacing:.06em;text-decoration:none;display:inline-block">'
+            + 'CURRENT IMG'
+            + '</a>'
+          : '')
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+      }).join('');
+    }
+
+    window.renderAdminContributionQueue = renderAdminContributionQueue;
+
+    async function adminApproveContribution(contribId) {
+      if (!currentUser?.is_admin) return;
+      try {
+        const r = await sb.rpc('apply_image_contribution', {
+          p_contribution_id: contribId,
+          p_reviewer_id:     currentUser.id,
+        });
+        if (r && r.error) { showToast('Approve failed: ' + r.error.message); return; }
+        showToast('Approved — catalog updated');
+        renderAdminContributionQueue();
+      } catch (e) {
+        showToast('Approve failed: ' + (e.message || 'unknown'));
+      }
+    }
+    window.adminApproveContribution = adminApproveContribution;
+
+    async function adminRejectContribution(contribId) {
+      if (!currentUser?.is_admin) return;
+      const reason = prompt('Reject reason (visible to contributor):', 'Image quality too low / watermarked / wrong card');
+      if (!reason) return;
+      try {
+        const r = await sb.rpc('reject_image_contribution', {
+          p_contribution_id: contribId,
+          p_reviewer_id:     currentUser.id,
+          p_reason:          reason,
+        });
+        if (r && r.error) { showToast('Reject failed: ' + r.error.message); return; }
+        showToast('Rejected');
+        renderAdminContributionQueue();
+      } catch (e) {
+        showToast('Reject failed: ' + (e.message || 'unknown'));
+      }
+    }
+    window.adminRejectContribution = adminRejectContribution;
 
     async function adminClearUserCollection(userId, label, count) {
       if (!currentUser?.is_admin) return;
@@ -15451,6 +15652,44 @@
     // history point (gives "since first tracked" semantics — still
     // more useful than nothing). No history at all → leaves the
     // "Add cost basis" placeholder in place so we don't lie.
+    // Catalog-photo contributor byline — populates the small italic
+    // line under the card name in the binder detail modal when the
+    // catalog row's image came from a community contribution. Click
+    // routes to the contributor's profile so users can see who
+    // helped fill the catalog in.
+    async function _loadContributorByline(item) {
+      try {
+        if (!item || !item.api_card_id || !item.id) return;
+        const slot = document.getElementById('contribByline_' + item.id);
+        if (!slot) return;
+        // Pull catalog credit fields. Cheap single-row lookup.
+        const cat = await sb.from('catalog')
+          .select('image_contributed_by, image_contributed_at')
+          .eq('id', item.api_card_id)
+          .maybeSingle();
+        if (cat.error || !cat.data || !cat.data.image_contributed_by) return;
+        const contributorId = cat.data.image_contributed_by;
+        // Look up the contributor's display name.
+        const prof = await sb.from('profiles')
+          .select('username, email')
+          .eq('id', contributorId)
+          .maybeSingle();
+        if (prof.error || !prof.data) return;
+        const label = prof.data.username
+          ? '@' + prof.data.username
+          : (prof.data.email ? prof.data.email.split('@')[0] : 'a curator');
+        // Subtle italic link. Profile URL is /?page=publicProfile&id=X
+        // — the existing public-profile route.
+        slot.innerHTML = 'Photo by '
+          + '<a href="/?page=publicProfile&id=' + encodeURIComponent(contributorId) + '" '
+          +   'style="color:var(--copper);text-decoration:none;border-bottom:1px dotted var(--copper-dim)">'
+          +   _escHtml(label)
+          + '</a>';
+      } catch (e) {
+        console.warn('[contrib byline] failed:', e);
+      }
+    }
+
     async function _fillSinceAddedGainLoss(item) {
       try {
         if (!item || !item.id) return;
@@ -16185,6 +16424,12 @@
           <div style="font-size:1rem;color:var(--text);font-weight:600;line-height:1.3">${_escHtml(item.card_name)}</div>
           ${item.set_name ? `<div style="font-size:.75rem;color:var(--muted);margin-top:3px">${_escHtml(item.set_name)}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
           ${item.cert_number ? `<div style="font-size:.68rem;color:var(--muted);margin-top:2px">Cert #${item.cert_number}</div>` : ''}
+          <!-- Catalog-photo contributor byline. Async-filled by
+               _loadContributorByline after the modal opens. Empty
+               when the catalog row has no image_contributed_by stamp
+               (the common case for cards whose photo came from
+               pokedata / PriceCharting). -->
+          <div id="contribByline_${item.id}" style="font-size:.58rem;color:var(--muted);margin-top:4px;letter-spacing:.04em;font-style:italic;opacity:.7"></div>
         </div>
 
         <!-- Stats 2×2 -->
@@ -16303,6 +16548,9 @@
       // a "Since Added" label instead of the static "Add cost basis"
       // placeholder so the user gets something useful by default.
       setTimeout(function() { _fillSinceAddedGainLoss(item); }, 0);
+      // Catalog-photo contributor byline. No-ops when the catalog
+      // row has no image_contributed_by stamp.
+      setTimeout(function() { _loadContributorByline(item); }, 0);
       // Per-unit swipe stack — vendor+ only, qty > 1. Loads units
       // lazily and replaces the single photo slot with a stack.
       // Free / Collector / Enthusiast skip this and see the plain
@@ -20302,9 +20550,10 @@
         +   '</div>'
         +   '<button onclick="document.getElementById(\'sellerProfileSheet\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px;color:var(--muted)">×</button>'
         + '</div>'
-        + '<div style="display:flex;gap:14px;font-size:.72rem;color:var(--muted);margin-bottom:14px;padding-top:10px;border-top:1px solid var(--border)">'
+        + '<div style="display:flex;gap:14px;font-size:.72rem;color:var(--muted);margin-bottom:14px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">'
         +   '<div><span style="color:var(--text);font-weight:700">' + activeListings + '</span> active listing' + (activeListings === 1 ? '' : 's') + '</div>'
         +   (rating > 0 ? '<div><span style="color:var(--gold)">★</span> <span style="color:var(--text);font-weight:700">' + rating.toFixed(1) + '</span></div>' : '')
+        +   '<div id="profileContribStat_' + sellerId + '" style="display:none"></div>'
         + '</div>'
         + (isVS && effectiveBio
             ? '<div style="font-size:.78rem;color:var(--text);line-height:1.5;margin-bottom:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--r-sm,6px)">' + _escHtml(effectiveBio) + '</div>'
@@ -20318,7 +20567,43 @@
         +   followBtn
         +   blockBtn
         + '</div>';
+
+      // Catalog photo contribution stat. Async-loaded so it doesn't
+      // block the modal paint. Hidden until we know the count is > 0.
+      setTimeout(function() { _fillProfileContribStat(sellerId); }, 0);
     }
+
+    // Counts approved catalog image contributions for a user and
+    // surfaces them as a stat tile + badge in the seller profile
+    // modal. Hidden when zero so the profile doesn't show "0 photos
+    // contributed" for the long tail of users who've never tried.
+    async function _fillProfileContribStat(sellerId) {
+      try {
+        const slot = document.getElementById('profileContribStat_' + sellerId);
+        if (!slot) return;
+        const r = await sb.from('catalog_image_contributions')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', sellerId)
+          .eq('status', 'approved');
+        const n = (r && r.count) || 0;
+        if (n === 0) return; // stay hidden
+        // Badge label per tier — matches the badges Phase 2 will issue.
+        const badge = n >= 100 ? '◆ ARCHIVIST'
+                    : n >= 25  ? '◆ TRUSTED CURATOR'
+                    : n >= 5   ? '◆ CURATOR'
+                    :            '';
+        slot.style.display = '';
+        slot.innerHTML = ''
+          + '<div title="Catalog photos contributed and approved">'
+          +   '<span style="color:var(--copper);font-weight:700">' + n + '</span>'
+          +   ' photo' + (n === 1 ? '' : 's') + ' contributed'
+          +   (badge ? ' <span style="margin-left:6px;background:var(--copper);color:var(--surface);font-size:.5rem;font-weight:800;letter-spacing:.1em;padding:2px 6px;border-radius:var(--r-pill,999px);text-transform:uppercase">' + badge + '</span>' : '')
+          + '</div>';
+      } catch (e) {
+        console.warn('[profile contrib stat] failed:', e);
+      }
+    }
+
     // (Follow placeholder removed — real followUser / unfollowUser
     // helpers are wired into the seller-profile modal directly.)
 
@@ -24946,8 +25231,14 @@
       // Scryfall's icon doubles as both, and pokemontcg.io ships a
       // wider logo + a compact symbol.
       const logoSrc  = s.logo_url || s.symbol_url || '';
+      // BUG FIX: loading="lazy" decoding="async" used to be embedded
+      // INSIDE the onerror handler's string. Those double quotes
+      // broke the onerror attribute's quoting, terminating it early
+      // and leaking the trailing `'">` as literal text content next
+      // to the [MTG] / [YGO] tags. The attributes belong on the IMG
+      // itself, not on a span being constructed dynamically.
       const logoHtml = logoSrc
-        ? `<img src="${_escHtml(logoSrc)}" alt="" onerror="this.parentNode.innerHTML='<span class=\\'sets-tile-tag\\' loading="lazy" decoding="async">[${cfg.label}]</span>'">`
+        ? `<img src="${_escHtml(logoSrc)}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.innerHTML='<span class=\\'sets-tile-tag\\'>[${cfg.label}]</span>'">`
         : `<span class="sets-tile-tag">[${cfg.label}]</span>`;
       return `<div class="sets-tile" onclick="loadTcgSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}','${_escJsAttr(gameKey)}')">
         <div class="sets-tile-logo">${logoHtml}</div>

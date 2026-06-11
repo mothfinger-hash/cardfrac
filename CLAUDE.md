@@ -458,6 +458,236 @@ game return Pokemon false positives instead of relevant cards.
   `image_url like '%pokedata.io%'` so already-mirrored rows are skipped
   on restart.
 
+## Scanner — catalog match cascade
+
+The scanner's catalog query for sealed/product scans uses a
+three-tier cascade that runs **per candidate phrase**:
+
+1. **Tier 1** — `game_type` + `product_type` + name match (strictest)
+2. **Tier 2** — drop `product_type`
+3. **Tier 3** — drop `game_type` (name-only)
+
+Tier 3 always runs for every candidate. Earlier versions gated it
+to "only on the last candidate after all earlier tiers returned
+empty," which meant a brand-line OCR garble (e.g. `KU GAM` instead
+of `POKEMON`) would leave `game_type=null` for the whole call and
+the GOOD candidates (`CHAOS RISING`, `MEGA EVOLUTION`) would never
+get a search — only the OCR garbage at the end would. Fix: every
+candidate gets at least the name-only search, scoring handles the
+rest.
+
+**PostgREST `.or()` wildcard gotcha.** When writing `.or(...)`
+clauses in supabase-js, use `*` not `%` for ilike wildcards:
+
+```js
+// BROKEN — sends literal % chars to Postgres; matches nothing.
+.or('name.ilike.%CHAOS%,set_name.ilike.%CHAOS%')
+
+// CORRECT — translates to ILIKE '%CHAOS%' in SQL.
+.or('name.ilike.*CHAOS*,set_name.ilike.*CHAOS*')
+```
+
+`sb.from(...).ilike('col', '%term%')` does the conversion for you,
+but raw `.or()` strings are sent through as-is. Strip commas and
+parens from interpolated values too — both are PostgREST clause
+syntax.
+
+**`product_type IS NULL` filter trap.** A naive
+`.neq('product_type', 'single')` silently drops every row where
+`product_type IS NULL` — Postgres treats `NULL != 'single'` as NULL
+(unknown), which the WHERE filter rejects. If you need "anything
+except single," filter client-side in JS after the query (where
+`pt === 'single'` evaluates honestly on NULL):
+
+```js
+rows.filter(r => {
+  const pt = String(r.product_type || '').toLowerCase();
+  return pt !== 'single' && pt !== 'tcg_single';
+});
+```
+
+**Stitched OCR composite.** `_stitchForOcr(dataURL)` builds a
+single composite that contains the top ~38% of the card + a 2×
+upscaled bottom ~30%, dropping the middle artwork. This lets Vision
+spend its text-detection budget on the two regions that actually
+carry text (title/HP/stage at top; rules + set code at bottom)
+instead of being eaten by holo sparkle in the artwork. Reliably
+catches tiny bottom-corner identifiers like `MEP EN 023`,
+`OP12-108`, `SVP IN 237` that the original full-image OCR pass
+routinely missed.
+
+**Sealed extractor buzzword dictionary.** `SET_BUZZWORDS` in
+`_extractSealedFromOcr` is a ~400-word list of TCG set-name
+vocabulary (Pokemon, MTG, OP, YGO, Digimon, Flesh and Blood,
+Gundam, DBZ). Each token a candidate phrase hits scores +5. Real
+set names hit multiple tokens (`OUTLAWS OF THUNDER JUNCTION` hits
+`outlaws +5`, `thunder +5`, `junction +5` = +15) while OCR garbage
+hits zero. When a new TCG release ships, just add its distinctive
+words to the list — no other code changes needed.
+
+## Discord bot
+
+**Deferral is OFF by default.** Both `DEFER_PUBLIC_SLASH` and
+`DEFER_EPHEMERAL_SLASH` are empty sets. Every command responds
+synchronously. Rationale: the bot is kept warm by the
+`/api/discord-bot?warm=1` Vercel cron (every 4 min), the lazy
+Supabase client init caches after first use, and even the heaviest
+handler (`/movers`) is well under the 3-second Discord ack window
+after the v8 RPC migration. The deferred-PATCH path is still wired
+but unused; if a future handler legitimately needs >3s, add its
+name to the appropriate Set and it'll switch to deferred-ack mode
+without other changes.
+
+**Lazy Supabase client.** `sb` at the top of `api/discord-bot.js`
+is a `Proxy` that calls `require('@supabase/supabase-js') +
+createClient()` on first property access, not at module load time.
+Saves ~300-500ms of cold-start that would otherwise eat into the
+3-second window. Cached after first hit. PING interactions (Discord
+verifies the endpoint every few seconds) never trigger the import.
+
+**`maxDuration: 60`.** Set in two places —
+`module.exports.config` at the top of the file AND re-attached
+after `module.exports = handler` overwrites it later. Without this
+the Hobby plan's 10-second default kills any handler that runs
+long, leaving Discord stuck on "thinking…" forever.
+
+**Per-RPC timeout.** `handleMovers` wraps each `sb.rpc(...)` in
+`_withTimeout(..., 8000)` and uses `Promise.allSettled` instead of
+`Promise.all` so one slow game can't block the others. Tunable via
+the `MOVERS_RPC_TIMEOUT_MS` env var.
+
+**Movers RPC scaling.** `get_global_price_movers` v8 takes
+`p_min_value` (defaults to `1.0`) — skips catalog rows under $X
+before the LATERAL join into `catalog_price_history`. Drops scan
+work from ~42K rows to ~5-8K and execution time from ~4.7s to
+~380ms. The website's call sites can override with `p_min_value:
+0` to include cheap commons; the bot keeps the default.
+
+## Catalog photo contributions
+
+User-submitted catalog images. Phase 1 ships missing-image fill
+only (replacement / new-row creation is bookmarked).
+
+**Schema** (`migration_catalog_image_contributions.sql`):
+- `catalog.image_contributed_by` / `image_contributed_at` — attribution
+- `catalog_image_contributions` — pending/approved/rejected queue
+- `user_can_contribute_image(uuid)` — eligibility check
+- `user_contribution_trust_tier(uuid)` — `first_time` / `verified` (5+ approved) / `trusted` (25+ approved, 0 strikes in 90d)
+- `apply_image_contribution(uuid, uuid)` — approval transaction (atomic update of `catalog.image_url` + credit stamping)
+- `reject_image_contribution(uuid, uuid, text)` — rejection w/ reason
+
+**Eligibility:** Collector+ tier, account age ≥ 30 days, ≥50 cards
+in collection, 0 active strikes (3 rejections in 90 days = revoked
+for 90 more days). Admins always pass.
+
+**Storage:** bucket `catalog-contributions` (public read), policies
+in `migration_catalog_contributions_storage_policies.sql`. INSERT
+gated by `user_can_contribute_image()`.
+
+**Scanner integration:** when a catalog hit has NULL `image_url`
+AND the user passes the eligibility check (cached per page load),
+the scan preview sheet surfaces a "CONTRIBUTE THIS PHOTO" CTA.
+Click → uploads the existing scan capture to the bucket, inserts
+the row, and either auto-approves (verified+ contributors via
+`apply_image_contribution`) or queues for admin review (first-time
+contributors).
+
+**Admin UI:** Account → Admin → Catalog Image Contributions.
+Renderer is `renderAdminContributionQueue()` in pb-app.js. Sorted
+oldest-first, side-by-side: submission + card meta + current image
+(if any) + APPROVE / REJECT buttons.
+
+**Display:** subtle italic byline on the binder detail modal
+(`_loadContributorByline`) links to the contributor's public
+profile. Profile stats row in the seller-profile modal shows
+"N photos contributed" with `Curator` / `Trusted Curator` /
+`Archivist` badge (`_fillProfileContribStat`). Both async-loaded
+after the modal opens.
+
+## Bulk CSV vendor import — two sheets
+
+`PathBinder_Vendor_Template.xlsx` has TWO sheets:
+
+- **Singles** — Card Name, Set Name, Card Number, Condition, Grade,
+  Cert #, Cost, Price, **Quantity**, Notes. Game defaults to
+  Pokemon, product_type to single. Grade/Cert columns are
+  first-class because graded singles are the main use case.
+
+- **Sealed** — Product Name, Set Name, **Game**, **Product Type**,
+  Cost, Price, **Quantity**, Notes. No Grade/Cert (don't apply).
+  Game + Product Type are required per row.
+
+`handleVendorImportFile` reads both sheets and tags each row with
+`_sourceSheet` (`singles` / `sealed`). The import loop branches on
+that tag — singles default `condition='raw'`, sealed default
+`condition='sealed'`. Backward-compat: old single-sheet templates
+named `Inventory` still import as singles.
+
+`VALID_PRODUCT_TYPES` set in the import code matches
+`SEALED_PATTERNS` enum values from `sync_sealed_products.py`.
+Unknown values fall back to `single`. Adding a new sealed format
+means adding it to both lists.
+
+`on_shelf_qty = quantity` defaulted for vendor+ users (Phase 1 shop
+inventory pattern). Same schema-fallback cascade as
+`quickAddScannedCard` — strips `on_shelf_qty` then `product_type`
+if the DB is on an older schema.
+
+## Service worker — must-revalidate strategy
+
+`vercel.json` serves `/sw.js` with
+`Cache-Control: public, max-age=0, must-revalidate`. Browser caches
+the file but re-validates with the server on every page load, so
+new SW deploys land within seconds instead of the 24-hour default
+SW re-check window.
+
+**Skip-waiting + claim** in `sw.js` install handler activates new
+SWs immediately without requiring all old tabs to close.
+
+**Page-side polling** in pb-app.js calls `reg.update()` every 5
+minutes (only when the tab is visible) and listens for
+`updatefound` to post `{type:'SKIP_WAITING'}` to a waiting SW. When
+the new SW takes control, a non-disruptive toast offers REFRESH
+instead of auto-reloading mid-task.
+
+**Vercel cron** at `*/4 * * * *` hits `/api/keepalive` (and
+separately `/api/discord-bot?warm=1`) to keep the serverless
+function instances warm. Both endpoints return a tiny `{ok:true}`
+without touching Supabase.
+
+## CLS / Speed Insights audit
+
+Fixed (from the original 0.42 audit):
+- Removed `padding-left/right` transitions from `body` and `width`
+  transition from `nav` (`pb-critical.css`). Sidebar collapse used
+  to animate the entire content area sliding 140px on every toggle.
+- Added `min-width:80px; display:inline-block` to the hero stat
+  values (`heroTotalCards`, `heroMarketCap`). The em-dash → number
+  swap on data load used to cause a 70px horizontal reflow.
+
+Bookmarked for later:
+- Card grid: add `aspect-ratio: 245/342` to `.card-thumb` /
+  `.listing-card .lc-thumb-wrap` to reserve space before images
+  load.
+- Sidebar avatar: use `flex: 0 0 200px` instead of `flex: 0 1 auto`
+  so the avatar slot doesn't grow when the image arrives.
+- Landing hero `pokedex.webp`: add `aspect-ratio: 600/400` in CSS.
+
+## Auth-state hint script (no landing-page flash)
+
+Inline `<script>` at the top of `<body>` in `index.html`
+synchronously checks `localStorage` for any
+`sb-<projectref>-auth-token` key with an `access_token` field
+present. If found, removes `body.on-landing` and injects a
+fixed-position skeleton overlay (PathBinder wordmark + animated
+cyan dots) that covers the landing page. Polls for
+`#accountPage.active` to drop the skeleton; 6-second hard timeout
+as a safety valve.
+
+Zero overhead for signed-out users (no token → script returns
+immediately). For signed-in users, hides the flash between initial
+HTML paint and `initApp()` restoring the session.
+
 ## Syntax check pipeline
 
 After non-trivial JS edits to `index.html`:

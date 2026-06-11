@@ -574,7 +574,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     <div class="nav-header">
       <button class="logo-img-btn" onclick="showPage('collection');setMobileNav('collection')">
         <img src="pathbinder.svg" alt="PathBinder" class="nav-logo-img nav-logo-full" fetchpriority="high" decoding="async">
-        <img src="pb.svg"         alt="PathBinder" class="nav-logo-img nav-logo-mark" decoding="async">
+        <!-- nav-logo-mark used to point at /pb.svg which never existed
+             on the deploy → 404 on every page load. Re-pointed at the
+             same full wordmark; the CSS rule
+               nav.sb-collapsed .nav-logo-mark{...object-fit:contain}
+             scales it down to 26×26 cleanly. A purpose-built compact
+             icon SVG would look nicer but isn't worth blocking on. -->
+        <img src="pathbinder.svg" alt="PathBinder" class="nav-logo-img nav-logo-mark" decoding="async">
       </button>
       <button class="nav-collapse-btn" id="navCollapseBtn" onclick="toggleNavCollapse()" title="Collapse sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2106,11 +2112,16 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <div style="margin-top:10px;font-size:.7rem;color:var(--muted)">Already have an account? <a href="#" onclick="openModal('loginModal');return false" style="color:var(--accent);text-decoration:none">Sign In</a></div>
         <div style="margin-top:24px;display:flex;gap:24px;flex-wrap:wrap">
           <div>
-            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)" id="heroTotalCards">—</div>
+            <!-- min-width prevents the "—" → number swap from
+                 widening the stat block on data load. Without it,
+                 the em-dash is ~10px and a number like "12,4M" is
+                 ~80px — that horizontal jump showed up as ~0.07 CLS
+                 in the Vercel Speed Insights audit. -->
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent);min-width:80px;display:inline-block" id="heroTotalCards">—</div>
             <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Cards Tracked</div>
           </div>
           <div>
-            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent)" id="heroMarketCap">—</div>
+            <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:20px;color:var(--accent);min-width:80px;display:inline-block" id="heroMarketCap">—</div>
             <div style="font-family:'Press Start 2P',monospace;font-size:5.5px;letter-spacing:.14em;color:var(--muted);margin-top:3px">Market Value</div>
           </div>
           <div>
@@ -3738,6 +3749,23 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         Listings whose photos need to be replaced (poor quality, wrong product, watermark, etc.). Flag a listing from the marketplace browse via the small <span style="color:var(--copper)">FLAG IMG</span> button on each card. Apply <code>migration_listings_image_review.sql</code> first.
       </div>
       <div id="adminImageReviewQueue" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.6rem;color:var(--muted)">Click Refresh to load.</div>
+      </div>
+    </div>
+
+    <!-- Catalog Image Contribution Queue — pending submissions from
+         users whose scan picked up a card with no catalog photo.
+         Approve to write to catalog.image_url and credit the user;
+         reject with a reason to add a strike. -->
+    <div style="margin-top:24px;border:1px solid var(--accent);background:rgba(26,199,160,.04);padding:16px 18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Catalog Image Contributions</div>
+        <button onclick="renderAdminContributionQueue()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);font-size:.62rem">Refresh</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Photos submitted by eligible Collector+ users when their scan hits a catalog row with no image. Approve to land the photo on the catalog and credit the contributor; reject with a reason to apply a strike. <code>migration_catalog_image_contributions.sql</code> + <code>catalog-contributions</code> storage bucket required.
+      </div>
+      <div id="adminContributionQueue" style="display:flex;flex-direction:column;gap:8px">
         <div style="font-size:.6rem;color:var(--muted)">Click Refresh to load.</div>
       </div>
     </div>

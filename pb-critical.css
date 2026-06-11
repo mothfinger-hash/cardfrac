@@ -16,15 +16,22 @@
       --shadow:#1E1408;--premium:#C8002A;--premium-txt:#F2ECD8;
       --sb-w:198px;--sb-w-coll:54px;
     }
-    body{font-family:'Space Mono','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-left:var(--sb-w);transition:background .2s,color .2s,padding-left .25s,padding-right .25s}
+    /* CLS fix (Vercel Speed Insights audit): removed
+       padding-left/right transitions on body and width transition on
+       nav. Sidebar collapse used to animate the entire content area
+       sliding ~140px to the left over 250ms — that was a full-viewport-
+       width layout shift counting against CLS on every toggle, and on
+       initial paint when the SW hadn't restored .nav-collapsed yet.
+       Background + color stay because those don't move boxes. */
+    body{font-family:'Space Mono','Share Tech Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-left:var(--sb-w);transition:background .2s,color .2s}
     body.nav-collapsed{padding-left:var(--sb-w-coll)}
     /* Landing page: keep sidebar, hide binder top bar only */
     body.on-landing #binderSidebar{display:none!important}
 
     @keyframes scanlines{0%{transform:translateY(0)}100%{transform:translateY(10px)}}
 
-    /* SIDEBAR NAV */
-    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
+    /* SIDEBAR NAV — width transition removed for same CLS reason. */
+    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;box-shadow:none}
     nav.sb-collapsed{width:var(--sb-w-coll)}
     .nav-header{height:52px;display:flex;align-items:center;padding:0 8px 0 10px;border-bottom:2px solid var(--border);flex-shrink:0;gap:6px}
     .logo-img-btn{background:none!important;border:none!important;padding:0!important;cursor:pointer;line-height:0;box-shadow:none!important;min-width:0!important;letter-spacing:0;flex:1;overflow:hidden}
