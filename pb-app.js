@@ -53,14 +53,16 @@
 // ── Lazy admin bundle loader ─────────────────────────────
 // Admin dashboard (markup + logic) lives in /pb-admin.js and loads only
 // when an admin opens the Admin tab. Regular users never fetch it.
-var _adminBundleLoaded = false;
+var _adminBundleLoaded = false, _adminBundleLoading = false;
 function _loadAdmin(){
   function go(){ try { if (typeof _pbInjectAdminMarkup === 'function') _pbInjectAdminMarkup(); } catch(e){} if (typeof renderAdmin === 'function') renderAdmin(); }
   if (_adminBundleLoaded) { go(); return; }
+  if (_adminBundleLoading) return;   // a load is already in flight; its onload renders
+  _adminBundleLoading = true;
   var s = document.createElement('script');
   s.src = '/pb-admin.js';
-  s.onload = function(){ _adminBundleLoaded = true; go(); };
-  s.onerror = function(){ if (typeof showToast === 'function') showToast('Failed to load admin panel'); };
+  s.onload = function(){ _adminBundleLoaded = true; _adminBundleLoading = false; go(); };
+  s.onerror = function(){ _adminBundleLoading = false; if (typeof showToast === 'function') showToast('Failed to load admin panel'); };
   document.head.appendChild(s);
 }
   

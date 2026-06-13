@@ -491,7 +491,7 @@ function _pbInjectAdminMarkup(){
     // action card per row. Two paths from here:
     //   - Refund Buyer    → /api/refund-order (admin path, Connect-aware)
     //   - Resolve for Seller → admin_resolve_dispute_for_seller RPC
-    let _adminDisputeCache = [];
+    var _adminDisputeCache = [];
 
     // Manually fires the /api/admin-notify-dispute endpoint for the most
     // recent disputed order so the admin can verify Resend is wired up
