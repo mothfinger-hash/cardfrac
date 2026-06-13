@@ -15434,7 +15434,7 @@ function _loadAdmin(){
           </div>
         `;
         const titleEl = document.getElementById('binderDetailTitle');
-        if (titleEl) { titleEl.textContent = 'Wishlist_Card'; titleEl.style.color = 'var(--teal)'; }
+        if (titleEl) { titleEl.textContent = 'Wishlist_Card'; titleEl.style.color = 'var(--teal)'; titleEl.style.display = ''; }
         openModal('binderDetailModal');
         return;
       }
@@ -15460,6 +15460,9 @@ function _loadAdmin(){
       const condLabel = isGraded
         ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
         : 'Raw';
+      // Edit-menu gating: per-copy editing only for vendor+ with 2+ copies.
+      const _bvVendorPlus = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
+      const _bvShowCopies = _bvVendorPlus && qty > 1;
 
       document.getElementById('binderDetailContent').innerHTML = `
 
@@ -15468,23 +15471,33 @@ function _loadAdmin(){
              is mounted into #binderUnitStack_${item.id} after open;
              see _mountUnitStackIntoBinderDetail below. The plain photo
              stays as the fallback (and as what every other tier sees). -->
-        <div id="binderUnitStack_${item.id}"></div>
-        <div class="pb-detail-photo-slot" id="binderPhotoSlot_${item.id}"
-             ${item.card_image_url ? `style="cursor:zoom-in"` : ''}
-             onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
-          ${(item.card_image_url || item.api_card_id)
-            ? `<img src="${item.card_image_url || 'data:,'}"
-                 onerror="_binderImgFail(this,'${item.id}')" loading="lazy" decoding="async">`
-            : `<div style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;padding:30px">?</div>`}
-        </div>
-        ${item.card_back_image_url ? `
-          <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 4px">FRONT</div>
-          <div class="pb-detail-photo-slot" style="cursor:zoom-in"
-               onclick="openImageLightbox('${item.card_back_image_url}')">
-            <img src="${item.card_back_image_url}" onerror="this.style.display='none'" loading="lazy" decoding="async">
+        <div style="position:relative">
+          <div id="binderUnitStack_${item.id}"></div>
+          <div class="pb-detail-photo-slot" id="binderPhotoSlot_${item.id}"
+               ${item.card_image_url ? `style="cursor:zoom-in"` : ''}
+               onclick="${item.card_image_url ? `openImageLightbox('${item.card_image_url}')` : ''}">
+            ${(item.card_image_url || item.api_card_id)
+              ? `<img src="${item.card_image_url || 'data:,'}"
+                   onerror="_binderImgFail(this,'${item.id}')" loading="lazy" decoding="async">`
+              : `<div style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;padding:30px">?</div>`}
           </div>
-          <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 10px">BACK</div>
-        ` : ''}
+          ${item.card_back_image_url ? `
+            <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 4px">FRONT</div>
+            <div class="pb-detail-photo-slot" style="cursor:zoom-in"
+                 onclick="openImageLightbox('${item.card_back_image_url}')">
+              <img src="${item.card_back_image_url}" onerror="this.style.display='none'" loading="lazy" decoding="async">
+            </div>
+            <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 10px">BACK</div>
+          ` : ''}
+          <!-- Single edit entry point: details / photo / (copies for vendor+ multi). -->
+          <button onclick="event.stopPropagation();_toggleCardEditMenu('${item.id}')" aria-label="Edit card"
+            style="position:absolute;top:8px;right:8px;z-index:5;width:36px;height:36px;border-radius:var(--r-pill,999px);border:1px solid var(--accent);background:rgba(10,14,26,.82);color:var(--accent);font-size:.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center">✏</button>
+          <div id="cardEditMenu_${item.id}" class="pb-cardedit-menu" style="display:none;position:absolute;top:48px;right:8px;z-index:6">
+            <button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');closeModal('binderDetailModal');openEditCardModal('${item.id}')">Edit details</button>
+            <button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');openCardPhotoModal('${item.id}')">Edit photo</button>
+            ${_bvShowCopies ? `<button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');_editFirstCopy('${item.id}')">Edit copies</button>` : ''}
+          </div>
+        </div>
 
         <!-- Badge -->
         <div style="text-align:center;margin-bottom:${item.notes ? '8px' : '12px'}">
@@ -15503,7 +15516,7 @@ function _loadAdmin(){
         ${item.notes ? `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);font-size:.68rem;color:var(--muted);line-height:1.5;word-break:break-word;margin-bottom:12px">${_escHtml(item.notes)}</div>` : ''}
 
         <!-- Name + set + cert -->
-        <div style="margin-bottom:12px">
+        <div style="margin-bottom:12px;text-align:center">
           <div style="font-size:1rem;color:var(--text);font-weight:600;line-height:1.3">${_escHtml(item.card_name)}</div>
           ${item.set_name ? `<div style="font-size:.75rem;color:var(--muted);margin-top:3px">${_escHtml(item.set_name)}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
           ${item.cert_number ? `<div style="font-size:.68rem;color:var(--muted);margin-top:2px">Cert #${item.cert_number}</div>` : ''}
@@ -15531,12 +15544,12 @@ function _loadAdmin(){
 
         <!-- Price trend -->
         ${hasPriceTracking()
-          ? `<div id="cardTrendSection_${item.id}" style="margin-bottom:12px">
-               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          ? `<div id="cardTrendSection_${item.id}" style="margin:0 0 14px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md)">
+               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;gap:8px">
                  <div style="font-size:.65rem;color:var(--accent);letter-spacing:.08em">// PRICE_TREND</div>
-                 <span id="cardTrendRange_${item.id}" style="font-size:.6rem;color:var(--muted)">Loading…</span>
+                 <span id="cardTrendRange_${item.id}" style="font-size:.62rem;color:var(--muted);white-space:nowrap">Loading…</span>
                </div>
-               <svg id="cardTrendSvg_${item.id}" width="100%" height="70" style="display:block;overflow:visible;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md)">
+               <svg id="cardTrendSvg_${item.id}" width="100%" height="70" style="display:block;overflow:visible;background:transparent;border:none">
                  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="var(--muted)" font-family="Share Tech Mono,monospace">Fetching history…</text>
                </svg>
              </div>`
@@ -15545,33 +15558,8 @@ function _loadAdmin(){
                <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:5px;padding:3px 10px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;cursor:pointer;border-radius:var(--r-sm)">Upgrade →</button>
              </div>`}
 
-        <!-- Price source URL — power-user plumbing, tucked behind a
-             disclosure so it stays out of the default collection view but
-             remains one tap away for anyone who needs to fix a link. -->
-        <details style="margin-bottom:16px">
-          <summary style="font-size:.62rem;color:var(--muted);letter-spacing:.04em;cursor:pointer;list-style:revert">Price_Source_URL</summary>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">
-            <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
-              placeholder="PriceCharting or TCGPlayer URL"
-              style="flex:1;padding:5px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;min-width:0" />
-            <button onclick="savePriceSourceUrl('${item.id}')"
-              style="padding:5px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;white-space:nowrap">Save</button>
-            ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.78rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
-          </div>
-        </details>
-
         <!-- Actions -->
         <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;gap:8px">
-            <button onclick="openCardPhotoModal('${item.id}')"
-              style="flex:1;padding:9px 12px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap"
-              onmouseover="this.style.background='rgba(26,199,160,.1)'"
-              onmouseout="this.style.background='transparent'">${item.card_back_image_url ? 'Edit Photos' : (item.card_image_url ? 'Edit / Add Back' : 'Add Photo')}</button>
-            <button onclick="closeModal('binderDetailModal');openEditCardModal('${item.id}')"
-              style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap"
-              onmouseover="this.style.background='rgba(26,199,160,.08)'"
-              onmouseout="this.style.background='transparent'">✏ Edit Details</button>
-          </div>
           <div style="display:flex;gap:8px">
             ${(() => {
               // Sealed items route through openListCardModal with productType
@@ -15593,8 +15581,8 @@ function _loadAdmin(){
               return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${_cond}',productType:'${_pt}',apiCardId:'${_api}',cardNumber:'${_cnm}',variant:'${_var}'})"
               style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>`;
             })()}
-            <button onclick="openSoldOfflineModal('${item.id}')"
-              style="flex:1;padding:9px 12px;border:1px solid var(--green);background:transparent;color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">$ Sold Offline</button>
+            <button onclick="deleteCollectionItem('${item.id}')"
+              style="flex:1;padding:9px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
           </div>
           ${binders.length > 0 ? `<select onchange="moveCardToBinder('${item.id}',this.value);closeModal('binderDetailModal')"
             style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">
@@ -15602,15 +15590,6 @@ function _loadAdmin(){
             <option value="">— All Cards —</option>
             ${binders.map(b=>`<option value="${b.id}" ${String(item.binder_id)===String(b.id)?'selected':''}>${_escHtml(b.name)}</option>`).join('')}
           </select>` : ''}
-          <div style="display:flex;gap:8px">
-            <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
-              style="flex:1;padding:9px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap"
-              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
-            <button onclick="deleteCollectionItem('${item.id}')"
-              style="flex:1;padding:9px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
-          </div>
-          <div id="binderRefreshStatus_${item.id}" style="font-size:.72rem;color:var(--muted);display:none"></div>
           <button onclick="openCardReportModal('${item.id}')"
             style="background:none;border:none;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;cursor:pointer;letter-spacing:.06em;padding:6px;text-align:center;text-decoration:underline;text-decoration-color:rgba(184,115,51,.4);text-underline-offset:3px;transition:color .15s"
             onmouseover="this.style.color='#d99550'"
@@ -15620,7 +15599,7 @@ function _loadAdmin(){
         </div>
       `;
       const titleEl2 = document.getElementById('binderDetailTitle');
-      if (titleEl2) { titleEl2.textContent = 'Card Detail'; titleEl2.style.color = ''; }
+      if (titleEl2) { titleEl2.textContent = ''; titleEl2.style.display = 'none'; }
       openModal('binderDetailModal');
       // Variant chip strip (Normal / Reverse Holo) — async since it
       // hits the catalog for has_reverse_holo. Hidden when the
@@ -27911,4 +27890,33 @@ function _binderEditShowAllRows(){
   var c = document.getElementById('binderEditColorRow'); if (c) c.style.display = '';
   var sub = document.querySelector('#binderEditModal .modal-sub');
   if (sub) sub.textContent = 'Organise your collection into separate binders by set, type, or anything you like.';
+}
+
+// ── Owned-card edit menu (binder detail) ─────────────────────────────
+// Single edit entry point overlaid on the card image: details / photo /
+// (copies for vendor+ multi). Replaces the old scattered bottom buttons.
+function _toggleCardEditMenu(id){
+  var m = document.getElementById('cardEditMenu_' + id);
+  if (m) m.style.display = (m.style.display === 'block') ? 'none' : 'block';
+}
+function _closeCardEditMenu(id){
+  var m = document.getElementById('cardEditMenu_' + id);
+  if (m) m.style.display = 'none';
+}
+// "Edit copies" — opens the per-unit editor for the first physical copy.
+// The unit stack (vendor+ qty>1) auto-mounts on detail open and populates
+// _binderUnitStackState; ensure it's ready, then open unit #1.
+async function _editFirstCopy(itemId){
+  var item = collectionItems.find(function(c){ return String(c.id) === String(itemId); });
+  if (!item) return;
+  try{
+    var s = (typeof _binderUnitStackState !== 'undefined') ? _binderUnitStackState : null;
+    var ready = s && s.units && s.units.length && String((s.item||{}).id) === String(itemId);
+    if (!ready && typeof _mountUnitStackIntoBinderDetail === 'function') {
+      await _mountUnitStackIntoBinderDetail(item);
+      s = _binderUnitStackState;
+    }
+    if (s && s.units && s.units.length) openEditUnitModal(s.units[0].id);
+    else showToast('No individual copies to edit');
+  }catch(e){ showToast('Could not open copies'); }
 }
