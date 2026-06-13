@@ -976,8 +976,22 @@ function _loadAdmin(){
       document.body.classList.toggle('pb-modal-open', !!anyOpen);
     }
     function openModal(modalId) {
-      document.getElementById(modalId).classList.add('open');
+      const _mEl = document.getElementById(modalId);
+      _mEl.classList.add('open');
       _syncModalScrollLock();
+      // A11y: mark as a dialog, remember what had focus, and move focus to
+      // the panel so screen-reader / keyboard users land inside the modal.
+      // We focus the panel (tabindex -1) rather than the first input so the
+      // mobile keyboard doesn't spring up uninvited. A stack handles the
+      // switchModal / stacked-modal cases.
+      try {
+        _mEl.setAttribute('role', 'dialog');
+        _mEl.setAttribute('aria-modal', 'true');
+        (window._modalFocusStack = window._modalFocusStack || []).push(document.activeElement);
+        const panel = _mEl.querySelector('.modal') || _mEl;
+        if (panel && !panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+        requestAnimationFrame(() => { try { panel.focus({ preventScroll: true }); } catch (_) {} });
+      } catch (_) {}
       // Side-effect hooks for specific modals — kept here so every
       // openModal call site doesn't have to remember to fire them.
       if (modalId === 'addToCollectionModal' && typeof _atcRefreshVariantChips === 'function') {
@@ -1053,6 +1067,13 @@ function _loadAdmin(){
     function closeModal(modalId) {
       document.getElementById(modalId).classList.remove('open');
       _syncModalScrollLock();
+      // A11y: restore focus to whatever opened the modal.
+      try {
+        const prev = (window._modalFocusStack || []).pop();
+        if (prev && typeof prev.focus === 'function') {
+          requestAnimationFrame(() => { try { prev.focus({ preventScroll: true }); } catch (_) {} });
+        }
+      } catch (_) {}
       // Reset edit mode whenever the add/edit modal is dismissed
       if (modalId === 'addToCollectionModal') {
         _atcEditMode = false; _atcEditItemId = null;
@@ -12459,9 +12480,13 @@ function _loadAdmin(){
     function upgradeMembership() { openPricingModal(); }
 
     // ===== TOAST & NOTIFICATIONS =====
-    function showToast(message) {
+    function showToast(message, type) {
       const toast = document.createElement('div');
-      toast.className = 'toast';
+      toast.className = 'toast' + (type === 'error' ? ' toast--error' : type === 'success' ? ' toast--success' : '');
+      // Announce to assistive tech: errors interrupt (assertive/alert),
+      // everything else is polite so it doesn't talk over the user.
+      toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+      toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
       toast.textContent = message;
       document.body.appendChild(toast);
       setTimeout(() => {
@@ -12482,7 +12507,7 @@ function _loadAdmin(){
       console.error('[caught]', detail);
       if (now - _lastErrorToastAt < 5000) return;
       _lastErrorToastAt = now;
-      try { showToast('Something went wrong — refresh if it sticks'); } catch (_) {}
+      try { showToast('Something went wrong — refresh if it sticks', 'error'); } catch (_) {}
     }
     window.addEventListener('error', function(ev) {
       // Ignore network-only errors from images / scripts loaded via <img loading="lazy" decoding="async">

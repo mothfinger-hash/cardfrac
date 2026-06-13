@@ -898,7 +898,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       .auth-btn{padding:4px 8px;font-size:.5rem}
       .member-chip{font-size:.48rem;padding:3px 6px}
       .btn,.btn-primary,.btn-secondary,.btn-teal,.btn-orange,.btn-red,.btn-gold{min-height:44px;padding:10px 12px;font-size:.58rem}
-      .mini-btn{min-height:36px;padding:7px 10px;font-size:.56rem}
+      .mini-btn{min-height:44px;padding:7px 10px;font-size:.56rem}
       .form-row{grid-template-columns:1fr}
       .form-group input,.form-group select{font-size:.58rem;padding:8px 10px}
       .detail-stats{grid-template-columns:1fr}
@@ -5118,6 +5118,11 @@ nav {
 /* ─── 16. TOAST + TOOLTIP ────────────────────────────────────────── */
 
 .toast { background: #000 !important; border: 2px solid var(--accent) !important; border-radius: 0 !important; color: var(--accent) !important; box-shadow: 4px 4px 0 var(--accent) !important; font-family: 'Space Mono', monospace !important; letter-spacing: 0.1em; animation: r404-toast-slide .25s var(--r404-snap); }
+/* Error/success toast variants — same cyberpunk shape, semantic colour so
+   failures read as failures instead of looking like a normal confirmation.
+   Higher specificity + !important to beat the base .toast override above. */
+.toast.toast--error { border-color: var(--red) !important; color: var(--red) !important; box-shadow: 4px 4px 0 var(--red) !important; }
+.toast.toast--success { border-color: var(--green) !important; color: var(--green) !important; box-shadow: 4px 4px 0 var(--green) !important; }
 @keyframes r404-toast-slide {
   from { transform: translateX(-110%); opacity: 0; }
   to   { transform: translateX(0); opacity: 1; }
