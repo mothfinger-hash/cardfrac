@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v523';
+const CACHE = 'pathbinder-v524';
 
 const PRECACHE = [
   '/offline.html',
@@ -745,7 +745,16 @@ self.addEventListener('fetch', e => {
   if (/\/pb-[\w-]+\.(?:js|css)$/.test(url.pathname)) {
     // Kick the network fetch off synchronously so waitUntil can keep the
     // SW alive until the background cache write finishes.
-    const refreshing = fetch(e.request).then(async res => {
+    //
+    // cache:'no-cache' forces the background refetch to REVALIDATE with the
+    // origin (conditional request) instead of being silently satisfied by
+    // the browser's HTTP disk cache. Without it, a plain fetch() here was
+    // served the stale copy from the HTTP cache (Vercel's CDN default puts a
+    // positive max-age on /pb-* assets) and we just re-cached stale → stale,
+    // so deploys never reached users no matter how many reloads. With
+    // revalidation, an unchanged file is a cheap 304; a changed file returns
+    // a fresh 200 that we write to the cache.
+    const refreshing = fetch(e.request, { cache: 'no-cache' }).then(async res => {
       if (res.status === 200 && res.type !== 'opaque') {
         const clone = res.clone();
         const cache = await caches.open(CACHE);
