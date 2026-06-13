@@ -965,8 +965,19 @@ function _loadAdmin(){
     // Slots are populated from Supabase in initApp() — no demo data needed
 
     // ===== AUTH =====
+    // Lock body scroll whenever ANY modal is open so the page behind it
+    // can't be scrolled / scroll-chained into. On mobile (iOS especially)
+    // an inner modal scroll "escapes" to the body once it reaches its end,
+    // which made taps fall through to the dashboard after scrolling a tall
+    // modal's options. Reference-free: just checks if any overlay is open
+    // so nested modals (e.g. binder detail -> edit details) stay locked.
+    function _syncModalScrollLock() {
+      var anyOpen = document.querySelector('.modal-overlay.open');
+      document.body.classList.toggle('pb-modal-open', !!anyOpen);
+    }
     function openModal(modalId) {
       document.getElementById(modalId).classList.add('open');
+      _syncModalScrollLock();
       // Side-effect hooks for specific modals — kept here so every
       // openModal call site doesn't have to remember to fire them.
       if (modalId === 'addToCollectionModal' && typeof _atcRefreshVariantChips === 'function') {
@@ -1041,6 +1052,7 @@ function _loadAdmin(){
     }
     function closeModal(modalId) {
       document.getElementById(modalId).classList.remove('open');
+      _syncModalScrollLock();
       // Reset edit mode whenever the add/edit modal is dismissed
       if (modalId === 'addToCollectionModal') {
         _atcEditMode = false; _atcEditItemId = null;

@@ -719,6 +719,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* MODALS */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:10002;align-items:center;justify-content:center;padding:16px}
     .modal-overlay.open{display:flex}
+    /* Mobile scroll hardening: lock the page behind an open modal, and keep
+       a modal's own scroll from chaining into the dashboard once it hits its
+       end (the iOS scroll-escape that let taps fall through to the page). */
+    body.pb-modal-open{overflow:hidden}
+    .modal-overlay,.modal{overscroll-behavior:contain}
     .modal{background:var(--surface);border:2px solid var(--border);border-radius:0;padding:26px;width:100%;max-width:460px;position:relative;max-height:92vh;overflow-y:auto;box-shadow:5px 5px 0 var(--shadow)}
     .modal h3{font-size:1.1rem;font-weight:700;margin-bottom:4px}
     .modal .modal-sub{color:var(--muted);font-size:.82rem;margin-bottom:18px}
