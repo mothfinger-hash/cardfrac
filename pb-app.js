@@ -25032,7 +25032,7 @@ function _loadAdmin(){
 
       // Page shell — back button + header + loading state
       el.innerHTML = '<div style="padding:12px 0 8px">' +
-        '<button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>' +
+        '<button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>' +
         '<h2 style="font-size:1.05rem;margin-bottom:2px">' + _escHtml(setName) + ' — Sealed</h2>' +
         '<div id="sealedProductGrid" style="background:var(--surface);border:1px solid var(--border);padding:10px;margin-top:12px;min-height:200px;max-height:calc(100svh - 260px);overflow-y:auto">' +
         '<div style="padding:32px;text-align:center;color:var(--muted)">Loading sealed products…</div>' +
@@ -25485,7 +25485,7 @@ function _loadAdmin(){
       const el = document.getElementById('setsPageContent');
       if (!el) return;
       el.innerHTML = `<div style="padding:12px 0 8px">
-        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
         <div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>
       </div>`;
       try {
@@ -25551,7 +25551,7 @@ function _loadAdmin(){
         const rows = _buildCatalogSetCardRows(cards, ownedMap, 'openJpSetCardDetail');
 
         el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
           <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">JP</span>${_escHtml(setName)}
           </h2>
@@ -25572,7 +25572,7 @@ function _loadAdmin(){
         </div>`;
       } catch(e) {
         el.innerHTML = `<div style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
           <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load. ${e.message}</div>
         </div>`;
       }
@@ -25701,7 +25701,7 @@ function _loadAdmin(){
       }
 
       el.innerHTML = '<div style="padding:12px 0 8px">' +
-        '<button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>' +
+        '<button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>' +
         '<h2 style="font-size:1.05rem;margin-bottom:6px">' + _escHtml(setName) + '</h2>' +
         '<div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>' +
         '</div>';
@@ -25772,7 +25772,7 @@ function _loadAdmin(){
         var rows = _buildCatalogSetCardRows(cards, ownedMap, 'openJpSetCardDetail');
 
         el.innerHTML = '<div class="pb-setd" style="padding:12px 0 8px">' +
-          '<button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>' +
+          '<button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>' +
           '<h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">' +
             '<span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">' + lang.toUpperCase() + '</span>' + _escHtml(setName) +
           '</h2>' +
@@ -26085,7 +26085,7 @@ function _loadAdmin(){
       const el = document.getElementById('setsPageContent');
       if (!el) return;
       el.innerHTML = `<div style="padding:12px 0 8px">
-        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
         <div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>
       </div>`;
       try {
@@ -26158,7 +26158,7 @@ function _loadAdmin(){
         const rows = _buildCatalogSetCardRows(cards, ownedMap, 'openTcgSetCardDetail');
 
         el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
           <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">${cfg.label}</span>${_escHtml(setName)}
           </h2>
@@ -26179,7 +26179,7 @@ function _loadAdmin(){
         </div>`;
       } catch(e) {
         el.innerHTML = `<div style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
           <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load. ${e.message}</div>
         </div>`;
       }
@@ -26365,7 +26365,7 @@ function _loadAdmin(){
       // chrome instantly while the cards fetch in the background.
       const sortPillStyle = (s) => `class="sets-sort-pill" data-sort="${s}" onclick="sortSetCards('${s}')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort===s?'var(--accent)':'var(--border)'};color:${_setsDetailSort===s?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap"`;
       el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
-        <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+        <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
         <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">${_escHtml(setName)}</h2>
         <span class="sets-detail-jp" id="setsDetailJpSub">セット</span>
         <div id="setsDetailProgress" class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px">
