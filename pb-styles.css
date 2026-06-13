@@ -3673,6 +3673,43 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       padding:1px 4px; border-radius:var(--r-pill, 999px);
       background:rgba(0,0,0,.7); border:1px solid currentColor;
     }
+    /* ── Mobile set-detail layout ──────────────────────────────────
+       Phones reclaim vertical space: the "Back to Sets" link + set
+       name share one line, the SORT row sits directly beneath, the
+       card grid grows to fill, and the set-completion tracker is
+       pinned just above the mobile nav bar. Achieved purely by
+       flex-reordering the existing children (every direct child of
+       .pb-setd is assigned an order), so no JS / data-flow changes.
+       Desktop keeps the original stacked layout untouched. */
+    @media (max-width:900px){
+      .pb-setd{
+        display:flex; flex-wrap:wrap; align-items:baseline; column-gap:10px;
+      }
+      .pb-setd > .pb-setd-back{ order:1; flex:0 0 auto; margin:0 !important; }
+      .pb-setd > .pb-setd-title{
+        order:2; flex:1 1 auto; min-width:0; margin:0 !important;
+        font-size:.95rem !important;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      }
+      .pb-setd > .sets-detail-jp{ order:3; flex-basis:100%; margin:3px 0 8px !important; }
+      .pb-setd > .pb-setd-sort{ order:4; flex-basis:100%; margin-bottom:8px !important; }
+      .pb-setd > #catalogSortHint{ order:4; flex-basis:100%; }
+      .pb-setd > .pb-setd-list{
+        order:5; flex-basis:100%;
+        max-height:calc(100svh - 232px) !important;
+        padding-bottom:56px !important;
+      }
+      /* Completion tracker — pinned above the 60px mobile nav bar. */
+      .pb-setd > .pb-setd-prog{
+        order:6;
+        position:fixed !important; left:12px; right:12px; bottom:68px;
+        z-index:60; margin:0 !important;
+        background:var(--surface) !important;
+        border:1px solid var(--border) !important;
+        border-radius:var(--r-md,10px) !important;
+        box-shadow:0 -2px 16px rgba(0,0,0,.55);
+      }
+    }
     /* Search input — keep the teal focus accent (the page's accent
        palette is still teal); just use the default border at rest. */
     #setsPage #setsSearch{

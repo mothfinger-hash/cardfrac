@@ -25103,7 +25103,7 @@
       const isNum    = _catalogSetDetailSort === 'number';
       const pill = (active, label, onclick, data) =>
         `<button class="catalog-sort-pill" data-sort="${data}" onclick="${onclick}" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${active?'var(--accent)':'var(--border)'};color:${active?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${label}</button>`;
-      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+      return `<div class="pb-setd-sort" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
         <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
         ${pill(isNum,    '#  NUMBER',                                        "sortCatalogSetCards('number')",  'number')}
         ${pill(isRarity, _catalogSetDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓', "toggleCatalogRarity(this)",       'rarity')}
@@ -26426,7 +26426,7 @@
             ${currentUser ? totalOwned + ' JP cards owned' : 'Log in to track your collection'} · ${sets.length} sets
           </p>
           ${_catalogSetsSearchHtml()}
-          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 260px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
             ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No JP sets found — run fetch_jp_pokedata.py to build the catalog</div>'}
           </div>
         </div>`;
@@ -26504,13 +26504,13 @@
 
         const rows = _buildCatalogSetCardRows(cards, ownedMap, 'openJpSetCardDetail');
 
-        el.innerHTML = `<div style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:2px">
+        el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">JP</span>${_escHtml(setName)}
           </h2>
           <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
-          <div style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+          <div class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
               <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
@@ -26520,7 +26520,7 @@
             <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
           </div>
           ${_catalogSetSortPillsHtml()}
-          <div id="catalogSetCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 370px);overflow-y:auto;overflow-x:hidden">
+          <div id="catalogSetCardList" class="pb-setd-list" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 370px);overflow-y:auto;overflow-x:hidden">
             ${rows}
           </div>
         </div>`;
@@ -26634,7 +26634,7 @@
             (currentUser ? (owned + ' ' + langLabel + ' Pokémon cards owned') : ('Log in to track your collection')) +
             ' · ' + sets.length + ' sets · ' + cached.totalCards + ' cards' +
           '</p>' +
-          '<div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">' +
+          '<div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 260px);overflow-y:auto;overflow-x:hidden" id="setsListInner">' +
             (rowsHtml || '<div style="padding:32px;text-align:center;color:var(--muted)">No ' + langLabel + ' sets in the catalog yet — run sync_pokemon_singles_by_lang.py --lang ' + lang + '</div>') +
           '</div>' +
           '</div>';
@@ -26693,26 +26693,56 @@
           _pcLangSetDetailCache[cacheKey] = { timestamp: now, cards: cards };
         }
 
-        // Build a simple grid render. Reuses the same card-shape look
-        // as the singles in other Sets pages — image + name + number.
-        var rowsHtml = cards.map(function(c) {
-          var img = c.image_url
-            ? '<img src="' + _escHtml(c.image_url) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">'
-            : '<div style="width:100%;height:100%;background:var(--surface2)"></div>';
-          var num = c.card_number ? ('#' + _escHtml(c.card_number)) : '';
-          return '<div style="background:var(--surface2);border:1px solid var(--border);padding:6px;display:flex;flex-direction:column;gap:6px;cursor:pointer" title="' + _escHtml(c.name) + '">' +
-            '<div style="aspect-ratio:245/342;background:var(--surface);overflow:hidden;border-radius:2px">' + img + '</div>' +
-            '<div style="font-size:.7rem;line-height:1.2;color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + _escHtml(c.name || '') + '</div>' +
-            (num ? '<div style="font-size:.55rem;color:var(--muted);font-family:\'Space Mono\',monospace">' + num + '</div>' : '') +
-            '</div>';
-        }).join('');
+        // Owned map — variant-aware shape (see JP path). PC-lang singles
+        // carry api_card_id `${lang}-pc-...`, so matching is by that prefix.
+        var ownedMap = {};
+        if (currentUser) {
+          collectionItems.filter(function(c){
+            return !c.is_ghost && !c.sold_offline && c.api_card_id && c.api_card_id.indexOf(lang + '-pc-') === 0;
+          }).forEach(function(c){
+            var v = c.variant || 'normal';
+            var existing = ownedMap[c.api_card_id] || {};
+            existing[v] = c;
+            if (!existing.item) existing.item = c;
+            ownedMap[c.api_card_id] = existing;
+          });
+        }
+        var ownedCount = cards.filter(function(c){ return ownedMap[c.id]; }).length;
+        var pct = cards.length > 0 ? Math.round(ownedCount / cards.length * 100) : 0;
+        var barColor = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent2)' : 'var(--accent)';
 
-        el.innerHTML = '<div style="padding:12px 0 8px">' +
-          '<button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>' +
-          '<h2 style="font-size:1.05rem;margin-bottom:4px">' + _escHtml(setName) + '</h2>' +
-          '<p style="font-size:.66rem;color:var(--muted);margin-bottom:14px;font-family:\'Space Mono\',monospace;letter-spacing:.06em">' + cards.length + ' cards</p>' +
-          '<div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 280px);overflow-y:auto;padding:10px">' +
-            '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">' + (rowsHtml || '') + '</div>' +
+        // Wire the shared catalog sort + card-detail handlers to this view.
+        // _setDetailGameKey = CN / KR so the add-to-collection helper tags
+        // the correct language (the JP sheet renderer is reused as-is).
+        window._jpSetDetailCards = cards;
+        window._jpSetOwnedMap    = ownedMap;
+        window._setDetailGameKey = lang.toUpperCase();
+        window._catalogSetDetailCards  = cards;
+        window._catalogSetDetailOwned  = ownedMap;
+        window._catalogSetDetailOpenFn = 'openJpSetCardDetail';
+        _catalogSetDetailSort = 'number';
+        _catalogSetOwnedFirst = false;
+
+        var rows = _buildCatalogSetCardRows(cards, ownedMap, 'openJpSetCardDetail');
+
+        el.innerHTML = '<div class="pb-setd" style="padding:12px 0 8px">' +
+          '<button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>' +
+          '<h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">' +
+            '<span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">' + lang.toUpperCase() + '</span>' + _escHtml(setName) +
+          '</h2>' +
+          '<span class="sets-detail-jp">セット ・ ' + cards.length + ' カード</span>' +
+          '<div class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">' +
+            '<div style="flex:1">' +
+              '<div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">' + ownedCount + ' / ' + cards.length + ' cards owned</div>' +
+              '<div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">' +
+                '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:4px;transition:width .5s"></div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="font-size:1.4rem;font-weight:700;color:' + barColor + ';flex-shrink:0">' + pct + '%</div>' +
+          '</div>' +
+          _catalogSetSortPillsHtml() +
+          '<div id="catalogSetCardList" class="pb-setd-list" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 370px);overflow-y:auto;overflow-x:hidden">' +
+            rows +
           '</div>' +
           '</div>';
       } catch(e) {
@@ -26994,7 +27024,7 @@
             ${currentUser ? totalOwned + ' ' + cfg.name + ' cards owned' : 'Log in to track your collection'} · ${sets.length} sets
           </p>
           ${_catalogSetsSearchHtml()}
-          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 310px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
+          <div style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 260px);overflow-y:auto;overflow-x:hidden" id="setsListInner">
             ${rows || '<div style="padding:32px;text-align:center;color:var(--muted)">No ' + cfg.name + ' sets yet. New sets will appear here as the catalog sync finishes.</div>'}
           </div>
         </div>`;
@@ -27081,13 +27111,13 @@
 
         const rows = _buildCatalogSetCardRows(cards, ownedMap, 'openTcgSetCardDetail');
 
-        el.innerHTML = `<div style="padding:12px 0 8px">
-          <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-          <h2 style="font-size:1.05rem;margin-bottom:2px">
+        el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
+          <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+          <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">
             <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">${cfg.label}</span>${_escHtml(setName)}
           </h2>
           <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
-          <div style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
+          <div class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
             <div style="flex:1">
               <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ownedCount} / ${cards.length} cards owned</div>
               <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden">
@@ -27097,7 +27127,7 @@
             <div style="font-size:1.4rem;font-weight:700;color:${barColor};flex-shrink:0">${pct}%</div>
           </div>
           ${_catalogSetSortPillsHtml()}
-          <div id="catalogSetCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 370px);overflow-y:auto;overflow-x:hidden">
+          <div id="catalogSetCardList" class="pb-setd-list" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 370px);overflow-y:auto;overflow-x:hidden">
             ${rows}
           </div>
         </div>`;
@@ -27127,7 +27157,11 @@
     var _SETS_GAME_KEY_TO_FIELDS = {
       MTG: { game_type: 'magic',    language: 'EN' },
       YGO: { game_type: 'yugioh',   language: 'EN' },
-      OP:  { game_type: 'onepiece', language: 'EN' }
+      OP:  { game_type: 'onepiece', language: 'EN' },
+      // Chinese / Korean Pokemon — same game_type, language tags the
+      // printing. api_card_id already carries the cn-/kr- prefix.
+      CN:  { game_type: 'pokemon',  language: 'CN' },
+      KR:  { game_type: 'pokemon',  language: 'KR' }
     };
 
     function openJpSetCardDetail(idx) {
@@ -27151,6 +27185,8 @@
       var _detailLabel = _gk === 'MTG' ? 'MAGIC CARD DETAIL'
                        : _gk === 'YGO' ? 'YU-GI-OH CARD DETAIL'
                        : _gk === 'OP'  ? 'ONE PIECE CARD DETAIL'
+                       : _gk === 'CN'  ? 'CN CARD DETAIL'
+                       : _gk === 'KR'  ? 'KR CARD DETAIL'
                        : 'JP CARD DETAIL';
       overlay.innerHTML = `
         <div class="modal" style="width:100%;max-width:360px;padding:22px 20px;max-height:92vh;overflow-y:auto">
@@ -27282,24 +27318,24 @@
       // empty list container with "Loading cards…". The user sees the
       // chrome instantly while the cards fetch in the background.
       const sortPillStyle = (s) => `class="sets-sort-pill" data-sort="${s}" onclick="sortSetCards('${s}')" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort===s?'var(--accent)':'var(--border)'};color:${_setsDetailSort===s?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap"`;
-      el.innerHTML = `<div style="padding:12px 0 8px">
-        <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
-        <h2 style="font-size:1.05rem;margin-bottom:2px">${_escHtml(setName)}</h2>
+      el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
+        <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Back to Sets</button>
+        <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">${_escHtml(setName)}</h2>
         <span class="sets-detail-jp" id="setsDetailJpSub">セット</span>
-        <div id="setsDetailProgress" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px">
+        <div id="setsDetailProgress" class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px">
           <div style="flex:1">
             <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Loading…</div>
             <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden;border:1px solid var(--border)"></div>
           </div>
           <div style="font-size:1.4rem;font-weight:700;color:var(--muted);flex-shrink:0">—</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <div class="pb-setd-sort" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
           <button ${sortPillStyle('number')}>#  NUMBER</button>
           <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
           <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
         </div>
-        <div id="setsCardList" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 290px);overflow-y:auto;overflow-x:hidden">
+        <div id="setsCardList" class="pb-setd-list" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 290px);overflow-y:auto;overflow-x:hidden">
           <div style="padding:32px;text-align:center;color:var(--muted)">Loading cards…</div>
         </div>
       </div>`;
