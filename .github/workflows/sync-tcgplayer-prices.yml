@@ -15,15 +15,24 @@ name: Sync TCGplayer Prices
 # TCGplayer intermediaries (One Piece, Gundam, DBZ, Topps) are skipped —
 # they stay PriceCharting-only.
 #
+# Why a per-game matrix (was: one job for all three)
+# ---------------------------------------------------
+# Running all three games in a single job hit the 45-minute job timeout:
+# pokemontcg.io's paginated, rate-limited fetch alone takes ~26 min and
+# Magic's Scryfall bulk match ~13 min, leaving Yu-Gi-Oh to get canceled
+# mid-run. Each game is now its own matrix job with its own 45-min budget,
+# so a slow Pokemon run can never starve Magic or Yu-Gi-Oh. On the single
+# self-hosted Mac runner they run one at a time (max-parallel: 1); add
+# runners later and they can fan out in parallel for free.
+#
 # Scheduling:
-#   08:00 UTC = 3 AM EST / 4 AM EDT  →  daily full sync
+#   08:00 UTC = 3 AM EST / 4 AM EDT  →  daily full sync (all three games)
 #
 # This runs 1 hour AFTER the PriceCharting all-TCGs refresh (07:00 UTC)
 # so both sources are fresh by the time morning users land on the
 # dashboard.
 #
 # Runs on the same self-hosted Mac runner as refresh-catalog-prices.yml.
-# Total wall time: ~5-8 minutes (bulk fetches + parallel Supabase writes).
 
 on:
   schedule:
@@ -34,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       game:
-        description: 'TCG scope (default: all)'
+        description: 'TCG scope (default: all → fans out to one job per game)'
         required: false
         default: 'all'
         type: choice
@@ -57,9 +66,34 @@ on:
           - 'true'
 
 jobs:
-  sync:
+  # Resolve which games to run into a JSON array the matrix consumes.
+  # Scheduled runs (no input) and an explicit 'all' fan out to all three;
+  # a specific game dispatches just that one.
+  setup:
     runs-on: self-hosted
-    timeout-minutes: 45   # bulk-fetch run is ~5-8 min; generous margin
+    outputs:
+      games: ${{ steps.pick.outputs.games }}
+    steps:
+      - name: Resolve game matrix
+        id: pick
+        run: |
+          GAME="${{ github.event.inputs.game || 'all' }}"
+          if [ "$GAME" = "all" ]; then
+            echo 'games=["pokemon","magic","yugioh"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "games=[\"$GAME\"]" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Matrix games: $GAME"
+
+  sync:
+    needs: setup
+    runs-on: self-hosted
+    timeout-minutes: 45   # PER GAME now — each game gets its own budget
+    strategy:
+      fail-fast: false    # a Pokemon failure must not cancel Magic / Yu-Gi-Oh
+      max-parallel: 1     # single self-hosted runner: run one game at a time
+      matrix:
+        game: ${{ fromJSON(needs.setup.outputs.games) }}
 
     # PYTHONUNBUFFERED keeps print() output flowing to the GitHub Actions
     # log in real time. Without it, Python block-buffers stdout on
@@ -82,7 +116,7 @@ jobs:
       - name: Build script args
         id: args
         run: |
-          ARGS="--game ${{ github.event.inputs.game || 'all' }}"
+          ARGS="--game ${{ matrix.game }}"
           if [ "${{ github.event.inputs.limit || '0' }}" != "0" ]; then
             ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
           fi
@@ -92,7 +126,7 @@ jobs:
           echo "value=$ARGS" >> "$GITHUB_OUTPUT"
           echo "Running: python3 -u sync_tcgplayer_via_free_apis.py $ARGS"
 
-      - name: Run TCGplayer sync
+      - name: Run TCGplayer sync (${{ matrix.game }})
         env:
           SUPABASE_URL:           ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY:   ${{ secrets.SUPABASE_SERVICE_KEY }}

@@ -15741,9 +15741,9 @@
           return;
         }
 
-        const qty = item.quantity || 1;
         const currentUnit = item.current_value || item._compEstimate || 0;
-        const since = (currentUnit - baselineUnit) * qty;
+        // Per-card, to match the per-card Gain/Loss tile (cost-basis path).
+        const since = (currentUnit - baselineUnit);
         const sincePctNum = ((currentUnit - baselineUnit) / baselineUnit) * 100;
         const sincePct = sincePctNum.toFixed(1);
         const sign = since >= 0 ? '+' : '';
@@ -15805,14 +15805,17 @@
           return;
         }
 
-        // Update range label
+        // Update range label — % change across the history we have,
+        // tagged with the real elapsed span (this used to print the
+        // POINT COUNT as "Nd", e.g. "2d" for two data points) plus a
+        // "/ 3mo" hint that the chart frame is a fixed 90-day window.
         if (rangeEl) {
-          const first = points[0].value, last = points[points.length - 1].value;
-          const chg = ((last - first) / first * 100);
+          const first = points[0], last = points[points.length - 1];
+          const chg = first.value ? ((last.value - first.value) / first.value * 100) : 0;
           const sign = chg >= 0 ? '+' : '';
           const color = chg >= 0 ? 'var(--green)' : 'var(--red)';
-          const days  = points.length;
-          rangeEl.innerHTML = `<span style="color:${color}">${sign}${chg.toFixed(1)}% (${days}d)</span>`;
+          const spanDays = Math.max(1, Math.round((new Date(last.date) - new Date(first.date)) / 86400000));
+          rangeEl.innerHTML = `<span style="color:${color}">${sign}${chg.toFixed(1)}% · ${spanDays}d</span> <span style="opacity:.45">/ 3mo</span>`;
         }
 
         _drawCardPriceChart(svg, points);
@@ -15840,11 +15843,23 @@
       const yAxisMin   = Math.max(0, minV - pad);
       const range      = yAxisMax - yAxisMin || 1;
 
-      const xScale = i => PAD_L + (i / (points.length - 1)) * (W - PAD_L - PAD_R);
+      // X axis is a FIXED 3-month (90-day) frame ending today, mapped by
+      // date — so a week of early data sits at the right edge and fills
+      // in leftward as history accumulates, instead of a few points
+      // stretched across the whole width (which read like a 7-day chart).
+      const DAY = 86400000;
+      const tOf = d => new Date(d + 'T00:00:00').getTime();
+      const winEnd   = Math.max(tOf(points[points.length - 1].date), Date.now());
+      const winStart = winEnd - 90 * DAY;
+      const winSpan  = (winEnd - winStart) || 1;
+      const xAt = d => {
+        const frac = Math.min(1, Math.max(0, (tOf(d) - winStart) / winSpan));
+        return PAD_L + frac * (W - PAD_L - PAD_R);
+      };
       const yScale = v => PAD_T + (1 - (v - yAxisMin) / range) * (H - PAD_T - PAD_B);
 
-      const polyPts = points.map((p, i) => `${xScale(i).toFixed(1)},${yScale(p.value).toFixed(1)}`).join(' ');
-      const areaPts = `${xScale(0).toFixed(1)},${H - PAD_B} ${polyPts} ${xScale(points.length - 1).toFixed(1)},${H - PAD_B}`;
+      const polyPts = points.map(p => `${xAt(p.date).toFixed(1)},${yScale(p.value).toFixed(1)}`).join(' ');
+      const areaPts = `${xAt(points[0].date).toFixed(1)},${H - PAD_B} ${polyPts} ${xAt(points[points.length - 1].date).toFixed(1)},${H - PAD_B}`;
 
       const isUp     = vals[vals.length - 1] >= vals[0];
       const lineClr  = isUp ? 'var(--green)' : 'var(--red)';
@@ -15858,14 +15873,15 @@
         return `<text x="${PAD_L - 3}" y="${y.toFixed(1)}" text-anchor="end" font-size="8" fill="var(--muted)" font-family="Share Tech Mono,monospace" dominant-baseline="middle">$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(v < 10 ? 2 : 0)}</text>`;
       }).join('');
 
-      // X labels: first and last date
-      const xLabels = [0, points.length - 1].map(i => {
-        const d = points[i].date.slice(5); // MM-DD
-        return `<text x="${xScale(i).toFixed(1)}" y="${H - PAD_B + 12}" text-anchor="${i === 0 ? 'start' : 'end'}" font-size="8" fill="var(--muted)" font-family="Share Tech Mono,monospace">${d}</text>`;
-      }).join('');
+      // X labels: the fixed window bounds (≈3 months ago … today) so the
+      // axis reads as a 3-month frame regardless of how much data exists.
+      const fmtT = t => { const dt = new Date(t); return String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); };
+      const xLabels = `
+        <text x="${PAD_L}" y="${H - PAD_B + 12}" text-anchor="start" font-size="8" fill="var(--muted)" font-family="Share Tech Mono,monospace">${fmtT(winStart)}</text>
+        <text x="${(W - PAD_R).toFixed(1)}" y="${H - PAD_B + 12}" text-anchor="end" font-size="8" fill="var(--muted)" font-family="Share Tech Mono,monospace">${fmtT(winEnd)}</text>`;
 
       // Hover dots (last point always shown)
-      const lastX = xScale(points.length - 1).toFixed(1);
+      const lastX = xAt(points[points.length - 1].date).toFixed(1);
       const lastY = yScale(vals[vals.length - 1]).toFixed(1);
 
       svg.innerHTML = `
@@ -15949,34 +15965,29 @@
     function _buildExtrasHtml(extras, fallbackTcgUrl, cardName) {
       const pcRow  = extras && extras.pricecharting;
       const tcgRow = extras && extras.tcgplayer;
-      const extraPriceRows = [];
-      if (pcRow)  extraPriceRows.push({ label: 'PriceCharting', val: pcRow.value });
-      if (tcgRow) extraPriceRows.push({ label: 'TCGplayer',     val: tcgRow.value });
       const tcgUrl = (tcgRow && tcgRow.source_url)
         || fallbackTcgUrl
         || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
-      const pcUrl  = pcRow && pcRow.source_url;
-      const tcgBtn = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
-      const pcBtn  = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
-      const extraPricesHtml = extraPriceRows.length
-        ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02);border-radius:var(--r-md)">
-            ${extraPriceRows.map(function(r) {
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
-                <span style="font-size:.6rem;color:rgba(26,199,160,.55);letter-spacing:.06em">${r.label}</span>
-                <span style="font-size:.72rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
-              </div>`;
-            }).join('')}
-          </div>`
-        : '';
-      const buttonsHtml = `<div style="display:flex;gap:8px;margin-top:12px">
-        <a href="${tcgUrl}" target="_blank" rel="noopener" style="${tcgBtn}"
-          onmouseover="this.style.background='rgba(26,199,160,.14)';this.style.color='rgba(26,199,160,1)'"
-          onmouseout="this.style.background='rgba(26,199,160,.04)';this.style.color='rgba(26,199,160,.85)'">&#8599; TCGPLAYER</a>
-        ${pcUrl ? `<a href="${pcUrl}" target="_blank" rel="noopener" style="${pcBtn}"
-          onmouseover="this.style.background='rgba(184,115,51,.14)';this.style.color='rgba(184,115,51,1)'"
-          onmouseout="this.style.background='rgba(184,115,51,.04)';this.style.color='rgba(184,115,51,.9)'">&#8599; PRICECHARTING</a>` : ''}
+      const pcUrl  = (pcRow && pcRow.source_url) || null;
+      // Each price IS its own link now — the source name + value open that
+      // product page, so the two big TCGPLAYER / PRICECHARTING buttons are
+      // gone. PriceCharting (copper) links only when we have its URL;
+      // TCGplayer (cyan) always has at least a name-search fallback URL.
+      const rows = [];
+      if (pcRow)  rows.push({ label: 'PriceCharting', val: pcRow.value, url: pcUrl,  color: '184,115,51' });
+      if (tcgRow) rows.push({ label: 'TCGplayer',     val: tcgRow.value, url: tcgUrl, color: '26,199,160' });
+      if (!rows.length) return '';
+      return `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);background:rgba(26,199,160,.02);border-radius:var(--r-md);overflow:hidden">
+        ${rows.map(function(r, i) {
+          const last  = i === rows.length - 1;
+          const base  = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;text-decoration:none' + (last ? '' : ';border-bottom:1px solid rgba(26,199,160,.08)');
+          const inner = `<span style="font-size:.62rem;color:rgba(${r.color},.85);letter-spacing:.06em">${r.label}${r.url ? ' <span style="opacity:.55">&#8599;</span>' : ''}</span>`
+            + `<span style="font-size:.78rem;font-weight:700;color:rgb(${r.color})">$${Number(r.val).toFixed(2)}</span>`;
+          return r.url
+            ? `<a href="${r.url}" target="_blank" rel="noopener" style="${base};cursor:pointer" onmouseover="this.style.background='rgba(${r.color},.08)'" onmouseout="this.style.background='transparent'">${inner}</a>`
+            : `<div style="${base}">${inner}</div>`;
+        }).join('')}
       </div>`;
-      return extraPricesHtml + buttonsHtml;
     }
     // Binder path — async-renders the extras block by catalog_id.
     // itemId (optional) lets the loader also patch the binder modal's
@@ -16001,9 +16012,8 @@
           if (tile && tile.textContent.trim() === '—') {
             const est = _computeEstimateFromExtras(extras);
             if (est) {
-              const item = collectionItems.find(function(c){ return String(c.id) === String(itemId); });
-              const qty  = (item && item.quantity) || 1;
-              tile.textContent = '$' + (est.value * qty).toFixed(2);
+              // Est_Value tile is per-card now, so don't multiply by qty.
+              tile.textContent = '$' + est.value.toFixed(2);
               tile.title = est.sourceCount > 1 ? 'Average of ' + est.sourceCount + ' sources' : 'From single comp source';
             }
           }
@@ -16368,11 +16378,18 @@
       // _compEstimate is JIT-populated by _enrichOwnedFromComps when the
       // collection loads — fills in cards where current_value is missing
       // but card_prices / catalog hold a usable comp.
-      const val  = (item.current_value || item._compEstimate || item.purchase_price || 0) * qty;
-      const cost = (item.purchase_price || 0) * qty;
-      const gain = val - cost;
-      const gainSign = gain >= 0 ? '+' : '';
-      const gainPct  = cost > 0 ? ((gain / cost) * 100).toFixed(1) : null;
+      // Tiles are PER-CARD so the headline matches the per-card comps
+      // (PriceCharting/TCGplayer) directly. The stack total (×qty) is
+      // surfaced under the Qty tile instead of in the Est_Value headline.
+      const unit     = item.current_value || item._compEstimate || item.purchase_price || 0;
+      const unitCost = item.purchase_price || 0;
+      const val      = unit * qty;        // stack total — shown under Qty
+      const cost     = unitCost * qty;    // stack total cost (kept for any downstream use)
+      const unitGain = unit - unitCost;   // per-card gain shown in the tile
+      const gain     = val - cost;        // stack-level gain (no longer drives a tile)
+      const gainSign = unitGain >= 0 ? '+' : '';
+      // Percentage is unit-invariant (unitGain/unitCost === gain/cost).
+      const gainPct  = unitCost > 0 ? ((unitGain / unitCost) * 100).toFixed(1) : null;
       const isGraded = item.condition && item.condition !== 'raw';
       const condLabel = isGraded
         ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
@@ -16434,10 +16451,10 @@
 
         <!-- Stats 2×2 -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-          <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" id="binderEstValueTile_${item.id}" style="font-size:.95rem">${val > 0 ? '$' + val.toFixed(2) : '—'}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Cost Basis</div><div class="coll-stat-value" style="font-size:.95rem">${cost > 0 ? '$' + cost.toFixed(2) : '—'}</div></div>
-          <div class="coll-stat-box" id="binderGainLossTile_${item.id}"><div class="coll-stat-label" id="binderGainLossLabel_${item.id}">Gain/Loss</div><div class="coll-stat-value ${gainPct === null ? '' : (gain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg')}" id="binderGainLossValue_${item.id}" style="font-size:${gainPct === null ? '.6rem' : '.95rem'};${gainPct === null ? 'color:var(--muted);font-weight:400;line-height:1.3' : ''}">${gainPct !== null ? gainSign + '$' + Math.abs(gain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : (item.created_at ? 'Loading…' : 'Add cost basis<br>to track')}</div></div>
-          <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:.95rem">${qty}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Est_Value</div><div class="coll-stat-value" id="binderEstValueTile_${item.id}" style="font-size:.95rem">${unit > 0 ? '$' + unit.toFixed(2) : '—'}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Cost Basis</div><div class="coll-stat-value" style="font-size:.95rem">${unitCost > 0 ? '$' + unitCost.toFixed(2) : '—'}</div></div>
+          <div class="coll-stat-box" id="binderGainLossTile_${item.id}"><div class="coll-stat-label" id="binderGainLossLabel_${item.id}">Gain/Loss</div><div class="coll-stat-value ${gainPct === null ? '' : (unitGain >= 0 ? 'coll-gain-pos' : 'coll-gain-neg')}" id="binderGainLossValue_${item.id}" style="font-size:${gainPct === null ? '.6rem' : '.95rem'};${gainPct === null ? 'color:var(--muted);font-weight:400;line-height:1.3' : ''}">${gainPct !== null ? gainSign + '$' + Math.abs(unitGain).toFixed(2) + ' (' + gainSign + gainPct + '%)' : (item.created_at ? 'Loading…' : 'Add cost basis<br>to track')}</div></div>
+          <div class="coll-stat-box"><div class="coll-stat-label">Qty</div><div class="coll-stat-value" style="font-size:.95rem">${qty}${(qty > 1 && val > 0) ? `<span style="display:block;font-size:.55rem;color:var(--muted);font-weight:400;letter-spacing:.02em;margin-top:2px">$${val.toFixed(2)} total</span>` : ''}</div></div>
         </div>
 
         <!-- Multi-source extras: PriceCharting + TCGplayer rows +
@@ -16462,10 +16479,12 @@
                <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:5px;padding:3px 10px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;cursor:pointer;border-radius:var(--r-sm)">Upgrade →</button>
              </div>`}
 
-        <!-- Price source URL -->
-        <div style="margin-bottom:16px">
-          <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;letter-spacing:.04em">Price_Source_URL</div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <!-- Price source URL — power-user plumbing, tucked behind a
+             disclosure so it stays out of the default collection view but
+             remains one tap away for anyone who needs to fix a link. -->
+        <details style="margin-bottom:16px">
+          <summary style="font-size:.62rem;color:var(--muted);letter-spacing:.04em;cursor:pointer;list-style:revert">Price_Source_URL</summary>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">
             <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
               placeholder="PriceCharting or TCGPlayer URL"
               style="flex:1;padding:5px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;min-width:0" />
@@ -16473,7 +16492,7 @@
               style="padding:5px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;white-space:nowrap">Save</button>
             ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.78rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
           </div>
-        </div>
+        </details>
 
         <!-- Actions -->
         <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:8px">
