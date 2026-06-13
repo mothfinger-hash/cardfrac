@@ -15,121 +15,41 @@ function _pbInjectAdminMarkup(){
       <h2>Admin</h2>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn-outline" id="refreshPricesBtn" onclick="triggerPriceRefresh()" style="font-size:.8rem;padding:6px 12px">Refresh Prices</button>
-        <button class="btn-outline" onclick="toggleAddForm()">Add Listing</button>
       </div>
     </div>
     <div id="priceRefreshStatus" style="display:none;font-size:.82rem;padding:10px 14px;border:1px solid var(--border);background:var(--surface2);margin-bottom:16px"></div>
-
-    <div class="add-form-wrap" id="addFormWrap">
-      <h3>Add New Listing</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Card Name</label>
-          <input type="text" id="cardName" placeholder="e.g., Charizard Base Set" oninput="this.style.border=''" />
-        </div>
-        <div class="form-group">
-          <label>Grade</label>
-          <input type="text" id="cardGrade" placeholder="e.g., PSA 10 or NM" oninput="this.style.border=''" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Card Type</label>
-          <input type="text" id="cardType" placeholder="e.g., Pokémon" oninput="this.style.border=''" />
-        </div>
-        <div class="form-group">
-          <label>Game Type</label>
-          <select id="cardGameType">
-            <option value="Pokémon">Pokémon</option>
-            <option value="Magic: The Gathering">Magic: The Gathering</option>
-            <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
-            <option value="One Piece">One Piece</option>
-            <option value="Gundam">Gundam</option>
-            <option value="Dragon Ball Z">Dragon Ball Z</option>
-            <option value="Pokemon Topps">Pokemon Topps</option>
-            <option value="Sports">Sports</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Total Value ($)</label>
-          <input type="number" id="cardValue" placeholder="10000" step="0.01" oninput="this.style.border=''" />
-        </div>
-        <div class="form-group">
-          <label>Number of Slots</label>
-          <input type="number" id="cardSlots" placeholder="100" oninput="this.style.border=''" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Certification Number</label>
-          <input type="text" id="cardCertNumber" placeholder="e.g., PSA-12345678" />
-        </div>
-        <div class="form-group">
-          <label>Vault Location</label>
-          <input type="text" id="cardVaultLocation" placeholder="e.g., PWCC Vault, Portland OR" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Status</label>
-          <select id="cardStatus">
-            <option value="available">Available</option>
-            <option value="sold">Sold Out</option>
-            <option value="early">Early Access</option>
-          </select>
-        </div>
-        <div class="form-group" style="display:flex;align-items:center;gap:10px">
-          <label style="margin:0">Insured</label>
-          <input type="checkbox" id="cardInsured" checked />
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Price Source URL <span style="color:var(--muted);font-size:.75rem">(TCGPlayer / eBay / PSA — admin only, used for auto price updates)</span></label>
-        <input type="url" id="cardPriceSourceUrl" placeholder="https://www.tcgplayer.com/product/..." />
-      </div>
-      <div class="form-group">
-        <label>Card Photos</label>
-        <div id="photoUploadArea" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('photoFileInput').click()">
-          <div style="font-size:2rem">[ ]</div>
-          <div style="color:var(--muted);font-size:.85rem;margin-top:6px">Click to upload photos</div>
-          <div style="color:var(--muted);font-size:.75rem">JPG, PNG, WEBP supported</div>
-        </div>
-        <input type="file" id="photoFileInput" accept="image/*" multiple style="display:none" onchange="handlePhotoUpload(event)" />
-        <div id="photoPreviewGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:12px"></div>
-        <div id="photoUploadStatus" style="font-size:.8rem;color:var(--muted);margin-top:6px"></div>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:16px">
-        <button type="button" class="btn btn-primary" onclick="addListing()" style="flex:1">Add Listing</button>
-        <button type="button" class="btn btn-secondary" onclick="toggleAddForm()">Cancel</button>
-      </div>
+<style>
+    #adminPage .admin-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 20px;border-bottom:1px solid var(--border);padding-bottom:10px}
+    #adminPage .admin-tab{font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.06em;padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;border-radius:6px;transition:all .15s;white-space:nowrap}
+    #adminPage .admin-tab:hover{border-color:var(--accent);color:var(--accent)}
+    #adminPage .admin-tab.active{border-color:var(--accent);background:var(--accent);color:var(--text-on-accent,#031);font-weight:700}
+    #adminPage .admin-panel{display:none}
+    #adminPage .admin-panel.active{display:block}
+    #adminPage .admin-ov-h{font-family:'Orbitron',monospace;font-size:.7rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--copper);margin:18px 0 10px}
+    #adminPage .admin-ov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:8px}
+    #adminPage .admin-ov-tile{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 15px}
+    #adminPage .admin-ov-val{font-family:'Orbitron',monospace;font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.1}
+    #adminPage .admin-ov-lbl{font-size:.6rem;letter-spacing:.08em;color:var(--muted);margin-top:6px;text-transform:uppercase}
+    #adminPage .admin-ov-sub{font-size:.56rem;color:var(--muted);margin-top:3px;font-style:italic}
+    </style>
+<div class="admin-tabs">
+      <button class="admin-tab active" data-tab="adminOverview"   onclick="switchAdminTab('adminOverview')">Overview</button>
+      <button class="admin-tab"        data-tab="adminModeration" onclick="switchAdminTab('adminModeration')">Moderation</button>
+      <button class="admin-tab"        data-tab="adminBeta"       onclick="switchAdminTab('adminBeta')">Beta &amp; Vendors</button>
+      <button class="admin-tab"        data-tab="adminCardData"   onclick="switchAdminTab('adminCardData')">Card Data</button>
+      <button class="admin-tab"        data-tab="adminSystem"     onclick="switchAdminTab('adminSystem')">System</button>
     </div>
-
-    <div class="revenue-panel">
-      <h3>Revenue Dashboard</h3>
-      <div class="revenue-grid">
-        <div class="rev-box">
-          <div class="rev-label">Total Revenue</div>
-          <div class="rev-val">$<span id="revTotal">0</span></div>
-        </div>
-        <div class="rev-box">
-          <div class="rev-label">From Sales</div>
-          <div class="rev-val">$<span id="revSales">0</span></div>
-        </div>
-        <div class="rev-box">
-          <div class="rev-label">From Resales</div>
-          <div class="rev-val">$<span id="revResales">0</span></div>
-        </div>
-        <div class="rev-box">
-          <div class="rev-label">From Cashouts</div>
-          <div class="rev-val">$<span id="revCashouts">0</span></div>
-        </div>
-      </div>
+<div class="admin-panel active" id="adminOverview">
+      <div class="admin-ov-h">Platform Revenue (est.)</div>
+      <div class="admin-ov-grid" id="ovRevenue"><div class="admin-ov-tile"><div class="admin-ov-val">…</div><div class="admin-ov-lbl">Loading</div></div></div>
+      <div class="admin-ov-h">Users &amp; Subscriptions</div>
+      <div class="admin-ov-grid" id="ovUsers"></div>
+      <div class="admin-ov-h">Content</div>
+      <div class="admin-ov-grid" id="ovContent"></div>
+      <div class="admin-ov-h">Moderation Queues</div>
+      <div class="admin-ov-grid" id="ovModeration"></div>
     </div>
-
-
-
+<div class="admin-panel" id="adminModeration">
     <!-- DISPUTES PANEL — admin reviews orders escalated to 'disputed'
          status (seller declined a buyer's return). Two actions per
          dispute: refund the buyer (calls /api/refund-order) or resolve
@@ -173,6 +93,32 @@ function _pbInjectAdminMarkup(){
       <div id="adminSuspendedList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
     </div>
 
+    <!-- Order Refund Tool -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);margin-bottom:8px;text-transform:uppercase">◈ Order Refund</div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Refund a marketplace order via the Stripe refund API. Refunds the buyer, marks the order refunded, and restores the listing to available. Use within the 7-day buyer protection window or when resolving disputes.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="adminRefundOrderId" placeholder="Order ID (full uuid)"
+          style="flex:1;min-width:240px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--text);outline:none"
+          onkeydown="if(event.key==='Enter')adminRefundOrder()">
+        <select id="adminRefundReason"
+          style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
+          <option value="requested_by_customer">Requested by customer</option>
+          <option value="fraudulent">Fraudulent</option>
+          <option value="duplicate">Duplicate</option>
+        </select>
+        <button onclick="adminRefundOrder()"
+          style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:6px 14px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">
+          Refund via Stripe
+        </button>
+      </div>
+      <div id="adminRefundStatus" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);min-height:16px;line-height:1.6"></div>
+    </div>
+
+    </div>
+<div class="admin-panel" id="adminBeta">
     <!-- Vendor Applications Panel (admin only) -->
     <div style="background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:18px;margin-bottom:24px">
       <div style="font-size:.75rem;color:var(--accent);letter-spacing:.08em;margin-bottom:14px">Vendor Applications</div>
@@ -180,65 +126,6 @@ function _pbInjectAdminMarkup(){
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;overflow-x:auto">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th></th>
-            <th>Card Name</th>
-            <th>Grade</th>
-            <th>Type</th>
-            <th>Value</th>
-            <th>Slots</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="listingsTable"></tbody>
-      </table>
-    </div>
-
-    <!-- Card Editor — admin-curated overrides driven by user error reports -->
-    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Card Editor</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="adminLoadCardReports('open')" id="adminCRTabOpen"
-            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);cursor:pointer">Open Reports</button>
-          <button onclick="adminLoadCardReports('resolved')" id="adminCRTabResolved"
-            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Resolved</button>
-          <button onclick="adminOpenCardOverrideEditor(null)"
-            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">+ Manual Override</button>
-        </div>
-      </div>
-      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
-        Review user-submitted reports about wrong card data and curate global overrides. Saved corrections apply to every new card add via search/scan.
-      </div>
-      <div id="adminCardReportsList" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:.62rem;color:rgba(26,199,160,.4);letter-spacing:.08em">Click "Open Reports" to load.</div>
-      </div>
-    </div>
-
-    <!-- Sealed BG Review Queue — flagged products whose automated bg
-         removal couldn't strip the background (cream / yellow / photo
-         backgrounds). Admins replace the image with a hand-cleaned
-         version, which clears the needs_manual_bg flag. -->
-    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Sealed BG Review</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="adminLoadBgReviewQueue()" id="adminBgReviewLoadBtn"
-            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);cursor:pointer">Load Queue</button>
-          <span id="adminBgReviewCount" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);align-self:center"></span>
-        </div>
-      </div>
-      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
-        Products auto-flagged by restore_sealed_bg.py when bg removal couldn't strip the background (cream / yellow / gradient / photo bg). Upload a hand-cleaned PNG/WebP to replace the image — clears the flag.
-      </div>
-      <div id="adminBgReviewList" style="display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:.62rem;color:rgba(184,115,51,.5);letter-spacing:.08em">Click "Load Queue" to fetch flagged products.</div>
-      </div>
-    </div>
-
     <!-- Beta Tester Manager — invite-only access for pre-launch testers -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -383,43 +270,80 @@ function _pbInjectAdminMarkup(){
       </div>
     </div>
 
-    <!-- Order Refund Tool -->
-    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
-      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);margin-bottom:8px;text-transform:uppercase">◈ Order Refund</div>
-      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
-        Refund a marketplace order via the Stripe refund API. Refunds the buyer, marks the order refunded, and restores the listing to available. Use within the 7-day buyer protection window or when resolving disputes.
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="adminRefundOrderId" placeholder="Order ID (full uuid)"
-          style="flex:1;min-width:240px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--text);outline:none"
-          onkeydown="if(event.key==='Enter')adminRefundOrder()">
-        <select id="adminRefundReason"
-          style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
-          <option value="requested_by_customer">Requested by customer</option>
-          <option value="fraudulent">Fraudulent</option>
-          <option value="duplicate">Duplicate</option>
-        </select>
-        <button onclick="adminRefundOrder()"
-          style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:6px 14px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">
-          Refund via Stripe
-        </button>
-      </div>
-      <div id="adminRefundStatus" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);min-height:16px;line-height:1.6"></div>
     </div>
-
-    <!-- Sealed Products Migration + Sync -->
+<div class="admin-panel" id="adminCardData">
+    <!-- Card Editor — admin-curated overrides driven by user error reports -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Sealed Products</div>
-        <button onclick="printSealedProductsMigration();showToast('Sealed products migration printed to console')"
-          style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Print SQL</button>
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Card Editor</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="adminLoadCardReports('open')" id="adminCRTabOpen"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);cursor:pointer">Open Reports</button>
+          <button onclick="adminLoadCardReports('resolved')" id="adminCRTabResolved"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Resolved</button>
+          <button onclick="adminOpenCardOverrideEditor(null)"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">+ Manual Override</button>
+        </div>
       </div>
       <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
-        Adds <code>product_type</code> + sealed metadata to <code>catalog</code> and <code>listings</code>. Idempotent &mdash; safe to re-run. After the migration applies, run
-        <code>python pokedata_sync.py --tcg pokemon-en --product-type sealed</code> to populate the catalog with ETBs, UTBs, booster boxes, etc. from PriceCharting.
+        Review user-submitted reports about wrong card data and curate global overrides. Saved corrections apply to every new card add via search/scan.
       </div>
-      <div style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--copper);line-height:1.5">
-        Verify: <code>select count(*) from catalog where product_type &lt;&gt; 'single';</code>
+      <div id="adminCardReportsList" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.62rem;color:rgba(26,199,160,.4);letter-spacing:.08em">Click "Open Reports" to load.</div>
+      </div>
+    </div>
+
+    <!-- Catalog Image Contribution Queue — pending submissions from
+         users whose scan picked up a card with no catalog photo.
+         Approve to write to catalog.image_url and credit the user;
+         reject with a reason to add a strike. -->
+    <div style="margin-top:24px;border:1px solid var(--accent);background:rgba(26,199,160,.04);padding:16px 18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Catalog Image Contributions</div>
+        <button onclick="renderAdminContributionQueue()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);font-size:.62rem">Refresh</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Photos submitted by eligible Collector+ users when their scan hits a catalog row with no image. Approve to land the photo on the catalog and credit the contributor; reject with a reason to apply a strike. <code>migration_catalog_image_contributions.sql</code> + <code>catalog-contributions</code> storage bucket required.
+      </div>
+      <div id="adminContributionQueue" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.6rem;color:var(--muted)">Click Refresh to load.</div>
+      </div>
+    </div>
+
+    <!-- Image Review Queue — listings flagged via the FLAG IMG button
+         on each marketplace card. Sorted oldest-flag-first so the
+         backlog clears in order. -->
+    <div style="margin-top:24px;border:1px solid var(--copper-dim);background:rgba(184,115,51,.04);padding:16px 18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Image Review Queue</div>
+        <button onclick="renderAdminImageReviewQueue()" class="pb-panel-link" style="border-color:var(--copper-dim);color:var(--copper);font-size:.62rem">Refresh</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Listings whose photos need to be replaced (poor quality, wrong product, watermark, etc.). Flag a listing from the marketplace browse via the small <span style="color:var(--copper)">FLAG IMG</span> button on each card. Apply <code>migration_listings_image_review.sql</code> first.
+      </div>
+      <div id="adminImageReviewQueue" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.6rem;color:var(--muted)">Click Refresh to load.</div>
+      </div>
+    </div>
+
+    <!-- Sealed BG Review Queue — flagged products whose automated bg
+         removal couldn't strip the background (cream / yellow / photo
+         backgrounds). Admins replace the image with a hand-cleaned
+         version, which clears the needs_manual_bg flag. -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Sealed BG Review</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="adminLoadBgReviewQueue()" id="adminBgReviewLoadBtn"
+            style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);cursor:pointer">Load Queue</button>
+          <span id="adminBgReviewCount" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);align-self:center"></span>
+        </div>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Products auto-flagged by restore_sealed_bg.py when bg removal couldn't strip the background (cream / yellow / gradient / photo bg). Upload a hand-cleaned PNG/WebP to replace the image — clears the flag.
+      </div>
+      <div id="adminBgReviewList" style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:.62rem;color:rgba(184,115,51,.5);letter-spacing:.08em">Click "Load Queue" to fetch flagged products.</div>
       </div>
     </div>
 
@@ -441,6 +365,8 @@ function _pbInjectAdminMarkup(){
       <div id="adminBackfillStatus" style="margin-top:8px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);min-height:16px;line-height:1.6"></div>
     </div>
 
+    </div>
+<div class="admin-panel" id="adminSystem">
     <!-- Shop Tier Metrics -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -454,36 +380,19 @@ function _pbInjectAdminMarkup(){
       <div id="adminShopMetricsPanel" style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted)">Click Refresh to load.</div>
     </div>
 
-    <!-- Image Review Queue — listings flagged via the FLAG IMG button
-         on each marketplace card. Sorted oldest-flag-first so the
-         backlog clears in order. -->
-    <div style="margin-top:24px;border:1px solid var(--copper-dim);background:rgba(184,115,51,.04);padding:16px 18px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Image Review Queue</div>
-        <button onclick="renderAdminImageReviewQueue()" class="pb-panel-link" style="border-color:var(--copper-dim);color:var(--copper);font-size:.62rem">Refresh</button>
+    <!-- Sealed Products Migration + Sync -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Sealed Products</div>
+        <button onclick="printSealedProductsMigration();showToast('Sealed products migration printed to console')"
+          style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Print SQL</button>
       </div>
-      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-        Listings whose photos need to be replaced (poor quality, wrong product, watermark, etc.). Flag a listing from the marketplace browse via the small <span style="color:var(--copper)">FLAG IMG</span> button on each card. Apply <code>migration_listings_image_review.sql</code> first.
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Adds <code>product_type</code> + sealed metadata to <code>catalog</code> and <code>listings</code>. Idempotent &mdash; safe to re-run. After the migration applies, run
+        <code>python pokedata_sync.py --tcg pokemon-en --product-type sealed</code> to populate the catalog with ETBs, UTBs, booster boxes, etc. from PriceCharting.
       </div>
-      <div id="adminImageReviewQueue" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:.6rem;color:var(--muted)">Click Refresh to load.</div>
-      </div>
-    </div>
-
-    <!-- Catalog Image Contribution Queue — pending submissions from
-         users whose scan picked up a card with no catalog photo.
-         Approve to write to catalog.image_url and credit the user;
-         reject with a reason to add a strike. -->
-    <div style="margin-top:24px;border:1px solid var(--accent);background:rgba(26,199,160,.04);padding:16px 18px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Catalog Image Contributions</div>
-        <button onclick="renderAdminContributionQueue()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);font-size:.62rem">Refresh</button>
-      </div>
-      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-        Photos submitted by eligible Collector+ users when their scan hits a catalog row with no image. Approve to land the photo on the catalog and credit the contributor; reject with a reason to apply a strike. <code>migration_catalog_image_contributions.sql</code> + <code>catalog-contributions</code> storage bucket required.
-      </div>
-      <div id="adminContributionQueue" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:.6rem;color:var(--muted)">Click Refresh to load.</div>
+      <div style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--copper);line-height:1.5">
+        Verify: <code>select count(*) from catalog where product_type &lt;&gt; 'single';</code>
       </div>
     </div>
 
@@ -496,6 +405,7 @@ function _pbInjectAdminMarkup(){
       <div id="adminClearCollectionUsers" style="display:flex;flex-direction:column;gap:8px">
         <div style="font-size:.6rem;color:rgba(26,199,160,.4);letter-spacing:.08em">Loading users…</div>
       </div>
+    </div>
     </div>`;
 }
 
@@ -559,8 +469,7 @@ function _pbInjectAdminMarkup(){
     }
 
     function renderAdmin() {
-      renderAdminTable();
-      updateRevenuePanel();
+      renderAdminOverview();
       loadVendorApplications().then(renderAdminVendorApplications);
       loadAdminClearCollectionUsers();
       renderAdminBetaTesters();
@@ -1491,3 +1400,100 @@ function _pbInjectAdminMarkup(){
       if (existing) existing.remove();
     }
     // ── End Admin Card Editor ─────────────────────────────────────────────
+
+// ── Tabbed admin dashboard ───────────────────────────────────────────
+// Mirrors the account-page tab pattern: one .admin-panel per tab, shown
+// via .active. Re-renders the Overview metrics each time it's opened.
+function switchAdminTab(tab){
+  try{
+    var root = document.getElementById('adminPage');
+    if (!root) return;
+    root.querySelectorAll('.admin-tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-tab') === tab); });
+    root.querySelectorAll('.admin-panel').forEach(function(p){ p.classList.toggle('active', p.id === tab); });
+    if (tab === 'adminOverview' && typeof renderAdminOverview === 'function') renderAdminOverview();
+  } catch(e){ console.warn('[admin] switchAdminTab', e); }
+}
+
+function _ovTile(val, lbl, sub){
+  return '<div class="admin-ov-tile"><div class="admin-ov-val">' + val + '</div>' +
+         '<div class="admin-ov-lbl">' + lbl + '</div>' +
+         (sub ? '<div class="admin-ov-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+// Real app/site metrics for the Overview tab. All queries are defensive:
+// a failed/blocked query renders an em-dash rather than throwing. Money
+// fields (orders.platform_fee / orders.amount / shop_sales.total_price)
+// are treated as dollar-denominated, matching the Payments page.
+async function renderAdminOverview(){
+  function $(id){ return document.getElementById(id); }
+  function money(n){ return '$' + (Number(n)||0).toLocaleString(undefined, {maximumFractionDigits:0}); }
+  function show(v){ return (v===null||v===undefined) ? '—' : v; }
+  async function cnt(table, build){
+    try{ var q = sb.from(table).select('*', {count:'exact', head:true}); if (build) q = build(q); var r = await q; if (r.error) return null; return r.count || 0; }
+    catch(e){ return null; }
+  }
+  var PRICE = { collector:5, enthusiast:10, vendor:50, shop:150 };
+
+  // Users & subscriptions
+  var tiers = ['free','collector','enthusiast','vendor','shop'];
+  var tc = {};
+  for (var i=0;i<tiers.length;i++){
+    tc[tiers[i]] = await cnt('profiles', (function(t){ return function(q){ return q.eq('subscription_tier', t); }; })(tiers[i]));
+  }
+  var totalUsers = await cnt('profiles');
+  var since = new Date(Date.now() - 30*86400000).toISOString();
+  var new30 = await cnt('profiles', function(q){ return q.gte('created_at', since); });
+  var mrr = (tc.collector||0)*PRICE.collector + (tc.enthusiast||0)*PRICE.enthusiast + (tc.vendor||0)*PRICE.vendor + (tc.shop||0)*PRICE.shop;
+
+  // Marketplace revenue (net of Stripe 2.9% + $0.30/txn). GMV is informational.
+  var fees=0, gmv=0, ord=0;
+  try{
+    var o = await sb.from('orders').select('platform_fee,amount,status');
+    if (!o.error){
+      var paid = (o.data||[]).filter(function(x){ return ['paid','shipped','completed','delivered'].indexOf(x.status) >= 0; });
+      ord  = paid.length;
+      fees = paid.reduce(function(s,x){ return s + (Number(x.platform_fee)||0); }, 0);
+      gmv  = paid.reduce(function(s,x){ return s + (Number(x.amount)||0); }, 0);
+    }
+  } catch(e){}
+  var netFees = fees - gmv*0.029 - ord*0.30;
+  var shopVol = 0;
+  try{ var ss = await sb.from('shop_sales').select('total_price'); if (!ss.error) shopVol = (ss.data||[]).reduce(function(s,x){ return s + (Number(x.total_price)||0); }, 0); } catch(e){}
+
+  // Content
+  var coll = await cnt('collection_items');
+  var cat  = await cnt('catalog');
+  var active = await cnt('listings', function(q){ return q.eq('status','active'); });
+
+  // Moderation queues
+  var disp    = await cnt('orders', function(q){ return q.eq('status','disputed'); });
+  var susp    = await cnt('listings', function(q){ return q.eq('status','suspended'); });
+  var contrib = await cnt('catalog_image_contributions', function(q){ return q.eq('status','pending'); });
+  var reports = await cnt('card_reports', function(q){ return q.eq('status','open'); });
+
+  if ($('ovRevenue')) $('ovRevenue').innerHTML =
+      _ovTile(money(mrr), 'Subscription MRR', 'est. from tier counts')
+    + _ovTile(money(netFees), 'Marketplace fees (net)', 'collected − 2.9% Stripe')
+    + _ovTile(money(mrr + (netFees>0?netFees:0)), 'Est. monthly revenue', 'MRR + net fees')
+    + _ovTile(money(gmv), 'Marketplace GMV', 'potential — not counted')
+    + _ovTile(money(shopVol), 'Shop sales volume', 'potential — not counted');
+
+  if ($('ovUsers')) $('ovUsers').innerHTML =
+      _ovTile(show(totalUsers), 'Total users', show(new30) + ' new / 30d')
+    + _ovTile(show(tc.collector), 'Collector', '$5/mo')
+    + _ovTile(show(tc.enthusiast), 'Enthusiast', '$10/mo')
+    + _ovTile(show(tc.vendor), 'Vendor', '$50/mo')
+    + _ovTile(show(tc.shop), 'Shop', '$150/mo')
+    + _ovTile(show(tc.free), 'Free', 'cannot sell');
+
+  if ($('ovContent')) $('ovContent').innerHTML =
+      _ovTile(show(coll), 'Collection items', 'tracked across users')
+    + _ovTile(show(cat), 'Catalog cards', '')
+    + _ovTile(show(active), 'Active listings', 'on marketplace');
+
+  if ($('ovModeration')) $('ovModeration').innerHTML =
+      _ovTile(show(disp), 'Open disputes', '')
+    + _ovTile(show(susp), 'Suspended listings', '')
+    + _ovTile(show(contrib), 'Pending photo contribs', '')
+    + _ovTile(show(reports), 'Open card reports', '');
+}
