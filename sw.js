@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v524';
+const CACHE = 'pathbinder-v525';
 
 const PRECACHE = [
   '/offline.html',
@@ -735,42 +735,15 @@ self.addEventListener('fetch', e => {
   }
 
   // App-code bundles (pb-app.js, pb-styles.css, pb-critical.css,
-  // pb-scanner.js, …): STALE-WHILE-REVALIDATE. Serve the cached copy
-  // instantly (fast), but ALWAYS refetch in the background and update the
-  // cache, so a deploy reaches users within a load or two even when the
-  // CACHE version constant was NOT bumped. This decouples shipping JS/CSS
-  // from the manual version bump — the old cache-first path below would
-  // pin these to whatever was cached until the next bump, which silently
-  // stranded updates whenever a deploy went out without one.
-  if (/\/pb-[\w-]+\.(?:js|css)$/.test(url.pathname)) {
-    // Kick the network fetch off synchronously so waitUntil can keep the
-    // SW alive until the background cache write finishes.
-    //
-    // cache:'no-cache' forces the background refetch to REVALIDATE with the
-    // origin (conditional request) instead of being silently satisfied by
-    // the browser's HTTP disk cache. Without it, a plain fetch() here was
-    // served the stale copy from the HTTP cache (Vercel's CDN default puts a
-    // positive max-age on /pb-* assets) and we just re-cached stale → stale,
-    // so deploys never reached users no matter how many reloads. With
-    // revalidation, an unchanged file is a cheap 304; a changed file returns
-    // a fresh 200 that we write to the cache.
-    const refreshing = fetch(e.request, { cache: 'no-cache' }).then(async res => {
-      if (res.status === 200 && res.type !== 'opaque') {
-        const clone = res.clone();
-        const cache = await caches.open(CACHE);
-        await cache.put(e.request, clone).catch(() => {});
-      }
-      return res;
-    }).catch(() => null);
-    e.waitUntil(refreshing);
-    e.respondWith(
-      caches.match(e.request).then(cached =>
-        cached || refreshing.then(res =>
-          res || new Response('', { status: 408, statusText: 'Network unavailable' }))
-      )
-    );
-    return;
-  }
+  // pb-scanner.js, …): intentionally CACHE-FIRST. They fall through to the
+  // generic static-asset handler below and are pinned to whatever is cached
+  // until the CACHE version constant is bumped. We deliberately do NOT
+  // auto-revalidate these — the stale-while-revalidate path proved
+  // unreliable in practice. Shipping new JS/CSS to users REQUIRES bumping
+  // CACHE, and every bump is coordinated explicitly. The vercel.json
+  // `max-age=0, must-revalidate` header on /pb-*.{js,css} ensures that the
+  // post-bump fetch (a cache miss under the new CACHE name) pulls fresh
+  // bytes from the origin rather than a stale HTTP-cached copy.
 
   // For other static assets (images, fonts, icons): cache first, then network.
   // Only cache fully-formed 200 responses. `res.ok` is true for the whole
