@@ -25553,7 +25553,7 @@ function _loadAdmin(){
         el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
           <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">
-            <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">JP</span>${_escHtml(setName)}
+            ${_escHtml(setName)}
           </h2>
           <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
           <div class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
@@ -25774,7 +25774,7 @@ function _loadAdmin(){
         el.innerHTML = '<div class="pb-setd" style="padding:12px 0 8px">' +
           '<button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>' +
           '<h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">' +
-            '<span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">' + lang.toUpperCase() + '</span>' + _escHtml(setName) +
+            _escHtml(setName) +
           '</h2>' +
           '<span class="sets-detail-jp">セット ・ ' + cards.length + ' カード</span>' +
           '<div class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">' +
@@ -26160,7 +26160,7 @@ function _loadAdmin(){
         el.innerHTML = `<div class="pb-setd" style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" class="pb-setd-back" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
           <h2 class="pb-setd-title" style="font-size:1.05rem;margin-bottom:2px">
-            <span style="font-size:.6rem;border:1px solid var(--copper-dim);color:var(--copper);padding:1px 7px;letter-spacing:.1em;margin-right:8px">${cfg.label}</span>${_escHtml(setName)}
+            ${_escHtml(setName)}
           </h2>
           <span class="sets-detail-jp">セット ・ ${cards.length} カード</span>
           <div class="pb-setd-prog" style="display:flex;align-items:center;gap:12px;margin:10px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border)">
