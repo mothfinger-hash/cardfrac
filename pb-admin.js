@@ -1443,7 +1443,22 @@ async function renderAdminOverview(){
   var totalUsers = await cnt('profiles');
   var since = new Date(Date.now() - 30*86400000).toISOString();
   var new30 = await cnt('profiles', function(q){ return q.gte('created_at', since); });
-  var mrr = (tc.collector||0)*PRICE.collector + (tc.enthusiast||0)*PRICE.enthusiast + (tc.vendor||0)*PRICE.vendor + (tc.shop||0)*PRICE.shop;
+  // Beta testers are comped (free for the term of their code), so subtract
+  // them from the paying counts before computing MRR. public_beta_testers
+  // exposes active grants; we look up those users' current tiers.
+  var betaPerTier = { collector:0, enthusiast:0, vendor:0, shop:0 };
+  var betaTotal = 0;
+  try{
+    var bt = await sb.from('public_beta_testers').select('user_id');
+    var betaIds = (bt.data||[]).map(function(r){ return r.user_id; }).filter(Boolean);
+    betaTotal = betaIds.length;
+    if (betaIds.length){
+      var bp = await sb.from('profiles').select('subscription_tier').in('id', betaIds);
+      (bp.data||[]).forEach(function(p){ if (betaPerTier[p.subscription_tier] != null) betaPerTier[p.subscription_tier]++; });
+    }
+  }catch(e){}
+  function _paying(t){ return Math.max(0, (tc[t]||0) - (betaPerTier[t]||0)); }
+  var mrr = _paying('collector')*PRICE.collector + _paying('enthusiast')*PRICE.enthusiast + _paying('vendor')*PRICE.vendor + _paying('shop')*PRICE.shop;
 
   // Marketplace revenue (net of Stripe 2.9% + $0.30/txn). GMV is informational.
   var fees=0, gmv=0, ord=0;
@@ -1472,7 +1487,7 @@ async function renderAdminOverview(){
   var reports = await cnt('card_reports', function(q){ return q.eq('status','open'); });
 
   if ($('ovRevenue')) $('ovRevenue').innerHTML =
-      _ovTile(money(mrr), 'Subscription MRR', 'est. from tier counts')
+      _ovTile(money(mrr), 'Subscription MRR', 'paying subs, excl. beta comps')
     + _ovTile(money(netFees), 'Marketplace fees (net)', 'collected − 2.9% Stripe')
     + _ovTile(money(mrr + (netFees>0?netFees:0)), 'Est. monthly revenue', 'MRR + net fees')
     + _ovTile(money(gmv), 'Marketplace GMV', 'potential — not counted')
@@ -1484,7 +1499,8 @@ async function renderAdminOverview(){
     + _ovTile(show(tc.enthusiast), 'Enthusiast', '$10/mo')
     + _ovTile(show(tc.vendor), 'Vendor', '$50/mo')
     + _ovTile(show(tc.shop), 'Shop', '$150/mo')
-    + _ovTile(show(tc.free), 'Free', 'cannot sell');
+    + _ovTile(show(tc.free), 'Free', 'cannot sell')
+    + _ovTile(show(betaTotal), 'Beta (comped)', 'free via code, not in MRR');
 
   if ($('ovContent')) $('ovContent').innerHTML =
       _ovTile(show(coll), 'Collection items', 'tracked across users')

@@ -27841,7 +27841,10 @@ function _loadAdmin(){
 // is cached per-user in localStorage. Falls back to the shipped default
 // cover. (Per-device for now; a profile column would sync it later.)
 function _allCardsCoverUrl(){
-  try{ if (currentUser) { var u = localStorage.getItem('pb_acc_cover_' + currentUser.id); if (u) return u; } }catch(_){}
+  try{
+    if (currentUser && currentUser.all_cards_cover_url) return currentUser.all_cards_cover_url;   // synced via profile
+    if (currentUser) { var u = localStorage.getItem('pb_acc_cover_' + currentUser.id); if (u) return u; }
+  }catch(_){}
   return 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp';
 }
 async function changeAllCardsCover(){
@@ -27854,6 +27857,8 @@ async function changeAllCardsCover(){
     showToast('Uploading cover…');
     try{
       var url = await _uploadBinderCover('all-cards', file);   // -> <uid>/all-cards.webp (cache-busted URL)
+      try{ await sb.from('profiles').update({ all_cards_cover_url: url }).eq('id', currentUser.id); }catch(_){}
+      if (currentUser) currentUser.all_cards_cover_url = url;
       try{ localStorage.setItem('pb_acc_cover_' + currentUser.id, url); }catch(_){}
       showToast('✓ All Cards cover updated');
       try{ renderBinderSidebar(true); }catch(_){}
