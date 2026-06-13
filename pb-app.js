@@ -7348,7 +7348,7 @@ function _loadAdmin(){
           <!-- Card image — centered, clickable -->
           ${img ? `<div style="display:flex;justify-content:center;margin-bottom:16px">
             <img src="${img}" alt="${_escHtml(c.card_name)}"
-              title="Click to enlarge" style="max-width:200px;width:100%;height:auto;border:1px solid rgba(26,199,160,.35);border-radius:4px;box-shadow:0 0 24px rgba(26,199,160,.22),0 0 60px rgba(26,199,160,.08);cursor:zoom-in;transition:transform .15s"
+              title="Click to enlarge" style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${img}')"
               onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
@@ -17363,7 +17363,7 @@ function _loadAdmin(){
           ${imgSmall ? `<div style="display:flex;justify-content:center;margin-bottom:16px">
             <img src="${imgSmall}" alt="${_escHtml(card.name)}"
               title="Click to enlarge"
-              style="max-width:200px;width:100%;height:auto;border:1px solid rgba(26,199,160,.35);border-radius:4px;box-shadow:0 0 24px rgba(26,199,160,.22),0 0 60px rgba(26,199,160,.08);cursor:zoom-in;transition:transform .15s"
+              style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${imgLarge}')"
               onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
@@ -26245,7 +26245,7 @@ function _loadAdmin(){
           </div>
           ${card.image_url ? `<div style="display:flex;justify-content:center;margin-bottom:16px">
             <img src="${card.image_url}" alt="${_escHtml(card.name||'')}"
-              style="max-width:200px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 24px var(--copper-glow);cursor:zoom-in"
+              style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in"
               onclick="openImageLightbox('${card.image_url}')"
               onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(184,115,51,.04);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
@@ -26258,10 +26258,11 @@ function _loadAdmin(){
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;border-top:1px solid rgba(184,115,51,.2);padding-top:14px">
             <div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);text-align:center;margin-bottom:2px">ADD CARD</div>
             <div style="display:flex;gap:0;width:100%">
-              <select id="jpSetCardBinderSelect"
+              <select id="jpSetCardBinderSelect" class="pb-binder-select" onchange="if(this.value==='_new_binder'){this.value='';openNewBinder()}"
                 style="flex:1;min-width:0;padding:7px 8px;background:#0a0804;border:1px solid var(--copper-dim);border-right:none;color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
                 <option value="">Unsorted</option>
                 ${binders.map(b => `<option value="${b.id}">${_escHtml(b.name)}</option>`).join('')}
+                <option value="_new_binder" style="color:#1AC7A0">＋ New Binder</option>
               </select>
               <button onclick="addJpSetCardToCollection(${idx})"
                 style="flex:0 0 auto;padding:7px 16px;border:1px solid var(--copper);background:var(--copper-glow);color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
@@ -26597,7 +26598,7 @@ function _loadAdmin(){
           ${img ? `<div style="display:flex;justify-content:center;margin-bottom:16px">
             <img src="${img}" alt="${_escHtml(card.name)}"
               title="Click to enlarge"
-              style="max-width:200px;width:100%;height:auto;border:1px solid rgba(26,199,160,.35);border-radius:4px;box-shadow:0 0 24px rgba(26,199,160,.22),0 0 60px rgba(26,199,160,.08);cursor:zoom-in;transition:transform .15s"
+              style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${card.images?.large || img}')"
               onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
@@ -26626,10 +26627,11 @@ function _loadAdmin(){
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(26,199,160,.1);padding-top:16px">
             <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(26,199,160,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
             <div style="display:flex;gap:0;width:100%">
-              <select id="setCardBinderSelect"
+              <select id="setCardBinderSelect" class="pb-binder-select" onchange="if(this.value==='_new_binder'){this.value='';openNewBinder()}"
                 style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(26,199,160,.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
                 <option value="" style="background:#030c14;color:rgba(210,240,255,.88)">Unsorted</option>
                 ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : '<option value="" style="background:#030c14;color:rgba(26,199,160,.4)">— no binders yet —</option>'}
+                <option value="_new_binder" style="background:#030c14;color:#1AC7A0">＋ New Binder</option>
               </select>
               <button onclick="addSetCardDirectly(${idx})"
                 style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(26,199,160,.55);background:rgba(26,199,160,.08);color:#1AC7A0;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
