@@ -117,7 +117,10 @@ function _loadAdmin(){
     // Marketplace product-type filter — 'all' (default) | 'single' | 'sealed'
     let browseProductTypeFilter = 'all';
     let browseSortFilter = 'default';
-    let binderView = '3x3';
+    // Persisted per-device so a user who prefers, say, list view in their
+    // binders doesn't get reset to 3×3 on every load (All-Cards view
+    // already persists via pb_acView).
+    let binderView = (function(){ try { var v = localStorage.getItem('pb_binderView'); return ['3x3','2x2','1x1','list'].includes(v) ? v : '3x3'; } catch(_) { return '3x3'; } })();
     let binderPage = 0;
     let browseTabFilter = 'all';
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
@@ -12804,6 +12807,7 @@ function _loadAdmin(){
 
     function setBinderView(view) {
       binderView = view;
+      try { localStorage.setItem('pb_binderView', view); } catch(_) {}
       binderPage = 0;
       ['3x3','2x2','1x1','list'].forEach(v => {
         const btn = document.getElementById('binderBtn' + v);
@@ -12885,8 +12889,8 @@ function _loadAdmin(){
 
     // ===== ALL CARDS SORT =====
     // Sort state only applies to the "All Cards" view — never bleeds into individual binders.
-    let allCardsSort = 'name'; // 'name' | 'rarity' | 'set' | 'value' | 'lang'
-    let allCardsSortDir = { name: 1, rarity: 1, set: 1, value: -1, lang: 1 }; // 1=asc, -1=desc; rarity 1=highest first
+    let allCardsSort = 'name'; // 'name' | 'rarity' | 'set' | 'value' | 'lang' | 'date'
+    let allCardsSortDir = { name: 1, rarity: 1, set: 1, value: -1, lang: 1, date: 1 }; // 1=asc, -1=desc; rarity 1=highest first; date 1=newest first
     let _allCardsView = localStorage.getItem('pb_acView') || 'list'; // 'list' | 'acgrid'
     let _acOffset = 0, _acObserver = null, _acItems = [];
     const _AC_BATCH = 40;
@@ -12921,7 +12925,7 @@ function _loadAdmin(){
         allCardsSort = key;
       }
       // Update button labels to show current direction
-      const dirSymbols = { name: ['Name A→Z','Name Z→A'], rarity: ['Rarity ↓','Rarity ↑'], set: ['Set A→Z','Set Z→A'], value: ['Value ↓','Value ↑'], lang: ['Language','Language'] };
+      const dirSymbols = { name: ['Name A→Z','Name Z→A'], rarity: ['Rarity ↓','Rarity ↑'], set: ['Set A→Z','Set Z→A'], value: ['Value ↓','Value ↑'], lang: ['Language','Language'], date: ['Newest','Oldest'] };
       document.querySelectorAll('.allcards-sort-btn').forEach(b => b.classList.remove('active'));
       const btn = document.getElementById('sortBtn-' + key);
       const syms = dirSymbols[key] || [key, key];
@@ -13155,6 +13159,13 @@ function _loadAdmin(){
             const la = (a.language || 'EN').toUpperCase();
             const lb = (b.language || 'EN').toUpperCase();
             return la.localeCompare(lb) || (a.card_name || '').localeCompare(b.card_name || '');
+          });
+          break;
+        case 'date':
+          // dir 1 = newest first (default), dir -1 = oldest first.
+          sorted.sort((a, b) => {
+            const d = new Date(b.created_at || 0) - new Date(a.created_at || 0);
+            return dir * (d !== 0 ? d : (a.card_name || '').localeCompare(b.card_name || ''));
           });
           break;
         default:
@@ -13948,6 +13959,15 @@ function _loadAdmin(){
       if (isAllCards) {
         document.getElementById('acViewBtnList')?.classList.toggle('active', _allCardsView === 'list');
         document.getElementById('acViewBtnGrid')?.classList.toggle('active', _allCardsView === 'acgrid');
+      } else {
+        // Reflect the restored/persisted binderView on the view pills +
+        // popover label (markup hardcodes 3×3 active, so a persisted
+        // 'list'/'2x2'/'1x1' would otherwise look unselected on load).
+        ['3x3','2x2','1x1','list'].forEach(v => {
+          document.getElementById('binderBtn' + v)?.classList.toggle('active', v === binderView);
+        });
+        const _bvl = document.getElementById('binderViewLbl');
+        if (_bvl) _bvl.textContent = binderView === '3x3' ? '3×3' : binderView === '2x2' ? '2×2' : binderView === '1x1' ? '1×1' : 'Organize';
       }
       // Reset lazy-load state on every full re-render
       if (_acObserver) { _acObserver.disconnect(); _acObserver = null; }
@@ -17673,6 +17693,9 @@ function _loadAdmin(){
               const { data: urlData } = sb.storage.from('card-photos').getPublicUrl(path);
               userPhotoUrl = urlData?.publicUrl || null;
               _uploadPhotoVariants(path, v.variants);
+            } else {
+              console.warn('[ATC] Photo upload failed:', upErr.message);
+              try { showToast('Saved, but the photo upload failed — re-add it from the card', 'error'); } catch(_) {}
             }
           } catch(_) {}
         }
@@ -17944,6 +17967,7 @@ function _loadAdmin(){
             _uploadPhotoVariants(path, v.variants);
           } else {
             console.warn('[ATC] Photo upload failed:', upErr.message);
+            try { showToast('Saved, but the photo upload failed — re-add it from the card', 'error'); } catch(_) {}
           }
         } catch (photoErr) {
           console.warn('[ATC] Photo upload error:', photoErr);
