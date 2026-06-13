@@ -3673,43 +3673,63 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       padding:1px 4px; border-radius:var(--r-pill, 999px);
       background:rgba(0,0,0,.7); border:1px solid currentColor;
     }
-    /* ── Mobile set-detail layout ──────────────────────────────────
-       Phones reclaim vertical space: the "Back to Sets" link + set
-       name share one line, the SORT row sits directly beneath, the
-       card grid grows to fill, and the set-completion tracker is
-       pinned just above the mobile nav bar. Achieved purely by
+    /* ── Set-detail layout (mobile + desktop) ──────────────────────
+       Reclaims vertical space on both: the "Back to Sets" link + set
+       name share one line (name right-aligned), the JP subtitle sits
+       right-aligned beneath, the SORT row next, the card grid grows to
+       fill, and the set-completion tracker is a 50%-opacity overlay
+       pinned near the bottom of the viewport. Achieved purely by
        flex-reordering the existing children (every direct child of
-       .pb-setd is assigned an order), so no JS / data-flow changes.
-       Desktop keeps the original stacked layout untouched. */
-    @media (max-width:900px){
-      .pb-setd{
-        display:flex; flex-wrap:wrap; align-items:baseline; column-gap:10px;
-      }
-      .pb-setd > .pb-setd-back{ order:1; flex:0 0 auto; margin:0 !important; }
-      .pb-setd > .pb-setd-title{
-        order:2; flex:1 1 auto; min-width:0; margin:0 !important;
-        font-size:.95rem !important; text-align:right;
-        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-      }
-      .pb-setd > .sets-detail-jp{ order:3; flex-basis:100%; margin:3px 0 8px !important; text-align:right; }
-      .pb-setd > .pb-setd-sort{ order:4; flex-basis:100%; margin-bottom:8px !important; }
-      .pb-setd > #catalogSortHint{ order:4; flex-basis:100%; }
+       .pb-setd gets an order), so no JS / data-flow changes. Only the
+       tracker anchor + list height differ per breakpoint. */
+    .pb-setd{
+      display:flex; flex-wrap:wrap; align-items:baseline; column-gap:10px;
+    }
+    .pb-setd > .pb-setd-back{ order:1; flex:0 0 auto; margin:0 !important; }
+    .pb-setd > .pb-setd-title{
+      order:2; flex:1 1 auto; min-width:0; margin:0 !important;
+      text-align:right;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .pb-setd > .sets-detail-jp{ order:3; flex-basis:100%; margin:3px 0 10px !important; text-align:right; }
+    .pb-setd > .pb-setd-sort{ order:4; flex-basis:100%; margin-bottom:8px !important; }
+    .pb-setd > #catalogSortHint{ order:4; flex-basis:100%; }
+    .pb-setd > .pb-setd-list{ order:5; flex-basis:100%; }
+    /* Completion tracker — 50%-opacity overlay over the card grid. */
+    .pb-setd > .pb-setd-prog{
+      order:6;
+      position:fixed !important; z-index:60; margin:0 !important; opacity:.5;
+      background:var(--surface) !important;
+      border:1px solid var(--border) !important;
+      border-radius:var(--r-md,10px) !important;
+      box-shadow:0 -2px 16px rgba(0,0,0,.55);
+    }
+    /* Desktop: tracker spans the content area right of the sidebar. */
+    @media (min-width:901px){
       .pb-setd > .pb-setd-list{
-        order:5; flex-basis:100%;
+        max-height:calc(100svh - 210px) !important;
+        padding-bottom:64px !important;
+      }
+      /* On desktop the sidebar is on the RIGHT (see @media min-width:901px
+         body padding-right + nav right:0), so anchor the tracker from the
+         right. Cap at the .page content width (max-width 1160 − 2×24
+         padding) and centre it within the post-sidebar area so it lines up
+         with the card grid at any width. */
+      .pb-setd > .pb-setd-prog{
+        left:24px; right:calc(var(--sb-w) + 24px); bottom:16px;
+        max-width:1112px; margin:0 auto !important;
+        transition:right .25s;
+      }
+      body.nav-collapsed .pb-setd > .pb-setd-prog{ right:calc(var(--sb-w-coll) + 24px); }
+    }
+    /* Mobile: smaller title, tracker pinned above the 60px nav bar. */
+    @media (max-width:900px){
+      .pb-setd > .pb-setd-title{ font-size:.95rem !important; }
+      .pb-setd > .pb-setd-list{
         max-height:calc(100svh - 232px) !important;
         padding-bottom:56px !important;
       }
-      /* Completion tracker — pinned above the 60px mobile nav bar.
-         Half-opacity so the card grid reads through it as an overlay. */
-      .pb-setd > .pb-setd-prog{
-        order:6;
-        position:fixed !important; left:12px; right:12px; bottom:68px;
-        z-index:60; margin:0 !important; opacity:.5;
-        background:var(--surface) !important;
-        border:1px solid var(--border) !important;
-        border-radius:var(--r-md,10px) !important;
-        box-shadow:0 -2px 16px rgba(0,0,0,.55);
-      }
+      .pb-setd > .pb-setd-prog{ left:12px; right:12px; bottom:68px; }
     }
     /* Search input — keep the teal focus accent (the page's accent
        palette is still teal); just use the default border at rest. */
