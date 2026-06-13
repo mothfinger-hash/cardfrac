@@ -7323,7 +7323,7 @@
               title="Click to enlarge" style="max-width:200px;width:100%;height:auto;border:1px solid rgba(26,199,160,.35);border-radius:4px;box-shadow:0 0 24px rgba(26,199,160,.22),0 0 60px rgba(26,199,160,.08);cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${img}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\' loading="lazy" decoding="async"><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
@@ -18321,7 +18321,7 @@
               style="max-width:200px;width:100%;height:auto;border:1px solid rgba(26,199,160,.35);border-radius:4px;box-shadow:0 0 24px rgba(26,199,160,.22),0 0 60px rgba(26,199,160,.08);cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${imgLarge}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\' loading="lazy" decoding="async"><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <div style="text-align:center;margin-bottom:12px">
             <div style="font-size:.9rem;font-weight:700;color:rgba(210,240,255,.95);margin-bottom:5px">${_escHtml(card.name)}</div>
@@ -27201,7 +27201,7 @@
             <img src="${card.image_url}" alt="${_escHtml(card.name||'')}"
               style="max-width:200px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;box-shadow:0 0 24px var(--copper-glow);cursor:zoom-in"
               onclick="openImageLightbox('${card.image_url}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(184,115,51,.04);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\' loading="lazy" decoding="async"><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(184,115,51,.04);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <div style="text-align:center;margin-bottom:16px">
             <div style="font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:5px">${_escHtml(card.name || '—')}</div>
@@ -27554,7 +27554,7 @@
               style="max-width:200px;width:100%;height:auto;border:1px solid rgba(26,199,160,.35);border-radius:4px;box-shadow:0 0 24px rgba(26,199,160,.22),0 0 60px rgba(26,199,160,.08);cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${card.images?.large || img}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\' loading="lazy" decoding="async"><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
