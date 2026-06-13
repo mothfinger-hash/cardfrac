@@ -551,8 +551,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         var started = Date.now();
         var poll = setInterval(function() {
           var accountActive = document.getElementById('accountPage');
+          // Drop as soon as the SPA has rendered ANY page (not just the
+          // account page) so a restore onto Sets / Market / etc. doesn't
+          // sit on the skeleton for the full 6s timeout.
+          var anyPageActive = document.querySelector('.page.active');
           var elapsed = Date.now() - started;
-          if ((accountActive && accountActive.classList.contains('active')) || elapsed > 6000) {
+          if ((accountActive && accountActive.classList.contains('active')) || anyPageActive || elapsed > 6000) {
             clearInterval(poll);
             var s = document.getElementById('pb-restore-skeleton');
             if (s) {
