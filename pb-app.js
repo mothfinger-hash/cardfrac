@@ -24198,9 +24198,63 @@ function _loadAdmin(){
       // and on a ~250-card set was a measurable chunk of the 30s render.
       const _origIdxMap = new Map();
       for (let i = 0; i < cards.length; i++) _origIdxMap.set(cards[i].id, i);
-      const origIdx = (c) => _origIdxMap.get(c.id) ?? 0;
-      return sorted.map(c => _renderCatalogCardRow(c, origIdx(c), ownedMap, openFn)).join('') ||
-        '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>';
+      // Stash sorted list + lookup state for the windowed renderer. The
+      // catalog path (JP / MTG / YGO / OP / GUN / DBZ / TOPPS / CN / KR)
+      // used to render ALL rows up front — a 250–500 card set built that
+      // many DOM tiles in one synchronous pass. Now it renders a page at a
+      // time and the IntersectionObserver appends more as the user scrolls,
+      // matching the EN path (_buildSetCardRows / _attachSetsObserver).
+      _catSorted     = sorted;
+      _catOrigIdxMap = _origIdxMap;
+      _catOwnedMap   = ownedMap;
+      _catOpenFn     = openFn;
+      _catRenderOff  = 0;
+      if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
+      if (!sorted.length) return '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>';
+      return _renderNextCatalogBatch();
+    }
+
+    // Module-level state for the windowed catalog set-detail renderer.
+    var _catSorted = [], _catOrigIdxMap = new Map(), _catOwnedMap = {}, _catOpenFn = 'openJpSetCardDetail', _catRenderOff = 0, _catObserver = null;
+
+    function _renderNextCatalogBatch() {
+      const page  = _SETS_PAGE();
+      const batch = _catSorted.slice(_catRenderOff, _catRenderOff + page);
+      _catRenderOff += batch.length;
+      const rows = batch.map(c => _renderCatalogCardRow(c, _catOrigIdxMap.get(c.id) ?? 0, _catOwnedMap, _catOpenFn)).join('');
+      const hasMore = _catRenderOff < _catSorted.length;
+      return rows + (hasMore ? '<div id="catalogSetSentinel" style="height:1px"></div>' : '');
+    }
+
+    function _attachCatalogSetObserver() {
+      const grid = document.getElementById('catalogSetCardList');
+      if (!grid) return;
+      let sentinel = document.getElementById('catalogSetSentinel');
+      if (!sentinel) return;
+      if (_catObserver) _catObserver.disconnect();
+      _catObserver = new IntersectionObserver((entries) => {
+        if (!entries[0].isIntersecting) return;
+        if (_catRenderOff >= _catSorted.length) { _catObserver.disconnect(); return; }
+        sentinel.remove();
+        const page  = _SETS_PAGE();
+        const batch = _catSorted.slice(_catRenderOff, _catRenderOff + page);
+        _catRenderOff += batch.length;
+        const fragment = document.createDocumentFragment();
+        batch.forEach(c => {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = _renderCatalogCardRow(c, _catOrigIdxMap.get(c.id) ?? 0, _catOwnedMap, _catOpenFn);
+          if (tmp.firstChild) fragment.appendChild(tmp.firstChild);
+        });
+        if (_catRenderOff < _catSorted.length) {
+          const ns = document.createElement('div');
+          ns.id = 'catalogSetSentinel';
+          ns.style.height = '1px';
+          fragment.appendChild(ns);
+        }
+        grid.appendChild(fragment);
+        _attachCatalogSetObserver(); // re-observe the new sentinel
+      }, { root: grid, threshold: 0, rootMargin: '0px 0px 100px 0px' });
+      _catObserver.observe(sentinel);
     }
 
     function _catalogSetSortPillsHtml() {
@@ -24244,6 +24298,7 @@ function _loadAdmin(){
       const ownedMap = window._catalogSetDetailOwned || {};
       const openFn   = window._catalogSetDetailOpenFn || 'openJpSetCardDetail';
       grid.innerHTML = _buildCatalogSetCardRows(cards, ownedMap, openFn);
+      requestAnimationFrame(_attachCatalogSetObserver);
       // Update active pills
       document.querySelectorAll('.catalog-sort-pill').forEach(p => {
         const s = p.dataset.sort;
@@ -25629,6 +25684,7 @@ function _loadAdmin(){
             ${rows}
           </div>
         </div>`;
+        requestAnimationFrame(_attachCatalogSetObserver);
       } catch(e) {
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
@@ -25850,6 +25906,7 @@ function _loadAdmin(){
             rows +
           '</div>' +
           '</div>';
+        requestAnimationFrame(_attachCatalogSetObserver);
       } catch(e) {
         console.warn('[pc-lang set detail] failed', e);
         el.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center">Failed to load set.<br><small>' + _escHtml(e.message || '') + '</small></div>';
@@ -26236,6 +26293,7 @@ function _loadAdmin(){
             ${rows}
           </div>
         </div>`;
+        requestAnimationFrame(_attachCatalogSetObserver);
       } catch(e) {
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
