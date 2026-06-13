@@ -13131,6 +13131,7 @@ function _loadAdmin(){
     let binders        = [];          // [{id, name, color, is_default}]
     let currentBinderId = null;       // null = "All Cards" / default view
     let _editingBinderId = null;      // which binder is being edited in the modal
+    let _editingAllCardsCover = false; // true when binderEditModal is in All-Cards cover-only mode
     const BINDER_COLORS = ['#FF8C14','#1D9E75','#534AB7','#993C1D','#E74C3C','#3498DB','#F39C12','#888780'];
 
     async function loadBinders() {
@@ -13314,6 +13315,7 @@ function _loadAdmin(){
         return;
       }
       _editingBinderId = null;
+      _editingAllCardsCover = false; _binderEditShowAllRows();
       document.getElementById('binderEditTitle').textContent = 'New Binder';
       document.getElementById('binderEditName').value = '';
       document.getElementById('binderEditDeleteWrap').style.display = 'none';
@@ -13327,6 +13329,7 @@ function _loadAdmin(){
       const b = binders.find(x => x.id === binderId);
       if (!b) return;
       _editingBinderId = binderId;
+      _editingAllCardsCover = false; _binderEditShowAllRows();
       document.getElementById('binderEditTitle').textContent = 'Edit_Binder';
       document.getElementById('binderEditName').value = b.name;
       document.getElementById('binderEditDeleteWrap').style.display = 'block';
@@ -13353,6 +13356,28 @@ function _loadAdmin(){
     }
 
     async function saveBinder() {
+      // All-Cards cover-only mode — no name / colour, just the cover image.
+      if (_editingAllCardsCover) {
+        try {
+          if (_binderCoverPending) {
+            var _acUrl = await _uploadBinderCover('all-cards', _binderCoverPending);
+            try { await sb.from('profiles').update({ all_cards_cover_url: _acUrl }).eq('id', currentUser.id); } catch(_){}
+            if (currentUser) currentUser.all_cards_cover_url = _acUrl;
+            try { localStorage.setItem('pb_acc_cover_' + currentUser.id, _acUrl); } catch(_){}
+            showToast('✓ All Cards cover updated');
+          } else if (_binderCoverRemoving) {
+            try { await sb.from('profiles').update({ all_cards_cover_url: null }).eq('id', currentUser.id); } catch(_){}
+            if (currentUser) currentUser.all_cards_cover_url = null;
+            try { localStorage.removeItem('pb_acc_cover_' + currentUser.id); } catch(_){}
+            showToast('✓ Reset to default cover');
+          }
+        } catch(e) { showToast('Cover update failed: ' + (e.message || 'error')); }
+        _editingAllCardsCover = false;
+        _binderEditShowAllRows();
+        closeModal('binderEditModal');
+        try { renderBinderSidebar(true); } catch(_){}
+        return;
+      }
       const name = document.getElementById('binderEditName').value.trim();
       if (!name) { showToast('Please enter a binder name'); return; }
       const color = _getSelectedColor();
@@ -17704,6 +17729,7 @@ function _loadAdmin(){
       // Open the binder creation modal, remembering which dropdown to update
       _binderDropdownSourceId = sel.id;
       _editingBinderId = null;
+      _editingAllCardsCover = false; _binderEditShowAllRows();
       document.getElementById('binderEditTitle').textContent = 'New Binder';
       document.getElementById('binderEditName').value = '';
       document.getElementById('binderEditDeleteWrap').style.display = 'none';
@@ -27859,22 +27885,30 @@ function _allCardsCoverUrl(){
   }catch(_){}
   return 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp';
 }
-async function changeAllCardsCover(){
+// Opens the shared binderEditModal in a cover-only mode for the virtual
+// "All Cards" binder (no name / colour / delete). Opening a modal needs no
+// user gesture, and the file picker then fires from a real tap on the cover
+// zone — unlike a bare input.click() inside the long-press timer, which
+// mobile browsers block as a non-gesture. Save handled in saveBinder().
+function changeAllCardsCover(){
   if (!currentUser) { showToast('Sign in first'); return; }
-  var inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = 'image/*';
-  inp.onchange = async function(){
-    var file = inp.files && inp.files[0];
-    if (!file) return;
-    showToast('Uploading cover…');
-    try{
-      var url = await _uploadBinderCover('all-cards', file);   // -> <uid>/all-cards.webp (cache-busted URL)
-      try{ await sb.from('profiles').update({ all_cards_cover_url: url }).eq('id', currentUser.id); }catch(_){}
-      if (currentUser) currentUser.all_cards_cover_url = url;
-      try{ localStorage.setItem('pb_acc_cover_' + currentUser.id, url); }catch(_){}
-      showToast('✓ All Cards cover updated');
-      try{ renderBinderSidebar(true); }catch(_){}
-    }catch(e){ showToast('Cover upload failed: ' + (e.message || 'error')); }
-  };
-  inp.click();
+  _editingBinderId = null;
+  _editingAllCardsCover = true;
+  var t = document.getElementById('binderEditTitle'); if (t) t.textContent = 'All Cards Cover';
+  var sub = document.querySelector('#binderEditModal .modal-sub'); if (sub) sub.textContent = 'Replace the cover image for your All Cards binder.';
+  var nameRow = document.getElementById('binderEditNameRow'); if (nameRow) nameRow.style.display = 'none';
+  var colorRow = document.getElementById('binderEditColorRow'); if (colorRow) colorRow.style.display = 'none';
+  var del = document.getElementById('binderEditDeleteWrap'); if (del) del.style.display = 'none';
+  var cur = (currentUser && currentUser.all_cards_cover_url) || null;
+  if (!cur) { try{ cur = localStorage.getItem('pb_acc_cover_' + currentUser.id); }catch(_){} }
+  _resetBinderCoverUI(cur || null);
+  openModal('binderEditModal');
+}
+// Restore the name + colour rows the All-Cards mode hides, so a normal
+// binder edit/create after it shows the full form again.
+function _binderEditShowAllRows(){
+  var n = document.getElementById('binderEditNameRow'); if (n) n.style.display = '';
+  var c = document.getElementById('binderEditColorRow'); if (c) c.style.display = '';
+  var sub = document.querySelector('#binderEditModal .modal-sub');
+  if (sub) sub.textContent = 'Organise your collection into separate binders by set, type, or anything you like.';
 }
