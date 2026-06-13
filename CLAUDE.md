@@ -136,10 +136,22 @@ done. Example pipeline at the bottom of this file.
 Either use double quotes, template literals, or rephrase. Backslash
 escapes inside string concatenation are easy to get wrong.
 
-### Bump the service worker cache on UI changes
+### Service worker cache — you usually DON'T need to bump it
 
-`sw.js` has a `CACHE = 'pathbinder-vXX'` constant. Increment it any time
-HTML/JS/CSS visibly changes, otherwise users won't see the update.
+`sw.js` has a `CACHE = 'pathbinder-vXX'` constant. As of v523 the app-code
+bundles (`pb-app.js`, `pb-styles.css`, `pb-critical.css`, `pb-scanner.js`,
+anything matching `/pb-[\w-]+\.(js|css)$/`) are served
+**stale-while-revalidate**: the SW returns the cached copy instantly but
+always refetches in the background and updates the cache, so a deploy
+reaches users within a load or two **without** a version bump. HTML is
+already network-only (navigations never cache).
+
+So for ordinary UI / JS / CSS changes you do **not** need to touch
+`CACHE`. Only bump it when you genuinely need to force an *instant*,
+same-load purge for every user — e.g. changing the SW's own caching
+strategy, or shipping a fix that must not wait one extra load (a security
+or data-corruption fix). Bumping needlessly just throws away every user's
+warm cache for no benefit. Images/fonts/icons remain cache-first.
 
 ### Don't N+1 the marketplace render
 

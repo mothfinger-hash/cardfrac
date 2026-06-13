@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v522';
+const CACHE = 'pathbinder-v523';
 
 const PRECACHE = [
   '/offline.html',
@@ -734,7 +734,36 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // For static assets: cache first, then network.
+  // App-code bundles (pb-app.js, pb-styles.css, pb-critical.css,
+  // pb-scanner.js, …): STALE-WHILE-REVALIDATE. Serve the cached copy
+  // instantly (fast), but ALWAYS refetch in the background and update the
+  // cache, so a deploy reaches users within a load or two even when the
+  // CACHE version constant was NOT bumped. This decouples shipping JS/CSS
+  // from the manual version bump — the old cache-first path below would
+  // pin these to whatever was cached until the next bump, which silently
+  // stranded updates whenever a deploy went out without one.
+  if (/\/pb-[\w-]+\.(?:js|css)$/.test(url.pathname)) {
+    // Kick the network fetch off synchronously so waitUntil can keep the
+    // SW alive until the background cache write finishes.
+    const refreshing = fetch(e.request).then(async res => {
+      if (res.status === 200 && res.type !== 'opaque') {
+        const clone = res.clone();
+        const cache = await caches.open(CACHE);
+        await cache.put(e.request, clone).catch(() => {});
+      }
+      return res;
+    }).catch(() => null);
+    e.waitUntil(refreshing);
+    e.respondWith(
+      caches.match(e.request).then(cached =>
+        cached || refreshing.then(res =>
+          res || new Response('', { status: 408, statusText: 'Network unavailable' }))
+      )
+    );
+    return;
+  }
+
+  // For other static assets (images, fonts, icons): cache first, then network.
   // Only cache fully-formed 200 responses. `res.ok` is true for the whole
   // 200-299 range, which includes 206 Partial Content — the response type
   // browsers return for ranged audio/video requests. cache.put rejects 206

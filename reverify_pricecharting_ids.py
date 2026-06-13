@@ -151,13 +151,13 @@ def _hdr(extra=None):
     return h
 
 
-def load_rows(tcg, id_prefix, limit, ids=None, require_url=True):
+def load_rows(tcg, id_prefix, limit, ids=None, require_url=True, missing_only=False):
     base = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
-    sel  = "id,name,set_name,price_source_url,pricecharting_id,current_value"
+    sel  = "id,name,set_name,card_number,price_source_url,pricecharting_id,current_value"
     if ids:
         return _load_by_ids(base, sel, ids)
-    flt  = "pricecharting_id=not.is.null"
-    if require_url:
+    flt  = "pricecharting_id=is.null" if missing_only else "pricecharting_id=not.is.null"
+    if require_url and not missing_only:
         flt += "&price_source_url=not.is.null"
     if tcg and tcg != "all":
         flt += f"&game_type=eq.{quote(tcg)}"
@@ -264,6 +264,126 @@ def run_api_scan(rows):
         print("  python3 reverify_pricecharting_ids.py --ids-file reverify_api_suspect_ids.txt --verify --apply")
 
 
+def _norm(s):
+    return re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+
+_SET_STOP = {"the", "of", "and", "pokemon", "magic", "yugioh", "yu", "gi", "oh",
+             "card", "cards", "game", "tcg", "english", "japanese", "edition", "set"}
+
+
+def _set_tokens(s):
+    return {t for t in re.findall(r'[a-z0-9]+', (s or '').lower())
+            if len(t) >= 3 and t not in _SET_STOP}
+
+
+def set_agrees(row_set, console_name):
+    """True if the row's set and the matched product's console plausibly
+    refer to the same set. Lenient: only returns False on a CLEAR conflict
+    (both sides have meaningful set tokens and share none). When either
+    side has no distinctive token, we can't judge, so we allow it."""
+    a, b = _set_tokens(row_set), _set_tokens(console_name)
+    if not a or not b:
+        return True
+    return bool(a & b)
+
+
+def api_search(query):
+    """PC API name search: /api/product?q=<query> returns the single
+    closest-matching product. Returns dict / False (rejected) / None (no key)."""
+    if not PC_API_KEY:
+        return None
+    _pace_api()
+    try:
+        r = _session.get(f"{PC_BASE}/api/product",
+                         params={"t": PC_API_KEY, "q": query}, timeout=REQUEST_TIMEOUT)
+        if not r.ok:
+            return False
+        data = r.json()
+    except Exception:
+        return False
+    if isinstance(data, dict) and data.get("status") == "error":
+        return False
+    if isinstance(data, dict) and (data.get("id") or data.get("product-name")):
+        return data
+    return False
+
+
+def patch_found(row_id, pc_id, url):
+    """Set pricecharting_id + price_source_url on a row that had neither."""
+    r = requests.patch(
+        f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog?id=eq.{quote(row_id)}",
+        headers=_hdr({"Content-Type": "application/json", "Prefer": "return=minimal"}),
+        data=json.dumps({"pricecharting_id": pc_id, "price_source_url": url}), timeout=30,
+    )
+    r.raise_for_status()
+
+
+def run_find_missing(rows, apply):
+    """For rows with NO pricecharting_id, search the PC API by name+set and
+    propose an id. Two guards keep bad matches out:
+      * LANGUAGE — the matched product's console language must equal the
+        row's (no English row gets a Japanese product, the bug we just fixed).
+      * NAME — the matched product-name must share the card name (normalized),
+        so a fuzzy q-search that drifts to a different card is rejected.
+    Anything that fails a guard is reported but NOT written. Dry-run by default."""
+    found = []; nomatch = 0; lang_skip = 0; name_skip = 0; set_skip = 0
+    for i, row in enumerate(rows, 1):
+        name = row.get("name") or ""
+        q = " ".join(x for x in [name, row.get("set_name") or "", row.get("card_number") or ""] if x).strip()
+        if not q:
+            continue
+        info = api_search(q)
+        if not isinstance(info, dict):
+            nomatch += 1
+        else:
+            pid   = str(info.get("id") or "").strip()
+            pname = info.get("product-name") or ""
+            cname = info.get("console-name") or ""
+            rl, cl = row_lang(row["id"]), console_lang(cname)
+            # Set guard only for the multi-printing-heavy games (Magic /
+            # Yu-Gi-Oh), where the SAME card name exists across many sets
+            # and PC's console-name IS the specific set. For Pokémon promos
+            # the console is generic ("Pokemon Promo"), so the set guard
+            # would mis-fire — language + name guards cover those.
+            set_guarded = row["id"].lower().startswith(("mtg-", "ygo-"))
+            if not pid:
+                nomatch += 1
+            elif rl != cl:
+                lang_skip += 1
+                print(f"  LANG-SKIP {row['id']:<18} {rl}!={cl}  {name}  -> {pname} / {cname}")
+            elif _norm(name) and _norm(name) not in _norm(pname) and _norm(pname) not in _norm(name):
+                name_skip += 1
+                print(f"  NAME-SKIP {row['id']:<18} '{name}' != '{pname}'")
+            elif set_guarded and not set_agrees(row.get("set_name"), cname):
+                set_skip += 1
+                print(f"  SET-SKIP  {row['id']:<18} set='{row.get('set_name')}' != console='{cname}'  ({name})")
+            else:
+                url = f"{PC_BASE}/offers?product={pid}"
+                found.append((row, pid, pname, cname))
+                print(f"  FOUND {row['id']:<18} -> id={pid:<10} {pname} / {cname}")
+                if apply:
+                    try:
+                        patch_found(row["id"], pid, url); print("        ^ set")
+                    except Exception as e:
+                        print(f"        ^ FAIL: {e}")
+        if i % 200 == 0:
+            print(f"  ...{i}/{len(rows)} found={len(found)} nomatch={nomatch} "
+                  f"lang_skip={lang_skip} name_skip={name_skip} set_skip={set_skip}")
+
+    print(f"\nfind-missing done. rows={len(rows)} found={len(found)} nomatch={nomatch} "
+          f"lang_skip={lang_skip} name_skip={name_skip} set_skip={set_skip}")
+    if found and not apply:
+        with open("find_missing_proposals.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "name", "set_name", "card_number", "proposed_id", "matched_product", "matched_console"])
+            for row, pid, pname, cname in found:
+                w.writerow([row["id"], row.get("name"), row.get("set_name"),
+                            row.get("card_number"), pid, pname, cname])
+        print(f"\nDRY-RUN — wrote find_missing_proposals.csv ({len(found)} proposals). "
+              "Review, then re-run with --apply.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tcg", default=None, help="game_type scope (e.g. pokemon)")
@@ -281,6 +401,9 @@ def main():
     ap.add_argument("--ids-file", default=None,
                     help="process only the catalog ids listed in this file (one per line). "
                          "Use it to fix the suspects an --api-scan turned up.")
+    ap.add_argument("--find-missing", action="store_true",
+                    help="fill rows that have NO pricecharting_id: search the PC API by "
+                         "name+set, language- and name-guarded. Dry-run writes proposals CSV.")
     args = ap.parse_args()
 
     ids = None
@@ -294,8 +417,18 @@ def main():
         sys.exit("Refusing to run against the ENTIRE catalog unscoped.\n"
                  "Scope it, e.g.:  --id-prefix xyp-   |   --tcg pokemon   |   --ids-file <file>")
 
-    if (args.verify or args.api_scan) and not PC_API_KEY:
-        sys.exit("--verify / --api-scan need PRICECHARTING_API_KEY in your environment.")
+    if (args.verify or args.api_scan or args.find_missing) and not PC_API_KEY:
+        sys.exit("--verify / --api-scan / --find-missing need PRICECHARTING_API_KEY in your environment.")
+
+    # ── Fill rows that have no pricecharting_id (PC API name search). ──
+    if args.find_missing:
+        rows = load_rows(args.tcg, args.id_prefix, args.limit, ids=ids,
+                         require_url=False, missing_only=True)
+        est_min = max(1, len(rows) // 30 // 60 + 1)
+        print(f"find-missing across {len(rows):,} id-less rows (~30/sec — ~{est_min} min)"
+              f"{'' if args.apply else ' — DRY-RUN'}.\n")
+        run_find_missing(rows, args.apply)
+        return
 
     # ── Fast detection-only pass: no scraping, no writes. ──
     if args.api_scan:
