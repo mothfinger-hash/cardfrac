@@ -13208,12 +13208,16 @@ function _loadAdmin(){
       let html = '';
       // All Cards icon
       const allActive = currentBinderId === null;
-      html += `<div class="bsb-icon${allActive?' active':''}" title="All Cards"
+      html += `<div class="bsb-icon${allActive?' active':''}" title="All Cards — long-press or right-click to change cover"
         onclick="selectBinder(null)"
+        oncontextmenu="event.preventDefault();changeAllCardsCover()"
+        ontouchstart="_bsbTouchStart(event,'__allcards__')"
+        ontouchend="_bsbTouchEnd(event)"
+        ontouchcancel="_bsbTouchEnd(event)"
         ondragover="bsbDragOver(event,null)"
         ondragleave="bsbDragLeave(event)"
         ondrop="bsbDrop(event,null)"
-      ><img src="https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp"
+      ><img src="${_allCardsCoverUrl()}"
         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
         alt="All" loading="lazy" decoding="async">
       <div class="bsb-fallback" style="display:none;background:#111;color:#888">ALL</div>
@@ -13258,6 +13262,7 @@ function _loadAdmin(){
       if (_bsbLongPressTimer) clearTimeout(_bsbLongPressTimer);
       _bsbLongPressTimer = setTimeout(function() {
         _bsbLongPressTimer = null;
+        if (binderId === '__allcards__') { changeAllCardsCover(); return; }
         openEditBinder(binderId);
       }, 500);
     }
@@ -27827,3 +27832,30 @@ function _loadAdmin(){
 })();
 
   
+
+// ── All Cards binder cover (user-replaceable) ────────────────────────
+// The virtual "All Cards" binder has no DB row, so its cover lives in
+// the binder-covers bucket at <uid>/all-cards.webp and the resolved URL
+// is cached per-user in localStorage. Falls back to the shipped default
+// cover. (Per-device for now; a profile column would sync it later.)
+function _allCardsCoverUrl(){
+  try{ if (currentUser) { var u = localStorage.getItem('pb_acc_cover_' + currentUser.id); if (u) return u; } }catch(_){}
+  return 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp';
+}
+async function changeAllCardsCover(){
+  if (!currentUser) { showToast('Sign in first'); return; }
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async function(){
+    var file = inp.files && inp.files[0];
+    if (!file) return;
+    showToast('Uploading cover…');
+    try{
+      var url = await _uploadBinderCover('all-cards', file);   // -> <uid>/all-cards.webp (cache-busted URL)
+      try{ localStorage.setItem('pb_acc_cover_' + currentUser.id, url); }catch(_){}
+      showToast('✓ All Cards cover updated');
+      try{ renderBinderSidebar(true); }catch(_){}
+    }catch(e){ showToast('Cover upload failed: ' + (e.message || 'error')); }
+  };
+  inp.click();
+}
