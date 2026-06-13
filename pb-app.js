@@ -1275,6 +1275,14 @@ function _loadAdmin(){
         return;
       }
 
+      // Double-submit guard: disable the submit button while the network
+      // round-trip is in flight so a double-tap can't fire two signUp calls
+      // (which would surface a confusing "user already registered" error).
+      const submitBtn = e.target?.querySelector?.('button[type="submit"], button:not([type])');
+      if (submitBtn?.dataset?.busy === '1') return;
+      if (submitBtn) { submitBtn.dataset.busy = '1'; submitBtn.disabled = true; submitBtn.style.opacity = '0.6'; }
+      const _reenable = () => { if (submitBtn) { submitBtn.dataset.busy = ''; submitBtn.disabled = false; submitBtn.style.opacity = ''; } };
+
       try {
         const { data, error } = await sb.auth.signUp({
           email, password,
@@ -1282,6 +1290,7 @@ function _loadAdmin(){
         });
         if (error) {
           errorEl.textContent = error.message || 'Registration failed';
+          _reenable();
           return;
         }
 
@@ -1296,9 +1305,11 @@ function _loadAdmin(){
         freshSignIn = true;
         closeModal('registerModal');
         showPage('account'); setMobileNav('account');
+        _reenable();
       } catch (err) {
         console.error('Register error:', err);
         errorEl.textContent = 'An error occurred. Please try again.';
+        _reenable();
       }
     }
 
