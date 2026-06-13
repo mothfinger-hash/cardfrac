@@ -18036,7 +18036,6 @@ function _loadAdmin(){
       _returnToScanner = false; // saved successfully — don't reopen scanner
       closeModal('addToCollectionModal');
       pendingCollectionCard = null;
-      await loadCollection();
       // Stash the new row id so the upcoming renderBinder applies the
       // slide-in animation to just this card. renderBinder clears the
       // global at the end of its run so subsequent re-renders don't
