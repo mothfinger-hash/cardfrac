@@ -13227,10 +13227,6 @@ function _loadAdmin(){
     function selectBinder(id) {
       currentBinderId = id;
       binderPage = 0;
-      // Clear any active search so it doesn't silently carry into the
-      // binder you just switched to (the filter applies to every view now).
-      const _bs = document.getElementById('binderListSearch');
-      if (_bs) _bs.value = '';
       renderBinderTabs();
       renderBinder();
     }
@@ -13998,9 +13994,7 @@ function _loadAdmin(){
 
       // Show/hide list search bar and vendor bulk import button
       const searchWrap = document.getElementById('binderListSearchWrap');
-      // Search is available in every binder/collection view now — All Cards
-      // and individual binders, in both list and grid modes.
-      if (searchWrap) searchWrap.style.display = 'block';
+      if (searchWrap) searchWrap.style.display = (effectiveView === 'list' || isAllCards) ? 'block' : 'none';
       // Toggle visibility for both the desktop pb-panel-h popover items
       // AND the mobile All-Cards popover duplicates (same classes, same logic).
       const bulkDisp  = hasBulkImport() ? 'block' : 'none';
@@ -14024,10 +14018,9 @@ function _loadAdmin(){
         activeItems = applyAllCardsSort(activeItems);
       }
 
-      // Apply search filter — every binder/collection view (All Cards, and
-      // individual binders in BOTH list and grid modes).
+      // Apply search filter (All Cards views always; list view inside binders too)
       let _isSearching = false;
-      {
+      if (effectiveView === 'list' || isAllCards) {
         const q = (document.getElementById('binderListSearch')?.value || '').toLowerCase().trim();
         if (q) {
           _isSearching = true;
@@ -14045,9 +14038,7 @@ function _loadAdmin(){
       if (activeItems.length === 0) {
         if (summary) summary.innerHTML = '';
         if (pagination) pagination.style.display = 'none';
-        content.innerHTML = _isSearching
-          ? `<div class="coll-empty">No cards match your search.</div>`
-          : `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add Your First Card</button></div>`;
+        content.innerHTML = `<div class="coll-empty">No cards yet.<br><button onclick="showPage('addCard');setMobileNav('addCard')" style="margin-top:12px;padding:8px 18px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">+ Add Your First Card</button></div>`;
         return;
       }
 
