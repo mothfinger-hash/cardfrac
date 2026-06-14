@@ -25626,7 +25626,7 @@ function _loadAdmin(){
           }
           allCards.sort((a, b) => (parseInt(a.card_number) || 0) - (parseInt(b.card_number) || 0));
           cards = allCards;
-          _jpSetsDetailCache[setCode] = { timestamp: now, cards };
+          if (cards.length) _jpSetsDetailCache[setCode] = { timestamp: now, cards };
         }
 
         // Build owned map — variant-aware shape (see EN path comment
@@ -25688,7 +25688,7 @@ function _loadAdmin(){
       } catch(e) {
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
-          <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load. ${e.message}</div>
+          ${_setDetailRetryHtml(() => loadJpSetDetail(setCode, setName))}
         </div>`;
       }
     }
@@ -25851,7 +25851,7 @@ function _loadAdmin(){
             return (a.card_number || a.name || '').localeCompare(b.card_number || b.name || '');
           });
           cards = allCards;
-          _pcLangSetDetailCache[cacheKey] = { timestamp: now, cards: cards };
+          if (cards.length) _pcLangSetDetailCache[cacheKey] = { timestamp: now, cards: cards };
         }
 
         // Owned map — variant-aware shape (see JP path). PC-lang singles
@@ -25909,7 +25909,7 @@ function _loadAdmin(){
         requestAnimationFrame(_attachCatalogSetObserver);
       } catch(e) {
         console.warn('[pc-lang set detail] failed', e);
-        el.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center">Failed to load set.<br><small>' + _escHtml(e.message || '') + '</small></div>';
+        el.innerHTML = _setDetailRetryHtml(() => loadPcLangSetDetail(lang, setCode, setName));
       }
     }
 
@@ -26237,7 +26237,7 @@ function _loadAdmin(){
             return String(a.card_number || '').localeCompare(String(b.card_number || ''));
           });
           cards = allCards;
-          _tcgSetsDetailCache[cacheKey] = { timestamp: now, cards };
+          if (cards.length) _tcgSetsDetailCache[cacheKey] = { timestamp: now, cards };
         }
 
         // Owned map (collection items in this set)
@@ -26297,7 +26297,7 @@ function _loadAdmin(){
       } catch(e) {
         el.innerHTML = `<div style="padding:12px 0 8px">
           <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
-          <div style="text-align:center;padding:40px;color:var(--muted)">Failed to load. ${e.message}</div>
+          ${_setDetailRetryHtml(() => loadTcgSetDetail(setCode, setName, gameKey))}
         </div>`;
       }
     }
@@ -26590,7 +26590,7 @@ function _loadAdmin(){
             // Surface a retry affordance instead of a misleading
             // "no cards found" for what is really a load failure.
             const _le = document.getElementById('setsCardList');
-            if (_le) _le.innerHTML = _setDetailRetryHtml(setId, setName);
+            if (_le) _le.innerHTML = _setDetailRetryHtml(() => loadSetDetail(setId, setName));
             return;
           }
         }
@@ -26679,7 +26679,7 @@ function _loadAdmin(){
         }
       } catch(e) {
         const listEl = document.getElementById('setsCardList');
-        if (listEl) listEl.innerHTML = _setDetailRetryHtml(setId, setName);
+        if (listEl) listEl.innerHTML = _setDetailRetryHtml(() => loadSetDetail(setId, setName));
       }
     }
 
@@ -26693,19 +26693,20 @@ function _loadAdmin(){
       return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
     }
 
-    // Graceful "couldn't load, tap to retry" block for the EN set-detail
-    // card list. Stashes the args on window so the inline onclick doesn't
-    // have to escape an arbitrary set name.
-    function _setDetailRetryHtml(setId, setName) {
-      window._setDetailRetryArgs = { setId: setId, setName: setName };
+    // Graceful "couldn't load, tap to retry" block, shared by every
+    // set-detail loader (EN + JP/MTG/YGO/OP/CN/KR). Stashes the retry
+    // closure on window so the inline onclick doesn't have to escape an
+    // arbitrary set name or know which loader to call.
+    function _setDetailRetryHtml(retryFn) {
+      window._setDetailRetry = (typeof retryFn === 'function') ? retryFn : null;
       return '<div style="padding:36px 24px;text-align:center;color:var(--muted)">'
         + '<div style="margin-bottom:14px;line-height:1.5">Couldn\'t load this set right now.<br><span style="font-size:.72rem;opacity:.8">The card source may be momentarily unavailable.</span></div>'
         + '<button onclick="_retrySetDetail()" style="padding:9px 22px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:inherit;font-size:.7rem;letter-spacing:.08em;cursor:pointer;border-radius:var(--r-pill,999px)">↻ RETRY</button>'
         + '</div>';
     }
     function _retrySetDetail() {
-      const a = window._setDetailRetryArgs;
-      if (a && typeof loadSetDetail === 'function') loadSetDetail(a.setId, a.setName);
+      const r = window._setDetailRetry;
+      if (typeof r === 'function') r();
     }
     // ── End Sets Completion Tracker ────────────────────────────────────────
 
