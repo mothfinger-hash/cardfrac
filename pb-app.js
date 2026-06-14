@@ -1077,6 +1077,11 @@ function _loadAdmin(){
           requestAnimationFrame(() => { try { prev.focus({ preventScroll: true }); } catch (_) {} });
         }
       } catch (_) {}
+      // Closing the new/edit-binder modal cancels any pending "create then
+      // move this card" intent. saveBinder() consumes + nulls it BEFORE it
+      // closes the modal, so by the time we get here on a real save it's
+      // already null — only a cancel leaves it set.
+      if (modalId === 'binderEditModal') { _pendingMoveItemId = null; }
       // Reset edit mode whenever the add/edit modal is dismissed
       if (modalId === 'addToCollectionModal') {
         _atcEditMode = false; _atcEditItemId = null;
@@ -13355,11 +13360,11 @@ function _loadAdmin(){
     }
 
     function openNewBinder() {
-      if (!currentUser) return;
+      if (!currentUser) return false;
       const max = getMaxBinders();
       if (binders.length >= max) {
         showToast(`Free plan is limited to ${max} binders — upgrade for unlimited`);
-        return;
+        return false;
       }
       _editingBinderId = null;
       _editingAllCardsCover = false; _binderEditShowAllRows();
@@ -13370,6 +13375,7 @@ function _loadAdmin(){
       _resetBinderCoverUI(null);
       openModal('binderEditModal');
       setTimeout(() => document.getElementById('binderEditName').focus(), 80);
+      return true;
     }
 
     function openEditBinder(binderId) {
@@ -13471,6 +13477,13 @@ function _loadAdmin(){
           populateBinderDropdown(_binderDropdownSourceId, data.id);
           _binderDropdownSourceId = null;
         }
+
+        // If the new binder was created to receive a specific card
+        // (move-to-binder → "＋ New Binder"), move it in now.
+        if (_pendingMoveItemId) {
+          try { await moveCardToBinder(_pendingMoveItemId, data.id); } catch(_) {}
+          _pendingMoveItemId = null;
+        }
       }
 
       closeModal('binderEditModal');
@@ -13503,7 +13516,26 @@ function _loadAdmin(){
       const item = collectionItems.find(c => String(c.id) === String(itemId));
       if (item) item.binder_id = binderId || null;
       renderBinder();
-      showToast('✓ Card moved');
+      const _dest = binderId ? (binders.find(b => String(b.id) === String(binderId))?.name || 'binder') : 'All Cards';
+      showToast('✓ Moved to ' + _dest);
+    }
+
+    // Pending "move this card into the binder we're about to create" intent.
+    // Set when the user picks "＋ New Binder" from the move-to-binder
+    // dropdown, consumed in saveBinder() once the new binder row exists.
+    var _pendingMoveItemId = null;
+    function _moveCardFromDetail(itemId, val) {
+      if (!val) return;                  // placeholder header — ignore
+      if (val === '_new_binder') {       // create a binder, then move into it
+        closeModal('binderDetailModal');
+        _pendingMoveItemId = itemId;
+        // If the new-binder modal didn't actually open (not signed in / at
+        // binder limit), drop the intent so it can't fire on a later create.
+        if (openNewBinder() === false) _pendingMoveItemId = null;
+        return;
+      }
+      moveCardToBinder(itemId, val === '__unsorted__' ? null : val);
+      closeModal('binderDetailModal');
     }
 
     // ── Sealed binder helper ──────────────────────────────────────────────
@@ -15640,11 +15672,12 @@ function _loadAdmin(){
             <button onclick="deleteCollectionItem('${item.id}')"
               style="flex:1;padding:9px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
           </div>
-          ${binders.length > 0 ? `<select onchange="moveCardToBinder('${item.id}',this.value);closeModal('binderDetailModal')"
-            style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">
-            <option value="">Move to binder…</option>
-            <option value="">— All Cards —</option>
-            ${binders.map(b=>`<option value="${b.id}" ${String(item.binder_id)===String(b.id)?'selected':''}>${_escHtml(b.name)}</option>`).join('')}
+          ${binders.length > 0 ? `<select class="pb-binder-select" onchange="_moveCardFromDetail('${item.id}', this.value)"
+            style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">
+            <option value="" disabled selected>Move to binder…</option>
+            <option value="__unsorted__"${!item.binder_id ? ' disabled' : ''}>— All Cards (Unsorted) —</option>
+            ${binders.map(b=>`<option value="${b.id}"${String(item.binder_id)===String(b.id)?' disabled':''}>${_escHtml(b.name)}${String(item.binder_id)===String(b.id)?' (current)':''}</option>`).join('')}
+            <option value="_new_binder">＋ New Binder</option>
           </select>` : ''}
           <button onclick="openCardReportModal('${item.id}')"
             style="background:none;border:none;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;cursor:pointer;letter-spacing:.06em;padding:6px;text-align:center;text-decoration:underline;text-decoration-color:rgba(184,115,51,.4);text-underline-offset:3px;transition:color .15s"
