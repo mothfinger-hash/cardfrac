@@ -5117,6 +5117,7 @@ function _loadAdmin(){
                           ? `<img src="${_pickThumbVariant(item.card_image_url, 200)}" data-fallback="${item.card_image_url}" alt="${_escHtml(item.card_name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{_binderImgFail(this,'${item.id}')}">`
                           : `<div class="ndash-tcard-art-ph">${_escHtml(item.card_name.slice(0,12))}</div>`}
                       </div>
+                      ${(item.quantity||1) > 1 ? `<div class="ndash-tcard-qty">×${item.quantity}</div>` : ''}
                       <div class="ndash-tcard-foot">
                         <div class="ndash-tcard-name">${_escHtml(item.card_name.slice(0,16))}</div>
                         ${v>0?`<div class="ndash-tcard-val">$${v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
