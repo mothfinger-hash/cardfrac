@@ -26512,6 +26512,11 @@ function _loadAdmin(){
           cards = _setsDetailCache[setId].cards;
         } else {
           let allCards = [];
+          // Track WHY we ended up empty so we can tell a transient load
+          // failure (offer retry) apart from a genuinely empty set
+          // (show "no cards"). catalogFailed = our DB query threw;
+          // apiFailed = the pokemontcg.io backup threw / timed out / 404'd.
+          let catalogFailed = false, apiFailed = false;
 
           // Try the fast RPC first (server-side WHERE/ORDER). Falls
           // back to a direct table query if the function isn't yet
@@ -26552,16 +26557,21 @@ function _loadAdmin(){
               if (catRows && catRows.length) {
                 allCards = catRows.map(_catalogRowToApiShape);
               }
-            } catch(_) {}
+            } catch(_) { catalogFailed = true; }
           }
 
-          // API fallback — pokemontcg.io for sets the catalog
-          // doesn't have.
+          // API fallback — pokemontcg.io for sets the catalog doesn't
+          // have. Time-boxed: pokemontcg.io has intermittent CORS/404
+          // outages and can hang, so we fail fast (7s) and offer a retry
+          // rather than letting a slow backup stall the whole load.
           if (allCards.length === 0) {
             let page = 1, total = null;
             do {
-              const r = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(setId)}&pageSize=250&page=${page}&orderBy=number`);
-              if (!r.ok) break;
+              let r;
+              try {
+                r = await _fetchWithTimeout(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(setId)}&pageSize=250&page=${page}&orderBy=number`, 7000);
+              } catch(_) { apiFailed = true; break; }
+              if (!r.ok) { apiFailed = true; break; }
               const d = await r.json();
               if (total === null) total = d.totalCount || 0;
               allCards = allCards.concat(d.data || []);
@@ -26569,7 +26579,20 @@ function _loadAdmin(){
             } while (allCards.length < total && page <= 4);
           }
           cards = allCards;
-          _setsDetailCache[setId] = { timestamp: now, cards };
+          // Cache ONLY a non-empty result. Caching an empty array would
+          // pin a transient failure (DB hiccup + pokemontcg.io down) for
+          // the full 10-min TTL — so even after the backup recovered the
+          // user kept seeing an empty/"failed" set. Leaving empties
+          // uncached means a retry actually re-fetches.
+          if (cards.length) {
+            _setsDetailCache[setId] = { timestamp: now, cards };
+          } else if (catalogFailed || apiFailed) {
+            // Surface a retry affordance instead of a misleading
+            // "no cards found" for what is really a load failure.
+            const _le = document.getElementById('setsCardList');
+            if (_le) _le.innerHTML = _setDetailRetryHtml(setId, setName);
+            return;
+          }
         }
 
         // Build owned lookup — keyed by api_card_id, value tracks which
@@ -26647,14 +26670,42 @@ function _loadAdmin(){
 
         const listEl = document.getElementById('setsCardList');
         if (listEl) {
-          listEl.innerHTML = _buildSetCardRows(cards, ownedMap, 'number', false) ||
-            '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>';
+          if (cards.length) {
+            listEl.innerHTML = _buildSetCardRows(cards, ownedMap, 'number', false);
+            requestAnimationFrame(_attachSetsObserver);
+          } else {
+            listEl.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">No cards found</div>';
+          }
         }
-        requestAnimationFrame(_attachSetsObserver);
       } catch(e) {
         const listEl = document.getElementById('setsCardList');
-        if (listEl) listEl.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted)">Failed to load set cards.</div>`;
+        if (listEl) listEl.innerHTML = _setDetailRetryHtml(setId, setName);
       }
+    }
+
+    // Fetch with a hard timeout via AbortController — used for the
+    // pokemontcg.io backup so a slow/hanging external API can't stall a
+    // set load. Rejects on timeout so the caller can fall through to its
+    // retry path instead of awaiting forever.
+    function _fetchWithTimeout(url, ms) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), ms || 7000);
+      return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+    }
+
+    // Graceful "couldn't load, tap to retry" block for the EN set-detail
+    // card list. Stashes the args on window so the inline onclick doesn't
+    // have to escape an arbitrary set name.
+    function _setDetailRetryHtml(setId, setName) {
+      window._setDetailRetryArgs = { setId: setId, setName: setName };
+      return '<div style="padding:36px 24px;text-align:center;color:var(--muted)">'
+        + '<div style="margin-bottom:14px;line-height:1.5">Couldn\'t load this set right now.<br><span style="font-size:.72rem;opacity:.8">The card source may be momentarily unavailable.</span></div>'
+        + '<button onclick="_retrySetDetail()" style="padding:9px 22px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:inherit;font-size:.7rem;letter-spacing:.08em;cursor:pointer;border-radius:var(--r-pill,999px)">↻ RETRY</button>'
+        + '</div>';
+    }
+    function _retrySetDetail() {
+      const a = window._setDetailRetryArgs;
+      if (a && typeof loadSetDetail === 'function') loadSetDetail(a.setId, a.setName);
     }
     // ── End Sets Completion Tracker ────────────────────────────────────────
 
