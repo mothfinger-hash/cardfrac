@@ -28074,9 +28074,11 @@ function _closeCardEditMenu(id){
   var m = document.getElementById('cardEditMenu_' + id);
   if (m) m.style.display = 'none';
 }
-// "Edit copies" — opens the per-unit editor for the first physical copy.
-// The unit stack (vendor+ qty>1) auto-mounts on detail open and populates
-// _binderUnitStackState; ensure it's ready, then open unit #1.
+// "Edit copies" — opens the per-unit editor for the copy currently shown
+// in the swipeable unit stack (the one the user swiped to), falling back
+// to the first copy if the stack hasn't been interacted with. The stack
+// (vendor+ qty>1) auto-mounts on detail open and populates
+// _binderUnitStackState; ensure it's ready, then open that unit.
 async function _editFirstCopy(itemId){
   var item = collectionItems.find(function(c){ return String(c.id) === String(itemId); });
   if (!item) return;
@@ -28087,7 +28089,12 @@ async function _editFirstCopy(itemId){
       await _mountUnitStackIntoBinderDetail(item);
       s = _binderUnitStackState;
     }
-    if (s && s.units && s.units.length) openEditUnitModal(s.units[0].id);
+    if (s && s.units && s.units.length) {
+      // Edit the copy on the active slide; clamp the index in case the
+      // stack re-mounted and reset it.
+      var idx = (typeof s.index === 'number' && s.index >= 0 && s.index < s.units.length) ? s.index : 0;
+      openEditUnitModal(s.units[idx].id);
+    }
     else showToast('No individual copies to edit');
   }catch(e){ showToast('Could not open copies'); }
 }
