@@ -3472,7 +3472,7 @@ function _loadAdmin(){
         +   '<img src="' + _escHtml(display.card_image_url || '') + '" alt="" onerror="this.style.display=\'none\'" loading="lazy" decoding="async">'
         +   '<span class="' + badgeClass + '">' + _escHtml(display.condLabel) + '</span>'
         +   '<span class="pb-unit-ordinal">' + (s.index + 1) + ' / ' + total + '</span>'
-        +   "<button class=\"pb-unit-edit\" onclick=\"event.stopPropagation();openEditUnitModal('" + unitIdAttr + "')\">EDIT</button>"
+        +   "<button class=\"pb-unit-edit\" onclick=\"event.stopPropagation();_toggleCardEditMenu('" + _escJsAttr(s.itemId) + "')\">EDIT</button>"
         + '</div>';
 
       const dots = s.units.map(function(u, i) {
