@@ -15569,6 +15569,11 @@ function _loadAdmin(){
               ? `<img src="${item.card_image_url || 'data:,'}"
                    onerror="_binderImgFail(this,'${item.id}')" loading="lazy" decoding="async">`
               : `<div style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2.5rem;padding:30px">?</div>`}
+            <!-- Edit button on the single-card photo. Hidden automatically
+                 when the multi-copy stack mounts (it hides this whole slot),
+                 so a stacked card shows the stack's own EDIT button instead
+                 — exactly one EDIT button either way. -->
+            <button class="pb-unit-edit" onclick="event.stopPropagation();_toggleCardEditMenu('${item.id}')" aria-label="Edit card">EDIT</button>
           </div>
           ${item.card_back_image_url ? `
             <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 4px">FRONT</div>
@@ -15578,9 +15583,9 @@ function _loadAdmin(){
             </div>
             <div style="text-align:center;font-size:.55rem;color:var(--muted);letter-spacing:.12em;margin:-6px 0 10px">BACK</div>
           ` : ''}
-          <!-- Single edit entry point: details / photo / (copies for vendor+ multi). -->
-          <button onclick="event.stopPropagation();_toggleCardEditMenu('${item.id}')" aria-label="Edit card"
-            style="position:absolute;top:8px;right:8px;z-index:5;width:36px;height:36px;border-radius:var(--r-pill,999px);border:1px solid var(--accent);background:rgba(10,14,26,.82);color:var(--accent);font-size:.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center">✏</button>
+          <!-- Edit menu — opened by the EDIT button on the card image
+               (the single photo slot OR the multi-copy stack). Pencil
+               removed; the on-card EDIT button is the one entry point. -->
           <div id="cardEditMenu_${item.id}" class="pb-cardedit-menu" style="display:none;position:absolute;top:48px;right:8px;z-index:6">
             <button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');closeModal('binderDetailModal');openEditCardModal('${item.id}')">Edit details</button>
             <button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');openCardPhotoModal('${item.id}')">Edit photo</button>
