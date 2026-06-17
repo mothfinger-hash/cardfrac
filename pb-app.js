@@ -7306,6 +7306,13 @@ function _loadAdmin(){
           ? `<img src="${_escHtml(profile.avatar_url)}" alt="" style="width:84px;height:84px;border-radius:var(--r-pill,999px);object-fit:cover;border:2px solid var(--accent)" loading="lazy" decoding="async">`
           : `<div style="width:84px;height:84px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:1.7rem">${_pbMonogram}</div>`;
 
+        // Flat cover for the redesign — natural aspect (no crop), no frame.
+        // (The shared coverArt above is height:100%/object-fit:cover, which
+        // clipped the cover art's edges inside a fixed box.)
+        const coverFlat = binderCoverUrl
+          ? `<img src="${binderCoverUrl}" alt="${_escHtml(binderName||'Binder')}" style="width:100%;height:auto;display:block;border-radius:10px" loading="lazy" decoding="async">`
+          : `<div style="width:100%;aspect-ratio:245/342;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${binderColor}22;border-radius:10px"><div style="font-size:2rem;color:${binderColor};opacity:.8">⬡</div><div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||displayName}</div></div>`;
+
         el.innerHTML = `
           <!-- Top nav row -->
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px">
@@ -7329,8 +7336,8 @@ function _loadAdmin(){
 
             <!-- The binder itself — secondary, flat cover (no 3D tilt). -->
             <div style="margin-top:16px;font-size:.62rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase">${binderName ? _escHtml(binderName) : 'Full Collection'}</div>
-            <div onclick="openPublicBinder()" title="Open Binder" style="width:184px;aspect-ratio:245/342;border-radius:10px;overflow:hidden;cursor:pointer;border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.5);background:${binderColor}22;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 30px rgba(0,0,0,.6)'" onmouseleave="this.style.transform='';this.style.boxShadow='0 8px 24px rgba(0,0,0,.5)'">
-              ${coverArt}
+            <div onclick="openPublicBinder()" title="Open Binder" style="width:200px;max-width:70vw;cursor:pointer;filter:drop-shadow(0 10px 24px rgba(0,0,0,.55));transition:transform .15s" onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
+              ${coverFlat}
             </div>
 
             <button onclick="openPublicBinder()" style="padding:12px 36px;border:none;background:var(--accent);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.06em;border-radius:6px">
@@ -7461,42 +7468,32 @@ function _loadAdmin(){
 
     // ── Public binder open/close animation ──────────────────────────────────
     function openPublicBinder() {
-      const book   = document.getElementById('pbBinderBook');
       const cover  = document.getElementById('pbCoverState');
       const cards  = document.getElementById('pbCardsState');
-      if (!book || !cover || !cards) return;
+      if (!cover || !cards) return;
 
-      // Flip the binder open
-      book.style.transform = 'perspective(900px) rotateY(-52deg) translateY(-12px)';
-      book.style.filter    = 'drop-shadow(12px 20px 40px rgba(0,0,0,.95))';
-
-      // After the flip, swap to card grid
+      // Crossfade cover → card grid. (The old 3D book flip was removed in
+      // the profile-forward redesign, so there's no book to animate — and
+      // guarding on the now-gone #pbBinderBook is what made this dead.)
+      cover.style.transition = 'opacity .25s ease';
+      cover.style.opacity = '0';
       setTimeout(() => {
-        cover.style.opacity = '0';
-        cover.style.transition = 'opacity .25s ease';
-        setTimeout(() => {
-          cover.style.display = 'none';
-          cards.style.display = 'block';
-          requestAnimationFrame(() => {
-            cards.style.opacity = '1';
-          });
-        }, 250);
-      }, 380);
+        cover.style.display = 'none';
+        cards.style.display = 'block';
+        requestAnimationFrame(() => { cards.style.opacity = '1'; });
+      }, 250);
     }
 
     function showPublicBinderCover() {
       const cover = document.getElementById('pbCoverState');
       const cards = document.getElementById('pbCardsState');
-      const book  = document.getElementById('pbBinderBook');
-      if (!cover || !cards || !book) return;
+      if (!cover || !cards) return;
 
       cards.style.opacity = '0';
       setTimeout(() => {
         cards.style.display = 'none';
         cover.style.display = 'flex';
         cover.style.opacity = '0';
-        book.style.transform = 'perspective(900px) rotateY(-18deg)';
-        book.style.filter    = 'drop-shadow(8px 16px 32px rgba(0,0,0,.85))';
         requestAnimationFrame(() => {
           cover.style.transition = 'opacity .3s ease';
           cover.style.opacity = '1';
