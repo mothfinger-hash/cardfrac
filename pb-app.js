@@ -7166,6 +7166,26 @@ function _loadAdmin(){
     }
 
     // ── Public binder renderer (read-only view for visitors) ──────────────────
+    // Follow button for the shared-binder page. Reuses the global
+    // followUser/unfollowUser + _followingIds cache (same system as the
+    // seller profile), and swaps itself in place on toggle. Signed-out
+    // visitors get a sign-up prompt — a deliberate conversion hook.
+    function _pbFollowBtnHtml(targetId) {
+      var following = window._followingIds && window._followingIds.has(targetId);
+      var attrs = 'id="pbFollowBtn" onclick="_pbFollowToggle(\'' + targetId + '\')"';
+      var base = ";font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-pill,999px)";
+      return following
+        ? '<button ' + attrs + ' style="padding:9px 26px;border:1px solid var(--muted);background:transparent;color:var(--muted)' + base + '">✓ Following</button>'
+        : '<button ' + attrs + ' style="padding:9px 26px;border:1px solid var(--accent);background:transparent;color:var(--accent)' + base + '">+ Follow</button>';
+    }
+    function _pbFollowToggle(targetId) {
+      if (!currentUser) { openModal('registerModal'); return; }
+      var following = window._followingIds && window._followingIds.has(targetId);
+      (following ? unfollowUser(targetId) : followUser(targetId)).then(function(ok) {
+        if (ok) { var b = document.getElementById('pbFollowBtn'); if (b) b.outerHTML = _pbFollowBtnHtml(targetId); }
+      });
+    }
+
     async function loadPublicBinder(usernameOrId, binderId) {
       const el = document.getElementById('publicBinderContent');
       if (!el) return;
@@ -7280,49 +7300,40 @@ function _loadAdmin(){
                <div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||displayName}</div>
              </div>`;
 
+        // Owner avatar for the profile-forward hero — real avatar or monogram.
+        const _pbMonogram = (displayName || '?').trim().split(/\s+/).map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2) || '?';
+        const avatarHtml = profile.avatar_url
+          ? `<img src="${_escHtml(profile.avatar_url)}" alt="" style="width:84px;height:84px;border-radius:var(--r-pill,999px);object-fit:cover;border:2px solid var(--accent)" loading="lazy" decoding="async">`
+          : `<div style="width:84px;height:84px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:1.7rem">${_pbMonogram}</div>`;
+
         el.innerHTML = `
           <!-- Top nav row -->
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:32px">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <span style="font-size:.8rem;color:var(--muted)">@${profile.username||displayName}</span>
-              ${tierBadge}
-              ${memberSince ? `<span style="font-size:.72rem;color:var(--muted)">· since ${memberSince}</span>` : ''}
-            </div>
-            <div style="display:flex;gap:10px">
-              <button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
-              ${currentUser ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>` : `<button onclick="openModal('loginModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`}
-            </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px">
+            <button onclick="window.history.back()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">← Back</button>
+            ${currentUser ? `<button onclick="showPage('collection');setMobileNav('collection')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">My Binder</button>` : `<button onclick="openModal('loginModal')" style="padding:7px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Sign In</button>`}
           </div>
 
-          <!-- ══ COVER STATE ══ -->
-          <div id="pbCoverState" style="display:flex;flex-direction:column;align-items:center;gap:28px;padding:20px 0 40px">
-            <div style="text-align:center">
-              <h2 style="font-size:1.4rem;margin:0 0 4px">${binderTitle}</h2>
-              <div style="font-size:.78rem;color:var(--muted)">${cardCount} card${cardCount!==1?'s':''}</div>
+          <!-- ══ COVER STATE — profile-forward: owner is the hero ══ -->
+          <div id="pbCoverState" style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:6px 0 36px">
+            ${avatarHtml}
+            <div>
+              <div style="font-family:'Orbitron',monospace;font-weight:700;font-size:1.5rem;color:var(--copper);line-height:1.15">${_escHtml(displayName)}</div>
+              <div style="font-size:.8rem;color:var(--muted);margin-top:6px">@${_escHtml(profile.username||displayName)}${tierBadge}</div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;color:var(--muted)">
+              <span><strong style="color:var(--text)">${cardCount}</strong> card${cardCount!==1?'s':''}</span>
+              ${totalValue>0 ? `<span style="color:var(--border)">·</span><span><strong style="color:var(--green)">$${totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> est.</span>` : ''}
+              ${memberSince ? `<span style="color:var(--border)">·</span><span>since ${memberSince}</span>` : ''}
+            </div>
+            ${(profile.id && (!currentUser || String(currentUser.id) !== String(profile.id))) ? _pbFollowBtnHtml(profile.id) : ''}
+
+            <!-- The binder itself — secondary, flat cover (no 3D tilt). -->
+            <div style="margin-top:16px;font-size:.62rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase">${binderName ? _escHtml(binderName) : 'Full Collection'}</div>
+            <div onclick="openPublicBinder()" title="Open Binder" style="width:184px;aspect-ratio:245/342;border-radius:10px;overflow:hidden;cursor:pointer;border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.5);background:${binderColor}22;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 30px rgba(0,0,0,.6)'" onmouseleave="this.style.transform='';this.style.boxShadow='0 8px 24px rgba(0,0,0,.5)'">
+              ${coverArt}
             </div>
 
-            <!-- Big binder book -->
-            <div id="pbBinderBook" style="
-              position:relative;width:180px;height:236px;
-              transform:perspective(900px) rotateY(-18deg);
-              filter:drop-shadow(8px 16px 32px rgba(0,0,0,.85));
-              transition:transform .5s cubic-bezier(.22,1,.36,1),filter .5s ease;
-              cursor:pointer" onclick="openPublicBinder()" title="Open Binder">
-              <!-- Spine -->
-              <div style="position:absolute;left:0;top:0;bottom:0;width:28px;border-radius:5px 0 0 5px;background:${binderColor};display:flex;align-items:center;justify-content:center;overflow:hidden">
-                <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:.7rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:190px;letter-spacing:.05em">${binderName||displayName}</span>
-              </div>
-              <!-- Cover -->
-              <div style="position:absolute;left:28px;top:0;right:0;bottom:0;border-radius:0 6px 6px 0;overflow:hidden;border-left:2px solid rgba(0,0,0,.3)">
-                ${coverArt}
-              </div>
-            </div>
-
-            <button onclick="openPublicBinder()" style="
-              padding:12px 36px;border:none;background:var(--accent);
-              color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;
-              font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.06em;
-              transition:transform .1s,box-shadow .1s">
+            <button onclick="openPublicBinder()" style="padding:12px 36px;border:none;background:var(--accent);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.06em;border-radius:6px">
               Open Binder →
             </button>
           </div>
