@@ -7300,8 +7300,14 @@ function _loadAdmin(){
                <div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||displayName}</div>
              </div>`;
 
-        // Owner avatar for the profile-forward hero — real avatar or monogram.
-        const _pbMonogram = (displayName || '?').trim().split(/\s+/).map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2) || '?';
+        // Public identity: shop/brand name takes precedence, else the
+        // username (the handle they chose). We deliberately never surface
+        // the real `name` field on this public page.
+        const _pbHandle = profile.username || '';
+        const _pbShop   = profile.shop_name || '';
+        const heroLabel = _pbShop || (_pbHandle ? '@' + _pbHandle : 'Collector');
+        const subLabel  = (_pbShop && _pbHandle) ? '@' + _pbHandle : '';
+        const _pbMonogram = ((_pbShop || _pbHandle || 'C').trim()[0] || 'C').toUpperCase();
         const avatarHtml = profile.avatar_url
           ? `<img src="${_escHtml(profile.avatar_url)}" alt="" style="width:84px;height:84px;border-radius:var(--r-pill,999px);object-fit:cover;border:2px solid var(--accent)" loading="lazy" decoding="async">`
           : `<div style="width:84px;height:84px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:1.7rem">${_pbMonogram}</div>`;
@@ -7311,7 +7317,7 @@ function _loadAdmin(){
         // clipped the cover art's edges inside a fixed box.)
         const coverFlat = binderCoverUrl
           ? `<img src="${binderCoverUrl}" alt="${_escHtml(binderName||'Binder')}" style="width:100%;height:auto;display:block;border-radius:10px" loading="lazy" decoding="async">`
-          : `<div style="width:100%;aspect-ratio:245/342;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${binderColor}22;border-radius:10px"><div style="font-size:2rem;color:${binderColor};opacity:.8">⬡</div><div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||displayName}</div></div>`;
+          : `<div style="width:100%;aspect-ratio:245/342;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${binderColor}22;border-radius:10px"><div style="font-size:2rem;color:${binderColor};opacity:.8">⬡</div><div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||heroLabel}</div></div>`;
 
         el.innerHTML = `
           <!-- Top nav row -->
@@ -7324,8 +7330,8 @@ function _loadAdmin(){
           <div id="pbCoverState" style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:6px 0 36px">
             ${avatarHtml}
             <div>
-              <div style="font-family:'Orbitron',monospace;font-weight:700;font-size:1.5rem;color:var(--copper);line-height:1.15">${_escHtml(displayName)}</div>
-              <div style="font-size:.8rem;color:var(--muted);margin-top:6px">@${_escHtml(profile.username||displayName)}${tierBadge}</div>
+              <div style="font-family:'Orbitron',monospace;font-weight:700;font-size:1.5rem;color:var(--copper);line-height:1.15">${_escHtml(heroLabel)}</div>
+              ${(subLabel || tier !== 'free') ? `<div style="margin-top:6px;display:flex;gap:8px;align-items:center;justify-content:center;font-size:.8rem;color:var(--muted)">${subLabel ? `<span>${_escHtml(subLabel)}</span>` : ''}${tier !== 'free' ? `<span style="font-size:.62rem;padding:3px 9px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;border-radius:var(--r-pill,999px)">${tier.toUpperCase()}</span>` : ''}</div>` : ''}
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;color:var(--muted)">
               <span><strong style="color:var(--text)">${cardCount}</strong> card${cardCount!==1?'s':''}</span>
