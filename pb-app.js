@@ -19533,11 +19533,75 @@ function _loadAdmin(){
       });
     }
 
+    // Quantity-aware remove prompt for multi-copy cards. Resolves to the
+    // number of copies to remove, `max` (remove all), or null (cancel).
+    function _pbRemoveQtyPrompt(max) {
+      return new Promise(function(resolve) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
+        const modal = document.createElement('div');
+        modal.style.cssText = 'background:var(--surface);border:2px solid var(--border);box-shadow:4px 4px 0 var(--shadow);padding:24px;max-width:340px;width:100%;text-align:center;font-family:"Space Mono","Share Tech Mono",monospace';
+        modal.innerHTML =
+          '<div style="font-size:.85rem;margin-bottom:6px;color:var(--text)">Remove how many?</div>' +
+          '<div style="font-size:.7rem;margin-bottom:16px;color:var(--muted)">You have ' + max + ' of this card.</div>' +
+          '<input id="_pbRmQty" type="number" inputmode="numeric" min="1" max="' + max + '" value="1" style="width:90px;text-align:center;padding:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:1rem;margin-bottom:16px">' +
+          '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
+            '<button data-cancel style="flex:1;min-width:88px;padding:10px 12px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.05em">CANCEL</button>' +
+            '<button data-all style="flex:1;min-width:88px;padding:10px 12px;background:transparent;border:1px solid #e74c3c;color:#e74c3c;font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.05em">REMOVE ALL</button>' +
+            '<button data-ok style="flex:1;min-width:88px;padding:10px 12px;background:#e74c3c;border:none;color:#fff;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.05em">REMOVE</button>' +
+          '</div>';
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        const input = modal.querySelector('#_pbRmQty');
+        setTimeout(function() { try { input.focus(); input.select(); } catch(_) {} }, 50);
+        function done(v) { overlay.remove(); resolve(v); }
+        modal.querySelector('[data-cancel]').onclick = function() { done(null); };
+        modal.querySelector('[data-all]').onclick = function() { done(max); };
+        modal.querySelector('[data-ok]').onclick = function() {
+          let n = parseInt(input.value, 10);
+          if (!n || n < 1) n = 1;
+          if (n > max) n = max;
+          done(n);
+        };
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) done(null); });
+      });
+    }
+
     async function deleteCollectionItem(id) {
-      if (!(await pbConfirm('Remove this card from your collection?', {
-        confirmText: 'REMOVE',
-        danger: true
-      }))) return;
+      const _delItem = collectionItems.find(c => String(c.id) === String(id));
+      const _delQty  = (_delItem && Number(_delItem.quantity)) || 1;
+
+      // Multi-copy: ask HOW MANY to remove instead of nuking the whole stack.
+      let _removeQty;
+      if (_delQty > 1) {
+        _removeQty = await _pbRemoveQtyPrompt(_delQty);
+        if (_removeQty == null) return;             // cancelled
+      } else {
+        if (!(await pbConfirm('Remove this card from your collection?', {
+          confirmText: 'REMOVE',
+          danger: true
+        }))) return;
+        _removeQty = 1;
+      }
+
+      // Partial removal — decrement the quantity, keep the row.
+      if (_removeQty < _delQty) {
+        const _newQty = _delQty - _removeQty;
+        const { error: _uErr } = await sb.from('collection_items')
+          .update({ quantity: _newQty }).eq('id', id).select();
+        if (_uErr) { showToast('Update failed: ' + (_uErr.message || 'unknown')); return; }
+        if (_delItem) _delItem.quantity = _newQty;
+        // Best-effort: drop the highest-ordinal per-unit rows (vendor+
+        // per-copy metadata) so the unit stack stays consistent. No-op when
+        // the card has no units / the table isn't installed.
+        try { await sb.from('collection_item_units').delete().eq('collection_item_id', id).gt('ordinal', _newQty); } catch(_) {}
+        renderCollection();
+        try { openBinderCardDetail(id); } catch(_) {}
+        showToast('Removed ' + _removeQty + ' · ' + _newQty + ' left');
+        return;
+      }
+
+      // Full removal (removing all copies) — delete the row below.
 
       // Diagnostic logging — surfaces exactly where remove-card breaks.
       // Three possible failure modes we want to distinguish:
