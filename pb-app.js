@@ -13019,6 +13019,7 @@ function _loadAdmin(){
                           && item.card_image_url.indexOf('/card-photos/') !== -1;
       return `<div
         class="allcards-row${isGhost ? ' ghost-card' : ''}${isUserPhoto ? ' has-user-photo' : ''}"
+        data-cid="${item.id}"
         draggable="true"
         ondragstart="allCardsDragStart(event,'${item.id}')"
         ondragend="allCardsDragEnd(event)"
@@ -13530,8 +13531,25 @@ function _loadAdmin(){
       if (error) { showToast('Error: ' + error.message); return; }
       const item = collectionItems.find(c => String(c.id) === String(itemId));
       if (item) item.binder_id = binderId || null;
-      renderBinder();
       const _dest = binderId ? (binders.find(b => String(b.id) === String(binderId))?.name || 'binder') : 'All Cards';
+
+      if (currentBinderId === null) {
+        // All Cards view: the card stays in the list regardless of which
+        // binder it's in, so a full renderBinder() is wasted AND resets
+        // scroll to the top — brutal on a list of hundreds/thousands while
+        // dragging cards to binders. Patch the row's binder tag in place
+        // (list view shows one; grid view shows no binder info), preserving
+        // the user's scroll position.
+        const row = document.querySelector('.allcards-row[data-cid="' + itemId + '"] .allcards-binder-tag');
+        if (row) {
+          row.textContent = _dest === 'All Cards' ? 'Unsorted' : _dest;
+          row.style.cssText = (_dest !== 'All Cards') ? 'border-color:var(--teal);color:var(--teal)' : '';
+        }
+      } else {
+        // Specific binder: the card just left this view, so it must be
+        // removed — re-render.
+        renderBinder();
+      }
       showToast('✓ Moved to ' + _dest);
     }
 
