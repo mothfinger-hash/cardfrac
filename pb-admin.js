@@ -293,6 +293,28 @@ function _pbInjectAdminMarkup(){
       </div>
     </div>
 
+    <!-- Price Mismatch Audit — finds cards whose PriceCharting
+         (catalog.current_value) and TCGplayer (card_prices) prices diverge
+         wildly, which almost always means a mis-linked PriceCharting product.
+         "Clear PC" nulls the bad PC id/url/value so the suggested price falls
+         back to TCGplayer and the next enrichment re-matches it. -->
+    <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Price Mismatch Audit</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <label style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted)">Min ratio</label>
+          <input id="adminPmThreshold" type="number" inputmode="decimal" value="4" min="2" style="width:54px;text-align:center;padding:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.62rem">
+          <button onclick="renderAdminPriceMismatch()" style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">Scan</button>
+        </div>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Cards where PriceCharting and TCGplayer disagree by ≥ the ratio — usually a mis-linked PriceCharting product (TCGplayer is ID-matched, so it's the reliable side). Check both ↗ links to confirm which is wrong, then "Clear PC" to drop the bad PriceCharting value; the suggested price falls back to TCGplayer until the next enrichment re-links it.
+      </div>
+      <div id="adminPriceMismatchList" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:.62rem;color:rgba(26,199,160,.4);letter-spacing:.08em">Click "Scan" to find divergent prices.</div>
+      </div>
+    </div>
+
     <!-- Catalog Image Contribution Queue — pending submissions from
          users whose scan picked up a card with no catalog photo.
          Approve to write to catalog.image_url and credit the user;
@@ -1418,6 +1440,82 @@ function _ovTile(val, lbl, sub){
   return '<div class="admin-ov-tile"><div class="admin-ov-val">' + val + '</div>' +
          '<div class="admin-ov-lbl">' + lbl + '</div>' +
          (sub ? '<div class="admin-ov-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+// ── Price Mismatch Audit ────────────────────────────────────────────────
+// Surfaces catalog rows where PriceCharting (catalog.current_value) and
+// TCGplayer (card_prices source=tcgplayer) disagree by >= the ratio — the
+// signature of a mis-linked PriceCharting product. Client-side join so no
+// migration/RPC is needed; bounded so it stays an admin spot-tool.
+async function renderAdminPriceMismatch(){
+  var box = document.getElementById('adminPriceMismatchList');
+  if (!box) return;
+  var threshold = Math.max(2, Number((document.getElementById('adminPmThreshold')||{}).value) || 4);
+  box.innerHTML = '<div style="font-size:.62rem;color:var(--muted)">Scanning…</div>';
+  try {
+    // 1) Pull TCGplayer comps (bounded to ~8k rows).
+    var tcg = {}, scanned = 0, page = 0, PAGE = 1000;
+    while (page < 8) {
+      var r = await sb.from('card_prices').select('catalog_id, value, source_url').eq('source','tcgplayer').gt('value', 0).range(page*PAGE, page*PAGE + PAGE - 1);
+      if (r.error || !r.data || !r.data.length) break;
+      r.data.forEach(function(x){ tcg[x.catalog_id] = { v: Number(x.value), url: x.source_url }; });
+      scanned += r.data.length;
+      if (r.data.length < PAGE) break;
+      page++;
+    }
+    var ids = Object.keys(tcg);
+    if (!ids.length) { box.innerHTML = '<div style="font-size:.62rem;color:var(--muted)">No TCGplayer comps found.</div>'; return; }
+    // 2) Pull catalog current_value for those ids (chunked) and compare.
+    var rows = [];
+    for (var i = 0; i < ids.length; i += 200) {
+      var cr = await sb.from('catalog').select('id,name,set_name,card_number,current_value,price_source_url,pricecharting_id,image_url').in('id', ids.slice(i, i + 200));
+      if (cr.data) cr.data.forEach(function(c){
+        var pc = Number(c.current_value) || 0, t = (tcg[c.id]||{}).v || 0;
+        if (pc > 0 && t > 0) {
+          var ratio = Math.max(pc, t) / Math.min(pc, t);
+          if (ratio >= threshold) rows.push({ c: c, pc: pc, tcg: t, ratio: ratio, tcgUrl: (tcg[c.id]||{}).url });
+        }
+      });
+    }
+    rows.sort(function(a, b){ return b.ratio - a.ratio; });
+    if (!rows.length) { box.innerHTML = '<div style="font-size:.62rem;color:var(--muted)">No divergences ≥ ' + threshold + '× found (scanned ' + scanned + ' TCGplayer comps).</div>'; return; }
+    var top = rows.slice(0, 80);
+    box.innerHTML = '<div style="font-size:.58rem;color:var(--muted);margin-bottom:6px">' + rows.length + ' divergent card(s) ≥ ' + threshold + '× · showing ' + top.length + '</div>' + top.map(_pmRowHtml).join('');
+  } catch(e) { box.innerHTML = '<div style="font-size:.62rem;color:var(--red)">Scan failed: ' + (e.message || 'error') + '</div>'; }
+}
+function _pmRowHtml(r){
+  var c = r.c;
+  var pcUrl = c.price_source_url || (c.pricecharting_id ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(c.pricecharting_id) : null);
+  var tcgUrl = r.tcgUrl || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(c.name || ''));
+  var rid = 'pm_' + String(c.id).replace(/[^a-z0-9]/gi, '_');
+  return '<div id="' + rid + '" style="display:flex;gap:10px;align-items:center;border:1px solid var(--border);background:var(--surface2);padding:8px 10px">'
+    + (c.image_url ? '<img src="' + c.image_url + '" loading="lazy" decoding="async" style="width:34px;height:47px;object-fit:contain;flex-shrink:0;background:var(--surface)">' : '')
+    + '<div style="flex:1;min-width:0">'
+    +   '<div style="font-size:.66rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(c.name || '?') + '</div>'
+    +   '<div style="font-size:.56rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escHtml(c.set_name || '') + (c.card_number ? (' #' + c.card_number) : '') + '</div>'
+    + '</div>'
+    + '<div style="text-align:right;flex-shrink:0;font-family:\'Space Mono\',monospace">'
+    +   '<div style="font-size:.6rem"><a href="' + (pcUrl || '#') + '" target="_blank" rel="noopener" style="color:var(--copper);text-decoration:none">PC $' + r.pc.toFixed(2) + ' ↗</a></div>'
+    +   '<div style="font-size:.6rem"><a href="' + tcgUrl + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">TCG $' + r.tcg.toFixed(2) + ' ↗</a></div>'
+    + '</div>'
+    + '<div style="flex-shrink:0;text-align:center;min-width:46px">'
+    +   '<div style="font-size:.68rem;font-weight:700;color:var(--red)">' + r.ratio.toFixed(1) + '×</div>'
+    +   '<button onclick="adminClearPcLink(\'' + c.id + '\')" style="margin-top:3px;font-size:.54rem;padding:3px 7px;border:1px solid var(--red);background:transparent;color:var(--red);cursor:pointer;font-family:inherit">Clear PC</button>'
+    + '</div>'
+  + '</div>';
+}
+async function adminClearPcLink(catalogId){
+  if (typeof pbConfirm === 'function') {
+    var ok = await pbConfirm('Clear the PriceCharting link + value for this card? The suggested price falls back to TCGplayer until the next enrichment re-matches it.', { confirmText: 'CLEAR', danger: true });
+    if (!ok) return;
+  }
+  try {
+    var r = await sb.from('catalog').update({ price_source_url: null, pricecharting_id: null, current_value: null }).eq('id', catalogId).select('id');
+    if (r.error) { showToast('Failed: ' + r.error.message); return; }
+    var row = document.getElementById('pm_' + String(catalogId).replace(/[^a-z0-9]/gi, '_'));
+    if (row) row.style.display = 'none';
+    showToast('PC link cleared — re-matches on next sync');
+  } catch(e) { showToast('Failed: ' + (e.message || 'error')); }
 }
 
 // Real app/site metrics for the Overview tab. All queries are defensive:
