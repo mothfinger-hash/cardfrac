@@ -7142,7 +7142,13 @@ function _loadAdmin(){
 
     function getShareUrl(username, binderId) {
       let url = `${window.location.origin}${window.location.pathname}?binder=${encodeURIComponent(username)}`;
-      if (binderId) url += `&b=${encodeURIComponent(binderId)}`;
+      if (binderId) {
+        url += `&b=${encodeURIComponent(binderId)}`;
+        // Carry the layout you're viewing so the shared binder opens in the
+        // same view (3x3 pages, etc.). Specific binders only — All Cards
+        // (no binderId) shares as the open grid.
+        if (typeof binderView !== 'undefined' && binderView) url += `&view=${encodeURIComponent(binderView)}`;
+      }
       return url;
     }
 
@@ -7186,7 +7192,74 @@ function _loadAdmin(){
       });
     }
 
-    async function loadPublicBinder(usernameOrId, binderId) {
+    // One public-binder card tile — shared by the All-Cards responsive grid
+    // and the paged 3x3/2x2/1x1 binder view. idx is the position in
+    // window._publicBinderItems so openPublicCardDetail(idx) resolves.
+    function _pbCardHtml(c, idx) {
+      const condLabel = c.condition === 'graded' && c.grade_value ? `PSA ${c.grade_value}` : (c.condition||'').toUpperCase();
+      const _pbSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+      const img = _pbSrc
+        ? `<img src="${_pbSrc}" alt="${_escHtml(c.card_name)}" loading="lazy" decoding="async" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`+
+          `<div class="pub-no-img" style="display:none;width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`
+        : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`;
+      const qtyBadge = c.quantity > 1
+        ? `<span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.7);color:var(--text);font-size:.6rem;padding:1px 5px;border-radius:2px">×${c.quantity}</span>`
+        : '';
+      return `<div onclick="openPublicCardDetail(${idx})" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative;transition:transform .15s,box-shadow .15s;cursor:pointer" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 24px rgba(0,0,0,.5)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+        ${img}
+        ${qtyBadge}
+        <div style="padding:8px 10px">
+          <div style="font-size:.75rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">${c.card_name}</div>
+          ${c.set_name ? `<div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.set_name}${c.card_number?` #${c.card_number}`:''}</div>` : ''}
+          ${condLabel ? `<div style="font-size:.62rem;color:var(--teal);margin-top:2px">${condLabel}</div>` : ''}
+        </div>
+      </div>`;
+    }
+
+    // Authentic binder-page rendering for a shared SPECIFIC binder. The
+    // shared link carries the owner's view (&view=3x3/2x2/1x1) so the
+    // recipient flips through pages in that exact layout.
+    function _pbViewDims(view) {
+      if (view === '2x2') return { cols: 2, per: 4, maxw: 400 };
+      if (view === '1x1') return { cols: 1, per: 1, maxw: 250 };
+      return { cols: 3, per: 9, maxw: 560 }; // 3x3 default
+    }
+    function _pbRenderBinderPage() {
+      const grid = document.getElementById('pbPagedGrid');
+      if (!grid) return;
+      const items = window._pbPagedItems || [];
+      const dims = _pbViewDims(window._pbView);
+      const pages = Math.max(1, Math.ceil(items.length / dims.per));
+      if (window._pbPage < 0) window._pbPage = 0;
+      if (window._pbPage > pages - 1) window._pbPage = pages - 1;
+      const start = window._pbPage * dims.per;
+      const slice = items.slice(start, start + dims.per);
+      let cells = '';
+      for (let i = 0; i < dims.per; i++) {
+        cells += (i < slice.length)
+          ? _pbCardHtml(slice[i], start + i)
+          : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:6px;opacity:.3"></div>';
+      }
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:12px;max-width:' + dims.maxw + 'px;margin:0 auto';
+      grid.innerHTML = cells;
+      const nav = document.getElementById('pbPageNav');
+      if (nav) {
+        nav.style.display = pages > 1 ? 'flex' : 'none';
+        const atStart = window._pbPage === 0, atEnd = window._pbPage >= pages - 1;
+        const btn = (dir, label, dis) => '<button onclick="_pbBinderPageNav(' + dir + ')"' + (dis ? ' disabled' : '') + ' style="padding:8px 16px;border:1px solid var(--border);background:transparent;color:' + (dis ? 'var(--border)' : 'var(--accent)') + ';font-family:inherit;font-size:.75rem;cursor:' + (dis ? 'default' : 'pointer') + ';border-radius:6px">' + label + '</button>';
+        nav.innerHTML = btn(-1, '‹ Prev', atStart) +
+          '<span style="font-family:inherit;font-size:.72rem;color:var(--muted)">Page ' + (window._pbPage + 1) + ' / ' + pages + '</span>' +
+          btn(1, 'Next ›', atEnd);
+      }
+    }
+    function _pbBinderPageNav(d) {
+      window._pbPage = (window._pbPage || 0) + d;
+      _pbRenderBinderPage();
+      const w = document.getElementById('pbPagedWrap');
+      if (w) { try { w.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch(_) {} }
+    }
+
+    async function loadPublicBinder(usernameOrId, binderId, view) {
       const el = document.getElementById('publicBinderContent');
       if (!el) return;
       isPublicView = true; // prevent onAuthStateChange from redirecting to browse
@@ -7256,30 +7329,14 @@ function _loadAdmin(){
           ? `<span style="font-size:.62rem;padding:2px 7px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;margin-left:8px">${tier.toUpperCase()}</span>`
           : '';
 
-        // Build card grid (hidden initially)
-        const gridCards = (items||[]).map((c, idx) => {
-          const condLabel = c.condition === 'graded' && c.grade_value
-            ? `PSA ${c.grade_value}`
-            : (c.condition||'').toUpperCase();
-          // Use 'data:,' to trigger onerror catalog fallback when url is missing but api_card_id exists
-          const _pbSrc = c.card_image_url || (c.api_card_id ? 'data:,' : '');
-          const img = _pbSrc
-            ? `<img src="${_pbSrc}" alt="${_escHtml(c.card_name)}" loading="lazy" decoding="async" style="width:100%;height:160px;object-fit:contain;border-radius:4px 4px 0 0;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`+
-              `<div class="pub-no-img" style="display:none;width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`
-            : `<div style="width:100%;height:160px;background:var(--surface2);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem">NO IMAGE</div>`;
-          const qtyBadge = c.quantity > 1
-            ? `<span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.7);color:var(--text);font-size:.6rem;padding:1px 5px;border-radius:2px">×${c.quantity}</span>`
-            : '';
-          return `<div onclick="openPublicCardDetail(${idx})" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative;transition:transform .15s,box-shadow .15s;cursor:pointer" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 24px rgba(0,0,0,.5)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-            ${img}
-            ${qtyBadge}
-            <div style="padding:8px 10px">
-              <div style="font-size:.75rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">${c.card_name}</div>
-              ${c.set_name ? `<div style="font-size:.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.set_name}${c.card_number?` #${c.card_number}`:''}</div>` : ''}
-              ${condLabel ? `<div style="font-size:.62rem;color:var(--teal);margin-top:2px">${condLabel}</div>` : ''}
-            </div>
-          </div>`;
-        }).join('');
+        // Build card grid (hidden initially) — All-Cards / fallback layout.
+        const gridCards = (items||[]).map((c, idx) => _pbCardHtml(c, idx)).join('');
+
+        // Authentic binder pages only for a shared SPECIFIC binder; All Cards
+        // (no binderId) keeps the open responsive grid. View comes from the
+        // share link (&view=…), defaulting to 3x3 for older links.
+        const _view = view || '3x3';
+        const _pbPaged = !!binderId && ['3x3','2x2','1x1'].includes(_view);
 
         // CTA for visitors who aren't signed in
         const ctaHtml = !currentUser ? `
@@ -7359,12 +7416,24 @@ function _loadAdmin(){
               ${totalValue > 0 ? `<span style="font-size:.78rem;color:var(--muted)">Est. Value: <span style="color:var(--green)">$${totalValue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>` : ''}
               <button onclick="showPublicBinderCover()" style="margin-left:auto;background:transparent;border:none;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;padding:0">← Close</button>
             </div>
-            <!-- Card grid -->
+            <!-- Card grid: paged 3x3/2x2/1x1 binder pages for a shared
+                 specific binder; open responsive grid for All Cards. -->
             ${cardCount === 0
               ? `<div style="text-align:center;padding:60px;color:var(--muted)">This binder is empty.</div>`
-              : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px">${gridCards}</div>`}
+              : (_pbPaged
+                  ? `<div id="pbPagedWrap"><div id="pbPagedGrid"></div><div id="pbPageNav" style="display:none;gap:14px;align-items:center;justify-content:center;margin-top:18px"></div></div>`
+                  : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px">${gridCards}</div>`)}
             ${ctaHtml}
           </div>`;
+
+        // Fill the paged binder view (rendered into the hidden cards-state;
+        // becomes visible when the visitor taps Open Binder).
+        if (_pbPaged) {
+          window._pbPagedItems = items || [];
+          window._pbView = _view;
+          window._pbPage = 0;
+          _pbRenderBinderPage();
+        }
 
 
 
@@ -27400,8 +27469,9 @@ function _loadAdmin(){
       const binderParam = urlParams.get('binder');
       if (binderParam) {
         const binderIdParam = urlParams.get('b') || null;
+        const viewParam = urlParams.get('view') || null;
         window.history.replaceState({}, '', window.location.pathname);
-        loadPublicBinder(binderParam, binderIdParam);
+        loadPublicBinder(binderParam, binderIdParam, viewParam);
         return;
       }
 
