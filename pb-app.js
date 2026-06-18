@@ -7216,6 +7216,22 @@ function _loadAdmin(){
       </div>`;
     }
 
+    // A single binder POCKET — just the card image (no name/set/condition
+    // footer), matching the owner's real 3x3 binder view. Used by the paged
+    // public binder; the labeled _pbCardHtml tile stays for the All-Cards grid.
+    function _pbPocketHtml(c, idx) {
+      const _src = c.card_image_url || (c.api_card_id ? 'data:,' : '');
+      const qtyBadge = c.quantity > 1
+        ? `<span style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,.8);color:var(--text);font-size:.62rem;padding:1px 6px;border-radius:3px;z-index:2">×${c.quantity}</span>`
+        : '';
+      const inner = _src
+        ? `<img src="${_src}" alt="${_escHtml(c.card_name)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`
+        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.62rem;text-align:center;padding:8px">${_escHtml(c.card_name||'NO IMAGE')}</div>`;
+      return `<div onclick="openPublicCardDetail(${idx})" style="position:relative;aspect-ratio:245/342;border-radius:8px;overflow:hidden;cursor:pointer;background:var(--surface2);border:1px solid var(--border);transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.55)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+        ${inner}${qtyBadge}
+      </div>`;
+    }
+
     // Authentic binder-page rendering for a shared SPECIFIC binder. The
     // shared link carries the owner's view (&view=3x3/2x2/1x1) so the
     // recipient flips through pages in that exact layout.
@@ -7237,8 +7253,8 @@ function _loadAdmin(){
       let cells = '';
       for (let i = 0; i < dims.per; i++) {
         cells += (i < slice.length)
-          ? _pbCardHtml(slice[i], start + i)
-          : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:6px;opacity:.3"></div>';
+          ? _pbPocketHtml(slice[i], start + i)
+          : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:8px;opacity:.3"></div>';
       }
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:12px;max-width:' + dims.maxw + 'px;margin:0 auto';
       grid.innerHTML = cells;
