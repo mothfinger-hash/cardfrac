@@ -16135,7 +16135,7 @@ function _loadAdmin(){
       const amountSaved  = parseFloat(document.getElementById('wishlistSaved').value)  || 0;
       console.log('[saveToWishlist] inputs → goal:', savingsGoal, '| saved:', amountSaved);
       const priceUrl     = document.getElementById('wishlistPriceUrl').value.trim() || null;
-      const binderId     = document.getElementById('wishlistBinderId')?.value || null;
+      const binderId     = _sanBinder(document.getElementById('wishlistBinderId')?.value);
 
       // Use manual name input if the row is visible
       let cardName = pendingCollectionCard.cardName;
@@ -17729,7 +17729,7 @@ function _loadAdmin(){
       const certNumber     = document.getElementById('atcCertNumber').value.trim() || null;
       const priceSourceUrl = document.getElementById('atcPriceUrl').value.trim() || null;
       const notes          = document.getElementById('atcNotes').value.trim() || null;
-      const binderId       = document.getElementById('atcBinderId')?.value || null;
+      const binderId       = _sanBinder(document.getElementById('atcBinderId')?.value);
       const language       = document.getElementById('atcLanguage')?.value || 'EN';
 
       const saveBtn = document.querySelector('#addToCollectionModal button[onclick="saveToCollection()"]');
@@ -17797,6 +17797,13 @@ function _loadAdmin(){
 
     // Tracks which dropdown triggered binder creation so we can auto-select after save
     let _binderDropdownSourceId = null;
+
+    // Sanitize a binder-select value before it's used as a binder_id (UUID).
+    // The "＋ New Binder" option carries the sentinel value '_new_binder';
+    // if it ever reaches a save (e.g. a select without the onchange handler,
+    // or a race), it must become null ("All Cards") — NOT get inserted as a
+    // uuid, which Postgres rejects with 'invalid input syntax for type uuid'.
+    function _sanBinder(v) { return (v && v !== '_new_binder') ? v : null; }
 
     function handleBinderDropdownChange(sel) {
       if (sel.value !== '_new_binder') {
@@ -17984,7 +17991,7 @@ function _loadAdmin(){
       const certNumber    = document.getElementById('atcCertNumber').value.trim() || null;
       const priceSourceUrl= document.getElementById('atcPriceUrl').value.trim() || null;
       const notes         = document.getElementById('atcNotes').value.trim() || null;
-      const binderId      = document.getElementById('atcBinderId')?.value || null;
+      const binderId      = _sanBinder(document.getElementById('atcBinderId')?.value);
 
       let cardName = pendingCollectionCard.cardName;
       const manualInput = document.getElementById('atcManualNameInput');
