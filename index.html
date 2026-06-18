@@ -162,6 +162,20 @@
        sidebar collapses to icons-only AND the bottom mobile-nav appears,
        so we leave the original left-side layout intact for mobile to
        avoid disrupting that compact layout. */
+    /* Mobile nav switch lives in CRITICAL CSS so it applies on the FIRST
+       paint. Without it, the base body{padding-left:var(--sb-w)} + visible
+       <nav> render the desktop sidebar on the left until the async
+       pb-styles.css ≤900px rule hides it — the "desktop nav flashes on
+       refresh" bug. Mirrors the equivalent rules in pb-styles.css. */
+    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch}
+    @media (max-width: 900px) {
+      nav{display:none!important}
+      body{padding-left:0;padding-right:0}
+      body.nav-collapsed{padding-left:0;padding-right:0}
+      #binderSidebar{left:0}
+      .mobile-nav{display:flex}
+      .page{padding-bottom:72px}
+    }
     @media (min-width: 901px) {
       body{padding-left:0;padding-right:var(--sb-w)}
       body.nav-collapsed{padding-left:0;padding-right:var(--sb-w-coll)}
