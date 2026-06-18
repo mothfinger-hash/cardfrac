@@ -7274,6 +7274,28 @@ function _loadAdmin(){
       const w = document.getElementById('pbPagedWrap');
       if (w) { try { w.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch(_) {} }
     }
+    // Swipe between pages on the shared paged binder — mirrors the owner's
+    // #collectionContent swipe (quick <500ms, clearly-horizontal >50px).
+    // Swipe left → next page, right → previous. Wired once; the target
+    // check means it only acts when touching inside the paged binder.
+    (function() {
+      let sx = null, sy = null, st = null;
+      document.addEventListener('touchstart', function(e) {
+        if (!e.target.closest || !e.target.closest('#pbPagedWrap')) return;
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+      }, { passive: true });
+      document.addEventListener('touchend', function(e) {
+        if (sx === null) return;
+        const inWrap = e.target.closest && e.target.closest('#pbPagedWrap');
+        const dx = e.changedTouches[0].clientX - sx;
+        const dy = e.changedTouches[0].clientY - sy;
+        const dt = Date.now() - st;
+        sx = sy = st = null;
+        if (!inWrap || dt > 500) return;
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+        if (typeof _pbBinderPageNav === 'function') _pbBinderPageNav(dx < 0 ? 1 : -1);
+      }, { passive: true });
+    })();
 
     async function loadPublicBinder(usernameOrId, binderId, view) {
       const el = document.getElementById('publicBinderContent');
