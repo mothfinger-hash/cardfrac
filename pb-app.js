@@ -7252,12 +7252,13 @@ function _loadAdmin(){
     function _pbPocketArtWindow(art, r, c, cols, rows, gap) {
       if (!art || !art.url) return '';
       var tx = (Number(art.x) || 0) * 100, ty = (Number(art.y) || 0) * 100, s = Number(art.scale) || 1;
+      var of = art.fit === 'contain' ? 'contain' : 'cover';
       return '<div style="position:absolute;'
         + 'width:calc(100% * ' + cols + ' + ' + ((cols - 1) * gap) + 'px);'
         + 'height:calc(100% * ' + rows + ' + ' + ((rows - 1) * gap) + 'px);'
         + 'left:calc(-100% * ' + c + ' - ' + (c * gap) + 'px);'
         + 'top:calc(-100% * ' + r + ' - ' + (r * gap) + 'px);pointer-events:none">'
-        + '<img src="' + art.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')">'
+        + '<img src="' + art.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:' + of + ';transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')">'
         + '</div>';
     }
     // ── Multi-image (regions) helpers ──────────────────────────────────────
@@ -7269,7 +7270,7 @@ function _loadAdmin(){
     function _pageRegions(art) {
       if (!art) return [];
       if (Array.isArray(art.regions)) return art.regions;
-      if (art.url) return [{ url: art.url, scale: Number(art.scale) || 1, x: Number(art.x) || 0, y: Number(art.y) || 0, pockets: (art.blanks || []).slice(), bleed: art.bleed !== false }];
+      if (art.url) return [{ url: art.url, scale: Number(art.scale) || 1, x: Number(art.x) || 0, y: Number(art.y) || 0, pockets: (art.blanks || []).slice(), bleed: art.bleed !== false, fit: art.fit === 'contain' ? 'contain' : 'cover' }];
       if (Array.isArray(art.blanks) && art.blanks.length) return [{ url: null, scale: 1, x: 0, y: 0, pockets: art.blanks.slice(), bleed: true }];
       return [];
     }
@@ -7305,8 +7306,9 @@ function _loadAdmin(){
         if (!reg.bleed || !reg.url) return;
         var bb = _regionBBox(reg, cols);
         var tx = (Number(reg.x) || 0) * 100, ty = (Number(reg.y) || 0) * 100, s = Number(reg.scale) || 1;
+        var of = reg.fit === 'contain' ? 'contain' : 'cover';
         h += '<div style="position:absolute;inset:0;grid-column:' + (bb.minC + 1) + '/span ' + bb.cols + ';grid-row:' + (bb.minR + 1) + '/span ' + bb.rows + ';overflow:hidden;z-index:0;border-radius:8px;pointer-events:none">'
-          + '<img src="' + reg.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')"></div>';
+          + '<img src="' + reg.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:' + of + ';transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')"></div>';
       });
       return h;
     }
@@ -13725,14 +13727,16 @@ function _loadAdmin(){
       var frame = document.getElementById('paFrame');
       if (frame) { var a = _paFrameAspect(); frame.style.aspectRatio = a[0] + ' / ' + a[1]; }
       var img = document.getElementById('paImg');
-      if (img) { if (has) { img.src = reg.url; img.style.display = 'block'; } else { img.style.display = 'none'; } }
+      if (img) { if (has) { img.src = reg.url; img.style.display = 'block'; img.style.objectFit = (reg.fit === 'contain') ? 'contain' : 'cover'; } else { img.style.display = 'none'; } }
       var empty = document.getElementById('paEmpty'); if (empty) empty.style.display = has ? 'none' : 'flex';
       var zoomRow = document.getElementById('paZoomRow'); if (zoomRow) zoomRow.style.display = has ? 'flex' : 'none';
       var pocketsRow = document.getElementById('paPocketsRow'); if (pocketsRow) pocketsRow.style.display = 'block';
       var bleedRow = document.getElementById('paBleedRow'); if (bleedRow) bleedRow.style.display = has ? 'flex' : 'none';
+      var fitRow = document.getElementById('paFitRow'); if (fitRow) fitRow.style.display = has ? 'flex' : 'none';
       var rm = document.getElementById('paRemoveBtn'); if (rm) rm.style.display = has ? 'block' : 'none';
       var zoom = document.getElementById('paZoom'); if (zoom && reg) zoom.value = Math.round((reg.scale || 1) * 100);
       var bl = document.getElementById('paBleed'); if (bl && reg) bl.checked = reg.bleed !== false;
+      var ft = document.getElementById('paFit'); if (ft && reg) ft.checked = reg.fit === 'contain';
       _paRenderTabs();
       _paRenderPockets();
       requestAnimationFrame(function(){ _paApplyTransform(); });
@@ -13750,7 +13754,7 @@ function _loadAdmin(){
     function _paSelectRegion(i) { _paState.active = i; _paRefresh(); }
     function _paAddRegion() {
       if (_paState.regions.length >= 3) return;
-      _paState.regions.push({ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true });
+      _paState.regions.push({ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true, fit: 'cover' });
       _paState.active = _paState.regions.length - 1;
       _paRefresh();
     }
@@ -13785,6 +13789,7 @@ function _loadAdmin(){
     }
     function _paZoom(val) { var reg = _paRegion(); if (reg) { reg.scale = Math.max(1, (Number(val) || 100) / 100); _paApplyTransform(); } }
     function _paBleedChange(el) { var reg = _paRegion(); if (reg) reg.bleed = !!el.checked; }
+    function _paFitChange(el) { var reg = _paRegion(); if (reg) { reg.fit = el.checked ? 'contain' : 'cover'; var img = document.getElementById('paImg'); if (img) img.style.objectFit = reg.fit; } }
     function _paOnFile(e) {
       var f = e.target.files && e.target.files[0]; if (!f) return;
       var reg = _paRegion(); if (!reg) { _paAddRegion(); reg = _paRegion(); }
@@ -13822,7 +13827,7 @@ function _loadAdmin(){
           if (!r.url && !(r.pockets && r.pockets.length)) continue; // skip empty
           var url = r.url;
           if (r.newBlob) url = await _uploadPageArt(currentBinderId, _paState.page + '_' + i, r.newBlob);
-          regions.push({ url: url || null, scale: r.scale || 1, x: r.x || 0, y: r.y || 0, pockets: (r.pockets || []).slice().sort(function(a, c){ return a - c; }), bleed: r.bleed !== false });
+          regions.push({ url: url || null, scale: r.scale || 1, x: r.x || 0, y: r.y || 0, pockets: (r.pockets || []).slice().sort(function(a, c){ return a - c; }), bleed: r.bleed !== false, fit: r.fit === 'contain' ? 'contain' : 'cover' });
         }
         var pa = Object.assign({}, b.page_art || {});
         if (regions.length) pa[String(_paState.page)] = { regions: regions };
@@ -13843,7 +13848,7 @@ function _loadAdmin(){
     function removePageArt() {
       if (!_paState.regions.length) return;
       _paState.regions.splice(_paState.active, 1);
-      if (!_paState.regions.length) _paState.regions.push({ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true });
+      if (!_paState.regions.length) _paState.regions.push({ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true, fit: 'cover' });
       _paState.active = Math.min(_paState.active, _paState.regions.length - 1);
       _paRefresh();
     }
