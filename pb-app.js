@@ -7243,11 +7243,36 @@ function _loadAdmin(){
         + '<img src="' + art.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')">'
         + '</div>';
     }
-    // Transparent placeholder pockets that pad the owner's binder grid out to
-    // a full page in art mode, so the artwork shows through every empty slot.
-    function _pbOwnerArtPads(n) {
+    // Per-pocket art window for BLEED-OFF mode: shows only this pocket's
+    // slice of the full-grid artwork (gaps stay clean). The inner layer is
+    // sized to the whole grid and offset to this pocket's (row,col), with the
+    // SAME transform as the continuous bg — so adjacent open pockets still
+    // line up into one scene, just without art in the seams. gap must match
+    // the grid gap so the slices register exactly.
+    function _pbPocketArtWindow(art, r, c, cols, rows, gap) {
+      if (!art || !art.url) return '';
+      var tx = (Number(art.x) || 0) * 100, ty = (Number(art.y) || 0) * 100, s = Number(art.scale) || 1;
+      return '<div style="position:absolute;'
+        + 'width:calc(100% * ' + cols + ' + ' + ((cols - 1) * gap) + 'px);'
+        + 'height:calc(100% * ' + rows + ' + ' + ((rows - 1) * gap) + 'px);'
+        + 'left:calc(-100% * ' + c + ' - ' + (c * gap) + 'px);'
+        + 'top:calc(-100% * ' + r + ' - ' + (r * gap) + 'px);pointer-events:none">'
+        + '<img src="' + art.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')">'
+        + '</div>';
+    }
+    // Placeholder pockets padding the owner's binder grid out to a full page.
+    // In bleed-off mode each pad shows its own art-window slice; otherwise
+    // it's a transparent window over the continuous bg.
+    function _pbOwnerArtPads(n, art, noBleed, startIdx, cols, rows, gap) {
       var s = '';
-      for (var k = 0; k < Math.max(0, n); k++) s += '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>';
+      for (var k = 0; k < Math.max(0, n); k++) {
+        var i = (startIdx || 0) + k;
+        if (art && noBleed) {
+          s += '<div class="binder-card pa-empty" style="position:relative;overflow:hidden;border-radius:8px"><div style="width:100%;aspect-ratio:245/342"></div>' + _pbPocketArtWindow(art, Math.floor(i / cols), i % cols, cols, rows, gap) + '</div>';
+        } else {
+          s += '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>';
+        }
+      }
       return s;
     }
     // Lay cards out into pages of `per` pockets, reserving the OPEN pockets
@@ -7297,30 +7322,37 @@ function _loadAdmin(){
       if (window._pbPage < 0) window._pbPage = 0;
       if (window._pbPage > pages - 1) window._pbPage = pages - 1;
       const art = pageArt[String(window._pbPage + 1)] || null;
-      const emptyCell = art
-        // Empty pocket in art mode = transparent window so the art behind
-        // shows through; the grid gap forms the binder seam.
-        ? '<div style="position:relative;z-index:1;aspect-ratio:245/342"></div>'
-        : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:8px;opacity:.3"></div>';
+      const bleed = art ? (art.bleed !== false) : true;
+      const artCols = dims.cols, artRows = Math.ceil(dims.per / dims.cols), artGap = 4;
+      // Empty/open pocket for slot index i. Bleed-on: transparent window over
+      // the continuous bg. Bleed-off: this pocket's own art-window slice.
+      function emptyCell(i) {
+        if (art && !bleed) {
+          return '<div style="position:relative;z-index:1;overflow:hidden;aspect-ratio:245/342;border-radius:8px">' + _pbPocketArtWindow(art, Math.floor(i / artCols), i % artCols, artCols, artRows, artGap) + '</div>';
+        }
+        return art
+          ? '<div style="position:relative;z-index:1;aspect-ratio:245/342"></div>'
+          : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:8px;opacity:.3"></div>';
+      }
       let cells = '';
       if (layout) {
         const pageSlots = layout[window._pbPage] || [];
         for (let i = 0; i < dims.per; i++) {
           const entry = pageSlots[i];
-          cells += entry ? _pbPocketHtml(entry, items.indexOf(entry)) : emptyCell;
+          cells += entry ? _pbPocketHtml(entry, items.indexOf(entry)) : emptyCell(i);
         }
       } else {
         const start = window._pbPage * dims.per;
         const slice = items.slice(start, start + dims.per);
         for (let i = 0; i < dims.per; i++) {
-          cells += (i < slice.length) ? _pbPocketHtml(slice[i], start + i) : emptyCell;
+          cells += (i < slice.length) ? _pbPocketHtml(slice[i], start + i) : emptyCell(i);
         }
       }
-      // Art mode gap = the "bleed": 4px seam shows the scene between pockets;
-      // 0 (bleed off) makes pockets flush so art only shows in open pockets.
-      const gap = art ? (art.bleed === false ? 0 : 4) : 12;
+      // Gap is constant in art mode (cards never resize). Bleed only changes
+      // WHERE the art shows: continuous bg (on) vs per-pocket windows (off).
+      const gap = art ? artGap : 12;
       grid.style.cssText = 'position:relative;display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:' + gap + 'px;max-width:' + dims.maxw + 'px;margin:0 auto';
-      grid.innerHTML = _pbArtBgHtml(art) + cells;
+      grid.innerHTML = ((art && bleed) ? _pbArtBgHtml(art) : '') + cells;
       const nav = document.getElementById('pbPageNav');
       if (nav) {
         nav.style.display = pages > 1 ? 'flex' : 'none';
@@ -14617,8 +14649,12 @@ function _loadAdmin(){
         const _ownBinder = (currentBinderId !== null) ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
         const _ownArt = (_ownBinder && _ownBinder.page_art) ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
         const _ownNoBleed = !!(_ownArt && _ownArt.bleed === false);
-        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}${_ownNoBleed ? ' no-bleed' : ''}" id="binderGrid"${_ownArt ? ' style="position:relative"' : ''}>${_ownArt ? _pbArtBgHtml(_ownArt) : ''}${pageItems.map((item, pageIdx) => {
-          if (!item) return '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>'; // open pocket — art shows through
+        const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
+        const _artRows = Math.ceil(perPage / _artCols);
+        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ' style="position:relative"' : ''}>${(_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : ''}${pageItems.map((item, pageIdx) => {
+          if (!item) return (_ownArt && _ownNoBleed)   // open pocket
+            ? '<div class="binder-card pa-empty" style="position:relative;overflow:hidden;border-radius:8px"><div style="width:100%;aspect-ratio:245/342"></div>' + _pbPocketArtWindow(_ownArt, Math.floor(pageIdx / _artCols), pageIdx % _artCols, _artCols, _artRows, 4) + '</div>'
+            : '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>';
           const globalIdx = _artLayout ? activeItems.indexOf(item) : (pageStart + pageIdx);
           const isGhost  = item.is_ghost;
           const isGraded = !isGhost && item.condition && item.condition !== 'raw';
@@ -14722,7 +14758,7 @@ function _loadAdmin(){
                             modal still shows name + price + trend on tap. */
             }
           </div>`;
-        }).join('')}${_ownArt ? _pbOwnerArtPads(perPage - pageItems.length) : ''}</div>`;
+        }).join('')}${_ownArt ? _pbOwnerArtPads(perPage - pageItems.length, _ownArt, _ownNoBleed, pageItems.length, _artCols, _artRows, 4) : ''}</div>`;
       }
 
       if (pagination) {
