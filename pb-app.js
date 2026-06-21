@@ -7250,6 +7250,28 @@ function _loadAdmin(){
       for (var k = 0; k < Math.max(0, n); k++) s += '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>';
       return s;
     }
+    // Lay cards out into pages of `per` pockets, reserving the OPEN pockets
+    // (Michi art windows) per page so cards flow around them. blanksByPage is
+    // keyed by 0-based page -> array of pocket indices. Returns an array of
+    // pages, each a `per`-length array whose entries are a card or null
+    // (null = open/art window). Card order (sort_order) is never changed —
+    // this is a pure render layout, so drag-to-reorder is unaffected.
+    function _pageFlowLayout(cards, per, blanksByPage) {
+      var pages = [], ci = 0, p = 0;
+      while (ci < cards.length && p < 5000) {
+        var blanks = blanksByPage[p] || [];
+        var page = [];
+        for (var s = 0; s < per; s++) {
+          if (blanks.indexOf(s) !== -1) page.push(null);          // open pocket
+          else if (ci < cards.length) page.push(cards[ci++]);
+          else page.push(null);                                   // trailing empty
+        }
+        pages.push(page);
+        p++;
+      }
+      if (!pages.length) { var pg = []; for (var s2 = 0; s2 < per; s2++) pg.push(null); pages.push(pg); }
+      return pages;
+    }
 
     // Authentic binder-page rendering for a shared SPECIFIC binder. The
     // shared link carries the owner's view (&view=3x3/2x2/1x1) so the
@@ -7264,21 +7286,35 @@ function _loadAdmin(){
       if (!grid) return;
       const items = window._pbPagedItems || [];
       const dims = _pbViewDims(window._pbView);
-      const pages = Math.max(1, Math.ceil(items.length / dims.per));
+      const pageArt = window._pbPageArt || {};
+      // Open-pocket layout: reserve art-window pockets per page so cards flow
+      // around them. Only kicks in when the binder actually has open pockets.
+      const blanksByPage = {};
+      let hasBlanks = false;
+      Object.keys(pageArt).forEach(function(k){ var a = pageArt[k]; if (a && Array.isArray(a.blanks) && a.blanks.length) { blanksByPage[parseInt(k, 10) - 1] = a.blanks; hasBlanks = true; } });
+      const layout = hasBlanks ? _pageFlowLayout(items, dims.per, blanksByPage) : null;
+      const pages = layout ? Math.max(1, layout.length) : Math.max(1, Math.ceil(items.length / dims.per));
       if (window._pbPage < 0) window._pbPage = 0;
       if (window._pbPage > pages - 1) window._pbPage = pages - 1;
-      const start = window._pbPage * dims.per;
-      const slice = items.slice(start, start + dims.per);
-      const art = (window._pbPageArt || {})[String(window._pbPage + 1)] || null;
+      const art = pageArt[String(window._pbPage + 1)] || null;
+      const emptyCell = art
+        // Empty pocket in art mode = transparent window so the art behind
+        // shows through; the grid gap forms the binder seam.
+        ? '<div style="position:relative;z-index:1;aspect-ratio:245/342"></div>'
+        : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:8px;opacity:.3"></div>';
       let cells = '';
-      for (let i = 0; i < dims.per; i++) {
-        cells += (i < slice.length)
-          ? _pbPocketHtml(slice[i], start + i)
-          : (art
-              // Empty pocket in art mode = transparent window so the art
-              // behind shows through; the grid gap forms the binder seam.
-              ? '<div style="position:relative;z-index:1;aspect-ratio:245/342"></div>'
-              : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:8px;opacity:.3"></div>');
+      if (layout) {
+        const pageSlots = layout[window._pbPage] || [];
+        for (let i = 0; i < dims.per; i++) {
+          const entry = pageSlots[i];
+          cells += entry ? _pbPocketHtml(entry, items.indexOf(entry)) : emptyCell;
+        }
+      } else {
+        const start = window._pbPage * dims.per;
+        const slice = items.slice(start, start + dims.per);
+        for (let i = 0; i < dims.per; i++) {
+          cells += (i < slice.length) ? _pbPocketHtml(slice[i], start + i) : emptyCell;
+        }
       }
       // Tighter gap in art mode keeps the revealed slices aligned with the
       // editor preview (which had near-flush pockets).
@@ -13548,7 +13584,7 @@ function _loadAdmin(){
     // normalised to the preview frame (fraction of width/height) so the
     // saved position reproduces at any render size; scale is a zoom (1 =
     // cover-fit). page is 1-based.
-    var _paState = { page: null, url: null, scale: 1, x: 0, y: 0, newBlob: null };
+    var _paState = { page: null, url: null, scale: 1, x: 0, y: 0, newBlob: null, blanks: [] };
 
     function openPageArtEditor(page) {
       if (!currentUser) { showToast('Sign in first'); return; }
@@ -13563,9 +13599,11 @@ function _loadAdmin(){
         x: art ? (Number(art.x) || 0) : 0,
         y: art ? (Number(art.y) || 0) : 0,
         newBlob: null,
+        blanks: (art && Array.isArray(art.blanks)) ? art.blanks.slice() : [],
       };
       var grid = document.getElementById('paGrid');
       if (grid) grid.innerHTML = new Array(9).fill('<div style="border:1px solid rgba(255,255,255,.28)"></div>').join('');
+      _paRenderPockets();
       var sub = document.getElementById('pageArtSub');
       if (sub) sub.textContent = 'Page ' + p + ' · drag to position, slider to zoom. Empty pockets reveal it.';
       var zoom = document.getElementById('paZoom');
@@ -13579,12 +13617,31 @@ function _loadAdmin(){
       var img = document.getElementById('paImg');
       var empty = document.getElementById('paEmpty');
       var zoomRow = document.getElementById('paZoomRow');
+      var pocketsRow = document.getElementById('paPocketsRow');
       var rm = document.getElementById('paRemoveBtn');
       var has = !!_paState.url;
       if (img) { if (has) { img.src = _paState.url; img.style.display = 'block'; _paApplyTransform(); } else { img.style.display = 'none'; } }
       if (empty)  empty.style.display  = has ? 'none' : 'flex';
       if (zoomRow) zoomRow.style.display = has ? 'flex' : 'none';
+      if (pocketsRow) pocketsRow.style.display = has ? 'block' : 'none';
       if (rm) rm.style.display = has ? 'block' : 'none';
+    }
+    // Pocket toggles — which of the 9 (3x3) pockets are OPEN (art windows).
+    // Cards flow around the open ones; stored as page_art[page].blanks.
+    function _paRenderPockets() {
+      var wrap = document.getElementById('paPockets');
+      if (!wrap) return;
+      var html = '';
+      for (var i = 0; i < 9; i++) {
+        var on = _paState.blanks.indexOf(i) !== -1;
+        html += '<button onclick="_paToggleBlank(' + i + ')" aria-pressed="' + on + '" style="aspect-ratio:245/342;border:1px solid ' + (on ? 'var(--copper)' : 'var(--border)') + ';background:' + (on ? 'rgba(184,115,51,.28)' : 'var(--surface2)') + ';color:var(--copper);font-family:inherit;font-size:.42rem;letter-spacing:.04em;cursor:pointer;border-radius:3px;display:flex;align-items:center;justify-content:center">' + (on ? 'ART' : '') + '</button>';
+      }
+      wrap.innerHTML = html;
+    }
+    function _paToggleBlank(i) {
+      var idx = _paState.blanks.indexOf(i);
+      if (idx === -1) _paState.blanks.push(i); else _paState.blanks.splice(idx, 1);
+      _paRenderPockets();
     }
     function _paApplyTransform() {
       var img = document.getElementById('paImg'), frame = document.getElementById('paFrame');
@@ -13630,7 +13687,7 @@ function _loadAdmin(){
         var url = _paState.url;
         if (_paState.newBlob) url = await _uploadPageArt(currentBinderId, _paState.page, _paState.newBlob);
         var pa = Object.assign({}, b.page_art || {});
-        pa[String(_paState.page)] = { url: url, scale: _paState.scale, x: _paState.x, y: _paState.y };
+        pa[String(_paState.page)] = { url: url, scale: _paState.scale, x: _paState.x, y: _paState.y, blanks: (_paState.blanks || []).slice().sort(function(a,c){return a-c;}) };
         var r = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
         if (r.error) {
           if (/column|schema|page_art/i.test(r.error.message || '')) { showToast('Run migration_binder_page_art.sql in Supabase first'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
