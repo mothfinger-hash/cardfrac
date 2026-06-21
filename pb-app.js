@@ -7293,15 +7293,23 @@ function _loadAdmin(){
       ps.forEach(function(i){ var r = Math.floor(i / cols), c = i % cols; if (r < minR) minR = r; if (r > maxR) maxR = r; if (c < minC) minC = c; if (c > maxC) maxC = c; });
       return { minR: minR, minC: minC, rows: maxR - minR + 1, cols: maxC - minC + 1 };
     }
-    // Grid-placed background layers for any BLEED regions (art fills the
-    // region's bounding box across its seams). z-index:0; pockets sit on top.
-    function _pbRegionBg(regions, cols) {
-      var h = '';
+    // Background layers for BLEED regions (art fills the region's bounding box
+    // across its seams). ABSOLUTELY positioned over the (position:relative)
+    // grid — NOT a grid item — so it never displaces the auto-placed pockets
+    // (a grid-item bg makes auto pockets skip its cells and shift). Position
+    // is computed from cell fractions + gap, with rows at card aspect.
+    function _pbRegionBg(regions, cols, gap) {
+      var h = '', AR = 342 / 245;
       regions.forEach(function(reg){
         if (!reg.bleed || !reg.url) return;
         var bb = _regionBBox(reg, cols);
+        var cw = '(100% - ' + ((cols - 1) * gap) + 'px)/' + cols; // one cell width
+        var left = 'calc((' + cw + ') * ' + bb.minC + ' + ' + (bb.minC * gap) + 'px)';
+        var width = 'calc((' + cw + ') * ' + bb.cols + ' + ' + ((bb.cols - 1) * gap) + 'px)';
+        var top = 'calc((' + cw + ') * ' + (AR * bb.minR).toFixed(4) + ' + ' + (bb.minR * gap) + 'px)';
+        var height = 'calc((' + cw + ') * ' + (AR * bb.rows).toFixed(4) + ' + ' + ((bb.rows - 1) * gap) + 'px)';
         var tx = (Number(reg.x) || 0) * 100, ty = (Number(reg.y) || 0) * 100, s = Number(reg.scale) || 1;
-        h += '<div style="grid-column:' + (bb.minC + 1) + '/' + (bb.minC + bb.cols + 1) + ';grid-row:' + (bb.minR + 1) + '/' + (bb.minR + bb.rows + 1) + ';position:relative;z-index:0;overflow:hidden;border-radius:8px;pointer-events:none">'
+        h += '<div style="position:absolute;left:' + left + ';top:' + top + ';width:' + width + ';height:' + height + ';overflow:hidden;z-index:0;border-radius:8px;pointer-events:none">'
           + '<img src="' + reg.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')"></div>';
       });
       return h;
@@ -7420,7 +7428,7 @@ function _loadAdmin(){
       // WHERE the art shows: continuous bg (on) vs per-pocket windows (off).
       const gap = art ? artGap : 12;
       grid.style.cssText = 'position:relative;display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:' + gap + 'px;max-width:' + dims.maxw + 'px;margin:0 auto';
-      const bgHtml = regionsArr ? _pbRegionBg(regionsArr, artCols) : ((art && bleed) ? _pbArtBgHtml(art) : '');
+      const bgHtml = regionsArr ? _pbRegionBg(regionsArr, artCols, gap) : ((art && bleed) ? _pbArtBgHtml(art) : '');
       grid.innerHTML = bgHtml + cells;
       const nav = document.getElementById('pbPageNav');
       if (nav) {
@@ -14744,7 +14752,7 @@ function _loadAdmin(){
         const _ownRegions = (_ownArt && Array.isArray(_ownArt.regions)) ? _ownArt.regions : null;
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
         const _artRows = Math.ceil(perPage / _artCols);
-        const _ownBg = _ownRegions ? _pbRegionBg(_ownRegions, _artCols) : ((_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : '');
+        const _ownBg = _ownRegions ? _pbRegionBg(_ownRegions, _artCols, 4) : ((_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : '');
         content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ' style="position:relative"' : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
           if (!item) return _ownRegions   // open pocket
             ? _pbRegionCell(_ownRegions, pageIdx, _artCols, 4, true)
