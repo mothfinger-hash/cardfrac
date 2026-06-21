@@ -7264,6 +7264,15 @@ function _loadAdmin(){
     // A page's art is either the legacy single-image shape
     // ({url,scale,x,y,blanks,bleed}) or the new multi-image shape
     // ({regions:[{url,scale,x,y,pockets,bleed}, …]}). These normalise both.
+    // Normalize a page's art into a regions array, handling the legacy
+    // single-image shape ({url,scale,x,y,blanks,bleed}) → one region.
+    function _pageRegions(art) {
+      if (!art) return [];
+      if (Array.isArray(art.regions)) return art.regions;
+      if (art.url) return [{ url: art.url, scale: Number(art.scale) || 1, x: Number(art.x) || 0, y: Number(art.y) || 0, pockets: (art.blanks || []).slice(), bleed: art.bleed !== false }];
+      if (Array.isArray(art.blanks) && art.blanks.length) return [{ url: null, scale: 1, x: 0, y: 0, pockets: art.blanks.slice(), bleed: true }];
+      return [];
+    }
     function _pageOpenPockets(art) {
       if (!art) return [];
       if (Array.isArray(art.regions)) {
