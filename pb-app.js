@@ -13720,6 +13720,69 @@ function _loadAdmin(){
       } catch(e) { showToast('Remove failed'); }
     }
 
+    // One Organize-view reorder row (extracted so the flat list and the
+    // Michi flow list share it). dispPage/dispSlot override the shown
+    // location; showAddPocket adds the "+◧ open a pocket here" button.
+    function _organizeRowHtml(item, idx, totalRows, dispPage, dispSlot, showAddPocket) {
+      var isGhost = item.is_ghost;
+      var pos = idx + 1;
+      var pageNum = dispPage || (Math.floor(idx / 9) + 1);
+      var slotInPage = dispSlot || ((idx % 9) + 1);
+      var _opts = '';
+      if (totalRows <= 30) { for (var i = 0; i < totalRows; i++) _opts += '<option value="' + i + '"' + (i === idx ? ' selected' : '') + '>' + (i + 1) + '</option>'; }
+      else { for (var j = 0; j < totalRows; j++) { var p = Math.floor(j / 9) + 1, s = (j % 9) + 1; _opts += '<option value="' + j + '"' + (j === idx ? ' selected' : '') + '>' + (j + 1) + ' (p' + p + '·' + s + ')</option>'; } }
+      return '<div class="organize-row binder-card' + (isGhost ? ' ghost-card' : '') + '" draggable="true" data-id="' + item.id + '" ondragstart="organizeDragStart(event,\'' + item.id + '\')" ondragover="organizeDragOver(event)" ondrop="organizeDrop(event,\'' + item.id + '\')" ondragend="organizeDragEnd(event)">'
+        + '<span class="org-num">' + pos + '</span>'
+        + '<span class="org-handle" title="Drag to reorder">⇅</span>'
+        + '<img src="' + _pickThumbVariant(item.card_image_url || '', 200) + '" data-fallback="' + (item.card_image_url || '') + '" alt="" loading="lazy" decoding="async" draggable="false" class="org-thumb' + (isGhost ? ' org-thumb-ghost' : '') + '" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility=\'hidden\';this.onerror=null}">'
+        + '<div class="org-meta" onclick="openBinderCardDetail(\'' + item.id + '\')">'
+        +   '<div class="org-name">' + item.card_name + '</div>'
+        +   '<div class="org-sub">' + (item.set_name || '') + (item.card_number ? ' #' + item.card_number : '') + ' <span class="org-loc">· p' + pageNum + '·' + slotInPage + '</span></div>'
+        + '</div>'
+        + (showAddPocket ? '<button onclick="event.stopPropagation();_orgOpenPocketAt(\'' + item.id + '\')" title="Open an art pocket here" style="background:none;border:1px solid var(--copper);color:var(--copper);cursor:pointer;font-size:.62rem;padding:3px 7px;border-radius:4px;flex-shrink:0">+◧</button>' : '')
+        + '<select class="org-move" title="Move to position" onchange="moveCardToPosition(\'' + item.id + '\', parseInt(this.value, 10))" onclick="event.stopPropagation()">' + _opts + '</select>'
+      + '</div>';
+    }
+    // Inline open/close of art pockets from the Organize flow. Edits the
+    // per-page blanks in page_art (same data the editor uses) — card order
+    // (sort_order) is never touched.
+    function _orgBlanksByPage(b) {
+      var bb = {};
+      if (b && b.page_art) Object.keys(b.page_art).forEach(function(k){ var a = b.page_art[k]; if (a && Array.isArray(a.blanks) && a.blanks.length) bb[parseInt(k, 10) - 1] = a.blanks; });
+      return bb;
+    }
+    async function _orgOpenPocketAt(itemId) {
+      var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
+      if (!b) return;
+      var cards = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
+      var layout = _pageFlowLayout(cards, 9, _orgBlanksByPage(b));
+      var P = -1, S = -1;
+      for (var p = 0; p < layout.length && P < 0; p++) { for (var s = 0; s < layout[p].length; s++) { if (layout[p][s] && String(layout[p][s].id) === String(itemId)) { P = p; S = s; break; } } }
+      if (P < 0) return;
+      await _orgPersistBlanks(b, P + 1, S, true);
+    }
+    async function _orgClosePocket(page, slot) {
+      var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
+      if (b) await _orgPersistBlanks(b, page, slot, false);
+    }
+    async function _orgPersistBlanks(b, page, slot, add) {
+      var pa = Object.assign({}, b.page_art || {});
+      var entry = Object.assign({}, pa[String(page)] || {});
+      var blanks = Array.isArray(entry.blanks) ? entry.blanks.slice() : [];
+      var idx = blanks.indexOf(slot);
+      if (add && idx === -1) blanks.push(slot);
+      else if (!add && idx !== -1) blanks.splice(idx, 1);
+      blanks.sort(function(a, c){ return a - c; });
+      entry.blanks = blanks;
+      pa[String(page)] = entry;
+      try {
+        var r = await sb.from('binders').update({ page_art: pa }).eq('id', b.id).select('id');
+        if (r.error) { if (/column|schema|page_art/i.test(r.error.message || '')) { showToast('Run migration_binder_page_art.sql first'); return; } showToast('Failed: ' + r.error.message); return; }
+        b.page_art = pa;
+        renderBinder();
+      } catch(e) { showToast('Failed'); }
+    }
+
     function _renderColorPicker(selected) {
       const picker = document.getElementById('binderColorPicker');
       picker.innerHTML = BINDER_COLORS.map(c => `
@@ -14521,59 +14584,32 @@ function _loadAdmin(){
         // No pagination — every card in the binder renders so cross-page
         // moves are a single interaction.
         const _totalRows = activeItems.length;
+        // Michi: when the binder has open pockets, render the reorder list as
+        // the page flow with inline OPEN POCKET markers (close with ✕) and a
+        // "+◧" on each card to open a pocket at that spot. Card order/reorder
+        // is untouched — pockets just edit page_art blanks. No art → the
+        // plain flat list renders unchanged.
+        const _orgBinder = binders.find(x => String(x.id) === String(currentBinderId));
+        const _orgBB = _orgBlanksByPage(_orgBinder);
+        const _orgLayout = Object.keys(_orgBB).length ? _pageFlowLayout(activeItems, 9, _orgBB) : null;
+        let _orgRows = '';
+        if (_orgLayout) {
+          for (let _p = 0; _p < _orgLayout.length; _p++) {
+            _orgRows += `<div class="org-page-divider">Page ${_p + 1}</div>`;
+            const _slots = _orgLayout[_p];
+            for (let _s = 0; _s < _slots.length; _s++) {
+              const _it = _slots[_s];
+              _orgRows += _it
+                ? _organizeRowHtml(_it, activeItems.indexOf(_it), _totalRows, _p + 1, _s + 1, true)
+                : `<div class="organize-row org-pocket-row"><span style="flex:1;font-size:.64rem;color:var(--copper);letter-spacing:.06em">◧ OPEN POCKET</span><button onclick="_orgClosePocket(${_p + 1}, ${_s})" title="Close pocket (let a card fill it)" style="background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:.72rem;width:26px;height:26px;border-radius:4px">✕</button></div>`;
+            }
+          }
+        } else {
+          _orgRows = activeItems.map((item, idx) => _organizeRowHtml(item, idx, _totalRows)).join('');
+        }
         content.innerHTML = `
           <div style="font-size:.6rem;color:var(--muted);letter-spacing:.06em;padding:6px 10px 5px;border-bottom:1px solid var(--border)">Drag the row or pick a new position · saves automatically</div>
-          <div id="binderGrid" class="pb-organize" style="display:flex;flex-direction:column">
-          ${activeItems.map((item, idx) => {
-            const isGhost  = item.is_ghost;
-            // Compact position display — just the number, no 3-digit pad
-            const pos = idx + 1;
-            const pageNum = Math.floor(idx / 9) + 1;
-            const slotInPage = (idx % 9) + 1;
-            // Build the position dropdown options. For large binders we
-            // condense the middle so the option list stays short and
-            // scannable — show every position for binders up to 30 cards,
-            // otherwise show start, near-current, end. The current
-            // position is selected; picking any other value triggers a
-            // move via moveCardToPosition.
-            let _opts = '';
-            if (_totalRows <= 30) {
-              for (let i = 0; i < _totalRows; i++) {
-                _opts += `<option value="${i}"${i === idx ? ' selected' : ''}>${i + 1}</option>`;
-              }
-            } else {
-              // Big binder: page-grouped options to make picking faster
-              for (let i = 0; i < _totalRows; i++) {
-                const p = Math.floor(i / 9) + 1;
-                const s = (i % 9) + 1;
-                _opts += `<option value="${i}"${i === idx ? ' selected' : ''}>${i + 1} (p${p}·${s})</option>`;
-              }
-            }
-            return `<div
-              class="organize-row binder-card${isGhost ? ' ghost-card' : ''}"
-              draggable="true"
-              data-id="${item.id}"
-              ondragstart="organizeDragStart(event,'${item.id}')"
-              ondragover="organizeDragOver(event)"
-              ondrop="organizeDrop(event,'${item.id}')"
-              ondragend="organizeDragEnd(event)">
-              <span class="org-num">${pos}</span>
-              <span class="org-handle" title="Drag to reorder">⇅</span>
-              <img src="${_pickThumbVariant(item.card_image_url || '', 200)}" data-fallback="${item.card_image_url || ''}" alt="" loading="lazy" decoding="async" draggable="false"
-                class="org-thumb${isGhost ? ' org-thumb-ghost' : ''}"
-                onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">
-              <div class="org-meta" onclick="openBinderCardDetail('${item.id}')">
-                <div class="org-name">${item.card_name}</div>
-                <div class="org-sub">${item.set_name || ''}${item.card_number ? ' #' + item.card_number : ''} <span class="org-loc">· p${pageNum}·${slotInPage}</span></div>
-              </div>
-              <select class="org-move" title="Move to position"
-                onchange="moveCardToPosition('${item.id}', parseInt(this.value, 10))"
-                onclick="event.stopPropagation()">
-                ${_opts}
-              </select>
-            </div>`;
-          }).join('')}
-          </div>`;
+          <div id="binderGrid" class="pb-organize" style="display:flex;flex-direction:column">${_orgRows}</div>`;
         }
       } else {
         const gridClass = effectiveView === '3x3' ? 'binder-grid-3x3' : effectiveView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
