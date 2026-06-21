@@ -3142,8 +3142,20 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* Organize-view Michi rows: page dividers + open-pocket markers. */
     .org-page-divider{font-size:.56rem;letter-spacing:.14em;color:var(--copper-dim);padding:9px 10px 3px;text-transform:uppercase}
     .org-pocket-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px dashed var(--copper-dim);background:rgba(184,115,51,.06);border-radius:4px;margin:2px 0}
-    #binderGrid.has-page-art .binder-card{position:relative;z-index:1}
+    #binderGrid.has-page-art .binder-card{position:relative;z-index:1;padding:0}
     #binderGrid.has-page-art .pa-empty{background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;cursor:default}
+    /* Michi pages on desktop: keep pockets CARD-shaped (sized by column
+       width, like mobile) instead of the viewport-height row sizing the
+       normal binder grid uses — so cards fill their slots and art windows
+       are card-shaped, no bleed gap around each card. */
+    @media (min-width: 901px) {
+      body.on-binder #collectionContent .binder-grid-3x3.has-page-art,
+      body.on-binder #collectionContent .binder-grid-2x2.has-page-art,
+      body.on-binder #collectionContent .binder-grid-1x1.has-page-art { grid-auto-rows: auto; }
+      body.on-binder #collectionContent .has-page-art .binder-card-img-wrap {
+        width: 100% !important; height: auto !important; max-width: none !important; margin: 0 !important; flex: none !important;
+      }
+    }
     .binder-grid-2x2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
     .binder-grid-1x1{display:grid;grid-template-columns:1fr;gap:16px;max-width:380px;margin:0 auto}
     @media(max-width:480px){.binder-grid-3x3{gap:6px}.binder-grid-2x2{gap:10px}}
