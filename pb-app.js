@@ -7227,9 +7227,21 @@ function _loadAdmin(){
       const inner = _src
         ? `<img src="${_src}" alt="${_escHtml(c.card_name)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;display:block" onerror="_publicImgFail(this,'${c.api_card_id||''}')">`
         : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.62rem;text-align:center;padding:8px">${_escHtml(c.card_name||'NO IMAGE')}</div>`;
-      return `<div onclick="openPublicCardDetail(${idx})" style="position:relative;aspect-ratio:245/342;border-radius:8px;overflow:hidden;cursor:pointer;background:var(--surface2);border:1px solid var(--border);transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.55)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+      return `<div onclick="openPublicCardDetail(${idx})" style="position:relative;z-index:1;aspect-ratio:245/342;border-radius:8px;overflow:hidden;cursor:pointer;background:var(--surface2);border:1px solid var(--border);transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.55)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
         ${inner}${qtyBadge}
       </div>`;
+    }
+
+    // Michi page-art background layer behind a 3x3 page. translate is in %
+    // (relative to the img's own box = the grid box) so it reproduces the
+    // editor's translate(x*frameW) exactly at any render size. z-index:0 so
+    // card pockets (z-index:1) sit on top and empty pockets reveal it.
+    function _pbArtBgHtml(art) {
+      if (!art || !art.url) return '';
+      var tx = (Number(art.x) || 0) * 100, ty = (Number(art.y) || 0) * 100, s = Number(art.scale) || 1;
+      return '<div style="position:absolute;inset:0;overflow:hidden;z-index:0;border-radius:8px;pointer-events:none">'
+        + '<img src="' + art.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')">'
+        + '</div>';
     }
 
     // Authentic binder-page rendering for a shared SPECIFIC binder. The
@@ -7250,14 +7262,22 @@ function _loadAdmin(){
       if (window._pbPage > pages - 1) window._pbPage = pages - 1;
       const start = window._pbPage * dims.per;
       const slice = items.slice(start, start + dims.per);
+      const art = (window._pbPageArt || {})[String(window._pbPage + 1)] || null;
       let cells = '';
       for (let i = 0; i < dims.per; i++) {
         cells += (i < slice.length)
           ? _pbPocketHtml(slice[i], start + i)
-          : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:8px;opacity:.3"></div>';
+          : (art
+              // Empty pocket in art mode = transparent window so the art
+              // behind shows through; the grid gap forms the binder seam.
+              ? '<div style="position:relative;z-index:1;aspect-ratio:245/342"></div>'
+              : '<div style="aspect-ratio:245/342;border:1px dashed var(--border);border-radius:8px;opacity:.3"></div>');
       }
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:12px;max-width:' + dims.maxw + 'px;margin:0 auto';
-      grid.innerHTML = cells;
+      // Tighter gap in art mode keeps the revealed slices aligned with the
+      // editor preview (which had near-flush pockets).
+      const gap = art ? 4 : 12;
+      grid.style.cssText = 'position:relative;display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:' + gap + 'px;max-width:' + dims.maxw + 'px;margin:0 auto';
+      grid.innerHTML = _pbArtBgHtml(art) + cells;
       const nav = document.getElementById('pbPageNav');
       if (nav) {
         nav.style.display = pages > 1 ? 'flex' : 'none';
@@ -7343,11 +7363,13 @@ function _loadAdmin(){
         // Resolve binder metadata (name, cover, color)
         let binderName = null, binderCoverUrl = null, binderColor = '#444';
         if (binderId) {
-          const { data: binderRow } = await sb.from('binders').select('name, cover_image_url, color').eq('id', binderId).maybeSingle();
+          const { data: binderRow } = await sb.from('binders').select('name, cover_image_url, color, page_art').eq('id', binderId).maybeSingle();
           binderName     = binderRow?.name || null;
           binderCoverUrl = binderRow?.cover_image_url || null;
           binderColor    = binderRow?.color || '#444';
+          window._pbPageArt = binderRow?.page_art || {};   // Michi page artwork
         } else {
+          window._pbPageArt = {};
           // All Cards — use the default cover
           binderCoverUrl = 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/binder-covers/default-cover.webp';
         }
