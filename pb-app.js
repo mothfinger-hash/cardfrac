@@ -13514,6 +13514,121 @@ function _loadAdmin(){
       openModal('binderEditModal');
     }
 
+    // ── Michi Method page artwork — editor (pan/zoom) ──────────────────────
+    // _paState holds the in-progress edit. x/y are translate offsets
+    // normalised to the preview frame (fraction of width/height) so the
+    // saved position reproduces at any render size; scale is a zoom (1 =
+    // cover-fit). page is 1-based.
+    var _paState = { page: null, url: null, scale: 1, x: 0, y: 0, newBlob: null };
+
+    function openPageArtEditor(page) {
+      if (!currentUser) { showToast('Sign in first'); return; }
+      if (currentBinderId === null) { showToast('Open a specific binder to add page artwork'); return; }
+      var p = page || ((binderPage || 0) + 1); // binderPage is 0-based
+      var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
+      var art = (b && b.page_art && b.page_art[String(p)]) || null;
+      _paState = {
+        page: p,
+        url:  art ? art.url : null,
+        scale: art ? (Number(art.scale) || 1) : 1,
+        x: art ? (Number(art.x) || 0) : 0,
+        y: art ? (Number(art.y) || 0) : 0,
+        newBlob: null,
+      };
+      var grid = document.getElementById('paGrid');
+      if (grid) grid.innerHTML = new Array(9).fill('<div style="border:1px solid rgba(255,255,255,.28)"></div>').join('');
+      var sub = document.getElementById('pageArtSub');
+      if (sub) sub.textContent = 'Page ' + p + ' · drag to position, slider to zoom. Empty pockets reveal it.';
+      var zoom = document.getElementById('paZoom');
+      if (zoom) zoom.value = Math.round(_paState.scale * 100);
+      _paRefresh();
+      openModal('pageArtModal');
+      _paAttachDrag();
+      requestAnimationFrame(function(){ _paApplyTransform(); });
+    }
+    function _paRefresh() {
+      var img = document.getElementById('paImg');
+      var empty = document.getElementById('paEmpty');
+      var zoomRow = document.getElementById('paZoomRow');
+      var rm = document.getElementById('paRemoveBtn');
+      var has = !!_paState.url;
+      if (img) { if (has) { img.src = _paState.url; img.style.display = 'block'; _paApplyTransform(); } else { img.style.display = 'none'; } }
+      if (empty)  empty.style.display  = has ? 'none' : 'flex';
+      if (zoomRow) zoomRow.style.display = has ? 'flex' : 'none';
+      if (rm) rm.style.display = has ? 'block' : 'none';
+    }
+    function _paApplyTransform() {
+      var img = document.getElementById('paImg'), frame = document.getElementById('paFrame');
+      if (!img || !frame) return;
+      var w = frame.clientWidth || 1, h = frame.clientHeight || 1;
+      img.style.transform = 'translate(' + (_paState.x * w) + 'px,' + (_paState.y * h) + 'px) scale(' + _paState.scale + ')';
+    }
+    function _paZoom(val) { _paState.scale = Math.max(1, (Number(val) || 100) / 100); _paApplyTransform(); }
+    function _paOnFile(e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      _paState.newBlob = f;
+      _paState.url = URL.createObjectURL(f);
+      _paState.scale = 1; _paState.x = 0; _paState.y = 0;
+      var zoom = document.getElementById('paZoom'); if (zoom) zoom.value = 100;
+      _paRefresh();
+      e.target.value = '';
+    }
+    function _paAttachDrag() {
+      var frame = document.getElementById('paFrame');
+      if (!frame || frame._paWired) return;
+      frame._paWired = true;
+      var dragging = false, lx = 0, ly = 0;
+      function down(e) { if (!_paState.url) return; dragging = true; var p = e.touches ? e.touches[0] : e; lx = p.clientX; ly = p.clientY; frame.style.cursor = 'grabbing'; }
+      function move(e) { if (!dragging) return; var p = e.touches ? e.touches[0] : e; var w = frame.clientWidth || 1, h = frame.clientHeight || 1; _paState.x += (p.clientX - lx) / w; _paState.y += (p.clientY - ly) / h; lx = p.clientX; ly = p.clientY; _paApplyTransform(); if (e.cancelable) e.preventDefault(); }
+      function up() { dragging = false; frame.style.cursor = 'grab'; }
+      frame.addEventListener('mousedown', down); window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+      frame.addEventListener('touchstart', down, { passive: true }); frame.addEventListener('touchmove', move, { passive: false }); frame.addEventListener('touchend', up);
+    }
+    async function _uploadPageArt(binderId, page, file) {
+      var conv = await _imgToWebpBlob(file);
+      var path = currentUser.id + '/pageart_' + binderId + '_' + page + '.' + conv.ext;
+      var up = await sb.storage.from('binder-covers').upload(path, conv.blob, { upsert: true, contentType: conv.contentType });
+      if (up.error) throw up.error;
+      var pub = sb.storage.from('binder-covers').getPublicUrl(path);
+      return pub.data.publicUrl + '?t=' + Date.now();
+    }
+    async function savePageArt() {
+      if (!_paState.url) { showToast('Upload an image first'); return; }
+      var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
+      if (!b) { showToast('Binder not found'); return; }
+      try {
+        var url = _paState.url;
+        if (_paState.newBlob) url = await _uploadPageArt(currentBinderId, _paState.page, _paState.newBlob);
+        var pa = Object.assign({}, b.page_art || {});
+        pa[String(_paState.page)] = { url: url, scale: _paState.scale, x: _paState.x, y: _paState.y };
+        var r = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
+        if (r.error) {
+          if (/column|schema|page_art/i.test(r.error.message || '')) { showToast('Run migration_binder_page_art.sql in Supabase first'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
+          showToast('Save failed: ' + r.error.message); return;
+        }
+        b.page_art = pa;
+        closeModal('pageArtModal');
+        showToast('Page artwork saved');
+        try { renderBinder(); } catch(_) {}
+      } catch(e) { showToast('Save failed: ' + (e.message || 'error')); }
+    }
+    async function removePageArt() {
+      var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
+      if (!b) return;
+      if (typeof pbConfirm === 'function') { var ok = await pbConfirm('Remove the artwork from this page?', { confirmText: 'REMOVE', danger: true }); if (!ok) return; }
+      try {
+        var pa = Object.assign({}, b.page_art || {});
+        delete pa[String(_paState.page)];
+        var r = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
+        if (r.error) { showToast('Remove failed: ' + r.error.message); return; }
+        b.page_art = pa;
+        closeModal('pageArtModal');
+        showToast('Page artwork removed');
+        try { renderBinder(); } catch(_) {}
+      } catch(e) { showToast('Remove failed'); }
+    }
+
     function _renderColorPicker(selected) {
       const picker = document.getElementById('binderColorPicker');
       picker.innerHTML = BINDER_COLORS.map(c => `
@@ -14173,6 +14288,9 @@ function _loadAdmin(){
       const shareDisp = currentUser     ? 'block' : 'none';
       document.querySelectorAll('.js-bulk-import-btn').forEach(b => b.style.display = bulkDisp);
       document.querySelectorAll('.js-share-binder-btn').forEach(b => b.style.display = shareDisp);
+      // Page Artwork (Michi Method) — specific binders only (not All Cards).
+      const pageArtDisp = (currentBinderId !== null && currentUser) ? 'flex' : 'none';
+      document.querySelectorAll('.js-page-art-btn').forEach(b => b.style.display = pageArtDisp);
 
       // Render binder tabs (Vendor+ multi-binder)
       renderBinderTabs();
