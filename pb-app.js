@@ -7260,6 +7260,63 @@ function _loadAdmin(){
         + '<img src="' + art.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')">'
         + '</div>';
     }
+    // ── Multi-image (regions) helpers ──────────────────────────────────────
+    // A page's art is either the legacy single-image shape
+    // ({url,scale,x,y,blanks,bleed}) or the new multi-image shape
+    // ({regions:[{url,scale,x,y,pockets,bleed}, …]}). These normalise both.
+    function _pageOpenPockets(art) {
+      if (!art) return [];
+      if (Array.isArray(art.regions)) {
+        var set = {};
+        art.regions.forEach(function(r){ (r.pockets || []).forEach(function(p){ set[p] = 1; }); });
+        return Object.keys(set).map(Number);
+      }
+      return Array.isArray(art.blanks) ? art.blanks.slice() : [];
+    }
+    function _regionForPocket(regions, i) {
+      for (var k = 0; k < regions.length; k++) { if ((regions[k].pockets || []).indexOf(i) !== -1) return regions[k]; }
+      return null;
+    }
+    function _regionBBox(region, cols) {
+      var ps = region.pockets || [];
+      if (!ps.length) return { minR: 0, minC: 0, rows: 1, cols: 1 };
+      var minR = 99, maxR = -1, minC = 99, maxC = -1;
+      ps.forEach(function(i){ var r = Math.floor(i / cols), c = i % cols; if (r < minR) minR = r; if (r > maxR) maxR = r; if (c < minC) minC = c; if (c > maxC) maxC = c; });
+      return { minR: minR, minC: minC, rows: maxR - minR + 1, cols: maxC - minC + 1 };
+    }
+    // Grid-placed background layers for any BLEED regions (art fills the
+    // region's bounding box across its seams). z-index:0; pockets sit on top.
+    function _pbRegionBg(regions, cols) {
+      var h = '';
+      regions.forEach(function(reg){
+        if (!reg.bleed || !reg.url) return;
+        var bb = _regionBBox(reg, cols);
+        var tx = (Number(reg.x) || 0) * 100, ty = (Number(reg.y) || 0) * 100, s = Number(reg.scale) || 1;
+        h += '<div style="grid-column:' + (bb.minC + 1) + '/' + (bb.minC + bb.cols + 1) + ';grid-row:' + (bb.minR + 1) + '/' + (bb.minR + bb.rows + 1) + ';position:relative;z-index:0;overflow:hidden;border-radius:8px;pointer-events:none">'
+          + '<img src="' + reg.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')"></div>';
+      });
+      return h;
+    }
+    // One open-pocket cell in region mode: bleed region → transparent (over
+    // its bg layer); non-bleed region → its own clipped slice; unassigned
+    // open pocket → empty. `inner` true wraps in a .binder-card pa-empty for
+    // the owner grid; false returns a bare cell for the shared view.
+    function _pbRegionCell(regions, i, cols, gap, inner) {
+      var reg = _regionForPocket(regions, i);
+      var body = '';
+      if (reg && !reg.bleed && reg.url) {
+        var bb = _regionBBox(reg, cols);
+        body = _pbPocketArtWindow(reg, Math.floor(i / cols) - bb.minR, (i % cols) - bb.minC, bb.cols, bb.rows, gap);
+      }
+      if (inner) {
+        return body
+          ? '<div class="binder-card pa-empty" style="position:relative;overflow:hidden;border-radius:8px"><div style="width:100%;aspect-ratio:245/342"></div>' + body + '</div>'
+          : '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>';
+      }
+      return body
+        ? '<div style="position:relative;z-index:1;overflow:hidden;aspect-ratio:245/342;border-radius:8px">' + body + '</div>'
+        : '<div style="position:relative;z-index:1;aspect-ratio:245/342"></div>';
+    }
     // Placeholder pockets padding the owner's binder grid out to a full page.
     // In bleed-off mode each pad shows its own art-window slice; otherwise
     // it's a transparent window over the continuous bg.
@@ -7316,17 +7373,19 @@ function _loadAdmin(){
       // around them. Only kicks in when the binder actually has open pockets.
       const blanksByPage = {};
       let hasBlanks = false;
-      Object.keys(pageArt).forEach(function(k){ var a = pageArt[k]; if (a && Array.isArray(a.blanks) && a.blanks.length) { blanksByPage[parseInt(k, 10) - 1] = a.blanks; hasBlanks = true; } });
+      Object.keys(pageArt).forEach(function(k){ var op = _pageOpenPockets(pageArt[k]); if (op.length) { blanksByPage[parseInt(k, 10) - 1] = op; hasBlanks = true; } });
       const layout = hasBlanks ? _pageFlowLayout(items, dims.per, blanksByPage) : null;
       const pages = layout ? Math.max(1, layout.length) : Math.max(1, Math.ceil(items.length / dims.per));
       if (window._pbPage < 0) window._pbPage = 0;
       if (window._pbPage > pages - 1) window._pbPage = pages - 1;
       const art = pageArt[String(window._pbPage + 1)] || null;
+      const regionsArr = (art && Array.isArray(art.regions)) ? art.regions : null;
       const bleed = art ? (art.bleed !== false) : true;
       const artCols = dims.cols, artRows = Math.ceil(dims.per / dims.cols), artGap = 4;
-      // Empty/open pocket for slot index i. Bleed-on: transparent window over
-      // the continuous bg. Bleed-off: this pocket's own art-window slice.
+      // Empty/open pocket for slot index i. Region mode → per-region cell;
+      // legacy single image → continuous bg (bleed) or per-pocket window.
       function emptyCell(i) {
+        if (regionsArr) return _pbRegionCell(regionsArr, i, artCols, artGap, false);
         if (art && !bleed) {
           return '<div style="position:relative;z-index:1;overflow:hidden;aspect-ratio:245/342;border-radius:8px">' + _pbPocketArtWindow(art, Math.floor(i / artCols), i % artCols, artCols, artRows, artGap) + '</div>';
         }
@@ -7352,7 +7411,8 @@ function _loadAdmin(){
       // WHERE the art shows: continuous bg (on) vs per-pocket windows (off).
       const gap = art ? artGap : 12;
       grid.style.cssText = 'position:relative;display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:' + gap + 'px;max-width:' + dims.maxw + 'px;margin:0 auto';
-      grid.innerHTML = ((art && bleed) ? _pbArtBgHtml(art) : '') + cells;
+      const bgHtml = regionsArr ? _pbRegionBg(regionsArr, artCols) : ((art && bleed) ? _pbArtBgHtml(art) : '');
+      grid.innerHTML = bgHtml + cells;
       const nav = document.getElementById('pbPageNav');
       if (nav) {
         nav.style.display = pages > 1 ? 'flex' : 'none';
@@ -13780,7 +13840,7 @@ function _loadAdmin(){
     // (sort_order) is never touched.
     function _orgBlanksByPage(b) {
       var bb = {};
-      if (b && b.page_art) Object.keys(b.page_art).forEach(function(k){ var a = b.page_art[k]; if (a && Array.isArray(a.blanks) && a.blanks.length) bb[parseInt(k, 10) - 1] = a.blanks; });
+      if (b && b.page_art) Object.keys(b.page_art).forEach(function(k){ var op = _pageOpenPockets(b.page_art[k]); if (op.length) bb[parseInt(k, 10) - 1] = op; });
       return bb;
     }
     async function _orgOpenPocketAt(itemId) {
@@ -14567,7 +14627,7 @@ function _loadAdmin(){
         ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
       if (_binderForArt && _binderForArt.page_art) {
         const _bb = {}; let _hb = false;
-        Object.keys(_binderForArt.page_art).forEach(k => { const a = _binderForArt.page_art[k]; if (a && Array.isArray(a.blanks) && a.blanks.length) { _bb[parseInt(k, 10) - 1] = a.blanks; _hb = true; } });
+        Object.keys(_binderForArt.page_art).forEach(k => { const op = _pageOpenPockets(_binderForArt.page_art[k]); if (op.length) { _bb[parseInt(k, 10) - 1] = op; _hb = true; } });
         if (_hb) _artLayout = _pageFlowLayout(activeItems, perPage, _bb);
       }
       const totalPages = _artLayout ? Math.max(1, _artLayout.length) : Math.ceil(activeItems.length / perPage);
@@ -14649,12 +14709,16 @@ function _loadAdmin(){
         const _ownBinder = (currentBinderId !== null) ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
         const _ownArt = (_ownBinder && _ownBinder.page_art) ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
         const _ownNoBleed = !!(_ownArt && _ownArt.bleed === false);
+        const _ownRegions = (_ownArt && Array.isArray(_ownArt.regions)) ? _ownArt.regions : null;
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
         const _artRows = Math.ceil(perPage / _artCols);
-        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ' style="position:relative"' : ''}>${(_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : ''}${pageItems.map((item, pageIdx) => {
-          if (!item) return (_ownArt && _ownNoBleed)   // open pocket
-            ? '<div class="binder-card pa-empty" style="position:relative;overflow:hidden;border-radius:8px"><div style="width:100%;aspect-ratio:245/342"></div>' + _pbPocketArtWindow(_ownArt, Math.floor(pageIdx / _artCols), pageIdx % _artCols, _artCols, _artRows, 4) + '</div>'
-            : '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>';
+        const _ownBg = _ownRegions ? _pbRegionBg(_ownRegions, _artCols) : ((_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : '');
+        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ' style="position:relative"' : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
+          if (!item) return _ownRegions   // open pocket
+            ? _pbRegionCell(_ownRegions, pageIdx, _artCols, 4, true)
+            : ((_ownArt && _ownNoBleed)
+              ? '<div class="binder-card pa-empty" style="position:relative;overflow:hidden;border-radius:8px"><div style="width:100%;aspect-ratio:245/342"></div>' + _pbPocketArtWindow(_ownArt, Math.floor(pageIdx / _artCols), pageIdx % _artCols, _artCols, _artRows, 4) + '</div>'
+              : '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>');
           const globalIdx = _artLayout ? activeItems.indexOf(item) : (pageStart + pageIdx);
           const isGhost  = item.is_ghost;
           const isGraded = !isGhost && item.condition && item.condition !== 'raw';
