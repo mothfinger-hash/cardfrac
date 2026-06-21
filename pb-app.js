@@ -13676,7 +13676,12 @@ function _loadAdmin(){
     // normalised to the preview frame (fraction of width/height) so the
     // saved position reproduces at any render size; scale is a zoom (1 =
     // cover-fit). page is 1-based.
-    var _paState = { page: null, url: null, scale: 1, x: 0, y: 0, newBlob: null, blanks: [], bleed: true };
+    // Multi-image (regions) editor state. Each region:
+    // { url, scale, x, y, newBlob, pockets:[indices], bleed }.
+    var _paState = { page: null, regions: [], active: 0 };
+    var _PA_COLORS = ['184,115,51', '26,199,160', '255,92,0']; // copper, teal, accent
+
+    function _paRegion() { return _paState.regions[_paState.active] || null; }
 
     function openPageArtEditor(page) {
       if (!currentUser) { showToast('Sign in first'); return; }
@@ -13684,74 +13689,93 @@ function _loadAdmin(){
       var p = page || ((binderPage || 0) + 1); // binderPage is 0-based
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
       var art = (b && b.page_art && b.page_art[String(p)]) || null;
-      _paState = {
-        page: p,
-        url:  art ? art.url : null,
-        scale: art ? (Number(art.scale) || 1) : 1,
-        x: art ? (Number(art.x) || 0) : 0,
-        y: art ? (Number(art.y) || 0) : 0,
-        newBlob: null,
-        blanks: (art && Array.isArray(art.blanks)) ? art.blanks.slice() : [],
-        bleed: art ? (art.bleed !== false) : true,
-      };
-      var grid = document.getElementById('paGrid');
-      if (grid) grid.innerHTML = new Array(9).fill('<div style="border:1px solid rgba(255,255,255,.28)"></div>').join('');
-      _paRenderPockets();
-      var bl = document.getElementById('paBleed'); if (bl) bl.checked = _paState.bleed;
+      // Normalize legacy single-image OR new regions into editable regions.
+      var regs = _pageRegions(art).map(function(r){ return { url: r.url || null, scale: Number(r.scale) || 1, x: Number(r.x) || 0, y: Number(r.y) || 0, newBlob: null, pockets: (r.pockets || []).slice(), bleed: r.bleed !== false }; });
+      if (!regs.length) regs = [{ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true }];
+      _paState = { page: p, regions: regs, active: 0 };
       var sub = document.getElementById('pageArtSub');
-      if (sub) sub.textContent = 'Page ' + p + ' · drag to position, slider to zoom. Empty pockets reveal it.';
-      var zoom = document.getElementById('paZoom');
-      if (zoom) zoom.value = Math.round(_paState.scale * 100);
+      if (sub) sub.textContent = 'Page ' + p + ' · add up to 3 images, tap pockets to fill each, drag/zoom to position.';
       _paRefresh();
       openModal('pageArtModal');
       _paAttachDrag();
       requestAnimationFrame(function(){ _paApplyTransform(); });
     }
-    function _paRefresh() {
-      var img = document.getElementById('paImg');
-      var empty = document.getElementById('paEmpty');
-      var zoomRow = document.getElementById('paZoomRow');
-      var pocketsRow = document.getElementById('paPocketsRow');
-      var rm = document.getElementById('paRemoveBtn');
-      var has = !!_paState.url;
-      if (img) { if (has) { img.src = _paState.url; img.style.display = 'block'; _paApplyTransform(); } else { img.style.display = 'none'; } }
-      if (empty)  empty.style.display  = has ? 'none' : 'flex';
-      if (zoomRow) zoomRow.style.display = has ? 'flex' : 'none';
-      if (pocketsRow) pocketsRow.style.display = has ? 'block' : 'none';
-      var bleedRow = document.getElementById('paBleedRow');
-      if (bleedRow) bleedRow.style.display = has ? 'flex' : 'none';
-      if (rm) rm.style.display = has ? 'block' : 'none';
+    function _paFrameAspect() {
+      var reg = _paRegion();
+      if (!reg || !reg.pockets.length) return [245, 342];
+      var bb = _regionBBox(reg, 3);
+      return [bb.cols * 245, bb.rows * 342];
     }
-    // Pocket toggles — which of the 9 (3x3) pockets are OPEN (art windows).
-    // Cards flow around the open ones; stored as page_art[page].blanks.
+    function _paRefresh() {
+      var reg = _paRegion();
+      var has = !!(reg && reg.url);
+      var frame = document.getElementById('paFrame');
+      if (frame) { var a = _paFrameAspect(); frame.style.aspectRatio = a[0] + ' / ' + a[1]; }
+      var img = document.getElementById('paImg');
+      if (img) { if (has) { img.src = reg.url; img.style.display = 'block'; } else { img.style.display = 'none'; } }
+      var empty = document.getElementById('paEmpty'); if (empty) empty.style.display = has ? 'none' : 'flex';
+      var zoomRow = document.getElementById('paZoomRow'); if (zoomRow) zoomRow.style.display = has ? 'flex' : 'none';
+      var pocketsRow = document.getElementById('paPocketsRow'); if (pocketsRow) pocketsRow.style.display = 'block';
+      var bleedRow = document.getElementById('paBleedRow'); if (bleedRow) bleedRow.style.display = has ? 'flex' : 'none';
+      var rm = document.getElementById('paRemoveBtn'); if (rm) rm.style.display = has ? 'block' : 'none';
+      var zoom = document.getElementById('paZoom'); if (zoom && reg) zoom.value = Math.round((reg.scale || 1) * 100);
+      var bl = document.getElementById('paBleed'); if (bl && reg) bl.checked = reg.bleed !== false;
+      _paRenderTabs();
+      _paRenderPockets();
+      requestAnimationFrame(function(){ _paApplyTransform(); });
+    }
+    function _paRenderTabs() {
+      var wrap = document.getElementById('paTabs'); if (!wrap) return;
+      var html = '';
+      for (var i = 0; i < _paState.regions.length; i++) {
+        var on = i === _paState.active, col = _PA_COLORS[i] || '136,135,128';
+        html += '<button onclick="_paSelectRegion(' + i + ')" style="padding:5px 11px;border:1px solid rgb(' + col + ');background:' + (on ? 'rgb(' + col + ')' : 'transparent') + ';color:' + (on ? 'var(--surface)' : 'rgb(' + col + ')') + ';font-family:inherit;font-size:.62rem;font-weight:700;cursor:pointer;border-radius:4px">Img ' + (i + 1) + '</button>';
+      }
+      if (_paState.regions.length < 3) html += '<button onclick="_paAddRegion()" style="padding:5px 11px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.62rem;cursor:pointer;border-radius:4px">+ Add</button>';
+      wrap.innerHTML = html;
+    }
+    function _paSelectRegion(i) { _paState.active = i; _paRefresh(); }
+    function _paAddRegion() {
+      if (_paState.regions.length >= 3) return;
+      _paState.regions.push({ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true });
+      _paState.active = _paState.regions.length - 1;
+      _paRefresh();
+    }
+    // 9-pocket grid, coloured by which image owns each pocket. Tap assigns the
+    // pocket to the active image (taking it from any other); tap again clears.
     function _paRenderPockets() {
-      var wrap = document.getElementById('paPockets');
-      if (!wrap) return;
+      var wrap = document.getElementById('paPockets'); if (!wrap) return;
       var html = '';
       for (var i = 0; i < 9; i++) {
-        var on = _paState.blanks.indexOf(i) !== -1;
-        html += '<button onclick="_paToggleBlank(' + i + ')" aria-pressed="' + on + '" style="aspect-ratio:245/342;border:1px solid ' + (on ? 'var(--copper)' : 'var(--border)') + ';background:' + (on ? 'rgba(184,115,51,.28)' : 'var(--surface2)') + ';color:var(--copper);font-family:inherit;font-size:.42rem;letter-spacing:.04em;cursor:pointer;border-radius:3px;display:flex;align-items:center;justify-content:center">' + (on ? 'ART' : '') + '</button>';
+        var rIdx = -1;
+        for (var k = 0; k < _paState.regions.length; k++) { if (_paState.regions[k].pockets.indexOf(i) !== -1) { rIdx = k; break; } }
+        var isActive = rIdx === _paState.active;
+        var col = rIdx >= 0 ? _PA_COLORS[rIdx] : null;
+        var bg = col ? ('rgba(' + col + ',' + (isActive ? '.45' : '.20') + ')') : 'var(--surface2)';
+        var bd = col ? ('rgb(' + col + ')') : 'var(--border)';
+        html += '<button onclick="_paTogglePocket(' + i + ')" style="aspect-ratio:245/342;border:' + (isActive ? '2px' : '1px') + ' solid ' + bd + ';background:' + bg + ';color:' + (col ? ('rgb(' + col + ')') : 'var(--muted)') + ';font-family:inherit;font-size:.55rem;font-weight:700;cursor:pointer;border-radius:3px;display:flex;align-items:center;justify-content:center">' + (rIdx >= 0 ? (rIdx + 1) : '') + '</button>';
       }
       wrap.innerHTML = html;
     }
-    function _paToggleBlank(i) {
-      var idx = _paState.blanks.indexOf(i);
-      if (idx === -1) _paState.blanks.push(i); else _paState.blanks.splice(idx, 1);
-      _paRenderPockets();
+    function _paTogglePocket(i) {
+      var reg = _paRegion(); if (!reg) return;
+      var inActive = reg.pockets.indexOf(i) !== -1;
+      _paState.regions.forEach(function(r){ var idx = r.pockets.indexOf(i); if (idx !== -1) r.pockets.splice(idx, 1); });
+      if (!inActive) reg.pockets.push(i);
+      _paRefresh(); // bbox/frame aspect may change
     }
     function _paApplyTransform() {
-      var img = document.getElementById('paImg'), frame = document.getElementById('paFrame');
-      if (!img || !frame) return;
+      var reg = _paRegion(), img = document.getElementById('paImg'), frame = document.getElementById('paFrame');
+      if (!reg || !img || !frame) return;
       var w = frame.clientWidth || 1, h = frame.clientHeight || 1;
-      img.style.transform = 'translate(' + (_paState.x * w) + 'px,' + (_paState.y * h) + 'px) scale(' + _paState.scale + ')';
+      img.style.transform = 'translate(' + ((reg.x || 0) * w) + 'px,' + ((reg.y || 0) * h) + 'px) scale(' + (reg.scale || 1) + ')';
     }
-    function _paZoom(val) { _paState.scale = Math.max(1, (Number(val) || 100) / 100); _paApplyTransform(); }
+    function _paZoom(val) { var reg = _paRegion(); if (reg) { reg.scale = Math.max(1, (Number(val) || 100) / 100); _paApplyTransform(); } }
+    function _paBleedChange(el) { var reg = _paRegion(); if (reg) reg.bleed = !!el.checked; }
     function _paOnFile(e) {
-      var f = e.target.files && e.target.files[0];
-      if (!f) return;
-      _paState.newBlob = f;
-      _paState.url = URL.createObjectURL(f);
-      _paState.scale = 1; _paState.x = 0; _paState.y = 0;
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      var reg = _paRegion(); if (!reg) { _paAddRegion(); reg = _paRegion(); }
+      reg.newBlob = f; reg.url = URL.createObjectURL(f); reg.scale = 1; reg.x = 0; reg.y = 0;
       var zoom = document.getElementById('paZoom'); if (zoom) zoom.value = 100;
       _paRefresh();
       e.target.value = '';
@@ -13761,34 +13785,39 @@ function _loadAdmin(){
       if (!frame || frame._paWired) return;
       frame._paWired = true;
       var dragging = false, lx = 0, ly = 0;
-      function down(e) { if (!_paState.url) return; dragging = true; var p = e.touches ? e.touches[0] : e; lx = p.clientX; ly = p.clientY; frame.style.cursor = 'grabbing'; }
-      function move(e) { if (!dragging) return; var p = e.touches ? e.touches[0] : e; var w = frame.clientWidth || 1, h = frame.clientHeight || 1; _paState.x += (p.clientX - lx) / w; _paState.y += (p.clientY - ly) / h; lx = p.clientX; ly = p.clientY; _paApplyTransform(); if (e.cancelable) e.preventDefault(); }
+      function down(e) { var reg = _paRegion(); if (!reg || !reg.url) return; dragging = true; var p = e.touches ? e.touches[0] : e; lx = p.clientX; ly = p.clientY; frame.style.cursor = 'grabbing'; }
+      function move(e) { if (!dragging) return; var reg = _paRegion(); if (!reg) return; var p = e.touches ? e.touches[0] : e; var w = frame.clientWidth || 1, h = frame.clientHeight || 1; reg.x = (reg.x || 0) + (p.clientX - lx) / w; reg.y = (reg.y || 0) + (p.clientY - ly) / h; lx = p.clientX; ly = p.clientY; _paApplyTransform(); if (e.cancelable) e.preventDefault(); }
       function up() { dragging = false; frame.style.cursor = 'grab'; }
       frame.addEventListener('mousedown', down); window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
       frame.addEventListener('touchstart', down, { passive: true }); frame.addEventListener('touchmove', move, { passive: false }); frame.addEventListener('touchend', up);
     }
-    async function _uploadPageArt(binderId, page, file) {
+    async function _uploadPageArt(binderId, key, file) {
       var conv = await _imgToWebpBlob(file);
-      var path = currentUser.id + '/pageart_' + binderId + '_' + page + '.' + conv.ext;
+      var path = currentUser.id + '/pageart_' + binderId + '_' + key + '.' + conv.ext;
       var up = await sb.storage.from('binder-covers').upload(path, conv.blob, { upsert: true, contentType: conv.contentType });
       if (up.error) throw up.error;
       var pub = sb.storage.from('binder-covers').getPublicUrl(path);
       return pub.data.publicUrl + '?t=' + Date.now();
     }
     async function savePageArt() {
-      if (!_paState.url) { showToast('Upload an image first'); return; }
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
       if (!b) { showToast('Binder not found'); return; }
       try {
-        var url = _paState.url;
-        if (_paState.newBlob) url = await _uploadPageArt(currentBinderId, _paState.page, _paState.newBlob);
-        var _bleedEl = document.getElementById('paBleed');
+        var regions = [];
+        for (var i = 0; i < _paState.regions.length; i++) {
+          var r = _paState.regions[i];
+          if (!r.url && !(r.pockets && r.pockets.length)) continue; // skip empty
+          var url = r.url;
+          if (r.newBlob) url = await _uploadPageArt(currentBinderId, _paState.page + '_' + i, r.newBlob);
+          regions.push({ url: url || null, scale: r.scale || 1, x: r.x || 0, y: r.y || 0, pockets: (r.pockets || []).slice().sort(function(a, c){ return a - c; }), bleed: r.bleed !== false });
+        }
         var pa = Object.assign({}, b.page_art || {});
-        pa[String(_paState.page)] = { url: url, scale: _paState.scale, x: _paState.x, y: _paState.y, blanks: (_paState.blanks || []).slice().sort(function(a,c){return a-c;}), bleed: _bleedEl ? !!_bleedEl.checked : true };
-        var r = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
-        if (r.error) {
-          if (/column|schema|page_art/i.test(r.error.message || '')) { showToast('Run migration_binder_page_art.sql in Supabase first'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
-          showToast('Save failed: ' + r.error.message); return;
+        if (regions.length) pa[String(_paState.page)] = { regions: regions };
+        else delete pa[String(_paState.page)];
+        var res = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
+        if (res.error) {
+          if (/column|schema|page_art/i.test(res.error.message || '')) { showToast('Run migration_binder_page_art.sql in Supabase first'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
+          showToast('Save failed: ' + res.error.message); return;
         }
         b.page_art = pa;
         closeModal('pageArtModal');
@@ -13796,20 +13825,14 @@ function _loadAdmin(){
         try { renderBinder(); } catch(_) {}
       } catch(e) { showToast('Save failed: ' + (e.message || 'error')); }
     }
-    async function removePageArt() {
-      var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
-      if (!b) return;
-      if (typeof pbConfirm === 'function') { var ok = await pbConfirm('Remove the artwork from this page?', { confirmText: 'REMOVE', danger: true }); if (!ok) return; }
-      try {
-        var pa = Object.assign({}, b.page_art || {});
-        delete pa[String(_paState.page)];
-        var r = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
-        if (r.error) { showToast('Remove failed: ' + r.error.message); return; }
-        b.page_art = pa;
-        closeModal('pageArtModal');
-        showToast('Page artwork removed');
-        try { renderBinder(); } catch(_) {}
-      } catch(e) { showToast('Remove failed'); }
+    // "Remove image" = drop the active image; saving persists (an all-empty
+    // page deletes its art entry).
+    function removePageArt() {
+      if (!_paState.regions.length) return;
+      _paState.regions.splice(_paState.active, 1);
+      if (!_paState.regions.length) _paState.regions.push({ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true });
+      _paState.active = Math.min(_paState.active, _paState.regions.length - 1);
+      _paRefresh();
     }
 
     // One Organize-view reorder row (extracted so the flat list and the
