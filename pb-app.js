@@ -13763,7 +13763,7 @@ function _loadAdmin(){
       var _opts = '';
       if (totalRows <= 30) { for (var i = 0; i < totalRows; i++) _opts += '<option value="' + i + '"' + (i === idx ? ' selected' : '') + '>' + (i + 1) + '</option>'; }
       else { for (var j = 0; j < totalRows; j++) { var p = Math.floor(j / 9) + 1, s = (j % 9) + 1; _opts += '<option value="' + j + '"' + (j === idx ? ' selected' : '') + '>' + (j + 1) + ' (p' + p + '·' + s + ')</option>'; } }
-      return '<div class="organize-row binder-card' + (isGhost ? ' ghost-card' : '') + '" draggable="true" data-id="' + item.id + '" ondragstart="organizeDragStart(event,\'' + item.id + '\')" ondragover="organizeDragOver(event)" ondrop="organizeDrop(event,\'' + item.id + '\')" ondragend="organizeDragEnd(event)">'
+      return '<div class="organize-row binder-card' + (isGhost ? ' ghost-card' : '') + (showAddPocket ? ' has-add-pocket' : '') + '" draggable="true" data-id="' + item.id + '" ondragstart="organizeDragStart(event,\'' + item.id + '\')" ondragover="organizeDragOver(event)" ondrop="organizeDrop(event,\'' + item.id + '\')" ondragend="organizeDragEnd(event)">'
         + '<span class="org-num">' + pos + '</span>'
         + '<span class="org-handle" title="Drag to reorder">⇅</span>'
         + '<img src="' + _pickThumbVariant(item.card_image_url || '', 200) + '" data-fallback="' + (item.card_image_url || '') + '" alt="" loading="lazy" decoding="async" draggable="false" class="org-thumb' + (isGhost ? ' org-thumb-ghost' : '') + '" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility=\'hidden\';this.onerror=null}">'
@@ -14633,7 +14633,7 @@ function _loadAdmin(){
               const _it = _slots[_s];
               _orgRows += _it
                 ? _organizeRowHtml(_it, activeItems.indexOf(_it), _totalRows, _p + 1, _s + 1, true)
-                : `<div class="organize-row org-pocket-row"><span style="flex:1;font-size:.64rem;color:var(--copper);letter-spacing:.06em">◧ OPEN POCKET</span><button onclick="_orgClosePocket(${_p + 1}, ${_s})" title="Close pocket (let a card fill it)" style="background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:.72rem;width:26px;height:26px;border-radius:4px">✕</button></div>`;
+                : `<div class="org-pocket-row"><span style="flex:1;font-size:.64rem;color:var(--copper);letter-spacing:.06em;white-space:nowrap">◧ OPEN POCKET · slot ${_s + 1}</span><button onclick="_orgClosePocket(${_p + 1}, ${_s})" title="Close pocket (let a card fill it)" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:.72rem;width:26px;height:26px;border-radius:4px">✕</button></div>`;
             }
           }
         } else {
