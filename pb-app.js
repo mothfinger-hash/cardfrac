@@ -7243,6 +7243,13 @@ function _loadAdmin(){
         + '<img src="' + art.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')">'
         + '</div>';
     }
+    // Transparent placeholder pockets that pad the owner's binder grid out to
+    // a full page in art mode, so the artwork shows through every empty slot.
+    function _pbOwnerArtPads(n) {
+      var s = '';
+      for (var k = 0; k < Math.max(0, n); k++) s += '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>';
+      return s;
+    }
 
     // Authentic binder-page rendering for a shared SPECIFIC binder. The
     // shared link carries the owner's view (&view=3x3/2x2/1x1) so the
@@ -14497,7 +14504,10 @@ function _loadAdmin(){
         }
       } else {
         const gridClass = effectiveView === '3x3' ? 'binder-grid-3x3' : effectiveView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
-        content.innerHTML = `<div class="${gridClass}" id="binderGrid">${pageItems.map((item, pageIdx) => {
+        // Michi page art for the current page of a specific binder (grid views).
+        const _ownBinder = (currentBinderId !== null) ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
+        const _ownArt = (_ownBinder && _ownBinder.page_art) ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
+        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ' style="position:relative"' : ''}>${_ownArt ? _pbArtBgHtml(_ownArt) : ''}${pageItems.map((item, pageIdx) => {
           const globalIdx = pageStart + pageIdx;
           const isGhost  = item.is_ghost;
           const isGraded = !isGhost && item.condition && item.condition !== 'raw';
@@ -14601,7 +14611,7 @@ function _loadAdmin(){
                             modal still shows name + price + trend on tap. */
             }
           </div>`;
-        }).join('')}</div>`;
+        }).join('')}${_ownArt ? _pbOwnerArtPads(perPage - pageItems.length) : ''}</div>`;
       }
 
       if (pagination) {
