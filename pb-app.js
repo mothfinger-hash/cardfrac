@@ -7281,7 +7281,9 @@ function _loadAdmin(){
       var s = '';
       if (art.bg) s += 'background-color:' + art.bg + ';';
       if (art.bgUrl) s += "background-image:url('" + art.bgUrl + "');background-size:cover;background-position:center;background-repeat:no-repeat;";
-      if (s) s += 'border-radius:10px;';
+      // When a background exists, pad the grid so the art forms a border frame
+      // around the card slots (slots keep their cells; they're just inset).
+      if (s) s += 'border-radius:12px;padding:clamp(12px,3.6%,26px);box-sizing:border-box;';
       return s;
     }
     function _pageOpenPockets(art) {
