@@ -13796,7 +13796,31 @@ function _loadAdmin(){
       }
       _paRenderTabs();
       _paRenderPockets();
+      _paRenderFrameMask();
       requestAnimationFrame(function(){ _paApplyTransform(); });
+    }
+    // WYSIWYG mask over the editor frame: the frame spans the active image's
+    // bounding box, but only the SELECTED pockets actually render the art. Dim
+    // the unselected cells so the user sees exactly what will show (no surprise
+    // crop on save).
+    function _paRenderFrameMask() {
+      var grid = document.getElementById('paGrid'); if (!grid) return;
+      var reg = _paRegion();
+      if (!reg || !reg.url || !reg.pockets || !reg.pockets.length) { grid.innerHTML = ''; grid.style.display = 'none'; return; }
+      var bb = _regionBBox(reg, 3);
+      grid.style.display = 'grid';
+      grid.style.gridTemplateColumns = 'repeat(' + bb.cols + ',1fr)';
+      grid.style.gridTemplateRows = 'repeat(' + bb.rows + ',1fr)';
+      grid.style.gap = '0';
+      var html = '';
+      for (var r = 0; r < bb.rows; r++) {
+        for (var c = 0; c < bb.cols; c++) {
+          var slot = (bb.minR + r) * 3 + (bb.minC + c);
+          var on = reg.pockets.indexOf(slot) !== -1;
+          html += '<div style="' + (on ? '' : 'background:rgba(5,10,18,.8);') + 'border:1px solid rgba(26,199,160,.14)"></div>';
+        }
+      }
+      grid.innerHTML = html;
     }
     function _paRenderTabs() {
       var wrap = document.getElementById('paTabs'); if (!wrap) return;
@@ -14752,7 +14776,10 @@ function _loadAdmin(){
       // flow around reserved art windows; pages come from the layout. Card
       // order is untouched — pure render, so drag-to-reorder is unaffected.
       let _artLayout = null;
-      const _binderForArt = (!isAllCards && (effectiveView === '3x3' || effectiveView === '2x2' || effectiveView === '1x1'))
+      // Page art + slot-pinning are authored on a 3x3 grid (pocket indices
+      // 0–8), so they only apply in 3x3 view. In 2x2 / 1x1 the binder renders
+      // as a plain packed grid for that layout.
+      const _binderForArt = (!isAllCards && effectiveView === '3x3')
         ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
       if (_binderForArt && _binderForArt.page_art) {
         const _bb = {}; let _hb = false;
@@ -14836,7 +14863,7 @@ function _loadAdmin(){
         const gridClass = effectiveView === '3x3' ? 'binder-grid-3x3' : effectiveView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
         // Michi page art for the current page of a specific binder (grid views).
         const _ownBinder = (currentBinderId !== null) ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
-        const _ownArt = (_ownBinder && _ownBinder.page_art) ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
+        const _ownArt = (_ownBinder && _ownBinder.page_art && effectiveView === '3x3') ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
         const _ownNoBleed = !!(_ownArt && _ownArt.bleed === false);
         const _ownRegions = (_ownArt && Array.isArray(_ownArt.regions)) ? _ownArt.regions : null;
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
@@ -15326,9 +15353,10 @@ function _loadAdmin(){
         + ' ondragover="binderDragOver(event)" ondrop="binderDropSlot(event,' + slotIdx + ')">'
         + '<div style="width:100%;aspect-ratio:245/342"></div></div>';
     }
-    // Drop a dragged card onto a SPECIFIC empty slot. The card lands exactly in
-    // that slot — any empty slots before it are reserved (held open) so the
-    // card doesn't pack back to the first gap. Works on plain and art pages.
+    // Drop a dragged card onto a SPECIFIC empty slot. Fully positional: every
+    // card keeps its exact slot (pinned via reserved blanks) and the dragged
+    // card lands precisely where dropped — even onto a slot that was itself a
+    // previously-reserved empty. Art-region pockets are never used as card slots.
     window.binderDropSlot = function(e, slot) {
       e.preventDefault();
       clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
@@ -15337,47 +15365,56 @@ function _loadAdmin(){
       if (!srcId) return;
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
       if (!b) return;
-      var per = binderView === '2x2' ? 4 : binderView === '1x1' ? 1 : 9;
+      // Slot-pinning is 3x3-only (art/pocket indices are 3x3). In 2x2 / 1x1 the
+      // binder packs, so an empty-slot drop just moves the card to the end.
+      if (binderView !== '3x3') {
+        var sg = collectionItems.findIndex(function(c){ return String(c.id) === String(srcId); });
+        if (sg === -1) return;
+        var moved = collectionItems.splice(sg, 1)[0];
+        var bcs = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
+        if (!bcs.length) collectionItems.push(moved);
+        else { var gl0 = collectionItems.findIndex(function(c){ return String(c.id) === String(bcs[bcs.length - 1].id); }); collectionItems.splice(gl0 + 1, 0, moved); }
+        renderBinder();
+        clearTimeout(binderSaveTimer); binderSaveTimer = setTimeout(saveBinderOrder, 600);
+        return;
+      }
+      var per = 9;
       var page = binderPage;
-      // Cards in this binder, in order, WITHOUT the dragged one.
-      var cardsNoDrag = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId) && String(c.id) !== String(srcId); });
-      var bbp = _orgBlanksByPage(b);                 // open pockets + reserved blanks per page
-      var pockets = bbp[page] || [];
-      if (pockets.indexOf(slot) !== -1) return;      // art pocket — not a card slot
-      var layout = _pageFlowLayout(cardsNoDrag, per, bbp);
-      var pageSlots = layout[page] || [];
-      // Reserve every empty (no card, no pocket) slot BEFORE the drop slot.
-      var addBlanks = [];
-      for (var s = 0; s < slot; s++) { if (!pageSlots[s] && pockets.indexOf(s) === -1) addBlanks.push(s); }
-      // Card index this card should occupy = cards on prior pages + cards before
-      // the drop slot on this page.
-      var cardsBefore = 0;
-      for (var p = 0; p < page; p++) { (layout[p] || []).forEach(function(x){ if (x) cardsBefore++; }); }
-      for (var s2 = 0; s2 < slot; s2++) { if (pageSlots[s2]) cardsBefore++; }
-      // 1) Persist the reserved blanks (merge into this page's art entry).
-      if (addBlanks.length) {
-        var pa = Object.assign({}, b.page_art || {});
-        var entry = Object.assign({}, pa[String(page + 1)] || {});
-        var blanks = Array.isArray(entry.blanks) ? entry.blanks.slice() : [];
-        addBlanks.forEach(function(x){ if (blanks.indexOf(x) === -1) blanks.push(x); });
-        blanks.sort(function(a, c){ return a - c; });
+      // Art-region pockets per page (image slots — never card slots).
+      var pa0 = b.page_art || {}, regionPk = {};
+      Object.keys(pa0).forEach(function(k){
+        var arr = []; if (Array.isArray(pa0[k].regions)) pa0[k].regions.forEach(function(r){ (r.pockets || []).forEach(function(p){ arr.push(p); }); });
+        regionPk[parseInt(k, 10) - 1] = arr;
+      });
+      if ((regionPk[page] || []).indexOf(slot) !== -1) return; // art pocket — not droppable
+      // Current card positions from the live flow layout.
+      var cards = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
+      var layout = _pageFlowLayout(cards, per, _orgBlanksByPage(b));
+      var pos = {};
+      for (var p = 0; p < layout.length; p++) { for (var s = 0; s < layout[p].length; s++) { var it = layout[p][s]; if (it) pos[String(it.id)] = { page: p, slot: s }; } }
+      pos[String(srcId)] = { page: page, slot: slot }; // move dragged to the drop target
+      // Card order = by absolute slot; pin every card by reserving the empty,
+      // non-art slots before each page's last card.
+      var ordered = Object.keys(pos).sort(function(a, c){ return (pos[a].page * per + pos[a].slot) - (pos[c].page * per + pos[c].slot); });
+      var occ = {}, lastSlot = {};
+      ordered.forEach(function(id){ var pp = pos[id].page, ss = pos[id].slot; (occ[pp] = occ[pp] || {})[ss] = 1; lastSlot[pp] = Math.max(lastSlot[pp] == null ? -1 : lastSlot[pp], ss); });
+      var newPa = Object.assign({}, b.page_art || {});
+      Object.keys(lastSlot).forEach(function(pp){
+        var rpk = regionPk[pp] || [], blanks = [];
+        for (var s = 0; s <= lastSlot[pp]; s++) { if (!(occ[pp] && occ[pp][s]) && rpk.indexOf(s) === -1) blanks.push(s); }
+        var key = String(parseInt(pp, 10) + 1), entry = Object.assign({}, newPa[key] || {});
         entry.blanks = blanks;
-        pa[String(page + 1)] = entry;
-        b.page_art = pa;
-        sb.from('binders').update({ page_art: pa }).eq('id', b.id).then(function(){}, function(){});
-      }
-      // 2) Reorder the card so the flow places it at `slot`.
-      var srcGlobal = collectionItems.findIndex(function(c){ return String(c.id) === String(srcId); });
-      if (srcGlobal === -1) return;
-      var dragged = collectionItems.splice(srcGlobal, 1)[0];
-      var binderCards = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
-      if (cardsBefore >= binderCards.length) {
-        if (!binderCards.length) collectionItems.push(dragged);
-        else { var gl = collectionItems.findIndex(function(c){ return String(c.id) === String(binderCards[binderCards.length - 1].id); }); collectionItems.splice(gl + 1, 0, dragged); }
-      } else {
-        var gt = collectionItems.findIndex(function(c){ return String(c.id) === String(binderCards[cardsBefore].id); });
-        collectionItems.splice(gt, 0, dragged);
-      }
+        if (!blanks.length && !(Array.isArray(entry.regions) && entry.regions.length) && !entry.bg && !entry.bgUrl) delete newPa[key];
+        else newPa[key] = entry;
+      });
+      b.page_art = newPa;
+      sb.from('binders').update({ page_art: newPa }).eq('id', b.id).then(function(){}, function(){});
+      // Reorder this binder's cards (in their existing global positions) to match.
+      var omap = {}; ordered.forEach(function(id, i){ omap[id] = i; });
+      var gidx = [];
+      collectionItems.forEach(function(c, i){ if (!c.sold_offline && String(c.binder_id) === String(currentBinderId)) gidx.push(i); });
+      var sorted = gidx.map(function(i){ return collectionItems[i]; }).sort(function(a, c){ return (omap[String(a.id)] == null ? 1e9 : omap[String(a.id)]) - (omap[String(c.id)] == null ? 1e9 : omap[String(c.id)]); });
+      gidx.forEach(function(g, j){ collectionItems[g] = sorted[j]; });
       renderBinder();
       clearTimeout(binderSaveTimer);
       binderSaveTimer = setTimeout(saveBinderOrder, 600);
