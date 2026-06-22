@@ -13770,7 +13770,7 @@ function _loadAdmin(){
       var frame = document.getElementById('paFrame');
       if (frame) { var a = _paFrameAspect(); frame.style.aspectRatio = a[0] + ' / ' + a[1]; }
       var img = document.getElementById('paImg');
-      if (img) { if (has) { img.src = reg.url; img.style.display = 'block'; img.style.objectFit = (reg.fit === 'contain') ? 'contain' : 'cover'; } else { img.style.display = 'none'; } }
+      if (img) { if (has) { img.onload = function(){ try { _paApplyTransform(); } catch(_) {} }; img.src = reg.url; img.style.display = 'block'; img.style.objectFit = (reg.fit === 'contain') ? 'contain' : 'cover'; } else { img.style.display = 'none'; } }
       var empty = document.getElementById('paEmpty'); if (empty) empty.style.display = has ? 'none' : 'flex';
       var zoomRow = document.getElementById('paZoomRow'); if (zoomRow) zoomRow.style.display = has ? 'flex' : 'none';
       var pocketsRow = document.getElementById('paPocketsRow'); if (pocketsRow) pocketsRow.style.display = 'block';
@@ -13841,7 +13841,23 @@ function _loadAdmin(){
       var reg = _paRegion(), img = document.getElementById('paImg'), frame = document.getElementById('paFrame');
       if (!reg || !img || !frame) return;
       var w = frame.clientWidth || 1, h = frame.clientHeight || 1;
+      _paClampPan(reg, img, frame);
       img.style.transform = 'translate(' + ((reg.x || 0) * w) + 'px,' + ((reg.y || 0) * h) + 'px) scale(' + (reg.scale || 1) + ')';
+    }
+    // Constrain pan so the image keeps covering the frame — dragging picks the
+    // visible crop without ever exposing an empty edge. Uses the rendered size
+    // (cover/contain base fit × zoom). reg.x/reg.y are fractions of frame w/h.
+    function _paClampPan(reg, img, frame) {
+      var fw = frame.clientWidth || 1, fh = frame.clientHeight || 1;
+      var iw = img.naturalWidth || 0, ih = img.naturalHeight || 0;
+      if (!iw || !ih) return; // not loaded yet
+      var s = reg.scale || 1;
+      var fit = (reg.fit === 'contain') ? Math.min(fw / iw, fh / ih) : Math.max(fw / iw, fh / ih);
+      var rw = iw * fit * s, rh = ih * fit * s;
+      var maxX = Math.max(0, (rw - fw) / 2), maxY = Math.max(0, (rh - fh) / 2);
+      var tx = Math.max(-maxX, Math.min(maxX, (reg.x || 0) * fw));
+      var ty = Math.max(-maxY, Math.min(maxY, (reg.y || 0) * fh));
+      reg.x = tx / fw; reg.y = ty / fh;
     }
     function _paZoom(val) { var reg = _paRegion(); if (reg) { reg.scale = Math.max(1, (Number(val) || 100) / 100); _paApplyTransform(); } }
     function _paBleedChange(el) { var reg = _paRegion(); if (reg) reg.bleed = !!el.checked; }
@@ -14825,16 +14841,28 @@ function _loadAdmin(){
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
         const _artRows = Math.ceil(perPage / _artCols);
         const _ownBg = _ownRegions ? _pbRegionBg(_ownRegions, _artCols) : ((_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : '');
+        const _legacyBlanks = (_ownArt && _ownNoBleed && Array.isArray(_ownArt.blanks)) ? _ownArt.blanks : null;
+        // Always render a FULL page of slots (pad trailing empties) so every
+        // layout shows its complete 3x3 / 2x2 / 1x1 grid and empty slots are
+        // real, droppable targets. Flow pages are already perPage.
+        const _slots = (pageItems || []).slice();
+        while (_slots.length < perPage) _slots.push(null);
         // Always use the binder-page layout (capped width + card-aspect slots)
-        // so EVERY binder reads as a tidy card page — art or not, full page or
-        // not. Without this, art-less / partial pages fell back to the wider
-        // viewport-height desktop grid and looked inconsistent.
-        content.innerHTML = `<div class="${gridClass} has-page-art" id="binderGrid"${_ownArt ? ` style="position:relative;${_pbPageBgStyle(_ownArt)}"` : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
-          if (!item) return _ownRegions   // open pocket
-            ? _pbRegionCell(_ownRegions, pageIdx, _artCols, 4, true)
-            : ((_ownArt && _ownNoBleed)
-              ? '<div class="binder-card pa-empty" style="position:relative;overflow:hidden;border-radius:8px"><div style="width:100%;aspect-ratio:245/342"></div>' + _pbPocketArtWindow(_ownArt, Math.floor(pageIdx / _artCols), pageIdx % _artCols, _artCols, _artRows, 4) + '</div>'
-              : '<div class="binder-card pa-empty"><div style="width:100%;aspect-ratio:245/342"></div></div>');
+        // so EVERY binder reads as a tidy card page — art or not, full page or not.
+        content.innerHTML = `<div class="${gridClass} has-page-art" id="binderGrid"${_ownArt ? ` style="position:relative;${_pbPageBgStyle(_ownArt)}"` : ''}>${_ownBg}${_slots.map((item, pageIdx) => {
+          if (!item) {
+            // Open art pocket (region OR legacy single-image blank) → art cell,
+            // not a card drop target.
+            const _isPocket = _ownRegions ? !!_regionForPocket(_ownRegions, pageIdx)
+              : (_legacyBlanks ? _legacyBlanks.indexOf(pageIdx) !== -1 : false);
+            if (_isPocket) {
+              return _ownRegions
+                ? _pbRegionCell(_ownRegions, pageIdx, _artCols, 4, true)
+                : '<div class="binder-card pa-empty" style="position:relative;overflow:hidden;border-radius:8px"><div style="width:100%;aspect-ratio:245/342"></div>' + _pbPocketArtWindow(_ownArt, Math.floor(pageIdx / _artCols), pageIdx % _artCols, _artCols, _artRows, 4) + '</div>';
+            }
+            // Otherwise an empty card slot — visible + droppable.
+            return _binderEmptySlot(pageIdx, !!_ownArt);
+          }
           const globalIdx = _artLayout ? activeItems.indexOf(item) : (pageStart + pageIdx);
           const isGhost  = item.is_ghost;
           const isGraded = !isGhost && item.condition && item.condition !== 'raw';
@@ -15228,7 +15256,7 @@ function _loadAdmin(){
       if (!dragSrcId) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      document.querySelectorAll('#binderGrid .binder-card').forEach(el => el.classList.remove('drag-over'));
+      document.querySelectorAll('#binderGrid .binder-card, #binderGrid .pb-empty-slot').forEach(el => el.classList.remove('drag-over'));
       e.currentTarget.classList.add('drag-over');
     }
 
@@ -15283,11 +15311,32 @@ function _loadAdmin(){
     function binderDragEnd(e) {
       dragSrcId = null; dragSrcIndex = null; _dragCrossPage = false;
       clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
-      document.querySelectorAll('#binderGrid .binder-card').forEach(el => {
+      document.querySelectorAll('#binderGrid .binder-card, #binderGrid .pb-empty-slot').forEach(el => {
         el.style.opacity = '';
         el.classList.remove('drag-over');
       });
     }
+
+    // A visible, droppable empty card slot. Over page art it's transparent so
+    // the background/art shows through; on a plain binder it gets a faint
+    // dashed outline so the page reads as a complete grid.
+    function _binderEmptySlot(slotIdx, hasArt) {
+      return '<div class="pb-empty-slot' + (hasArt ? '' : ' is-plain') + '" data-slot="' + slotIdx + '"'
+        + ' ondragover="binderDragOver(event)" ondrop="binderDropSlot(event)">'
+        + '<div style="width:100%;aspect-ratio:245/342"></div></div>';
+    }
+    // Drop a dragged card onto an empty slot. A packed binder has no gaps, so
+    // every empty slot sits past the last card — the card moves to the first
+    // open slot (end of this binder's sequence).
+    window.binderDropSlot = function(e) {
+      e.preventDefault();
+      clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
+      var srcId = dragSrcId; dragSrcId = null; dragSrcIndex = null; _dragCrossPage = false;
+      document.querySelectorAll('#binderGrid .binder-card, #binderGrid .pb-empty-slot').forEach(function(el){ el.classList.remove('drag-over'); el.style.opacity = ''; });
+      if (!srcId) return;
+      var bi = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
+      if (typeof moveCardToPosition === 'function') moveCardToPosition(srcId, bi.length);
+    };
 
     async function saveBinderOrder() {
       if (!currentUser) return;
