@@ -1081,7 +1081,12 @@ function _loadAdmin(){
       // move this card" intent. saveBinder() consumes + nulls it BEFORE it
       // closes the modal, so by the time we get here on a real save it's
       // already null — only a cancel leaves it set.
-      if (modalId === 'binderEditModal') { _pendingMoveItemId = null; }
+      if (modalId === 'binderEditModal') {
+        _pendingMoveItemId = null;
+        // Reset any temporary stacking bump applied when it was opened on top
+        // of a high-z sheet (e.g. the search card-detail dropdown).
+        var _bem = document.getElementById('binderEditModal'); if (_bem) _bem.style.zIndex = '';
+      }
       // Reset edit mode whenever the add/edit modal is dismissed
       if (modalId === 'addToCollectionModal') {
         _atcEditMode = false; _atcEditItemId = null;
@@ -14786,16 +14791,16 @@ function _loadAdmin(){
         // Michi page art for the current page of a specific binder (grid views).
         const _ownBinder = (currentBinderId !== null) ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
         const _ownArt = (_ownBinder && _ownBinder.page_art) ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
-        // If ANY page of this binder has art, use the binder-page layout (560
-        // cap + card-aspect slots) on EVERY page so slot sizing stays uniform —
-        // otherwise art-less pages fall back to the wider viewport-height grid.
-        const _binderHasArt = !!(_ownBinder && _ownBinder.page_art && Object.keys(_ownBinder.page_art).length);
         const _ownNoBleed = !!(_ownArt && _ownArt.bleed === false);
         const _ownRegions = (_ownArt && Array.isArray(_ownArt.regions)) ? _ownArt.regions : null;
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
         const _artRows = Math.ceil(perPage / _artCols);
         const _ownBg = _ownRegions ? _pbRegionBg(_ownRegions, _artCols) : ((_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : '');
-        content.innerHTML = `<div class="${gridClass}${(_ownArt || _binderHasArt) ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ` style="position:relative;${_pbPageBgStyle(_ownArt)}"` : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
+        // Always use the binder-page layout (capped width + card-aspect slots)
+        // so EVERY binder reads as a tidy card page — art or not, full page or
+        // not. Without this, art-less / partial pages fell back to the wider
+        // viewport-height desktop grid and looked inconsistent.
+        content.innerHTML = `<div class="${gridClass} has-page-art" id="binderGrid"${_ownArt ? ` style="position:relative;${_pbPageBgStyle(_ownArt)}"` : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
           if (!item) return _ownRegions   // open pocket
             ? _pbRegionCell(_ownRegions, pageIdx, _artCols, 4, true)
             : ((_ownArt && _ownNoBleed)
@@ -18382,6 +18387,10 @@ function _loadAdmin(){
       _renderColorPicker(null);
       _resetBinderCoverUI(null);
       openModal('binderEditModal');
+      // Stack ABOVE the dynamic card-detail sheet (z-index 10010) so the
+      // create-binder form isn't hidden behind it. Reset on close (see
+      // closeModal). Standard modals are 10002, which lands behind the sheet.
+      var _bem = document.getElementById('binderEditModal'); if (_bem) _bem.style.zIndex = '10060';
       setTimeout(() => document.getElementById('binderEditName').focus(), 80);
     }
 
