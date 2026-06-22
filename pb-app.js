@@ -15897,25 +15897,10 @@ function _loadAdmin(){
         const emptyStateHtml = (!hadPokemontcgPrices && !extraPriceRows.length)
           ? `<div style="margin-top:8px;font-size:.63rem;color:rgba(26,199,160,.35);text-align:center">No price data available</div>`
           : '';
-        // Pick button URLs. Prefer card_prices.source_url, then
-        // pokemontcg.io's tcgplayer.url, then a TCGplayer name search.
-        const tcgUrl = (tcgRow && tcgRow.source_url)
-          || fallbackTcgUrl
-          || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
-        const pcUrl  = pcRow && pcRow.source_url;
-        // Common button style: square, accent-bordered, hover lift.
-        const btnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(26,199,160,.4);background:rgba(26,199,160,.04);color:rgba(26,199,160,.85);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
-        const pcBtnStyle = 'flex:1;text-align:center;padding:9px 12px;border:1px solid rgba(184,115,51,.45);background:rgba(184,115,51,.04);color:rgba(184,115,51,.9);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.62rem;letter-spacing:.1em;text-decoration:none;transition:all .15s;cursor:pointer;border-radius:var(--r-sm)';
-        const extraPricesHtml = extraPriceRows.length
-          ? `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);padding:8px 12px;background:rgba(26,199,160,.02);border-radius:var(--r-md)">
-              ${extraPriceRows.map(function(r) {
-                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
-                  <span style="font-size:.6rem;color:rgba(26,199,160,.55);letter-spacing:.06em">${r.label}</span>
-                  <span style="font-size:.72rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
-                </div>`;
-              }).join('')}
-            </div>`
-          : '';
+        // Per-source price rows ARE the links now (shared _buildExtrasHtml) —
+        // the source name + value open that product page, so the two big
+        // TCGPLAYER / PRICECHARTING buttons are gone (matches binder detail).
+        const extraPricesHtml = _buildExtrasHtml(extras, fallbackTcgUrl, cardName);
         // Same Estimated Value row as the binder path. When PriceCharting
         // is missing but TCGplayer has a row (or vice versa) the user
         // still sees a single dollar figure rather than just the per-
@@ -15927,15 +15912,7 @@ function _loadAdmin(){
               <span style="font-size:.85rem;font-weight:800;color:var(--copper)">$${_setsEst.value.toFixed(2)}</span>
             </div>`
           : '';
-        const buttonsHtml = `<div style="display:flex;gap:8px;margin-top:12px">
-          <a href="${tcgUrl}" target="_blank" rel="noopener" style="${btnStyle}"
-            onmouseover="this.style.background='rgba(26,199,160,.14)';this.style.color='rgba(26,199,160,1)'"
-            onmouseout="this.style.background='rgba(26,199,160,.04)';this.style.color='rgba(26,199,160,.85)'">&#8599; TCGPLAYER</a>
-          ${pcUrl ? `<a href="${pcUrl}" target="_blank" rel="noopener" style="${pcBtnStyle}"
-            onmouseover="this.style.background='rgba(184,115,51,.14)';this.style.color='rgba(184,115,51,1)'"
-            onmouseout="this.style.background='rgba(184,115,51,.04)';this.style.color='rgba(184,115,51,.9)'">&#8599; PRICECHARTING</a>` : ''}
-        </div>`;
-        slot.innerHTML = emptyStateHtml + estHtml + extraPricesHtml + buttonsHtml;
+        slot.innerHTML = emptyStateHtml + estHtml + extraPricesHtml;
       }, 0);
       return `<div id="${elId}"></div>`;
     }
@@ -18064,10 +18041,11 @@ function _loadAdmin(){
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(26,199,160,.1);padding-top:16px">
             <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(26,199,160,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
             <div style="display:flex;gap:0;width:100%">
-              <select id="searchCardBinderSelect"
+              <select id="searchCardBinderSelect" onchange="handleBinderDropdownChange(this)"
                 style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(26,199,160,.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
                 <option value="" style="background:#030c14;color:rgba(210,240,255,.88)">Unsorted</option>
-                ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : '<option value="" style="background:#030c14;color:rgba(26,199,160,.4)">— no binders yet —</option>'}
+                ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : ''}
+                <option value="_new_binder" style="background:#030c14;color:#1AC7A0">＋ New Binder</option>
               </select>
               <button onclick="addSearchCardFromDetail()"
                 style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(26,199,160,.55);background:rgba(26,199,160,.08);color:#1AC7A0;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
@@ -18386,9 +18364,11 @@ function _loadAdmin(){
 
       const max = getMaxBinders();
       if (userTier() === 'free' && binders.length >= max) {
-        // Show inline upsell instead of opening modal
+        // Show inline upsell if present (Add-Card modal); otherwise (e.g. the
+        // search card-detail dropdown) fall back to a toast so it isn't silent.
         const upsell = document.getElementById('atcBinderUpsell');
         if (upsell) upsell.style.display = 'block';
+        else showToast(`Free plan is limited to ${max} binders — upgrade for unlimited`);
         return;
       }
 
