@@ -7274,6 +7274,16 @@ function _loadAdmin(){
       if (Array.isArray(art.blanks) && art.blanks.length) return [{ url: null, scale: 1, x: 0, y: 0, pockets: art.blanks.slice(), bleed: true }];
       return [];
     }
+    // Per-page background (color + optional full-page image), painted on the
+    // grid container itself so it shows through gaps + empty/open pockets.
+    function _pbPageBgStyle(art) {
+      if (!art) return '';
+      var s = '';
+      if (art.bg) s += 'background-color:' + art.bg + ';';
+      if (art.bgUrl) s += "background-image:url('" + art.bgUrl + "');background-size:cover;background-position:center;background-repeat:no-repeat;";
+      if (s) s += 'border-radius:10px;';
+      return s;
+    }
     function _pageOpenPockets(art) {
       if (!art) return [];
       if (Array.isArray(art.regions)) {
@@ -7425,7 +7435,7 @@ function _loadAdmin(){
       // Gap is constant in art mode (cards never resize). Bleed only changes
       // WHERE the art shows: continuous bg (on) vs per-pocket windows (off).
       const gap = art ? artGap : 12;
-      grid.style.cssText = 'position:relative;display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:' + gap + 'px;max-width:' + dims.maxw + 'px;margin:0 auto';
+      grid.style.cssText = 'position:relative;display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:' + gap + 'px;max-width:' + dims.maxw + 'px;margin:0 auto;' + _pbPageBgStyle(art);
       const bgHtml = regionsArr ? _pbRegionBg(regionsArr, artCols) : ((art && bleed) ? _pbArtBgHtml(art) : '');
       grid.innerHTML = bgHtml + cells;
       const nav = document.getElementById('pbPageNav');
@@ -13705,9 +13715,9 @@ function _loadAdmin(){
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
       var art = (b && b.page_art && b.page_art[String(p)]) || null;
       // Normalize legacy single-image OR new regions into editable regions.
-      var regs = _pageRegions(art).map(function(r){ return { url: r.url || null, scale: Number(r.scale) || 1, x: Number(r.x) || 0, y: Number(r.y) || 0, newBlob: null, pockets: (r.pockets || []).slice(), bleed: r.bleed !== false }; });
-      if (!regs.length) regs = [{ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true }];
-      _paState = { page: p, regions: regs, active: 0 };
+      var regs = _pageRegions(art).map(function(r){ return { url: r.url || null, scale: Number(r.scale) || 1, x: Number(r.x) || 0, y: Number(r.y) || 0, newBlob: null, pockets: (r.pockets || []).slice(), bleed: r.bleed !== false, fit: r.fit === 'contain' ? 'contain' : 'cover' }; });
+      if (!regs.length) regs = [{ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true, fit: 'cover' }];
+      _paState = { page: p, regions: regs, active: 0, bg: (art && art.bg) || '', bgUrl: (art && art.bgUrl) || '', bgBlob: null };
       var sub = document.getElementById('pageArtSub');
       if (sub) sub.textContent = 'Page ' + p + ' · add up to 3 images, tap pockets to fill each, drag/zoom to position.';
       _paRefresh();
@@ -13737,6 +13747,14 @@ function _loadAdmin(){
       var zoom = document.getElementById('paZoom'); if (zoom && reg) zoom.value = Math.round((reg.scale || 1) * 100);
       var bl = document.getElementById('paBleed'); if (bl && reg) bl.checked = reg.bleed !== false;
       var ft = document.getElementById('paFit'); if (ft && reg) ft.checked = reg.fit === 'contain';
+      var bgc = document.getElementById('paBgColor'); if (bgc) bgc.value = _paState.bg || '#0b0e14';
+      var bgClr = document.getElementById('paBgImgClear'); if (bgClr) bgClr.style.display = _paState.bgUrl ? 'inline-block' : 'none';
+      var frame = document.getElementById('paFrame');
+      if (frame) {
+        frame.style.backgroundColor = _paState.bg || 'var(--surface2)';
+        frame.style.backgroundImage = _paState.bgUrl ? ("url('" + _paState.bgUrl + "')") : 'none';
+        frame.style.backgroundSize = 'cover'; frame.style.backgroundPosition = 'center';
+      }
       _paRenderTabs();
       _paRenderPockets();
       requestAnimationFrame(function(){ _paApplyTransform(); });
@@ -13790,6 +13808,14 @@ function _loadAdmin(){
     function _paZoom(val) { var reg = _paRegion(); if (reg) { reg.scale = Math.max(1, (Number(val) || 100) / 100); _paApplyTransform(); } }
     function _paBleedChange(el) { var reg = _paRegion(); if (reg) reg.bleed = !!el.checked; }
     function _paFitChange(el) { var reg = _paRegion(); if (reg) { reg.fit = el.checked ? 'contain' : 'cover'; var img = document.getElementById('paImg'); if (img) img.style.objectFit = reg.fit; } }
+    // Page background (color + optional full-page image, behind all pockets).
+    function _paBgColorChange(el) { _paState.bg = el.value || ''; }
+    function _paBgClearColor() { _paState.bg = ''; _paRefresh(); }
+    function _paBgOnFile(e) {
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      _paState.bgBlob = f; _paState.bgUrl = URL.createObjectURL(f); _paRefresh();
+    }
+    function _paBgClearImg() { _paState.bgUrl = ''; _paState.bgBlob = null; _paRefresh(); }
     function _paOnFile(e) {
       var f = e.target.files && e.target.files[0]; if (!f) return;
       var reg = _paRegion(); if (!reg) { _paAddRegion(); reg = _paRegion(); }
@@ -13829,9 +13855,16 @@ function _loadAdmin(){
           if (r.newBlob) url = await _uploadPageArt(currentBinderId, _paState.page + '_' + i, r.newBlob);
           regions.push({ url: url || null, scale: r.scale || 1, x: r.x || 0, y: r.y || 0, pockets: (r.pockets || []).slice().sort(function(a, c){ return a - c; }), bleed: r.bleed !== false, fit: r.fit === 'contain' ? 'contain' : 'cover' });
         }
+        var bgUrl = _paState.bgUrl || '';
+        if (_paState.bgBlob) bgUrl = await _uploadPageArt(currentBinderId, _paState.page + '_bg', _paState.bgBlob) || '';
+        var bg = _paState.bg || '';
         var pa = Object.assign({}, b.page_art || {});
-        if (regions.length) pa[String(_paState.page)] = { regions: regions };
-        else delete pa[String(_paState.page)];
+        if (regions.length || bg || bgUrl) {
+          var entry = { regions: regions };
+          if (bg) entry.bg = bg;
+          if (bgUrl) entry.bgUrl = bgUrl;
+          pa[String(_paState.page)] = entry;
+        } else delete pa[String(_paState.page)];
         var res = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
         if (res.error) {
           if (/column|schema|page_art/i.test(res.error.message || '')) { showToast('Run migration_binder_page_art.sql in Supabase first'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
@@ -14754,7 +14787,7 @@ function _loadAdmin(){
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
         const _artRows = Math.ceil(perPage / _artCols);
         const _ownBg = _ownRegions ? _pbRegionBg(_ownRegions, _artCols) : ((_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : '');
-        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ' style="position:relative"' : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
+        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ` style="position:relative;${_pbPageBgStyle(_ownArt)}"` : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
           if (!item) return _ownRegions   // open pocket
             ? _pbRegionCell(_ownRegions, pageIdx, _artCols, 4, true)
             : ((_ownArt && _ownNoBleed)
