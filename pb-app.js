@@ -13964,10 +13964,15 @@ function _loadAdmin(){
         var bg = _paState.bg || '';
         var pa = Object.assign({}, b.page_art || {});
         var _k = _artKey(_paState.view || '3x3', _paState.page);
-        if (regions.length || bg || bgUrl) {
+        // Preserve reserved open-slot placeholders (blanks) — they're managed by
+        // drag-to-slot / Organize, NOT this editor, so a save here must not wipe them.
+        var _existing = pa[_k] || {};
+        var _keepBlanks = (Array.isArray(_existing.blanks) && _existing.blanks.length) ? _existing.blanks.slice() : null;
+        if (regions.length || bg || bgUrl || _keepBlanks) {
           var entry = { regions: regions };
           if (bg) entry.bg = bg;
           if (bgUrl) entry.bgUrl = bgUrl;
+          if (_keepBlanks) entry.blanks = _keepBlanks;
           pa[_k] = entry;
         } else delete pa[_k];
         var res = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
