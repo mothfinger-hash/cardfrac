@@ -7568,11 +7568,15 @@ function _loadAdmin(){
         // Load their collection (public cards only — no ghost/wishlist items)
         // If a specific binder ID was shared, filter to just that binder
         let itemsQuery = sb.from('collection_items')
-          .select('id, card_name, set_name, card_number, condition, grade_value, quantity, card_image_url, current_value, purchase_price, rarity, api_card_id, binder_id')
+          .select('id, card_name, set_name, card_number, condition, grade_value, quantity, card_image_url, current_value, purchase_price, rarity, api_card_id, binder_id, sort_order')
           .eq('user_id', profile.id)
           .eq('is_ghost', false);
         if (binderId) itemsQuery = itemsQuery.eq('binder_id', binderId);
-        const { data: items, error } = await itemsQuery.order('created_at', { ascending: true });
+        // Order by the owner's arrangement (sort_order), not when cards were
+        // added — otherwise the shared view's slots won't match the owner's.
+        const { data: items, error } = await itemsQuery
+          .order('sort_order', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true });
         window._publicBinderItems = items || [];
         console.log('[PublicBinder] items query error:', error, '| count:', items?.length, '| sample url:', items?.[0]?.card_image_url);
 
