@@ -121,6 +121,9 @@ function _loadAdmin(){
     // binders doesn't get reset to 3×3 on every load (All-Cards view
     // already persists via pb_acView).
     let binderView = (function(){ try { var v = localStorage.getItem('pb_binderView'); return ['3x3','2x2','1x1','list'].includes(v) ? v : '3x3'; } catch(_) { return '3x3'; } })();
+    // Last actual grid layout (3x3/2x2/1x1) — the Organize ('list') view edits
+    // open slots for THIS layout so per-layout Michi stays consistent.
+    let _lastGridView = (binderView === '2x2' || binderView === '1x1') ? binderView : '3x3';
     let binderPage = 0;
     let browseTabFilter = 'all';
     let expandedCards = {}; // Track expanded state of cards in My Slots by listingId
@@ -13169,6 +13172,9 @@ function _loadAdmin(){
 
     function setBinderView(view) {
       binderView = view;
+      // Remember the last actual GRID layout so the Organize ('list') view can
+      // edit slots for the layout the user was viewing (per-layout Michi).
+      if (view === '3x3' || view === '2x2' || view === '1x1') _lastGridView = view;
       try { localStorage.setItem('pb_binderView', view); } catch(_) {}
       binderPage = 0;
       ['3x3','2x2','1x1','list'].forEach(v => {
@@ -14023,14 +14029,15 @@ function _loadAdmin(){
     // per-page blanks in page_art (same data the editor uses) — card order
     // (sort_order) is never touched.
     function _orgBlanksByPage(b) {
-      // Organize is a 3x3-based reorder list — only read 3x3 (plain-key) art.
-      return _blanksByView(b, '3x3');
+      // Organize edits the LAST grid layout the user viewed (per-layout Michi).
+      return _blanksByView(b, _lastGridView || '3x3');
     }
     async function _orgOpenPocketAt(itemId) {
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
       if (!b) return;
+      var view = _lastGridView || '3x3', per = _viewCols(view) * _viewCols(view);
       var cards = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
-      var layout = _pageFlowLayout(cards, 9, _orgBlanksByPage(b));
+      var layout = _pageFlowLayout(cards, per, _blanksByView(b, view));
       var P = -1, S = -1;
       for (var p = 0; p < layout.length && P < 0; p++) { for (var s = 0; s < layout[p].length; s++) { if (layout[p][s] && String(layout[p][s].id) === String(itemId)) { P = p; S = s; break; } } }
       if (P < 0) return;
@@ -14042,14 +14049,16 @@ function _loadAdmin(){
     }
     async function _orgPersistBlanks(b, page, slot, add) {
       var pa = Object.assign({}, b.page_art || {});
-      var entry = Object.assign({}, pa[String(page)] || {});
+      var _k = _artKey(_lastGridView || '3x3', page);
+      var entry = Object.assign({}, pa[_k] || {});
       var blanks = Array.isArray(entry.blanks) ? entry.blanks.slice() : [];
       var idx = blanks.indexOf(slot);
       if (add && idx === -1) blanks.push(slot);
       else if (!add && idx !== -1) blanks.splice(idx, 1);
       blanks.sort(function(a, c){ return a - c; });
       entry.blanks = blanks;
-      pa[String(page)] = entry;
+      if (!blanks.length && !(Array.isArray(entry.regions) && entry.regions.length) && !entry.bg && !entry.bgUrl) delete pa[_k];
+      else pa[_k] = entry;
       try {
         var r = await sb.from('binders').update({ page_art: pa }).eq('id', b.id).select('id');
         if (r.error) { if (/column|schema|page_art/i.test(r.error.message || '')) { showToast('Run migration_binder_page_art.sql first'); return; } showToast('Failed: ' + r.error.message); return; }
@@ -14866,8 +14875,11 @@ function _loadAdmin(){
         // is untouched — pockets just edit page_art blanks. No art → the
         // plain flat list renders unchanged.
         const _orgBinder = binders.find(x => String(x.id) === String(currentBinderId));
-        const _orgBB = _orgBlanksByPage(_orgBinder);
-        const _orgLayout = Object.keys(_orgBB).length ? _pageFlowLayout(activeItems, 9, _orgBB) : null;
+        // Organize edits open slots for the LAST grid layout the user viewed.
+        const _orgView = _lastGridView || '3x3';
+        const _orgPer = _viewCols(_orgView) * _viewCols(_orgView);
+        const _orgBB = _blanksByView(_orgBinder, _orgView);
+        const _orgLayout = Object.keys(_orgBB).length ? _pageFlowLayout(activeItems, _orgPer, _orgBB) : null;
         let _orgRows = '';
         if (_orgLayout) {
           for (let _p = 0; _p < _orgLayout.length; _p++) {
@@ -14884,7 +14896,7 @@ function _loadAdmin(){
           _orgRows = activeItems.map((item, idx) => _organizeRowHtml(item, idx, _totalRows)).join('');
         }
         content.innerHTML = `
-          <div style="font-size:.6rem;color:var(--muted);letter-spacing:.06em;padding:6px 10px 5px;border-bottom:1px solid var(--border)">Drag the row or pick a new position · saves automatically</div>
+          <div style="font-size:.6rem;color:var(--muted);letter-spacing:.06em;padding:6px 10px 5px;border-bottom:1px solid var(--border)">Drag the row or pick a new position · saves automatically · editing <span style="color:var(--copper)">${_orgView}</span> layout</div>
           <div id="binderGrid" class="pb-organize" style="display:flex;flex-direction:column">${_orgRows}</div>`;
         }
       } else {
