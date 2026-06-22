@@ -7283,7 +7283,7 @@ function _loadAdmin(){
       if (art.bgUrl) s += "background-image:url('" + art.bgUrl + "');background-size:cover;background-position:center;background-repeat:no-repeat;";
       // When a background exists, pad the grid so the art forms a border frame
       // around the card slots (slots keep their cells; they're just inset).
-      if (s) s += 'border-radius:12px;padding:clamp(12px,3.6%,26px);box-sizing:border-box;';
+      if (s) s += 'border-radius:12px;padding:clamp(18px,5.4%,39px);box-sizing:border-box;';
       return s;
     }
     function _pageOpenPockets(art) {
@@ -7436,7 +7436,9 @@ function _loadAdmin(){
       }
       // Gap is constant in art mode (cards never resize). Bleed only changes
       // WHERE the art shows: continuous bg (on) vs per-pocket windows (off).
-      const gap = art ? artGap : 12;
+      // If ANY page of the binder has art, keep the tight gap on every page so
+      // art-less pages don't look wider/looser than their neighbours.
+      const gap = (art || Object.keys(pageArt).length) ? artGap : 12;
       grid.style.cssText = 'position:relative;display:grid;grid-template-columns:repeat(' + dims.cols + ',minmax(0,1fr));gap:' + gap + 'px;max-width:' + dims.maxw + 'px;margin:0 auto;' + _pbPageBgStyle(art);
       const bgHtml = regionsArr ? _pbRegionBg(regionsArr, artCols) : ((art && bleed) ? _pbArtBgHtml(art) : '');
       grid.innerHTML = bgHtml + cells;
@@ -14784,12 +14786,16 @@ function _loadAdmin(){
         // Michi page art for the current page of a specific binder (grid views).
         const _ownBinder = (currentBinderId !== null) ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
         const _ownArt = (_ownBinder && _ownBinder.page_art) ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
+        // If ANY page of this binder has art, use the binder-page layout (560
+        // cap + card-aspect slots) on EVERY page so slot sizing stays uniform —
+        // otherwise art-less pages fall back to the wider viewport-height grid.
+        const _binderHasArt = !!(_ownBinder && _ownBinder.page_art && Object.keys(_ownBinder.page_art).length);
         const _ownNoBleed = !!(_ownArt && _ownArt.bleed === false);
         const _ownRegions = (_ownArt && Array.isArray(_ownArt.regions)) ? _ownArt.regions : null;
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
         const _artRows = Math.ceil(perPage / _artCols);
         const _ownBg = _ownRegions ? _pbRegionBg(_ownRegions, _artCols) : ((_ownArt && !_ownNoBleed) ? _pbArtBgHtml(_ownArt) : '');
-        content.innerHTML = `<div class="${gridClass}${_ownArt ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ` style="position:relative;${_pbPageBgStyle(_ownArt)}"` : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
+        content.innerHTML = `<div class="${gridClass}${(_ownArt || _binderHasArt) ? ' has-page-art' : ''}" id="binderGrid"${_ownArt ? ` style="position:relative;${_pbPageBgStyle(_ownArt)}"` : ''}>${_ownBg}${pageItems.map((item, pageIdx) => {
           if (!item) return _ownRegions   // open pocket
             ? _pbRegionCell(_ownRegions, pageIdx, _artCols, 4, true)
             : ((_ownArt && _ownNoBleed)
