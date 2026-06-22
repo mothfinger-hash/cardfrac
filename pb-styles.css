@@ -3140,12 +3140,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        3x3 width onto 2x2 / 1x1 grids. */
     #binderGrid.binder-grid-2x2.has-page-art{max-width:400px}
     #binderGrid.binder-grid-1x1.has-page-art{max-width:280px}
-    /* Empty, droppable card slots — keep the full grid visible and let cards be
-       dragged in. Plain (no page art) slots get a faint dashed outline; slots
-       over page art stay transparent so the art shows. */
-    #binderGrid .pb-empty-slot{position:relative;z-index:1;border-radius:8px;cursor:default;transition:box-shadow .12s,border-color .12s}
-    #binderGrid .pb-empty-slot.is-plain{border:1px dashed rgba(255,255,255,.10)}
-    #binderGrid .pb-empty-slot.drag-over{box-shadow:inset 0 0 0 2px var(--accent);border-color:var(--accent)}
+    /* Empty, droppable card slots — invisible at rest; the outline only appears
+       while a card is being dragged (grid gets .pb-dragging) so empty spots
+       read as targetable drop zones, then disappear again on drop. */
+    #binderGrid .pb-empty-slot{position:relative;z-index:1;border-radius:8px;cursor:default;border:1px dashed transparent;transition:box-shadow .12s,border-color .12s,background .12s}
+    #binderGrid.pb-dragging .pb-empty-slot{border-color:rgba(255,255,255,.28)}
+    #binderGrid .pb-empty-slot.drag-over{box-shadow:inset 0 0 0 2px var(--accent);border-color:var(--accent);background:rgba(26,199,160,.10)}
     /* Organize rows that carry the "+◧ open pocket" button need a 6th column
        so the position select doesn't wrap. */
     .pb-organize .organize-row.has-add-pocket{grid-template-columns:24px 20px 32px 1fr auto 64px}

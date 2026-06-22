@@ -15322,6 +15322,8 @@ function _loadAdmin(){
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', dragSrcId);
       e.currentTarget.style.opacity = '0.4';
+      // Reveal empty-slot drop targets only while dragging.
+      var _bg = document.getElementById('binderGrid'); if (_bg) _bg.classList.add('pb-dragging');
     }
 
     function binderDragOver(e) {
@@ -15383,6 +15385,7 @@ function _loadAdmin(){
     function binderDragEnd(e) {
       dragSrcId = null; dragSrcIndex = null; _dragCrossPage = false;
       clearTimeout(_dragPageFlipTimer); _dragPageFlipTimer = null;
+      var _bg = document.getElementById('binderGrid'); if (_bg) _bg.classList.remove('pb-dragging');
       document.querySelectorAll('#binderGrid .binder-card, #binderGrid .pb-empty-slot').forEach(el => {
         el.style.opacity = '';
         el.classList.remove('drag-over');
