@@ -7318,14 +7318,38 @@ function _loadAdmin(){
     // being out-of-flow means it never displaces the auto-placed pockets. No
     // manual cell math — the grid tracks define the geometry. inset:0 fills it.
     function _pbRegionBg(regions, cols) {
-      var h = '';
+      var h = '', gap = 4; // matches the art-mode grid gap
       regions.forEach(function(reg){
         if (!reg.bleed || !reg.url) return;
         var bb = _regionBBox(reg, cols);
         var tx = (Number(reg.x) || 0) * 100, ty = (Number(reg.y) || 0) * 100, s = Number(reg.scale) || 1;
         var of = reg.fit === 'contain' ? 'contain' : 'cover';
-        h += '<div style="position:absolute;inset:0;grid-column:' + (bb.minC + 1) + '/span ' + bb.cols + ';grid-row:' + (bb.minR + 1) + '/span ' + bb.rows + ';overflow:hidden;z-index:0;border-radius:8px;pointer-events:none">'
-          + '<img src="' + reg.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;object-fit:' + of + ';transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')"></div>';
+        var pockets = reg.pockets || [];
+        // One clipped layer PER selected pocket, each showing the same
+        // bbox-aligned slice of the image. A layer extends by `gap` into the
+        // seam toward any ALSO-selected neighbour (so adjacent pockets read as
+        // one continuous image) but stops at the cell edge toward unselected
+        // pockets — so the art never bridges across slots you didn't pick.
+        pockets.forEach(function(p){
+          var r = Math.floor(p / cols), c = p % cols;
+          var lr = r - bb.minR, lc = c - bb.minC;
+          var tE = pockets.indexOf(p - cols) !== -1 ? gap : 0;
+          var bE = pockets.indexOf(p + cols) !== -1 ? gap : 0;
+          var lE = (c > 0 && pockets.indexOf(p - 1) !== -1) ? gap : 0;
+          var rE = (c < cols - 1 && pockets.indexOf(p + 1) !== -1) ? gap : 0;
+          var cwE = '(100% - ' + (lE + rE) + 'px)';      // this cell's width (width ctx)
+          var chE = '(100% - ' + (tE + bE) + 'px)';      // this cell's height (height ctx)
+          var imgW = 'calc(' + bb.cols + ' * ' + cwE + ' + ' + ((bb.cols - 1) * gap) + 'px)';
+          var imgH = 'calc(' + bb.rows + ' * ' + chE + ' + ' + ((bb.rows - 1) * gap) + 'px)';
+          var imgL = 'calc(' + lE + 'px - ' + lc + ' * (' + cwE + ' + ' + gap + 'px))';
+          var imgT = 'calc(' + tE + 'px - ' + lr + ' * (' + chE + ' + ' + gap + 'px))';
+          h += '<div style="position:absolute;grid-column:' + (c + 1) + '/span 1;grid-row:' + (r + 1) + '/span 1;'
+            + 'top:' + (-tE) + 'px;right:' + (-rE) + 'px;bottom:' + (-bE) + 'px;left:' + (-lE) + 'px;'
+            + 'overflow:hidden;z-index:0;pointer-events:none">'
+            + '<img src="' + reg.url + '" alt="" loading="lazy" decoding="async" style="position:absolute;'
+            + 'width:' + imgW + ';height:' + imgH + ';left:' + imgL + ';top:' + imgT + ';'
+            + 'object-fit:' + of + ';transform-origin:center center;transform:translate(' + tx.toFixed(3) + '%,' + ty.toFixed(3) + '%) scale(' + s + ')"></div>';
+        });
       });
       return h;
     }
@@ -13758,11 +13782,16 @@ function _loadAdmin(){
       var ft = document.getElementById('paFit'); if (ft && reg) ft.checked = reg.fit === 'contain';
       var bgc = document.getElementById('paBgColor'); if (bgc) bgc.value = _paState.bg || '#0b0e14';
       var bgClr = document.getElementById('paBgImgClear'); if (bgClr) bgClr.style.display = _paState.bgUrl ? 'inline-block' : 'none';
-      var frame = document.getElementById('paFrame');
-      if (frame) {
-        frame.style.backgroundColor = _paState.bg || 'var(--surface2)';
-        frame.style.backgroundImage = _paState.bgUrl ? ("url('" + _paState.bgUrl + "')") : 'none';
-        frame.style.backgroundSize = 'cover'; frame.style.backgroundPosition = 'center';
+      // Page background gets its OWN preview strip — it is NOT tied to the
+      // region frame (which is shaped by pocket selection). Painting it on the
+      // frame made the full-page bg look like it resized/cropped per slot.
+      var bgPrev = document.getElementById('paBgPreview');
+      if (bgPrev) {
+        var hasBg = !!(_paState.bg || _paState.bgUrl);
+        bgPrev.style.display = hasBg ? 'block' : 'none';
+        bgPrev.style.backgroundColor = _paState.bg || 'var(--surface2)';
+        bgPrev.style.backgroundImage = _paState.bgUrl ? ("url('" + _paState.bgUrl + "')") : 'none';
+        bgPrev.style.backgroundSize = 'cover'; bgPrev.style.backgroundPosition = 'center';
       }
       _paRenderTabs();
       _paRenderPockets();
