@@ -7301,6 +7301,25 @@ function _loadAdmin(){
       if (Array.isArray(art.blanks)) art.blanks.forEach(function(p){ set[p] = 1; });
       return Object.keys(set).map(Number);
     }
+    // ── Per-view page art ──────────────────────────────────────────────────
+    // Each layout (3x3 / 2x2 / 1x1) keeps its OWN art because pocket indices
+    // are grid-specific. 3x3 uses plain page keys ("1"), so legacy art still
+    // loads; 2x2 / 1x1 use prefixed keys ("2x2:1"). cols = grid width = rows.
+    function _viewCols(v) { return v === '2x2' ? 2 : v === '1x1' ? 1 : 3; }
+    function _artKey(v, page) { return (v === '3x3' ? '' : v + ':') + page; } // page is 1-based
+    function _artEntry(binder, v, page) { return (binder && binder.page_art) ? (binder.page_art[_artKey(v, page)] || null) : null; }
+    // 0-based page → open pockets, for the keys belonging to one view.
+    function _blanksByView(binder, v) {
+      var bb = {}, pa = binder && binder.page_art; if (!pa) return bb;
+      var pref = v === '3x3' ? '' : v + ':';
+      Object.keys(pa).forEach(function(k){
+        var pageStr;
+        if (v === '3x3') { if (!/^\d+$/.test(k)) return; pageStr = k; }
+        else { if (k.indexOf(pref) !== 0) return; pageStr = k.slice(pref.length); if (!/^\d+$/.test(pageStr)) return; }
+        var op = _pageOpenPockets(pa[k]); if (op.length) bb[parseInt(pageStr, 10) - 1] = op;
+      });
+      return bb;
+    }
     function _regionForPocket(regions, i) {
       for (var k = 0; k < regions.length; k++) { if ((regions[k].pockets || []).indexOf(i) !== -1) return regions[k]; }
       return null;
@@ -7426,16 +7445,16 @@ function _loadAdmin(){
       const items = window._pbPagedItems || [];
       const dims = _pbViewDims(window._pbView);
       const pageArt = window._pbPageArt || {};
+      const _pbBinder = { page_art: pageArt };
       // Open-pocket layout: reserve art-window pockets per page so cards flow
-      // around them. Only kicks in when the binder actually has open pockets.
-      const blanksByPage = {};
-      let hasBlanks = false;
-      Object.keys(pageArt).forEach(function(k){ var op = _pageOpenPockets(pageArt[k]); if (op.length) { blanksByPage[parseInt(k, 10) - 1] = op; hasBlanks = true; } });
+      // around them — for THIS view's art. Only kicks in when there are pockets.
+      const blanksByPage = _blanksByView(_pbBinder, window._pbView);
+      const hasBlanks = Object.keys(blanksByPage).length > 0;
       const layout = hasBlanks ? _pageFlowLayout(items, dims.per, blanksByPage) : null;
       const pages = layout ? Math.max(1, layout.length) : Math.max(1, Math.ceil(items.length / dims.per));
       if (window._pbPage < 0) window._pbPage = 0;
       if (window._pbPage > pages - 1) window._pbPage = pages - 1;
-      const art = pageArt[String(window._pbPage + 1)] || null;
+      const art = _artEntry(_pbBinder, window._pbView, window._pbPage + 1);
       const regionsArr = (art && Array.isArray(art.regions)) ? art.regions : null;
       const bleed = art ? (art.bleed !== false) : true;
       const artCols = dims.cols, artRows = Math.ceil(dims.per / dims.cols), artGap = 4;
@@ -13747,13 +13766,14 @@ function _loadAdmin(){
       if (currentBinderId === null) { showToast('Open a specific binder to add page artwork'); return; }
       var p = page || ((binderPage || 0) + 1); // binderPage is 0-based
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
-      var art = (b && b.page_art && b.page_art[String(p)]) || null;
+      var view = (binderView === '2x2' || binderView === '1x1') ? binderView : '3x3';
+      var art = _artEntry(b, view, p);
       // Normalize legacy single-image OR new regions into editable regions.
       var regs = _pageRegions(art).map(function(r){ return { url: r.url || null, scale: Number(r.scale) || 1, x: Number(r.x) || 0, y: Number(r.y) || 0, newBlob: null, pockets: (r.pockets || []).slice(), bleed: r.bleed !== false, fit: r.fit === 'contain' ? 'contain' : 'cover' }; });
       if (!regs.length) regs = [{ url: null, scale: 1, x: 0, y: 0, newBlob: null, pockets: [], bleed: true, fit: 'cover' }];
-      _paState = { page: p, regions: regs, active: 0, bg: (art && art.bg) || '', bgUrl: (art && art.bgUrl) || '', bgBlob: null };
+      _paState = { page: p, view: view, cols: _viewCols(view), regions: regs, active: 0, bg: (art && art.bg) || '', bgUrl: (art && art.bgUrl) || '', bgBlob: null };
       var sub = document.getElementById('pageArtSub');
-      if (sub) sub.textContent = 'Page ' + p + ' · add up to 3 images, tap pockets to fill each, drag/zoom to position.';
+      if (sub) sub.textContent = 'Page ' + p + ' · ' + view + ' · add up to 3 images, tap pockets to fill each, drag/zoom to position.';
       _paRefresh();
       openModal('pageArtModal');
       _paAttachDrag();
@@ -13762,7 +13782,7 @@ function _loadAdmin(){
     function _paFrameAspect() {
       var reg = _paRegion();
       if (!reg || !reg.pockets.length) return [245, 342];
-      var bb = _regionBBox(reg, 3);
+      var bb = _regionBBox(reg, _paState.cols || 3);
       return [bb.cols * 245, bb.rows * 342];
     }
     function _paRefresh() {
@@ -13807,7 +13827,8 @@ function _loadAdmin(){
       var grid = document.getElementById('paGrid'); if (!grid) return;
       var reg = _paRegion();
       if (!reg || !reg.url || !reg.pockets || !reg.pockets.length) { grid.innerHTML = ''; grid.style.display = 'none'; return; }
-      var bb = _regionBBox(reg, 3);
+      var cols = _paState.cols || 3;
+      var bb = _regionBBox(reg, cols);
       grid.style.display = 'grid';
       grid.style.gridTemplateColumns = 'repeat(' + bb.cols + ',1fr)';
       grid.style.gridTemplateRows = 'repeat(' + bb.rows + ',1fr)';
@@ -13815,7 +13836,7 @@ function _loadAdmin(){
       var html = '';
       for (var r = 0; r < bb.rows; r++) {
         for (var c = 0; c < bb.cols; c++) {
-          var slot = (bb.minR + r) * 3 + (bb.minC + c);
+          var slot = (bb.minR + r) * cols + (bb.minC + c);
           var on = reg.pockets.indexOf(slot) !== -1;
           html += '<div style="' + (on ? '' : 'background:rgba(5,10,18,.8);') + 'border:1px solid rgba(26,199,160,.14)"></div>';
         }
@@ -13839,12 +13860,16 @@ function _loadAdmin(){
       _paState.active = _paState.regions.length - 1;
       _paRefresh();
     }
-    // 9-pocket grid, coloured by which image owns each pocket. Tap assigns the
-    // pocket to the active image (taking it from any other); tap again clears.
+    // Pocket grid (cols×cols for the current view), coloured by which image
+    // owns each pocket. Tap assigns the pocket to the active image (taking it
+    // from any other); tap again clears.
     function _paRenderPockets() {
       var wrap = document.getElementById('paPockets'); if (!wrap) return;
+      var cols = _paState.cols || 3, n = cols * cols;
+      wrap.style.gridTemplateColumns = 'repeat(' + cols + ',1fr)';
+      wrap.style.maxWidth = (cols * 44) + 'px';
       var html = '';
-      for (var i = 0; i < 9; i++) {
+      for (var i = 0; i < n; i++) {
         var rIdx = -1;
         for (var k = 0; k < _paState.regions.length; k++) { if (_paState.regions[k].pockets.indexOf(i) !== -1) { rIdx = k; break; } }
         var isActive = rIdx === _paState.active;
@@ -13931,19 +13956,20 @@ function _loadAdmin(){
           var r = _paState.regions[i];
           if (!r.url && !(r.pockets && r.pockets.length)) continue; // skip empty
           var url = r.url;
-          if (r.newBlob) url = await _uploadPageArt(currentBinderId, _paState.page + '_' + i, r.newBlob);
+          if (r.newBlob) url = await _uploadPageArt(currentBinderId, (_paState.view || '3x3') + '_' + _paState.page + '_' + i, r.newBlob);
           regions.push({ url: url || null, scale: r.scale || 1, x: r.x || 0, y: r.y || 0, pockets: (r.pockets || []).slice().sort(function(a, c){ return a - c; }), bleed: r.bleed !== false, fit: r.fit === 'contain' ? 'contain' : 'cover' });
         }
         var bgUrl = _paState.bgUrl || '';
-        if (_paState.bgBlob) bgUrl = await _uploadPageArt(currentBinderId, _paState.page + '_bg', _paState.bgBlob) || '';
+        if (_paState.bgBlob) bgUrl = await _uploadPageArt(currentBinderId, (_paState.view || '3x3') + '_' + _paState.page + '_bg', _paState.bgBlob) || '';
         var bg = _paState.bg || '';
         var pa = Object.assign({}, b.page_art || {});
+        var _k = _artKey(_paState.view || '3x3', _paState.page);
         if (regions.length || bg || bgUrl) {
           var entry = { regions: regions };
           if (bg) entry.bg = bg;
           if (bgUrl) entry.bgUrl = bgUrl;
-          pa[String(_paState.page)] = entry;
-        } else delete pa[String(_paState.page)];
+          pa[_k] = entry;
+        } else delete pa[_k];
         var res = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
         if (res.error) {
           if (/column|schema|page_art/i.test(res.error.message || '')) { showToast('Run migration_binder_page_art.sql in Supabase first'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
@@ -13992,9 +14018,8 @@ function _loadAdmin(){
     // per-page blanks in page_art (same data the editor uses) — card order
     // (sort_order) is never touched.
     function _orgBlanksByPage(b) {
-      var bb = {};
-      if (b && b.page_art) Object.keys(b.page_art).forEach(function(k){ var op = _pageOpenPockets(b.page_art[k]); if (op.length) bb[parseInt(k, 10) - 1] = op; });
-      return bb;
+      // Organize is a 3x3-based reorder list — only read 3x3 (plain-key) art.
+      return _blanksByView(b, '3x3');
     }
     async function _orgOpenPocketAt(itemId) {
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
@@ -14776,15 +14801,13 @@ function _loadAdmin(){
       // flow around reserved art windows; pages come from the layout. Card
       // order is untouched — pure render, so drag-to-reorder is unaffected.
       let _artLayout = null;
-      // Page art + slot-pinning are authored on a 3x3 grid (pocket indices
-      // 0–8), so they only apply in 3x3 view. In 2x2 / 1x1 the binder renders
-      // as a plain packed grid for that layout.
-      const _binderForArt = (!isAllCards && effectiveView === '3x3')
+      // Page art + slot-pinning work in every grid view — each layout keeps its
+      // own pockets (3x3 / 2x2 / 1x1), looked up by view-scoped key.
+      const _binderForArt = (!isAllCards && (effectiveView === '3x3' || effectiveView === '2x2' || effectiveView === '1x1'))
         ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
       if (_binderForArt && _binderForArt.page_art) {
-        const _bb = {}; let _hb = false;
-        Object.keys(_binderForArt.page_art).forEach(k => { const op = _pageOpenPockets(_binderForArt.page_art[k]); if (op.length) { _bb[parseInt(k, 10) - 1] = op; _hb = true; } });
-        if (_hb) _artLayout = _pageFlowLayout(activeItems, perPage, _bb);
+        const _bb = _blanksByView(_binderForArt, effectiveView);
+        if (Object.keys(_bb).length) _artLayout = _pageFlowLayout(activeItems, perPage, _bb);
       }
       const totalPages = _artLayout ? Math.max(1, _artLayout.length) : Math.ceil(activeItems.length / perPage);
       binderPage = Math.max(0, Math.min(binderPage, Math.max(0, totalPages - 1)));
@@ -14863,7 +14886,7 @@ function _loadAdmin(){
         const gridClass = effectiveView === '3x3' ? 'binder-grid-3x3' : effectiveView === '2x2' ? 'binder-grid-2x2' : 'binder-grid-1x1';
         // Michi page art for the current page of a specific binder (grid views).
         const _ownBinder = (currentBinderId !== null) ? binders.find(x => String(x.id) === String(currentBinderId)) : null;
-        const _ownArt = (_ownBinder && _ownBinder.page_art && effectiveView === '3x3') ? (_ownBinder.page_art[String(binderPage + 1)] || null) : null;
+        const _ownArt = _artEntry(_ownBinder, effectiveView, binderPage + 1);
         const _ownNoBleed = !!(_ownArt && _ownArt.bleed === false);
         const _ownRegions = (_ownArt && Array.isArray(_ownArt.regions)) ? _ownArt.regions : null;
         const _artCols = effectiveView === '2x2' ? 2 : effectiveView === '1x1' ? 1 : 3;
@@ -15365,31 +15388,20 @@ function _loadAdmin(){
       if (!srcId) return;
       var b = binders.find(function(x){ return String(x.id) === String(currentBinderId); });
       if (!b) return;
-      // Slot-pinning is 3x3-only (art/pocket indices are 3x3). In 2x2 / 1x1 the
-      // binder packs, so an empty-slot drop just moves the card to the end.
-      if (binderView !== '3x3') {
-        var sg = collectionItems.findIndex(function(c){ return String(c.id) === String(srcId); });
-        if (sg === -1) return;
-        var moved = collectionItems.splice(sg, 1)[0];
-        var bcs = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
-        if (!bcs.length) collectionItems.push(moved);
-        else { var gl0 = collectionItems.findIndex(function(c){ return String(c.id) === String(bcs[bcs.length - 1].id); }); collectionItems.splice(gl0 + 1, 0, moved); }
-        renderBinder();
-        clearTimeout(binderSaveTimer); binderSaveTimer = setTimeout(saveBinderOrder, 600);
-        return;
-      }
-      var per = 9;
+      var view = (binderView === '2x2' || binderView === '1x1') ? binderView : '3x3';
+      var cols = _viewCols(view), per = cols * cols;
       var page = binderPage;
-      // Art-region pockets per page (image slots — never card slots).
-      var pa0 = b.page_art || {}, regionPk = {};
-      Object.keys(pa0).forEach(function(k){
-        var arr = []; if (Array.isArray(pa0[k].regions)) pa0[k].regions.forEach(function(r){ (r.pockets || []).forEach(function(p){ arr.push(p); }); });
-        regionPk[parseInt(k, 10) - 1] = arr;
+      // Art-region pockets per page (image slots — never card slots) for THIS view.
+      var regionPk = {};
+      Object.keys(b.page_art || {}).forEach(function(k){
+        var pageStr; if (view === '3x3') { if (!/^\d+$/.test(k)) return; pageStr = k; } else { var pf = view + ':'; if (k.indexOf(pf) !== 0) return; pageStr = k.slice(pf.length); if (!/^\d+$/.test(pageStr)) return; }
+        var arr = []; if (Array.isArray(b.page_art[k].regions)) b.page_art[k].regions.forEach(function(r){ (r.pockets || []).forEach(function(p){ arr.push(p); }); });
+        regionPk[parseInt(pageStr, 10) - 1] = arr;
       });
       if ((regionPk[page] || []).indexOf(slot) !== -1) return; // art pocket — not droppable
-      // Current card positions from the live flow layout.
+      // Current card positions from the live flow layout (this view's pockets).
       var cards = collectionItems.filter(function(c){ return !c.sold_offline && String(c.binder_id) === String(currentBinderId); });
-      var layout = _pageFlowLayout(cards, per, _orgBlanksByPage(b));
+      var layout = _pageFlowLayout(cards, per, _blanksByView(b, view));
       var pos = {};
       for (var p = 0; p < layout.length; p++) { for (var s = 0; s < layout[p].length; s++) { var it = layout[p][s]; if (it) pos[String(it.id)] = { page: p, slot: s }; } }
       pos[String(srcId)] = { page: page, slot: slot }; // move dragged to the drop target
@@ -15402,7 +15414,7 @@ function _loadAdmin(){
       Object.keys(lastSlot).forEach(function(pp){
         var rpk = regionPk[pp] || [], blanks = [];
         for (var s = 0; s <= lastSlot[pp]; s++) { if (!(occ[pp] && occ[pp][s]) && rpk.indexOf(s) === -1) blanks.push(s); }
-        var key = String(parseInt(pp, 10) + 1), entry = Object.assign({}, newPa[key] || {});
+        var key = _artKey(view, parseInt(pp, 10) + 1), entry = Object.assign({}, newPa[key] || {});
         entry.blanks = blanks;
         if (!blanks.length && !(Array.isArray(entry.regions) && entry.regions.length) && !entry.bg && !entry.bgUrl) delete newPa[key];
         else newPa[key] = entry;
