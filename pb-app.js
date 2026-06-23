@@ -26386,7 +26386,7 @@ function _loadAdmin(){
           let useCreatedAt = true;
           let firstErr = null;
           while (true) {
-            const cols = useCreatedAt ? 'set_name, set_code, created_at' : 'set_name, set_code';
+            const cols = useCreatedAt ? 'set_name, set_code, created_at, release_date' : 'set_name, set_code, release_date';
             const res = await sb.from('catalog')
               .select(cols)
               .or('id.like.jp-%,id.like.pd-%')
@@ -26409,22 +26409,28 @@ function _loadAdmin(){
           }
           if (firstErr) throw new Error(firstErr.message || 'catalog query failed');
 
-          // Group by set_code, count cards, track max(created_at) if available
+          // Group by set_code, count cards, track max(release_date) and
+          // max(created_at). release_date (ISO yyyy-mm-dd) sorts lexically.
           const byCode = {};
           allRows.forEach(r => {
             const key = r.set_code || r.set_name || '?';
-            if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0, max_created_at: 0 };
+            if (!byCode[key]) byCode[key] = { set_name: r.set_name || r.set_code || '?', set_code: r.set_code || '', total: 0, max_created_at: 0, max_release: '' };
             byCode[key].total++;
             if (useCreatedAt && r.created_at) {
               const t = new Date(r.created_at).getTime();
               if (t > byCode[key].max_created_at) byCode[key].max_created_at = t;
             }
+            if (r.release_date && r.release_date > byCode[key].max_release) byCode[key].max_release = r.release_date;
           });
           const sets = Object.values(byCode).sort((a, b) => {
-            if (useCreatedAt) {
-              const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
-              if (dt !== 0) return dt;
-            }
+            // Primary: release_date DESC (newest first); undated sinks to bottom.
+            const ad = a.max_release || '', bd = b.max_release || '';
+            if (ad && bd && ad !== bd) return bd.localeCompare(ad);
+            if (ad && !bd) return -1;
+            if (bd && !ad) return  1;
+            // Secondary: catalog recency, then alphabetical.
+            const dt = (b.max_created_at || 0) - (a.max_created_at || 0);
+            if (dt !== 0) return dt;
             return (a.set_name || '').localeCompare(b.set_name || '');
           });
           _jpSetsCache = { timestamp: now, sets };
@@ -26475,6 +26481,12 @@ function _loadAdmin(){
     async function loadJpSetDetail(setCode, setName) {
       const el = document.getElementById('setsPageContent');
       if (!el) return;
+      // SEALED view: route to the sealed-products renderer (it picks the JP id
+      // prefix). Without this, JP sets always showed singles even with the
+      // SEALED toggle on.
+      if (_setsView === 'sealed') {
+        return _renderSealedProductsForSet(setCode, setName, el);
+      }
       el.innerHTML = `<div style="padding:12px 0 8px">
         <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
         <div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>
@@ -26955,7 +26967,7 @@ function _loadAdmin(){
         // _v3 — busted on 2026-06-06 to force a fresh fetch+enrich for
         // every user, picking up the newly-mirrored MTG logo_urls and
         // YGO release_dates that _v2 caches were missing.
-        const LS_KEY  = 'pathbinder_tcg_sets_' + gameKey + '_v3';
+        const LS_KEY  = 'pathbinder_tcg_sets_' + gameKey + '_v4';
         let cachedBlock = _tcgSetsCache[gameKey];
 
         if (!cachedBlock || (now - cachedBlock.timestamp > MEM_TTL)) {
@@ -27077,6 +27089,11 @@ function _loadAdmin(){
       if (!cfg) return;
       const el = document.getElementById('setsPageContent');
       if (!el) return;
+      // SEALED view: route to the sealed-products renderer (picks the per-game
+      // id prefix). Without this, these sets showed singles with SEALED on.
+      if (_setsView === 'sealed') {
+        return _renderSealedProductsForSet(setCode, setName, el);
+      }
       el.innerHTML = `<div style="padding:12px 0 8px">
         <button onclick="loadSetsPage()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.82rem;margin-bottom:12px;padding:0">← Sets</button>
         <div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>

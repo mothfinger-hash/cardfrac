@@ -55,8 +55,16 @@ DELAY          = 0.05   # seconds between image HEAD requests
 # ══════════════════════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Update JP card image URLs from pokedata.io CDN")
 parser.add_argument("--only",         type=str,  default=None, help="Only process this set (name or code)")
+parser.add_argument("--pokedata-name", dest="pokedata_name", type=str, default=None,
+                    help="Use THIS name for the pokedata CDN image folder while "
+                         "leaving the catalog set_name untouched. Use when you "
+                         "trust the catalog's name (e.g. PC's 'Abyss Eye') but "
+                         "pokedata files the images under a different spelling "
+                         "(e.g. 'Abyss Eve').")
 parser.add_argument("--upload",       action="store_true",   help="Upload images to Supabase Storage (otherwise just update image_url to CDN URL)")
 parser.add_argument("--list-sets",    action="store_true",   help="Print all JP sets pokedata knows about and exit")
+parser.add_argument("--dump-set",     type=str, default=None, help="Diagnostic: fetch the pokedata set PAGE for this name and print its __NEXT_DATA__ card structure (keys + a sample card), then exit.")
+parser.add_argument("--set-dates",    action="store_true", help="Backfill catalog.release_date for EVERY JP set from pokedata's set list (matched by name/code). Sets with no pokedata match are left untouched. Honors --dry-run.")
 parser.add_argument("--dry-run",      action="store_true",   help="Check images but don't update catalog")
 parser.add_argument("--fill-missing", action="store_true",   help="For JP sets in pokedata but NOT in catalog, probe CDN and create new entries")
 args = parser.parse_args()
@@ -150,6 +158,20 @@ def upload_to_storage(path, img_bytes):
 def _str(val):
     return val if isinstance(val, str) else ""
 
+def _to_iso_date(s):
+    """Normalize pokedata's release_date to YYYY-MM-DD. Handles ISO
+    ('2026-05-22') and RFC-2822 ('Fri, 22 May 2026 00:00:00 GMT')."""
+    s = _str(s).strip()
+    if not s:
+        return None
+    if re.match(r'^\d{4}-\d{2}-\d{2}', s):
+        return s[:10]
+    try:
+        from email.utils import parsedate_to_datetime
+        return parsedate_to_datetime(s).date().isoformat()
+    except Exception:
+        return None
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FETCH POKEDATA SET LIST
@@ -173,15 +195,40 @@ print(f"  Found {len(jp_sets)} Japanese sets")
 pokedata_by_name = {}   # "nihil zero"    → "Nihil Zero"
 pokedata_by_code = {}   # "m3"            → "Nihil Zero"
 pokedata_name_to_code = {}  # "nihil zero" → "m3"
+pokedata_date_by_name = {}  # "nihil zero" → "2024-01-26"
+pokedata_date_by_code = {}  # "m3"         → "2024-01-26"
 for s in jp_sets:
     name = _str(s.get("name"))
     code = _str(s.get("code"))
+    iso  = _to_iso_date(s.get("release_date"))
     if name:
         pokedata_by_name[name.lower()] = name
+        if iso: pokedata_date_by_name[name.lower()] = iso
     if code:
         pokedata_by_code[code.lower()] = name
+        if iso: pokedata_date_by_code[code.lower()] = iso
     if name and code:
         pokedata_name_to_code[name.lower()] = code.lower()
+
+if args.dump_set:
+    import pprint
+    print(f"Fetching cards API for '{args.dump_set}'…")
+    r = _session.get(f"{POKEDATA_BASE}/api/cards",
+                     params={"set_name": args.dump_set, "tcg": "", "stats": "kwan"},
+                     timeout=REQUEST_TIMEOUT)
+    print(f"  GET {r.url}  → HTTP {r.status_code}")
+    try:
+        data = r.json()
+    except Exception:
+        print(r.text[:600]); sys.exit("✗ Response wasn't JSON.")
+    cards = data if isinstance(data, list) else (data.get("cards") or data.get("data") or [])
+    print(f"  {len(cards)} cards returned")
+    if cards:
+        print("  sample card keys:", list(cards[0].keys()))
+        pprint.pprint(cards[0])
+    else:
+        pprint.pprint(data)
+    sys.exit(0)
 
 if args.list_sets:
     for s in jp_sets:
@@ -193,6 +240,55 @@ if args.list_sets:
         print(f"  {code:8s}  {name:35s}  {series:20s}  {rel}")
         if cdn_sample:
             print(f"           CDN: {cdn_sample}")
+    sys.exit(0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SET DATES — backfill catalog.release_date for every JP set from pokedata
+# ══════════════════════════════════════════════════════════════════════════════
+if args.set_dates:
+    print("\nBackfilling catalog.release_date for JP sets from pokedata…")
+    # Distinct JP catalog sets across jp- and pd- prefixes.
+    seen = {}
+    for _pfx in ("jp-%", "pd-%"):
+        _off = 0
+        while True:
+            res = sb.table("catalog").select("set_name,set_code").like("id", _pfx).range(_off, _off + 999).execute()
+            chunk = res.data or []
+            for r in chunk:
+                seen[(_str(r.get("set_name")), _str(r.get("set_code")))] = True
+            if len(chunk) < 1000:
+                break
+            _off += 1000
+    print(f"  {len(seen)} distinct JP sets in catalog")
+
+    matched = 0
+    unmatched = []
+    for (sn, sc) in sorted(seen):
+        date = (pokedata_date_by_name.get(sn.lower())
+                or pokedata_date_by_code.get(sc.lower()))
+        if not date:
+            unmatched.append(sn or sc)        # no pokedata date → leave unchanged
+            continue
+        matched += 1
+        label = (sn or sc)[:42]
+        if args.dry_run:
+            print(f"  [dry] {label:42s} → {date}")
+        else:
+            for _pfx in ("jp-%", "pd-%"):
+                q = sb.table("catalog").update({"release_date": date})
+                q = q.eq("set_code", sc) if sc else q.eq("set_name", sn)
+                try:
+                    q.like("id", _pfx).execute()
+                except Exception as e:
+                    print(f"    ✗ {label}: {e}")
+            print(f"  ✓ {label:42s} → {date}")
+
+    print(f"\n  Done. matched={matched}  unmatched={len(unmatched)} (left unchanged)")
+    if unmatched:
+        print("  Unmatched (no pokedata date — date NOT touched):")
+        for u in unmatched[:80]:
+            print(f"    - {u}")
     sys.exit(0)
 
 
@@ -256,8 +352,11 @@ total_missing = 0
 total_skipped = 0
 
 for (set_name, set_code), cards in cards_by_set.items():
-    # Find the pokedata display name for this set
-    pd_name = (pokedata_by_name.get(set_name.lower())
+    # Find the pokedata display name for this set. An explicit --pokedata-name
+    # wins (used when the catalog name and pokedata's folder spelling differ
+    # and we want to KEEP the catalog name).
+    pd_name = (args.pokedata_name
+               or pokedata_by_name.get(set_name.lower())
                or pokedata_by_code.get(set_code.lower())
                or pokedata_by_name.get(set_code.lower()))
 
@@ -288,7 +387,7 @@ for (set_name, set_code), cards in cards_by_set.items():
 
         final_url = cdn_url
 
-        if args.upload:
+        if args.upload and not args.dry_run:
             img_bytes = download_image(cdn_url)
             if img_bytes:
                 storage_path = f"jp/{set_code or set_name}/{card_num}.webp"
@@ -302,9 +401,12 @@ for (set_name, set_code), cards in cards_by_set.items():
             # stored. This is what turns Japanese set names into clean
             # English ones in one pass.
             patch = {"image_url": final_url}
-            existing_name = _str(card.get("set_name"))
-            if pd_name and pd_name != existing_name:
-                patch["set_name"] = pd_name
+            # Keep the catalog's own set_name when --pokedata-name is used (the
+            # whole point is to trust PC's name while reading pokedata images).
+            if not args.pokedata_name:
+                existing_name = _str(card.get("set_name"))
+                if pd_name and pd_name != existing_name:
+                    patch["set_name"] = pd_name
             sb.table("catalog").update(patch).eq("id", card["id"]).execute()
 
         set_updated += 1

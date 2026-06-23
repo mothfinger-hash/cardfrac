@@ -196,6 +196,28 @@ TCG_CONFIG = {
             "one-piece-wings-of-the-captain",
         ],
     },
+    # ── Pokemon Japanese singles (PC data + pokedata images) ───────────
+    # JP set slugs are "pokemon-japanese-<set>". Pulling PC here gives each
+    # single a pricecharting_id + price_source_url up front (no later
+    # backfill). Inserts use id `jp-pc-{pcid}` so they match the app's JP
+    # Sets view (`id like 'jp-%'`). Stripping the full "pokemon-japanese-"
+    # prefix yields a clean set_code/set_name (e.g. "abyss-eye" / "Abyss
+    # Eye") that lines up with pokedata, so fetch_jp_pokedata.py can swap in
+    # the card images afterward. Use --set-name/--set-code to override the
+    # derived keys for oddly-slugged sets.
+    "pokemon-jp": {
+        "search_term":   "pokemon japanese",
+        "slug_prefix":   "pokemon-japanese-",
+        "game_type":     "pokemon",
+        "id_prefix":     "jp",
+        "exclude":       [],
+        # CRITICAL: the Pokémon catalog is huge and multi-set/multi-language,
+        # so the default whole-catalog "match by number-or-name alone" would
+        # wrongly attach JP cards onto English rows. Scope matching to THIS set
+        # only — a brand-new JP set then has no matches and every card inserts
+        # fresh as jp-pc-{id}. (Gundam/DBZ don't set this: small unique catalogs.)
+        "scope_to_set":  True,
+    },
     # ── Pokemon Topps (Topps Co., 1999–2000) ───────────────────────────
     # Slug prefix "pokemon-" is too broad (overlaps with the official
     # Pokemon TCG sets), so we use slug_contains="topps" as the
@@ -559,6 +581,12 @@ def build_catalog_index(catalog_rows, slug, cfg):
         'by_name':       {'destinygundam': [row, ...]},
       }
     """
+    # Set-scoped matching (e.g. pokemon-jp): only index rows in the SAME set
+    # as the slug, so JP cards can't match English rows by bare number/name.
+    if cfg.get("scope_to_set"):
+        tgt = _norm(slug.replace(cfg["slug_prefix"], ""))
+        catalog_rows = [r for r in catalog_rows
+                        if _norm(r.get("set_code")) == tgt or _norm(r.get("set_name")) == tgt]
     by_code      = {}
     by_name_code = {}
     by_name      = {}
@@ -612,6 +640,13 @@ def main():
     ap.add_argument("--probe", action="store_true",
                     help="List discovered sets + card counts; don't touch catalog.")
     ap.add_argument("--only", help="Process only this set slug (e.g. gundam-phantom-aria).")
+    ap.add_argument("--set-name", dest="set_name", default=None,
+                    help="Override the set_name on --create-missing inserts "
+                         "(default: derived from slug). Pin to the pokedata set "
+                         "name so fetch_jp_pokedata.py can match images.")
+    ap.add_argument("--set-code", dest="set_code", default=None,
+                    help="Override the set_code on --create-missing inserts "
+                         "(default: slug minus prefix).")
     ap.add_argument("--dry-run", action="store_true",
                     help="Show what would be enriched, don't PATCH.")
     ap.add_argument("--create-missing", action="store_true",
@@ -739,8 +774,8 @@ def main():
                     payload = {
                         "id":               new_id,
                         "name":             pc["name"],
-                        "set_code":         slug.replace(cfg["slug_prefix"], ""),
-                        "set_name":         slug.replace(cfg["slug_prefix"], "").replace("-", " ").title(),
+                        "set_code":         args.set_code or slug.replace(cfg["slug_prefix"], ""),
+                        "set_name":         args.set_name or slug.replace(cfg["slug_prefix"], "").replace("-", " ").title(),
                         "card_number":      pc.get("card_number"),
                         "game_type":        cfg["game_type"],
                         "product_type":     "single",
