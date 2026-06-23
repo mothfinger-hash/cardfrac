@@ -1,19 +1,34 @@
 import Stripe from 'npm:stripe@14'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
-  apiVersion: '2024-06-20',
-})
-
 // Service role client — bypasses RLS so webhook can update any row
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
+// Mode-aware secret selection — mirrors create-checkout-session. STRIPE_MODE
+// ('test'|'live') picks <NAME>_TEST / <NAME>_LIVE; unset uses legacy unsuffixed.
+function envForMode(base: string): string | undefined {
+  const m = (Deno.env.get('STRIPE_MODE') || '').toLowerCase()
+  if (m === 'test') return Deno.env.get(`${base}_TEST`)
+  if (m === 'live') return Deno.env.get(`${base}_LIVE`) ?? Deno.env.get(base)
+  return Deno.env.get(base)
+}
+
 Deno.serve(async (req) => {
   const sig = req.headers.get('stripe-signature')
   if (!sig) return new Response('Missing stripe-signature', { status: 400 })
+
+  // Build the Stripe client per-request so a missing STRIPE_SECRET_KEY returns
+  // a clean error instead of crashing the function on boot. Mode-aware.
+  const stripeKey = envForMode('STRIPE_SECRET_KEY')
+  const webhookSecret = envForMode('STRIPE_WEBHOOK_SECRET')
+  if (!stripeKey || !webhookSecret) {
+    console.error(`Stripe not configured for STRIPE_MODE=${Deno.env.get('STRIPE_MODE') || 'unset'} (need STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET, optionally _TEST/_LIVE)`)
+    return new Response('Server not configured', { status: 500 })
+  }
+  const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
 
   // Read raw body for signature verification — must NOT parse as JSON first
   const body = await req.text()
@@ -23,7 +38,7 @@ Deno.serve(async (req) => {
     event = stripe.webhooks.constructEvent(
       body,
       sig,
-      Deno.env.get('STRIPE_WEBHOOK_SECRET')!
+      webhookSecret
     )
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message)

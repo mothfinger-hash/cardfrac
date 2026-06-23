@@ -1,0 +1,18 @@
+# Supabase CLI config.
+# Pins per-function settings so `supabase functions deploy` keeps the right
+# behavior without remembering CLI flags.
+#
+# Both Stripe functions run with gateway JWT verification OFF and do their own
+# auth instead:
+#   • create-checkout-session — verifies the caller via supabase.auth.getUser()
+#     on the Bearer token (so the no-token CORS preflight can still reach it).
+#   • stripe-webhook — has no Supabase JWT (Stripe calls it); it authenticates
+#     via the Stripe signature (constructEvent + STRIPE_WEBHOOK_SECRET). It MUST
+#     be no-verify or every Stripe event would be rejected 401.
+project_id = "xjamytrhxeaynywcwfun"
+
+[functions.create-checkout-session]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false

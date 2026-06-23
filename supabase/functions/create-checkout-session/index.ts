@@ -1,40 +1,32 @@
 import Stripe from 'npm:stripe@14'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
-  apiVersion: '2024-06-20',
-})
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// ── Stripe Price ID map ───────────────────────────────────────────────────────
-// Store these in Supabase Edge Function secrets (Dashboard → Edge Functions → Secrets):
-//   STRIPE_PRICE_COLLECTOR_MONTHLY    ($5/mo,  no annual)
-//   STRIPE_PRICE_ENTHUSIAST_MONTHLY   ($20/mo)
-//   STRIPE_PRICE_ENTHUSIAST_ANNUAL    ($199.99/yr — 17% off)
-//   STRIPE_PRICE_VENDOR_MONTHLY       ($75/mo)
-//   STRIPE_PRICE_VENDOR_ANNUAL        ($719.99/yr — 20% off)
-//   STRIPE_PRICE_SHOP_MONTHLY         ($200/mo)
-//   STRIPE_PRICE_SHOP_ANNUAL          ($1,800/yr — 25% off)
-//
-// Tier renamed from old vendor ($25/mo) to enthusiast ($20/mo, 40 listing cap).
-// New vendor tier ($75/mo, 150 listings, product scanner) added on top.
+// ── Stripe mode + secret selection ─────────────────────────────────────────
+// Flip STRIPE_MODE between 'test' and 'live' to switch the WHOLE app without
+// re-entering anything. Store both sets of secrets side by side:
+//   test → <NAME>_TEST   live → <NAME>_LIVE   (legacy unsuffixed = treated as live)
+// With STRIPE_MODE unset, the legacy unsuffixed names are used (back-compat).
+//   Keys:    STRIPE_SECRET_KEY[_TEST|_LIVE]
+//   Webhook: STRIPE_WEBHOOK_SECRET[_TEST|_LIVE]   (used by stripe-webhook)
+//   Prices:  STRIPE_PRICE_<TIER>_<BILLING>[_TEST|_LIVE]
+//            tiers: collector|enthusiast|vendor|shop  billing: monthly|annual
+//            (collector $5/mo only; enthusiast $20/mo, vendor $75/mo, shop $200/mo)
+function envForMode(base: string): string | undefined {
+  const m = (Deno.env.get('STRIPE_MODE') || '').toLowerCase()
+  if (m === 'test') return Deno.env.get(`${base}_TEST`)                        // test: strict — never falls back to live
+  if (m === 'live') return Deno.env.get(`${base}_LIVE`) ?? Deno.env.get(base)  // live: _LIVE or legacy unsuffixed
+  return Deno.env.get(base)                                                    // no mode set: legacy unsuffixed
+}
+
 function getPriceId(tier: string, billing: string): string {
-  const map: Record<string, string> = {
-    'collector_monthly':  Deno.env.get('STRIPE_PRICE_COLLECTOR_MONTHLY')  || '',
-    'enthusiast_monthly': Deno.env.get('STRIPE_PRICE_ENTHUSIAST_MONTHLY') || '',
-    'enthusiast_annual':  Deno.env.get('STRIPE_PRICE_ENTHUSIAST_ANNUAL')  || '',
-    'vendor_monthly':     Deno.env.get('STRIPE_PRICE_VENDOR_MONTHLY')     || '',
-    'vendor_annual':      Deno.env.get('STRIPE_PRICE_VENDOR_ANNUAL')      || '',
-    'shop_monthly':       Deno.env.get('STRIPE_PRICE_SHOP_MONTHLY')       || '',
-    'shop_annual':        Deno.env.get('STRIPE_PRICE_SHOP_ANNUAL')        || '',
-  }
-  const key = `${tier}_${billing}`
-  const priceId = map[key]
-  if (!priceId) throw new Error(`No Stripe Price ID configured for ${key}`)
+  const base = `STRIPE_PRICE_${tier.toUpperCase()}_${billing.toUpperCase()}`
+  const priceId = envForMode(base)
+  if (!priceId) throw new Error(`No Stripe Price ID for ${tier}_${billing} (set ${base}[_TEST|_LIVE], STRIPE_MODE=${Deno.env.get('STRIPE_MODE') || 'unset'})`)
   return priceId
 }
 
@@ -44,6 +36,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Build the Stripe client per-request (NOT at module load) so a missing
+    // STRIPE_SECRET_KEY surfaces as a clean JSON error instead of crashing the
+    // function on boot — which would make even the OPTIONS preflight fail and
+    // show up in the browser as a confusing CORS error.
+    const stripeKey = envForMode('STRIPE_SECRET_KEY')
+    if (!stripeKey) throw new Error(`STRIPE_SECRET_KEY not set for STRIPE_MODE=${Deno.env.get('STRIPE_MODE') || 'unset'} (set STRIPE_SECRET_KEY[_TEST|_LIVE])`)
+    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
+
     // Authenticate via JWT
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,

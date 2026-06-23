@@ -12719,7 +12719,7 @@ function _loadAdmin(){
       if (!grid) return;
       const current = userTier();
 
-      grid.innerHTML = TIER_DEFS.filter(t => t.id !== 'shop').map(t => {
+      grid.innerHTML = TIER_DEFS.map(t => {
         const isCurrent = t.id === current;
 
         // ── Price line ──────────────────────────────────────────────────
