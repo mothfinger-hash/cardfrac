@@ -204,7 +204,25 @@ async function handleMarketplacePurchase(session) {
   const platformFee = parseInt(meta.platform_fee || 0);
   const sellerPayout = amountCents - platformFee;
 
-  const { error: orderErr } = await sb.from('orders').insert({
+  // Buyer shipping address, captured by Checkout's shipping_address_collection.
+  // Lives on session.shipping_details (name + address) + customer_details
+  // (email/phone). The seller reads these to buy a Shippo label. Wrapped so a
+  // pre-migration DB (missing ship_to_* columns) doesn't fail the insert.
+  const ship = (session.shipping_details && session.shipping_details.address) || {};
+  const cust = session.customer_details || {};
+  const shipTo = {
+    ship_to_name:    (session.shipping_details && session.shipping_details.name) || cust.name || null,
+    ship_to_street1: ship.line1 || null,
+    ship_to_street2: ship.line2 || null,
+    ship_to_city:    ship.city || null,
+    ship_to_state:   ship.state || null,
+    ship_to_zip:     ship.postal_code || null,
+    ship_to_country: ship.country || 'US',
+    ship_to_phone:   cust.phone || null,
+    ship_to_email:   cust.email || null,
+  };
+
+  const baseOrder = {
     listing_id:             meta.listing_id || null,
     buyer_id:               meta.buyer_id   || null,
     seller_id:              meta.seller_id  || null,
@@ -215,7 +233,14 @@ async function handleMarketplacePurchase(session) {
     stripe_session_id:      session.id,
     stripe_payment_intent:  session.payment_intent,
     payment_route:          meta.payment_route || 'platform_only',
-  });
+  };
+
+  let { error: orderErr } = await sb.from('orders').insert(Object.assign({}, baseOrder, shipTo));
+  // Graceful fallback if the shipping-address migration hasn't been applied.
+  if (orderErr && /ship_to_/.test(orderErr.message || '')) {
+    console.warn('[webhook] ship_to_* columns missing — inserting order without address');
+    ({ error: orderErr } = await sb.from('orders').insert(baseOrder));
+  }
 
   if (orderErr) {
     console.error('[webhook] order creation error:', orderErr.message);

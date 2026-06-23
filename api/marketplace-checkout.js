@@ -254,6 +254,11 @@ module.exports = async function handler(req, res) {
     },
     success_url: successUrl || process.env.NEXT_PUBLIC_SITE_URL + '?payment=success&type=purchase',
     cancel_url: cancelUrl || process.env.NEXT_PUBLIC_SITE_URL + '?payment=cancelled',
+    // Collect the buyer's shipping address so the seller can buy a label.
+    // Saved onto the order by the webhook (ship_to_* columns). US-only for
+    // now — add country codes here when international shipping is enabled.
+    shipping_address_collection: { allowed_countries: ['US'] },
+    phone_number_collection: { enabled: true },
   };
 
   // Destination-charge wiring — only enabled when the seller has finished

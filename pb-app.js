@@ -9645,11 +9645,206 @@ function _loadAdmin(){
       showToast('Rating submitted — thanks!');
     }
 
+    // ── Ship Order modal (Shippo labels + manual fallback) ──────────────────
+    function _shipVal(id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+    function _shipSetVal(id, v) { var el = document.getElementById(id); if (el) el.value = v == null ? '' : v; }
+    function _shipEsc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+      });
+    }
+
     function openAddTrackingModal(orderId) {
       document.getElementById('trackingOrderId').value = orderId;
       document.getElementById('trackingNumber').value = '';
-      document.getElementById('trackingCarrier').value = '';
+      document.getElementById('trackingCarrier').value = 'USPS';
+
+      // Reset the Shippo sub-UI for a clean open.
+      var ratesBox = document.getElementById('shippoRates'); if (ratesBox) ratesBox.innerHTML = '';
+      var resBox   = document.getElementById('shippoResult'); if (resBox) { resBox.style.display = 'none'; resBox.innerHTML = ''; }
+      var buyBtn   = document.getElementById('shippoBuyBtn'); if (buyBtn) buyBtn.style.display = 'none';
+      var preset   = document.getElementById('shipParcelPreset'); if (preset) preset.value = 'card';
+      var custom   = document.getElementById('shipCustomParcel'); if (custom) custom.style.display = 'none';
+      window._shipSelectedRate = null;
+
+      var o = (typeof orders !== 'undefined' && orders) ? orders.find(function(x){ return x.id === orderId; }) : null;
+      _shipRenderShipTo(o);
+      _shipPrefillFromAddress();
       openModal('addTrackingModal');
+    }
+
+    function _shipRenderShipTo(o) {
+      var el = document.getElementById('shipToDisplay');
+      if (!el) return;
+      if (!o || !o.ship_to_street1) {
+        el.innerHTML = '<span style="color:var(--yellow)">⚠ No shipping address on file for this order — use manual tracking below.</span>';
+        return;
+      }
+      var lines = [
+        o.ship_to_name,
+        o.ship_to_street1,
+        o.ship_to_street2,
+        [o.ship_to_city, o.ship_to_state].filter(Boolean).join(', ') + ' ' + (o.ship_to_zip || '')
+      ];
+      el.innerHTML = lines.filter(function(p){ return p && String(p).trim(); })
+        .map(function(p){ return _shipEsc(p); }).join('<br>');
+    }
+
+    function _shipPrefillFromAddress() {
+      var u = currentUser || {};
+      _shipSetVal('shipFromName',    u.ship_from_name || u.shop_name || u.name || '');
+      _shipSetVal('shipFromStreet1', u.ship_from_street1 || '');
+      _shipSetVal('shipFromStreet2', u.ship_from_street2 || '');
+      _shipSetVal('shipFromCity',    u.ship_from_city || '');
+      _shipSetVal('shipFromState',   u.ship_from_state || '');
+      _shipSetVal('shipFromZip',     u.ship_from_zip || '');
+      _shipSetVal('shipFromPhone',   u.ship_from_phone || '');
+      var saved = document.getElementById('shipFromSaved');
+      if (saved) saved.style.display = u.ship_from_street1 ? 'inline' : 'none';
+    }
+
+    function _shipParcelPresetChange() {
+      var preset = (document.getElementById('shipParcelPreset') || {}).value;
+      var custom = document.getElementById('shipCustomParcel');
+      if (custom) custom.style.display = (preset === 'custom') ? 'flex' : 'none';
+    }
+    function _shipParcelFromForm() {
+      var preset = (document.getElementById('shipParcelPreset') || {}).value || 'card';
+      if (preset === 'bubble')   return { length: 9, width: 6, height: 1, weight: 4 };
+      if (preset === 'smallbox') return { length: 8, width: 6, height: 4, weight: 8 };
+      if (preset === 'custom')   return {
+        length: parseFloat(_shipVal('shipPL')) || 6,
+        width:  parseFloat(_shipVal('shipPW')) || 4,
+        height: parseFloat(_shipVal('shipPH')) || 1,
+        weight: parseFloat(_shipVal('shipPWeight')) || 3,
+      };
+      return { length: 6, width: 4, height: 1, weight: 3 }; // card mailer
+    }
+
+    async function _shipSaveFromAddress() {
+      var a = {
+        ship_from_name:    _shipVal('shipFromName') || null,
+        ship_from_street1: _shipVal('shipFromStreet1') || null,
+        ship_from_street2: _shipVal('shipFromStreet2') || null,
+        ship_from_city:    _shipVal('shipFromCity') || null,
+        ship_from_state:   _shipVal('shipFromState').toUpperCase() || null,
+        ship_from_zip:     _shipVal('shipFromZip') || null,
+        ship_from_phone:   _shipVal('shipFromPhone') || null,
+        ship_from_country: 'US',
+      };
+      var { error } = await sb.from('profiles').update(a).eq('id', currentUser.id);
+      if (!error && currentUser) Object.assign(currentUser, a);
+      return error;
+    }
+
+    async function _shipApi(payload) {
+      var sess = await sb.auth.getSession();
+      var tok = sess && sess.data && sess.data.session && sess.data.session.access_token;
+      var r = await fetch('/api/shippo-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (tok || '') },
+        body: JSON.stringify(payload),
+      });
+      var j = {};
+      try { j = await r.json(); } catch (_) {}
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      return j;
+    }
+
+    async function shippoGetRates() {
+      var orderId = _shipVal('trackingOrderId');
+      if (!orderId) return;
+      if (!_shipVal('shipFromStreet1') || !_shipVal('shipFromCity') || !_shipVal('shipFromState') || !_shipVal('shipFromZip')) {
+        showToast('Fill in your return address first');
+        return;
+      }
+      var btn = document.getElementById('shipRatesBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Getting rates…'; }
+      try {
+        var saveErr = await _shipSaveFromAddress();
+        if (saveErr) throw new Error('Could not save return address: ' + saveErr.message);
+        var data = await _shipApi({ action: 'rates', orderId: orderId, parcel: _shipParcelFromForm() });
+        _shipRenderRates(data.rates || []);
+      } catch (e) {
+        var box = document.getElementById('shippoRates');
+        if (box) box.innerHTML = '<div style="color:var(--red);font-size:.78rem">' + _shipEsc(e.message || 'Could not get rates') + '</div>';
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Get Rates'; }
+      }
+    }
+
+    function _shipRenderRates(rates) {
+      window._shipRates = rates;
+      window._shipSelectedRate = null;
+      var box = document.getElementById('shippoRates');
+      var buyBtn = document.getElementById('shippoBuyBtn');
+      if (buyBtn) buyBtn.style.display = 'none';
+      if (!box) return;
+      if (!rates.length) { box.innerHTML = '<div style="color:var(--muted);font-size:.78rem">No rates available for this package.</div>'; return; }
+      box.innerHTML = rates.map(function(r) {
+        var days = r.days ? (r.days + ' day' + (r.days === 1 ? '' : 's')) : '—';
+        return '<label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);margin-bottom:6px;cursor:pointer">' +
+          '<input type="radio" name="shipRate" value="' + _shipEsc(r.rate_id) + '" data-carrier="' + _shipEsc(r.provider || '') + '" onchange="_shipSelectRate(this.value, this.dataset.carrier)" style="accent-color:var(--accent)">' +
+          '<span style="flex:1;font-size:.8rem;color:var(--text)"><strong>' + _shipEsc(r.provider || '') + '</strong> · ' + _shipEsc(r.servicelevel || '') + '</span>' +
+          '<span style="font-size:.8rem;color:var(--green);font-weight:700">$' + _shipEsc(r.amount) + '</span>' +
+          '<span style="font-size:.62rem;color:var(--muted);min-width:46px;text-align:right">' + days + '</span>' +
+        '</label>';
+      }).join('');
+    }
+    function _shipSelectRate(rateId, carrier) {
+      window._shipSelectedRate = { rateId: rateId, carrier: carrier };
+      var buyBtn = document.getElementById('shippoBuyBtn');
+      if (buyBtn) buyBtn.style.display = 'block';
+    }
+
+    async function shippoBuyLabel() {
+      var orderId = _shipVal('trackingOrderId');
+      var sel = window._shipSelectedRate;
+      if (!orderId || !sel) { showToast('Select a rate first'); return; }
+      var buyBtn = document.getElementById('shippoBuyBtn');
+      if (buyBtn) { buyBtn.disabled = true; buyBtn.textContent = 'Buying label…'; }
+      try {
+        var data = await _shipApi({ action: 'buy', orderId: orderId, rateId: sel.rateId, carrier: sel.carrier });
+
+        var o = orders.find(function(x){ return x.id === orderId; });
+        if (o) {
+          o.tracking_number = data.tracking_number;
+          o.tracking_carrier = data.carrier;
+          o.status = 'shipped';
+          o.shippo_label_url = data.label_url;
+        }
+
+        // Same inventory bookkeeping as the manual saveTracking path.
+        try {
+          if (o && o.listing_id && currentUser && o.seller_id === currentUser.id) {
+            var sr = await sb.from('listings').select('api_card_id, variant, quantity').eq('id', o.listing_id).maybeSingle();
+            var snap = sr.data;
+            if (snap && snap.api_card_id) {
+              await _invOnListingShipped(currentUser.id, snap.api_card_id, snap.variant || 'normal', (o.quantity || 1));
+            }
+          }
+        } catch (e) { console.warn('[inv] ship bookkeeping failed:', e && e.message); }
+
+        var resBox = document.getElementById('shippoResult');
+        if (resBox) {
+          resBox.style.display = 'block';
+          resBox.innerHTML = '<div style="padding:10px 12px;border:1px solid var(--green);background:rgba(26,199,160,.06)">' +
+            '<div style="color:var(--green);font-size:.82rem;font-weight:700;margin-bottom:4px">✓ Label purchased</div>' +
+            '<div style="font-size:.74rem;color:var(--muted);margin-bottom:8px">' + _shipEsc(data.carrier || '') + ' · ' + _shipEsc(data.tracking_number || '') + '</div>' +
+            (data.label_url ? '<a href="' + _shipEsc(data.label_url) + '" target="_blank" rel="noopener" style="display:inline-block;padding:9px 14px;background:var(--accent);color:var(--text-on-accent);text-decoration:none;font-size:.8rem;font-weight:700">Print Label (PDF)</a>' : '') +
+          '</div>';
+        }
+        var ratesBox = document.getElementById('shippoRates'); if (ratesBox) ratesBox.innerHTML = '';
+        if (buyBtn) buyBtn.style.display = 'none';
+
+        showToast('Label purchased — buyer notified.');
+        renderOrders();
+        updateOrderNotification();
+      } catch (e) {
+        showToast(e.message || 'Label purchase failed');
+      } finally {
+        if (buyBtn) { buyBtn.disabled = false; buyBtn.textContent = 'Buy Label & Mark Shipped'; }
+      }
     }
 
     async function saveTracking() {

@@ -2011,29 +2011,82 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
   <!-- ADD TRACKING MODAL -->
   <div class="modal-overlay" id="addTrackingModal">
-    <div class="modal" style="max-width:400px">
+    <div class="modal" style="max-width:460px">
       <button class="modal-close" onclick="closeModal('addTrackingModal')">×</button>
-      <h3>Add Tracking</h3>
-      <p class="modal-sub">Ship the card and enter the tracking details below. Buyer will be notified.</p>
+      <h3>Ship Order</h3>
+      <p class="modal-sub">Buy a prepaid label, or enter your own tracking number below.</p>
       <input type="hidden" id="trackingOrderId" />
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Carrier</label>
-        <select class="atc-input" id="trackingCarrier" style="width:100%">
-          <option value="USPS">USPS</option>
-          <option value="UPS">UPS</option>
-          <option value="FedEx">FedEx</option>
-          <option value="DHL">DHL</option>
-          <option value="Other">Other</option>
+
+      <!-- Buyer ship-to (read-only) -->
+      <div id="shipToBlock" style="margin-bottom:14px;padding:10px 12px;border:1px solid var(--border);background:var(--surface2)">
+        <div style="font-size:.55rem;color:var(--muted);letter-spacing:.08em;margin-bottom:4px">SHIP TO</div>
+        <div id="shipToDisplay" style="font-size:.8rem;color:var(--text);line-height:1.45">—</div>
+      </div>
+
+      <!-- ◈ Buy a label (Shippo) -->
+      <div style="font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:.1em;color:var(--copper);margin:6px 0 10px">◈ BUY A LABEL</div>
+
+      <!-- Seller return address (prefilled; saved for next time) -->
+      <div id="shipFromBlock" style="margin-bottom:12px">
+        <div style="font-size:.55rem;color:var(--muted);letter-spacing:.08em;margin-bottom:6px">YOUR RETURN ADDRESS <span id="shipFromSaved" style="color:var(--green);display:none">· saved</span></div>
+        <input class="atc-input" id="shipFromName" type="text" placeholder="Name or shop name" style="width:100%;margin-bottom:6px" />
+        <input class="atc-input" id="shipFromStreet1" type="text" placeholder="Street address" style="width:100%;margin-bottom:6px" />
+        <input class="atc-input" id="shipFromStreet2" type="text" placeholder="Apt / Suite (optional)" style="width:100%;margin-bottom:6px" />
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <input class="atc-input" id="shipFromCity" type="text" placeholder="City" style="flex:2" />
+          <input class="atc-input" id="shipFromState" type="text" placeholder="State" maxlength="2" style="flex:1;text-transform:uppercase" />
+          <input class="atc-input" id="shipFromZip" type="text" placeholder="ZIP" inputmode="numeric" style="flex:1" />
+        </div>
+        <input class="atc-input" id="shipFromPhone" type="tel" placeholder="Phone (for carrier)" style="width:100%" />
+      </div>
+
+      <!-- Parcel preset -->
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Package</label>
+        <select class="atc-input" id="shipParcelPreset" style="width:100%" onchange="_shipParcelPresetChange()">
+          <option value="card">Card mailer — 6×4×1 in, 3 oz</option>
+          <option value="bubble">Bubble mailer — 9×6×1 in, 4 oz</option>
+          <option value="smallbox">Small box — 8×6×4 in, 8 oz</option>
+          <option value="custom">Custom…</option>
         </select>
       </div>
-      <div class="form-group" style="margin-bottom:18px">
-        <label>Tracking Number *</label>
-        <input class="atc-input" id="trackingNumber" type="text" placeholder="e.g. 9400111899223821234567" style="width:100%" />
+      <div id="shipCustomParcel" style="display:none;gap:6px;margin-bottom:10px">
+        <input class="atc-input" id="shipPL" type="text" inputmode="decimal" placeholder="L in" style="flex:1" />
+        <input class="atc-input" id="shipPW" type="text" inputmode="decimal" placeholder="W in" style="flex:1" />
+        <input class="atc-input" id="shipPH" type="text" inputmode="decimal" placeholder="H in" style="flex:1" />
+        <input class="atc-input" id="shipPWeight" type="text" inputmode="decimal" placeholder="oz" style="flex:1" />
       </div>
-      <div style="display:flex;gap:10px">
-        <button onclick="saveTracking()" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer">Save &amp; Notify Buyer</button>
-        <button onclick="closeModal('addTrackingModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
-      </div>
+
+      <button id="shipRatesBtn" onclick="shippoGetRates()" style="width:100%;padding:11px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;margin-bottom:10px">Get Rates</button>
+
+      <!-- Rates list (filled by JS) -->
+      <div id="shippoRates" style="margin-bottom:10px"></div>
+
+      <!-- Buy button (shown once a rate is selected) -->
+      <button id="shippoBuyBtn" onclick="shippoBuyLabel()" style="display:none;width:100%;padding:12px;background:var(--copper);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;margin-bottom:6px">Buy Label &amp; Mark Shipped</button>
+
+      <!-- Result after purchase -->
+      <div id="shippoResult" style="display:none;margin-bottom:6px"></div>
+
+      <!-- Manual fallback -->
+      <details style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <summary style="cursor:pointer;color:var(--muted);font-size:.78rem">Or enter tracking manually</summary>
+        <div class="form-group" style="margin:12px 0 10px">
+          <label>Carrier</label>
+          <select class="atc-input" id="trackingCarrier" style="width:100%">
+            <option value="USPS">USPS</option>
+            <option value="UPS">UPS</option>
+            <option value="FedEx">FedEx</option>
+            <option value="DHL">DHL</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label>Tracking Number *</label>
+          <input class="atc-input" id="trackingNumber" type="text" placeholder="e.g. 9400111899223821234567" style="width:100%" />
+        </div>
+        <button onclick="saveTracking()" style="width:100%;padding:11px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer">Save Tracking &amp; Notify Buyer</button>
+      </details>
     </div>
   </div>
 
