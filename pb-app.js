@@ -16199,6 +16199,47 @@ function _loadAdmin(){
       return `<div id="${elId}" style="margin-bottom:12px"></div>`;
     }
 
+    // Flip a card's displayed image between the user's uploaded photo and the
+    // stock catalog image — reversibly. card_image_url is "what's shown";
+    // photo_url preserves the upload so we can always switch back. Switching to
+    // stock captures the CURRENT photo into photo_url first (handles freshly
+    // uploaded photos), then pulls the stock image from catalog by api_card_id.
+    window._toggleCardImage = async function(itemId) {
+      var item = collectionItems.find(function(c){ return String(c.id) === String(itemId); });
+      if (!item) return;
+      var cur = item.card_image_url || '';
+      var isPhoto = cur.indexOf('/card-photos/') !== -1;
+      var updates = {};
+      if (isPhoto) {
+        var stock = null;
+        if (item.api_card_id) {
+          try {
+            var r = await sb.from('catalog').select('image_url').eq('id', item.api_card_id).maybeSingle();
+            stock = (r.data && r.data.image_url) || null;
+          } catch (_) {}
+        }
+        if (!stock) { showToast('No stock image available for this card'); return; }
+        updates.photo_url = cur;          // preserve the currently-shown photo
+        updates.card_image_url = stock;
+      } else {
+        if (!item.photo_url) { showToast('No saved photo for this card'); return; }
+        updates.card_image_url = item.photo_url;
+      }
+      try {
+        var res = await sb.from('collection_items').update(updates).eq('id', itemId);
+        if (res.error) {
+          showToast(/photo_url|column|schema/i.test(res.error.message || '')
+            ? 'Run migration_collection_item_photo_url.sql first'
+            : ('Failed: ' + res.error.message));
+          return;
+        }
+      } catch (e) { showToast('Failed: ' + (e.message || 'error')); return; }
+      Object.assign(item, updates);
+      showToast(isPhoto ? '✓ Showing stock image' : '✓ Showing your photo');
+      try { renderCollection(); } catch (_) {}
+      openBinderCardDetail(itemId);
+    };
+
     function openBinderCardDetail(itemId) {
       const item = collectionItems.find(c => String(c.id) === String(itemId));
       if (!item) return;
@@ -16349,6 +16390,11 @@ function _loadAdmin(){
           <div id="cardEditMenu_${item.id}" class="pb-cardedit-menu" style="display:none;position:absolute;top:48px;right:8px;z-index:6">
             <button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');closeModal('binderDetailModal');openEditCardModal('${item.id}')">Edit details</button>
             <button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');openCardPhotoModal('${item.id}')">Edit photo</button>
+            ${(item.card_image_url && item.card_image_url.indexOf('/card-photos/') !== -1 && item.api_card_id)
+                ? `<button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');_toggleCardImage('${item.id}')">Use stock image</button>`
+                : (item.photo_url
+                    ? `<button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');_toggleCardImage('${item.id}')">Use my photo</button>`
+                    : '')}
             ${_bvShowCopies ? `<button class="pb-cardedit-item" onclick="_closeCardEditMenu('${item.id}');_editFirstCopy('${item.id}')">Edit copies</button>` : ''}
           </div>
         </div>
@@ -18506,7 +18552,7 @@ function _loadAdmin(){
           cert_number: certNumber, price_source_url: priceSourceUrl,
           notes, language, binder_id: binderId || null,
         };
-        if (userPhotoUrl) updates.card_image_url = userPhotoUrl;
+        if (userPhotoUrl) { updates.card_image_url = userPhotoUrl; updates.photo_url = userPhotoUrl; }
 
         const { error } = await sb.from('collection_items').update(updates).eq('id', itemId);
         if (error) throw error;
