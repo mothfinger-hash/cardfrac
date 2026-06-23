@@ -91,7 +91,7 @@ module.exports = async function handler(req, res) {
   const { data: seller } = await sb
     .from('profiles')
     // NOTE: Phase 2 adds shippo_oauth_token here once the column + OAuth exist.
-    .select('ship_from_name, ship_from_street1, ship_from_street2, ship_from_city, ship_from_state, ship_from_zip, ship_from_country, ship_from_phone, shop_name, name')
+    .select('ship_from_name, ship_from_street1, ship_from_street2, ship_from_city, ship_from_state, ship_from_zip, ship_from_country, ship_from_phone, shop_name, name, email')
     .eq('id', user.id)
     .single();
 
@@ -116,6 +116,7 @@ module.exports = async function handler(req, res) {
     zip: seller.ship_from_zip,
     country: seller.ship_from_country || 'US',
     phone: seller.ship_from_phone || '',
+    email: seller.email || 'orders@pathbinder.gg',
   };
   const addressTo = {
     name: order.ship_to_name || 'Buyer',
@@ -126,7 +127,7 @@ module.exports = async function handler(req, res) {
     zip: order.ship_to_zip,
     country: order.ship_to_country || 'US',
     phone: order.ship_to_phone || '',
-    email: order.ship_to_email || '',
+    email: order.ship_to_email || 'buyer@pathbinder.gg',
   };
 
   // Parcel — defaults to a padded card mailer (6x4x1 in, 3 oz). The UI can
