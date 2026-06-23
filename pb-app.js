@@ -11598,33 +11598,35 @@ function _loadAdmin(){
     //      (hidden for now per product decision; flip flag when ready)
     window._FEATURE_SHOP_MARKETING = false;
 
+    // Reads go through gated RPCs (admin / self-scoped) — the raw views are no
+    // longer granted to anon/authenticated so shop revenue can't be scraped.
+    // See migration_secure_metrics_views.sql.
+    function _metricsMissing(msg) {
+      var m = String(msg || '').toLowerCase();
+      return m.includes('does not exist') || m.includes('find the function') || m.includes('schema cache');
+    }
     async function _fetchShopTierPlatformMetrics() {
       try {
-        var res = await sb.from('shop_tier_platform_metrics').select('*').maybeSingle();
+        var res = await sb.rpc('get_shop_platform_metrics');
         if (res.error) {
-          if (String(res.error.message || '').toLowerCase().includes('does not exist')) {
-            return { _missing: true };
-          }
+          if (_metricsMissing(res.error.message)) return { _missing: true };
           throw res.error;
         }
-        return res.data || {};
+        var rows = res.data || [];
+        return rows[0] || {};
       } catch (e) {
         return { _error: e.message || String(e) };
       }
     }
     async function _fetchShopSellerMetrics(sellerId) {
       try {
-        var q = sb.from('shop_seller_metrics').select('*');
-        if (sellerId) q = q.eq('seller_id', sellerId).maybeSingle();
-        else          q = q.order('gross_gmv', { ascending: false }).limit(50);
-        var res = await q;
+        var res = await sb.rpc('get_shop_seller_metrics', { p_seller_id: sellerId || null });
         if (res.error) {
-          if (String(res.error.message || '').toLowerCase().includes('does not exist')) {
-            return { _missing: true };
-          }
+          if (_metricsMissing(res.error.message)) return { _missing: true };
           throw res.error;
         }
-        return res.data || (sellerId ? null : []);
+        var rows = res.data || [];
+        return sellerId ? (rows[0] || null) : rows;
       } catch (e) {
         return { _error: e.message || String(e) };
       }
@@ -17905,6 +17907,19 @@ function _loadAdmin(){
         } catch(_) {}
       }
 
+      // Set-prefixed codes ("OP13-066", "GD04-050", "ST04-013", even
+      // "op13-66 sr") never match a name search — route them through a direct
+      // card_number lookup. Covers One Piece / Gundam / Digimon-style codes.
+      if (!cards.length && typeof _pbSetCodeVariants === 'function') {
+        const _otSetCodes = _pbSetCodeVariants(query);
+        if (_otSetCodes.length) {
+          try {
+            const codeRows = await _pbSearchCatalogBySetCode(_otSetCodes, _otPrefix, 1000);
+            if (codeRows && codeRows.length) cards = codeRows.map(_catalogRowToApiShape);
+          } catch(_) {}
+        }
+      }
+
       if (!cards.length) try {
         const { data: rows, error } = await sb.rpc('search_catalog_cards', {
           q: query,
@@ -22786,6 +22801,38 @@ function _loadAdmin(){
       }
       return Array.from(out);
     }
+    function _pbSetCodeVariants(q) {
+      // Set-prefixed hyphenated codes printed at the bottom of One Piece /
+      // Gundam / Digimon / Star-Wars-Unlimited style cards — e.g. "OP13-066",
+      // "GD04-050", "ST04-013", "BT1-001", "EB01-001". Tolerates a lowercase
+      // query, a leading "#", and a trailing rarity token ("op13-66 sr",
+      // "ST04-013 L"). Catalog stores these as the full upper-cased code with
+      // a zero-padded 3-digit number ("OP13-066"), so we emit both the
+      // un-padded and zero-padded forms to cover every sync path. Returns []
+      // when the query isn't a set-code (so callers fall back to name search).
+      if (!q) return [];
+      var s = String(q).trim().replace(/^#\s*/, '');
+      var m = s.match(/^([A-Za-z]{1,4}\d{1,2})-(\d{1,4})(?:\s+[A-Za-z]{1,3}\.?)?$/);
+      if (!m) return [];
+      var prefix = m[1].toUpperCase();
+      var rawNum = m[2].replace(/^0+/, '') || '0';
+      var out = new Set();
+      var maxPad = Math.max(3 - rawNum.length, 0);
+      for (var pad = 0; pad <= maxPad; pad++) {
+        out.add(prefix + '-' + rawNum.padStart(rawNum.length + pad, '0'));
+      }
+      return Array.from(out);
+    }
+    async function _pbSearchCatalogBySetCode(codeVariants, idPrefix, limit) {
+      if (!codeVariants || !codeVariants.length) return [];
+      var query = sb.from('catalog')
+        .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+        .in('card_number', codeVariants)
+        .limit(limit || 1000);
+      if (idPrefix) query = query.ilike('id', idPrefix + '%');
+      var res = await query;
+      return (res.error || !res.data) ? [] : res.data;
+    }
     async function _pbSearchCatalogByCardNumber(numSpec, idPrefix, limit) {
       var variants = _pbCardNumberVariants(numSpec);
       if (!variants.length) return [];
@@ -22824,6 +22871,16 @@ function _loadAdmin(){
           var numRows = await _pbSearchCatalogByCardNumber(cardNum, idPrefix, 1000);
           cards = numRows.map(_catalogRowToApiShape);
         } else if (game !== 'pokemon') {
+          // Set-prefixed code ("OP13-066", "GD04-050", "op13-66 sr") → direct
+          // card_number lookup before any name search.
+          var ftSetCodes = (typeof _pbSetCodeVariants === 'function') ? _pbSetCodeVariants(q) : [];
+          if (ftSetCodes.length) {
+            try {
+              var ftCodeRows = await _pbSearchCatalogBySetCode(ftSetCodes, idPrefix, 1000);
+              if (ftCodeRows && ftCodeRows.length) cards = ftCodeRows.map(_catalogRowToApiShape);
+            } catch(_) {}
+          }
+
           // Non-Pokemon TCGs (magic / yugioh / onepiece): direct
           // catalog table query first. The search_catalog_cards RPC
           // was returning empty for OP even on simple queries like
@@ -22831,7 +22888,7 @@ function _loadAdmin(){
           // (op- / mtg- / ygo-) and an ilike name match — this is
           // reliable across game types regardless of how game_type is
           // populated per row.
-          try {
+          if (!cards.length) try {
             var directQuery = sb.from('catalog')
               .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
               .ilike('name', '%' + q + '%')
