@@ -914,6 +914,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           <label>Referral Code (Optional)</label>
           <input type="text" id="regReferralCode" placeholder="Enter referral code if you have one" />
         </div>
+        <div class="form-group" style="display:flex;align-items:flex-start;gap:8px;text-transform:none">
+          <input type="checkbox" id="regAgree" required style="margin-top:3px;flex-shrink:0;width:auto;accent-color:var(--accent)" />
+          <label for="regAgree" style="font-size:.78rem;color:var(--muted);line-height:1.5;text-transform:none;cursor:pointer">
+            I am 18 or older (or 13+ with a parent or guardian) and agree to the
+            <a href="/terms" target="_blank" rel="noopener" style="color:var(--accent2)">Terms of Service</a> and
+            <a href="/privacy" target="_blank" rel="noopener" style="color:var(--accent2)">Privacy Policy</a>.
+          </label>
+        </div>
         <div id="registerError" class="form-error"></div>
         <button type="submit" class="btn btn-primary">Create Account</button>
         <p style="text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px">
@@ -2087,6 +2095,20 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         </div>
         <button onclick="saveTracking()" style="width:100%;padding:11px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer">Save Tracking &amp; Notify Buyer</button>
       </details>
+    </div>
+  </div>
+
+  <!-- ORDER CONFIRMED MODAL -->
+  <div class="modal-overlay" id="orderConfirmedModal">
+    <div class="modal" style="max-width:420px;text-align:center">
+      <button class="modal-close" onclick="closeModal('orderConfirmedModal')">×</button>
+      <div style="font-size:2.4rem;color:var(--green);line-height:1;margin:8px 0 10px">&#10003;</div>
+      <h3 style="margin-bottom:8px">Order Confirmed</h3>
+      <p class="modal-sub" style="margin-bottom:20px">Your payment went through and the seller has been notified to ship. We&rsquo;ll email you tracking as soon as it&rsquo;s on its way.</p>
+      <div style="display:flex;gap:10px">
+        <button onclick="closeModal('orderConfirmedModal');showPage('account');switchAccountTab('myOrders')" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.86rem;font-weight:700;cursor:pointer">View My Orders</button>
+        <button onclick="closeModal('orderConfirmedModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.86rem;cursor:pointer">Keep Browsing</button>
+      </div>
     </div>
   </div>
 
@@ -3710,6 +3732,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028 14.09 14.09 0 001.226-1.994.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
       DISCORD
     </a>
+  </div>
+
+  <div class="legal-footer" id="legalFooter" style="padding:8px 14px 12px;display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.6rem;letter-spacing:.04em;opacity:.75">
+    <a href="/privacy" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Privacy</a>
+    <a href="/terms" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Terms</a>
+    <a href="/marketplace-terms" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Marketplace</a>
+    <a href="/refund-policy" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Refunds</a>
+    <a href="/acceptable-use" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Acceptable Use</a>
   </div>
 
   <div class="mobile-nav" id="mobileNav">

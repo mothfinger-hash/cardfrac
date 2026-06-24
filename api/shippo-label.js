@@ -20,11 +20,52 @@
 // the platform token — so wiring Shippo OAuth later is a small change here.
 
 const { createClient } = require('@supabase/supabase-js');
+const { renderBuyerShipped, sendOrderEmail } = require('./_lib/order-emails');
 
 const sb = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
+
+// Best-effort buyer "your order shipped" email. Looks up the card name from
+// the listing (if any) and sends to the order's ship-to email. Never throws —
+// a mail failure must not break label purchase or manual tracking.
+async function notifyBuyerShipped(order, tracking) {
+  try {
+    const to = order.ship_to_email;
+    if (!to) return;
+    let cardName = null, setName = null, imageUrl = null;
+    if (order.listing_id) {
+      const { data: l } = await sb.from('listings')
+        .select('name, set_name, photos, api_card_id').eq('id', order.listing_id).maybeSingle();
+      if (l) {
+        cardName = l.name || null;
+        setName = l.set_name || null;
+        // Prefer the listing's own ad photo; fall back to the catalog image.
+        if (Array.isArray(l.photos) && l.photos[0]) imageUrl = l.photos[0];
+        if (!imageUrl && l.api_card_id) {
+          const { data: cat } = await sb.from('catalog')
+            .select('image_url').eq('id', l.api_card_id).maybeSingle();
+          if (cat) imageUrl = cat.image_url || null;
+        }
+      }
+    }
+    const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL || 'https://pathbinder.gg').replace(/\/+$/, '');
+    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) imageUrl = siteOrigin + (imageUrl[0] === '/' ? '' : '/') + imageUrl;
+    const msg = renderBuyerShipped({
+      siteOrigin: siteOrigin,
+      orderId: order.id,
+      cardName: cardName,
+      setName: setName,
+      imageUrl: imageUrl,
+      shipTo: { name: order.ship_to_name },
+      tracking: tracking || {},
+    });
+    await sendOrderEmail({ to: to, subject: msg.subject, html: msg.html, text: msg.text });
+  } catch (e) {
+    console.error('[shippo] shipped email failed:', e && e.message);
+  }
+}
 
 // Mode-aware token selection — mirrors the Stripe STRIPE_MODE switch so the
 // test -> live cutover is a single env change.
@@ -85,6 +126,18 @@ module.exports = async function handler(req, res) {
   if (ordErr || !order) return res.status(404).json({ error: 'Order not found' });
   if (order.seller_id !== user.id) {
     return res.status(403).json({ error: 'You can only ship your own orders' });
+  }
+
+  // ── Manual-tracking path: just email the buyer (no label/address needed) ─
+  // Called by the client after a manual "Save Tracking" so the buyer still
+  // gets the shipped notification when the seller ships outside Shippo.
+  if (action === 'notify_shipped') {
+    await notifyBuyerShipped(order, {
+      carrier: order.tracking_carrier || null,
+      number:  order.tracking_number || null,
+      url:     null,
+    });
+    return res.status(200).json({ ok: true });
   }
 
   // ── Seller (from) + buyer (to) addresses ────────────────────────────────
@@ -198,6 +251,13 @@ module.exports = async function handler(req, res) {
       };
       const { error: upErr } = await sb.from('orders').update(patch).eq('id', orderId);
       if (upErr) console.error('[shippo] order update failed:', upErr.message);
+
+      // Notify the buyer their order shipped (best-effort).
+      await notifyBuyerShipped(order, {
+        carrier: carrier || null,
+        number:  tx.tracking_number || null,
+        url:     tx.tracking_url_provider || null,
+      });
 
       return res.status(200).json({
         tracking_number: tx.tracking_number || null,

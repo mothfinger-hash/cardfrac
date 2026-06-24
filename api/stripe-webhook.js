@@ -18,6 +18,7 @@
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createClient } = require('@supabase/supabase-js');
+const { renderSellerNewOrder, sendOrderEmail } = require('./_lib/order-emails');
 
 const sb = createClient(
   process.env.SUPABASE_URL,
@@ -235,17 +236,18 @@ async function handleMarketplacePurchase(session) {
     payment_route:          meta.payment_route || 'platform_only',
   };
 
-  let { error: orderErr } = await sb.from('orders').insert(Object.assign({}, baseOrder, shipTo));
+  let insertRes = await sb.from('orders').insert(Object.assign({}, baseOrder, shipTo)).select('id').single();
   // Graceful fallback if the shipping-address migration hasn't been applied.
-  if (orderErr && /ship_to_/.test(orderErr.message || '')) {
+  if (insertRes.error && /ship_to_/.test(insertRes.error.message || '')) {
     console.warn('[webhook] ship_to_* columns missing — inserting order without address');
-    ({ error: orderErr } = await sb.from('orders').insert(baseOrder));
+    insertRes = await sb.from('orders').insert(baseOrder).select('id').single();
   }
 
-  if (orderErr) {
-    console.error('[webhook] order creation error:', orderErr.message);
+  if (insertRes.error) {
+    console.error('[webhook] order creation error:', insertRes.error.message);
     return;
   }
+  const newOrderId = insertRes.data && insertRes.data.id;
 
   if (meta.listing_id) {
     await sb.from('listings').update({
@@ -254,7 +256,67 @@ async function handleMarketplacePurchase(session) {
     }).eq('id', meta.listing_id);
   }
 
+  // Notify the seller they made a sale (best-effort — never block the webhook).
+  try {
+    await notifySellerOfSale({
+      orderId: newOrderId,
+      sellerId: meta.seller_id,
+      listingId: meta.listing_id,
+      amount: amountCents / 100,
+      payout: sellerPayout / 100,
+      shipTo: shipTo,
+    });
+  } catch (e) {
+    console.error('[webhook] seller email failed:', e && e.message);
+  }
+
   console.log(`[webhook] order created for listing ${meta.listing_id} via ${meta.payment_route || 'platform_only'}`);
+}
+
+// Best-effort "you made a sale" email to the seller.
+async function notifySellerOfSale(o) {
+  if (!o.sellerId) return;
+  const { data: seller } = await sb.from('profiles')
+    .select('email, name, shop_name').eq('id', o.sellerId).maybeSingle();
+  const to = seller && seller.email;
+  if (!to) return;
+
+  let cardName = null, setName = null, imageUrl = null;
+  if (o.listingId) {
+    const { data: l } = await sb.from('listings')
+      .select('name, set_name, photos, api_card_id').eq('id', o.listingId).maybeSingle();
+    if (l) {
+      cardName = l.name || null;
+      setName = l.set_name || null;
+      if (Array.isArray(l.photos) && l.photos[0]) imageUrl = l.photos[0];
+      if (!imageUrl && l.api_card_id) {
+        const { data: cat } = await sb.from('catalog')
+          .select('image_url').eq('id', l.api_card_id).maybeSingle();
+        if (cat) imageUrl = cat.image_url || null;
+      }
+    }
+  }
+  const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL || 'https://pathbinder.gg').replace(/\/+$/, '');
+  if (imageUrl && !/^https?:\/\//i.test(imageUrl)) imageUrl = siteOrigin + (imageUrl[0] === '/' ? '' : '/') + imageUrl;
+
+  const msg = renderSellerNewOrder({
+    siteOrigin: siteOrigin,
+    orderId: o.orderId,
+    cardName: cardName,
+    setName: setName,
+    imageUrl: imageUrl,
+    amount: o.amount,
+    payout: o.payout,
+    shipTo: {
+      name: o.shipTo.ship_to_name,
+      street1: o.shipTo.ship_to_street1,
+      street2: o.shipTo.ship_to_street2,
+      city: o.shipTo.ship_to_city,
+      state: o.shipTo.ship_to_state,
+      zip: o.shipTo.ship_to_zip,
+    },
+  });
+  await sendOrderEmail({ to: to, subject: msg.subject, html: msg.html, text: msg.text });
 }
 
 // ── Connect Express: account state changed ───────────────────────────────────

@@ -1307,6 +1307,12 @@ function _loadAdmin(){
       const errorEl = document.getElementById('registerError');
       errorEl.textContent = '';
 
+      const agreeEl = document.getElementById('regAgree');
+      if (agreeEl && !agreeEl.checked) {
+        errorEl.textContent = 'Please agree to the Terms of Service and Privacy Policy to continue';
+        return;
+      }
+
       if (password !== confirm) {
         errorEl.textContent = 'Passwords do not match';
         return;
@@ -9879,6 +9885,10 @@ function _loadAdmin(){
         console.warn('[inv] ship bookkeeping failed:', e && e.message);
       }
 
+      // Email the buyer their order shipped (best-effort; server-side via the
+      // same Shippo function, reusing its auth). Non-blocking.
+      try { await _shipApi({ action: 'notify_shipped', orderId: orderId }); } catch (_) {}
+
       closeModal('addTrackingModal');
       showToast('Tracking added! Buyer has been notified.');
       renderOrders();
@@ -13037,9 +13047,33 @@ function _loadAdmin(){
       closeModal('membershipModal');
     }
 
+    // True ONLY for the native App Store / Play Store build, which must not run
+    // an in-app subscription purchase (Apple/Google IAP rules). The native
+    // wrapper sets one of these signals. We deliberately do NOT treat a
+    // PWA / standalone web install as native — "Add to Home Screen" users are
+    // still on the web and keep their normal Stripe checkout.
+    function _isNativeApp() {
+      try {
+        if (window.PB_NATIVE_APP === true) return true;
+        if (localStorage.getItem('pb_native') === '1') return true;
+        if (/PathBinderApp/i.test(navigator.userAgent || '')) return true;
+      } catch (_) {}
+      return false;
+    }
+    function _openExternal(url) {
+      try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; }
+    }
+
     function upgradeTier(tierId) {
       if (!currentUser) { openModal('loginModal'); closeModal('membershipModal'); return; }
       closeModal('membershipModal');
+      // App Store / Play build: subscriptions are sold on the web only (no IAP).
+      // Route the user to the web to subscribe instead of running Stripe in-app.
+      if (_isNativeApp()) {
+        _openExternal('https://pathbinder.gg/?subscribe=' + encodeURIComponent(tierId || ''));
+        showToast('Manage your membership on pathbinder.gg');
+        return;
+      }
       initiateMembershipCheckout(tierId);
     }
 
@@ -28493,6 +28527,16 @@ function _loadAdmin(){
         }
       }
 
+      // ── Web subscribe deep-link ─────────────────────────────────────────
+      // The native app routes "upgrade" taps to pathbinder.gg/?subscribe=<tier>
+      // (subscriptions are web-only to avoid app-store IAP fees). On the web,
+      // open the pricing modal for that tier.
+      const subscribeTier = urlParams.get('subscribe');
+      if (subscribeTier) {
+        window.history.replaceState({}, '', window.location.pathname);
+        try { openPricingModal(subscribeTier); } catch (_) { try { openPricingModal(); } catch (_) {} }
+      }
+
       // ── Post-payment redirect handling ──────────────────────────────────
       // Stripe sends the user back to ?payment=success or ?payment=cancelled
       const paymentStatus = urlParams.get('payment');
@@ -28514,15 +28558,13 @@ function _loadAdmin(){
                 });
             }
           } else {
-            showToast('Payment successful! Your order is being processed...');
-            // Give the webhook ~3s to process, then re-fetch orders
+            // Marketplace purchase — show the confirmation modal right away.
+            if (typeof openModal === 'function') openModal('orderConfirmedModal');
+            else showToast('Order confirmed! You will get an email when it ships.');
+            // Give the webhook a few seconds, then refresh orders in the
+            // background so they're populated when the buyer checks.
             setTimeout(() => {
-              loadOrders().then(() => {
-                renderAllContent();
-                showToast('✅ Order confirmed! Check Dashboard → Orders.');
-                showPage('account');
-                switchAccountTab('myOrders');
-              }).catch(() => {});
+              loadOrders().then(() => { renderAllContent(); }).catch(() => {});
             }, 3000);
           }
         } else if (paymentStatus === 'cancelled') {
