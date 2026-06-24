@@ -1867,7 +1867,11 @@ function _loadAdmin(){
         const isSold = listing.status === 'sold';
         const isActive = listing.status === 'active' || listing.status === 'available';
 
-        const shouldShowByTab = browseTabFilter === 'all' ||
+        // "All" shows everything still purchasable (active/available + any
+        // non-terminal status) but NOT sold listings — a sold card should
+        // drop out of the live marketplace and only appear under the Sold tab.
+        const shouldShowByTab =
+          (browseTabFilter === 'all' && !isSold) ||
           (browseTabFilter === 'available' && isActive) ||
           (browseTabFilter === 'sold' && isSold);
         if (!shouldShowByTab) return false;

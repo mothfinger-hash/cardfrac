@@ -120,6 +120,26 @@ Deno.serve(async (req) => {
         .eq('id', userId)
         .single()
 
+      // Validate the stored Stripe customer against the CURRENT mode. A
+      // customer created in test mode doesn't exist in live (and vice versa),
+      // and a customer can be deleted — either case makes reusing the id throw
+      // "No such customer". If it's not retrievable here, forget it and create
+      // a fresh customer so checkout self-heals instead of hard-failing.
+      let customerId = profile?.stripe_customer_id || null
+      if (customerId) {
+        try {
+          const cust = await stripe.customers.retrieve(customerId)
+          if ((cust as any)?.deleted) customerId = null
+        } catch (_) {
+          customerId = null
+        }
+        if (!customerId) {
+          await supabase.from('profiles')
+            .update({ stripe_customer_id: null, stripe_subscription_id: null })
+            .eq('id', userId)
+        }
+      }
+
       // ── Tier change with proration ─────────────────────────────────────
       // If the user already has an active subscription, we should UPDATE it
       // (with proration_behavior='create_prorations') rather than create a
@@ -138,9 +158,9 @@ Deno.serve(async (req) => {
       // then drops to the new tier at the next renewal — matches what the
       // user asked for ("membership stays true for as long as the
       // original tier sub is active").
-      if (profile?.stripe_customer_id) {
+      if (customerId) {
         const existingSubs = await stripe.subscriptions.list({
-          customer: profile.stripe_customer_id,
+          customer: customerId,
           status: 'active',
           limit: 5,
         })
@@ -165,7 +185,21 @@ Deno.serve(async (req) => {
             metadata: { type: 'subscription', tier, user_id: userId },
           })
 
-          // Webhook will pick up subscription.updated and sync profiles row.
+          // Upgrades take effect immediately, so write the new tier NOW
+          // rather than waiting on the async customer.subscription.updated
+          // webhook — otherwise the client's refreshProfile() can read the
+          // old tier and the listing cap won't lift right after upgrading.
+          // Downgrades keep the current tier until period end, so we leave
+          // those for the webhook to apply at renewal.
+          if (isUpgrade) {
+            await supabase.from('profiles').update({
+              subscription_tier: tier,
+              stripe_subscription_id: updated.id,
+              subscription_updated_at: new Date().toISOString(),
+            }).eq('id', userId)
+          }
+
+          // Webhook also picks up subscription.updated and re-syncs (backup).
           return new Response(JSON.stringify({
             url: null,
             updated: true,
@@ -198,9 +232,10 @@ Deno.serve(async (req) => {
         cancel_url:  `${cancelUrl}?payment=cancelled`,
       }
 
-      // Re-use existing Stripe customer if we have one
-      if (profile?.stripe_customer_id) {
-        sessionParams.customer = profile.stripe_customer_id
+      // Re-use existing Stripe customer if we have a valid one (validated
+      // against the current mode above); otherwise let Checkout create one.
+      if (customerId) {
+        sessionParams.customer = customerId
       } else if (profile?.email) {
         sessionParams.customer_email = profile.email
       }
