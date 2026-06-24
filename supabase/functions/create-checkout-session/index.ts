@@ -17,7 +17,7 @@ const corsHeaders = {
 //            tiers: collector|enthusiast|vendor|shop  billing: monthly|annual
 //            (collector $5/mo only; enthusiast $20/mo, vendor $75/mo, shop $200/mo)
 function envForMode(base: string): string | undefined {
-  const m = (Deno.env.get('STRIPE_MODE') || '').toLowerCase()
+  const m = (Deno.env.get('STRIPE_MODE') || '').trim().toLowerCase()
   if (m === 'test') return Deno.env.get(`${base}_TEST`)                        // test: strict — never falls back to live
   if (m === 'live') return Deno.env.get(`${base}_LIVE`) ?? Deno.env.get(base)  // live: _LIVE or legacy unsuffixed
   return Deno.env.get(base)                                                    // no mode set: legacy unsuffixed
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
       // the new subscription to their existing customer record
       const { data: profile } = await supabase
         .from('profiles')
-        .select('stripe_customer_id, email')
+        .select('stripe_customer_id, email, subscription_tier')
         .eq('id', userId)
         .single()
 
@@ -150,7 +150,11 @@ Deno.serve(async (req) => {
           const TIER_RANK: Record<string, number> = {
             free: 0, collector: 1, enthusiast: 2, vendor: 3, shop: 4,
           }
-          const currentTier = (liveSub.metadata?.tier || '').toLowerCase()
+          // Use the PROFILE tier (the app's source of truth) to decide
+          // upgrade vs downgrade — not the Stripe sub's metadata, which can be
+          // stale or belong to a leftover/duplicate subscription. Fall back to
+          // the sub metadata only if the profile tier is missing.
+          const currentTier = ((profile?.subscription_tier || liveSub.metadata?.tier || '') as string).toLowerCase()
           const isUpgrade = (TIER_RANK[tier] || 0) > (TIER_RANK[currentTier] || 0)
 
           const updated = await stripe.subscriptions.update(liveSub.id, {

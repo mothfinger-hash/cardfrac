@@ -1821,6 +1821,32 @@ function _loadAdmin(){
     });
 
     // ===== BROWSE / MARKETPLACE =====
+    // ── Pre-launch marketplace access ──────────────────────────────────────
+    // The marketplace is hidden until launch. Admins always have access; for
+    // testing, anyone can unlock the pre-launch UI with a shared code. This is
+    // a CLIENT-side reveal only — it doesn't grant any privilege the server
+    // wouldn't already allow (listing inserts still hit the tier-cap trigger).
+    // Change this code to whatever you want to hand out to testers.
+    var _MP_UNLOCK_CODE = 'pathbinder-preview';
+    function _mpUnlocked() {
+      try {
+        if (currentUser && currentUser.is_admin) return true;
+        return localStorage.getItem('pb_mkt_unlock') === _MP_UNLOCK_CODE;
+      } catch (_) { return !!(currentUser && currentUser.is_admin); }
+    }
+    function unlockMarketplace(code) {
+      if (code == null) code = prompt('Enter marketplace access code:');
+      if (code == null) return;
+      if (code === _MP_UNLOCK_CODE) {
+        try { localStorage.setItem('pb_mkt_unlock', code); } catch (_) {}
+        showToast('Marketplace unlocked');
+        try { showPage('browse'); renderBrowse(); } catch (_) {}
+      } else {
+        showToast('Incorrect code');
+      }
+    }
+    window.unlockMarketplace = unlockMarketplace;
+
     function renderBrowse() {
       const grid = document.getElementById('browseGrid');
       if (!grid) return;
@@ -1830,7 +1856,7 @@ function _loadAdmin(){
       // the real marketplace UI stays hidden. Admins see everything.
       // We toggle via display:'' instead of removing the markup so the
       // grid + filter state is preserved across page switches.
-      const _isMpAdmin   = !!(currentUser && currentUser.is_admin);
+      const _isMpAdmin   = _mpUnlocked();
       const _comingSoon  = document.getElementById('browseComingSoon');
       const _realContent = document.getElementById('browseRealContent');
       if (_comingSoon)  _comingSoon.style.display  = _isMpAdmin ? 'none' : '';
@@ -10065,7 +10091,7 @@ function _loadAdmin(){
       // listings either, since their listings would never become
       // visible to other shoppers. Match the renderBrowse() gate so
       // the rules stay in lockstep.
-      if (!currentUser.is_admin) {
+      if (!_mpUnlocked()) {
         showToast('Marketplace coming soon');
         return;
       }
@@ -28524,6 +28550,16 @@ function _loadAdmin(){
           showPage('account'); setMobileNav('account');
         } else {
           showPage('landing'); setMobileNav('');
+        }
+      }
+
+      // ── Marketplace pre-launch unlock via link (?mkt=<code>) ────────────
+      const mktCode = urlParams.get('mkt');
+      if (mktCode) {
+        window.history.replaceState({}, '', window.location.pathname);
+        if (mktCode === _MP_UNLOCK_CODE) {
+          try { localStorage.setItem('pb_mkt_unlock', mktCode); } catch (_) {}
+          try { showToast('Marketplace unlocked'); } catch (_) {}
         }
       }
 

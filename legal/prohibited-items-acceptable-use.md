@@ -55,4 +55,4 @@ If you believe an action was taken in error, contact support@pathbinder.gg and w
 
 ## 7. Contact
 
-PathBinder LLC · 600 W Parrish Dr, Benson, NC 27504, USA · support@pathbinder.gg
+PathBinder LLC · 471 Cleveland Crossing Dr Unit 101, Garner, NC 27529, USA · support@pathbinder.gg

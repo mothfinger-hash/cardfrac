@@ -153,7 +153,7 @@ function shell({ title, body, currentOut }) {
 ${body}  </main>
   <footer>
     <nav>${nav}</nav>
-    <div class="addr">PathBinder LLC · 600 W Parrish Dr, Benson, NC 27504, USA · <a href="mailto:support@pathbinder.gg">support@pathbinder.gg</a></div>
+    <div class="addr">PathBinder LLC · 471 Cleveland Crossing Dr Unit 101, Garner, NC 27529, USA · <a href="mailto:support@pathbinder.gg">support@pathbinder.gg</a></div>
   </footer>
 </body>
 </html>`;

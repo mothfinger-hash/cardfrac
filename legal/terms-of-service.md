@@ -92,5 +92,5 @@ If you download PathBinder from the Apple App Store or Google Play, you also agr
 ## 17. Contact
 
 PathBinder LLC
-600 W Parrish Dr, Benson, NC 27504, USA
+471 Cleveland Crossing Dr Unit 101, Garner, NC 27529, USA
 support@pathbinder.gg

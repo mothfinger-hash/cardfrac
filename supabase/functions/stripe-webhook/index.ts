@@ -10,7 +10,7 @@ const supabase = createClient(
 // Mode-aware secret selection — mirrors create-checkout-session. STRIPE_MODE
 // ('test'|'live') picks <NAME>_TEST / <NAME>_LIVE; unset uses legacy unsuffixed.
 function envForMode(base: string): string | undefined {
-  const m = (Deno.env.get('STRIPE_MODE') || '').toLowerCase()
+  const m = (Deno.env.get('STRIPE_MODE') || '').trim().toLowerCase()
   if (m === 'test') return Deno.env.get(`${base}_TEST`)
   if (m === 'live') return Deno.env.get(`${base}_LIVE`) ?? Deno.env.get(base)
   return Deno.env.get(base)

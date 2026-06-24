@@ -8,7 +8,7 @@ PathBinder LLC ("PathBinder," "we," "us," or "our") operates the PathBinder webs
 
 By using the Service you agree to this Privacy Policy. If you do not agree, please do not use the Service.
 
-**Contact:** PathBinder LLC, 600 W Parrish Dr, Benson, NC 27504, USA — support@pathbinder.gg
+**Contact:** PathBinder LLC, 471 Cleveland Crossing Dr Unit 101, Garner, NC 27529, USA — support@pathbinder.gg
 
 ---
 
@@ -98,5 +98,5 @@ We may update this Privacy Policy from time to time. We will post the updated ve
 ## 13. Contact us
 
 PathBinder LLC
-600 W Parrish Dr, Benson, NC 27504, USA
+471 Cleveland Crossing Dr Unit 101, Garner, NC 27529, USA
 support@pathbinder.gg
