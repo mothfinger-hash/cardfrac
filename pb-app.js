@@ -411,7 +411,7 @@ function _loadAdmin(){
           + '<div style="padding:12px 16px;background:var(--surface2);border:1px solid var(--yellow);border-left:3px solid var(--yellow);margin-bottom:12px;font-family:\'Space Mono\',monospace">'
           +   '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
           +     '<div>'
-          +       '<div style="font-size:.78rem;color:var(--yellow);font-weight:700;letter-spacing:.04em;margin-bottom:4px">⚠ STRIPE SETUP INCOMPLETE</div>'
+          +       '<div style="font-size:.78rem;color:var(--yellow);font-weight:700;letter-spacing:.04em;margin-bottom:4px">STRIPE SETUP INCOMPLETE</div>'
           +       '<div style="font-size:.7rem;color:var(--muted);line-height:1.5">'
           +         'Your account exists but isn&rsquo;t cleared for payouts yet.' + disabled + dueText
           +       '</div>'
@@ -429,7 +429,7 @@ function _loadAdmin(){
         : '';
       return ''
         + '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--green);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-family:\'Space Mono\',monospace;font-size:.72rem;color:var(--muted)">'
-        +   '<span><span style="color:var(--green);font-weight:700">✓ Stripe Connected</span> &middot; payouts going to your bank on Stripe&rsquo;s standard schedule</span>'
+        +   '<span><span style="color:var(--green);font-weight:700">Stripe Connected</span> &middot; payouts going to your bank on Stripe&rsquo;s standard schedule</span>'
         +   dashBtn
         + '</div>';
     }
@@ -482,7 +482,7 @@ function _loadAdmin(){
         deletionBlock = ''
           + '<div style="border:1px solid rgba(255,60,60,.35);background:rgba(255,60,60,.06);padding:14px 16px;margin-top:8px">'
           +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:rgba(255,100,100,.9);margin-bottom:8px;text-transform:uppercase">'
-          +     '⚠ Account Deletion Scheduled'
+          +     'Account Deletion Scheduled'
           +   '</div>'
           +   '<div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px">'
           +     'Your account is set to be permanently deleted on '
@@ -498,7 +498,7 @@ function _loadAdmin(){
         deletionBlock = ''
           + '<div style="border:1px solid rgba(255,60,60,.35);background:rgba(255,60,60,.04);padding:14px 16px;margin-top:8px">'
           +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:rgba(255,100,100,.9);margin-bottom:8px;text-transform:uppercase">'
-          +     '⚠ Delete Account'
+          +     'Delete Account'
           +   '</div>'
           +   '<div style="font-size:.72rem;color:var(--muted);line-height:1.6;margin-bottom:12px">'
           +     'Permanently delete your PathBinder account and all personal data. '
@@ -540,7 +540,7 @@ function _loadAdmin(){
       const prefsBlock = ''
         + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
         +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:10px;text-transform:uppercase">'
-        +     '◇ Dashboard preferences'
+        +     'Dashboard preferences'
         +   '</div>'
         +   '<label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text);cursor:pointer">'
         +     '<input type="checkbox" id="settingShowDiscordPanel" ' + (discordHidden ? '' : 'checked') + ' onchange="_toggleDiscordPanelVisibility(this.checked)"'
@@ -568,7 +568,7 @@ function _loadAdmin(){
         shopBlock = ''
           + '<div style="border:1px solid var(--copper-dim);background:rgba(184,115,51,.04);padding:14px 16px;margin-top:14px">'
           +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);margin-bottom:10px;text-transform:uppercase">'
-          +     '◇ Shop pause' + (pauseActive ? ' — ACTIVE' : '')
+          +     'Shop pause' + (pauseActive ? ' — ACTIVE' : '')
           +   '</div>'
           +   '<div style="font-size:.72rem;color:var(--text);margin-bottom:10px;line-height:1.5">'
           +     (pauseActive
@@ -597,7 +597,7 @@ function _loadAdmin(){
       const followsBlock = ''
         + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
         +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">'
-        +     '◇ Social'
+        +     'Social'
         +   '</div>'
         +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
         +     '<button type="button" onclick="closeModal(\'accountSettingsModal\');openMyFollowsModal()"'
@@ -797,7 +797,7 @@ function _loadAdmin(){
       }
       const dateLbl = deletionScheduledDateLabel();
       host.innerHTML = ''
-        + '⚠ Your account is scheduled for deletion'
+        + 'Your account is scheduled for deletion'
         + (dateLbl ? ' on <strong>' + dateLbl + '</strong>' : '')
         + '. <button type="button" onclick="cancelAccountDeletion()" '
         +   'style="background:#fff;color:rgba(255,60,60,.95);border:none;padding:3px 10px;'
@@ -1226,7 +1226,7 @@ function _loadAdmin(){
       // to avoid leaking which addresses have accounts. So we always
       // show the same generic confirmation here.
       if (status) {
-        status.innerHTML = '<span style="color:var(--accent)">✓</span> If that email has an account, a reset link is on the way. Check your inbox + spam folder.';
+        status.innerHTML = '<span style="color:var(--accent)"></span> If that email has an account, a reset link is on the way. Check your inbox + spam folder.';
         status.style.color = 'var(--muted)';
       }
       // Clear the input so a successful flow doesn't leave it filled.
@@ -1253,7 +1253,7 @@ function _loadAdmin(){
         return;
       }
       if (status) {
-        status.innerHTML = '<span style="color:var(--accent)">✓</span> Password updated. Redirecting…';
+        status.innerHTML = '<span style="color:var(--accent)"></span> Password updated. Redirecting…';
         status.style.color = 'var(--muted)';
       }
       // Clear fields + close modal after a beat so the success state
@@ -1488,13 +1488,13 @@ function _loadAdmin(){
       e.stopPropagation();
       const dd = document.getElementById('avatarDropdown');
       dd.classList.toggle('open');
-      if (dd.classList.contains('open')) { renderDdBadges(); updateAvatarBtnLabel(); }
+      if (dd.classList.contains('open')) { renderDdBadges(); updateAvatarBtnLabel(); _refreshBetaInviteMenu(); }
     };
     document.getElementById('userChip').addEventListener('click', (e) => {
       e.stopPropagation();
       const dd = document.getElementById('avatarDropdown');
       dd.classList.toggle('open');
-      if (dd.classList.contains('open')) { renderDdBadges(); updateAvatarBtnLabel(); }
+      if (dd.classList.contains('open')) { renderDdBadges(); updateAvatarBtnLabel(); _refreshBetaInviteMenu(); }
     });
     document.getElementById('myAccountBtn').addEventListener('click', () => {
       document.getElementById('avatarDropdown').classList.remove('open');
@@ -2079,7 +2079,7 @@ function _loadAdmin(){
         // uploaded before variant generation existed still render.
         const _thumb200 = _pickThumbVariant(photoSrc, 200);
         return `<div class="listing-card ${isSold ? 'locked-card' : ''}">
-          ${isSold ? '<div class="lock-overlay"><div class="lock-icon">✓</div><p>Sold</p></div>' : ''}
+          ${isSold ? '<div class="lock-overlay"><div class="lock-icon"></div><p>Sold</p></div>' : ''}
           <div class="lc-thumb-wrap" onclick="viewDetail('${listing.id}')" style="cursor:pointer">
             <img src="${_thumb200}" data-fallback="${photoSrc}" alt="${_escHtml(listing.name)}" class="lc-thumb" loading="lazy" decoding="async" onerror="_thumbFail(this)" />
             <div class="lc-overlay-top">
@@ -2262,7 +2262,7 @@ function _loadAdmin(){
 
       detail.innerHTML = `
         <a class="detail-back" onclick="showPage('browse')" style="cursor:pointer">← Back to Marketplace</a>
-        ${isSold ? '<div style="background:rgba(210,120,40,.08);border:1px solid rgba(210,120,40,.25);padding:12px 16px;margin-bottom:16px;color:var(--green);font-size:.85rem">✓ This card has been sold</div>' : ''}
+        ${isSold ? '<div style="background:rgba(210,120,40,.08);border:1px solid rgba(210,120,40,.25);padding:12px 16px;margin-bottom:16px;color:var(--green);font-size:.85rem">This card has been sold</div>' : ''}
         <div class="detail-layout">
           <div class="gallery-wrap">
             <div class="gallery-main" id="galleryMain_${listingId}" onclick="openLightboxFromGallery('${listingId}')" style="cursor:zoom-in">
@@ -2309,7 +2309,7 @@ function _loadAdmin(){
                 Buy Now → $${total.toFixed(2)}
               </button>
               <div style="font-size:.72rem;color:var(--muted);line-height:1.8;text-align:center">
-                ✓ Secure Stripe payment · ✓ 7-day buyer protection · ✓ Platform fee paid by seller
+                Secure Stripe payment · 7-day buyer protection · Platform fee paid by seller
               </div>
             </div>` : ''}
             ${isOwn && !isSold ? `
@@ -2338,7 +2338,7 @@ function _loadAdmin(){
                  a generic search URL since we don't have a per-card
                  TCGplayer product mapping. -->
             <div style="background:var(--surface2);padding:14px 16px;margin:20px 0;border:1px solid var(--border)">
-              <div style="font-size:.75rem;color:var(--muted);margin-bottom:10px;letter-spacing:.06em">◇ COMPARE PRICES</div>
+              <div style="font-size:.75rem;color:var(--muted);margin-bottom:10px;letter-spacing:.06em">COMPARE PRICES</div>
               <div id="priceComps_${listingId}" style="display:flex;gap:8px;flex-wrap:wrap"></div>
               <div style="font-size:.62rem;color:var(--muted);margin-top:8px;line-height:1.5">External links open in a new tab — use them to verify the asking price against other marketplaces.</div>
             </div>
@@ -2626,14 +2626,14 @@ function _loadAdmin(){
           window.location.href = result.url;
         } else if (result.updated) {
           if (result.mode === 'upgrade_prorated') {
-            showToast('✓ Upgraded — unused time credited to new tier');
+            showToast('Upgraded — unused time credited to new tier');
           } else if (result.mode === 'downgrade_at_period_end') {
             var periodEnd = result.current_period_end
               ? _fmtDate(new Date(result.current_period_end * 1000))
               : 'period end';
-            showToast('✓ Downgrade scheduled. Current tier active until ' + periodEnd);
+            showToast('Downgrade scheduled. Current tier active until ' + periodEnd);
           } else {
-            showToast('✓ Subscription updated');
+            showToast('Subscription updated');
           }
           // Refetch profile so the UI reflects the new tier
           if (typeof refreshProfile === 'function') await refreshProfile();
@@ -3229,7 +3229,7 @@ function _loadAdmin(){
               if (wrap) {
                 const msg = (err && err.message) ? err.message : String(err || 'unknown');
                 wrap.innerHTML = '<div style="padding:24px;color:var(--red,#ef4444);font-size:.78rem;font-family:\'Space Mono\',monospace">'
-                  + '<div style="font-weight:700;letter-spacing:.08em;margin-bottom:8px">⚠ Store failed to render</div>'
+                  + '<div style="font-weight:700;letter-spacing:.08em;margin-bottom:8px">Store failed to render</div>'
                   + '<div style="color:var(--muted);font-size:.7rem;word-break:break-word">' + (msg || '') + '</div>'
                   + '</div>';
               }
@@ -3240,7 +3240,7 @@ function _loadAdmin(){
             const wrap = document.getElementById('myStoreContent');
             if (wrap) {
               wrap.innerHTML = '<div style="padding:24px;color:var(--red,#ef4444);font-size:.78rem;font-family:\'Space Mono\',monospace">'
-                + '<div style="font-weight:700;letter-spacing:.08em;margin-bottom:8px">⚠ Couldn\'t load store module</div>'
+                + '<div style="font-weight:700;letter-spacing:.08em;margin-bottom:8px">Couldn\'t load store module</div>'
                 + '<div style="color:var(--muted);font-size:.7rem">Check your connection and refresh the page.</div>'
                 + '<button onclick="location.reload()" class="pb-panel-link" style="margin-top:14px;border-color:var(--accent);color:var(--accent)">Refresh</button>'
                 + '</div>';
@@ -3739,7 +3739,7 @@ function _loadAdmin(){
       const btn = document.getElementById('euSubmitBtn');
       if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
       const updated = await _updateUnit(ctx.unitId, patch);
-      if (btn) { btn.textContent = '✓ Save Unit'; btn.disabled = false; }
+      if (btn) { btn.textContent = 'Save Unit'; btn.disabled = false; }
       if (!updated) { _err('Save failed — see console'); return; }
       // Update in-memory stack state + re-render.
       const s = _binderUnitStackState;
@@ -3898,7 +3898,7 @@ function _loadAdmin(){
           // Trigger raises clean exceptions like
           // "shop_sales: only 2 on shelf, cannot sell 3" — surface them.
           _err(r.error.message.replace(/^shop_sales:\s*/, ''));
-          if (btn) { btn.textContent = '✓ Record Sale'; btn.disabled = false; }
+          if (btn) { btn.textContent = 'Record Sale'; btn.disabled = false; }
           return;
         }
         // Re-pull collection so the inventory tile + row qty refresh.
@@ -3932,7 +3932,7 @@ function _loadAdmin(){
         }
       } catch (e) {
         _err((e && e.message) || 'Unexpected error');
-        if (btn) { btn.textContent = '✓ Record Sale'; btn.disabled = false; }
+        if (btn) { btn.textContent = 'Record Sale'; btn.disabled = false; }
       }
     }
 
@@ -4675,6 +4675,33 @@ function _loadAdmin(){
       </div>`;
     }
     // Modal — generate a new code
+    // Account-dropdown "Invite Friends" item: only beta testers have a quota
+    // (granted_tier non-null), so show/hide accordingly and surface how many
+    // invites remain. Called when the dropdown opens.
+    async function _refreshBetaInviteMenu() {
+      const item = document.getElementById('betaInviteBtn');
+      if (!item) return;
+      try {
+        const q = await _loadSubsidiaryQuota(false);
+        const eligible = !!(q && q.granted_tier);
+        item.style.display = eligible ? '' : 'none';
+        if (eligible) {
+          const c = document.getElementById('betaInviteCount');
+          if (c) c.textContent = q.remaining > 0 ? '(' + q.remaining + ')' : '(used)';
+        }
+      } catch (_) {}
+    }
+    window._refreshBetaInviteMenu = _refreshBetaInviteMenu;
+
+    // Route the menu item: generate a new code if invites remain, otherwise
+    // open the manage-invites view so they can still see/resend existing ones.
+    async function openSubsidiaryInviteMenu() {
+      const q = await _loadSubsidiaryQuota(true);
+      if (q && q.remaining > 0) return openGenerateSubsidiaryInviteModal();
+      return openMySubsidiaryInvitesModal();
+    }
+    window.openSubsidiaryInviteMenu = openSubsidiaryInviteMenu;
+
     async function openGenerateSubsidiaryInviteModal() {
       const q = await _loadSubsidiaryQuota(true);
       if (!q || q.remaining <= 0) {
@@ -5054,7 +5081,7 @@ function _loadAdmin(){
         const greeting  = firstName ? ('Welcome to PathBinder, ' + firstName + '.') : 'Welcome to PathBinder.';
         content.innerHTML = ''
           + '<div style="max-width:720px;margin:24px auto;padding:24px 22px;border:1px solid var(--copper-dim);background:var(--surface);border-left:3px solid var(--copper);font-family:\'Space Mono\',monospace">'
-          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.14em;color:var(--copper);margin-bottom:6px;text-transform:uppercase">◈ Getting Started</div>'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.14em;color:var(--copper);margin-bottom:6px;text-transform:uppercase">Getting Started</div>'
           +   '<h2 style="font-family:\'Orbitron\',monospace;font-size:1.3rem;color:var(--text);margin:0 0 10px;letter-spacing:.04em">' + greeting + '</h2>'
           +   '<p style="font-size:.85rem;color:var(--muted);line-height:1.6;margin-bottom:22px">'
           +     'Your dashboard fills in as you add cards, list on the marketplace, or organize a binder. Pick a starting point below &mdash; you can always come back to this page from the nav.'
@@ -5288,7 +5315,7 @@ function _loadAdmin(){
                 ${totalEarned>0?`<div class="ndash-sum-row"><div class="ndash-sum-l">Earned</div><div class="ndash-sum-r" style="color:var(--accent)">$${totalEarned.toFixed(2)}</div></div>`:''}
                 ${awaitingShip>0?`<div class="ndash-sum-row"><div class="ndash-sum-l">To Ship</div><div class="ndash-sum-r" style="color:var(--yellow,#FFDD44)">${awaitingShip} order${awaitingShip>1?'s':''}</div></div>`:''}
                 <div style="display:flex;gap:6px;margin-top:4px">
-                  <button class="ndash-panel-link" style="border-color:var(--border);flex:1;text-align:center" onclick="copyStoreLink()">⬡ COPY LINK</button>
+                  <button class="ndash-panel-link" style="border-color:var(--border);flex:1;text-align:center" onclick="copyStoreLink()">COPY LINK</button>
                   <button class="ndash-panel-link" style="border-color:var(--border);flex:1;text-align:center" onclick="openListCardModal()">+ LIST CARD</button>
                 </div>
               </div>
@@ -5439,7 +5466,7 @@ function _loadAdmin(){
     // Renders one of three states:
     //   • Unlinked → full panel with code input (the second half of the
     //     /link DM flow).
-    //   • Linked + not dismissed → compact one-line "✓ Linked as @user"
+    //   • Linked + not dismissed → compact one-line "Linked as @user"
     //     strip with × hide button.
     //   • Linked + dismissed (localStorage flag set) → nothing renders.
     //     User can bring it back by clearing pb_hide_discord_panel in
@@ -5487,7 +5514,7 @@ function _loadAdmin(){
         const inner = linked
           // Linked → compact one-line strip. Less visual weight, dismissable.
           ? `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:.7rem">
-              <span style="color:#5865F2">◇</span>
+              <span style="color:#5865F2"></span>
               <span style="color:var(--muted)">Discord linked as</span>
               <strong style="color:var(--accent)">@${_escHtml(linked.discord_username || linked.discord_user_id)}</strong>
               <button onclick="_disconnectDiscord()" title="Disconnect"
@@ -5497,7 +5524,7 @@ function _loadAdmin(){
             </div>`
           // Unlinked → full panel with code input.
           : `<div class="pb-panel-h" style="padding:10px 14px"><div class="pb-panel-title">`
-            + `<span class="pb-panel-title-ico" style="color:#5865F2">◇</span>Discord`
+            + `<span class="pb-panel-title-ico" style="color:#5865F2"></span>Discord`
             + `</div></div>`
             + `<div class="pb-panel-body" style="padding:12px 14px">`
             + `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">`
@@ -5552,7 +5579,7 @@ function _loadAdmin(){
           if (status) { status.style.color = 'var(--red)'; status.textContent = 'Code not found or expired. Run /link in Discord again.'; }
           return;
         }
-        if (status) { status.style.color = 'var(--green)'; status.textContent = '✓ Linked. Run /tier in Discord to grant your role.'; }
+        if (status) { status.style.color = 'var(--green)'; status.textContent = 'Linked. Run /tier in Discord to grant your role.'; }
         setTimeout(_renderDiscordConnect, 800);
       } catch (e) {
         if (status) { status.style.color = 'var(--red)'; status.textContent = 'Failed: ' + (e.message || 'unknown'); }
@@ -6560,7 +6587,7 @@ function _loadAdmin(){
         slot.style.display = '';
         slot.innerHTML =
             '<div style="background:rgba(26,199,160,.08);border:1px solid var(--accent);border-radius:6px;padding:10px 12px">'
-          +   '<div style="font-size:.6rem;letter-spacing:.1em;color:var(--accent);margin-bottom:4px">◈ HELP FILL THIS IN?</div>'
+          +   '<div style="font-size:.6rem;letter-spacing:.1em;color:var(--accent);margin-bottom:4px">HELP FILL THIS IN?</div>'
           +   '<div style="font-size:.66rem;color:var(--text);margin-bottom:8px;line-height:1.5">'
           +     'Got this card in hand? Upload a clean photo and credit goes to you.'
           +   '</div>'
@@ -6645,7 +6672,7 @@ function _loadAdmin(){
         '<div onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>' +
         '<div style="position:relative;width:100%;max-width:480px;background:var(--surface);border:2px solid var(--copper-dim);border-radius:6px;padding:20px 18px 24px;max-height:90svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
           '<button onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>' +
-          '<div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);margin-bottom:14px">◈ CARD DETAIL</div>' +
+          '<div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);margin-bottom:14px">CARD DETAIL</div>' +
           (card.image_url
             ? '<div style="display:flex;justify-content:center;margin-bottom:14px">' +
                 '<img src="' + card.image_url + '" alt="' + _escHtml(card.name || '') + '" onclick="openImageLightbox(\'' + safeImg + '\')" style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;cursor:zoom-in;box-shadow:0 0 20px var(--copper-glow)" loading="lazy" decoding="async">' +
@@ -6657,7 +6684,7 @@ function _loadAdmin(){
             // prompt that gets filled async if the user is eligible.
             : '<div style="display:flex;justify-content:center;margin-bottom:6px">' +
                 '<div style="width:180px;height:252px;background:rgba(184,115,51,.06);border:1px dashed var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">' +
-                  '<span style="font-size:2rem;opacity:.25">⬡</span>' +
+                  '<span style="font-size:2rem;opacity:.25"></span>' +
                   '<span style="font-size:.5rem;letter-spacing:.1em;color:var(--copper-dim)">NO IMAGE YET</span>' +
                 '</div>' +
               '</div>' +
@@ -7089,8 +7116,8 @@ function _loadAdmin(){
           // stopPropagation prevents these from also firing the row's
           // viewDetail click handler.
           actionHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button onclick="event.stopPropagation();markOrderReceived('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">✓ Mark Received</button>
-            <button onclick="event.stopPropagation();requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">⚠ Report Issue</button>
+            <button onclick="event.stopPropagation();markOrderReceived('${order.id}')" style="padding:8px 16px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Mark Received</button>
+            <button onclick="event.stopPropagation();requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Report Issue</button>
           </div>`;
         } else if (isBuying && status === 'completed') {
           actionHtml = `<button onclick="event.stopPropagation();requestReturn('${order.id}')" style="padding:8px 16px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">↩ Return / Refund Request</button>`;
@@ -7140,7 +7167,7 @@ function _loadAdmin(){
               <div style="margin-top:8px">
                 <button onclick="event.stopPropagation();openOrderMessagesModal('${order.id}')"
                   style="padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.04em">
-                  ⬡ Message ${isBuying ? 'seller' : 'buyer'}
+                  Message ${isBuying ? 'seller' : 'buyer'}
                 </button>
               </div>
             </div>
@@ -7225,7 +7252,7 @@ function _loadAdmin(){
       var attrs = 'id="pbFollowBtn" onclick="_pbFollowToggle(\'' + targetId + '\')"';
       var base = ";font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:var(--r-pill,999px)";
       return following
-        ? '<button ' + attrs + ' style="padding:9px 26px;border:1px solid var(--muted);background:transparent;color:var(--muted)' + base + '">✓ Following</button>'
+        ? '<button ' + attrs + ' style="padding:9px 26px;border:1px solid var(--muted);background:transparent;color:var(--muted)' + base + '">Following</button>'
         : '<button ' + attrs + ' style="padding:9px 26px;border:1px solid var(--accent);background:transparent;color:var(--accent)' + base + '">+ Follow</button>';
     }
     function _pbFollowToggle(targetId) {
@@ -7669,7 +7696,7 @@ function _loadAdmin(){
         const coverArt = binderCoverUrl
           ? `<img src="${binderCoverUrl}" alt="${binderName||'Binder'}" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none" loading="lazy" decoding="async">`
           : `<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${binderColor}22;padding:16px">
-               <div style="font-size:2rem;color:${binderColor};opacity:.8">⬡</div>
+               <div style="font-size:2rem;color:${binderColor};opacity:.8"></div>
                <div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||displayName}</div>
              </div>`;
 
@@ -7690,7 +7717,7 @@ function _loadAdmin(){
         // clipped the cover art's edges inside a fixed box.)
         const coverFlat = binderCoverUrl
           ? `<img src="${binderCoverUrl}" alt="${_escHtml(binderName||'Binder')}" style="width:100%;height:auto;display:block;border-radius:10px" loading="lazy" decoding="async">`
-          : `<div style="width:100%;aspect-ratio:245/342;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${binderColor}22;border-radius:10px"><div style="font-size:2rem;color:${binderColor};opacity:.8">⬡</div><div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||heroLabel}</div></div>`;
+          : `<div style="width:100%;aspect-ratio:245/342;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${binderColor}22;border-radius:10px"><div style="font-size:2rem;color:${binderColor};opacity:.8"></div><div style="font-size:.8rem;font-family:'Space Mono','Share Tech Mono',monospace;color:rgba(255,255,255,.72);text-align:center;word-break:break-word">${binderName||heroLabel}</div></div>`;
 
         el.innerHTML = `
           <!-- Top nav row -->
@@ -7801,7 +7828,7 @@ function _loadAdmin(){
               title="Click to enlarge" style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${img}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
@@ -7950,7 +7977,7 @@ function _loadAdmin(){
 
       const saved = document.getElementById('shopSettingSaved');
       if (saved) { saved.style.display = 'inline'; setTimeout(() => { saved.style.display = 'none'; }, 2500); }
-      showToast('✓ Shop settings saved');
+      showToast('Shop settings saved');
     }
 
     // ── Public storefront page ───────────────────────────────────────────────
@@ -8189,7 +8216,7 @@ function _loadAdmin(){
       if (!tierAtLeast('enthusiast')) {
         content.innerHTML = ''
           + '<div style="text-align:center;padding:48px 24px">'
-          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:8px">◈ SELLER DASHBOARD</div>'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:8px">SELLER DASHBOARD</div>'
           +   '<h2 style="font-family:\'Orbitron\',monospace;font-size:1.15rem;color:var(--text);margin:0 0 10px">Marketplace selling is on Enthusiast+ tiers</h2>'
           +   '<p style="color:var(--muted);font-size:.85rem;line-height:1.65;max-width:480px;margin:0 auto 20px">Once you upgrade you\'ll see Stripe Connect status, your lifetime payout history, and a per-tier commission breakdown here.</p>'
           +   '<button onclick="openPricingModalWithPromo(\'enthusiast\')" style="padding:11px 22px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:\'Space Mono\',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">See plans</button>'
@@ -8232,7 +8259,7 @@ function _loadAdmin(){
         content.innerHTML = ''
           + connectHtml
           + '<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--copper);border-radius:10px;padding:32px 28px;text-align:center;margin-top:12px">'
-          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:8px">◈ NO SALES YET</div>'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:8px">NO SALES YET</div>'
           +   '<h2 style="font-family:\'Orbitron\',monospace;font-size:1.2rem;color:var(--text);margin:0 0 12px;letter-spacing:.04em">Once your first sale lands, this is where you\'ll track it.</h2>'
           +   '<p style="color:var(--muted);font-size:.85rem;line-height:1.65;max-width:520px;margin:0 auto 22px">'
           +     'Every sale shows up here with the gross amount, the ' + myRatePct + ' platform fee deducted, and your net payout. '
@@ -8322,7 +8349,7 @@ function _loadAdmin(){
         + statsHtml
         + commissionHtml
         + '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;font-weight:800;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin:18px 0 10px">'
-        +   '◈ Recent payouts'
+        +   'Recent payouts'
         + '</div>'
         + payoutsListHtml;
     }
@@ -8343,7 +8370,7 @@ function _loadAdmin(){
       return ''
         + '<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--copper);padding:14px 18px;margin-bottom:16px;border-radius:10px">'
         +   '<div style="font-family:\'Orbitron\',monospace;font-size:.7rem;font-weight:800;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:10px">'
-        +     '◈ Commission rates by tier'
+        +     'Commission rates by tier'
         +   '</div>'
         +   '<div style="font-size:.74rem;color:var(--muted);line-height:1.6;margin-bottom:12px">'
         +     'Lower commission as you move up tiers. The $0.30/transaction Stripe processing floor is included so cheap-item sales never put us underwater. Shipping passes through to you 100% — commission applies to the item price only.'
@@ -8708,7 +8735,7 @@ function _loadAdmin(){
       }
       renderSalesArchive();
       renderBinder();
-      showToast('✓ Card restored to binder');
+      showToast('Card restored to binder');
     }
 
     // ── Build the unified sales rows used by both export functions ───────────
@@ -8771,7 +8798,7 @@ function _loadAdmin(){
       a.href     = URL.createObjectURL(blob);
       a.download = `pathbinder-sales-${label.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;
       a.click();
-      showToast('✓ CSV downloaded');
+      showToast('CSV downloaded');
     }
 
     // ── PDF Export — Enthusiast+: itemized transaction list ──────────────────
@@ -8836,7 +8863,7 @@ function _loadAdmin(){
         }
 
         doc.save(`pathbinder-sales-${label.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
-        showToast('✓ PDF downloaded');
+        showToast('PDF downloaded');
       });
     }
 
@@ -8962,7 +8989,7 @@ function _loadAdmin(){
         }
 
         doc.save(`pathbinder-pl-report-${label.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
-        showToast('✓ Full P&L Report downloaded');
+        showToast('Full P&L Report downloaded');
       });
     }
 
@@ -9706,14 +9733,46 @@ function _loadAdmin(){
       var o = (typeof orders !== 'undefined' && orders) ? orders.find(function(x){ return x.id === orderId; }) : null;
       _shipRenderShipTo(o);
       _shipPrefillFromAddress();
+      _renderShippoConnectRow();
       openModal('addTrackingModal');
     }
+
+    // Phase 2: per-seller Shippo Connect. When connected, labels bill to the
+    // seller's own Shippo account; otherwise they fall back to the platform.
+    function _renderShippoConnectRow() {
+      var el = document.getElementById('shippoConnectRow');
+      if (!el) return;
+      var connected = !!(currentUser && currentUser.shippo_connected_at);
+      if (connected) {
+        el.innerHTML = '<span style="color:var(--green)">Shippo account connected</span> — labels bill to your account.';
+      } else {
+        el.innerHTML = 'Labels bill to the platform. <a href="#" onclick="connectShippo();return false" style="color:var(--accent);text-decoration:none">Connect your Shippo account →</a> to bill them to you.';
+      }
+    }
+    async function connectShippo() {
+      try {
+        var sess = await sb.auth.getSession();
+        var tok = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        var r = await fetch('/api/shippo-oauth-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (tok || '') },
+        });
+        var j = {};
+        try { j = await r.json(); } catch (_) {}
+        if (!r.ok || !j.url) {
+          showToast(j.code === 'NOT_CONFIGURED' ? 'Shippo Connect is coming soon' : (j.error || 'Could not start Shippo connect'));
+          return;
+        }
+        window.location.href = j.url;
+      } catch (e) { showToast('Could not start Shippo connect'); }
+    }
+    window.connectShippo = connectShippo;
 
     function _shipRenderShipTo(o) {
       var el = document.getElementById('shipToDisplay');
       if (!el) return;
       if (!o || !o.ship_to_street1) {
-        el.innerHTML = '<span style="color:var(--yellow)">⚠ No shipping address on file for this order — use manual tracking below.</span>';
+        el.innerHTML = '<span style="color:var(--yellow)">No shipping address on file for this order — use manual tracking below.</span>';
         return;
       }
       var lines = [
@@ -9865,7 +9924,7 @@ function _loadAdmin(){
         if (resBox) {
           resBox.style.display = 'block';
           resBox.innerHTML = '<div style="padding:10px 12px;border:1px solid var(--green);background:rgba(26,199,160,.06)">' +
-            '<div style="color:var(--green);font-size:.82rem;font-weight:700;margin-bottom:4px">✓ Label purchased</div>' +
+            '<div style="color:var(--green);font-size:.82rem;font-weight:700;margin-bottom:4px">Label purchased</div>' +
             '<div style="font-size:.74rem;color:var(--muted);margin-bottom:8px">' + _shipEsc(data.carrier || '') + ' · ' + _shipEsc(data.tracking_number || '') + '</div>' +
             (data.label_url ? '<a href="' + _shipEsc(data.label_url) + '" target="_blank" rel="noopener" style="display:inline-block;padding:9px 14px;background:var(--accent);color:var(--text-on-accent);text-decoration:none;font-size:.8rem;font-weight:700">Print Label (PDF)</a>' : '') +
           '</div>';
@@ -11157,7 +11216,7 @@ function _loadAdmin(){
       btn.disabled = false;
       vendorImportRows = [];
       document.getElementById('importSubmitBtn').style.display = 'none';
-      showToast(`✓ ${success} card${success !== 1 ? 's' : ''} added — matching images in background`);
+      showToast(`${success} card${success !== 1 ? 's' : ''} added — matching images in background`);
       closeModal('vendorImportModal');
 
       // Show cards immediately (no images yet), then enrich in background
@@ -11418,7 +11477,7 @@ function _loadAdmin(){
 
       _enrichBanner(null);  // hide banner
       renderDashboard();
-      if (matched > 0) showToast(`✓ Matched images for ${matched} card${matched !== 1 ? 's' : ''} — fetching prices…`);
+      if (matched > 0) showToast(`Matched images for ${matched} card${matched !== 1 ? 's' : ''} — fetching prices…`);
       console.log(`[PathBinder] Enrichment complete — ${matched}/${items.length} matched.`);
 
       // ── Price refresh for newly imported cards ──────────────────────────────
@@ -11462,7 +11521,7 @@ function _loadAdmin(){
       if (priced > 0) {
         renderBinder();
         renderDashboard();
-        showToast(`✓ Prices updated for ${priced} card${priced !== 1 ? 's' : ''}`);
+        showToast(`Prices updated for ${priced} card${priced !== 1 ? 's' : ''}`);
       }
     }
 
@@ -11481,7 +11540,7 @@ function _loadAdmin(){
           statusEl.textContent = '⏳ Your application is pending review. We\'ll be in touch soon.';
         } else if (data.status === 'approved') {
           statusEl.style.background = 'rgba(210,120,40,.1)'; statusEl.style.color = 'var(--green)';
-          statusEl.textContent = '✓ Your application was approved! Refresh the page to start listing.';
+          statusEl.textContent = 'Your application was approved! Refresh the page to start listing.';
         } else if (data.status === 'rejected') {
           statusEl.style.background = 'rgba(255,60,60,.1)'; statusEl.style.color = 'var(--red)';
           statusEl.textContent = 'Your previous application was not approved. You may reapply below.';
@@ -12068,7 +12127,7 @@ function _loadAdmin(){
         } catch(_) { notFound++; }
       }
 
-      statusEl.innerHTML = `// Done for <strong>${label}</strong>: ✓ ${fixed} backfilled${notFound ? `, ${notFound} not in catalog (may need manual entry)` : ''}.`;
+      statusEl.innerHTML = `// Done for <strong>${label}</strong>: ${fixed} backfilled${notFound ? `, ${notFound} not in catalog (may need manual entry)` : ''}.`;
     }
 
     function renderAdminTable() {
@@ -12120,11 +12179,11 @@ function _loadAdmin(){
             resultEl.textContent = `✅ Found: ${found.name} (@${found.username})${found.email ? ' — ' + found.email : ''}`;
           } else {
             resultEl.style.color = '#ef4444';
-            resultEl.textContent = '⚠️ No user found. Make sure they have registered.';
+            resultEl.textContent = 'No user found. Make sure they have registered.';
           }
         } catch (err) {
           resultEl.style.color = '#ef4444';
-          resultEl.textContent = '⚠️ Search error: ' + err.message;
+          resultEl.textContent = 'Search error: ' + err.message;
         }
       }, 400);
     }
@@ -12137,7 +12196,7 @@ function _loadAdmin(){
       const statusEl = document.getElementById('assignStatus');
 
       if (!listingId || !userSearch) {
-        statusEl.textContent = '⚠️ Please select a listing and enter a user.';
+        statusEl.textContent = 'Please select a listing and enter a user.';
         statusEl.style.color = '#ef4444';
         return;
       }
@@ -12161,7 +12220,7 @@ function _loadAdmin(){
       }
 
       if (!profile) {
-        statusEl.textContent = '⚠️ User not found. Make sure they have registered and confirmed their email.';
+        statusEl.textContent = 'User not found. Make sure they have registered and confirmed their email.';
         statusEl.style.color = '#ef4444';
         return;
       }
@@ -12192,7 +12251,7 @@ function _loadAdmin(){
           .select('*').eq('listing_id', listingId).in('idx', targetIndices);
         const already = found?.filter(s => s.user_id) || [];
         if (already.length > 0) {
-          statusEl.textContent = `⚠️ Already owned: slot(s) #${already.map(s => s.idx).join(', ')}`;
+          statusEl.textContent = `Already owned: slot(s) #${already.map(s => s.idx).join(', ')}`;
           statusEl.style.color = '#ef4444';
           return;
         }
@@ -12204,7 +12263,7 @@ function _loadAdmin(){
           .select('*').eq('listing_id', listingId).is('user_id', null)
           .order('idx').limit(count);
         if (!available || available.length === 0) {
-          statusEl.textContent = '⚠️ No available slots on this listing.';
+          statusEl.textContent = 'No available slots on this listing.';
           statusEl.style.color = '#ef4444';
           return;
         }
@@ -12219,7 +12278,7 @@ function _loadAdmin(){
       for (const slot of slotsToAssign) {
         const { error } = await sb.from('slots')
           .update({ user_id: userId, ask_price: 0, trade_open: false }).eq('id', slot.id);
-        if (error) { statusEl.textContent = `⚠️ Error on slot #${slot.idx}: ${error.message}`; statusEl.style.color = '#ef4444'; return; }
+        if (error) { statusEl.textContent = `Error on slot #${slot.idx}: ${error.message}`; statusEl.style.color = '#ef4444'; return; }
         await sb.from('transactions').insert({
           type: 'buy', listing_id: listingId, slot_idx: slot.idx,
           user_id: userId, amount: assignSlotPrice, fee: 0, note: 'Admin assignment'
@@ -12991,7 +13050,7 @@ function _loadAdmin(){
         //     instead of one coherent button family.
         let ctaBtn = '';
         if (isCurrent) {
-          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:var(--surface2);letter-spacing:.06em;border-radius:var(--r-sm,6px)">✓ Current plan</div>`;
+          ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:var(--surface2);letter-spacing:.06em;border-radius:var(--r-sm,6px)">Current plan</div>`;
         } else if (t.ctaAction === 'shop_intake') {
           ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px)">Contact us →</button>`;
         } else if (t.ctaAction) {
@@ -13006,7 +13065,7 @@ function _loadAdmin(){
         // ── Feature list ────────────────────────────────────────────────
         const featureLines = t.features.map(f =>
           `<div style="font-size:.68rem;color:${isCurrent ? 'var(--text)' : 'var(--muted)'};padding:3px 0;display:flex;gap:6px;align-items:baseline">
-            <span style="color:${isCurrent ? 'var(--accent)' : 'var(--muted)'};flex-shrink:0;font-size:.7rem">✓</span>${f}
+            <span style="color:${isCurrent ? 'var(--accent)' : 'var(--muted)'};flex-shrink:0;font-size:.7rem">•</span>${f}
           </div>`
         ).join('');
         const lockedLines = t.locked.map(f =>
@@ -13073,7 +13132,7 @@ function _loadAdmin(){
           submitted_at: new Date().toISOString(),
         });
       } catch (_) {}
-      showToast('✓ Submitted! The PathBinder team will be in touch shortly.');
+      showToast('Submitted! The PathBinder team will be in touch shortly.');
       closeModal('membershipModal');
     }
 
@@ -13714,8 +13773,8 @@ function _loadAdmin(){
 
         if (fetchErr) throw fetchErr;
         if (!missing || missing.length === 0) {
-          showToast('All cards already have rarity data ✓');
-          if (btn) { btn.textContent = '✓ All synced'; btn.disabled = false; }
+          showToast('All cards already have rarity data ');
+          if (btn) { btn.textContent = 'All synced'; btn.disabled = false; }
           return;
         }
 
@@ -13749,7 +13808,7 @@ function _loadAdmin(){
         }
 
         showToast(`Synced ${updated} of ${missing.length} cards`);
-        if (btn) { btn.textContent = `✓ ${updated} synced`; btn.disabled = false; setTimeout(() => { if (btn) btn.textContent = '⟳ Sync Rarities'; }, 4000); }
+        if (btn) { btn.textContent = `${updated} synced`; btn.disabled = false; setTimeout(() => { if (btn) btn.textContent = '⟳ Sync Rarities'; }, 4000); }
 
         // 4. Reload collection so sort sees the new data
         await loadCollection();
@@ -14358,12 +14417,12 @@ function _loadAdmin(){
             try { await sb.from('profiles').update({ all_cards_cover_url: _acUrl }).eq('id', currentUser.id); } catch(_){}
             if (currentUser) currentUser.all_cards_cover_url = _acUrl;
             try { localStorage.setItem('pb_acc_cover_' + currentUser.id, _acUrl); } catch(_){}
-            showToast('✓ All Cards cover updated');
+            showToast('All Cards cover updated');
           } else if (_binderCoverRemoving) {
             try { await sb.from('profiles').update({ all_cards_cover_url: null }).eq('id', currentUser.id); } catch(_){}
             if (currentUser) currentUser.all_cards_cover_url = null;
             try { localStorage.removeItem('pb_acc_cover_' + currentUser.id); } catch(_){}
-            showToast('✓ Reset to default cover');
+            showToast('Reset to default cover');
           }
         } catch(e) { showToast('Cover update failed: ' + (e.message || 'error')); }
         _editingAllCardsCover = false;
@@ -14429,7 +14488,7 @@ function _loadAdmin(){
 
       closeModal('binderEditModal');
       renderBinderTabs();
-      showToast(_editingBinderId ? '✓ Binder updated' : '✓ Binder created');
+      showToast(_editingBinderId ? 'Binder updated' : 'Binder created');
       if (!_editingBinderId) { try { checkBadge_archived(); } catch(_) {} }
     }
 
@@ -14446,7 +14505,7 @@ function _loadAdmin(){
       closeModal('binderEditModal');
       renderBinderTabs();
       renderBinder();
-      showToast('✓ Binder deleted');
+      showToast('Binder deleted');
     }
 
     // Called from the card detail modal to move a card to a different binder
@@ -14475,7 +14534,7 @@ function _loadAdmin(){
         // removed — re-render.
         renderBinder();
       }
-      showToast('✓ Moved to ' + _dest);
+      showToast('Moved to ' + _dest);
     }
 
     // Pending "move this card into the binder we're about to create" intent.
@@ -14635,7 +14694,7 @@ function _loadAdmin(){
         const coverHtml = b.cover_image_url
           ? `<img src="${_pickThumbVariant(b.cover_image_url, 400)}" data-fallback="${b.cover_image_url}" alt="${b.name}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
           : `<div class="binder-cover-default" style="background:${bgColor}28">
-               <div style="font-size:1rem;color:${bgColor};opacity:.8">⬡</div>
+               <div style="font-size:1rem;color:${bgColor};opacity:.8"></div>
                <div class="binder-cover-text">${b.name}</div>
              </div>`;
 
@@ -14896,7 +14955,7 @@ function _loadAdmin(){
         overlay.innerHTML =
           '<div class="pb-cin-modal" role="dialog" aria-label="Card added to binder">' +
             '<div class="pb-cin-header">' +
-              '<div class="pb-cin-eyebrow">◈ ADDED TO BINDER</div>' +
+              '<div class="pb-cin-eyebrow">ADDED TO BINDER</div>' +
               '<div class="pb-cin-title">' + _escHtml(binderName) + '</div>' +
               '<div class="pb-cin-sub">Page ' + (pageNum + 1) + ' · Slot ' + (slotInPage + 1) + '</div>' +
             '</div>' +
@@ -16496,7 +16555,7 @@ function _loadAdmin(){
         }
       } catch (e) { showToast('Failed: ' + (e.message || 'error')); return; }
       Object.assign(item, updates);
-      showToast(isPhoto ? '✓ Showing stock image' : '✓ Showing your photo');
+      showToast(isPhoto ? 'Showing stock image' : 'Showing your photo');
       try { renderCollection(); } catch (_) {}
       openBinderCardDetail(itemId);
     };
@@ -16574,7 +16633,7 @@ function _loadAdmin(){
           </div>
           <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
             <button onclick="convertGhostToOwned('${item.id}')"
-              style="padding:8px 18px;border:1px solid var(--green);background:rgba(210,120,40,.08);color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">✓ Mark_As_Owned</button>
+              style="padding:8px 18px;border:1px solid var(--green);background:rgba(210,120,40,.08);color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Mark_As_Owned</button>
             <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
               style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer"
               onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
@@ -16840,7 +16899,7 @@ function _loadAdmin(){
         notes: notes || (document.getElementById('soNotes').value.trim() || null)
       }).eq('id', itemId);
 
-      if (btn) { btn.textContent = '✓ Mark as Sold'; btn.disabled = false; }
+      if (btn) { btn.textContent = 'Mark as Sold'; btn.disabled = false; }
 
       if (error) {
         // Columns may not exist yet — handle gracefully
@@ -18541,7 +18600,7 @@ function _loadAdmin(){
               style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${imgLarge}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <div style="text-align:center;margin-bottom:12px">
             <div style="font-size:.9rem;font-weight:700;color:rgba(210,240,255,.95);margin-bottom:5px">${_escHtml(card.name)}</div>
@@ -18647,7 +18706,7 @@ function _loadAdmin(){
       try { checkBadge_stacked(); } catch(_) {}
 
       const binderLabel = b ? (binders.find(bb => String(bb.id) === String(b))?.name || 'binder') : 'your binder';
-      showToast('✓ ' + cardData.cardName + ' added — tap the card to add details');
+      showToast('' + cardData.cardName + ' added — tap the card to add details');
 
       // Cinematic hologram modal — pops the 3×3 preview of the page the
       // card landed on when targeted at a real binder. Skips for the
@@ -18835,7 +18894,7 @@ function _loadAdmin(){
         if (local) Object.assign(local, updates);
 
         closeModal('addToCollectionModal');
-        showToast('✓ Card details updated');
+        showToast('Card details updated');
         renderCollection();
         setTimeout(() => openBinderCardDetail(itemId), 100);
       } catch(e) {
@@ -19301,7 +19360,7 @@ function _loadAdmin(){
       // Library is pre-loaded as a module at page start (window._imglyRemoveBg)
       var removeBg = window._imglyRemoveBg;
       if (!removeBg) {
-        if (status) status.textContent = '⚠ Background removal unavailable — CDN blocked. Try refreshing.';
+        if (status) status.textContent = 'Background removal unavailable — CDN blocked. Try refreshing.';
         if (btn)    { btn.textContent = '✦ Remove Background'; btn.disabled = false; }
         _atcBgBusy = false;
         return;
@@ -19318,8 +19377,8 @@ function _loadAdmin(){
         });
         _atcPhotoBlob = resultBlob;
         if (thumb)  thumb.src = URL.createObjectURL(resultBlob);
-        if (status) status.textContent = '✓ Background removed · transparent PNG';
-        if (btn)    { btn.textContent = '✓ Done'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
+        if (status) status.textContent = 'Background removed · transparent PNG';
+        if (btn)    { btn.textContent = 'Done'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
       } catch (err) {
         console.error('[BG Remove]', err);
         if (status) status.textContent = 'Background removal failed — original photo kept';
@@ -19655,7 +19714,7 @@ function _loadAdmin(){
       if (variant === 'dot') {
         return '<span class="beta-dot ' + tier + '" title="' + title + '"></span>';
       }
-      return '<span class="beta-badge ' + tier + '" title="' + title + '"><span class="bb-glyph">◈</span>' + label + '</span>';
+      return '<span class="beta-badge ' + tier + '" title="' + title + '"><span class="bb-glyph"></span>' + label + '</span>';
     }
 
     function printBetaTesterSQL() {
@@ -20522,7 +20581,7 @@ function _loadAdmin(){
         }
         if (preview) preview.style.display = '';
 
-        showToast('✓ PSA cert found — grade & image pre-filled');
+        showToast('PSA cert found — grade & image pre-filled');
 
       } catch (err) {
         var msg = err.message || 'Lookup failed';
@@ -20845,7 +20904,7 @@ function _loadAdmin(){
       const isFollowing = window._followingIds && window._followingIds.has(sellerId);
       const followBtn = (!isSelf && currentUser)
         ? (isFollowing
-            ? `<button onclick="unfollowUser('${sellerId}').then(()=>openSellerProfile('${sellerId}'))" style="flex:1;padding:9px;border:1px solid var(--muted);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ FOLLOWING</button>`
+            ? `<button onclick="unfollowUser('${sellerId}').then(()=>openSellerProfile('${sellerId}'))" style="flex:1;padding:9px;border:1px solid var(--muted);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">FOLLOWING</button>`
             : `<button onclick="followUser('${sellerId}').then(()=>openSellerProfile('${sellerId}'))" style="flex:1;padding:9px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">+ FOLLOW</button>`)
         : '';
       const messageBtn = (!isSelf && currentUser)
@@ -20909,9 +20968,9 @@ function _loadAdmin(){
         const n = (r && r.count) || 0;
         if (n === 0) return; // stay hidden
         // Badge label per tier — matches the badges Phase 2 will issue.
-        const badge = n >= 100 ? '◆ ARCHIVIST'
-                    : n >= 25  ? '◆ TRUSTED CURATOR'
-                    : n >= 5   ? '◆ CURATOR'
+        const badge = n >= 100 ? 'ARCHIVIST'
+                    : n >= 25  ? 'TRUSTED CURATOR'
+                    : n >= 5   ? 'CURATOR'
                     :            '';
         slot.style.display = '';
         slot.innerHTML = ''
@@ -22664,7 +22723,7 @@ function _loadAdmin(){
       var statusMsg = (_ftLocked.A && _ftLocked.B)
         ? 'Both sides locked — analyzing…'
         : (_ftLocked[mine]
-            ? '✓ Your offer locked — waiting for ' + theirName + ' to lock in'
+            ? 'Your offer locked — waiting for ' + theirName + ' to lock in'
           : (_ftLocked[theirs]
             ? '⚡ ' + theirName + ' is locked — lock in your offer!'
           : (bHasJoined
@@ -23581,7 +23640,7 @@ function _loadAdmin(){
         if (!btn) return;
         var locked = _ftLocked[side];
         if (locked) {
-          btn.textContent = '✓ Side ' + side + ' Locked';
+          btn.textContent = 'Side ' + side + ' Locked';
           btn.disabled    = true;
           btn.style.opacity   = '0.55';
           btn.style.cursor    = 'default';
@@ -23734,7 +23793,7 @@ function _loadAdmin(){
       var pct = Math.abs(diff) / maxSide * 100;
       var verdictText, verdictColor;
       if (pct <= 10) {
-        verdictText  = '✓ Fair — ' + pct.toFixed(1) + '% difference';
+        verdictText  = 'Fair — ' + pct.toFixed(1) + '% difference';
         verdictColor = '#D2783A';
       } else if (pct <= 25) {
         verdictText  = '~ Close — ' + pct.toFixed(1) + '% difference';
@@ -23743,7 +23802,7 @@ function _loadAdmin(){
         var nameWinner = totalA > totalB
           ? ((_ftSession && _ftSession.nameA) || 'Side A')
           : ((_ftSession && _ftSession.nameB) || 'Side B');
-        verdictText  = '⚠ Uneven — ' + nameWinner + ' gives ' + pct.toFixed(1) + '% more value';
+        verdictText  = 'Uneven — ' + nameWinner + ' gives ' + pct.toFixed(1) + '% more value';
         verdictColor = '#ef4444';
       }
 
@@ -24922,7 +24981,7 @@ function _loadAdmin(){
           <!-- Tails face (hidden initially) -->
           <g id="ftCoinTails" style="display:none">
             <circle cx="40" cy="36" r="10" fill="#707070" opacity=".5"/>
-            <text x="40" y="40" text-anchor="middle" dominant-baseline="middle" font-size="18" fill="#555">⬡</text>
+            <text x="40" y="40" text-anchor="middle" dominant-baseline="middle" font-size="18" fill="#555"></text>
             <text x="40" y="60" text-anchor="middle" font-size="6" fill="#555" font-family="monospace" font-weight="700" letter-spacing="1">TAILS</text>
           </g>
         </svg>
@@ -25010,7 +25069,7 @@ function _loadAdmin(){
         btn.style.color = 'var(--muted)';
         if (statusEl) { statusEl.textContent = 'Waiting for them to confirm…'; statusEl.style.color = 'var(--muted)'; }
       } else if (theirReady) {
-        btn.textContent = '✓ CONFIRM FLIP';
+        btn.textContent = 'CONFIRM FLIP';
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.borderColor = 'var(--accent)';
@@ -25229,7 +25288,7 @@ function _loadAdmin(){
       const priceLine = owned && price
         ? `<div class="sets-cardtile-val">$${Number(price).toFixed(2)}${qty > 1 ? ` ×${qty}` : ''}</div>`
         : owned
-          ? `<div class="sets-cardtile-val">✓${qty > 1 ? ' ×' + qty : ''}</div>`
+          ? `<div class="sets-cardtile-val">×${qty}</div>`
           : `<div class="sets-cardtile-miss">Missing</div>`;
 
       const imgHtml = img
@@ -25388,7 +25447,7 @@ function _loadAdmin(){
       const priceLine = owned && price
         ? `<div class="sets-cardtile-val">$${Number(price).toFixed(2)}${qty > 1 ? ` ×${qty}` : ''}</div>`
         : owned
-          ? `<div class="sets-cardtile-val">✓${qty > 1 ? ' ×' + qty : ''}</div>`
+          ? `<div class="sets-cardtile-val">×${qty}</div>`
           : `<div class="sets-cardtile-miss">Missing</div>`;
 
       const imgHtml = card.image_url
@@ -25505,7 +25564,7 @@ function _loadAdmin(){
         <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
         ${pill(isNum,    '#  NUMBER',                                        "sortCatalogSetCards('number')",  'number')}
         ${pill(isRarity, _catalogSetDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓', "toggleCatalogRarity(this)",       'rarity')}
-        ${pill(_catalogSetOwnedFirst, '✓ OWNED FIRST',                       "sortCatalogSetCards('owned')",   'owned')}
+        ${pill(_catalogSetOwnedFirst, 'OWNED FIRST',                       "sortCatalogSetCards('owned')",   'owned')}
       </div>
       <div id="catalogSortHint" style="display:none;font-size:.58rem;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;padding-left:2px"></div>`;
     }
@@ -25785,7 +25844,7 @@ function _loadAdmin(){
         var sel = _setsLang === t.key;
         html +=   '<button type="button" role="option" class="sets-lang-opt' + (sel ? ' is-selected' : '') +
                     '" onclick="setSetsLangFromDropdown(\'' + t.key + '\')">' +
-                    (sel ? '<span class="sets-lang-opt-check">✓</span>' : '<span class="sets-lang-opt-check" style="visibility:hidden">✓</span>') +
+                    (sel ? '<span class="sets-lang-opt-check">•</span>' : '<span class="sets-lang-opt-check" style="visibility:hidden">•</span>') +
                     '<span>' + t.label + '</span>' +
                   '</button>';
       });
@@ -25819,7 +25878,7 @@ function _loadAdmin(){
           var sel = _setsPokemonLang === L.code;
           html +=   '<button type="button" role="option" class="sets-lang-opt' + (sel ? ' is-selected' : '') +
                       '" onclick="setSetsPokemonLang(\'' + L.code + '\')">' +
-                      (sel ? '<span class="sets-lang-opt-check">✓</span>' : '<span class="sets-lang-opt-check" style="visibility:hidden">✓</span>') +
+                      (sel ? '<span class="sets-lang-opt-check">•</span>' : '<span class="sets-lang-opt-check" style="visibility:hidden">•</span>') +
                       '<span>' + L.label + '</span>' +
                     '</button>';
         });
@@ -26581,7 +26640,7 @@ function _loadAdmin(){
             ? '<div style="width:100%;max-width:360px;margin-top:6px;padding-top:10px;border-top:1px dashed var(--copper-dim)">' +
                 '<div style="font-size:.55rem;color:var(--muted);letter-spacing:.1em;margin-bottom:6px;text-align:center">ADMIN</div>' +
                 (prod.needs_image_review
-                  ? '<div style="font-size:.65rem;color:var(--copper);font-style:italic;margin-bottom:6px;text-align:center">◆ Flagged' +
+                  ? '<div style="font-size:.65rem;color:var(--copper);font-style:italic;margin-bottom:6px;text-align:center">Flagged' +
                       (prod.image_review_note ? ' — "' + _escHtml(prod.image_review_note) + '"' : '') +
                     '</div>'
                   : '') +
@@ -26589,7 +26648,7 @@ function _loadAdmin(){
                   'style="width:100%;padding:8px;background:' + (prod.needs_image_review ? 'var(--copper)' : 'transparent') + ';' +
                   'color:' + (prod.needs_image_review ? '#1a0a00' : 'var(--copper)') + ';' +
                   'border:1px solid var(--copper);font-family:\'Space Mono\',monospace;font-size:.7rem;font-weight:700;letter-spacing:.06em;cursor:pointer">' +
-                  (prod.needs_image_review ? 'CLEAR IMAGE-REVIEW FLAG' : '◆ FLAG IMAGE FOR REVIEW') +
+                  (prod.needs_image_review ? 'CLEAR IMAGE-REVIEW FLAG' : 'FLAG IMAGE FOR REVIEW') +
                 '</button>' +
               '</div>'
             : '') +
@@ -26703,7 +26762,7 @@ function _loadAdmin(){
             if (match) match.quantity = newQty;
             else collectionItems.push(upd.data);
           }
-          showToast('✓ Quantity now ×' + newQty + ' in Sealed binder');
+          showToast('Quantity now ×' + newQty + ' in Sealed binder');
         } else {
           var insert = {
             user_id:      currentUser.id,
@@ -26723,7 +26782,7 @@ function _loadAdmin(){
           if (typeof collectionItems !== 'undefined' && Array.isArray(collectionItems)) {
             collectionItems.push(ins.data);
           }
-          showToast('✓ Added ×' + quantity + ' to Sealed binder');
+          showToast('Added ×' + quantity + ' to Sealed binder');
         }
       } catch(e) {
         console.warn('[sealed add] failed', e);
@@ -27620,7 +27679,7 @@ function _loadAdmin(){
             <img src="${card.image_url}" alt="${_escHtml(card.name||'')}"
               style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in"
               onclick="openImageLightbox('${card.image_url}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(184,115,51,.04);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(184,115,51,.04);border:1px solid var(--copper-dim);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:var(--copper-dim)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <div style="text-align:center;margin-bottom:16px">
             <div style="font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:5px">${_escHtml(card.name || '—')}</div>
@@ -27709,7 +27768,7 @@ function _loadAdmin(){
       // cinematic preview aligned with where the card actually lands.
       collectionItems.push(fresh);
       try { checkBadge_stacked(); } catch(_) {}
-      showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
+      showToast('' + (card.name || 'Card') + ' added — tap to add details');
 
       // Cinematic hologram modal for any singles add to a real binder.
       // Sealed product flows have their own add-to-binder path and
@@ -27753,7 +27812,7 @@ function _loadAdmin(){
           <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
           <button ${sortPillStyle('number')}>#  NUMBER</button>
           <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
-          <button ${sortPillStyle('owned')}>✓ OWNED FIRST</button>
+          <button ${sortPillStyle('owned')}>OWNED FIRST</button>
         </div>
         <div id="setsCardList" class="pb-setd-list" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 290px);overflow-y:auto;overflow-x:hidden">
           <div style="padding:32px;text-align:center;color:var(--muted)">Loading cards…</div>
@@ -28026,7 +28085,7 @@ function _loadAdmin(){
               style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${card.images?.large || img}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'>⬡</span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
@@ -28155,7 +28214,7 @@ function _loadAdmin(){
       // server load order — keeps the cinematic in sync with reality.
       collectionItems.push(fresh);
       try { checkBadge_stacked(); } catch(_) {}
-      showToast('✓ ' + (card.name || 'Card') + ' added — tap to add details');
+      showToast('' + (card.name || 'Card') + ' added — tap to add details');
 
       // Cinematic for binder-targeted singles adds (sealed flow excluded).
       // `b` is the binder dropdown value from earlier in this function.
@@ -28192,7 +28251,7 @@ function _loadAdmin(){
       if (error) { showToast('Error adding card'); return; }
       await loadCollection();
       document.getElementById('setCardDetailSheet')?.remove();
-      showToast('✓ Added to binder');
+      showToast('Added to binder');
 
       // Cinematic for binder-targeted singles adds (sealed flow excluded).
       // `binderId` was read at the top of this function from the binder
@@ -28554,6 +28613,21 @@ function _loadAdmin(){
           showPage('account'); setMobileNav('account');
         } else {
           showPage('landing'); setMobileNav('');
+        }
+      }
+
+      // ── Shippo Connect return (?shippo=connected|error) ─────────────────
+      const shippoResult = urlParams.get('shippo');
+      if (shippoResult) {
+        window.history.replaceState({}, '', window.location.pathname);
+        if (shippoResult === 'connected') {
+          showToast('Shippo account connected');
+          if (currentUser) {
+            sb.from('profiles').select('shippo_connected_at').eq('id', currentUser.id).maybeSingle()
+              .then(function (r) { if (r.data) { currentUser.shippo_connected_at = r.data.shippo_connected_at; } });
+          }
+        } else if (shippoResult === 'error') {
+          showToast('Shippo connect failed' + (urlParams.get('reason') ? ': ' + urlParams.get('reason') : ''));
         }
       }
 
@@ -29094,11 +29168,11 @@ function _loadAdmin(){
     bar.setAttribute('aria-label', 'Site status ticker');
     const track = document.createElement('div');
     track.className = 'r404-marquee-track';
-    const text = MARQUEE_PARTS.join('  ◆  ');
+    const text = MARQUEE_PARTS.join('   ');
     for (let i = 0; i < 2; i++) {
       const seg = document.createElement('span');
       seg.className = 'r404-marquee-segment';
-      seg.textContent = text + '  ◆  ';
+      seg.textContent = text + '   ';
       if (i > 0) seg.setAttribute('aria-hidden', 'true');
       track.appendChild(seg);
     }
@@ -29150,7 +29224,7 @@ function _loadAdmin(){
 })();
 
 /* ── ANCIENT CARD DECORATION ──────────────────────────────────────────────────
-   ⚠ DISABLED — the corner brackets + elemental rails created visual
+   DISABLED — the corner brackets + elemental rails created visual
    clutter that competed with the actual panel content. The IIFE is
    short-circuited below; CSS at the bottom of this file hides any
    instances that may have already been injected before the disable

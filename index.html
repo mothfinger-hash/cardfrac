@@ -363,7 +363,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 .lp-feat-card { padding:14px 18px; border-right:1.5px solid var(--border); cursor:pointer; transition:background .12s; display:flex; align-items:center; gap:12px; }
 .lp-feat-card:last-child { border-right:none; }
 .lp-feat-card:hover { background:rgba(26,199,160,.04); }
-.lp-feat-ico { width:24px; height:24px; border:1.5px solid var(--accent); display:grid; place-items:center; font-family:'Orbitron',monospace; font-weight:900; font-size:9px; color:var(--accent); flex-shrink:0; }
+.lp-feat-ico { display:none; width:24px; height:24px; border:1.5px solid var(--accent); display:grid; place-items:center; font-family:'Orbitron',monospace; font-weight:900; font-size:9px; color:var(--accent); flex-shrink:0; }
 .lp-feat-body { flex:1; min-width:0; }
 .lp-feat-title { font-family:'Orbitron',monospace; font-weight:800; font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); margin-bottom:3px; }
 .lp-feat-desc { font-family:'Space Mono',monospace; font-size:.58rem; color:var(--muted); line-height:1.5; }
@@ -438,7 +438,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 .lp-tier-per { font-family:'Space Mono',monospace; font-size:.56rem; color:var(--muted); margin-bottom:8px; }
 .lp-tier-feats { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; flex:1; }
 .lp-tier-feats li { font-family:'Space Mono',monospace; font-size:.58rem; color:var(--muted); padding-left:12px; position:relative; line-height:1.35; }
-.lp-tier-feats li::before { content:'✓'; position:absolute; left:0; color:var(--accent); font-weight:700; }
+.lp-tier-feats li::before { content:'•'; position:absolute; left:0; color:var(--accent); font-weight:700; }
 .lp-tier-cta { margin-top:10px; width:100%; padding:7px; font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.06em; cursor:pointer; transition:all .1s; border:1.5px solid var(--border); background:transparent; color:var(--muted); }
 .lp-tier-cta:hover { border-color:var(--accent); color:var(--accent); }
 .lp-tier.featured .lp-tier-cta { background:var(--accent); color:#000; border-color:#000; font-weight:700; box-shadow:2px 2px 0 #000; }
@@ -678,25 +678,29 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        mobile display:none on nav doesn't hide it when open ─────────────────── -->
   <div class="avatar-dropdown" id="avatarDropdown">
     <div class="dd-badge-section">
-      <div class="dd-badge-label">⬡ Badges</div>
+      <div class="dd-badge-label">Badges</div>
       <div class="dd-badge-grid" id="ddBadgeGrid"></div>
     </div>
-    <div class="dropdown-item" id="myAccountBtn">⬡ My Account</div>
+    <div class="dropdown-item" id="myAccountBtn">My Account</div>
     <div class="dropdown-divider"></div>
     <!-- Admin-only: opens the admin notifications panel. Hidden by JS
          (updateAdminBellBadge) for non-admins. Unread count is rendered
-         inline so the dropdown shows e.g. "⬡ Admin Alerts (3)". -->
+         inline so the dropdown shows e.g. "Admin Alerts (3)". -->
     <div class="dropdown-item" id="adminBellBtn" style="display:none;color:var(--copper)" onclick="openAdminNotificationsPanel();document.getElementById('avatarDropdown')?.classList?.remove('open')">
-      ⬡ Admin Alerts <span id="adminBellCount" style="margin-left:4px"></span>
+      Admin Alerts <span id="adminBellCount" style="margin-left:4px"></span>
     </div>
     <div class="dropdown-divider" id="adminBellDivider" style="display:none"></div>
     <div class="dropdown-item" id="createAvatarBtn">Create Avatar</div>
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" onclick="openModal('redeemBetaModal');document.getElementById('avatarDropdown')?.classList?.remove('open')">⬡ Redeem Beta Code</div>
+    <div class="dropdown-item" onclick="openModal('redeemBetaModal');document.getElementById('avatarDropdown')?.classList?.remove('open')">Redeem Beta Code</div>
+    <!-- Beta testers only: surfaced by _refreshBetaInviteMenu() when the user
+         has a subsidiary-invite quota. Routes to Generate (if invites left)
+         or My Invites (if all used). -->
+    <div class="dropdown-item" id="betaInviteBtn" style="display:none" onclick="openSubsidiaryInviteMenu();document.getElementById('avatarDropdown')?.classList?.remove('open')">Invite Friends <span id="betaInviteCount" style="margin-left:4px;color:var(--muted)"></span></div>
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" onclick="openAccountSettingsModal();document.getElementById('avatarDropdown')?.classList?.remove('open')">⬡ Account Settings</div>
+    <div class="dropdown-item" onclick="openAccountSettingsModal();document.getElementById('avatarDropdown')?.classList?.remove('open')">Account Settings</div>
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">⏻ Sign Out</div>
+    <div class="dropdown-item" id="signOutBtn" style="color:var(--red)">Sign Out</div>
   </div>
 
   <!-- ── TOP NAV (mobile, non-sticky) ──────────────────────────────────────── -->
@@ -935,7 +939,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="redeemBetaModal">
     <div class="modal" style="max-width:440px">
       <button class="modal-close" onclick="closeModal('redeemBetaModal')">×</button>
-      <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Beta Access</div>
+      <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Beta Access</div>
       <h3 style="margin-bottom:4px;font-size:1.1rem">Redeem Invite Code</h3>
       <p class="modal-sub" style="margin-bottom:14px">Enter the beta invite code an admin shared with you. Codes are case-insensitive and look like <code style="font-family:'Space Mono',monospace;color:var(--accent)">XXXX-XXXX-XXXX</code>.</p>
       <div class="form-group">
@@ -959,7 +963,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="adminNotificationsModal">
     <div class="modal" style="max-width:640px;max-height:80vh;overflow-y:auto">
       <button class="modal-close" onclick="closeModal('adminNotificationsModal')">×</button>
-      <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Admin Alerts</div>
+      <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Admin Alerts</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <h3 style="margin:0;font-size:1.1rem">Notifications</h3>
         <button type="button" onclick="markAllAdminNotificationsRead()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:5px 10px;cursor:pointer">Mark all read</button>
@@ -982,7 +986,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="orderMessagesModal">
     <div class="modal" style="max-width:520px;display:flex;flex-direction:column;max-height:80vh">
       <button class="modal-close" onclick="closeModal('orderMessagesModal')">×</button>
-      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Messages</div>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Messages</div>
       <h3 id="orderMessagesTitle" style="margin-bottom:6px;font-size:1.05rem">Messages</h3>
       <p class="modal-sub" id="orderMessagesSub" style="margin-bottom:12px"></p>
 
@@ -1013,7 +1017,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="returnRequestModal">
     <div class="modal" style="max-width:480px">
       <button class="modal-close" onclick="closeModal('returnRequestModal')">×</button>
-      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">⚠ Report Issue</div>
+      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Report Issue</div>
       <h3 style="margin-bottom:8px;font-size:1.1rem">Request a refund / return</h3>
       <p class="modal-sub" style="margin-bottom:14px">
         The seller is notified immediately and has 48 hours to respond. If they don&rsquo;t, an admin steps in.
@@ -1058,7 +1062,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="sellerRefundConfirmModal">
     <div class="modal" style="max-width:440px">
       <button class="modal-close" onclick="closeModal('sellerRefundConfirmModal')">×</button>
-      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">⚠ Confirm Refund</div>
+      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Confirm Refund</div>
       <h3 style="margin-bottom:10px;font-size:1.1rem">Issue a full refund?</h3>
       <div id="sellerRefundBody" style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px"></div>
       <input type="hidden" id="sellerRefundOrderId" />
@@ -1086,7 +1090,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="editMarketplaceListingModal">
     <div class="modal" style="max-width:560px">
       <button class="modal-close" onclick="closeModal('editMarketplaceListingModal')">×</button>
-      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Edit Listing</div>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Edit Listing</div>
       <h3 style="margin-bottom:14px;font-size:1.1rem" id="emlTitle">Edit Listing</h3>
 
       <input type="hidden" id="emlListingId" />
@@ -1150,7 +1154,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="accountSettingsModal">
     <div class="modal" style="max-width:520px">
       <button class="modal-close" onclick="closeModal('accountSettingsModal')">×</button>
-      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">◈ Account Settings</div>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Account Settings</div>
       <h3 style="margin-bottom:14px;font-size:1.1rem">Manage your account</h3>
       <div id="accountSettingsBody"></div>
     </div>
@@ -1163,7 +1167,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="deleteAccountModal">
     <div class="modal" style="max-width:480px">
       <button class="modal-close" onclick="closeModal('deleteAccountModal')">×</button>
-      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">⚠ Delete Account</div>
+      <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Delete Account</div>
       <h3 style="margin-bottom:10px;font-size:1.1rem">This will delete your PathBinder account</h3>
       <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px">
         After you confirm:
@@ -1199,7 +1203,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="betaDiscordModal">
     <div class="modal" style="max-width:440px;text-align:center">
       <button class="modal-close" onclick="closeModal('betaDiscordModal')">×</button>
-      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:6px;text-transform:uppercase">◈ Welcome to the Beta</div>
+      <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:6px;text-transform:uppercase">Welcome to the Beta</div>
       <h3 style="margin-bottom:6px;font-size:1.15rem">You're in.</h3>
       <p style="font-size:.85rem;color:var(--muted);line-height:1.55;margin-bottom:18px">
         Beta testers report bugs and feature ideas in real time on our Discord. It's the fastest way to reach the team and shape PathBinder before launch.
@@ -1559,7 +1563,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <input type="text" class="atc-input" id="soNotes" placeholder="Any additional notes" style="width:100%" />
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="confirmSoldOffline()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Mark as Sold</button>
+        <button onclick="confirmSoldOffline()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Mark as Sold</button>
         <button onclick="closeModal('soldOfflineModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1615,7 +1619,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       </div>
       <div id="msError" style="display:none;color:var(--red);font-size:.75rem;margin-bottom:10px"></div>
       <div style="display:flex;gap:10px">
-        <button id="msSubmitBtn" onclick="submitMarkSold()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Record Sale</button>
+        <button id="msSubmitBtn" onclick="submitMarkSold()" style="flex:1;padding:12px;background:var(--green);color:var(--surface);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Record Sale</button>
         <button onclick="closeModal('markSoldModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1659,7 +1663,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       </div>
       <div id="euError" style="display:none;color:var(--red);font-size:.75rem;margin-bottom:10px"></div>
       <div style="display:flex;gap:10px">
-        <button id="euSubmitBtn" onclick="saveUnitEdit()" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Save Unit</button>
+        <button id="euSubmitBtn" onclick="saveUnitEdit()" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Save Unit</button>
         <button onclick="closeModal('editUnitModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -1686,7 +1690,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <span>Don't ask again on this device</span>
       </label>
       <div style="display:flex;gap:10px">
-        <button id="delistConfirmBtn" onclick="confirmDelistAndSell()" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Pull &amp; Sell</button>
+        <button id="delistConfirmBtn" onclick="confirmDelistAndSell()" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Pull &amp; Sell</button>
         <button onclick="closeModal('delistConfirmModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -2005,9 +2009,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <div style="display:flex;justify-content:space-between"><span style="color:var(--accent)">Total</span><span id="buyCardTotal" style="color:var(--accent);font-weight:700"></span></div>
       </div>
       <div style="font-size:.72rem;color:var(--muted);margin-bottom:16px;line-height:1.7">
-        ✓ Secure payment via Stripe<br>
-        ✓ 7-day buyer protection window — dispute if the card doesn't match the listing<br>
-        ✓ Stripe-secured checkout · dispute resolution if needed
+        Secure payment via Stripe<br>
+        7-day buyer protection window — dispute if the card doesn't match the listing<br>
+        Stripe-secured checkout · dispute resolution if needed
       </div>
       <input type="hidden" id="buyCardListingId" />
       <div style="display:flex;gap:10px">
@@ -2031,8 +2035,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <div id="shipToDisplay" style="font-size:.8rem;color:var(--text);line-height:1.45">—</div>
       </div>
 
-      <!-- ◈ Buy a label (Shippo) -->
-      <div style="font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:.1em;color:var(--copper);margin:6px 0 10px">◈ BUY A LABEL</div>
+      <!-- Buy a label (Shippo) -->
+      <div style="font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:.1em;color:var(--copper);margin:6px 0 10px">BUY A LABEL</div>
+
+      <!-- Shippo Connect status (Phase 2 — labels bill to the seller's own account) -->
+      <div id="shippoConnectRow" style="margin-bottom:12px;font-size:.72rem;color:var(--muted);line-height:1.5"></div>
 
       <!-- Seller return address (prefilled; saved for next time) -->
       <div id="shipFromBlock" style="margin-bottom:12px">
@@ -2102,8 +2109,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div class="modal-overlay" id="orderConfirmedModal">
     <div class="modal" style="max-width:420px;text-align:center">
       <button class="modal-close" onclick="closeModal('orderConfirmedModal')">×</button>
-      <div style="font-size:2.4rem;color:var(--green);line-height:1;margin:8px 0 10px">&#10003;</div>
-      <h3 style="margin-bottom:8px">Order Confirmed</h3>
+      <h3 style="margin-bottom:8px;color:var(--green)">Order Confirmed</h3>
       <p class="modal-sub" style="margin-bottom:20px">Your payment went through and the seller has been notified to ship. We&rsquo;ll email you tracking as soon as it&rsquo;s on its way.</p>
       <div style="display:flex;gap:10px">
         <button onclick="closeModal('orderConfirmedModal');showPage('account');switchAccountTab('myOrders')" style="flex:1;padding:12px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.86rem;font-weight:700;cursor:pointer">View My Orders</button>
@@ -2141,7 +2147,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     <div class="modal" style="width:min(420px,92vw);padding:28px 24px">
       <button class="modal-close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
       <div style="font-family:'Space Mono','Share Tech Mono',monospace">
-        <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(26,199,160,.65);margin-bottom:14px">⬡ CARD SEARCH</div>
+        <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(26,199,160,.65);margin-bottom:14px">CARD SEARCH</div>
         <!-- Game / TCG selector — mirrors the desktop dropdown so mobile
              search isn't pinned to Pokemon. acSetMobGame() handles the
              selection and toggles the EN/JA strip below (Pokemon-only). -->
@@ -2244,7 +2250,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <span class="lp-feat-arrow">→</span>
       </div>
       <div class="lp-feat-card" onclick="openAuthModal('signup')">
-        <div class="lp-feat-ico">◈</div>
+        <div class="lp-feat-ico"></div>
         <div class="lp-feat-title">Ghost Card Fund</div>
         <div class="lp-feat-desc">Save for the cards you want. Watch your fund grow as you collect.</div>
         <span class="lp-feat-arrow">→</span>
@@ -2377,7 +2383,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          non-admins see this, admins see #browseRealContent below.
          Hidden by default so SSR / first paint doesn't flash for admins. -->
     <div id="browseComingSoon" style="display:none;text-align:center;padding:80px 24px 60px;max-width:560px;margin:0 auto">
-      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.14em;color:var(--copper);margin-bottom:14px;text-transform:uppercase">◈ Marketplace</div>
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.14em;color:var(--copper);margin-bottom:14px;text-transform:uppercase">Marketplace</div>
       <h2 style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--text);margin:0 0 14px;letter-spacing:.05em">Coming Soon</h2>
       <p style="font-size:.88rem;color:var(--muted);line-height:1.65;margin:0 0 28px">
         The PathBinder marketplace is in private beta and not yet open
@@ -2471,7 +2477,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div id="accountPage" class="page" data-tab="dashboard">
     <div class="pb-page-hdr">
       <div class="pb-page-hdr-main">
-        <div class="pb-page-hdr-title">◈ Account</div>
+        <div class="pb-page-hdr-title">Account</div>
       </div>
       <!-- Mobile-only user chip — mirrors sidebar chip, opens same avatar dropdown -->
       <div id="mobileUserChip" onclick="toggleTopNavDropdown(event)" style="display:none;align-items:center;gap:8px;cursor:pointer;padding:5px 10px;border:1px solid var(--border);position:relative;flex-shrink:0">
@@ -2637,7 +2643,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <div class="pb-panel">
         <div class="pb-panel-h">
           <div class="pb-panel-title">
-            <span class="pb-panel-title-ico">⬢</span>
+            <span class="pb-panel-title-ico"></span>
             Payments
           </div>
         </div>
@@ -2842,8 +2848,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
              only thing on the right on desktop (Add Card/⋯ live in
              pb-panel-h on desktop). -->
         <div class="ac-list-grid-icons" style="display:flex;gap:3px;flex-shrink:0;margin-left:auto">
-          <button id="acViewBtnList" class="allcards-sort-btn active" onclick="setAllCardsView('list')"   title="List view"  style="padding:4px 8px;font-size:.7rem">☰</button>
-          <button id="acViewBtnGrid" class="allcards-sort-btn"        onclick="setAllCardsView('acgrid')" title="Grid view"  style="padding:4px 8px;font-size:.7rem">⊞</button>
+          <button id="acViewBtnList" class="allcards-sort-btn active" onclick="setAllCardsView('list')"   title="List view"  style="padding:4px 8px;font-size:.7rem"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:middle"><line x1="2" y1="4" x2="12" y2="4"/><line x1="2" y1="7" x2="12" y2="7"/><line x1="2" y1="10" x2="12" y2="10"/></svg></button>
+          <button id="acViewBtnGrid" class="allcards-sort-btn"        onclick="setAllCardsView('acgrid')" title="Grid view"  style="padding:4px 8px;font-size:.7rem"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:middle"><rect x="2" y="2" width="4" height="4"/><rect x="8" y="2" width="4" height="4"/><rect x="2" y="8" width="4" height="4"/><rect x="8" y="8" width="4" height="4"/></svg></button>
         </div>
         <!-- Mobile-only Add Card + ⋯ — visually separate group pushed to
              the right edge so the row reads as two clusters:
@@ -3307,10 +3313,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <div id="ftHowToModal" class="ft-howto-overlay" style="display:none" onclick="if(event.target===this)ftCloseHowItWorks()">
     <div class="ft-howto-card" role="dialog" aria-modal="true" aria-labelledby="ftHowToTitle">
       <button class="ft-howto-close" onclick="ftCloseHowItWorks()" aria-label="Close">×</button>
-      <div class="ft-howto-title" id="ftHowToTitle">◈ How It Works</div>
+      <div class="ft-howto-title" id="ftHowToTitle">How It Works</div>
       <div class="ft-howto-jp">使い方</div>
 
-      <h4>◇ Build Each Side</h4>
+      <h4>Build Each Side</h4>
       <p>
         <span class="ft-howto-tag">SEARCH</span>
         <span class="ft-howto-tag">SCAN</span>
@@ -3319,14 +3325,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         Tack on cash with the <strong>+$</strong> field.
       </p>
 
-      <h4>◇ Analyze Trade</h4>
+      <h4>Analyze Trade</h4>
       <p>
         Runs prices in parallel through TCGPlayer and PriceCharting,
         then drops you on the verdict gauge. Use this for an offline
         in-person valuation.
       </p>
 
-      <h4>◇ Create Trade Link</h4>
+      <h4>Create Trade Link</h4>
       <p>
         Generates a live session and a QR code. Share it with the
         other trader — they join, build their side, and you both
@@ -3334,14 +3340,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         fires automatically and you both see the same gauge.
       </p>
 
-      <h4>◇ Coin Flip</h4>
+      <h4>Coin Flip</h4>
       <p>
         On the results screen both traders can press
         <strong>COIN FLIP</strong> for a tie-break or "who picks first"
         decision. The result is synced — neither side can rig it.
       </p>
 
-      <h4>◇ Accept Trade</h4>
+      <h4>Accept Trade</h4>
       <p>
         Hitting <strong>Accept Trade</strong> moves the offered cards
         out of your binder and brings the received cards in.
@@ -3384,7 +3390,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     <div class="pb-panel">
       <div class="pb-panel-h">
         <div class="pb-panel-title">
-          <span class="pb-panel-title-ico">◈</span>
+          <span class="pb-panel-title-ico"></span>
           Rankings
         </div>
         <div class="pb-panel-actions">

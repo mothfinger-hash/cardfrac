@@ -83,12 +83,18 @@ function resolveToken(sellerProfile) {
 }
 
 async function shippo(path, method, body, token) {
+  // OAuth (per-seller) tokens start with "oauth." and authenticate as Bearer,
+  // and on-behalf-of calls require a pinned API version. Platform-account
+  // tokens (shippo_test_/shippo_live_) use the "ShippoToken" scheme.
+  const isOauth = /^oauth\./.test(token || '');
+  const headers = {
+    'Authorization': (isOauth ? 'Bearer ' : 'ShippoToken ') + token,
+    'Content-Type': 'application/json',
+  };
+  if (isOauth) headers['Shippo-API-Version'] = '2018-02-08';
   const r = await fetch('https://api.goshippo.com' + path, {
     method: method || 'GET',
-    headers: {
-      'Authorization': 'ShippoToken ' + token,
-      'Content-Type': 'application/json',
-    },
+    headers: headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await r.text();
@@ -143,8 +149,7 @@ module.exports = async function handler(req, res) {
   // ── Seller (from) + buyer (to) addresses ────────────────────────────────
   const { data: seller } = await sb
     .from('profiles')
-    // NOTE: Phase 2 adds shippo_oauth_token here once the column + OAuth exist.
-    .select('ship_from_name, ship_from_street1, ship_from_street2, ship_from_city, ship_from_state, ship_from_zip, ship_from_country, ship_from_phone, shop_name, name, email')
+    .select('ship_from_name, ship_from_street1, ship_from_street2, ship_from_city, ship_from_state, ship_from_zip, ship_from_country, ship_from_phone, shop_name, name, email, shippo_oauth_token')
     .eq('id', user.id)
     .single();
 

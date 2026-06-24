@@ -102,16 +102,18 @@ module.exports = async function handler(req, res) {
       // PII we send; everything else (legal name, DOB, SSN-4, bank acct) is
       // collected by Stripe directly so we never see it.
       //
-      // capabilities: card_payments + transfers are the two we need for
-      // destination charges. Stripe will gate them behind the requirements
-      // it collects during onboarding.
+      // capabilities: destination charges only need `transfers` on the
+      // connected (seller) account — the platform account handles the actual
+      // card payment, so the seller is a recipient. We deliberately do NOT
+      // request card_payments: it would put sellers through full merchant KYC
+      // they don't need and doesn't match the recipient config. Stripe gates
+      // transfers behind the identity/bank requirements it collects in onboarding.
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US', // tighten later when we expand
         email: profile.email || user.email || undefined,
         capabilities: {
-          card_payments: { requested: true },
-          transfers:     { requested: true },
+          transfers: { requested: true },
         },
         business_type: 'individual', // sellers can override during onboarding
         metadata: {

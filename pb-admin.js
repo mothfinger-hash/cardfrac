@@ -58,7 +58,7 @@ function _pbInjectAdminMarkup(){
          ?admin=disputes&order=<id> scrolls + highlights a specific row. -->
     <div id="adminDisputesPanel" style="background:var(--surface);border:1.5px solid var(--red);border-radius:14px;padding:18px;margin-bottom:24px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <div style="font-size:.75rem;color:var(--red);letter-spacing:.08em">⚠ Open Disputes <span id="adminDisputesCount" style="color:var(--muted)"></span></div>
+        <div style="font-size:.75rem;color:var(--red);letter-spacing:.08em">Open Disputes <span id="adminDisputesCount" style="color:var(--muted)"></span></div>
         <div style="display:flex;gap:6px">
           <button type="button" onclick="sendAdminTestEmail()" title="Triggers the admin-notify-dispute endpoint for the most recent disputed order to verify Resend wiring" style="background:transparent;border:1px solid var(--copper);color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Send test email</button>
           <button type="button" onclick="loadAdminDisputes()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Refresh</button>
@@ -95,7 +95,7 @@ function _pbInjectAdminMarkup(){
 
     <!-- Order Refund Tool -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
-      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);margin-bottom:8px;text-transform:uppercase">◈ Order Refund</div>
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);margin-bottom:8px;text-transform:uppercase">Order Refund</div>
       <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
         Refund a marketplace order via the Stripe refund API. Refunds the buyer, marks the order refunded, and restores the listing to available. Use within the 7-day buyer protection window or when resolving disputes.
       </div>
@@ -129,7 +129,7 @@ function _pbInjectAdminMarkup(){
     <!-- Beta Tester Manager — invite-only access for pre-launch testers -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Beta Testers</div>
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Beta Testers</div>
         <button onclick="printBetaTesterSQL();showToast('Beta tester SQL printed to console')"
           style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Print SQL</button>
       </div>
@@ -270,6 +270,15 @@ function _pbInjectAdminMarkup(){
       </div>
     </div>
 
+    <!-- Subsidiary invite tracker (read-only). Lists friend-of-tester codes. -->
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Subsidiary Invites</div>
+        <button type="button" onclick="renderAdminSubsidiaryInvites()" style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Refresh</button>
+      </div>
+      <div id="adminSubsidiaryInvitesList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
+    </div>
+
     </div>
 <div class="admin-panel" id="adminCardData">
     <!-- Card Editor — admin-curated overrides driven by user error reports -->
@@ -321,7 +330,7 @@ function _pbInjectAdminMarkup(){
          reject with a reason to add a strike. -->
     <div style="margin-top:24px;border:1px solid var(--accent);background:rgba(26,199,160,.04);padding:16px 18px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Catalog Image Contributions</div>
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Catalog Image Contributions</div>
         <button onclick="renderAdminContributionQueue()" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent);font-size:.62rem">Refresh</button>
       </div>
       <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
@@ -337,7 +346,7 @@ function _pbInjectAdminMarkup(){
          backlog clears in order. -->
     <div style="margin-top:24px;border:1px solid var(--copper-dim);background:rgba(184,115,51,.04);padding:16px 18px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Image Review Queue</div>
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Image Review Queue</div>
         <button onclick="renderAdminImageReviewQueue()" class="pb-panel-link" style="border-color:var(--copper-dim);color:var(--copper);font-size:.62rem">Refresh</button>
       </div>
       <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
@@ -354,7 +363,7 @@ function _pbInjectAdminMarkup(){
          version, which clears the needs_manual_bg flag. -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">◈ Sealed BG Review</div>
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Sealed BG Review</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button onclick="adminLoadBgReviewQueue()" id="adminBgReviewLoadBtn"
             style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:5px 12px;border:1px solid var(--copper);background:rgba(184,115,51,.12);color:var(--copper);cursor:pointer">Load Queue</button>
@@ -371,7 +380,7 @@ function _pbInjectAdminMarkup(){
 
     <!-- Image Backfill Tool -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
-      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">◈ Image Backfill</div>
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">Image Backfill</div>
       <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
         Repair missing card images for any user. Finds cards with <code>api_card_id</code> but no <code>card_image_url</code> and fills them from the catalog.
       </div>
@@ -392,7 +401,7 @@ function _pbInjectAdminMarkup(){
     <!-- Shop Tier Metrics -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Shop Tier Metrics</div>
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Shop Tier Metrics</div>
         <button onclick="adminLoadShopMetrics()"
           style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:6px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">Refresh</button>
       </div>
@@ -405,7 +414,7 @@ function _pbInjectAdminMarkup(){
     <!-- Sealed Products Migration + Sync -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">◈ Sealed Products</div>
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Sealed Products</div>
         <button onclick="printSealedProductsMigration();showToast('Sealed products migration printed to console')"
           style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Print SQL</button>
       </div>
@@ -420,7 +429,7 @@ function _pbInjectAdminMarkup(){
 
     <!-- Danger Zone -->
     <div style="margin-top:24px;border:1px solid rgba(255,60,60,.35);background:rgba(255,60,60,.04);padding:16px 18px">
-      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:rgba(255,100,100,.85);margin-bottom:14px;text-transform:uppercase">⚠ Danger Zone</div>
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:rgba(255,100,100,.85);margin-bottom:14px;text-transform:uppercase">Danger Zone</div>
       <div style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
         Permanently delete all collection cards for a user. Binders are kept. This cannot be undone.
       </div>
@@ -451,7 +460,7 @@ function _pbInjectAdminMarkup(){
       await sb.from('vendor_applications').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', appId);
       vendorApplications = vendorApplications.map(a => a.id === appId ? { ...a, status: 'approved' } : a);
       renderAdminVendorApplications();
-      showToast('Vendor approved ✓');
+      showToast('Vendor approved ');
     }
 
     async function rejectVendorApplication(appId) {
@@ -481,8 +490,8 @@ function _pbInjectAdminMarkup(){
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
               <span style="font-size:.7rem;color:${statusColor};letter-spacing:.06em;text-transform:uppercase">${a.status}</span>
               ${a.status === 'pending' ? `
-                <button onclick="approveVendorApplication('${a.user_id}','${a.id}')" style="padding:6px 14px;background:rgba(210,120,40,.12);border:1px solid var(--green);color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✓ Approve</button>
-                <button onclick="rejectVendorApplication('${a.id}')" style="padding:6px 14px;background:transparent;border:1px solid var(--red);color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">✗ Reject</button>
+                <button onclick="approveVendorApplication('${a.user_id}','${a.id}')" style="padding:6px 14px;background:rgba(210,120,40,.12);border:1px solid var(--green);color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">Approve</button>
+                <button onclick="rejectVendorApplication('${a.id}')" style="padding:6px 14px;background:transparent;border:1px solid var(--red);color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">Reject</button>
               ` : ''}
             </div>
           </div>
@@ -490,8 +499,67 @@ function _pbInjectAdminMarkup(){
       }).join('');
     }
 
+    // ─── Admin: Subsidiary invite tracker (read-only) ──────────────────
+    // Lists every friend-of-tester invite code. Admins can SELECT all rows
+    // (RLS grants it). Inviter / claimer names are fetched separately to
+    // avoid FK-embed ambiguity (two FKs to profiles).
+    async function renderAdminSubsidiaryInvites() {
+      const el = document.getElementById('adminSubsidiaryInvitesList');
+      if (!el) return;
+      el.innerHTML = '<div style="color:var(--muted);font-size:.8rem">Loading…</div>';
+      try {
+        const r = await sb.from('subsidiary_invites')
+          .select('id, code, inviter_id, inviter_tier, granted_tier, duration_months, created_at, claimed_at, claimed_by, expires_at, revoked_at')
+          .order('created_at', { ascending: false })
+          .limit(500);
+        if (r.error) {
+          const m = String(r.error.message || '');
+          el.innerHTML = '<div style="color:var(--red);font-size:.8rem">' +
+            (/does not exist|relation|schema cache/i.test(m) ? 'Subsidiary invites table not found — run migration_subsidiary_invites.sql.' : m) + '</div>';
+          return;
+        }
+        const rows = r.data || [];
+        const ids = Array.from(new Set([].concat(rows.map(x => x.inviter_id), rows.map(x => x.claimed_by)).filter(Boolean)));
+        const pmap = {};
+        if (ids.length) {
+          const pr = await sb.from('profiles').select('id, username, email').in('id', ids);
+          (pr.data || []).forEach(p => { pmap[p.id] = p; });
+        }
+        const total = rows.length;
+        const claimed = rows.filter(x => x.claimed_at).length;
+        const revoked = rows.filter(x => x.revoked_at).length;
+        const open = total - claimed - revoked;
+        const summary = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-family:\'Space Mono\',monospace;font-size:.62rem;color:var(--muted)">' +
+          '<span>Total: <strong style="color:var(--text)">' + total + '</strong></span>' +
+          '<span>Claimed: <strong style="color:var(--green)">' + claimed + '</strong></span>' +
+          '<span>Unclaimed: <strong style="color:var(--accent)">' + open + '</strong></span>' +
+          '<span>Revoked: <strong style="color:var(--red)">' + revoked + '</strong></span></div>';
+        if (!total) { el.innerHTML = summary + '<div style="color:var(--muted);font-size:.8rem">No subsidiary invites yet.</div>'; return; }
+        const nameOf = (id) => { const p = pmap[id]; return p ? (p.username || p.email || String(id).slice(0, 8)) : (id ? String(id).slice(0, 8) : '—'); };
+        const fmt = (d) => d ? new Date(d).toLocaleDateString() : '—';
+        const list = rows.map(x => {
+          let status = 'Unclaimed', color = 'var(--accent)';
+          if (x.revoked_at) { status = 'Revoked'; color = 'var(--red)'; }
+          else if (x.claimed_at) { status = 'Claimed'; color = 'var(--green)'; }
+          return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">' +
+            '<div style="min-width:0">' +
+              '<div style="font-family:\'Courier New\',monospace;font-size:.8rem;color:var(--text);letter-spacing:.06em">' + x.code + '</div>' +
+              '<div style="font-size:.66rem;color:var(--muted);margin-top:2px">from <strong style="color:var(--text)">' + nameOf(x.inviter_id) + '</strong> (' + x.inviter_tier + ') · grants ' + x.granted_tier + ' ' + x.duration_months + 'mo · created ' + fmt(x.created_at) + '</div>' +
+              (x.claimed_by ? '<div style="font-size:.66rem;color:var(--muted)">claimed by <strong style="color:var(--text)">' + nameOf(x.claimed_by) + '</strong> ' + fmt(x.claimed_at) + ' · expires ' + fmt(x.expires_at) + '</div>' : '') +
+            '</div>' +
+            '<span style="font-size:.66rem;color:' + color + ';letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">' + status + '</span>' +
+          '</div>';
+        }).join('');
+        el.innerHTML = summary + '<div style="display:flex;flex-direction:column;gap:8px">' + list + '</div>';
+      } catch (e) {
+        el.innerHTML = '<div style="color:var(--red);font-size:.8rem">' + (e.message || 'Error') + '</div>';
+      }
+    }
+    window.renderAdminSubsidiaryInvites = renderAdminSubsidiaryInvites;
+
     function renderAdmin() {
       renderAdminOverview();
+      try { renderAdminSubsidiaryInvites(); } catch (_) {}
       loadVendorApplications().then(renderAdminVendorApplications);
       loadAdminClearCollectionUsers();
       renderAdminBetaTesters();
@@ -1070,7 +1138,7 @@ function _pbInjectAdminMarkup(){
         +       '<div><span style="color:var(--accent)">By</span> ' + _escHtml(prof.username || prof.email || r.user_id.slice(0, 8)) + ' (' + _escHtml(tier) + ')</div>'
         +       '<div><span style="color:var(--accent)">When</span> ' + _escHtml(submittedAgo) + '</div>'
         +       '<div><span style="color:var(--accent)">Catalog id</span> <code style="color:var(--muted);font-size:.55rem">' + _escHtml(r.catalog_id) + '</code></div>'
-        +       (cat.image_url ? '<div style="color:var(--copper);margin-top:4px">⚠ Catalog row ALREADY has an image — this would replace it.</div>' : '')
+        +       (cat.image_url ? '<div style="color:var(--copper);margin-top:4px">Catalog row ALREADY has an image — this would replace it.</div>' : '')
         +       (r.notes ? '<div style="margin-top:4px;color:var(--text)">Note: <em>' + _escHtml(r.notes) + '</em></div>' : '')
         +     '</div>'
         +     '<div style="display:flex;gap:6px">'

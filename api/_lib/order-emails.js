@@ -37,7 +37,7 @@ function renderShell(opts) {
 '<table role="presentation" width="540" cellspacing="0" cellpadding="0" border="0" style="max-width:540px;width:100%;background:rgba(10,14,26,0.94);border:1px solid #1AC7A0;border-radius:14px;box-shadow:0 0 0 1px rgba(26,199,160,0.4), 0 0 28px rgba(26,199,160,0.35), 0 0 64px rgba(26,199,160,0.18)">' +
 '<tr><td style="padding:34px 30px 6px;text-align:center">' +
 '<img src="' + logoUrl + '" alt="PathBinder" width="140" style="display:inline-block;max-width:140px;height:auto;margin-bottom:14px" />' +
-'<div style="font-family:Helvetica,Arial,sans-serif;font-size:13px;font-weight:800;letter-spacing:0.22em;color:#B87333;text-transform:uppercase;margin-top:8px">&#9672;&nbsp; ' + escapeHtml(opts.badge || '') + ' &nbsp;&#9672;</div>' +
+'<div style="font-family:Helvetica,Arial,sans-serif;font-size:13px;font-weight:800;letter-spacing:0.22em;color:#B87333;text-transform:uppercase;margin-top:8px">' + escapeHtml(opts.badge || '') + '</div>' +
 '</td></tr>' +
 '<tr><td style="padding:8px 36px 0">' +
 '<h1 style="font-family:Helvetica,Arial,sans-serif;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:0.03em;margin:14px 0 14px;text-align:center">' + escapeHtml(opts.heading || '') + '</h1>' +
