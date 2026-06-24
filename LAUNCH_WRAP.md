@@ -61,19 +61,24 @@ SW is at **v605**. Committed as `76efbeb` on `main`.
 
 ## 3. Marketplace → Stripe live
 
-Subscriptions are already on live Stripe (Supabase edge functions).
-The **marketplace** side (Vercel Node functions) is separate and still
-needs the live switch:
+Key fact: the **marketplace and subscriptions share the same Vercel
+webhook** (`/api/stripe-webhook`) and the **same two env vars**
+(`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`). That one function handles
+subscription tier grants, marketplace purchases, Connect updates,
+disputes, and refunds. So because subscriptions are already live, the
+marketplace is almost entirely live too.
 
-- Set in **Vercel** env:
-  - `STRIPE_SECRET_KEY` = `sk_live_…`
-  - `STRIPE_WEBHOOK_SECRET` = signing secret from the **live**
-    `https://pathbinder.gg/api/stripe-webhook` endpoint
-- In **Stripe (live mode)**: create that webhook endpoint
-  (`checkout.session.completed` at minimum) and **enable Connect**.
-- Verify the **live** Collector price is **recurring** (the test one
-  tripped us up); add live annual prices if you're offering them.
-- Redeploy Vercel after setting env vars.
+Verified 2026-06-24:
+
+- **Connect:** active in **Live** mode (0 connected accounts yet — normal).
+- **Live webhook** at `https://pathbinder.gg/api/stripe-webhook` has 9 of
+  10 events. **TODO: add `capability.updated`** (Connect payout-readiness
+  sync) — search it in the endpoint's event list and save.
+- **TODO: confirm Vercel env** `STRIPE_SECRET_KEY` = `sk_live_…` and
+  `STRIPE_WEBHOOK_SECRET` = the **live** endpoint's `whsec_…`. (If they
+  weren't already live, set them and redeploy Vercel.)
+- Marketplace charges are dynamic amounts, so **no Stripe price objects
+  needed** for the marketplace (that's a subscription-only concern).
 
 **Redeploy the Supabase edge functions** to pick up the trim /
 profile-tier / customer self-heal / synchronous-tier fixes:
@@ -82,6 +87,23 @@ profile-tier / customer self-heal / synchronous-tier fixes:
 supabase functions deploy create-checkout-session
 supabase functions deploy stripe-webhook
 ```
+
+**Data cleanup — one stale listing.** A card "sold" during the earlier
+405-webhook window never got flipped to sold, so it's still showing in
+the marketplace. Run once in Supabase to reconcile any listing that has a
+paid order (safe + idempotent):
+
+```sql
+update listings l
+set status = 'sold',
+    sold_to = o.buyer_id
+from orders o
+where o.listing_id = l.id
+  and o.status in ('paid','shipped','completed')
+  and l.status in ('active','available');
+```
+
+Then hard-refresh the marketplace (listings are cached client-side).
 
 ---
 
@@ -122,7 +144,8 @@ supabase functions deploy stripe-webhook
 | Code (this session) | Committed `76efbeb` — **push to deploy** |
 | New migrations | **Run in Supabase** |
 | Subscriptions (Stripe live) | Live; **redeploy edge functions** for fixes |
-| Marketplace (Stripe live) | **Set Vercel env + live webhook + Connect** |
+| Marketplace (Stripe live) | Connect live + webhook set; **add `capability.updated` + confirm Vercel keys** |
+| Stale sold listing | **Run reconciliation SQL** (§3) |
 | Shippo Phase 1 | Verify live token set |
 | Shippo Phase 2 (OAuth) | Dormant — waiting on partner program |
 | Legal | Live; **attorney review pending** |
