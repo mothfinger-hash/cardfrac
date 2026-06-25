@@ -13421,11 +13421,42 @@ function _loadAdmin(){
     async function _cacheCollection(items) {
       var k = _collCacheKey(); if (!k) return;
       try { await _idbSet(k, { items: items, syncedAt: Date.now() }); } catch (_) {}
+      // Warm the image cache so the binder shows card art offline. Fire-and-
+      // forget + throttled; the SW caches Supabase storage images into
+      // 'pb-card-imgs'. Already-cached images come straight from cache (no
+      // network), so this is cheap on repeat loads.
+      try { _prefetchCardImages(items); } catch (_) {}
+    }
+    function _prefetchCardImages(items) {
+      if (!navigator.onLine || !items || !items.length) return;
+      var seen = {}, urls = [];
+      for (var i = 0; i < items.length; i++) {
+        var u = items[i] && items[i].card_image_url;
+        if (u && u.indexOf('/storage/v1/object/public/') !== -1 && !seen[u]) { seen[u] = 1; urls.push(u); }
+      }
+      if (!urls.length) return;
+      var idx = 0, CONC = 6;
+      function next() {
+        if (idx >= urls.length) return;
+        var u = urls[idx++];
+        fetch(u, { mode: 'no-cors' }).then(function () { next(); }, function () { next(); });
+      }
+      for (var c = 0; c < Math.min(CONC, urls.length); c++) next();
     }
     async function _loadCachedCollection() {
       var k = _collCacheKey(); if (!k) return null;
       var rec = await _idbGet(k);
       return (rec && rec.items) ? rec : null;   // { items, syncedAt }
+    }
+    // Cache the user's profile (subscription_tier + flags) so tier resolves
+    // offline — without this, a card-show launch with no signal shows Free.
+    async function _cacheProfile(profile) {
+      if (!profile || !profile.id) return;
+      try { await _idbSet('profile:' + profile.id, profile); } catch (_) {}
+    }
+    async function _loadCachedProfile(userId) {
+      if (!userId) return null;
+      try { return await _idbGet('profile:' + userId); } catch (_) { return null; }
     }
     function _setOfflineBanner(on, syncedAt) {
       var id = 'pbOfflineBanner';
@@ -13700,8 +13731,10 @@ function _loadAdmin(){
           const cached = await _loadCachedCollection();
           if (cached && cached.items && cached.items.length) {
             collectionItems = cached.items;
-            _setOfflineBanner(true, cached.syncedAt);
           }
+          // Show the offline banner whenever we're actually offline, even if
+          // the cache is empty, so the state is never silent.
+          if (!navigator.onLine) _setOfflineBanner(true, cached ? cached.syncedAt : null);
         } catch(_) {}
       }
     }
@@ -28778,7 +28811,14 @@ function _loadAdmin(){
         // Restore session
         const session = sessionResult.data?.session;
         if (session?.user) {
-          const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+          let profile = null, _profileFromNet = false;
+          try {
+            const _pr = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+            if (_pr && _pr.data) { profile = _pr.data; _profileFromNet = true; }
+          } catch (_) {}
+          // Offline / fetch failed — fall back to the last cached profile so
+          // subscription_tier + flags survive with no connection (card shows).
+          if (!profile) { try { profile = await _loadCachedProfile(session.user.id); } catch (_) {} }
           // Already-purged accounts (deleted_at set, is_deleted = true) shouldn't
           // have an active session — sign them out and bail so the auth UI
           // reverts to the signed-out state.
@@ -28787,6 +28827,7 @@ function _loadAdmin(){
             showToast('This account has been deleted.');
           } else {
             currentUser = { ...session.user, ...(profile || {}) };
+            if (_profileFromNet) { try { _cacheProfile(profile); } catch (_) {} }
             // Stamp the dedup guard so onAuthStateChange's SIGNED_IN
             // handler doesn't re-fetch the same profile + listings
             // moments later. listings was already fetched above as part

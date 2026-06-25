@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v611';
+const CACHE = 'pathbinder-v612';
 
 const PRECACHE = [
   '/offline.html',
@@ -676,7 +676,9 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      // Keep the persistent card-image cache across version bumps so the
+      // binder's offline art survives a deploy instead of re-downloading.
+      Promise.all(keys.filter(k => k !== CACHE && k !== 'pb-card-imgs').map(k => caches.delete(k)))
     ).then(() =>
       caches.open(CACHE).then(cache =>
         cache.keys().then(reqs =>
@@ -713,6 +715,28 @@ self.addEventListener('fetch', e => {
   // Chaos Rising for Pokemon EN) won't appear on mobile until the
   // user manually clears storage. Same logic applies to PriceCharting
   // and any other live catalog endpoint we add later.
+  // Supabase Storage images (public card photos + mirrored catalog art):
+  // cache-first into a persistent image cache so the binder + POS show card
+  // art offline at shows. Everything else on supabase.co (DB / auth / rpc)
+  // stays network-only via the bypass below. Card-image URLs are unique per
+  // upload, so cache staleness isn't a concern.
+  if (
+    e.request.method === 'GET' &&
+    url.hostname.includes('supabase.co') &&
+    url.pathname.includes('/storage/v1/object/public/')
+  ) {
+    e.respondWith(
+      caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+        try {
+          const clone = res.clone();   // opaque responses are fine for <img>
+          caches.open('pb-card-imgs').then(c => c.put(e.request, clone)).catch(() => {});
+        } catch (_) {}
+        return res;
+      }).catch(() => caches.match(e.request)))
+    );
+    return;
+  }
+
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('api.pokemontcg.io') ||
