@@ -13432,7 +13432,7 @@ function _loadAdmin(){
       var seen = {}, urls = [];
       for (var i = 0; i < items.length; i++) {
         var u = items[i] && items[i].card_image_url;
-        if (u && u.indexOf('/storage/v1/object/public/') !== -1 && !seen[u]) { seen[u] = 1; urls.push(u); }
+        if (u && /^https?:\/\//i.test(u) && !seen[u]) { seen[u] = 1; urls.push(u); }
       }
       if (!urls.length) return;
       var idx = 0, CONC = 6;

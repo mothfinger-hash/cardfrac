@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v612';
+const CACHE = 'pathbinder-v613';
 
 const PRECACHE = [
   '/offline.html',
@@ -715,20 +715,23 @@ self.addEventListener('fetch', e => {
   // Chaos Rising for Pokemon EN) won't appear on mobile until the
   // user manually clears storage. Same logic applies to PriceCharting
   // and any other live catalog endpoint we add later.
-  // Supabase Storage images (public card photos + mirrored catalog art):
-  // cache-first into a persistent image cache so the binder + POS show card
-  // art offline at shows. Everything else on supabase.co (DB / auth / rpc)
-  // stays network-only via the bypass below. Card-image URLs are unique per
-  // upload, so cache staleness isn't a concern.
+  // Card art (ANY host — Supabase storage, pokedata.io, images.pokemontcg.io,
+  // same-origin): cache-first into a persistent image cache so the binder +
+  // POS show card images offline at shows. Opaque cross-origin responses
+  // render fine in <img>. Placed BEFORE the network-only bypass so images on
+  // the data hosts are cached too — their JSON APIs aren't images, so they
+  // fall through and stay network-only. Card-image URLs are effectively
+  // immutable, so cache staleness isn't a concern.
   if (
-    e.request.method === 'GET' &&
-    url.hostname.includes('supabase.co') &&
-    url.pathname.includes('/storage/v1/object/public/')
+    e.request.method === 'GET' && (
+      e.request.destination === 'image' ||
+      /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(url.pathname)
+    )
   ) {
     e.respondWith(
       caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
         try {
-          const clone = res.clone();   // opaque responses are fine for <img>
+          const clone = res.clone();
           caches.open('pb-card-imgs').then(c => c.put(e.request, clone)).catch(() => {});
         } catch (_) {}
         return res;
