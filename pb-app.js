@@ -13357,21 +13357,107 @@ function _loadAdmin(){
 
     // ===== COLLECTION PAGE (Phase 2) =====
 
+    // ── Offline cache (IndexedDB) — Phase 2.5a ──────────────────────────
+    // Mirrors the user's collection locally so the binder + POS still work
+    // at card shows with no signal. Minimal key-value store (one 'kv' store);
+    // reused later for the offline write outbox (Phase 2.5b).
+    var _pbIdbPromise = null;
+    function _pbIdb() {
+      if (_pbIdbPromise) return _pbIdbPromise;
+      _pbIdbPromise = new Promise(function (resolve, reject) {
+        try {
+          var req = indexedDB.open('pathbinder', 1);
+          req.onupgradeneeded = function () {
+            var db = req.result;
+            if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+          };
+          req.onsuccess = function () { resolve(req.result); };
+          req.onerror   = function () { reject(req.error); };
+        } catch (e) { reject(e); }
+      });
+      return _pbIdbPromise;
+    }
+    async function _idbSet(key, val) {
+      try {
+        var db = await _pbIdb();
+        await new Promise(function (res, rej) {
+          var tx = db.transaction('kv', 'readwrite');
+          tx.objectStore('kv').put(val, key);
+          tx.oncomplete = function () { res(); };
+          tx.onerror    = function () { rej(tx.error); };
+        });
+      } catch (_) {}
+    }
+    async function _idbGet(key) {
+      try {
+        var db = await _pbIdb();
+        return await new Promise(function (res, rej) {
+          var tx = db.transaction('kv', 'readonly');
+          var r = tx.objectStore('kv').get(key);
+          r.onsuccess = function () { res(r.result); };
+          r.onerror   = function () { rej(r.error); };
+        });
+      } catch (_) { return undefined; }
+    }
+    function _collCacheKey() { return currentUser ? 'collection:' + currentUser.id : null; }
+    async function _cacheCollection(items) {
+      var k = _collCacheKey(); if (!k) return;
+      try { await _idbSet(k, { items: items, syncedAt: Date.now() }); } catch (_) {}
+    }
+    async function _loadCachedCollection() {
+      var k = _collCacheKey(); if (!k) return null;
+      var rec = await _idbGet(k);
+      return (rec && rec.items) ? rec : null;   // { items, syncedAt }
+    }
+    function _setOfflineBanner(on, syncedAt) {
+      var id = 'pbOfflineBanner';
+      var el = document.getElementById(id);
+      if (!on) { if (el) el.remove(); return; }
+      if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+          'background:var(--copper,#B87333);color:#0a0e1a;' +
+          'font-family:\'Space Mono\',monospace;font-size:.7rem;text-align:center;' +
+          'padding:5px 10px;letter-spacing:.04em';
+        document.body.appendChild(el);
+      }
+      var when = '';
+      try { if (syncedAt) when = ' (last synced ' + new Date(syncedAt).toLocaleString() + ')'; } catch (_) {}
+      el.textContent = 'Offline — showing your last synced collection' + when + '.';
+    }
+    function _pbRegisterOfflineSync() {
+      if (window._pbOfflineSyncReady) return;
+      window._pbOfflineSyncReady = true;
+      window.addEventListener('online', function () {
+        try { loadCollection().then(function () { try { renderCollection(); } catch (_) {} }); } catch (_) {}
+      });
+      window.addEventListener('offline', function () {
+        try { _loadCachedCollection().then(function (c) { if (c) _setOfflineBanner(true, c.syncedAt); }); } catch (_) {}
+      });
+    }
+
     async function loadCollection() {
       if (!currentUser) { collectionItems = []; return; }
       const sevenAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const [collResult, histResult] = await Promise.all([
-        sb.from('collection_items')
-          .select('*')
-          .eq('user_id', currentUser.id)
-          .order('sort_order', { ascending: true, nullsFirst: false })
-          .order('created_at',  { ascending: true }),
-        sb.from('price_history')
-          .select('collection_item_id, recorded_at, recorded_value')
-          .eq('user_id', currentUser.id)
-          .gte('recorded_at', sevenAgo)
-          .order('recorded_at', { ascending: true })
-      ]);
+      let collResult, histResult;
+      try {
+        [collResult, histResult] = await Promise.all([
+          sb.from('collection_items')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('sort_order', { ascending: true, nullsFirst: false })
+            .order('created_at',  { ascending: true }),
+          sb.from('price_history')
+            .select('collection_item_id, recorded_at, recorded_value')
+            .eq('user_id', currentUser.id)
+            .gte('recorded_at', sevenAgo)
+            .order('recorded_at', { ascending: true })
+        ]);
+      } catch (e) {
+        collResult = { error: e }; histResult = { error: e };
+      }
+      _pbRegisterOfflineSync();
       if (!collResult.error && collResult.data) {
         // Attach price history log to each item
         const histMap = {};
@@ -13401,6 +13487,20 @@ function _loadAdmin(){
         // checkBadge call.
         try { checkBadge_stacked(); } catch(_) {}
         try { checkBadge_phantom_p2(); } catch(_) {}
+        // Online + fresh data: clear any offline banner and mirror the
+        // collection to IndexedDB so it renders offline at card shows / POS.
+        _setOfflineBanner(false);
+        try { await _cacheCollection(collectionItems); } catch(_) {}
+      } else {
+        // Online fetch failed (e.g. no signal at a show) — fall back to the
+        // last collection we cached locally so the binder + POS still work.
+        try {
+          const cached = await _loadCachedCollection();
+          if (cached && cached.items && cached.items.length) {
+            collectionItems = cached.items;
+            _setOfflineBanner(true, cached.syncedAt);
+          }
+        } catch(_) {}
       }
     }
 

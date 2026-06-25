@@ -230,6 +230,67 @@ So **~6–8 weeks** to live in stores from a standing start. Could be faster wit
 
 ---
 
+## Phase 2.5 — Offline Data Layer (the card-show requirement)
+
+The wrap above makes the app *install* and the *shell* load offline (via the
+service worker). It does NOT make your **data** available offline — the
+collection and catalog are live Supabase queries today, so with no signal the
+app opens to empty/erroring screens. This phase adds the local data layer so
+you can view your collection and log cards at a show, then sync when you're
+back online. It works with the existing remote-URL wrap (no origin refactor)
+— the only requirement is **one online launch to sync** before going dark.
+
+### Store: IndexedDB (works in PWA + Capacitor WebView)
+
+- **`collection` store** — mirror of the user's `collection_items` plus the
+  catalog fields needed to render a card (name, set, number, image_url,
+  current_value, variant, quantity). Refreshed on every online load.
+- **`outbox` store** — queued offline writes (adds, quantity changes,
+  deletes) with a client-generated UUID and a timestamp, so each change has a
+  stable id and can be replayed in order.
+- **`catalog_sets` store** (optional, Phase 2.5b) — sets the user explicitly
+  "downloads for offline" so they can search + log unowned cards at a show.
+  The full 250K-row catalog is too big to ship; download-by-set keeps it
+  scoped to what's needed.
+
+### Read path
+
+- On online load: fetch `collection_items` from Supabase as today, render,
+  **and write the rows into IndexedDB**.
+- When `navigator.onLine` is false (or a fetch fails): render the collection
+  from IndexedDB instead. Show an "Offline — showing your last synced data"
+  banner.
+
+### Write path (logging offline)
+
+- A card logged offline writes to the IndexedDB `collection` store
+  immediately (instant UI) **and** appends to `outbox` with a client UUID.
+- A sync routine flushes `outbox` to Supabase when connectivity returns
+  (`online` event + on next app launch). Inserts use the client UUID as the
+  row id so re-sync is idempotent; quantity changes merge (last-write-wins is
+  fine — collection logging is low-conflict).
+- Outbox items show a small "pending sync" badge until confirmed.
+
+### Catalog / scanning offline
+
+- The camera **scan** needs cloud OCR, so scanning stays **online-only**.
+- Manual search + log works offline **against downloaded sets** (Phase 2.5b).
+  Without a downloaded set, offline logging is limited to cards already in the
+  collection (re-add / quantity bump).
+
+### Build order
+
+1. **2.5a — Offline collection (read):** IndexedDB mirror + offline render
+   fallback + offline banner. Foundation; lowest risk.
+2. **2.5b — Offline logging (write):** outbox + sync-on-reconnect + pending
+   badges.
+3. **2.5c — Download-a-set:** cache chosen sets for offline search/log.
+
+This is independent of the wrap and also improves the plain PWA, so none of it
+is wasted if the native timeline slips.
+
+---
+
 ## What we can do right now in the existing codebase
 
 A few small things that'd make the eventual port easier (low effort, do anytime):
