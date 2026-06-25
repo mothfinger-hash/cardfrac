@@ -28274,16 +28274,11 @@ function _loadAdmin(){
           // apiFailed = the pokemontcg.io backup threw / timed out / 404'd.
           let catalogFailed = false, apiFailed = false;
 
-          // Try the fast RPC first (server-side WHERE/ORDER). Falls
-          // back to a direct table query if the function isn't yet
-          // installed.
-          try {
-            const rpc = await sb.rpc('catalog_cards_in_set', { p_prefix: 'en-', p_set_code: setId });
-            if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length) {
-              allCards = rpc.data.map(_catalogRowToApiShape);
-            }
-          } catch(_) {}
-
+          // PRIMARY: index-backed direct query on set_code (uses
+          // idx_catalog_set_code). The old `catalog_cards_in_set` RPC
+          // filtered with is_pokemon_en_id(id) — a per-row function that
+          // can't use an index, so it scanned the whole catalog (~3-5s).
+          // The .eq on set_code is selective + indexed → sub-second.
           if (!allCards.length) {
             try {
               // .eq is index-friendly; .ilike forces a full-table regex
