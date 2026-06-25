@@ -13494,7 +13494,7 @@ function _loadAdmin(){
           'box-shadow:0 2px 10px rgba(0,0,0,.4)';
         document.body.appendChild(el);
       }
-      el.textContent = n + ' offline sale' + (n === 1 ? '' : 's') + ' pending sync';
+      el.textContent = n + ' offline change' + (n === 1 ? '' : 's') + ' pending sync';
     }
     function _pbNewId() {
       try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (_) {}
@@ -13515,6 +13515,18 @@ function _loadAdmin(){
         await _cacheCollection(collectionItems);
       } catch (_) {}
     }
+    async function _addCardOffline(insertBase) {
+      var opId = _pbNewId();
+      var row = Object.assign({ id: opId }, insertBase);   // explicit id => idempotent replay
+      await _outboxAdd({ id: opId, type: 'collection_add', payload: row, ts: Date.now() });
+      // Optimistic local row so the binder + inventory show it immediately.
+      try {
+        var localRow = Object.assign({ id: opId, created_at: new Date().toISOString(), price_history_log: [] }, insertBase);
+        collectionItems.push(localRow);
+        await _cacheCollection(collectionItems);
+      } catch (_) {}
+      return opId;
+    }
     async function _pbFlushOutbox() {
       if (!navigator.onLine || !currentUser) return;
       var list = await _outboxList();
@@ -13523,16 +13535,20 @@ function _loadAdmin(){
       for (var i = 0; i < list.length; i++) {
         var op = list[i];
         try {
+          var r;
           if (op.type === 'shop_sale') {
-            var r = await sb.from('shop_sales').insert(op.payload).select().maybeSingle();
-            if (r.error && !/duplicate key|already exists/i.test(r.error.message || '')) {
-              // Server rejected (e.g. stock changed elsewhere). Drop so the
-              // queue can't wedge; warn the vendor.
-              console.warn('[outbox] shop_sale dropped:', r.error.message);
-              dropped++;
-            } else {
-              synced++;
-            }
+            r = await sb.from('shop_sales').insert(op.payload).select().maybeSingle();
+          } else if (op.type === 'collection_add') {
+            r = await sb.from('collection_items').insert(op.payload).select('id').maybeSingle();
+          } else {
+            r = { error: null };
+          }
+          if (r.error && !/duplicate key|already exists/i.test(r.error.message || '')) {
+            // Server rejected. Drop so the queue can't wedge; warn.
+            console.warn('[outbox] ' + op.type + ' dropped:', r.error.message);
+            dropped++;
+          } else {
+            synced++;
           }
           await _outboxRemove(op.id);
         } catch (e) {
@@ -13542,8 +13558,8 @@ function _loadAdmin(){
       var remaining = await _outboxList();
       _setPendingBadge(remaining.length);
       try {
-        if (synced)  showToast(synced + ' offline sale' + (synced === 1 ? '' : 's') + ' synced');
-        if (dropped) showToast(dropped + ' offline sale' + (dropped === 1 ? '' : 's') + ' could not sync (stock changed)');
+        if (synced)  showToast(synced + ' offline change' + (synced === 1 ? '' : 's') + ' synced');
+        if (dropped) showToast(dropped + ' offline change' + (dropped === 1 ? '' : 's') + ' could not sync');
       } catch (_) {}
     }
     function _posLoopReopen() {
@@ -13557,6 +13573,67 @@ function _loadAdmin(){
           } catch (_) {}
         }, 300);
       }
+    }
+
+    // ── Offline catalog (Phase 2.5c): download-a-set ────────────────────
+    // Caches catalog rows for the sets in the user's collection so the Add
+    // Card search works offline at a show. Logging the result needs the
+    // write outbox (next step) — search-offline is the read half.
+    async function _downloadOfflineSets() {
+      if (!navigator.onLine) { try { showToast('Connect to the internet to download sets'); } catch (_) {} return; }
+      if (!currentUser || !collectionItems.length) { try { showToast('Add cards first — downloads are based on the sets you own'); } catch (_) {} return; }
+      var seen = {}, sets = [];
+      collectionItems.forEach(function (c) {
+        var g = (c.game_type || 'pokemon'), s = c.set_name;
+        if (!s) return;
+        var k = g + '|' + s;
+        if (!seen[k]) { seen[k] = 1; sets.push({ key: k, game: g, setName: s }); }
+      });
+      if (!sets.length) { try { showToast('No sets found in your collection'); } catch (_) {} return; }
+      try { showToast('Downloading ' + sets.length + ' set(s) for offline…'); } catch (_) {}
+      var index = [];
+      for (var i = 0; i < sets.length; i++) {
+        var s = sets[i];
+        try {
+          var res = await sb.from('catalog')
+            .select('id, set_code, name, card_number, rarity, set_name, image_url, current_value, game_type, has_reverse_holo')
+            .eq('game_type', s.game)
+            .eq('set_name', s.setName)
+            .limit(2000);
+          var rows = (res && res.data) ? res.data : [];
+          await _idbSet('catalog_set:' + s.key, rows);
+          index.push({ key: s.key, game: s.game, setName: s.setName, count: rows.length, syncedAt: Date.now() });
+        } catch (_) {}
+      }
+      await _idbSet('catalog_sets_index', index);
+      var total = index.reduce(function (a, b) { return a + b.count; }, 0);
+      try { showToast('Offline ready: ' + total + ' cards across ' + index.length + ' set(s)'); } catch (_) {}
+    }
+    window.downloadOfflineSets = _downloadOfflineSets;
+    async function _offlineCatalogSearch(query, gameType) {
+      try {
+        var index = await _idbGet('catalog_sets_index');
+        if (!Array.isArray(index) || !index.length) return [];
+        var q = String(query || '').toLowerCase().trim();
+        var qNum = q.replace(/[^0-9a-z]/gi, '');
+        var out = [];
+        for (var i = 0; i < index.length && out.length < 300; i++) {
+          var entry = index[i];
+          if (gameType && entry.game && entry.game !== gameType) continue;
+          var rows = await _idbGet('catalog_set:' + entry.key);
+          if (!Array.isArray(rows)) continue;
+          for (var j = 0; j < rows.length; j++) {
+            var r = rows[j];
+            var name = String(r.name || '').toLowerCase();
+            var num  = String(r.card_number || '').toLowerCase().replace(/[^0-9a-z]/gi, '');
+            if ((q && name.indexOf(q) !== -1) || (qNum && num.indexOf(qNum) !== -1)) {
+              out.push(_catalogRowToApiShape(r));
+              if (out.length >= 300) break;
+            }
+          }
+        }
+        return out;
+      } catch (_) { return []; }
     }
 
     async function loadCollection() {
@@ -18431,8 +18508,12 @@ function _loadAdmin(){
       if (deskCount)  deskCount.textContent = '—';
       if (deskGrid)   deskGrid.innerHTML = '';
 
-      let cards = [];
-      let source = 'catalog';
+      // Offline: search the downloaded sets (Phase 2.5c) instead of the
+      // network. Falls through to the normal path the moment signal returns.
+      let cards = (!navigator.onLine && typeof _offlineCatalogSearch === 'function')
+        ? await _offlineCatalogSearch(query, gameType)
+        : [];
+      let source = navigator.onLine ? 'catalog' : 'offline';
 
       // Card-number queries (e.g. "063" or "063/182") route through a
       // catalog.card_number lookup instead of name search.
@@ -19445,6 +19526,24 @@ function _loadAdmin(){
       // Apply admin overrides (image / set / number / rarity / name)
       // before insert so corrections flow into the saved row.
       applyOverrideToInsertRow(_insertBase);
+
+      // ── Offline add path (Phase 2.5c write) ───────────────────────
+      // No signal at a show: queue the card to the outbox + optimistic
+      // local add so the binder/inventory reflect it now; syncs to
+      // collection_items on reconnect. Photo upload is skipped offline —
+      // the catalog image is used instead.
+      if (!navigator.onLine) {
+        const _offlineId = await _addCardOffline(_insertBase);
+        if (saveBtn) { saveBtn.textContent = 'Add to My Binder'; saveBtn.disabled = false; }
+        showToast(cardName + ' added (offline — will sync)');
+        _returnToScanner = false;
+        closeModal('addToCollectionModal');
+        pendingCollectionCard = null;
+        window._justAddedCardId = _offlineId;
+        renderCollection();
+        try { checkBadge_stacked(); checkBadge_phantom_p2(); } catch(_) {}
+        return;
+      }
 
       let { data: newRow, error } = await sb.from('collection_items').insert(_insertBase).select('id').single();
 
