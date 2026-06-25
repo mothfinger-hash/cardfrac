@@ -3846,6 +3846,13 @@ function _loadAdmin(){
         ? new Date(dateStr + 'T12:00:00').toISOString()  // midday avoids tz-edge shifting the date
         : new Date().toISOString();
 
+      // Offline can't reach the listings/orders tables, so an over-shelf
+      // sale (which would pull from a listing) isn't possible with no signal.
+      if (qty > onShelf && !navigator.onLine) {
+        _err('Offline: you can only sell on-shelf stock right now (max ' + onShelf + ').');
+        return;
+      }
+
       // ── Cross-channel pre-flight ──────────────────────────────────
       // If the requested qty exceeds on_shelf, the difference has to
       // come out of an active listing (or get blocked if there's an
@@ -3892,6 +3899,19 @@ function _loadAdmin(){
         sold_at:            soldAtIso,
       };
 
+      // ── Offline POS path ──────────────────────────────────────────
+      // No signal at a show: queue the sale to the IndexedDB outbox,
+      // optimistically decrement local stock, and keep the POS loop going.
+      // It replays to shop_sales when connectivity returns.
+      if (!navigator.onLine) {
+        try { await _recordSaleOffline(payload, item, total); } catch(_) {}
+        try { if (document.getElementById('myStore')?.classList.contains('active') && typeof window.renderMyStore === 'function') window.renderMyStore(); } catch(_) {}
+        closeModal('markSoldModal');
+        showToast('Recorded $' + total.toFixed(2) + ' sale (offline — will sync)');
+        _posLoopReopen();
+        return;
+      }
+
       try {
         const r = await sb.from('shop_sales').insert(payload).select().single();
         if (r.error) {
@@ -3914,25 +3934,20 @@ function _loadAdmin(){
 
         closeModal('markSoldModal');
         showToast('Recorded $' + total.toFixed(2) + ' sale');
-
-        // POS-mode loop — reopen the scanner for the next sale
-        // instead of dropping the vendor back to the Inventory tab.
-        // Persists POS mode until they explicitly tap EXIT POS.
-        if (window._posSaleMode) {
-          setTimeout(function() {
-            try {
-              openCardScanner();
-              _setPosBanner(true);
-              // Re-trigger camera so the workflow is "scan, confirm,
-              // sale, next scan" without intermediate taps.
-              const inp = document.getElementById('navScanCardInput');
-              if (inp) inp.click();
-            } catch(_) {}
-          }, 300);
-        }
+        _posLoopReopen();
       } catch (e) {
-        _err((e && e.message) || 'Unexpected error');
-        if (btn) { btn.textContent = 'Record Sale'; btn.disabled = false; }
+        // Lost signal mid-insert → fall back to the offline queue rather than
+        // dropping the sale. Genuine (online) errors still surface.
+        if (!navigator.onLine) {
+          try { await _recordSaleOffline(payload, item, total); } catch(_) {}
+          try { if (document.getElementById('myStore')?.classList.contains('active') && typeof window.renderMyStore === 'function') window.renderMyStore(); } catch(_) {}
+          closeModal('markSoldModal');
+          showToast('Recorded $' + total.toFixed(2) + ' sale (offline — will sync)');
+          _posLoopReopen();
+        } else {
+          _err((e && e.message) || 'Unexpected error');
+          if (btn) { btn.textContent = 'Record Sale'; btn.disabled = false; }
+        }
       }
     }
 
@@ -13427,14 +13442,121 @@ function _loadAdmin(){
       el.textContent = 'Offline — showing your last synced collection' + when + '.';
     }
     function _pbRegisterOfflineSync() {
+      try { _outboxList().then(function (l) { _setPendingBadge(l.length); }); } catch (_) {}
       if (window._pbOfflineSyncReady) return;
       window._pbOfflineSyncReady = true;
+      // One-time startup flush: app may reopen already-online with a queue
+      // left over from an offline session (the 'online' event won't fire).
+      if (navigator.onLine) { try { _pbFlushOutbox(); } catch (_) {} }
       window.addEventListener('online', function () {
-        try { loadCollection().then(function () { try { renderCollection(); } catch (_) {} }); } catch (_) {}
+        try {
+          _pbFlushOutbox().then(function () {
+            loadCollection().then(function () { try { renderCollection(); } catch (_) {} });
+          });
+        } catch (_) {}
       });
       window.addEventListener('offline', function () {
         try { _loadCachedCollection().then(function (c) { if (c) _setOfflineBanner(true, c.syncedAt); }); } catch (_) {}
       });
+    }
+
+    // ── Offline write outbox (Phase 2.5b) ───────────────────────────────
+    // Queues POS sales made with no signal and replays them to shop_sales
+    // when connectivity returns. Optimistic local stock decrement keeps the
+    // POS UI correct offline; the server trigger does the real decrement on
+    // sync. Replay is idempotent via a client-generated row id.
+    async function _outboxList() {
+      var rec = await _idbGet('outbox');
+      return Array.isArray(rec) ? rec : [];
+    }
+    async function _outboxAdd(op) {
+      var list = await _outboxList();
+      list.push(op);
+      await _idbSet('outbox', list);
+      _setPendingBadge(list.length);
+    }
+    async function _outboxRemove(id) {
+      var list = await _outboxList();
+      list = list.filter(function (o) { return o.id !== id; });
+      await _idbSet('outbox', list);
+      _setPendingBadge(list.length);
+    }
+    function _setPendingBadge(n) {
+      var id = 'pbPendingBadge';
+      var el = document.getElementById(id);
+      if (!n || n < 1) { if (el) el.remove(); return; }
+      if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99999;' +
+          'background:var(--copper,#B87333);color:#0a0e1a;font-family:\'Space Mono\',monospace;' +
+          'font-size:.66rem;padding:6px 10px;border-radius:6px;letter-spacing:.04em;' +
+          'box-shadow:0 2px 10px rgba(0,0,0,.4)';
+        document.body.appendChild(el);
+      }
+      el.textContent = n + ' offline sale' + (n === 1 ? '' : 's') + ' pending sync';
+    }
+    function _pbNewId() {
+      try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (_) {}
+      return 'op-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    }
+    async function _recordSaleOffline(payload, item, total) {
+      var opId = _pbNewId();
+      var saleRow = Object.assign({ id: opId }, payload);   // explicit id => idempotent replay
+      await _outboxAdd({ id: opId, type: 'shop_sale', payload: saleRow, ts: Date.now() });
+      // Optimistic local decrement so the inventory tile + row reflect the sale.
+      try {
+        var it = collectionItems.find(function (c) { return String(c.id) === String(item.id); });
+        if (it) {
+          var q = payload.qty || 0;
+          if (it.on_shelf_qty != null) it.on_shelf_qty = Math.max(0, (it.on_shelf_qty || 0) - q);
+          it.quantity = Math.max(0, (it.quantity || 0) - q);
+        }
+        await _cacheCollection(collectionItems);
+      } catch (_) {}
+    }
+    async function _pbFlushOutbox() {
+      if (!navigator.onLine || !currentUser) return;
+      var list = await _outboxList();
+      if (!list.length) { _setPendingBadge(0); return; }
+      var synced = 0, dropped = 0;
+      for (var i = 0; i < list.length; i++) {
+        var op = list[i];
+        try {
+          if (op.type === 'shop_sale') {
+            var r = await sb.from('shop_sales').insert(op.payload).select().maybeSingle();
+            if (r.error && !/duplicate key|already exists/i.test(r.error.message || '')) {
+              // Server rejected (e.g. stock changed elsewhere). Drop so the
+              // queue can't wedge; warn the vendor.
+              console.warn('[outbox] shop_sale dropped:', r.error.message);
+              dropped++;
+            } else {
+              synced++;
+            }
+          }
+          await _outboxRemove(op.id);
+        } catch (e) {
+          break;   // lost signal mid-flush — leave the rest queued
+        }
+      }
+      var remaining = await _outboxList();
+      _setPendingBadge(remaining.length);
+      try {
+        if (synced)  showToast(synced + ' offline sale' + (synced === 1 ? '' : 's') + ' synced');
+        if (dropped) showToast(dropped + ' offline sale' + (dropped === 1 ? '' : 's') + ' could not sync (stock changed)');
+      } catch (_) {}
+    }
+    function _posLoopReopen() {
+      if (window._posSaleMode) {
+        setTimeout(function () {
+          try {
+            openCardScanner();
+            _setPosBanner(true);
+            var inp = document.getElementById('navScanCardInput');
+            if (inp) inp.click();
+          } catch (_) {}
+        }, 300);
+      }
     }
 
     async function loadCollection() {
