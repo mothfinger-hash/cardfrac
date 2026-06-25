@@ -250,10 +250,16 @@ async function handleMarketplacePurchase(session) {
   const newOrderId = insertRes.data && insertRes.data.id;
 
   if (meta.listing_id) {
-    await sb.from('listings').update({
-      status:  'sold',
-      sold_to: meta.buyer_id || null,
+    // Mark the listing sold so it drops out of the live marketplace.
+    // Buyer is tracked on the order (orders.buyer_id) — there is no sold_to
+    // column on listings, and including one here previously made the whole
+    // update fail (PGRST204), leaving sold listings live in the marketplace.
+    const _soldRes = await sb.from('listings').update({
+      status: 'sold',
     }).eq('id', meta.listing_id);
+    if (_soldRes.error) {
+      console.error('[webhook] failed to mark listing sold:', meta.listing_id, _soldRes.error.message);
+    }
   }
 
   // Notify the seller they made a sale (best-effort — never block the webhook).
