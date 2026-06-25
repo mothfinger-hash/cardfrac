@@ -28311,29 +28311,39 @@ function _loadAdmin(){
             } catch(_) { catalogFailed = true; }
           }
 
-          // Still empty? Match by set NAME — the reliable bridge for when a
-          // set's id (used as the set_code lookup) doesn't equal the catalog's
-          // set_code. Runs BEFORE the flaky pokemontcg.io backup so the set
-          // still loads from our own DB instead of erroring out.
+          // Still empty? Match by set NAME — the reliable bridge for when the
+          // list's id (e.g. set_metadata 'me4') doesn't equal the catalog's
+          // set_code (e.g. 'CRI'). NOTE: no id-prefix filter here — those
+          // ids (CRI-/me4-) wouldn't match the en-/legacy patterns and would
+          // wrongly exclude the cards. EN Pokemon set names are unique
+          // (YuGiOh/Magic names carry a game prefix), so set_name alone is
+          // safe. Runs BEFORE the flaky pokemontcg.io backup.
           if (!allCards.length && setName) {
             try {
               let { data: nameRows } = await sb.from('catalog')
                 .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
-                .or(_pokemonENOrFilter())
                 .eq('set_name', setName)
                 .order('card_number', { ascending: true })
-                .limit(500);
+                .limit(800);
               if (!nameRows || !nameRows.length) {
                 const ni = await sb.from('catalog')
                   .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
-                  .or(_pokemonENOrFilter())
                   .ilike('set_name', setName)
                   .order('card_number', { ascending: true })
-                  .limit(500);
+                  .limit(800);
                 nameRows = ni.data || [];
               }
               if (nameRows && nameRows.length) {
-                allCards = nameRows.map(_catalogRowToApiShape);
+                // The catalog can hold the same set under multiple set_codes
+                // ('CRI' 122 + 'chaos-rising' 8). Prefer the dominant set_code,
+                // then fill any gaps — deduped by card number so nothing doubles.
+                var _byCode = {};
+                nameRows.forEach(function (r) { var c = r.set_code || ''; _byCode[c] = (_byCode[c] || 0) + 1; });
+                var _bestCode = Object.keys(_byCode).sort(function (a, b) { return _byCode[b] - _byCode[a]; })[0];
+                var _seen = {}, _dedup = [];
+                nameRows.forEach(function (r) { if ((r.set_code || '') !== _bestCode) return; var k = String(r.card_number || r.id); if (_seen[k]) return; _seen[k] = 1; _dedup.push(r); });
+                nameRows.forEach(function (r) { var k = String(r.card_number || r.id); if (_seen[k]) return; _seen[k] = 1; _dedup.push(r); });
+                allCards = _dedup.map(_catalogRowToApiShape);
                 catalogFailed = false;
               }
             } catch(_) {}
