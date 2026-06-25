@@ -26685,6 +26685,45 @@ function _loadAdmin(){
       console.log(sql);
     }
 
+    // Load the EN Pokemon set list straight from OUR database (set_metadata):
+    // fast, chronological by release_date, with mirrored logos. Removes the
+    // dependency on pokemontcg.io's API, which frequently 504s and serves no
+    // CORS header — leaving the page stuck loading or falling back to an
+    // out-of-order catalog list.
+    async function _loadEnSetsFromDb() {
+      try {
+        const r = await sb.from('set_metadata')
+          .select('id, name, series, release_date, total, printed_total, logo_url, symbol_url')
+          .eq('game_type', 'pokemon')
+          .order('release_date', { ascending: false, nullsFirst: false });
+        if (r.error || !Array.isArray(r.data) || !r.data.length) return null;
+        return r.data.map(function (m) {
+          return {
+            id: m.id,
+            name: m.name,
+            series: m.series || 'Pokémon',
+            releaseDate: m.release_date ? String(m.release_date).replace(/-/g, '/') : '0000/00/00',
+            total: m.total || m.printed_total || 0,
+            printedTotal: m.printed_total || 0,
+            images: { logo: m.logo_url || '', symbol: m.symbol_url || '' },
+            _source: 'db',
+          };
+        });
+      } catch (_) { return null; }
+    }
+    async function _refreshEnSetsInBackground(lsKey) {
+      if (_setsBackgroundRefreshInflight) return;
+      _setsBackgroundRefreshInflight = true;
+      try {
+        var fresh = await _loadEnSetsFromDb();
+        if (fresh && fresh.length) {
+          var now = Date.now();
+          try { localStorage.setItem(lsKey, JSON.stringify({ timestamp: now, sets: fresh })); } catch (_) {}
+          _setsCache = { timestamp: now, sets: fresh };
+        }
+      } catch (_) {} finally { _setsBackgroundRefreshInflight = false; }
+    }
+
     async function loadSetsPage() {
       const el = document.getElementById('setsPageContent');
       if (!el) return;
@@ -26717,7 +26756,7 @@ function _loadAdmin(){
         // returning-user load from "wait 6 seconds" → "render instantly".
         let sets;
         const now = Date.now();
-        const LS_KEY  = 'pathbinder_sets_pokemonen_v1';
+        const LS_KEY  = 'pathbinder_sets_pokemonen_v2';
         const LS_TTL  = 24 * 60 * 60 * 1000;   // 24 hours
         const MEM_TTL = 10 * 60 * 1000;        // 10 minutes (session)
 
@@ -26738,39 +26777,38 @@ function _loadAdmin(){
           } catch(_) {}
 
           if (lsSets && lsAge < LS_TTL) {
-            // Fresh cache hit — render immediately, refresh in background.
+            // Fresh cache hit — render immediately, refresh from the DB in bg.
             sets = lsSets;
             _setsCache = { timestamp: now, sets };
-            _refreshSetsListInBackground(LS_KEY);
+            _refreshEnSetsInBackground(LS_KEY);
           } else {
-            // No cache (or expired) — wait for API. Slow first load.
-            let apiSets = [];
-            try {
-              // cache: 'no-store' bypasses both the HTTP cache and any SW
-              // cache so a freshly-released set (e.g. Chaos Rising) lands
-              // immediately instead of waiting for a TTL to expire.
-              const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250', { cache: 'no-store' });
-              if (res.ok) {
-                const data = await res.json();
-                apiSets = data.data || [];
-              }
-            } catch(_) {}
-
-            sets = apiSets;
+            // PRIMARY: load the EN set list from OUR database (set_metadata) —
+            // fast, chronological by release_date, with mirrored logos and no
+            // dependency on pokemontcg.io (which 504s + has no CORS header).
+            let dbSets = await _loadEnSetsFromDb();
+            if (dbSets && dbSets.length) {
+              sets = dbSets;
+            } else {
+              // Last-resort fallback only if set_metadata is empty:
+              // pokemontcg.io, then the catalog aggregate.
+              let apiSets = [];
+              try {
+                const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250', { cache: 'no-store' });
+                if (res.ok) {
+                  const data = await res.json();
+                  apiSets = data.data || [];
+                }
+              } catch(_) {}
+              sets = apiSets;
+              _appendCatalogSetsAsync(sets);
+            }
             _setsCache = { timestamp: now, sets };
-            // Persist to localStorage so the next visit (today, or after
-            // the user comes back tomorrow) doesn't have to wait again.
             try {
-              if (apiSets.length) {
-                localStorage.setItem(LS_KEY, JSON.stringify({ timestamp: now, sets: apiSets }));
+              if (sets.length) {
+                localStorage.setItem(LS_KEY, JSON.stringify({ timestamp: now, sets }));
               }
             } catch(_) {}
           }
-
-          // Catalog sets — non-blocking. Kicks off after the page has
-          // rendered the API sets so the user isn't waiting on the
-          // catalog aggregate.
-          _appendCatalogSetsAsync(sets);
         }
 
         // Mirror enrichment — swap pokemontcg.io logo/symbol URLs for
