@@ -28311,6 +28311,34 @@ function _loadAdmin(){
             } catch(_) { catalogFailed = true; }
           }
 
+          // Still empty? Match by set NAME — the reliable bridge for when a
+          // set's id (used as the set_code lookup) doesn't equal the catalog's
+          // set_code. Runs BEFORE the flaky pokemontcg.io backup so the set
+          // still loads from our own DB instead of erroring out.
+          if (!allCards.length && setName) {
+            try {
+              let { data: nameRows } = await sb.from('catalog')
+                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                .or(_pokemonENOrFilter())
+                .eq('set_name', setName)
+                .order('card_number', { ascending: true })
+                .limit(500);
+              if (!nameRows || !nameRows.length) {
+                const ni = await sb.from('catalog')
+                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                  .or(_pokemonENOrFilter())
+                  .ilike('set_name', setName)
+                  .order('card_number', { ascending: true })
+                  .limit(500);
+                nameRows = ni.data || [];
+              }
+              if (nameRows && nameRows.length) {
+                allCards = nameRows.map(_catalogRowToApiShape);
+                catalogFailed = false;
+              }
+            } catch(_) {}
+          }
+
           // API fallback — pokemontcg.io for sets the catalog doesn't
           // have. Time-boxed: pokemontcg.io has intermittent CORS/404
           // outages and can hang, so we fail fast (7s) and offer a retry
