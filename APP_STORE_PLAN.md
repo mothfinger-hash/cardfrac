@@ -280,14 +280,25 @@ back online. It works with the existing remote-URL wrap (no origin refactor)
 
 ### Build order
 
-1. **2.5a — Offline collection (read):** IndexedDB mirror + offline render
-   fallback + offline banner. Foundation; lowest risk.
-2. **2.5b — Offline logging (write):** outbox + sync-on-reconnect + pending
-   badges.
-3. **2.5c — Download-a-set:** cache chosen sets for offline search/log.
+1. **2.5a — Offline collection (read): SHIPPED.** `loadCollection()` mirrors
+   the collection to IndexedDB on every online load and falls back to it
+   (with an offline banner) when there's no signal.
+2. **2.5b — Offline POS sales (write): SHIPPED.** `submitMarkSold` queues
+   sales to an IndexedDB outbox with optimistic stock decrement; replays to
+   `shop_sales` on reconnect (idempotent). Over-shelf sales blocked offline.
+3. **2.5c — Download-a-set + offline search + offline logging: SHIPPED.**
+   "Download sets for offline" button caches the collection's sets; the
+   multi-TCG **and** Pokémon Add Card search read the cache when offline;
+   `saveToCollection` queues a `collection_add` to the same outbox with an
+   optimistic local add. One "N offline changes pending sync" badge; one
+   flush on reconnect drains sales + adds.
 
-This is independent of the wrap and also improves the plain PWA, so none of it
-is wasted if the native timeline slips.
+All three are independent of the wrap and also improve the plain PWA.
+
+**Still online-only:** the camera **scanner** (cloud OCR via `/api/vision-ocr`
++ the `match_cards_v2` embedding RPC). Offline POS scanning needs on-device
+OCR — best delivered as a native ML Kit plugin during the Capacitor wrap,
+matching against the already-cached collection.
 
 ---
 

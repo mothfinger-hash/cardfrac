@@ -1,0 +1,47 @@
+import { CapacitorConfig } from '@capacitor/cli';
+
+// PathBinder native shell (Capacitor).
+//
+// Remote-URL wrap: the native app loads the live site at pathbinder.gg, so
+// web deploys reach users instantly (no store resubmission for content).
+// Offline is handled by the live service worker (caches the app shell) plus
+// the IndexedDB data layer shipped in Phase 2.5 (collection + POS + outbox).
+// The local `www/` bundle is only a first-launch fallback if the site and
+// the SW cache are both unavailable.
+//
+// Change appId before the first build if you want a different bundle id —
+// it must be globally unique and match what you register in App Store
+// Connect / Google Play.
+
+const config: CapacitorConfig = {
+  appId: 'gg.pathbinder.app',
+  appName: 'PathBinder',
+  webDir: 'www',
+  server: {
+    url: 'https://pathbinder.gg',
+    cleartext: false,
+    androidScheme: 'https',
+    iosScheme: 'https',
+  },
+  ios: {
+    contentInset: 'always',
+    backgroundColor: '#0a0e1a',
+  },
+  android: {
+    backgroundColor: '#0a0e1a',
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 1200,
+      backgroundColor: '#0a0e1a',
+      showSpinner: false,
+    },
+    StatusBar: {
+      // App is dark, so use light (white) status-bar content.
+      style: 'LIGHT',
+      backgroundColor: '#0a0e1a',
+    },
+  },
+};
+
+export default config;

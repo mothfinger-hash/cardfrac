@@ -13158,6 +13158,9 @@ function _loadAdmin(){
     // still on the web and keep their normal Stripe checkout.
     function _isNativeApp() {
       try {
+        // Capacitor native shell (iOS/Android wrap) — authoritative check.
+        if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function'
+            && window.Capacitor.isNativePlatform()) return true;
         if (window.PB_NATIVE_APP === true) return true;
         if (localStorage.getItem('pb_native') === '1') return true;
         if (/PathBinderApp/i.test(navigator.userAgent || '')) return true;
@@ -18618,9 +18621,13 @@ function _loadAdmin(){
         // API. This is dramatically faster (<100ms vs 500–2000ms), works
         // offline-ish, and survives third-party rate limits / outages.
         // Falls back to pokemontcg.io only when catalog returns nothing.
-        let cards = [];
-        let total = 0;
-        let source = 'catalog';
+        // Offline: search the downloaded sets (Phase 2.5c) instead of the
+        // network. Falls through to the catalog/API path once signal returns.
+        let cards = (!navigator.onLine && typeof _offlineCatalogSearch === 'function')
+          ? await _offlineCatalogSearch(query, 'pokemon')
+          : [];
+        let total = cards.length;
+        let source = navigator.onLine ? 'catalog' : 'offline';
 
         // Card-number queries (e.g. "063" or "063/182") route through a
         // catalog.card_number lookup instead of name search. Works across
