@@ -13427,21 +13427,32 @@ function _loadAdmin(){
       // network), so this is cheap on repeat loads.
       try { _prefetchCardImages(items); } catch (_) {}
     }
+    // Warm the SW image cache for a list of URLs. Awaitable; returns the
+    // count attempted. Concurrency-limited so it doesn't swamp the network.
+    // Already-cached images come straight from cache (no network), so it's
+    // cheap to re-run.
+    async function _warmImages(urls) {
+      if (!navigator.onLine) return 0;
+      var seen = {}, q = [];
+      (urls || []).forEach(function (u) {
+        if (u && /^https?:\/\//i.test(u) && !seen[u]) { seen[u] = 1; q.push(u); }
+      });
+      if (!q.length) return 0;
+      var i = 0, CONC = 6;
+      async function worker() {
+        while (i < q.length) {
+          var u = q[i++];
+          try { await fetch(u, { mode: 'no-cors' }); } catch (_) {}
+        }
+      }
+      var ws = [];
+      for (var c = 0; c < Math.min(CONC, q.length); c++) ws.push(worker());
+      await Promise.all(ws);
+      return q.length;
+    }
     function _prefetchCardImages(items) {
       if (!navigator.onLine || !items || !items.length) return;
-      var seen = {}, urls = [];
-      for (var i = 0; i < items.length; i++) {
-        var u = items[i] && items[i].card_image_url;
-        if (u && /^https?:\/\//i.test(u) && !seen[u]) { seen[u] = 1; urls.push(u); }
-      }
-      if (!urls.length) return;
-      var idx = 0, CONC = 6;
-      function next() {
-        if (idx >= urls.length) return;
-        var u = urls[idx++];
-        fetch(u, { mode: 'no-cors' }).then(function () { next(); }, function () { next(); });
-      }
-      for (var c = 0; c < Math.min(CONC, urls.length); c++) next();
+      _warmImages(items.map(function (c) { return c && c.card_image_url; }));  // fire-and-forget
     }
     async function _loadCachedCollection() {
       var k = _collCacheKey(); if (!k) return null;
@@ -13626,6 +13637,7 @@ function _loadAdmin(){
       if (!sets.length) { try { showToast('No sets found in your collection'); } catch (_) {} return; }
       try { showToast('Downloading ' + sets.length + ' set(s) for offline…'); } catch (_) {}
       var index = [];
+      var imgUrls = [];
       for (var i = 0; i < sets.length; i++) {
         var s = sets[i];
         try {
@@ -13636,12 +13648,19 @@ function _loadAdmin(){
             .limit(2000);
           var rows = (res && res.data) ? res.data : [];
           await _idbSet('catalog_set:' + s.key, rows);
+          for (var ri = 0; ri < rows.length; ri++) { if (rows[ri].image_url) imgUrls.push(rows[ri].image_url); }
           index.push({ key: s.key, game: s.game, setName: s.setName, count: rows.length, syncedAt: Date.now() });
         } catch (_) {}
       }
       await _idbSet('catalog_sets_index', index);
+      // Also warm the user's own collection art, so the binder + POS are
+      // fully covered, not just the downloaded sets.
+      try { for (var ci = 0; ci < collectionItems.length; ci++) { if (collectionItems[ci].card_image_url) imgUrls.push(collectionItems[ci].card_image_url); } } catch (_) {}
       var total = index.reduce(function (a, b) { return a + b.count; }, 0);
-      try { showToast('Offline ready: ' + total + ' cards across ' + index.length + ' set(s)'); } catch (_) {}
+      try { showToast('Caching ' + imgUrls.length + ' images for offline…'); } catch (_) {}
+      var warmed = 0;
+      try { warmed = await _warmImages(imgUrls); } catch (_) {}
+      try { showToast('Offline ready: ' + total + ' cards · ' + warmed + ' images cached'); } catch (_) {}
     }
     window.downloadOfflineSets = _downloadOfflineSets;
     async function _offlineCatalogSearch(query, gameType) {
@@ -26448,18 +26467,38 @@ function _loadAdmin(){
     // pokemontcg.io list is missing. Tries the catalog_sets_summary
     // RPC first (server-side GROUP BY, <100ms) and falls back to the
     // slow client-side dedupe if the function isn't installed.
+    // 24h client cache of the Pokemon-EN catalog set summary so repeat visits
+    // to the Sets page are instant instead of re-running the heavy scan.
+    function _getCachedSetsSummary() {
+      try {
+        var raw = localStorage.getItem('pb_sets_summary_en');
+        if (!raw) return null;
+        var o = JSON.parse(raw);
+        if (!o || !o.t || (Date.now() - o.t) > 86400000) return null;   // 24h TTL
+        return Array.isArray(o.s) ? o.s : null;
+      } catch (_) { return null; }
+    }
+    function _setCachedSetsSummary(summary) {
+      try { localStorage.setItem('pb_sets_summary_en', JSON.stringify({ t: Date.now(), s: summary })); } catch (_) {}
+    }
+
     async function _appendCatalogSetsAsync(apiSets) {
       try {
         const seenCodes = new Set(apiSets.map(s => (s.id || s.ptcgoCode || '').toLowerCase()));
         const seenNames = new Set(apiSets.map(s => (s.name || '').toLowerCase()));
-        let summary = null;
+        // Cache-first: the Pokemon-EN catalog summary is expensive to compute
+        // (function-filtered scan of ~169k rows), but the set LIST barely
+        // changes. Serve a cached copy instantly (24h TTL) and only hit the
+        // DB when the cache is cold/stale.
+        let summary = _getCachedSetsSummary();
 
-        // Path A — fast RPC (preferred). Requires the catalog_sets_summary
-        // function from the migration printed below by printCatalogSetsRpcSQL().
-        try {
-          const r = await sb.rpc('catalog_sets_summary', { p_prefix: 'en-' });
-          if (!r.error && Array.isArray(r.data)) summary = r.data;
-        } catch(_) {}
+        if (!summary) {
+          // Path A — fast RPC (preferred). Requires the catalog_sets_summary
+          // function from migration_pokemon_en_legacy_ids.sql.
+          try {
+            const r = await sb.rpc('catalog_sets_summary', { p_prefix: 'en-' });
+            if (!r.error && Array.isArray(r.data)) summary = r.data;
+          } catch(_) {}
 
         // Path B — fallback: paginate the catalog client-side. Slow but
         // works without admin action. Logs a console hint with the SQL
@@ -26484,6 +26523,9 @@ function _loadAdmin(){
             offset += 1000;
           }
           summary = Object.values(byCode);
+        }
+
+          if (summary && summary.length) _setCachedSetsSummary(summary);
         }
 
         if (!summary || !summary.length) return;

@@ -1507,10 +1507,29 @@ def mode_mirror_images():
         q = (sb.table("catalog")
              .select("id,image_url,set_code,card_number,name"))
         if getattr(args, "fallback_source", False):
-            # Either still on pokedata, OR null → fall back to canonical source
-            q = q.or_("image_url.like.%pokedata.io%,image_url.is.null")
+            # Off-Supabase (any upstream CDN) OR null → fall back to canonical source
+            q = q.or_(
+                "image_url.like.%pokedata.io%,"
+                "image_url.like.%pokemontcg.io%,"
+                "image_url.like.%scrydex.com%,"
+                "image_url.like.%tcgdex.net%,"
+                "image_url.like.%googleapis.com%,"
+                "image_url.is.null"
+            )
         else:
-            q = q.like("image_url", "%pokedata.io%")
+            # Mirror any catalog image still hosted off-Supabase. Originally
+            # pokedata.io only; broadened to the other upstream image CDNs
+            # (pokemontcg.io, scrydex, tcgdex, googleapis) so the ~5.8k
+            # stragglers get pulled into our bucket + repointed too. Still
+            # idempotent: once a row's image_url is on supabase.co it no
+            # longer matches, so re-runs skip it.
+            q = q.or_(
+                "image_url.like.%pokedata.io%,"
+                "image_url.like.%pokemontcg.io%,"
+                "image_url.like.%scrydex.com%,"
+                "image_url.like.%tcgdex.net%,"
+                "image_url.like.%googleapis.com%"
+            )
         # Per-TCG scoping
         if tcg_prefix == "POKEMON":
             # Pokemon rows are en-/jp-/pd- prefixed OR legacy raw ids (no prefix)
