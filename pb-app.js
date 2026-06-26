@@ -28321,17 +28321,28 @@ function _loadAdmin(){
           if (!allCards.length && setName) {
             try {
               let { data: nameRows } = await sb.from('catalog')
-                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, product_type')
                 .eq('set_name', setName)
                 .order('card_number', { ascending: true })
                 .limit(800);
               if (!nameRows || !nameRows.length) {
                 const ni = await sb.from('catalog')
-                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, product_type')
                   .ilike('set_name', setName)
                   .order('card_number', { ascending: true })
                   .limit(800);
                 nameRows = ni.data || [];
+              }
+              // SINGLES ONLY — this is the singles view, and sealed products
+              // (booster boxes, ETBs, etc.) share the same set_name. Filter
+              // client-side so NULL/empty product_type is honestly treated as a
+              // single (per the product_type-IS-NULL gotcha). Sealed has its
+              // own view.
+              if (nameRows && nameRows.length) {
+                nameRows = nameRows.filter(function (r) {
+                  var pt = String(r.product_type || '').toLowerCase();
+                  return pt === '' || pt === 'single' || pt === 'tcg_single';
+                });
               }
               if (nameRows && nameRows.length) {
                 // The catalog can hold the same set under multiple set_codes
