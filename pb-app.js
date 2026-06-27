@@ -1144,7 +1144,20 @@ function _loadAdmin(){
       if (error || !authData?.user) {
         // Re-open modal and show error if auth failed
         openModal('loginModal');
-        errorEl.textContent = error?.message || 'Sign in failed. Please try again.';
+        const _msg = error?.message || 'Sign in failed. Please try again.';
+        // "Email not confirmed" is a dead end otherwise (the link expired) —
+        // surface a one-tap resend so the user can recover themselves.
+        const _notConfirmed = (error && error.code === 'email_not_confirmed')
+          || /email not confirmed|not confirmed|confirm your email/i.test(_msg);
+        if (_notConfirmed) {
+          window._pendingConfirmEmail = email;
+          errorEl.innerHTML = 'Your email hasn\'t been confirmed yet. '
+            + '<button type="button" onclick="resendConfirmation()" '
+            + 'style="background:none;border:none;color:var(--accent);text-decoration:underline;'
+            + 'cursor:pointer;font-family:inherit;font-size:inherit;padding:0">Resend confirmation email</button>';
+        } else {
+          errorEl.textContent = _msg;
+        }
         freshSignIn = false;
         return;
       }
@@ -1188,6 +1201,25 @@ function _loadAdmin(){
       showPage('account'); setMobileNav('account');
       showToast('Welcome back!');
     }
+
+    // Resend the signup confirmation email — wired to the "Resend
+    // confirmation email" link that appears when a login fails because the
+    // address was never confirmed (or the original link expired).
+    async function resendConfirmation() {
+      var emailEl = document.getElementById('loginEmail');
+      var email = window._pendingConfirmEmail || (emailEl && emailEl.value.trim());
+      if (!email) { showToast('Enter your email first.'); return; }
+      try {
+        const r = await sb.auth.resend({ type: 'signup', email: email });
+        if (r && r.error) { showToast('Couldn\'t resend: ' + r.error.message); return; }
+        showToast('Confirmation email sent — check your inbox + spam.');
+        const el = document.getElementById('loginError');
+        if (el) el.textContent = 'Confirmation email resent to ' + email + '. Open the link, then sign in.';
+      } catch (e) {
+        showToast('Couldn\'t resend right now — try again in a minute.');
+      }
+    }
+    window.resendConfirmation = resendConfirmation;
 
     // ── Password reset flow ────────────────────────────────────────────
     // Two-stage:
@@ -1306,6 +1338,7 @@ function _loadAdmin(){
 
       const errorEl = document.getElementById('registerError');
       errorEl.textContent = '';
+      errorEl.style.color = '';
 
       const agreeEl = document.getElementById('regAgree');
       if (agreeEl && !agreeEl.checked) {
@@ -1344,10 +1377,31 @@ function _loadAdmin(){
           }
         }
 
+        // If email confirmation is enabled, signUp returns NO session — the
+        // user isn't actually signed in until they click the link. Don't
+        // navigate them to a logged-out account page; keep the modal open
+        // with a clear "check your email" message + a one-tap resend in case
+        // the email lands in spam or gets missed.
+        if (data && data.session) {
+          // Auto-confirmed (email confirmation disabled) — already signed in.
+          showToast('Account created!');
+          freshSignIn = true;
+          closeModal('registerModal');
+          showPage('account'); setMobileNav('account');
+          _reenable();
+          return;
+        }
+
+        window._pendingConfirmEmail = email;
+        errorEl.style.color = 'var(--green)';
+        errorEl.innerHTML = 'Account created. We sent a confirmation link to '
+          + '<strong id="regConfirmEmailSlot"></strong>. Open it, then sign in.<br>'
+          + 'Didn\'t get it? <button type="button" onclick="resendConfirmation()" '
+          + 'style="background:none;border:none;color:var(--accent);text-decoration:underline;'
+          + 'cursor:pointer;font-family:inherit;font-size:inherit;padding:0">Resend confirmation email</button>';
+        var _slot = document.getElementById('regConfirmEmailSlot');
+        if (_slot) _slot.textContent = email;
         showToast('Account created! Check your email to confirm.');
-        freshSignIn = true;
-        closeModal('registerModal');
-        showPage('account'); setMobileNav('account');
         _reenable();
       } catch (err) {
         console.error('Register error:', err);
