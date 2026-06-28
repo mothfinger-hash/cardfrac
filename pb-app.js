@@ -983,6 +983,15 @@ function _loadAdmin(){
     }
     function openModal(modalId) {
       const _mEl = document.getElementById(modalId);
+      // Guarantee the full-screen backdrop actually covers the whole viewport.
+      // A position:fixed overlay is only viewport-relative if no ancestor has a
+      // transform/filter/perspective — and animated panels (holo-project) plus
+      // stacked modals can introduce one, which clips the wash and lets the
+      // page show through at the top. Re-parenting the overlay to <body> on
+      // open removes any such ancestor and also fixes stacking order.
+      if (_mEl && _mEl.parentElement !== document.body) {
+        document.body.appendChild(_mEl);
+      }
       _mEl.classList.add('open');
       _syncModalScrollLock();
       // A11y: mark as a dialog, remember what had focus, and move focus to
@@ -2468,12 +2477,33 @@ function _loadAdmin(){
     // priceSourceUrl if the catalog lookup hasn't completed yet.
     // TCGplayer always uses a search URL since we don't store product
     // IDs for them — works across game types.
+    // ── TCGplayer affiliate (Impact) deep-link wrapper ──────────────────
+    // Any tcgplayer.com URL routed through here earns commission via our
+    // partner link. Non-tcgplayer URLs (PriceCharting, eBay, ...) and links
+    // that are ALREADY affiliate-wrapped pass straight through. The prefix is
+    // config only — never baked into stored data — so links stay re-pointable
+    // if the partner link ever changes. `medium` (optional) tags the surface
+    // (e.g. 'sets-modal', 'binder') so Impact reports which screen drives clicks.
+    var TCGPLAYER_AFFILIATE_PREFIX = 'https://partner.tcgplayer.com/c/7431583/1780961/21018';
+    function tcgAffiliateUrl(url, medium) {
+      if (!url) return url;
+      var host;
+      try { host = new URL(url, 'https://x').hostname.toLowerCase(); }
+      catch (e) { return url; }
+      if (host === 'partner.tcgplayer.com' || host.endsWith('.pxf.io')) return url; // already tracked
+      if (host !== 'tcgplayer.com' && !host.endsWith('.tcgplayer.com')) return url; // not tcgplayer
+      var out = TCGPLAYER_AFFILIATE_PREFIX + '?u=' + encodeURIComponent(url);
+      if (medium) out += '&sharedid=' + encodeURIComponent(medium);
+      return out;
+    }
+    window.tcgAffiliateUrl = tcgAffiliateUrl;
+
     function _renderListingPriceComps(listing) {
       var compsEl = document.getElementById('priceComps_' + listing.id);
       if (!compsEl) return;
       var pcUrl = listing._catalogPriceSourceUrl || listing.priceSourceUrl || '';
       var name = String(listing.name || '').trim();
-      var tcgUrl = 'https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(name);
+      var tcgUrl = tcgAffiliateUrl('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(name), 'listing-comps');
       var ebayUrl = 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(name) + '&_sacat=183454'; // Trading Card Singles category
 
       var btnStyle = 'padding:8px 12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:Space Mono,monospace;font-size:.7rem;text-decoration:none;letter-spacing:.05em;display:inline-flex;align-items:center;gap:6px;transition:border-color .12s,color .12s';
@@ -16631,9 +16661,9 @@ function _loadAdmin(){
     function _buildExtrasHtml(extras, fallbackTcgUrl, cardName) {
       const pcRow  = extras && extras.pricecharting;
       const tcgRow = extras && extras.tcgplayer;
-      const tcgUrl = (tcgRow && tcgRow.source_url)
+      const tcgUrl = tcgAffiliateUrl((tcgRow && tcgRow.source_url)
         || fallbackTcgUrl
-        || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || ''));
+        || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || '')), 'card-detail');
       const pcUrl  = (pcRow && pcRow.source_url) || null;
       // Each price IS its own link now — the source name + value open that
       // product page, so the two big TCGPLAYER / PRICECHARTING buttons are
