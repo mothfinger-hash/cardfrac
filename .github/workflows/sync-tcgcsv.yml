@@ -1,0 +1,102 @@
+name: Sync TCGCSV (TCGplayer product links)
+
+# Keeps catalog.tcgplayer_product_id + tcgplayer_url current from TCGCSV
+# (tcgcsv.com — a once-daily cache of TCGplayer's own API). New sets and
+# cards get linked as they appear upstream.
+#
+# Phase 1 today: product IDs + URLs only (no price writes). When pricing
+# (Phase 2) is added to sync_tcgcsv.py, this same workflow carries it.
+#
+# Etiquette is enforced in the script (custom User-Agent, 100ms spacing,
+# and a last-updated.txt guard that no-ops when TCGCSV hasn't rebuilt).
+# Human review decisions (manual / skip / missing in tcgplayer_group_map)
+# are sticky and never re-fuzzed.
+#
+# Scheduling:
+#   09:00 UTC = 4 AM EST / 5 AM EDT  →  runs AFTER the PriceCharting refresh
+#   (07:00 UTC) and the free-API TCGplayer sync (08:00 UTC), so all price
+#   sources settle before morning users land. TCGCSV only rebuilds once a
+#   day, so a single daily pass is all that's useful.
+#
+# Runs on the same self-hosted Mac runner as the other price workflows.
+
+on:
+  schedule:
+    # GitHub cron is UTC and does NOT auto-adjust for DST.
+    - cron: '0 9 * * *'    # 4 AM EST / 5 AM EDT
+  workflow_dispatch:
+    inputs:
+      tcg:
+        description: 'game_type to sync, or all'
+        required: false
+        default: 'all'
+      groups_only:
+        description: 'Only (re)build the group map, skip product backfill'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      force:
+        description: 'Run even if TCGCSV last-updated.txt has not advanced'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      dry_run:
+        description: 'Dry-run: match + report, no DB writes'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    timeout-minutes: 45
+
+    # PYTHONUNBUFFERED keeps print() flowing to the Actions log in real
+    # time so the run never looks frozen during the rate-limited fetch.
+    env:
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show Python version
+        run: python3 --version
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip --user
+          python3 -m pip install requests --user
+
+      - name: Build script args
+        id: args
+        run: |
+          ARGS="--tcg ${{ github.event.inputs.tcg || 'all' }}"
+          if [ "${{ github.event.inputs.groups_only || 'false' }}" = "true" ]; then
+            ARGS="$ARGS --groups-only"
+          fi
+          if [ "${{ github.event.inputs.force || 'false' }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "value=$ARGS" >> "$GITHUB_OUTPUT"
+          echo "Running: python3 -u sync_tcgcsv.py $ARGS"
+
+      - name: Run TCGCSV sync
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          # -u forces unbuffered stdout/stderr so progress streams live.
+          python3 -u sync_tcgcsv.py ${{ steps.args.outputs.value }}

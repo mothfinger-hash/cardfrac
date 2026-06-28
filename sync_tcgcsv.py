@@ -157,6 +157,7 @@ def tcg_get(path):
         except requests.RequestException as e:
             if attempt == 3:
                 raise
+            _log(f"    (slow/failed {path}: {type(e).__name__}; retry {attempt + 1}/3)")
             time.sleep(2 * (attempt + 1))
     return None
 
@@ -235,34 +236,76 @@ def ratio(a, b):
 
 
 # ── Supabase REST helpers ───────────────────────────────────────────────────
+# Every call retries on transient timeouts / 5xx so a single network blip can't
+# kill a long backfill (Supabase occasionally read-times-out under load).
+def _sb_send(method, path, **kwargs):
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{path}"
+    kwargs.setdefault("timeout", 60)
+    last = None
+    for attempt in range(5):
+        try:
+            r = _sb.request(method, url, **kwargs)
+        except requests.RequestException as e:
+            last = type(e).__name__
+            if attempt == 4:
+                raise
+            _log(f"    (Supabase {last}; retry {attempt + 1}/5)")
+            time.sleep(2 * (attempt + 1))
+            continue
+        # Only transient statuses are worth retrying.
+        if r.status_code in (429, 500, 502, 503, 504):
+            last = f"HTTP {r.status_code}"
+            if attempt == 4:
+                raise RuntimeError(f"Supabase {last} after retries: {r.text[:300]}")
+            _log(f"    (Supabase {last}; retry {attempt + 1}/5)")
+            time.sleep(2 * (attempt + 1))
+            continue
+        if not r.ok:
+            # Permanent client error (4xx) — don't retry; surface the body.
+            raise RuntimeError(f"Supabase {r.status_code} on {method} {path}: {r.text[:400]}")
+        return r
+    raise RuntimeError(f"Supabase request failed after retries: {last}")
+
+
 def sb_get(path):
-    r = _sb.get(f"{SUPABASE_URL.rstrip('/')}/rest/v1/{path}", timeout=60)
-    r.raise_for_status()
-    return r.json()
+    return _sb_send("GET", path).json()
 
 
-def sb_patch_catalog(cat_id, fields):
-    q = requests.utils.quote(cat_id, safe="")
-    r = _sb.patch(
-        f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog?id=eq.{q}",
-        headers={"Content-Type": "application/json", "Prefer": "return=minimal"},
-        data=json.dumps(fields),
-        timeout=30,
-    )
-    r.raise_for_status()
+def sb_upsert_catalog_links(rows):
+    """Batch-write tcgplayer_product_id + tcgplayer_url for many catalog rows
+    via the apply_tcgplayer_links() RPC — a true partial UPDATE, so it doesn't
+    trip PostgREST upsert's NOT-NULL requirements. One request per ~500 rows.
+    Requires migration_tcgcsv_apply_links_rpc.sql."""
+    for i in range(0, len(rows), 500):
+        chunk = rows[i:i + 500]
+        _sb_send(
+            "POST", "rpc/apply_tcgplayer_links",
+            headers={"Content-Type": "application/json", "Prefer": "return=minimal"},
+            data=json.dumps({"p": chunk}),
+        )
 
 
 def sb_upsert_group_map(row):
-    r = _sb.post(
-        f"{SUPABASE_URL.rstrip('/')}/rest/v1/tcgplayer_group_map?on_conflict=group_id",
-        headers={
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates,return=minimal",
-        },
+    _sb_send(
+        "POST", "tcgplayer_group_map?on_conflict=group_id",
+        headers={"Content-Type": "application/json",
+                 "Prefer": "resolution=merge-duplicates,return=minimal"},
         data=json.dumps(row),
-        timeout=30,
     )
-    r.raise_for_status()
+
+
+def sb_upsert_card_prices(rows):
+    """Batch upsert into card_prices, keyed (catalog_id, source). Unlike the
+    catalog link write, these rows are fully specified so a plain PostgREST
+    upsert works (insert-or-update). One request per ~500 rows."""
+    for i in range(0, len(rows), 500):
+        chunk = rows[i:i + 500]
+        _sb_send(
+            "POST", "card_prices?on_conflict=catalog_id,source",
+            headers={"Content-Type": "application/json",
+                     "Prefer": "resolution=merge-duplicates,return=minimal"},
+            data=json.dumps(chunk),
+        )
 
 
 def fetch_catalog_sets(game_type):
@@ -287,13 +330,33 @@ def fetch_catalog_sets(game_type):
     return rows  # { set_code: set_name }
 
 
-def fetch_catalog_cards_in_set(game_type, set_code):
-    """All singles in a set, returned as a number-keyed match index."""
-    q = requests.utils.quote(set_code, safe="")
-    rows = sb_get(
-        f"catalog?select=id,name,card_number,product_type"
-        f"&game_type=eq.{game_type}&set_code=eq.{q}&limit=2000"
-    )
+def fetch_catalog_cards_in_set(game_type, set_code, set_name, relink=False):
+    """
+    Singles in a set still NEEDING a link, number-keyed for matching.
+
+    Prefer matching by set_NAME, not set_code: the catalog carries duplicate
+    set_codes for the same real set (a few promo rows under one code, the bulk
+    under another), so a single set_code misses most cards. The set_name groups
+    them. Falls back to set_code if the name yields nothing.
+
+    By default this returns only rows where tcgplayer_product_id IS NULL, so a
+    re-run resumes — already-linked cards are skipped. Pass relink=True to
+    re-process everything (e.g. after upstream productId changes).
+    """
+    nullf = "" if relink else "&tcgplayer_product_id=is.null"
+    rows = []
+    if set_name:
+        q = requests.utils.quote(set_name, safe="")
+        rows = sb_get(
+            f"catalog?select=id,name,card_number,product_type"
+            f"&game_type=eq.{game_type}&set_name=eq.{q}{nullf}&limit=4000"
+        )
+    if not rows and set_code:
+        q = requests.utils.quote(set_code, safe="")
+        rows = sb_get(
+            f"catalog?select=id,name,card_number,product_type"
+            f"&game_type=eq.{game_type}&set_code=eq.{q}{nullf}&limit=4000"
+        )
     by_num = {}
     for r in rows:
         pt = str(r.get("product_type") or "").lower()
@@ -355,7 +418,7 @@ def build_group_map(game_type, category_id, dry_run):
     # 'missing' are never re-fuzzed or overwritten here.
     locked_rows = {}
     try:
-        for row in sb_get(f"tcgplayer_group_map?select=group_id,set_code,confidence"
+        for row in sb_get(f"tcgplayer_group_map?select=group_id,set_code,set_name,confidence"
                           f"&category_id=eq.{category_id}"
                           f"&confidence=in.(manual,skip,missing)"):
             locked_rows[row["group_id"]] = row
@@ -374,8 +437,8 @@ def build_group_map(game_type, category_id, dry_run):
         if lr:
             locked += 1
             # 'manual' drives product backfill; 'skip'/'missing' are excluded.
-            if lr.get("confidence") == "manual" and lr.get("set_code"):
-                result[gid] = lr["set_code"]
+            if lr.get("confidence") == "manual" and (lr.get("set_code") or lr.get("set_name")):
+                result[gid] = (lr.get("set_code"), lr.get("set_name"))
             continue
 
         clean, abbr = set_name_from_group(gname)
@@ -425,8 +488,8 @@ def build_group_map(game_type, category_id, dry_run):
             unmatched += 1
             _log(f"    UNMATCHED group {gid}: '{gname}'")
 
-        if set_code:
-            result[gid] = set_code
+        if set_code or set_name:
+            result[gid] = (set_code, set_name)
 
     locked_note = f", {locked} locked (manual/skip)" if locked else ""
     _log(f"  group map: {mapped} exact, {fuzzy} fuzzy, {unmatched} unmatched{locked_note}")
@@ -449,19 +512,39 @@ def product_number(product):
     return None
 
 
-def backfill_products(game_type, category_id, group_to_setcode, dry_run, limit):
-    linked, skipped_sealed, no_match, ambiguous = 0, 0, 0, 0
+def backfill_products(game_type, category_id, group_to_setcode, dry_run, limit, relink):
+    linked, skipped_sealed, no_match, ambiguous, skipped_done = 0, 0, 0, 0, 0
     set_cache = {}  # set_code -> number index
+
+    # Batched writes: collect link updates and flush every 500 rows via one
+    # upsert, rather than a PATCH per card. De-dupe by catalog id within a
+    # flush (a card can only carry one product id).
+    pending = {}
+
+    def flush():
+        if pending and not dry_run:
+            sb_upsert_catalog_links(list(pending.values()))
+        pending.clear()
 
     total_groups = len(group_to_setcode)
     _log(f"  Backfilling products across {total_groups} mapped group(s) "
          f"(~1 request each)…")
 
-    for gi, (gid, set_code) in enumerate(group_to_setcode.items(), 1):
+    for gi, (gid, sc_sn) in enumerate(group_to_setcode.items(), 1):
+        set_code, set_name = sc_sn
+        cache_key = set_name or set_code
+        if cache_key not in set_cache:
+            set_cache[cache_key] = fetch_catalog_cards_in_set(game_type, set_code, set_name, relink)
+        by_num = set_cache[cache_key]
+        # Nothing left to link in this set (all already linked, or no rows) —
+        # skip the TCGCSV product fetch entirely. This is what makes a re-run
+        # resume fast instead of re-fetching every group.
+        if not by_num:
+            skipped_done += 1
+            if gi == 1 or gi % 5 == 0 or gi == total_groups:
+                _log(f"    …{gi}/{total_groups} groups ({linked} linked so far)")
+            continue
         prods = tcg_get(f"/tcgplayer/{category_id}/{gid}/products").get("results", [])
-        if set_code not in set_cache:
-            set_cache[set_code] = fetch_catalog_cards_in_set(game_type, set_code)
-        by_num = set_cache[set_code]
         seen = 0
 
         for p in prods:
@@ -489,19 +572,22 @@ def backfill_products(game_type, category_id, group_to_setcode, dry_run, limit):
                 if best < 0.6:
                     ambiguous += 1
                     continue
-            fields = {
+            pending[target["id"]] = {
+                "id":                   target["id"],
                 "tcgplayer_product_id": p["productId"],
                 "tcgplayer_url":        p.get("url"),
             }
-            if not dry_run:
-                sb_patch_catalog(target["id"], fields)
             linked += 1
+            if len(pending) >= 500:
+                flush()
 
-        if gi % 20 == 0 or gi == total_groups:
+        if gi == 1 or gi % 5 == 0 or gi == total_groups:
             _log(f"    …{gi}/{total_groups} groups ({linked} linked so far)")
 
+    flush()  # write the final partial batch
+    done_note = f", {skipped_done} groups already done" if skipped_done else ""
     _log(f"  products: {linked} linked, {no_match} no-match, "
-         f"{ambiguous} ambiguous, {skipped_sealed} sealed-skipped")
+         f"{ambiguous} ambiguous, {skipped_sealed} sealed-skipped{done_note}")
 
 
 # ── last-updated guard ──────────────────────────────────────────────────────
@@ -544,6 +630,8 @@ def main():
                     help="run even if last-updated.txt hasn't advanced")
     ap.add_argument("--limit", type=int, default=0,
                     help="cap products per group (testing)")
+    ap.add_argument("--relink", action="store_true",
+                    help="re-process ALL cards, not just unlinked ones (default: resume)")
     args = ap.parse_args()
 
     remote_ts = remote_last_updated()
@@ -569,7 +657,7 @@ def main():
         if args.groups_only:
             continue
         backfill_products(game_type, category_id, group_to_setcode,
-                          args.dry_run, args.limit)
+                          args.dry_run, args.limit, args.relink)
 
     if not args.dry_run:
         write_local_last_updated(remote_ts)
