@@ -4826,6 +4826,14 @@ function _loadAdmin(){
               <button type="button" onclick="sendSubsidiaryInviteEmail()" class="btn btn-secondary" style="margin-top:8px;width:100%">Send Email</button>
               <div id="subsidiaryInviteEmailStatus" style="font-size:.7rem;min-height:16px;margin-top:6px;color:var(--muted)"></div>
             </div>
+            <div id="subsidiaryInviteShareBox" style="display:none;margin-bottom:14px">
+              <label style="font-size:.72rem;color:var(--muted);letter-spacing:.05em;display:block;margin-bottom:6px">Or text it to their phone</label>
+              <div style="display:flex;gap:8px">
+                <input type="tel" id="subsidiaryInvitePhone" placeholder="(555) 123-4567" style="flex:1;padding:9px 12px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.78rem" />
+                <button type="button" onclick="sendSubsidiaryInviteSMS()" class="btn btn-secondary" style="white-space:nowrap">Text</button>
+              </div>
+              <button type="button" onclick="shareSubsidiaryInvite()" class="btn btn-secondary" style="margin-top:8px;width:100%">Share...</button>
+            </div>
             <button type="button" id="subsidiaryInviteGenBtn" onclick="generateSubsidiaryInvite()" class="btn btn-primary" style="width:100%">Generate Code</button>
           </div>
         </div>`;
@@ -4856,6 +4864,8 @@ function _loadAdmin(){
         if (btn) { btn.style.display = 'none'; }
         const emailBox = document.getElementById('subsidiaryInviteEmailBox');
         if (emailBox) emailBox.style.display = '';
+        const shareBox = document.getElementById('subsidiaryInviteShareBox');
+        if (shareBox) shareBox.style.display = '';
         // Refresh the cached quota so the banner re-renders correctly
         // next time renderDashboard fires.
         await _loadSubsidiaryQuota(true);
@@ -4897,6 +4907,42 @@ function _loadAdmin(){
         if (status) { status.style.color = 'var(--red)'; status.textContent = 'Network error: ' + e.message; }
       }
     }
+    // Shared invite message for the SMS / Share paths.
+    function _subsidiaryInviteShareText() {
+      const code = _lastGeneratedSubsidiaryCode || '';
+      return 'Join me on PathBinder! Use invite code ' + code
+        + ' when you sign up at https://pathbinder.gg';
+    }
+    // Open the phone's SMS composer, pre-filled, to the number they typed (or
+    // no recipient if blank). The "?&" param separator works on both iOS and
+    // Android sms: links. No SMS provider needed — it sends on their own plan.
+    function sendSubsidiaryInviteSMS() {
+      if (!_lastGeneratedSubsidiaryCode) { showToast('Generate a code first.'); return; }
+      const el  = document.getElementById('subsidiaryInvitePhone');
+      const num = ((el && el.value) || '').replace(/[^0-9+]/g, '');
+      window.location.href = 'sms:' + num + '?&body=' + encodeURIComponent(_subsidiaryInviteShareText());
+    }
+    // Native share sheet (Messages, WhatsApp, etc.) in the app; Web Share API
+    // in a mobile browser; clipboard fallback everywhere else.
+    async function shareSubsidiaryInvite() {
+      if (!_lastGeneratedSubsidiaryCode) { showToast('Generate a code first.'); return; }
+      const text = _subsidiaryInviteShareText();
+      const payload = { title: 'PathBinder invite', text: text, url: 'https://pathbinder.gg' };
+      try {
+        const cap = window.Capacitor;
+        if (cap && cap.isNativePlatform && cap.isNativePlatform()
+            && cap.Plugins && cap.Plugins.Share) {
+          await cap.Plugins.Share.share(payload);
+          return;
+        }
+        if (navigator.share) { await navigator.share(payload); return; }
+        await navigator.clipboard.writeText(text);
+        showToast('Invite copied — paste it into any message');
+      } catch (e) { /* user cancelled the share sheet — no-op */ }
+    }
+    window.sendSubsidiaryInviteSMS = sendSubsidiaryInviteSMS;
+    window.shareSubsidiaryInvite = shareSubsidiaryInvite;
+
     async function openMySubsidiaryInvitesModal() {
       try {
         const { data } = await sb.from('subsidiary_invites')
@@ -16639,19 +16685,19 @@ function _loadAdmin(){
         return result;
       } catch (_) { return null; }
     }
-    // Computes a single "Estimated Value" from whatever comp sources
-    // returned data. Averages when 2+ sources have a value, returns the
-    // single value when only one source has data, null otherwise. Used
-    // to keep an Est_Value visible for cards where one source (typically
-    // PriceCharting) has no row but another (TCGplayer) does.
+    // Computes a single "Estimated Value" from the comp sources. PREFERS the
+    // TCGplayer market price — it's the most reliable single figure for US
+    // card value — and falls back to PriceCharting only when TCGplayer has no
+    // row (e.g. JP-only cards, sealed product). Previously this averaged the
+    // two, which let a stale/mismapped PriceCharting number drag the estimate
+    // off. Returns null when neither source has data.
     function _computeEstimateFromExtras(extras) {
       if (!extras) return null;
-      const vals = [];
-      if (extras.pricecharting && Number(extras.pricecharting.value) > 0) vals.push(Number(extras.pricecharting.value));
-      if (extras.tcgplayer     && Number(extras.tcgplayer.value)     > 0) vals.push(Number(extras.tcgplayer.value));
-      if (!vals.length) return null;
-      const avg = vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
-      return { value: avg, sourceCount: vals.length };
+      const tcg = extras.tcgplayer     && Number(extras.tcgplayer.value);
+      const pc  = extras.pricecharting && Number(extras.pricecharting.value);
+      if (tcg && tcg > 0) return { value: tcg, primary: 'tcgplayer',     hasBoth: !!(pc && pc > 0) };
+      if (pc  && pc  > 0) return { value: pc,  primary: 'pricecharting', hasBoth: false };
+      return null;
     }
     // Shared HTML renderer — used by both Sets and Binder paths.
     // The binder modal renders an Est_Value tile above this block and
@@ -16710,7 +16756,7 @@ function _loadAdmin(){
             if (est) {
               // Est_Value tile is per-card now, so don't multiply by qty.
               tile.textContent = '$' + est.value.toFixed(2);
-              tile.title = est.sourceCount > 1 ? 'Average of ' + est.sourceCount + ' sources' : 'From single comp source';
+              tile.title = est.primary === 'tcgplayer' ? 'TCGplayer market price' : 'PriceCharting price';
             }
           }
         }
@@ -16867,7 +16913,7 @@ function _loadAdmin(){
         const _setsEst = _computeEstimateFromExtras(extras);
         const estHtml = _setsEst
           ? `<div style="margin-top:10px;border:1px solid var(--copper-dim);padding:8px 12px;background:rgba(184,115,51,.04);display:flex;justify-content:space-between;align-items:center;border-radius:var(--r-md)">
-              <span style="font-size:.6rem;color:var(--copper);letter-spacing:.08em">ESTIMATED VALUE${_setsEst.sourceCount > 1 ? ' (AVG)' : ''}</span>
+              <span style="font-size:.6rem;color:var(--copper);letter-spacing:.08em">ESTIMATED VALUE</span>
               <span style="font-size:.85rem;font-weight:800;color:var(--copper)">$${_setsEst.value.toFixed(2)}</span>
             </div>`
           : '';

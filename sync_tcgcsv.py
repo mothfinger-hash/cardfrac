@@ -13,9 +13,13 @@ needed). Phase 1 backfills two things and writes NO prices:
 
     tcgplayer_group_map            TCGCSV group (set) -> catalog set_code
 
-Pricing (card_prices: source='tcgplayer' / 'tcgplayer_reverse_holo' /
-sealed) lands in a later phase. This script intentionally does not
-touch card_prices.
+Phase 2 also writes prices into card_prices from TCGCSV /prices, matched by
+the linked tcgplayer_product_id:
+    source='tcgplayer'               the card's main market price
+    source='tcgplayer_reverse_holo'  the Reverse Holofoil subtype, when present
+The price pass runs every sync (prices change daily) and is NOT subject to the
+resume filter. Skip it with --no-prices; run only prices with --prices-only.
+Sealed-product pricing is still a later phase.
 
 HOW MATCHING WORKS
 ------------------
@@ -590,6 +594,98 @@ def backfill_products(game_type, category_id, group_to_setcode, dry_run, limit, 
          f"{ambiguous} ambiguous, {skipped_sealed} sealed-skipped{done_note}")
 
 
+# ── Price backfill (Phase 2) ────────────────────────────────────────────────
+# TCGCSV /prices returns one row per (productId, subTypeName). We write the
+# card's MAIN price as source='tcgplayer' and its Reverse Holofoil (if any) as
+# source='tcgplayer_reverse_holo'. Other finishes are left for a later phase.
+_MAIN_SUBTYPE_PRIORITY = [
+    "Normal", "Holofoil", "1st Edition Holofoil", "1st Edition",
+    "Unlimited Holofoil", "Unlimited",
+]
+
+
+def fetch_set_product_map(game_type, set_code, set_name):
+    """{ tcgplayer_product_id : (catalog_id, tcgplayer_url) } for a set's linked rows."""
+    rows = []
+    if set_name:
+        q = requests.utils.quote(set_name, safe="")
+        rows = sb_get(
+            f"catalog?select=id,tcgplayer_product_id,tcgplayer_url"
+            f"&game_type=eq.{game_type}&set_name=eq.{q}"
+            f"&tcgplayer_product_id=not.is.null&limit=4000"
+        )
+    if not rows and set_code:
+        q = requests.utils.quote(set_code, safe="")
+        rows = sb_get(
+            f"catalog?select=id,tcgplayer_product_id,tcgplayer_url"
+            f"&game_type=eq.{game_type}&set_code=eq.{q}"
+            f"&tcgplayer_product_id=not.is.null&limit=4000"
+        )
+    return {r["tcgplayer_product_id"]: (r["id"], r.get("tcgplayer_url")) for r in rows}
+
+
+def backfill_prices(game_type, category_id, group_to_setcode, dry_run):
+    written, groups_priced = 0, 0
+    pending = []
+
+    def flush():
+        nonlocal written
+        if pending and not dry_run:
+            sb_upsert_card_prices(pending)
+        written += len(pending)
+        pending.clear()
+
+    total = len(group_to_setcode)
+    _log(f"  Pricing {total} mapped group(s) from TCGCSV /prices…")
+    now = datetime.now(timezone.utc).isoformat()
+
+    for gi, (gid, sc_sn) in enumerate(group_to_setcode.items(), 1):
+        set_code, set_name = sc_sn
+        pid_map = fetch_set_product_map(game_type, set_code, set_name)
+        if pid_map:
+            groups_priced += 1
+            prices = tcg_get(f"/tcgplayer/{category_id}/{gid}/prices").get("results", [])
+            # collapse to { productId: { subType: marketPrice } }
+            by_pid = {}
+            for pr in prices:
+                mp = pr.get("marketPrice")
+                if mp is None:
+                    continue
+                by_pid.setdefault(pr.get("productId"), {})[(pr.get("subTypeName") or "").strip()] = mp
+
+            for pid, subs in by_pid.items():
+                tgt = pid_map.get(pid)
+                if not tgt:
+                    continue
+                cat_id, url = tgt
+                main = None
+                for s in _MAIN_SUBTYPE_PRIORITY:
+                    if s in subs:
+                        main = subs[s]
+                        break
+                if main is None:  # holo-only / unusual finish — take any non-RH
+                    for s, v in subs.items():
+                        if s != "Reverse Holofoil":
+                            main = v
+                            break
+                if main is not None:
+                    pending.append({"catalog_id": cat_id, "source": "tcgplayer",
+                                    "value": main, "currency": "USD",
+                                    "source_url": url, "recorded_at": now})
+                if "Reverse Holofoil" in subs:
+                    pending.append({"catalog_id": cat_id, "source": "tcgplayer_reverse_holo",
+                                    "value": subs["Reverse Holofoil"], "currency": "USD",
+                                    "source_url": url, "recorded_at": now})
+                if len(pending) >= 500:
+                    flush()
+
+        if gi == 1 or gi % 5 == 0 or gi == total:
+            _log(f"    …{gi}/{total} groups ({written + len(pending)} prices)")
+
+    flush()
+    _log(f"  prices: {written} written across {groups_priced} priced group(s)")
+
+
 # ── last-updated guard ──────────────────────────────────────────────────────
 def remote_last_updated():
     dt = time.time() - _last_req[0]
@@ -632,6 +728,10 @@ def main():
                     help="cap products per group (testing)")
     ap.add_argument("--relink", action="store_true",
                     help="re-process ALL cards, not just unlinked ones (default: resume)")
+    ap.add_argument("--no-prices", action="store_true",
+                    help="skip the price pass (links/IDs only)")
+    ap.add_argument("--prices-only", action="store_true",
+                    help="skip linking, only refresh card_prices from TCGCSV")
     args = ap.parse_args()
 
     remote_ts = remote_last_updated()
@@ -656,8 +756,11 @@ def main():
         group_to_setcode = build_group_map(game_type, category_id, args.dry_run)
         if args.groups_only:
             continue
-        backfill_products(game_type, category_id, group_to_setcode,
-                          args.dry_run, args.limit, args.relink)
+        if not args.prices_only:
+            backfill_products(game_type, category_id, group_to_setcode,
+                              args.dry_run, args.limit, args.relink)
+        if not args.no_prices:
+            backfill_prices(game_type, category_id, group_to_setcode, args.dry_run)
 
     if not args.dry_run:
         write_local_last_updated(remote_ts)
