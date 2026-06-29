@@ -16644,7 +16644,7 @@ function _loadAdmin(){
     // stores it as api_card_id). The Sets path uses
     // _renderSetsModalExtrasPlaceholder below which derives candidate
     // catalog ids from the pokemontcg.io id.
-    async function _loadExtraPricesByCatalogId(catalogId) {
+    async function _loadExtraPricesByCatalogId(catalogId, variant) {
       if (!catalogId) return null;
       try {
         const [catRes, cpRes] = await Promise.all([
@@ -16667,21 +16667,26 @@ function _loadAdmin(){
                   : null);
           result.pricecharting = { value: Number(catRow.current_value), source_url: pcUrl };
         }
+        // Collect every tcgplayer* finish; pick the one matching the owned
+        // variant for display, falling back to the base price.
+        const tcgMap = {};
         cps.forEach(function(r) {
-          if (r.source === 'tcgplayer' && r.value && Number(r.value) > 0) {
-            result.tcgplayer = {
-              value:       Number(r.value),
-              source_url:  r.source_url || null,
-              recorded_at: r.recorded_at,
-            };
-          } else if (r.source === 'pricecharting' && !result.pricecharting && r.value && Number(r.value) > 0) {
-            result.pricecharting = {
-              value:       Number(r.value),
-              source_url:  r.source_url || null,
-              recorded_at: r.recorded_at,
-            };
+          const val = Number(r.value);
+          if (!(val > 0)) return;
+          if (String(r.source).indexOf('tcgplayer') === 0) {
+            tcgMap[r.source] = { value: val, source_url: r.source_url || null, recorded_at: r.recorded_at };
+          } else if (r.source === 'pricecharting' && !result.pricecharting) {
+            result.pricecharting = { value: val, source_url: r.source_url || null, recorded_at: r.recorded_at };
           }
         });
+        const VARIANT_SOURCE = {
+          reverse_holo:       'tcgplayer_reverse_holo',
+          holo:               'tcgplayer_holo',
+          '1st_edition_holo': 'tcgplayer_1st_edition_holo',
+          foil:               'tcgplayer_foil',
+        };
+        const wantSrc = VARIANT_SOURCE[variant];
+        result.tcgplayer = (wantSrc && tcgMap[wantSrc]) || tcgMap['tcgplayer'] || null;
         return result;
       } catch (_) { return null; }
     }
@@ -16735,13 +16740,13 @@ function _loadAdmin(){
     // itemId (optional) lets the loader also patch the binder modal's
     // Est_Value tile when current_value was missing but the comp lookup
     // found a TCGplayer / averaged value.
-    function _renderBinderExtrasPlaceholder(catalogId, cardName, itemId) {
+    function _renderBinderExtrasPlaceholder(catalogId, cardName, itemId, variant) {
       if (!catalogId) return '';
       const elId = 'binderExtras_' + String(catalogId).replace(/[^a-z0-9]/gi, '_');
       setTimeout(async function() {
         const slot = document.getElementById(elId);
         if (!slot) return;
-        const extras = await _loadExtraPricesByCatalogId(catalogId);
+        const extras = await _loadExtraPricesByCatalogId(catalogId, variant);
         slot.innerHTML = _buildExtrasHtml(extras, null, cardName);
         // Patch the Est_Value tile if it's currently showing the
         // em-dash placeholder. We deliberately don't overwrite an
@@ -17244,7 +17249,7 @@ function _loadAdmin(){
              buttons to each product page. Shared renderer with the
              Sets-page card detail modal so the two views stay
              visually consistent. -->
-        ${_renderBinderExtrasPlaceholder(item.api_card_id, item.card_name, item.id)}
+        ${_renderBinderExtrasPlaceholder(item.api_card_id, item.card_name, item.id, item.variant)}
 
         <!-- Price trend -->
         ${hasPriceTracking()
@@ -19505,6 +19510,7 @@ function _loadAdmin(){
       normal:       'Normal',
       reverse_holo: 'Reverse Holo',
       holo:         'Holo',
+      foil:         'Foil',
     };
     async function _atcRefreshVariantChips() {
       const row     = document.getElementById('atcVariantRow');
@@ -19512,24 +19518,28 @@ function _loadAdmin(){
       if (!row || !chipsEl) return;
       const pc = pendingCollectionCard || {};
       const game = (pc.gameType || '').toLowerCase();
-      // Pokemon only for now — extend the list when variant taxonomies
-      // for other TCGs land.
-      if (game !== 'pokemon') {
+      // Build the available-variant list. Always offer Normal.
+      let variants = ['normal'];
+      if (game === 'pokemon') {
+        // Add Reverse Holo when the printing has one (catalog.has_reverse_holo).
+        if (pc.apiCardId) {
+          try {
+            const r = await sb.from('catalog')
+              .select('has_reverse_holo')
+              .eq('id', pc.apiCardId)
+              .maybeSingle();
+            if (r && r.data && r.data.has_reverse_holo) variants.push('reverse_holo');
+          } catch(_) { /* network blip — render Normal only */ }
+        }
+      } else if (game === 'magic' || game === 'mtg') {
+        // Almost every Magic card has a foil printing — offer it so the
+        // foil price (card_prices source 'tcgplayer_foil') can attach.
+        variants.push('foil');
+      } else {
+        // Other games: no variant taxonomy wired yet.
         row.style.display = 'none';
         if (pc) pc.variant = 'normal';
         return;
-      }
-      // Build the available-variant list. Always offer Normal. Look up
-      // catalog.has_reverse_holo when we have a real catalog id.
-      let variants = ['normal'];
-      if (pc.apiCardId) {
-        try {
-          const r = await sb.from('catalog')
-            .select('has_reverse_holo')
-            .eq('id', pc.apiCardId)
-            .maybeSingle();
-          if (r && r.data && r.data.has_reverse_holo) variants.push('reverse_holo');
-        } catch(_) { /* network blip — render Normal only */ }
       }
       // Default selection: whatever the pendingCollectionCard already
       // has set, otherwise Normal. Keeps the chip state across re-opens.
@@ -25096,12 +25106,14 @@ function _loadAdmin(){
     // the official backs to a PUBLIC Supabase bucket named "card-backs" as
     // <game_type>.png (pokemon.png, magic.png, yugioh.png, ...). Any game
     // without an uploaded back falls through to the generic PLACEHOLDER_IMG.
+    // Card backs are stored as lowercase <game_type>.webp in the public
+    // "card-backs" bucket. Add a game_type to the list when you upload its
+    // back; games without one fall to the generic PLACEHOLDER_IMG.
     window.CARD_BACKS = (function() {
       var base = 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/card-backs/';
       var m = {};
-      ['pokemon', 'magic', 'yugioh', 'onepiece', 'digimon', 'gundam', 'dbz',
-       'dbfusion', 'fab', 'lorcana', 'pokemon_topps'].forEach(function(g) {
-        m[g] = base + g + '.png';
+      ['pokemon', 'magic', 'yugioh', 'onepiece', 'dbz', 'gundam'].forEach(function(g) {
+        m[g] = base + g + '.webp';
       });
       return m;
     })();
@@ -25989,8 +26001,8 @@ function _loadAdmin(){
           : `<div class="sets-cardtile-miss">Missing</div>`;
 
       const imgHtml = card.image_url
-        ? `<img src="${_pickThumbVariant(card.image_url, 400)}" data-fallback="${_escHtml(card.image_url)}" alt="${_escHtml(card.name||'')}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" class="sets-cardtile-img">`
-        : `<div class="sets-cardtile-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">?</div>`;
+        ? `<img src="${_pickThumbVariant(card.image_url, 400)}" data-fallback="${_escHtml(card.image_url)}" data-game="${_escHtml(card.game_type||'')}" alt="${_escHtml(card.name||'')}" loading="lazy" decoding="async" onerror="_cardImgFallback(this)" class="sets-cardtile-img">`
+        : `<img src="${window._cardBackFor(card.game_type)}" alt="${_escHtml(card.name||'')}" loading="lazy" decoding="async" class="sets-cardtile-img">`;
 
       return `<div class="sets-cardtile ${owned ? 'owned' : 'missing'}" onclick="${openFn}(${idx})">
         ${imgHtml}
