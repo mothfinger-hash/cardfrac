@@ -595,13 +595,34 @@ def backfill_products(game_type, category_id, group_to_setcode, dry_run, limit, 
 
 
 # ── Price backfill (Phase 2) ────────────────────────────────────────────────
-# TCGCSV /prices returns one row per (productId, subTypeName). We write the
-# card's MAIN price as source='tcgplayer' and its Reverse Holofoil (if any) as
-# source='tcgplayer_reverse_holo'. Other finishes are left for a later phase.
-_MAIN_SUBTYPE_PRIORITY = [
+# TCGCSV /prices returns one row per (productId, subTypeName). We capture EVERY
+# finish so nothing is dropped: the card's base finish is written as
+# source='tcgplayer' (the headline), and each other finish gets its own source
+# (tcgplayer_foil, tcgplayer_reverse_holo, tcgplayer_holo, ...). That fixes
+# foil/holo cards reading the cheap non-foil price.
+_BASE_SUBTYPE_PRIORITY = [
     "Normal", "Holofoil", "1st Edition Holofoil", "1st Edition",
     "Unlimited Holofoil", "Unlimited",
 ]
+# Stable source slugs for the common finishes; anything else gets a generated
+# tcgplayer_<slug> source.
+_SUBTYPE_SOURCE = {
+    "Reverse Holofoil":     "tcgplayer_reverse_holo",
+    "Foil":                 "tcgplayer_foil",
+    "Holofoil":             "tcgplayer_holo",
+    "1st Edition":          "tcgplayer_1st_edition",
+    "1st Edition Holofoil": "tcgplayer_1st_edition_holo",
+    "Unlimited":            "tcgplayer_unlimited",
+    "Unlimited Holofoil":   "tcgplayer_unlimited_holo",
+}
+
+
+def _subtype_source(sub):
+    s = (sub or "").strip()
+    if s in _SUBTYPE_SOURCE:
+        return _SUBTYPE_SOURCE[s]
+    slug = re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
+    return "tcgplayer_" + slug if slug else "tcgplayer"
 
 
 def fetch_set_product_map(game_type, set_code, set_name):
@@ -658,23 +679,24 @@ def backfill_prices(game_type, category_id, group_to_setcode, dry_run):
                 if not tgt:
                     continue
                 cat_id, url = tgt
-                main = None
-                for s in _MAIN_SUBTYPE_PRIORITY:
+                # Pick the base finish for the headline 'tcgplayer' source.
+                base_sub = None
+                for s in _BASE_SUBTYPE_PRIORITY:
                     if s in subs:
-                        main = subs[s]
+                        base_sub = s
                         break
-                if main is None:  # holo-only / unusual finish — take any non-RH
-                    for s, v in subs.items():
-                        if s != "Reverse Holofoil":
-                            main = v
-                            break
-                if main is not None:
+                if base_sub is None:
+                    base_sub = next(iter(subs), None)  # holo-only / unusual
+                if base_sub is not None:
                     pending.append({"catalog_id": cat_id, "source": "tcgplayer",
-                                    "value": main, "currency": "USD",
+                                    "value": subs[base_sub], "currency": "USD",
                                     "source_url": url, "recorded_at": now})
-                if "Reverse Holofoil" in subs:
-                    pending.append({"catalog_id": cat_id, "source": "tcgplayer_reverse_holo",
-                                    "value": subs["Reverse Holofoil"], "currency": "USD",
+                # Every OTHER finish gets its own source so nothing is lost.
+                for sub, mp in subs.items():
+                    if sub == base_sub:
+                        continue
+                    pending.append({"catalog_id": cat_id, "source": _subtype_source(sub),
+                                    "value": mp, "currency": "USD",
                                     "source_url": url, "recorded_at": now})
                 if len(pending) >= 500:
                     flush()

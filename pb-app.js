@@ -15799,7 +15799,7 @@ function _loadAdmin(){
             style="cursor:grab">
             <div class="binder-card-img-wrap">
               ${item.card_image_url
-                ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''} onload="_userPhotoAspectFit(this)" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.onerror=null}">`
+                ? `<img src="${item.card_image_url ? _pickThumbVariant(item.card_image_url, 400) : window._cardBackFor(item.game_type)}" data-fallback="${item.card_image_url || ''}" data-game="${item.game_type || ''}" class="binder-card-img" loading="lazy" decoding="async" alt="${item.card_name}"${isGhost ? ' style="filter:grayscale(30%)"' : ''} onload="_userPhotoAspectFit(this)" onerror="_cardImgFallback(this)">`
                 : `<div class="binder-card-placeholder"${isGhost ? ' style="color:var(--teal)"' : ''}>${isGhost ? '♡' : '?'}</div>`}
               ${isGhost
                 ? `<span class="want-badge">WANT</span><div class="ghost-shimmer"></div>
@@ -25091,6 +25091,34 @@ function _loadAdmin(){
     // broken page. Hoisted to window level here so every callsite can
     // reach it regardless of which scope they execute in.
     window.PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a0a00'/%3E%3Crect x='110' y='60' width='80' height='100' rx='4' fill='%232e1500'/%3E%3Ctext x='150' y='185' font-family='monospace' font-size='11' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
+
+    // Per-game card-back placeholders for catalog cards with no image. Upload
+    // the official backs to a PUBLIC Supabase bucket named "card-backs" as
+    // <game_type>.png (pokemon.png, magic.png, yugioh.png, ...). Any game
+    // without an uploaded back falls through to the generic PLACEHOLDER_IMG.
+    window.CARD_BACKS = (function() {
+      var base = 'https://xjamytrhxeaynywcwfun.supabase.co/storage/v1/object/public/card-backs/';
+      var m = {};
+      ['pokemon', 'magic', 'yugioh', 'onepiece', 'digimon', 'gundam', 'dbz',
+       'dbfusion', 'fab', 'lorcana', 'pokemon_topps'].forEach(function(g) {
+        m[g] = base + g + '.png';
+      });
+      return m;
+    })();
+    window._cardBackFor = function(gameType) {
+      return (gameType && window.CARD_BACKS[gameType]) || window.PLACEHOLDER_IMG;
+    };
+    // onerror for catalog-card images: try the original full-size url
+    // (data-fallback), then the card's game back, then stop.
+    window._cardImgFallback = function(img) {
+      try {
+        var fb = img.getAttribute('data-fallback');
+        if (fb && img.src !== fb) { img.src = fb; return; }
+        var back = window._cardBackFor(img.getAttribute('data-game'));
+        img.onerror = null;
+        if (img.src !== back) img.src = back;
+      } catch (e) { img.onerror = null; }
+    };
 
     // ─────────────────────────────────────────────────────────────────
     // _thumbFail / _thumbFailHide — universal img onerror handlers.
