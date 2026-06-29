@@ -608,7 +608,7 @@
 //   Dashboard mini thumbs:   width=160-200
 //  Lightbox + binder detail modal keep full resolution for zoom.
 //  Plus missing decoding="async" added to several sites for consistency.
-const CACHE = 'pathbinder-v631';
+const CACHE = 'pathbinder-v632';
 
 const PRECACHE = [
   '/offline.html',
@@ -678,7 +678,7 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       // Keep the persistent card-image cache across version bumps so the
       // binder's offline art survives a deploy instead of re-downloading.
-      Promise.all(keys.filter(k => k !== CACHE && k !== 'pb-card-imgs').map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE && k !== 'pb-card-imgs' && k !== 'pb-data-cache').map(k => caches.delete(k)))
     ).then(() =>
       caches.open(CACHE).then(cache =>
         cache.keys().then(reqs =>
@@ -737,6 +737,46 @@ self.addEventListener('fetch', e => {
         return res;
       }).catch(() => caches.match(e.request)))
     );
+    return;
+  }
+
+  // Public, slow-changing reference data (catalog + prices + set metadata):
+  // STALE-WHILE-REVALIDATE. These tables are the same for every user (no
+  // per-user RLS), change at most once a day (nightly refresh), and are the
+  // heaviest cross-region reads. Serving the cached copy instantly — then
+  // refreshing in the background past a short TTL — is the biggest win for
+  // far-from-Supabase users (AU/ZA/etc).
+  //
+  // STRICTLY scoped: GET only, supabase.co only, and ONLY these public read
+  // tables. User-specific data (collection_items, profiles, listings, orders)
+  // and every write fall through to the network-only bypass below. Stored in
+  // its own cache ('pb-data-cache') that survives version bumps.
+  const PUBLIC_DATA_TABLES = /^\/rest\/v1\/(catalog|card_prices|set_metadata|catalog_price_history)$/;
+  if (
+    e.request.method === 'GET' &&
+    url.hostname.includes('supabase.co') &&
+    PUBLIC_DATA_TABLES.test(url.pathname)
+  ) {
+    const DATA_TTL = 30 * 60 * 1000; // 30 min — data changes at most daily
+    e.respondWith((async () => {
+      const cache  = await caches.open('pb-data-cache');
+      const cached = await cache.match(e.request, { ignoreVary: true });
+      const revalidate = async () => {
+        try {
+          const res = await fetch(e.request);
+          if (res.ok) { try { await cache.put(e.request, res.clone()); } catch (_) {} }
+          return res;
+        } catch (_) { return null; }
+      };
+      if (cached) {
+        const d   = cached.headers.get('date');
+        const age = d ? (Date.now() - new Date(d).getTime()) : Infinity;
+        if (age >= DATA_TTL) { revalidate(); }   // refresh in background
+        return cached;                            // ...but render instantly
+      }
+      const res = await revalidate();
+      return res || new Response('[]', { status: 503, headers: { 'Content-Type': 'application/json' } });
+    })());
     return;
   }
 
