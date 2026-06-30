@@ -2549,9 +2549,16 @@ function _loadAdmin(){
       </linearGradient></defs>
       <path d="${fillD}" fill="url(#grad_${listingId})"/>
       <path d="${pathD}" stroke="var(--accent)" stroke-width="2" fill="none"/>`;
+      // Dots on every point, but only ~5 evenly-spaced date labels (first +
+      // last + a few between) so 31 days of history don't overlap into garble.
+      const _labelStep = Math.max(1, Math.ceil((priceHistory.length - 1) / 4));
       pts.forEach((p, i) => {
-        html += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent)"/>
-        <text x="${p.x}" y="${pad.top+h+20}" text-anchor="middle" font-size="11" fill="var(--muted)">${(priceHistory[i].date||'').split('-')[2]||''}</text>`;
+        html += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent)"/>`;
+        if (i === 0 || i === pts.length - 1 || i % _labelStep === 0) {
+          const _parts = String(priceHistory[i].date || '').split('-'); // YYYY-MM-DD
+          const _lbl = _parts.length >= 3 ? _parts[1] + '-' + _parts[2] : (_parts[2] || '');
+          html += `<text x="${p.x}" y="${pad.top+h+20}" text-anchor="middle" font-size="10" fill="var(--muted)">${_lbl}</text>`;
+        }
       });
       for (let i = 0; i <= 4; i++) {
         const yp = pad.top + (h/4)*i;
@@ -16520,25 +16527,43 @@ function _loadAdmin(){
       if (!svg || !currentUser) return;
 
       try {
-        // Fetch up to 90 days of history for this specific card
+        // Prefer the rich CATALOG market history — the same source the
+        // marketplace chart uses — so the binder trend shows a full line like
+        // the shop's, not the sparse per-card snapshots. The binder already
+        // knows the exact catalog id (api_card_id), so no fuzzy name match.
         const ninetyAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const { data, error } = await sb
-          .from('price_history')
-          .select('recorded_at, recorded_value')
-          .eq('collection_item_id', itemId)
-          .eq('user_id', currentUser.id)
-          .gte('recorded_at', ninetyAgo)
-          .order('recorded_at', { ascending: true });
+        const todayStr  = new Date().toISOString().slice(0, 10);
+        const item      = collectionItems.find(c => String(c.id) === String(itemId));
+        let points = [];
 
-        if (error) throw error;
+        if (item && item.api_card_id) {
+          const cph = await sb
+            .from('catalog_price_history')
+            .select('recorded_at, recorded_value')
+            .eq('catalog_id', item.api_card_id)
+            .gte('recorded_at', ninetyAgo)
+            .order('recorded_at', { ascending: true });
+          if (!cph.error && cph.data && cph.data.length >= 2) {
+            points = cph.data.map(h => ({ date: h.recorded_at.slice(0, 10), value: Number(h.recorded_value) }));
+          }
+        }
 
-        // Also include current value as "today" point if not already present
-        const item = collectionItems.find(c => String(c.id) === String(itemId));
-        const todayStr = new Date().toISOString().slice(0, 10);
-        let points = (data || []).map(h => ({ date: h.recorded_at.slice(0, 10), value: Number(h.recorded_value) }));
-        if (item?.current_value) {
-          const lastDate = points[points.length - 1]?.date;
-          if (lastDate !== todayStr) points.push({ date: todayStr, value: item.current_value });
+        // Fall back to the user's own per-card snapshots when there's no market
+        // history yet, appending today's tracked value as the latest point.
+        if (points.length < 2) {
+          const { data, error } = await sb
+            .from('price_history')
+            .select('recorded_at, recorded_value')
+            .eq('collection_item_id', itemId)
+            .eq('user_id', currentUser.id)
+            .gte('recorded_at', ninetyAgo)
+            .order('recorded_at', { ascending: true });
+          if (error) throw error;
+          points = (data || []).map(h => ({ date: h.recorded_at.slice(0, 10), value: Number(h.recorded_value) }));
+          if (item?.current_value) {
+            const lastDate = points[points.length - 1]?.date;
+            if (lastDate !== todayStr) points.push({ date: todayStr, value: item.current_value });
+          }
         }
 
         if (points.length < 2) {

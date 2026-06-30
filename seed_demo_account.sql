@@ -25,6 +25,18 @@ BEGIN
     RAISE EXCEPTION 'Demo user % not found — create it in the Dashboard first.', v_email;
   END IF;
 
+  -- ── Tier the account up so the enforce_listing_cap trigger allows seeding
+  --    AND reviewers see every feature. Set BOTH the text tier and the legacy
+  --    boolean flags, since the server trigger may resolve tier from either.
+  UPDATE public.profiles
+     SET subscription_tier = 'shop', is_vendor = true, is_premium = true
+   WHERE id = v_uid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'No profiles row for % (id %). The auth user exists but has no profile — sign into the app once as this account to create the row (or insert one), then re-run.',
+      v_email, v_uid;
+  END IF;
+
   -- ── Clean slate (re-run safe) ───────────────────────────────────────
   DELETE FROM public.listings         WHERE seller_id = v_uid;
   DELETE FROM public.collection_items WHERE user_id   = v_uid;
@@ -44,12 +56,19 @@ BEGIN
     current_date - 14,
     round(coalesce(c.current_value, 0)::numeric, 2),
     'normal', 'demo_seed'
-  FROM public.catalog c
-  WHERE public.is_pokemon_en_id(c.id)
-    AND c.image_url IS NOT NULL
-    AND (c.product_type IS NULL OR c.product_type IN ('single','tcg_single'))
-    AND c.current_value IS NOT NULL
-    AND c.current_value BETWEEN 5 AND 400   -- believable spread, skips outliers
+  FROM (
+    -- Collapse duplicate catalog rows (en-/bare- pairs) to one per real card,
+    -- preferring the en- id, so the demo binder doesn't show
+    -- "Umbreon, Umbreon, Umbreon Holo" from the same set/number.
+    SELECT DISTINCT ON (c0.set_name, c0.card_number) c0.*
+    FROM public.catalog c0
+    WHERE public.is_pokemon_en_id(c0.id)
+      AND c0.image_url IS NOT NULL
+      AND (c0.product_type IS NULL OR c0.product_type IN ('single','tcg_single'))
+      AND c0.current_value IS NOT NULL
+      AND c0.current_value BETWEEN 5 AND 400   -- believable spread, skips outliers
+    ORDER BY c0.set_name, c0.card_number, (c0.id LIKE 'en-%') DESC, c0.id
+  ) c
   ORDER BY c.current_value DESC
   LIMIT 8;
 
