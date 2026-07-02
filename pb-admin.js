@@ -1555,6 +1555,7 @@ function _pmRowHtml(r){
   var c = r.c;
   var pcUrl = c.price_source_url || (c.pricecharting_id ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(c.pricecharting_id) : null);
   var tcgUrl = r.tcgUrl || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(c.name || ''));
+  if (window.tcgAffiliateUrl) tcgUrl = window.tcgAffiliateUrl(tcgUrl, 'admin-pricemon');
   var rid = 'pm_' + String(c.id).replace(/[^a-z0-9]/gi, '_');
   return '<div id="' + rid + '" style="display:flex;gap:10px;align-items:center;border:1px solid var(--border);background:var(--surface2);padding:8px 10px">'
     + (c.image_url ? '<img src="' + c.image_url + '" loading="lazy" decoding="async" style="width:34px;height:47px;object-fit:contain;flex-shrink:0;background:var(--surface)">' : '')

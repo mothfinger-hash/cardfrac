@@ -95,6 +95,20 @@ TCG_CONFIG = {
         "id_segment":    "op",
         "lang_aware":    False,
     },
+    # ── Disney Lorcana (Ravensburger, 2023+) ───────────────────────────
+    # Auto-discovered like Magic/YGO/OP — PC has a category index page.
+    # VERIFY the category path before a full run:
+    #     python3 sync_sealed_products.py --tcg lorcana --debug-dump
+    # If it returns nothing, the live PC URL differs — adjust
+    # category_path / slug_prefix to match (PC console slugs look like
+    # /console/lorcana-the-first-chapter).
+    "lorcana": {
+        "category_path": "/category/lorcana-cards",
+        "game_type":     "Lorcana",
+        "slug_prefix":   "lorcana-",
+        "id_segment":    "lor",
+        "lang_aware":    False,
+    },
     # ── Gundam Card Game (Bandai, 2024+) ───────────────────────────────
     # PriceCharting has no /category/ index page for this TCG, so we
     # supply the set slugs explicitly. discover_set_slugs() picks these
@@ -108,6 +122,8 @@ TCG_CONFIG = {
         "explicit_slugs": [
             "gundam-dual-impact",
             "gundam-edition-beta",
+            "gundam-eternal-nexus",           # EB01, released 2026-06-26 (PC console page confirmed)
+            "gundam-starter-deck-10-generation-pulse",  # ST10, released 2026-06-26 (matches ST01 slug convention; confirm on PC)
             "gundam-newtype-rising",
             "gundam-phantom-aria",
             "gundam-promo",

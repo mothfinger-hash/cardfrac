@@ -208,6 +208,10 @@ def main():
             "ygo":       ["sealed-ygo-"],
             "onepiece":  ["sealed-op-"],
             "op":        ["sealed-op-"],
+            # Lorcana sealed is PC-sourced (sealed-lor-); its SINGLES come
+            # from TCGCSV (tcgplayer-cdn) so they're mirrored by
+            # mirror_tcgplayer_images.py, not here — no lor-pc- prefix.
+            "lorcana":   ["sealed-lor-"],
             "gundam":    ["sealed-gun-", "gun-pc-"],
             "dbz":       ["sealed-dbz-", "dbz-pc-"],
             # Vintage Topps Pokemon — distinct game_type ('pokemon_topps')

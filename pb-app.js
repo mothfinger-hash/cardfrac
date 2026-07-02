@@ -18733,7 +18733,7 @@ function _loadAdmin(){
       // Card-number queries (e.g. "063" or "063/182") route through a
       // catalog.card_number lookup instead of name search.
       const _otCardNum = (typeof _pbDetectCardNumber === 'function') ? _pbDetectCardNumber(query) : null;
-      const _otPrefix = { magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-', gundam: 'gun-', dbz: 'dbz-' }[gameType];
+      const _otPrefix = { magic: 'mtg-', yugioh: 'ygo-', onepiece: 'op-', gundam: 'gun-', dbz: 'dbz-', lorcana: 'lor-' }[gameType];
       if (_otCardNum) {
         try {
           const numRows = await _pbSearchCatalogByCardNumber(_otCardNum, _otPrefix, 1000);
@@ -23553,6 +23553,7 @@ function _loadAdmin(){
       { key: 'yugioh',   label: 'YGO',  idPrefix: 'ygo-', placeholder: 'Yu-Gi-Oh card…'    },
       { key: 'onepiece', label: 'OP',   idPrefix: 'op-',  placeholder: 'One Piece card…'   },
       { key: 'gundam',   label: 'GUN',  idPrefix: 'gun-', placeholder: 'Gundam card…'      },
+      { key: 'lorcana',  label: 'LOR',  idPrefix: 'lor-', placeholder: 'Lorcana card…'     },
       { key: 'dbz',      label: 'DBZ',  idPrefix: 'dbz-', placeholder: 'Dragon Ball Z card…' },
     ];
     function _ftGame(key) {
@@ -26385,6 +26386,7 @@ function _loadAdmin(){
       { key: 'YGO',     label: 'YU-GI-OH'  },
       { key: 'OP',      label: 'ONE PIECE' },
       { key: 'GUN',     label: 'GUNDAM'    },
+      { key: 'LOR',     label: 'LORCANA'   },
       { key: 'DBZ',     label: 'DRAGON BALL Z' },
       { key: 'TOPPS',   label: 'POKEMON TOPPS' }
     ];
@@ -27648,6 +27650,7 @@ function _loadAdmin(){
       YGO:   { prefix: 'ygo-',   label: 'YGO',   name: 'Yu-Gi-Oh' },
       OP:    { prefix: 'op-',    label: 'OP',    name: 'One Piece' },
       GUN:   { prefix: 'gun-',   label: 'GUN',   name: 'Gundam'    },
+      LOR:   { prefix: 'lor-',   label: 'LOR',   name: 'Lorcana'   },
       DBZ:   { prefix: 'dbz-',   label: 'DBZ',   name: 'Dragon Ball Z' },
       TOPPS: { prefix: 'topps-', label: 'TOPPS', name: 'Pokemon Topps' }
     };

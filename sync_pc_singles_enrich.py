@@ -92,6 +92,39 @@ TCG_CONFIG = {
             "gundam-steel-requiem",
         ],
     },
+    # ── Disney Lorcana (Ravensburger) ───────────────────────────────────
+    # Catalog uses game_type='lorcana' with id_prefix='lor'. PC serves
+    # Lorcana singles under /console/lorcana-<set-slug>. The slugs below
+    # follow PC's convention (lowercase, hyphenated, apostrophes dropped);
+    # discover_sets_for_tcg() also auto-augments from PC's search endpoint.
+    # Verify a run with --probe; if any set returns 0 cards its slug differs
+    # from PC's live URL — copy the exact slug from the /category/lorcana-cards
+    # page and fix it here (or run that one set with --only <slug>).
+    "lorcana": {
+        "search_term": "lorcana",
+        "slug_prefix": "lorcana-",
+        "game_type":   "lorcana",
+        "id_prefix":   "lor",
+        "exclude":     [],
+        # Verified against PC via --probe. Note PC KEEPS the apostrophe in
+        # the slug (lorcana-ursula's-return), and First Chapter is
+        # "first-chapter" with no leading "the".
+        "explicit_slugs": [
+            "lorcana-first-chapter",
+            "lorcana-rise-of-the-floodborn",
+            "lorcana-into-the-inklands",
+            "lorcana-ursula's-return",
+            "lorcana-shimmering-skies",
+            "lorcana-azurite-sea",
+            "lorcana-archazia's-island",
+            "lorcana-reign-of-jafar",
+            "lorcana-fabled",
+            "lorcana-whispers-in-the-well",
+            "lorcana-winterspell",
+            "lorcana-wilds-unknown",
+            "lorcana-promo",
+        ],
+    },
     "dbz": {
         "search_term": "dragon ball z",
         "slug_prefix": "dragon-ball-z-",

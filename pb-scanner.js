@@ -3981,7 +3981,7 @@
     function detectScanTcg(text) {
       if (!text) return 'pokemon';
       var t = text.toLowerCase();
-      var scores = { pokemon: 0, magic: 0, yugioh: 0, onepiece: 0, gundam: 0, dbz: 0 };
+      var scores = { pokemon: 0, magic: 0, yugioh: 0, onepiece: 0, gundam: 0, dbz: 0, lorcana: 0 };
 
       // Pokemon signals
       if (/\bhp\s*\d{2,3}\b/i.test(text))      scores.pokemon += 2;
@@ -4059,11 +4059,22 @@
       if (/\b(dbz|db)\d+-\d+/i.test(text))     scores.dbz += 2;
       if (/\b(saiyan|namekian|frieza\s*saga|cell\s*saga|buu\s*saga)\b/i.test(t)) scores.dbz += 1;
 
+      // Disney Lorcana signals (Ravensburger). Distinct vocabulary: ink cost,
+      // lore + willpower stats, inkwell, Illumineer, and card types
+      // Character/Action/Item/Location/Song. The generic type words are only
+      // scored when paired with "ink" so they don't poach other games.
+      if (/lorcana/i.test(t))                                              scores.lorcana += 3;
+      if (/\billumineer\b/i.test(t))                                       scores.lorcana += 2;
+      if (/\b(inkable|inkwell|not\s*inkable)\b/i.test(t))                  scores.lorcana += 2;
+      if (/\b(willpower|lore)\b/i.test(t) && /\bink\b/i.test(t))           scores.lorcana += 2;
+      if (/\b(character|action|item|location|song)\b/i.test(t) && /\bink\b/i.test(t)) scores.lorcana += 1;
+      if (/ravensburger/i.test(t))                                         scores.lorcana += 1;
+
       // Pick highest. Threshold = 2 to claim non-Pokemon (avoids stray
       // single-word hits dragging a Pokemon card into another search).
       var best  = 'pokemon';
       var bestN = scores.pokemon;
-      ['magic','yugioh','onepiece','gundam','dbz'].forEach(function(g) {
+      ['magic','yugioh','onepiece','gundam','dbz','lorcana'].forEach(function(g) {
         if (scores[g] > bestN && scores[g] >= 2) { best = g; bestN = scores[g]; }
       });
       try { console.log('[Scanner] TCG detect:', JSON.stringify(scores), '→', best); } catch(_) {}

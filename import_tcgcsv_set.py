@@ -130,7 +130,10 @@ def upsert_catalog(rows):
             data=json.dumps(chunk),
             timeout=60,
         )
-        r.raise_for_status()
+        if not r.ok:
+            print(f"  ! upsert failed (HTTP {r.status_code}) on rows {i}-{i + len(chunk) - 1}")
+            print(f"    response body: {r.text[:1000]}")
+            r.raise_for_status()
 
 
 def main():
@@ -139,6 +142,9 @@ def main():
     ap.add_argument("--set-code", required=True, help="catalog set_code to assign (REQUIRED)")
     ap.add_argument("--set-name", default=None, help="override the set name (else derived)")
     ap.add_argument("--game", default=None, help="game_type if the group isn't in group_map yet")
+    ap.add_argument("--category", type=int, default=None,
+                    help="TCGplayer categoryId — bypasses category auto-resolve. Needed to "
+                         "bootstrap a game_type that has 0 catalog rows yet (e.g. a brand-new game).")
     ap.add_argument("--lang", default="EN", help="Pokemon language for id prefix (EN/JA)")
     ap.add_argument("--limit", type=int, default=0, help="cap cards (testing)")
     ap.add_argument("--commit", action="store_true", help="actually write (default: dry-run)")
@@ -152,6 +158,12 @@ def main():
         game_type = args.game.strip()
     if not game_type:
         sys.exit("Group not in tcgplayer_group_map — pass --game <game_type>.")
+    # Explicit --category bypasses resolve_categories(), which otherwise
+    # refuses to map a game_type that has 0 catalog rows yet (a guard against
+    # typo'd game types). That guard blocks the very FIRST import of a new
+    # game (chicken-and-egg), so pass --category <id> to bootstrap it.
+    if args.category is not None:
+        category_id = args.category
     if category_id is None:
         cats = tc.resolve_categories([game_type])
         category_id = cats.get(game_type)
@@ -209,8 +221,25 @@ def main():
         if url:  row["tcgplayer_url"] = url
         rows.append(row)
 
+    # Dedupe by catalog id. MTG (and some other games) ship multiple products
+    # that share one collector number — borderless / extended-art / showcase /
+    # promo treatments. Our id scheme is one row per (set, number), so those
+    # collapse to the same `{prefix}-{set}-{num}` id. A batch upsert with
+    # on_conflict=id raises "ON CONFLICT DO UPDATE command cannot affect row a
+    # second time" (Postgres 500) if the same id appears twice in one statement.
+    # Keep the first occurrence per id and report how many were folded.
+    seen, deduped, dup_count = set(), [], 0
+    for row in rows:
+        if row["id"] in seen:
+            dup_count += 1
+            continue
+        seen.add(row["id"])
+        deduped.append(row)
+    rows = deduped
+
     print(f"  {len(rows)} card rows ready "
-          f"({skipped_sealed} sealed-skipped, {skipped_nonum} no-number-skipped)")
+          f"({skipped_sealed} sealed-skipped, {skipped_nonum} no-number-skipped"
+          f"{f', {dup_count} duplicate-id folded' if dup_count else ''})")
     for r in rows[:5]:
         print(f"    {r['id']:<28} {r.get('name','')}  [{r.get('rarity','')}]")
     if len(rows) > 5:
