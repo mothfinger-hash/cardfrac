@@ -26935,7 +26935,8 @@ function _loadAdmin(){
         return;
       }
       if (_setsLang === 'MTG' || _setsLang === 'YGO' || _setsLang === 'OP'
-          || _setsLang === 'GUN' || _setsLang === 'DBZ' || _setsLang === 'TOPPS') {
+          || _setsLang === 'GUN' || _setsLang === 'DBZ' || _setsLang === 'TOPPS'
+          || _setsLang === 'LOR') {
         await loadTcgSetsPage(el, _setsLang);
         return;
       }
@@ -27070,12 +27071,12 @@ function _loadAdmin(){
       if (_setsLang === 'POKEMON') {
         var lang = (_setsPokemonLang || 'EN').toLowerCase();
         idPrefix = 'sealed-' + lang + '-';        // e.g. sealed-en-, sealed-jp-, sealed-cn-, sealed-kr-
-      } else if (_setsLang === 'MTG') {
-        idPrefix = 'sealed-mtg-';
-      } else if (_setsLang === 'YGO') {
-        idPrefix = 'sealed-ygo-';
-      } else if (_setsLang === 'OP') {
-        idPrefix = 'sealed-op-';
+      } else if (_TCG_SETS_CONFIG[_setsLang]) {
+        // Generic: sealed-<segment>- derived from the game's catalog prefix
+        // (mtg-/ygo-/op-/gun-/lor-/…). Previously only MTG/YGO/OP were listed
+        // here, so LOR/GUN/DBZ/TOPPS fell through to the catch-all 'sealed-'
+        // and surfaced every game's sealed products (incl. Pokemon).
+        idPrefix = 'sealed-' + _TCG_SETS_CONFIG[_setsLang].prefix;
       } else {
         idPrefix = 'sealed-';
       }
@@ -28275,6 +28276,10 @@ function _loadAdmin(){
       MTG: { game_type: 'magic',    language: 'EN' },
       YGO: { game_type: 'yugioh',   language: 'EN' },
       OP:  { game_type: 'onepiece', language: 'EN' },
+      GUN: { game_type: 'gundam',   language: 'EN' },
+      DBZ: { game_type: 'dbz',      language: 'EN' },
+      LOR: { game_type: 'lorcana',  language: 'EN' },
+      TOPPS: { game_type: 'pokemon_topps', language: 'EN' },
       // Chinese / Korean Pokemon — same game_type, language tags the
       // printing. api_card_id already carries the cn-/kr- prefix.
       CN:  { game_type: 'pokemon',  language: 'CN' },
@@ -28302,6 +28307,10 @@ function _loadAdmin(){
       var _detailLabel = _gk === 'MTG' ? 'MAGIC CARD DETAIL'
                        : _gk === 'YGO' ? 'YU-GI-OH CARD DETAIL'
                        : _gk === 'OP'  ? 'ONE PIECE CARD DETAIL'
+                       : _gk === 'GUN' ? 'GUNDAM CARD DETAIL'
+                       : _gk === 'DBZ' ? 'DRAGON BALL Z CARD DETAIL'
+                       : _gk === 'LOR' ? 'LORCANA CARD DETAIL'
+                       : _gk === 'TOPPS' ? 'POKEMON TOPPS CARD DETAIL'
                        : _gk === 'CN'  ? 'CN CARD DETAIL'
                        : _gk === 'KR'  ? 'KR CARD DETAIL'
                        : 'JP CARD DETAIL';
