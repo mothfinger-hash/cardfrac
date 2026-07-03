@@ -210,10 +210,10 @@ Received" action just flips paid→completed for UX, not for money flow.
   with legacy boolean fallback (`is_premium`, `is_vendor`, `is_admin`).
   **The old `vendor` tier was renamed to `enthusiast`** (see migration
   `migration_tier_rename_vendor_to_enthusiast.sql`) — same feature set,
-  dropped to $20/mo, added a 40-listing concurrent active marketplace
-  cap. The NEW `vendor` tier sits between enthusiast and shop at $75/mo,
+  dropped to $10/mo, added a 40-listing concurrent active marketplace
+  cap. The NEW `vendor` tier sits between enthusiast and shop at $50/mo,
   150-listing cap, and unlocks non-TCG product listing + product scanner
-  access. `shop` is unchanged at $200/mo / unlimited. Anywhere old code
+  access. `shop` is $150/mo / unlimited. (Collector is $5/mo.) Anywhere old code
   wrote `tierAtLeast('vendor')` for OLD vendor features (bulk CSV, sales
   archive, multi-binder, etc.) has been retargeted to
   `tierAtLeast('enthusiast')`. New `tierAtLeast('vendor')` references

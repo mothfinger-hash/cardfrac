@@ -28,7 +28,7 @@
     @keyframes scanlines{0%{transform:translateY(0)}100%{transform:translateY(10px)}}
 
     /* SIDEBAR NAV */
-    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
+    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
     nav.sb-collapsed{width:var(--sb-w-coll)}
     .nav-header{height:52px;display:flex;align-items:center;padding:0 8px 0 10px;border-bottom:2px solid var(--border);flex-shrink:0;gap:6px}
     .logo-img-btn{background:none!important;border:none!important;padding:0!important;cursor:pointer;line-height:0;box-shadow:none!important;min-width:0!important;letter-spacing:0;flex:1;overflow:hidden}
@@ -958,13 +958,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
     /* MOBILE BOTTOM NAV */
     /* Bottom mobile nav — sticky, shown on mobile */
-    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch;box-shadow:0 -3px 0 var(--shadow)}
+    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(60px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch;box-shadow:0 -3px 0 var(--shadow)}
     .mobile-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.42rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;transition:color .15s;padding:0 1px;position:relative;}
     .mobile-nav-btn svg{width:25px;height:25px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .mobile-nav-btn img{width:25px;height:25px;object-fit:contain;display:block}
     .mobile-nav-btn.active{color:var(--accent)}
     .mobile-nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700}
-    @media(max-width:900px){.mobile-nav{display:flex}.page{padding-bottom:72px}#mobileUserChip{display:flex!important}}
+    @media(max-width:900px){.mobile-nav{display:flex}.page{padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}#mobileUserChip{display:flex!important}#legalFooter{margin-bottom:calc(60px + env(safe-area-inset-bottom,0px))}}
 
     /* ── TOP NAV (mobile only, not sticky) ──────────────────────────────────── */
     .top-nav{display:none;flex-direction:column;background:var(--surface);border-bottom:2px solid var(--border);width:100%;box-sizing:border-box;z-index:100}
@@ -1011,7 +1011,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
     /* Lift toast above mobile nav bar */
     @media(max-width:600px){
-      .toast{bottom:72px;left:12px;right:12px;max-width:none;font-size:.7rem}
+      .toast{bottom:calc(72px + env(safe-area-inset-bottom,0px));left:12px;right:12px;max-width:none;font-size:.7rem}
     }
     @keyframes slideInLeft{
       from{transform:translateX(-110%) scale(0.96);opacity:0}

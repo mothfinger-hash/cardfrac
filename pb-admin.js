@@ -67,6 +67,17 @@ function _pbInjectAdminMarkup(){
       <div id="adminDisputesList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
     </div>
 
+    <!-- CONTENT REPORTS PANEL — user-filed abuse flags on listings, profiles,
+         reviews, photos (content_reports). Satisfies App Store Guideline 1.2 /
+         Play UGC. Admin marks each actioned or dismissed. -->
+    <div id="adminContentReportsPanel" style="background:var(--surface);border:1.5px solid var(--copper);border-radius:14px;padding:18px;margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:.75rem;color:var(--copper);letter-spacing:.08em">Content Reports <span id="adminContentReportsCount" style="color:var(--muted)"></span></div>
+        <button type="button" onclick="loadContentReports()" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;padding:5px 12px;cursor:pointer">Refresh</button>
+      </div>
+      <div id="adminContentReportsList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
+    </div>
+
     <!-- USER MANAGEMENT PANEL — search by email/username, view summary,
          ban / unban. Ban flips profiles.is_banned + cascades all active
          listings to suspended. Sign-in is blocked server-side via
@@ -1494,6 +1505,48 @@ function _pbInjectAdminMarkup(){
 // ── Tabbed admin dashboard ───────────────────────────────────────────
 // Mirrors the account-page tab pattern: one .admin-panel per tab, shown
 // via .active. Re-renders the Overview metrics each time it's opened.
+// ── Content reports (abuse/UGC) admin queue — App Store Guideline 1.2 ────
+async function loadContentReports(){
+  var box = document.getElementById('adminContentReportsList');
+  var cntEl = document.getElementById('adminContentReportsCount');
+  if (!box) return;
+  var esc = function(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  box.innerHTML = '<div style="color:var(--muted);font-size:.8rem">Loading…</div>';
+  var res = await sb.from('content_reports').select('*').order('created_at', { ascending: false }).limit(80);
+  if (res.error) { box.innerHTML = '<div style="color:var(--red);font-size:.8rem">Could not load reports (is migration_content_reports.sql applied?).</div>'; return; }
+  var rows = res.data || [];
+  var open = rows.filter(function(r){ return r.status === 'open'; });
+  if (cntEl) cntEl.textContent = '(' + open.length + ' open)';
+  if (!rows.length) { box.innerHTML = '<div style="color:var(--muted);font-size:.8rem">No reports yet.</div>'; return; }
+  box.innerHTML = rows.map(function(r){
+    var badge = r.status === 'open' ? 'var(--yellow)' : r.status === 'actioned' ? 'var(--red)' : 'var(--muted)';
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--surface2)">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+      +   '<span style="font-size:.72rem;color:var(--text);text-transform:uppercase;letter-spacing:.06em">' + esc(r.target_type) + (r.target_label ? ' · ' + esc(r.target_label) : '') + '</span>'
+      +   '<span style="font-size:.62rem;color:' + badge + ';text-transform:uppercase">' + esc(r.status) + '</span>'
+      + '</div>'
+      + '<div style="font-size:.74rem;color:var(--accent);margin-bottom:4px">' + esc(r.reason) + '</div>'
+      + (r.details ? '<div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;line-height:1.5">' + esc(r.details) + '</div>' : '')
+      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:8px">target: ' + esc(r.target_id) + ' · ' + new Date(r.created_at).toLocaleString() + '</div>'
+      + (r.status === 'open'
+          ? '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+            + '<button onclick="_setContentReportStatus(\'' + r.id + '\',\'actioned\')" style="border:1px solid var(--red);background:transparent;color:var(--red);font-family:\'Space Mono\',monospace;font-size:.66rem;padding:4px 10px;cursor:pointer">Mark actioned</button>'
+            + '<button onclick="_setContentReportStatus(\'' + r.id + '\',\'dismissed\')" style="border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;padding:4px 10px;cursor:pointer">Dismiss</button>'
+            + '</div>'
+          : '')
+      + '</div>';
+  }).join('');
+}
+async function _setContentReportStatus(id, status){
+  try {
+    var res = await sb.from('content_reports').update({ status: status, reviewed_at: new Date().toISOString() }).eq('id', id);
+    if (res.error) throw res.error;
+  } catch(e){ console.error('[content report update]', e); }
+  loadContentReports();
+}
+window.loadContentReports = loadContentReports;
+window._setContentReportStatus = _setContentReportStatus;
+
 function switchAdminTab(tab){
   try{
     var root = document.getElementById('adminPage');
@@ -1501,6 +1554,7 @@ function switchAdminTab(tab){
     root.querySelectorAll('.admin-tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-tab') === tab); });
     root.querySelectorAll('.admin-panel').forEach(function(p){ p.classList.toggle('active', p.id === tab); });
     if (tab === 'adminOverview' && typeof renderAdminOverview === 'function') renderAdminOverview();
+    if (tab === 'adminModeration' && typeof loadContentReports === 'function') loadContentReports();
   } catch(e){ console.warn('[admin] switchAdminTab', e); }
 }
 
@@ -1652,6 +1706,7 @@ async function renderAdminOverview(){
   var susp    = await cnt('listings', function(q){ return q.eq('status','suspended'); });
   var contrib = await cnt('catalog_image_contributions', function(q){ return q.eq('status','pending'); });
   var reports = await cnt('card_reports', function(q){ return q.eq('status','open'); });
+  var creports = await cnt('content_reports', function(q){ return q.eq('status','open'); });
 
   if ($('ovRevenue')) $('ovRevenue').innerHTML =
       _ovTile(money(mrr), 'Subscription MRR', 'paying subs, excl. beta comps')
@@ -1678,5 +1733,6 @@ async function renderAdminOverview(){
       _ovTile(show(disp), 'Open disputes', '')
     + _ovTile(show(susp), 'Suspended listings', '')
     + _ovTile(show(contrib), 'Pending photo contribs', '')
-    + _ovTile(show(reports), 'Open card reports', '');
+    + _ovTile(show(reports), 'Open card reports', '')
+    + _ovTile(show(creports), 'Open content reports', 'abuse / UGC flags');
 }

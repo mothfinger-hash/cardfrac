@@ -16,6 +16,10 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'gg.pathbinder.app',
   appName: 'PathBinder',
+  // Appended to the WebView user-agent from the first byte so the remote
+  // pathbinder.gg bundle can detect the native shell synchronously (before
+  // Capacitor's JS bridge initializes). _isNativeApp() matches /PathBinderApp/.
+  appendUserAgent: 'PathBinderApp',
   webDir: 'www',
   server: {
     url: 'https://pathbinder.gg',
@@ -25,23 +29,23 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: 'always',
-    backgroundColor: '#0a0e1a',
+    backgroundColor: '#0F0D0A',
   },
   android: {
-    backgroundColor: '#0a0e1a',
+    backgroundColor: '#0F0D0A',
   },
   plugins: {
     SplashScreen: {
       // Remote-URL wrap loads pathbinder.gg over the network, so give the
       // splash long enough to cover the first load instead of flashing blank.
       launchShowDuration: 2500,
-      backgroundColor: '#0a0e1a',
+      backgroundColor: '#0F0D0A',
       showSpinner: false,
     },
     StatusBar: {
       // App is dark, so use light (white) status-bar content.
       style: 'LIGHT',
-      backgroundColor: '#0a0e1a',
+      backgroundColor: '#0F0D0A',
     },
   },
 };

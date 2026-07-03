@@ -2,8 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PathBinder — Card Collection &amp; Marketplace</title>
+  <meta name="description" content="Track, value, and trade your Pokemon, Magic, One Piece, Lorcana, and Yu-Gi-Oh cards. Scan cards with your camera, follow live market prices, and buy and sell in the PathBinder marketplace." />
+  <!-- Open Graph / social share so shared binder + listing links unfurl -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="PathBinder" />
+  <meta property="og:title" content="PathBinder — Card Collection & Marketplace" />
+  <meta property="og:description" content="Scan, track, value, and trade your trading cards. Live market prices and a peer-to-peer marketplace." />
+  <meta property="og:url" content="https://pathbinder.gg/" />
+  <meta property="og:image" content="https://pathbinder.gg/icons/icon-512.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="PathBinder — Card Collection & Marketplace" />
+  <meta name="twitter:description" content="Scan, track, value, and trade your trading cards. Live market prices and a peer-to-peer marketplace." />
+  <meta name="twitter:image" content="https://pathbinder.gg/icons/icon-512.png" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#FF5C00" />
@@ -88,7 +100,7 @@
     @keyframes scanlines{0%{transform:translateY(0)}100%{transform:translateY(10px)}}
 
     /* SIDEBAR NAV */
-    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
+    nav{background:var(--surface);border-right:2px solid var(--border);position:fixed;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);left:0;top:0;bottom:0;width:var(--sb-w);height:100vh;display:flex;flex-direction:column;z-index:9999;overflow:hidden;transition:width .25s;box-shadow:none}
     nav.sb-collapsed{width:var(--sb-w-coll)}
     .nav-header{height:52px;display:flex;align-items:center;padding:0 8px 0 10px;border-bottom:2px solid var(--border);flex-shrink:0;gap:6px}
     .logo-img-btn{background:none!important;border:none!important;padding:0!important;cursor:pointer;line-height:0;box-shadow:none!important;min-width:0!important;letter-spacing:0;flex:1;overflow:hidden}
@@ -167,7 +179,7 @@
        <nav> render the desktop sidebar on the left until the async
        pb-styles.css ≤900px rule hides it — the "desktop nav flashes on
        refresh" bug. Mirrors the equivalent rules in pb-styles.css. */
-    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch}
+    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(60px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:var(--surface);border-top:2px solid var(--border);z-index:9999;align-items:stretch}
     @media (max-width: 900px) {
       nav{display:none!important}
       body{padding-left:0;padding-right:0}
@@ -817,7 +829,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- LOGIN MODAL -->
   <div class="modal-overlay" id="loginModal">
     <div class="modal">
-      <button class="modal-close" onclick="closeModal('loginModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('loginModal')">×</button>
       <h3>Sign In</h3>
       <p class="modal-sub">Enter your credentials to continue</p>
       <div>
@@ -847,7 +859,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        picks it up and opens the new-password modal. -->
   <div class="modal-overlay" id="forgotPasswordModal">
     <div class="modal">
-      <button class="modal-close" onclick="closeModal('forgotPasswordModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('forgotPasswordModal')">×</button>
       <h3>Reset your password</h3>
       <p class="modal-sub">Enter the email on your PathBinder account. We'll send a link to set a new password.</p>
       <div class="form-group">
@@ -869,7 +881,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        call updateUser({ password }) to set the new one. -->
   <div class="modal-overlay" id="newPasswordModal">
     <div class="modal">
-      <button class="modal-close" onclick="closeModal('newPasswordModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('newPasswordModal')">×</button>
       <h3>Set a new password</h3>
       <p class="modal-sub">You're signed in via the reset link. Pick a new password to finish.</p>
       <div class="form-group">
@@ -889,7 +901,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- REGISTER MODAL -->
   <div class="modal-overlay" id="registerModal">
     <div class="modal">
-      <button class="modal-close" onclick="closeModal('registerModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('registerModal')">×</button>
       <h3>Create Account</h3>
       <p class="modal-sub">Join PathBinder today</p>
       <form onsubmit="handleRegister(event)">
@@ -914,10 +926,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           <label>Confirm Password</label>
           <input type="password" id="regConfirm" placeholder="Confirm password" required />
         </div>
-        <div class="form-group">
-          <label>Referral Code (Optional)</label>
-          <input type="text" id="regReferralCode" placeholder="Enter referral code if you have one" />
-        </div>
+        <!-- Referral Code input removed — CardFrac legacy. handleRegister reads
+             #regReferralCode with optional chaining, so its absence is safe. -->
         <div class="form-group" style="display:flex;align-items:flex-start;gap:8px;text-transform:none">
           <input type="checkbox" id="regAgree" required style="margin-top:3px;flex-shrink:0;width:auto;accent-color:var(--accent)" />
           <label for="regAgree" style="font-size:.78rem;color:var(--muted);line-height:1.5;text-transform:none;cursor:pointer">
@@ -938,7 +948,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- REDEEM BETA CODE MODAL -->
   <div class="modal-overlay" id="redeemBetaModal">
     <div class="modal" style="max-width:440px">
-      <button class="modal-close" onclick="closeModal('redeemBetaModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('redeemBetaModal')">×</button>
       <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Beta Access</div>
       <h3 style="margin-bottom:4px;font-size:1.1rem">Redeem Invite Code</h3>
       <p class="modal-sub" style="margin-bottom:14px">Enter the beta invite code an admin shared with you. Codes are case-insensitive and look like <code style="font-family:'Space Mono',monospace;color:var(--accent)">XXXX-XXXX-XXXX</code>.</p>
@@ -962,7 +972,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        is the in-app channel of the same notification. -->
   <div class="modal-overlay" id="adminNotificationsModal">
     <div class="modal" style="max-width:640px;max-height:80vh;overflow-y:auto">
-      <button class="modal-close" onclick="closeModal('adminNotificationsModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('adminNotificationsModal')">×</button>
       <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Admin Alerts</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <h3 style="margin:0;font-size:1.1rem">Notifications</h3>
@@ -985,7 +995,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        Thread renders bottom-up like SMS; composer at the bottom. -->
   <div class="modal-overlay" id="orderMessagesModal">
     <div class="modal" style="max-width:520px;display:flex;flex-direction:column;max-height:80vh">
-      <button class="modal-close" onclick="closeModal('orderMessagesModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('orderMessagesModal')">×</button>
       <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Messages</div>
       <h3 id="orderMessagesTitle" style="margin-bottom:6px;font-size:1.05rem">Messages</h3>
       <p class="modal-sub" id="orderMessagesSub" style="margin-bottom:12px"></p>
@@ -1016,7 +1026,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
   <div class="modal-overlay" id="returnRequestModal">
     <div class="modal" style="max-width:480px">
-      <button class="modal-close" onclick="closeModal('returnRequestModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('returnRequestModal')">×</button>
       <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Report Issue</div>
       <h3 style="margin-bottom:8px;font-size:1.1rem">Request a refund / return</h3>
       <p class="modal-sub" style="margin-bottom:14px">
@@ -1061,7 +1071,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        so the seller knows exactly what's happening. -->
   <div class="modal-overlay" id="sellerRefundConfirmModal">
     <div class="modal" style="max-width:440px">
-      <button class="modal-close" onclick="closeModal('sellerRefundConfirmModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('sellerRefundConfirmModal')">×</button>
       <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Confirm Refund</div>
       <h3 style="margin-bottom:10px;font-size:1.1rem">Issue a full refund?</h3>
       <div id="sellerRefundBody" style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px"></div>
@@ -1089,7 +1099,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        a separate upload flow at the bottom. -->
   <div class="modal-overlay" id="editMarketplaceListingModal">
     <div class="modal" style="max-width:560px">
-      <button class="modal-close" onclick="closeModal('editMarketplaceListingModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('editMarketplaceListingModal')">×</button>
       <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Edit Listing</div>
       <h3 style="margin-bottom:14px;font-size:1.1rem" id="emlTitle">Edit Listing</h3>
 
@@ -1153,7 +1163,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        renderAccountSettingsModal() so the deletion state stays live. -->
   <div class="modal-overlay" id="accountSettingsModal">
     <div class="modal" style="max-width:520px">
-      <button class="modal-close" onclick="closeModal('accountSettingsModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('accountSettingsModal')">×</button>
       <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Account Settings</div>
       <h3 style="margin-bottom:14px;font-size:1.1rem">Manage your account</h3>
       <div id="accountSettingsBody"></div>
@@ -1166,7 +1176,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        enables. -->
   <div class="modal-overlay" id="deleteAccountModal">
     <div class="modal" style="max-width:480px">
-      <button class="modal-close" onclick="closeModal('deleteAccountModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('deleteAccountModal')">×</button>
       <div style="font-size:.7rem;color:var(--red);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Delete Account</div>
       <h3 style="margin-bottom:10px;font-size:1.1rem">This will delete your PathBinder account</h3>
       <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:14px">
@@ -1202,7 +1212,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- DISCORD JOIN PROMPT (shown after beta confirmation) -->
   <div class="modal-overlay" id="betaDiscordModal">
     <div class="modal" style="max-width:440px;text-align:center">
-      <button class="modal-close" onclick="closeModal('betaDiscordModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('betaDiscordModal')">×</button>
       <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:6px;text-transform:uppercase">Welcome to the Beta</div>
       <h3 style="margin-bottom:6px;font-size:1.15rem">You're in.</h3>
       <p style="font-size:.85rem;color:var(--muted);line-height:1.55;margin-bottom:18px">
@@ -1222,7 +1232,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- PRICING MODAL -->
   <div class="modal-overlay" id="membershipModal" style="align-items:flex-start;padding:20px 12px;overflow-y:auto">
     <div class="modal" style="max-width:980px;padding:28px 24px">
-      <button class="modal-close" onclick="closeModal('membershipModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('membershipModal')">×</button>
       <div style="font-size:.7rem;color:var(--teal);letter-spacing:.1em;margin-bottom:4px">Choose Your Plan</div>
       <h3 style="margin-bottom:2px;font-size:1.15rem">PathBinder Subscription</h3>
       <p class="modal-sub" id="pricingSubtitle" style="margin-bottom:18px">All plans include the PathBinder mobile app.</p>
@@ -1240,7 +1250,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <div id="pricingGrid" style="display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px"></div>
 
       <!-- Subscription disclosure -->
-      <p style="font-size:.62rem;color:var(--muted);text-align:center;margin:0 0 18px;line-height:1.6">
+      <p id="pricingDisclosure" style="font-size:.62rem;color:var(--muted);text-align:center;margin:0 0 18px;line-height:1.6">
         Paid plans are <strong style="color:var(--text)">monthly subscriptions</strong> that renew automatically at the full plan price until cancelled.
         Cancel anytime from your account settings — no cancellation fees.
         Annual billing locks in a discounted rate for 12 months.
@@ -1270,7 +1280,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- ADD TO COLLECTION MODAL -->
   <div class="modal-overlay" id="addToCollectionModal">
     <div class="modal" style="max-width:540px">
-      <button class="modal-close" onclick="closeModal('addToCollectionModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('addToCollectionModal')">×</button>
       <h3>Add to My Binder</h3>
       <p class="modal-sub" id="atcCardName" style="color:var(--accent);text-transform:none"></p>
       <!-- Manual name input (shown only for manual entry) -->
@@ -1468,7 +1478,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- WISHLIST / GHOST CARD MODAL -->
   <div class="modal-overlay" id="addToWishlistModal">
     <div class="modal" style="max-width:440px">
-      <button class="modal-close" onclick="closeModal('addToWishlistModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('addToWishlistModal')">×</button>
       <h3 style="color:var(--teal)">Add to Wishlist</h3>
       <p class="modal-sub" id="wishlistCardName" style="color:var(--teal);text-transform:none;opacity:.8"></p>
       <div class="form-group" id="wishlistManualNameRow" style="display:none;margin-bottom:14px">
@@ -1508,7 +1518,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- CREATE / RENAME BINDER MODAL -->
   <div class="modal-overlay" id="binderEditModal">
     <div class="modal" style="max-width:400px">
-      <button class="modal-close" onclick="closeModal('binderEditModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('binderEditModal')">×</button>
       <h3 id="binderEditTitle">New Binder</h3>
       <p class="modal-sub">Organise your collection into separate binders by set, type, or anything you like.</p>
       <div class="form-group" id="binderEditNameRow">
@@ -1543,7 +1553,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- SOLD OFFLINE MODAL -->
   <div class="modal-overlay" id="soldOfflineModal">
     <div class="modal" style="max-width:420px">
-      <button class="modal-close" onclick="closeModal('soldOfflineModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('soldOfflineModal')">×</button>
       <h3>Sold Offline</h3>
       <p class="modal-sub" id="soldOfflineCardName" style="color:var(--accent);text-transform:none;opacity:.85"></p>
       <p style="font-size:.75rem;color:var(--muted);margin-bottom:16px">Log a sale that happened outside PathBinder. The card will be removed from your active binder and recorded in your sales history.</p>
@@ -1581,7 +1591,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        stock on the shelf. -->
   <div class="modal-overlay" id="markSoldModal">
     <div class="modal" style="max-width:440px">
-      <button class="modal-close" onclick="closeModal('markSoldModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('markSoldModal')">×</button>
       <h3>Record In-Store Sale</h3>
       <p class="modal-sub" id="msCardLabel" style="color:var(--accent);text-transform:none;opacity:.85"></p>
       <p style="font-size:.72rem;color:var(--muted);margin-bottom:14px" id="msAvailLabel"></p>
@@ -1634,7 +1644,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        inherit from the parent collection_items row. -->
   <div class="modal-overlay" id="editUnitModal" style="z-index:10010">
     <div class="modal" style="max-width:420px">
-      <button class="modal-close" onclick="closeModal('editUnitModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('editUnitModal')">×</button>
       <h3 id="editUnitTitle">Edit Unit</h3>
       <p class="modal-sub" id="editUnitCardLabel" style="color:var(--accent);text-transform:none;opacity:.85"></p>
       <p style="font-size:.7rem;color:var(--muted);margin-bottom:14px">Leave a field blank to inherit from the card's default. Overrides only apply to this individual physical copy.</p>
@@ -1683,7 +1693,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        stored in localStorage. -->
   <div class="modal-overlay" id="delistConfirmModal">
     <div class="modal" style="max-width:440px">
-      <button class="modal-close" onclick="closeModal('delistConfirmModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('delistConfirmModal')">×</button>
       <h3>Pull from Online Listing?</h3>
       <p class="modal-sub" id="delistCardLabel" style="color:var(--accent);text-transform:none;opacity:.85"></p>
       <p style="font-size:.78rem;color:var(--muted);margin-bottom:14px" id="delistExplain"></p>
@@ -1702,7 +1712,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- VENDOR APPLICATION MODAL -->
   <div class="modal-overlay" id="vendorApplicationModal">
     <div class="modal" style="max-width:520px">
-      <button class="modal-close" onclick="closeModal('vendorApplicationModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('vendorApplicationModal')">×</button>
       <h3 style="color:var(--accent)">Apply to Sell</h3>
       <p style="font-size:.8rem;color:var(--muted);margin-bottom:20px">PathBinder is a verified vendor marketplace. Fill out the form below and we'll review your application within 2–3 business days.</p>
       <div id="vendorAppStatus" style="display:none;padding:10px 14px;border-radius:6px;font-size:.8rem;margin-bottom:16px"></div>
@@ -1740,7 +1750,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- VENDOR BULK IMPORT MODAL -->
   <div class="modal-overlay" id="vendorImportModal">
     <div class="modal" style="max-width:560px">
-      <button class="modal-close" onclick="closeModal('vendorImportModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('vendorImportModal')">×</button>
       <h3 style="margin-bottom:4px">Bulk Import</h3>
       <p style="font-size:.78rem;color:var(--muted);margin-bottom:18px">Upload your inventory spreadsheet — cards are added to your binder. From there you can list any card for sale (with photos), or mark it as sold offline.</p>
 
@@ -1782,7 +1792,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           <span style="font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem;font-weight:700;letter-spacing:.08em;color:var(--gold)">&#9638; MULTI-SCAN</span>
           <span style="font-size:.6rem;padding:2px 6px;background:var(--gold);color:var(--surface);font-family:'Space Mono','Share Tech Mono',monospace;font-weight:700;letter-spacing:.06em">VENDOR</span>
         </div>
-        <button onclick="closeModal('multiScanModal')" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px">×</button>
+        <button aria-label="Close" onclick="closeModal('multiScanModal')" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px">×</button>
       </div>
 
       <!-- Picker view: choose mode -->
@@ -1865,7 +1875,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- LIST CARD MODAL -->
   <div class="modal-overlay" id="listCardModal">
     <div class="modal" style="max-width:600px">
-      <button class="modal-close" onclick="closeModal('listCardModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('listCardModal')">×</button>
       <h3>List Card for Sale</h3>
       <p class="modal-sub">Required: front &amp; back photo. Buyers see market price vs. your ask.</p>
 
@@ -1995,7 +2005,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- BUY CARD MODAL -->
   <div class="modal-overlay" id="buyCardModal">
     <div class="modal" style="max-width:420px">
-      <button class="modal-close" onclick="closeModal('buyCardModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('buyCardModal')">×</button>
       <h3>Confirm Purchase</h3>
       <p class="modal-sub" id="buyCardName" style="color:var(--accent);text-transform:none;font-size:.95rem"></p>
       <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;margin:16px 0;font-size:.82rem">
@@ -2028,7 +2038,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- ADD TRACKING MODAL -->
   <div class="modal-overlay" id="addTrackingModal">
     <div class="modal" style="max-width:460px">
-      <button class="modal-close" onclick="closeModal('addTrackingModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('addTrackingModal')">×</button>
       <h3>Ship Order</h3>
       <p class="modal-sub">Buy a prepaid label, or enter your own tracking number below.</p>
       <input type="hidden" id="trackingOrderId" />
@@ -2112,7 +2122,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- ORDER CONFIRMED MODAL -->
   <div class="modal-overlay" id="orderConfirmedModal">
     <div class="modal" style="max-width:420px;text-align:center">
-      <button class="modal-close" onclick="closeModal('orderConfirmedModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('orderConfirmedModal')">×</button>
       <h3 style="margin-bottom:8px;color:var(--green)">Order Confirmed</h3>
       <p class="modal-sub" style="margin-bottom:20px">Your payment went through and the seller has been notified to ship. We&rsquo;ll email you tracking as soon as it&rsquo;s on its way.</p>
       <div style="display:flex;gap:10px">
@@ -2125,7 +2135,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- RATE SELLER MODAL -->
   <div class="modal-overlay" id="rateSellerModal">
     <div class="modal" style="max-width:400px">
-      <button class="modal-close" onclick="closeModal('rateSellerModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('rateSellerModal')">×</button>
       <h3>Rate Seller</h3>
       <p class="modal-sub" id="rateSellerName"></p>
       <input type="hidden" id="rateOrderId" />
@@ -2149,7 +2159,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- PHONDEX MOBILE SEARCH MODAL -->
   <div class="modal-overlay" id="acMobSearchModal">
     <div class="modal" style="width:min(420px,92vw);padding:28px 24px">
-      <button class="modal-close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
       <div style="font-family:'Space Mono','Share Tech Mono',monospace">
         <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(26,199,160,.65);margin-bottom:14px">CARD SEARCH</div>
         <!-- Game / TCG selector — mirrors the desktop dropdown so mobile
@@ -2267,7 +2277,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <div class="lp-feat-card" onclick="showPage('fairTrade');setMobileNav('')" id="lpTrade">
         <div class="lp-feat-ico">⇌</div>
         <div class="lp-feat-title">Trade Analyzer <span class="beta-badge">BETA</span></div>
-        <div class="lp-feat-desc">AI-powered analysis for confident, fair trades.</div>
+        <div class="lp-feat-desc">Live TCGplayer + PriceCharting price comparison for confident, fair trades.</div>
         <span class="lp-feat-arrow">→</span>
       </div>
     </div>
@@ -3305,7 +3315,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
             style="padding:12px 32px;border:2px solid var(--green,#D2783A);background:transparent;color:var(--green,#D2783A);font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s,color .15s"
             onmouseover="this.style.background='var(--green,#D2783A)';this.style.color='var(--surface)'"
             onmouseout="this.style.background='transparent';this.style.color='var(--green,#D2783A)'">
-            ✅ Accept Trade
+            ✓ Accept Trade
           </button>
           <button onclick="ftReset()"
             style="padding:10px 28px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;letter-spacing:.04em">
@@ -3392,32 +3402,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     </div>
   </div>
 
-  <div id="leaderboardPage" class="page">
-    <div class="pb-page-hdr">
-      <div class="pb-page-hdr-main">
-        <div class="pb-page-hdr-title">▲ Leaderboard</div>
-        <div class="pb-page-hdr-sub">Top collectors ranked by portfolio, volume, and diversity.</div>
-      </div>
-    </div>
-    <div class="pb-panel">
-      <div class="pb-panel-h">
-        <div class="pb-panel-title">
-          <span class="pb-panel-title-ico"></span>
-          Rankings
-        </div>
-        <div class="pb-panel-actions">
-          <div class="section-tabs" style="margin:0">
-            <button class="section-tab active" onclick="renderLeaderboard('value')">Portfolio Value</button>
-            <button class="section-tab" onclick="renderLeaderboard('slots')">Most Cards</button>
-            <button class="section-tab" onclick="renderLeaderboard('diverse')">Most Diverse</button>
-          </div>
-        </div>
-      </div>
-      <div class="pb-panel-body">
-        <div id="leaderboardContent"><div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div></div>
-      </div>
-    </div>
-  </div>
+  <!-- leaderboardPage removed — CardFrac legacy (fractional investing). Route also
+       removed from _historyPages + showPage in pb-app.js. -->
+
 
   <div id="adminPage" class="page"></div>
 
@@ -3464,7 +3451,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     <div class="lightbox-inner" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;gap:0" onclick="event.stopPropagation()">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
         <h3 style="font-size:1.1rem;font-weight:700">Edit Listing</h3>
-        <button class="lightbox-close" style="position:static;width:32px;height:32px;font-size:1.1rem" onclick="closeEditModal()">×</button>
+        <button class="lightbox-close" aria-label="Close" style="position:static;width:32px;height:32px;font-size:1.1rem" onclick="closeEditModal()">×</button>
       </div>
       <div class="form-row" style="margin-bottom:12px">
         <div class="form-group" style="margin-bottom:0">
@@ -3517,7 +3504,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
   <!-- LIGHTBOX -->
   <div class="lightbox" id="lightbox">
-    <button class="lightbox-close" onclick="closeLightbox()">×</button>
+    <button class="lightbox-close" aria-label="Close" onclick="closeLightbox()">×</button>
     <div class="lightbox-inner">
       <img id="lightboxImg" src="" alt="" class="lightbox-img" />
       <button class="lightbox-nav lb-prev" onclick="prevLightbox()">‹</button>
@@ -3534,7 +3521,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- BINDER CARD DETAIL MODAL -->
   <div class="modal-overlay" id="binderDetailModal">
     <div class="modal" style="max-width:560px">
-      <button class="modal-close" onclick="closeModal('binderDetailModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('binderDetailModal')">×</button>
       <h3 id="binderDetailTitle">Card Detail</h3>
       <div id="binderDetailContent"></div>
     </div>
@@ -3545,7 +3532,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        a 3x3 page so empty pockets reveal it and cards sit on top. -->
   <div class="modal-overlay" id="pageArtModal">
     <div class="modal" style="max-width:360px">
-      <button class="modal-close" onclick="closeModal('pageArtModal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('pageArtModal')">×</button>
       <h3 style="margin-bottom:4px">Page Artwork</h3>
       <div class="modal-sub" id="pageArtSub" style="margin-bottom:12px">Upload an image, drag to position, slider to zoom.</div>
       <div id="paBgRow" style="margin-bottom:14px;padding:10px;border:1px solid var(--border);border-radius:6px">
@@ -3591,7 +3578,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 
   <div class="modal-overlay" id="cardPhotoModal">
     <div class="modal" style="max-width:480px">
-      <button class="modal-close" onclick="closeCardPhotoModal()">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeCardPhotoModal()">×</button>
       <h3 style="margin-bottom:4px">Update Card Photo</h3>
       <p style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Edit the existing photo or upload a new one · drag to reposition · scroll to zoom · crop then save</p>
 
@@ -3662,7 +3649,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <!-- CARD REPORT MODAL — user-submitted card-data error reports -->
   <div class="modal-overlay" id="cardReportModal">
     <div class="modal" style="max-width:440px">
-      <button class="modal-close" onclick="closeCardReportModal()">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeCardReportModal()">×</button>
       <div id="cardReportContent">
         <h3 style="margin-bottom:6px">Report Card Issue</h3>
         <p class="modal-sub" style="font-size:.74rem;margin-bottom:14px">Spotted wrong data, a missing photo, or a card in the wrong set? Tell us — admins will review it.</p>

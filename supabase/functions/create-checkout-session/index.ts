@@ -15,7 +15,7 @@ const corsHeaders = {
 //   Webhook: STRIPE_WEBHOOK_SECRET[_TEST|_LIVE]   (used by stripe-webhook)
 //   Prices:  STRIPE_PRICE_<TIER>_<BILLING>[_TEST|_LIVE]
 //            tiers: collector|enthusiast|vendor|shop  billing: monthly|annual
-//            (collector $5/mo only; enthusiast $20/mo, vendor $75/mo, shop $200/mo)
+//            (collector $5/mo, enthusiast $10/mo, vendor $50/mo, shop $150/mo)
 function envForMode(base: string): string | undefined {
   const m = (Deno.env.get('STRIPE_MODE') || '').trim().toLowerCase()
   if (m === 'test') return Deno.env.get(`${base}_TEST`)                        // test: strict — never falls back to live
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     const userId = user.id
 
     const body = await req.json()
-    const { type, items, tier, billing, successUrl, cancelUrl } = body
+    const { type, items, tier, billing, successUrl, cancelUrl, promo } = body
     // type: 'slot_purchase' | 'secondary_purchase' | 'subscription'
     // tier (subscription only): 'collector' | 'vendor' | 'shop'
     // billing (subscription only): 'monthly' | 'annual'
@@ -232,6 +232,14 @@ Deno.serve(async (req) => {
         cancel_url:  `${cancelUrl}?payment=cancelled`,
       }
 
+      // Welcome promo: apply the server-owned first-month coupon (Stripe coupon
+      // with duration=once) when the client flags it. NEW subscriptions only —
+      // the existing-subscription proration path above returns before here.
+      // Override the coupon id via the STRIPE_WELCOME_COUPON env var if needed.
+      if (promo) {
+        sessionParams.discounts = [{ coupon: Deno.env.get('STRIPE_WELCOME_COUPON') || 'ukgWK5jy' }]
+      }
+
       // Re-use existing Stripe customer if we have a valid one (validated
       // against the current mode above); otherwise let Checkout create one.
       if (customerId) {
@@ -243,6 +251,26 @@ Deno.serve(async (req) => {
       const session = await stripe.checkout.sessions.create(sessionParams)
 
       return new Response(JSON.stringify({ url: session.url }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+
+    // ── Stripe billing portal (manage payment method / invoices / cancel) ─────
+    // Requires the Customer Portal to be enabled in the Stripe Dashboard
+    // (Settings → Billing → Customer portal). Cancel behavior (at period end)
+    // is configured there, matching the "cancel anytime" account-settings copy.
+    } else if (type === 'portal') {
+      const { data: portalProfile } = await supabase
+        .from('profiles')
+        .select('stripe_customer_id')
+        .eq('id', userId)
+        .single()
+      const portalCustomer = portalProfile?.stripe_customer_id
+      if (!portalCustomer) throw new Error('No billing account for this user')
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: portalCustomer,
+        return_url: body.returnUrl || successUrl || 'https://pathbinder.gg/',
+      })
+      return new Response(JSON.stringify({ url: portalSession.url }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }

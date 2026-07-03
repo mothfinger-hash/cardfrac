@@ -2829,7 +2829,7 @@
         set_code:         card.set_code   || null,
         card_number:      card.card_number || null,
         card_image_url:   card.image_url  || null,
-        game_type:        'pokemon',
+        game_type:        card.game_type || 'pokemon',
         condition,
         grade_value:      gradeValue,
         cert_number:      certNumber,
@@ -3442,7 +3442,7 @@
           } else if (res.status === 500) {
             // Proxy misconfiguration — GCV_API_KEY missing in Vercel env.
             console.error('[GCV] proxy error:', reason);
-            setScanStatus('Vision proxy not configured — see console');
+            setScanStatus('Scanner is temporarily unavailable — please try again.');
           } else {
             console.error('[GCV] error:', reason);
           }
@@ -4464,6 +4464,13 @@
         window._scanCapturedDataUrl = dataURL;
       }
 
+      // Scanner is 100% online (cloud OCR + visual-embedding match). Fail fast
+      // with a clear message instead of burning a scan or blaming the photo.
+      if (!navigator.onLine) {
+        if (!silent) setScanStatus('You are offline — the scanner needs an internet connection to identify cards.');
+        return [];
+      }
+
       // ── Per-tier monthly scanner usage gate (non-silent scans only) ─────────
       if (!silent && currentUser) {
         const used  = getUsageCount('scan');
@@ -4482,9 +4489,6 @@
           }
           return [];
         }
-        // Count the scan
-        incrementUsage('scan');
-        try { checkBadge_scanner(); } catch(_) {}
         // Show remaining uses for free tier as a soft nudge
         if (!tierAtLeast('collector')) {
           const left = limit - used - 1;
@@ -4516,6 +4520,13 @@
           _stitchedP,
           window._getClipEmbedding(dataURL),
         ]);
+
+        // Count the scan only now that the backend round-trip succeeded — an
+        // offline or errored scan throws above into catch and never burns quota.
+        if (!silent && currentUser) {
+          incrementUsage('scan');
+          try { checkBadge_scanner(); } catch(_) {}
+        }
 
         // Normalise smart quotes / dashes from GCV before any parsing
         const fullText = normalizeOcr(rawFullText);
@@ -4626,7 +4637,7 @@
         }
         const q = () => {
           let qb = sb.from('catalog')
-            .select('id,name,set_name,set_code,card_number,rarity,image_url')
+            .select('id,name,set_name,set_code,card_number,rarity,image_url,game_type')
             .eq('game_type', scanTcg);
           if (isTopps) qb = qb.like('id', 'topps-%');
           // POS scope — only consider rows that exist in this user's
@@ -4882,7 +4893,7 @@
 
         if (clipRes.error) {
           if (clipRes.error.code === 'PGRST202' || (clipRes.error.message && clipRes.error.message.includes('match_cards'))) {
-            if (!silent) setScanStatus('Run scanner_setup.sql in Supabase first');
+            if (!silent) setScanStatus('Scanner is temporarily unavailable — please try again.');
             return [];
           } else throw clipRes.error;
         }
@@ -5225,13 +5236,8 @@
             const countRes = await sb.from('catalog').select('id', { count: 'exact', head: true }).not('embedding', 'is', null);
             const embeddedCount = countRes.count || 0;
             if (embeddedCount === 0) {
-              const totalRes = await sb.from('catalog').select('id', { count: 'exact', head: true });
-              const totalCount = totalRes.count || 0;
-              if (totalCount === 0) {
-                setScanStatus('Card catalog is empty — run generate_embeddings.py first');
-              } else {
-                setScanStatus(`Catalog blocked (${totalCount.toLocaleString()} cards exist but can't be read) — run: alter table catalog disable row level security`);
-              }
+              console.error('[Scanner] catalog returned no embedded rows — backend not ready (check embeddings / RLS)');
+              setScanStatus('Scanner is temporarily unavailable — try the name search below.');
             } else {
               setScanStatus('No match found — try a clearer photo or use the name search below');
             }
@@ -5245,7 +5251,7 @@
         return final;
       } catch(err) {
         console.error('[Scanner]', err);
-        if (!silent) setScanStatus('Error: ' + (err.message || err));
+        if (!silent) setScanStatus(navigator.onLine ? 'Scanner is temporarily unavailable — please try again.' : 'You are offline — the scanner needs an internet connection to identify cards.');
         return [];
       } finally {
         // nothing to re-enable — sheet stays open
@@ -5655,7 +5661,7 @@
           set_code:       m.set_code      || null,
           card_number:    m.card_number   || null,
           card_image_url: m.image_url     || null,
-          game_type:      'pokemon',
+          game_type:      m.game_type     || 'pokemon',
           quantity:       1,
           binder_id:      binderId        || null,
         };

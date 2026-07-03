@@ -49,8 +49,8 @@ After any change to `capacitor.config.ts`, `www/`, or the plugin list, re-run
 
 ## Native permissions to add
 
-The scanner uses the camera (via the web `getUserMedia` API inside the
-WebView), and photo upload may touch the library. Add these or the OS will
+The scanner uses the camera (via an `<input type="file" capture="environment">`
+element inside the WebView), and photo upload may touch the library. Add these or the OS will
 silently block them:
 
 **iOS** — `ios/App/App/Info.plist`:

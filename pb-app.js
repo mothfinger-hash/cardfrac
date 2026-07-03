@@ -354,6 +354,26 @@ function _loadAdmin(){
       }
     }
 
+    // Post-listing nudge: if the seller has no active payouts, prompt them to
+    // finish Stripe Connect onboarding so future sales pay out automatically
+    // instead of landing in platform-hold. Non-blocking; guarded against
+    // double-prompting.
+    let _connectPromptPending = false;
+    function _maybePromptConnectSetup() {
+      if (!currentUser || !tierAtLeast('enthusiast') || _connectPromptPending) return;
+      const _decide = function() {
+        if (_connectPromptPending || !connectStatus.loaded || connectStatus.payoutsEnabled) return;
+        _connectPromptPending = true;
+        const started = connectStatus.detailsSubmitted || connectStatus.accountId;
+        const msg = started
+          ? 'Your listing is live. Your Stripe payout setup is not finished yet — finish it so sales pay out to you automatically.'
+          : 'Your listing is live! Set up Stripe payouts so you get paid automatically when it sells. Until then, a sale is held until your payouts are set up.';
+        Promise.resolve(pbConfirm(msg, { confirmText: 'SET UP PAYOUTS', cancelText: 'LATER' })).then(function(ok) { _connectPromptPending = false; if (ok) startStripeConnectOnboarding(); });
+      };
+      if (connectStatus.loaded) _decide();
+      else { refreshConnectStatus(_decide); setTimeout(_decide, 3500); }
+    }
+
     // Renders the seller's payout-status banner above My Listings. Pulls
     // from cached connectStatus — no async work here. Returns '' when the
     // user isn't a seller so renderMyListings can safely concatenate it.
@@ -607,8 +627,50 @@ function _loadAdmin(){
         +   '</div>'
         + '</div>';
 
-      body.innerHTML = emailRow + prefsBlock + shopBlock + followsBlock + deletionBlock;
+      // Membership — manage/cancel subscription via the Stripe billing portal.
+      // Only for paying subscribers; makes "cancel anytime from your account
+      // settings" real (Apple 3.1.2 / Google requirement).
+      const _mTier = (typeof userTier === 'function') ? userTier() : ((currentUser && currentUser.subscription_tier) || 'free');
+      const _mLabel = (typeof TIER_COLORS !== 'undefined' && TIER_COLORS[_mTier]) ? TIER_COLORS[_mTier].label : _mTier;
+      const membershipBlock = (_mTier && _mTier !== 'free')
+        ? ''
+          + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">Membership</div>'
+          +   '<div style="font-size:.78rem;color:var(--text);margin-bottom:8px;line-height:1.5">Current plan: <strong style="color:var(--accent)">' + _mLabel + '</strong></div>'
+          +   '<div style="font-size:.66rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Update your payment method, view invoices, or cancel. Cancelling keeps your plan active until the end of the current billing period.</div>'
+          +   '<button type="button" onclick="closeModal(\'accountSettingsModal\');openBillingPortal()" style="width:100%;padding:11px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer">Manage subscription &rarr;</button>'
+          + '</div>'
+        : '';
+
+      body.innerHTML = emailRow + membershipBlock + prefsBlock + shopBlock + followsBlock + deletionBlock;
     }
+
+    // Opens the Stripe billing portal so a subscriber can update payment
+    // method, view invoices, or cancel. The Edge Function resolves the
+    // stripe_customer_id server-side. Native routes externally (subscriptions
+    // are web-managed) so the WebView isn't stranded on a Stripe page.
+    async function openBillingPortal() {
+      if (!currentUser) { openModal('loginModal'); return; }
+      showToast('Opening billing…');
+      try {
+        const result = await callEdgeFunction('create-checkout-session', {
+          type: 'portal',
+          returnUrl: window.location.origin + window.location.pathname,
+        });
+        if (result && result.url) {
+          if (typeof _isNativeApp === 'function' && _isNativeApp()) _openExternal(result.url);
+          else window.location.href = result.url;
+          return;
+        }
+        const emsg = (result && result.error) || '';
+        showToast(/no billing/i.test(emsg) ? 'No billing account yet — subscribe on the web first.' : 'Could not open billing — please try again.', 'error');
+      } catch (e) {
+        console.error('[billing portal]', e);
+        const emsg = (e && e.message) || '';
+        showToast(/no billing/i.test(emsg) ? 'No billing account yet — subscribe on the web first.' : 'Could not open billing — please try again.', 'error');
+      }
+    }
+    window.openBillingPortal = openBillingPortal;
 
     async function _saveShopPause() {
       const el = document.getElementById('settingShopPauseDate');
@@ -959,9 +1021,14 @@ function _loadAdmin(){
       return t === 'free' ? 4 : Infinity;
     }
 
-    // Admins are automatically treated as premium (no subscription needed)
+    // Admins are automatically treated as premium (no subscription needed).
+    // Primary signal is subscription_tier (via tierAtLeast) because the Stripe
+    // webhook writes subscription_tier, not the legacy is_premium boolean —
+    // otherwise paying subscribers kept seeing the "upgrade to Premium" chip.
     function userIsPremium() {
-      return !!(currentUser && (currentUser.is_admin || currentUser.is_premium || currentUser.membershipActive));
+      if (currentUser && currentUser.is_admin) return true;
+      if (currentUser && typeof tierAtLeast === 'function' && tierAtLeast('collector')) return true;
+      return !!(currentUser && (currentUser.is_premium || currentUser.membershipActive));
     }
 
     function userIsVendor() {
@@ -1692,7 +1759,7 @@ function _loadAdmin(){
     // NOTE: when PathBinder ships as a native iOS/Android app (Capacitor etc.)
     // history.pushState is a no-op inside a WebView — that's fine, the popstate
     // listener simply won't fire and the app behaves as it always has.
-    const _historyPages = new Set(['browse','collection','addCard','account','leaderboard','fairTrade','sets','avatar','landing']);
+    const _historyPages = new Set(['browse','collection','addCard','account','fairTrade','sets','avatar','landing']);
     let _suppressHistoryPush = false;  // true during popstate handling to avoid double-push
 
     function _pushPageState(pageId) {
@@ -1811,7 +1878,7 @@ function _loadAdmin(){
       document.body.style.overflow = (pageId === 'addCard') ? 'hidden' : '';
       // Ensure sidebar is restored when navigating away from landing
       if (pageId !== 'landing') document.body.classList.remove('on-landing');
-      if (pageId === 'leaderboard') renderLeaderboard();
+      // leaderboard route removed — CardFrac legacy (fractional investing)
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const navTab = document.querySelector(`[data-page="${pageId}"]`);
       if (navTab) navTab.classList.add('active');
@@ -1914,17 +1981,16 @@ function _loadAdmin(){
       const grid = document.getElementById('browseGrid');
       if (!grid) return;
 
-      // Coming Soon gate — marketplace is admin-only for now. Non-admins
-      // (including logged-out visitors) see the placeholder panel and
-      // the real marketplace UI stays hidden. Admins see everything.
-      // We toggle via display:'' instead of removing the markup so the
-      // grid + filter state is preserved across page switches.
-      const _isMpAdmin   = _mpUnlocked();
+      // Marketplace browse is open to everyone — all tiers, including
+      // logged-out visitors, can browse and buy. Selling is gated
+      // separately (enthusiast+; see openListCardModal). The Coming Soon
+      // panel stays in the DOM but always hidden now that browse is live;
+      // we toggle display so grid/filter state survives page switches.
       const _comingSoon  = document.getElementById('browseComingSoon');
       const _realContent = document.getElementById('browseRealContent');
-      if (_comingSoon)  _comingSoon.style.display  = _isMpAdmin ? 'none' : '';
-      if (_realContent) _realContent.style.display = _isMpAdmin ? '' : 'none';
-      if (!_isMpAdmin) return;   // nothing to render for non-admins
+      if (_comingSoon)  _comingSoon.style.display  = 'none';
+      if (_realContent) _realContent.style.display = '';
+      _populateGameTypeFilter();
 
       let filtered = listings.filter(listing => {
         const isSold = listing.status === 'sold';
@@ -1942,6 +2008,7 @@ function _loadAdmin(){
         const search = browseSearchQuery.toLowerCase();
         const matchesSearch = search === '' ||
           listing.name.toLowerCase().includes(search) ||
+          (listing.set_name || '').toLowerCase().includes(search) ||
           (listing.type || '').toLowerCase().includes(search) ||
           (listing.grade || '').toLowerCase().includes(search);
         if (!matchesSearch) return false;
@@ -2232,6 +2299,29 @@ function _loadAdmin(){
       renderBrowse();
     }
 
+    // Populate + reveal the marketplace game-type filter from the games
+    // actually present in the current listing set. Hidden when there's 0-1
+    // game to choose between (nothing to filter). The filter LOGIC already
+    // exists (browseGameTypeFilter); this just surfaces the control.
+    function _populateGameTypeFilter() {
+      const sel = document.getElementById('gameTypeFilter');
+      if (!sel) return;
+      const seen = {};
+      (listings || []).forEach(function(l) {
+        const g = l && l.gameType;
+        if (g && g !== 'Other') seen[g] = true;
+      });
+      const games = Object.keys(seen).sort();
+      if (games.length < 2) { sel.style.display = 'none'; return; }
+      const cur = browseGameTypeFilter || 'all';
+      const _cap = function(g) { return String(g).charAt(0).toUpperCase() + String(g).slice(1); };
+      sel.innerHTML = '<option value="all">All games</option>' + games.map(function(g) {
+        return '<option value="' + _escHtml(g) + '">' + _escHtml(_cap(g)) + '</option>';
+      }).join('');
+      sel.value = cur;
+      sel.style.display = '';
+    }
+
     function setGameTypeFilter(type) {
       browseGameTypeFilter = type;
       document.querySelectorAll('.game-pill').forEach(p => p.classList.remove('active'));
@@ -2373,6 +2463,9 @@ function _loadAdmin(){
               </button>
               <div style="font-size:.72rem;color:var(--muted);line-height:1.8;text-align:center">
                 Secure Stripe payment · 7-day buyer protection · Platform fee paid by seller
+              </div>
+              <div style="text-align:center;margin-top:8px">
+                <button onclick="openReportModal('listing','${listingId}','${_escJsAttr(listing.name || 'listing')}')" style="background:none;border:none;color:var(--muted);font-family:'Space Mono',monospace;font-size:.68rem;cursor:pointer;text-decoration:underline;letter-spacing:.04em">Report this listing</button>
               </div>
             </div>` : ''}
             ${isOwn && !isSold ? `
@@ -2703,10 +2796,15 @@ function _loadAdmin(){
 
       showToast('Redirecting to checkout...');
       try {
+        // Apply the welcome promo only when checking out the exact tier the
+        // limit-wall promo was shown for (_limitPromoTier). The server owns the
+        // coupon id — we only send a boolean so a client can't inject a coupon.
+        const _applyPromo = !!(_limitPromoTier && _limitPromoTier === tier);
         const result = await callEdgeFunction('create-checkout-session', {
           type: 'subscription',
           tier,
           billing,
+          promo: _applyPromo,
           successUrl: window.location.origin + window.location.pathname,
           cancelUrl:  window.location.origin + window.location.pathname,
         });
@@ -3237,7 +3335,7 @@ function _loadAdmin(){
       } catch(e) {
         el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
           Could not load trade history.<br>
-          <span style="font-size:.72rem">${e.message && e.message.includes('does not exist') ? 'Run the SQL migration to create the trade_history table first.' : _escHtml(e.message || '')}</span>
+          <span style="font-size:.72rem">${e.message && e.message.includes('does not exist') ? 'This feature is temporarily unavailable — please try again shortly.' : _escHtml(e.message || '')}</span>
         </div>`;
       }
     }
@@ -10301,15 +10399,7 @@ function _loadAdmin(){
 
     function openListCardModal(prefill) {
       if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
-      // Coming Soon gate — the marketplace is admin-only during the
-      // pre-launch window. Non-admins shouldn't be able to create
-      // listings either, since their listings would never become
-      // visible to other shoppers. Match the renderBrowse() gate so
-      // the rules stay in lockstep.
-      if (!_mpUnlocked()) {
-        showToast('Marketplace coming soon');
-        return;
-      }
+      // Marketplace is live. Selling access is gated by subscription tier below.
       // Marketplace selling is gated by subscription tier with per-tier
       // listing caps:
       //   free / collector : cannot sell (cap = 0)
@@ -10520,8 +10610,8 @@ function _loadAdmin(){
       if (!currentUser) return;
       // Belt-and-suspenders: openListCardModal already gates this, but
       // someone could call save directly via dev tools. Don't trust the UI.
-      if (!tierAtLeast('shop')) {
-        showToast('Shop plan required to list on the marketplace');
+      if (!tierAtLeast('enthusiast')) {
+        showToast('An Enthusiast plan or higher is required to sell on the marketplace');
         return;
       }
       const productType = lcProductType || 'single';
@@ -10703,6 +10793,9 @@ function _loadAdmin(){
       showToast(name + ' listed for sale!');
       renderBrowse();
       renderMyListings();
+      // Nudge the seller to finish Stripe payouts if they haven't — until then
+      // a sale lands in platform-hold and needs manual payout. Non-blocking.
+      _maybePromptConnectSetup();
     }
 
     // ─── Edit Marketplace Listing ──────────────────────────────────────
@@ -12328,7 +12421,7 @@ function _loadAdmin(){
           if (found) {
             resolvedAssignUser = found;
             resultEl.style.color = 'var(--green, #10b981)';
-            resultEl.textContent = `✅ Found: ${found.name} (@${found.username})${found.email ? ' — ' + found.email : ''}`;
+            resultEl.textContent = `✓ Found: ${found.name} (@${found.username})${found.email ? ' — ' + found.email : ''}`;
           } else {
             resultEl.style.color = '#ef4444';
             resultEl.textContent = 'No user found. Make sure they have registered.';
@@ -12441,7 +12534,7 @@ function _loadAdmin(){
       }
 
       const listing = listings.find(l => l.id == listingId);
-      statusEl.textContent = `✅ Assigned ${assigned.length} slot(s) [#${assigned.join(', ')}] of "${listing?.name}" to ${userName}!`;
+      statusEl.textContent = `✓ Assigned ${assigned.length} slot(s) [#${assigned.join(', ')}] of "${listing?.name}" to ${userName}!`;
       statusEl.style.color = 'var(--green, #10b981)';
       document.getElementById('assignSlotIdx').value = '';
       if (document.getElementById('assignSlotCount')) document.getElementById('assignSlotCount').value = '';
@@ -13167,6 +13260,20 @@ function _loadAdmin(){
       if (!grid) return;
       const current = userTier();
 
+      // Native build (App Store / Play): no in-app prices, billing toggle,
+      // promo, or auto-renew disclosure — Apple/Google forbid steering
+      // digital-subscription buyers to external web payment. Native users
+      // see tier benefits + a neutral "manage on the web" link instead.
+      const _native = (typeof _isNativeApp === 'function') && _isNativeApp();
+      const _toggle = document.getElementById('pricingBillingToggle');
+      if (_toggle) _toggle.style.display = _native ? 'none' : '';
+      const _disc = document.getElementById('pricingDisclosure');
+      if (_disc) _disc.style.display = _native ? 'none' : '';
+      const _sub = document.getElementById('pricingSubtitle');
+      if (_sub) _sub.textContent = _native
+        ? 'Manage your membership at pathbinder.gg — changes sync back to the app automatically.'
+        : 'All plans include the PathBinder mobile app.';
+
       grid.innerHTML = TIER_DEFS.map(t => {
         const isCurrent = t.id === current;
 
@@ -13185,12 +13292,16 @@ function _loadAdmin(){
             priceLine += `<div style="font-size:.6rem;color:var(--muted);margin-top:2px">Annual billing available</div>`;
           }
         }
+        // Native build: suppress prices entirely (no in-app purchase steering).
+        if (_native) priceLine = (t.monthly === 0)
+          ? `<span style="font-size:.95rem;font-weight:700;color:var(--text)">Free</span>`
+          : '';
 
         // ── Promo banner (shown when user hit a usage limit) ─────────────
         // Restyled as an inline informational chip (not a CTA-looking
         // strip) so users don't read it as a second button alongside
         // the actual CTA below.
-        const isPromoTarget = (_limitPromoTier === t.id) && !isCurrent;
+        const isPromoTarget = !_native && (_limitPromoTier === t.id) && !isCurrent;
         const promoBanner = isPromoTarget
           ? `<div style="background:transparent;color:var(--accent);font-size:.58rem;font-weight:700;letter-spacing:.08em;text-align:center;padding:6px 8px;margin-bottom:8px;border:1px dashed var(--accent);border-radius:var(--r-sm,6px)">25% OFF YOUR FIRST MONTH</div>`
           : '';
@@ -13205,6 +13316,9 @@ function _loadAdmin(){
           ctaBtn = `<div style="text-align:center;padding:9px;font-size:.75rem;color:var(--accent);border:1px solid var(--accent);background:var(--surface2);letter-spacing:.06em;border-radius:var(--r-sm,6px)">Current plan</div>`;
         } else if (t.ctaAction === 'shop_intake') {
           ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px)">Contact us →</button>`;
+        } else if (_native && t.ctaAction) {
+          // Native: neutral manage-on-web link instead of a priced Upgrade CTA.
+          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:transparent;color:var(--accent);border:1px solid var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px)">Manage on the web →</button>`;
         } else if (t.ctaAction) {
           const isAbove = TIER_ORDER.indexOf(t.id) < TIER_ORDER.indexOf(current);
           const ctaText = isPromoTarget ? (t.ctaLabel + ' — Save 25% →') : (t.ctaLabel + ' →');
@@ -13336,10 +13450,19 @@ function _loadAdmin(){
       toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
       toast.textContent = message;
       document.body.appendChild(toast);
-      setTimeout(() => {
+      // Errors stay on screen long enough to read and act on; confirmations
+      // are quick. Longer messages get a little extra time. Tap to dismiss.
+      const _base = type === 'error' ? 5200 : 2400;
+      const _dur  = Math.min(9000, _base + Math.max(0, (String(message).length - 40)) * 45);
+      let _dismissed = false;
+      const _dismiss = () => {
+        if (_dismissed) return; _dismissed = true;
         toast.style.animation = 'slideOutLeft .3s ease';
         setTimeout(() => toast.remove(), 300);
-      }, 2000);
+      };
+      toast.style.cursor = 'pointer';
+      toast.addEventListener('click', _dismiss);
+      setTimeout(_dismiss, _dur);
     }
 
     // ── Global error boundary ──────────────────────────────────────────
@@ -14798,7 +14921,7 @@ function _loadAdmin(){
         } else delete pa[_k];
         var res = await sb.from('binders').update({ page_art: pa }).eq('id', currentBinderId).select('id');
         if (res.error) {
-          if (/column|schema|page_art/i.test(res.error.message || '')) { showToast('Run migration_binder_page_art.sql in Supabase first'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
+          if (/column|schema|page_art/i.test(res.error.message || '')) { showToast('Could not save right now — please try again.'); console.log('%cMichi page-art migration:', 'color:orange;font-weight:bold', "alter table public.binders add column if not exists page_art jsonb not null default '{}'::jsonb;"); return; }
           showToast('Save failed: ' + res.error.message); return;
         }
         b.page_art = pa;
@@ -14876,7 +14999,7 @@ function _loadAdmin(){
       else pa[_k] = entry;
       try {
         var r = await sb.from('binders').update({ page_art: pa }).eq('id', b.id).select('id');
-        if (r.error) { if (/column|schema|page_art/i.test(r.error.message || '')) { showToast('Run migration_binder_page_art.sql first'); return; } showToast('Failed: ' + r.error.message); return; }
+        if (r.error) { if (/column|schema|page_art/i.test(r.error.message || '')) { showToast('Could not save right now — please try again.'); return; } showToast('Failed: ' + r.error.message); return; }
         b.page_art = pa;
         renderBinder();
       } catch(e) { showToast('Failed'); }
@@ -17062,9 +17185,8 @@ function _loadAdmin(){
       try {
         var res = await sb.from('collection_items').update(updates).eq('id', itemId);
         if (res.error) {
-          showToast(/photo_url|column|schema/i.test(res.error.message || '')
-            ? 'Run migration_collection_item_photo_url.sql first'
-            : ('Failed: ' + res.error.message));
+          if (/photo_url|column|schema/i.test(res.error.message || '')) console.warn('[collection] photo_url migration not applied:', res.error.message);
+          showToast('Could not save right now — please try again.');
           return;
         }
       } catch (e) { showToast('Failed: ' + (e.message || 'error')); return; }
@@ -17418,7 +17540,7 @@ function _loadAdmin(){
       if (error) {
         // Columns may not exist yet — handle gracefully
         if (error.message?.includes('column') || error.message?.includes('schema')) {
-          showToast('Run the Sold Offline SQL migration first (see console)');
+          showToast('Could not save right now — please try again.');
           console.log('%cSold Offline SQL Migration:', 'color:orange;font-weight:bold');
           console.log(`alter table collection_items
   add column if not exists sold_offline boolean default false,
@@ -17811,7 +17933,7 @@ function _loadAdmin(){
 
       if (error) {
         if (error.message?.includes('column') || error.message?.includes('schema')) {
-          showToast('Run the ghost-card SQL migration in Supabase first (see console for SQL)');
+          showToast('Could not save right now — please try again.');
           console.log('%cGhost Card SQL Migration:', 'color:orange;font-weight:bold');
           console.log(`alter table collection_items
   add column if not exists is_ghost boolean default false,
@@ -19793,14 +19915,14 @@ function _loadAdmin(){
             console.log('%c[PathBinder] Run migration_shop_inventory.sql to enable in-store inventory tracking.', 'color:#FF9800;font-weight:bold');
           } else {
             console.log('%c[PathBinder] Add this column in Supabase SQL editor:\nalter table collection_items add column if not exists language text default \'EN\';', 'color:#FF9800;font-weight:bold');
-            showToast('Card added! (Run SQL migration to enable language tracking — see console)');
+            showToast('Card added!');
           }
         } else if (_isSchemaErr(r2.error)) {
           // Strip language + rarity as the last-ditch fallback.
           const { on_shelf_qty: _osq2, language: _l2, rarity: _r2, ..._bare } = _insertBase;
           const r3 = await sb.from('collection_items').insert(_bare).select('id').single();
           newRow = r3.data; error = r3.error;
-          if (!error) showToast('Card added! (Run SQL migrations for language + rarity columns — see console)');
+          if (!error) showToast('Card added!');
         } else {
           newRow = r2.data; error = r2.error;
         }
@@ -19821,7 +19943,7 @@ function _loadAdmin(){
       if (error) {
         // Friendly message for missing table
         if (error.message && error.message.includes('does not exist')) {
-          showToast('Run the SQL migration in Supabase first — see PORTFOLIO_TRACKER_PLAN.md');
+          showToast('Could not save right now — please try again.');
         } else {
           showToast('Error saving card: ' + error.message);
         }
@@ -20050,6 +20172,86 @@ function _loadAdmin(){
     // "Thanks for contributing" state when the user re-opens the modal.
     var _crOriginalContent = null;
 
+    // ── Content abuse reporting (App Store Guideline 1.2 / Play UGC) ─────────
+    // Lets a signed-in user flag a listing / seller profile / review / photo for
+    // moderator review → content_reports (see migration_content_reports.sql,
+    // surfaced in the admin Moderation queue). Built dynamically so it needs no
+    // index.html markup. Distinct from card_reports (card-data corrections).
+    const _REPORT_REASONS = [
+      'Prohibited or illegal item',
+      'Counterfeit / not authentic',
+      'Offensive or inappropriate content',
+      'Harassment or abusive behavior',
+      'Spam or scam',
+      'Misleading / not as described',
+      'Other',
+    ];
+    function _reportTypeLabel(t) {
+      return t === 'listing' ? 'listing' : t === 'profile' ? 'user' : t === 'review' ? 'review'
+           : t === 'photo' ? 'photo' : t === 'message' ? 'message' : 'content';
+    }
+    function openReportModal(targetType, targetId, targetLabel) {
+      if (!currentUser) { showToast('Sign in to report'); openModal('loginModal'); return; }
+      if (!targetId) return;
+      var existing = document.getElementById('pbReportOverlay');
+      if (existing) existing.remove();
+      window._reportTarget = { type: targetType, id: String(targetId), label: targetLabel ? String(targetLabel).slice(0, 120) : null };
+      var reasonOpts = _REPORT_REASONS.map(function(r) { return '<option value="' + _escHtml(r) + '">' + _escHtml(r) + '</option>'; }).join('');
+      var overlay = document.createElement('div');
+      overlay.id = 'pbReportOverlay';
+      overlay.className = 'modal-overlay';
+      overlay.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:100060';
+      overlay.innerHTML = ''
+        + '<div class="modal" style="max-width:420px;padding:22px 20px">'
+        +   '<button class="modal-close" aria-label="Close" onclick="_closeReportModal()">×</button>'
+        +   '<div style="font-family:\'Orbitron\',monospace;font-size:.95rem;font-weight:800;letter-spacing:.06em;margin-bottom:4px">Report ' + _escHtml(_reportTypeLabel(targetType)) + '</div>'
+        +   (window._reportTarget.label ? '<div style="font-size:.72rem;color:var(--muted);margin-bottom:14px">' + _escHtml(window._reportTarget.label) + '</div>' : '<div style="margin-bottom:12px"></div>')
+        +   '<label style="display:block;font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Reason</label>'
+        +   '<select id="pbReportReason" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:\'Space Mono\',monospace;font-size:.8rem;margin-bottom:12px">' + reasonOpts + '</select>'
+        +   '<label style="display:block;font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Details (optional)</label>'
+        +   '<textarea id="pbReportDetails" rows="3" placeholder="Anything the moderators should know" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:\'Space Mono\',monospace;font-size:.8rem;resize:vertical;margin-bottom:6px"></textarea>'
+        +   '<div id="pbReportStatus" style="font-size:.7rem;color:var(--muted);min-height:16px;margin-bottom:10px"></div>'
+        +   '<button id="pbReportSubmit" onclick="submitContentReport()" style="width:100%;padding:11px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:\'Space Mono\',monospace;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Submit report</button>'
+        + '</div>';
+      overlay.addEventListener('click', function(e) { if (e.target === overlay) _closeReportModal(); });
+      document.body.appendChild(overlay);
+    }
+    function _closeReportModal() {
+      var o = document.getElementById('pbReportOverlay'); if (o) o.remove();
+      window._reportTarget = null;
+    }
+    async function submitContentReport() {
+      var t = window._reportTarget;
+      if (!currentUser || !t) return;
+      var reason = (document.getElementById('pbReportReason') || {}).value || '';
+      var details = String((document.getElementById('pbReportDetails') || {}).value || '').trim();
+      var st = document.getElementById('pbReportStatus');
+      var btn = document.getElementById('pbReportSubmit');
+      if (!reason) { if (st) st.textContent = 'Pick a reason first.'; return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      try {
+        var res = await sb.from('content_reports').insert({
+          reporter_id:  currentUser.id,
+          target_type:  t.type,
+          target_id:    t.id,
+          target_label: t.label,
+          reason:       reason,
+          details:      details || null,
+          status:       'open',
+        });
+        if (res.error) throw res.error;
+        _closeReportModal();
+        showToast('Report submitted — our team will review it.', 'success');
+      } catch (e) {
+        console.error('[content report]', e);
+        if (st) st.textContent = 'Could not submit right now — please try again.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Submit report'; }
+      }
+    }
+    window.openReportModal = openReportModal;
+    window._closeReportModal = _closeReportModal;
+    window.submitContentReport = submitContentReport;
+
     function openCardReportModal(itemId) {
       var item = collectionItems.find(function(c) { return String(c.id) === String(itemId); });
       if (!item) { showToast('Card not found'); return; }
@@ -20120,7 +20322,7 @@ function _loadAdmin(){
           if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1) {
             printAdminCardSQL();
             if (st) _setProcessingText(st, 'Database needs migration — see console for SQL');
-            showToast('Run the card-reports SQL migration in Supabase first');
+            showToast('Could not submit right now — please try again.');
             if (btn) { btn.disabled = false; _setProcessingText(btn, 'Send'); }
             return;
           }
@@ -21295,7 +21497,7 @@ function _loadAdmin(){
           userId: currentUser ? currentUser.id : null,
           hint: 'Check collection_items RLS policies in Supabase dashboard. Need: USING (auth.uid() = user_id) on DELETE.'
         });
-        showToast('Delete blocked — see browser console for details.');
+        showToast('Could not delete that right now — please try again.');
         return;
       }
 
@@ -21491,7 +21693,10 @@ function _loadAdmin(){
         +   messageBtn
         +   followBtn
         +   blockBtn
-        + '</div>';
+        + '</div>'
+        + ((!isSelf && currentUser)
+            ? '<div style="text-align:center;margin-top:10px"><button onclick="openReportModal(\'profile\',\'' + sellerId + '\',\'' + _escJsAttr(name) + '\')" style="background:none;border:none;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.68rem;cursor:pointer;text-decoration:underline;letter-spacing:.04em">Report this user</button></div>'
+            : '');
 
       // Catalog photo contribution stat. Async-loaded so it doesn't
       // block the modal paint. Hidden until we know the count is > 0.
@@ -22033,6 +22238,7 @@ function _loadAdmin(){
         grade: l.grade,
         type: l.card_type || '',
         gameType: l.game_type || 'Other',
+        set_name: l.set_name || '',
         value: l.value,
         list_price: l.list_price || l.value || 0,
         condition: l.condition || 'NM',
@@ -22997,7 +23203,7 @@ function _loadAdmin(){
         console.error('[FairTrade] Create session error:', e);
         var msg = e && e.message ? e.message : '';
         if (msg.includes('column') && (msg.includes('name_a') || msg.includes('name_b') || msg.includes('joined_b') || msg.includes('locked_'))) {
-          showToast('DB schema outdated — see console for migration SQL');
+          showToast('Could not create the trade session right now — please try again.');
           console.warn('[FairTrade] Missing columns! Run this SQL in Supabase SQL editor:\n' +
             'alter table fair_trade_sessions add column if not exists name_a text default \'\';\n' +
             'alter table fair_trade_sessions add column if not exists name_b text default \'Guest\';\n' +
@@ -23270,7 +23476,7 @@ function _loadAdmin(){
         : (_ftLocked[mine]
             ? 'Your offer locked — waiting for ' + theirName + ' to lock in'
           : (_ftLocked[theirs]
-            ? '⚡ ' + theirName + ' is locked — lock in your offer!'
+            ? theirName + ' is locked — lock in your offer!'
           : (bHasJoined
             ? (role === 'a' ? nameB + ' has joined — add your cards' : 'Joined as ' + nameB + ' — add your cards below')
             : '⏳ Waiting for partner to join…')));
@@ -24856,7 +25062,7 @@ function _loadAdmin(){
 
         if (!offered.length && !received.length) {
           showToast('No cards on either side to accept');
-          if (btn) { btn.disabled = false; btn.textContent = '✅ Accept Trade'; }
+          if (btn) { btn.disabled = false; btn.textContent = '✓ Accept Trade'; }
           return;
         }
 
@@ -24964,7 +25170,7 @@ function _loadAdmin(){
         if (errors.length) {
           showToast('Trade accepted with errors: ' + errors[0]);
         } else {
-          showToast('Trade accepted! Binder updated ✅');
+          showToast('Trade accepted! Binder updated.');
         }
 
         // Give the user a moment to see the toast, then reset
@@ -24973,7 +25179,7 @@ function _loadAdmin(){
       } catch(e) {
         console.error('[ftAcceptTrade]', e);
         showToast('Error accepting trade: ' + e.message);
-        if (btn) { btn.disabled = false; btn.textContent = '✅ Accept Trade'; }
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Accept Trade'; }
       }
     }
 
