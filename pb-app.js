@@ -345,9 +345,10 @@ function _loadAdmin(){
           showToast(data.error || 'Could not start Stripe onboarding');
           return;
         }
-        // Same-tab redirect — Stripe Express onboarding doesn't play well
-        // inside a popup on mobile Safari.
-        location.assign(data.url);
+        // Native: in-app browser (dismissible) so the seller can get back.
+        // Web: same-tab redirect (Stripe Express onboarding dislikes popups).
+        if (typeof _isNativeApp === 'function' && _isNativeApp()) _openExternal(data.url);
+        else location.assign(data.url);
       } catch (e) {
         console.error('[connect-onboard] error:', e);
         showToast('Could not start Stripe onboarding');
@@ -8040,7 +8041,10 @@ function _loadAdmin(){
 
       } catch (err) {
         console.error('loadPublicBinder error:', err);
-        el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--red)">Failed to load binder.</div>`;
+        el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">
+          <div style="color:var(--red);margin-bottom:12px">Couldn't load this binder. Check your connection and try again.</div>
+          <button onclick="loadPublicBinder('${_escJsAttr(usernameOrId)}','${_escJsAttr(binderId||'')}','${_escJsAttr(view||'')}')" style="padding:6px 16px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;cursor:pointer;font-size:.8rem">Retry</button>
+        </div>`;
       }
     }
 
@@ -8415,7 +8419,10 @@ function _loadAdmin(){
 
       } catch (err) {
         console.error('loadStorefront error:', err);
-        el.innerHTML = `<div style="text-align:center;padding:80px;color:var(--red)">Failed to load storefront.</div>`;
+        el.innerHTML = `<div style="text-align:center;padding:80px;color:var(--muted)">
+          <div style="color:var(--red);margin-bottom:12px">Couldn't load this storefront. Check your connection and try again.</div>
+          <button onclick="loadStorefront('${_escJsAttr(usernameOrId)}')" style="padding:6px 16px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;cursor:pointer;font-size:.8rem">Retry</button>
+        </div>`;
       }
     }
 
@@ -11088,7 +11095,11 @@ function _loadAdmin(){
         });
         const result = await res.json();
         if (result.url) {
-          window.location.href = result.url;
+          // Native: open Stripe checkout in the in-app browser (dismissible)
+          // instead of navigating the WebView with no way back. Web: normal
+          // full-page redirect.
+          if (typeof _isNativeApp === 'function' && _isNativeApp()) _openExternal(result.url);
+          else window.location.href = result.url;
         } else {
           showToast('Checkout error: ' + (result.error || 'No URL returned'));
           if (btn) { btn.textContent = 'Proceed to Payment'; btn.disabled = false; }
@@ -13427,6 +13438,16 @@ function _loadAdmin(){
       return false;
     }
     function _openExternal(url) {
+      // On the native shell, open in the Capacitor Browser (in-app Safari/Chrome
+      // view with a Done button) so users aren't stranded with no back button.
+      // Falls back to window.open on web / before the plugin is installed.
+      try {
+        var _cap = window.Capacitor;
+        if (_cap && _cap.Plugins && _cap.Plugins.Browser && typeof _cap.Plugins.Browser.open === 'function') {
+          _cap.Plugins.Browser.open({ url: url });
+          return;
+        }
+      } catch (_) {}
       try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; }
     }
 
@@ -17442,7 +17463,7 @@ function _loadAdmin(){
               const _api = _escJsAttr(item.api_card_id || '');
               const _cnm = _escJsAttr(item.card_number || '');
               const _var = _escJsAttr(item.variant || 'normal');
-              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'${_listingGameLabel(item.game_type)}',condition:'${_cond}',productType:'${_pt}',apiCardId:'${_api}',cardNumber:'${_cnm}',variant:'${_var}'})"
+              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'${_listingGameLabel(item.game_type, item.api_card_id)}',condition:'${_cond}',productType:'${_pt}',apiCardId:'${_api}',cardNumber:'${_cnm}',variant:'${_var}'})"
               style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>`;
             })()}
             <button onclick="deleteCollectionItem('${item.id}')"
@@ -22243,7 +22264,21 @@ function _loadAdmin(){
     // modal's Game dropdown uses (its <option> values are display strings).
     // Used by the binder "List for Sale" prefill so a One Piece / Magic / YGO
     // card doesn't default to Pokémon.
-    function _listingGameLabel(gt) {
+    function _listingGameLabel(gt, apiId) {
+      // The catalog id PREFIX encodes the game and is authoritative — older
+      // collection rows can have a mis-tagged game_type (defaulted to 'pokemon'
+      // before the multi-TCG scanner fix), so trust the id prefix first.
+      var id = String(apiId || '').toLowerCase();
+      if (id) {
+        if (/^(en|jp|pd|cn|kr)-/.test(id))               return 'Pokémon';
+        if (id.indexOf('mtg') === 0)                     return 'Magic: The Gathering';
+        if (id.indexOf('ygo') === 0)                     return 'Yu-Gi-Oh!';
+        if (id.indexOf('op') === 0)                      return 'One Piece';
+        if (id.indexOf('gun') === 0 || id.indexOf('gundam') === 0) return 'Gundam';
+        if (id.indexOf('dbz') === 0)                     return 'Dragon Ball Z';
+        if (id.indexOf('topps') === 0)                   return 'Pokemon Topps';
+      }
+      // Fall back to the stored game_type when there's no catalog id.
       var g = String(gt || '').toLowerCase().replace(/[^a-z]/g, '');
       if (g === 'pokemon' || g === 'pkmn' || g === 'pd' || g === 'jp' || g === 'en') return 'Pokémon';
       if (g === 'mtg' || g === 'magic') return 'Magic: The Gathering';
@@ -26102,7 +26137,7 @@ function _loadAdmin(){
         ? `<img src="${_pickThumbVariant(img, 400)}" data-fallback="${_escHtml(img)}" alt="${_escHtml(card.name)}" loading="lazy" decoding="async" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.onerror=null}" class="sets-cardtile-img">`
         : `<div class="sets-cardtile-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4rem">?</div>`;
 
-      return `<div class="sets-cardtile ${owned ? 'owned' : 'missing'}" onclick="openSetCardDetail(${origIdx})">
+      return `<div class="sets-cardtile ${owned ? 'owned' : 'missing'}" data-set-idx="${origIdx}" onclick="openSetCardDetail(${origIdx})">
         ${imgHtml}
         <span class="sets-cardtile-num">#${card.number || '?'}</span>
         ${variantChips}
@@ -26261,7 +26296,7 @@ function _loadAdmin(){
         ? `<img src="${_pickThumbVariant(card.image_url, 400)}" data-fallback="${_escHtml(card.image_url)}" data-game="${_escHtml(card.game_type||'')}" alt="${_escHtml(card.name||'')}" loading="lazy" decoding="async" onerror="_cardImgFallback(this)" class="sets-cardtile-img">`
         : `<img src="${window._cardBackFor(card.game_type)}" alt="${_escHtml(card.name||'')}" loading="lazy" decoding="async" class="sets-cardtile-img">`;
 
-      return `<div class="sets-cardtile ${owned ? 'owned' : 'missing'}" onclick="${openFn}(${idx})">
+      return `<div class="sets-cardtile ${owned ? 'owned' : 'missing'}" data-set-idx="${idx}" onclick="${openFn}(${idx})">
         ${imgHtml}
         <span class="sets-cardtile-num">#${_escHtml(card.card_number||'?')}</span>
         <div class="sets-cardtile-foot">
@@ -26363,6 +26398,7 @@ function _loadAdmin(){
     }
 
     function _catalogSetSortPillsHtml() {
+      _setMaReset();
       const isRarity = _catalogSetDetailSort.startsWith('rarity');
       const isNum    = _catalogSetDetailSort === 'number';
       const pill = (active, label, onclick, data) =>
@@ -26372,6 +26408,7 @@ function _loadAdmin(){
         ${pill(isNum,    '#  NUMBER',                                        "sortCatalogSetCards('number')",  'number')}
         ${pill(isRarity, _catalogSetDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓', "toggleCatalogRarity(this)",       'rarity')}
         ${pill(_catalogSetOwnedFirst, 'OWNED FIRST',                       "sortCatalogSetCards('owned')",   'owned')}
+        <button id="setMultiAddToggle" onclick="toggleSetMultiAdd()" class="catalog-sort-pill" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid var(--accent);color:var(--accent);cursor:pointer;white-space:nowrap;margin-left:auto">+ MULTI-ADD</button>
       </div>
       <div id="catalogSortHint" style="display:none;font-size:.58rem;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;padding-left:2px"></div>`;
     }
@@ -28692,6 +28729,7 @@ function _loadAdmin(){
           <button ${sortPillStyle('number')}>#  NUMBER</button>
           <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
           <button ${sortPillStyle('owned')}>OWNED FIRST</button>
+          <button id="setMultiAddToggle" onclick="toggleSetMultiAdd()" class="sets-sort-pill" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid var(--accent);color:var(--accent);cursor:pointer;white-space:nowrap;margin-left:auto">+ MULTI-ADD</button>
         </div>
         <div id="setsCardList" class="pb-setd-list" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 290px);overflow-y:auto;overflow-x:hidden">
           <div style="padding:32px;text-align:center;color:var(--muted)">Loading cards…</div>
@@ -28947,6 +28985,204 @@ function _loadAdmin(){
       if (typeof r === 'function') r();
     }
     // ── End Sets Completion Tracker ────────────────────────────────────────
+
+    // ── Set-detail Multi-Add ────────────────────────────────────────────────
+    // Add many cards from a TCG set at once instead of one modal at a time.
+    // The toggle turns the set grid into a selection surface; a capture-phase
+    // click interceptor swallows the normal open-detail click so a tap just
+    // selects/deselects. Operates on the Pokemon-shape set detail
+    // (window._setsDetailCards); the catalog multi-TCG path can adopt it later.
+    var _setMultiAdd = false;
+    var _setMaSel = new Set();   // selected origIdx values (as strings)
+
+    // Resolve the currently-shown set-detail path (Pokemon EN vs multi-TCG
+    // catalog) so multi-add reads the right cards / owned-map / grid + row shape.
+    function _setMaCtx() {
+      if (document.getElementById('catalogSetCardList')) {
+        var gf = (typeof _SETS_GAME_KEY_TO_FIELDS !== 'undefined' && _SETS_GAME_KEY_TO_FIELDS[window._setDetailGameKey])
+                 || { game_type: 'pokemon', language: 'JA' };
+        return { kind: 'catalog', gridId: 'catalogSetCardList',
+                 cards: window._catalogSetDetailCards || [],
+                 owned: window._catalogSetDetailOwned || {}, gameFields: gf };
+      }
+      return { kind: 'pokemon', gridId: 'setsCardList',
+               cards: window._setsDetailCards || [],
+               owned: _setsDetailOwnedMap || {} };
+    }
+    function _setMaBuildRow(card, ctx, binderId) {
+      if (!card) return null;
+      if (ctx.kind === 'catalog') {
+        return { user_id: currentUser.id, api_card_id: card.id, card_name: card.name || '',
+          set_name: card.set_name || '', set_code: card.set_code || null, card_number: card.card_number || null,
+          card_image_url: card.image_url || null, game_type: ctx.gameFields.game_type, condition: 'raw',
+          quantity: 1, language: ctx.gameFields.language, binder_id: binderId, is_ghost: false,
+          rarity: card.rarity || null, current_value: card.current_value || null };
+      }
+      var tcgp = (card.tcgplayer && card.tcgplayer.prices) || {};
+      var cm = (card.cardmarket && card.cardmarket.prices) || {};
+      var bestPrice = (tcgp.holofoil && tcgp.holofoil.market) || (tcgp.normal && tcgp.normal.market) || cm.averageSellPrice || null;
+      return { user_id: currentUser.id, api_card_id: card.id, card_name: card.name || '',
+        set_name: (card.set && card.set.name) || '', set_code: (card.set && card.set.id) || null, card_number: card.number || null,
+        card_image_url: (card.images && card.images.small) || null, game_type: 'pokemon', condition: 'raw',
+        quantity: 1, language: 'EN', binder_id: binderId, is_ghost: false,
+        rarity: card.rarity || null, current_value: bestPrice || null };
+    }
+    // Reset when a set detail (re)loads so selections never carry across sets.
+    function _setMaReset() {
+      _setMultiAdd = false; _setMaSel.clear();
+      var bar = document.getElementById('setMaBar'); if (bar) bar.remove();
+    }
+
+    function _setMaMark(tile, on) {
+      if (!tile) return;
+      if (on) { tile.classList.add('ma-selected'); tile.style.outline = '3px solid var(--accent)'; tile.style.outlineOffset = '-3px'; }
+      else    { tile.classList.remove('ma-selected'); tile.style.outline = ''; tile.style.outlineOffset = ''; }
+    }
+
+    function _setMaCaptureClick(e) {
+      if (!_setMultiAdd) return;
+      var tile = e.target && e.target.closest ? e.target.closest('.sets-cardtile') : null;
+      if (!tile || !(tile.closest('#setsCardList') || tile.closest('#catalogSetCardList'))) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var idx = tile.getAttribute('data-set-idx');
+      if (idx == null) return;
+      idx = String(idx);
+      if (_setMaSel.has(idx)) { _setMaSel.delete(idx); _setMaMark(tile, false); }
+      else { _setMaSel.add(idx); _setMaMark(tile, true); }
+      _updateSetMaBar();
+    }
+    document.addEventListener('click', _setMaCaptureClick, true);
+
+    function toggleSetMultiAdd() {
+      if (!currentUser) { showToast('Sign in to add cards'); openModal('loginModal'); return; }
+      _setMultiAdd = !_setMultiAdd;
+      var btn = document.getElementById('setMultiAddToggle');
+      if (btn) {
+        btn.textContent = _setMultiAdd ? 'DONE' : '+ MULTI-ADD';
+        btn.style.background = _setMultiAdd ? 'var(--accent)' : 'transparent';
+        btn.style.color = _setMultiAdd ? 'var(--text-on-accent)' : 'var(--accent)';
+      }
+      if (!_setMultiAdd) {
+        _setMaSel.clear();
+        document.querySelectorAll('#setsCardList .sets-cardtile.ma-selected, #catalogSetCardList .sets-cardtile.ma-selected').forEach(function(t){ _setMaMark(t, false); });
+      }
+      _renderSetMaBar();
+    }
+
+    function _renderSetMaBar() {
+      var existing = document.getElementById('setMaBar');
+      if (!_setMultiAdd) { if (existing) existing.remove(); return; }
+      if (existing) { _updateSetMaBar(); return; }
+      var bar = document.createElement('div');
+      bar.id = 'setMaBar';
+      bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9998;background:var(--surface);border-top:2px solid var(--accent);box-shadow:0 -3px 0 var(--shadow);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+      bar.innerHTML = `
+        <span id="setMaCount" style="font-family:'Space Mono',monospace;font-size:.75rem;color:var(--text);letter-spacing:.04em">0 selected</span>
+        <button onclick="_setMaSelectAllMissing()" style="padding:7px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.04em">Select all missing</button>
+        <button onclick="submitSetMultiAdd()" id="setMaAddBtn" style="margin-left:auto;padding:9px 18px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add 0 cards</button>`;
+      document.body.appendChild(bar);
+      _updateSetMaBar();
+    }
+
+    function _updateSetMaBar() {
+      var n = _setMaSel.size;
+      var c = document.getElementById('setMaCount'); if (c) c.textContent = n + ' selected';
+      var b = document.getElementById('setMaAddBtn');
+      if (b) { b.textContent = 'Add ' + n + ' card' + (n === 1 ? '' : 's'); b.disabled = n === 0; b.style.opacity = n === 0 ? '.55' : '1'; }
+    }
+
+    function _setMaSelectAllMissing() {
+      var ctx = _setMaCtx();
+      ctx.cards.forEach(function(card, i) {
+        if (!card) return;
+        var e = ctx.owned[card.id];
+        if (e && e.item) return;   // already owned — skip
+        _setMaSel.add(String(i));
+      });
+      document.querySelectorAll('#' + ctx.gridId + ' .sets-cardtile').forEach(function(t) {
+        var idx = t.getAttribute('data-set-idx');
+        if (idx != null && _setMaSel.has(String(idx))) _setMaMark(t, true);
+      });
+      _updateSetMaBar();
+    }
+
+    async function submitSetMultiAdd() {
+      if (!currentUser) { showToast('Sign in to add cards'); return; }
+      var idxs = Array.from(_setMaSel);
+      if (!idxs.length) { showToast('Select some cards first'); return; }
+      var ctx = _setMaCtx();
+
+      // Respect the free-tier card cap.
+      var remain = (typeof remainingCardSlots === 'function') ? remainingCardSlots() : Infinity;
+      if (remain !== Infinity && idxs.length > remain) {
+        showToast('Free plan: only ' + Math.max(0, remain) + ' more card(s). Upgrade for unlimited.');
+        if (remain <= 0) { if (typeof openPricingModal === 'function') openPricingModal('collector'); return; }
+        idxs = idxs.slice(0, remain);
+      }
+
+      var btn = document.getElementById('setMaAddBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+      var binderId = (typeof currentBinderId !== 'undefined' && currentBinderId) ? currentBinderId : null;
+
+      var rows = idxs.map(function(sidx) {
+        var row = _setMaBuildRow(ctx.cards[Number(sidx)], ctx, binderId);
+        if (row) { try { applyOverrideToInsertRow(row); } catch (_) {} }
+        return row;
+      }).filter(Boolean);
+
+      if (!rows.length) { if (btn) btn.disabled = false; return; }
+
+      var ins = await sb.from('collection_items').insert(rows).select('id, api_card_id');
+      // Schema fallback: strip language/rarity if those columns are missing.
+      if (ins.error) {
+        var msg = ((ins.error.message||'') + (ins.error.details||'') + (ins.error.hint||'')).toLowerCase();
+        if (msg.indexOf('language') !== -1 || msg.indexOf('rarity') !== -1 || msg.indexOf('schema') !== -1) {
+          var bare = rows.map(function(r){ var cpy = Object.assign({}, r); delete cpy.language; delete cpy.rarity; return cpy; });
+          ins = await sb.from('collection_items').insert(bare).select('id, api_card_id');
+        }
+      }
+      if (ins.error) {
+        showToast('Could not add cards — please try again.');
+        console.error('[set multi-add]', ins.error);
+        if (btn) { btn.disabled = false; _updateSetMaBar(); }
+        return;
+      }
+
+      // Reflect locally: push into collectionItems + mark owned in the set map.
+      var added = ins.data || [];
+      added.forEach(function(nr, i) {
+        var fresh = Object.assign({ id: nr.id }, rows[i] || {});
+        collectionItems.push(fresh);
+        var e = ctx.owned[fresh.api_card_id] || {};
+        e.item = fresh; e.normal = fresh;
+        ctx.owned[fresh.api_card_id] = e;
+      });
+      try { checkBadge_stacked(); } catch (_) {}
+
+      // Exit multi-add + re-render the active grid so added cards flip to owned.
+      _setMultiAdd = false; _setMaSel.clear();
+      _renderSetMaBar();
+      var tgl = document.getElementById('setMultiAddToggle');
+      if (tgl) { tgl.textContent = '+ MULTI-ADD'; tgl.style.background = 'transparent'; tgl.style.color = 'var(--accent)'; }
+      try {
+        var grid = document.getElementById(ctx.gridId);
+        if (grid) {
+          if (ctx.kind === 'catalog') {
+            grid.innerHTML = _buildCatalogSetCardRows(ctx.cards, ctx.owned, window._catalogSetDetailOpenFn || 'openJpSetCardDetail');
+            if (typeof _attachCatalogSetObserver === 'function') requestAnimationFrame(_attachCatalogSetObserver);
+          } else {
+            grid.innerHTML = _buildSetCardRows(window._setsDetailCards, _setsDetailOwnedMap, _setsDetailSort, _setsOwnedFirst);
+            if (typeof _attachSetsObserver === 'function') _attachSetsObserver();
+          }
+        }
+      } catch (_) {}
+      try { renderCollection(); } catch (_) {}
+      showToast('Added ' + added.length + ' card' + (added.length === 1 ? '' : 's') + ' to your collection');
+    }
+    window.toggleSetMultiAdd = toggleSetMultiAdd;
+    window._setMaSelectAllMissing = _setMaSelectAllMissing;
+    window.submitSetMultiAdd = submitSetMultiAdd;
 
     function openSetCardDetail(idx) {
       const card = window._setsDetailCards && window._setsDetailCards[idx];
