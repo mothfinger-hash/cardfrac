@@ -360,18 +360,26 @@ function _loadAdmin(){
     // double-prompting.
     let _connectPromptPending = false;
     function _maybePromptConnectSetup() {
-      if (!currentUser || !tierAtLeast('enthusiast') || _connectPromptPending) return;
-      const _decide = function() {
-        if (_connectPromptPending || !connectStatus.loaded || connectStatus.payoutsEnabled) return;
-        _connectPromptPending = true;
-        const started = connectStatus.detailsSubmitted || connectStatus.accountId;
-        const msg = started
+      if (!currentUser || !tierAtLeast('enthusiast')) return;
+      var _shown = false;
+      var _show = function() {
+        // Only skip if we POSITIVELY know payouts are already enabled. A
+        // no-account seller has payoutsEnabled=false, so they get prompted.
+        if (_shown || _connectPromptPending || connectStatus.payoutsEnabled) return;
+        _shown = true; _connectPromptPending = true;
+        var started = connectStatus.detailsSubmitted || connectStatus.accountId;
+        var msg = started
           ? 'Your listing is live. Your Stripe payout setup is not finished yet — finish it so sales pay out to you automatically.'
           : 'Your listing is live! Set up Stripe payouts so you get paid automatically when it sells. Until then, a sale is held until your payouts are set up.';
         Promise.resolve(pbConfirm(msg, { confirmText: 'SET UP PAYOUTS', cancelText: 'LATER' })).then(function(ok) { _connectPromptPending = false; if (ok) startStripeConnectOnboarding(); });
       };
-      if (connectStatus.loaded) _decide();
-      else { refreshConnectStatus(_decide); setTimeout(_decide, 3500); }
+      if (connectStatus.loaded) { _show(); return; }
+      // Not loaded yet — refresh, then decide. Fallback timer fires regardless
+      // of load state: a brand-new seller's status is all-false, so the diff in
+      // refreshConnectStatus is a no-op and its onChange never fires — the timer
+      // catches that case so the prompt still appears.
+      refreshConnectStatus(_show);
+      setTimeout(_show, 2800);
     }
 
     // Renders the seller's payout-status banner above My Listings. Pulls
@@ -17434,7 +17442,7 @@ function _loadAdmin(){
               const _api = _escJsAttr(item.api_card_id || '');
               const _cnm = _escJsAttr(item.card_number || '');
               const _var = _escJsAttr(item.variant || 'normal');
-              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'Pokémon',condition:'${_cond}',productType:'${_pt}',apiCardId:'${_api}',cardNumber:'${_cnm}',variant:'${_var}'})"
+              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'${_listingGameLabel(item.game_type)}',condition:'${_cond}',productType:'${_pt}',apiCardId:'${_api}',cardNumber:'${_cnm}',variant:'${_var}'})"
               style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>`;
             })()}
             <button onclick="deleteCollectionItem('${item.id}')"
@@ -22229,6 +22237,23 @@ function _loadAdmin(){
       if (any && typeof renderBrowse === 'function') {
         try { renderBrowse(); } catch(_) {}
       }
+    }
+
+    // Map a catalog/collection game_type code to the exact label the listing
+    // modal's Game dropdown uses (its <option> values are display strings).
+    // Used by the binder "List for Sale" prefill so a One Piece / Magic / YGO
+    // card doesn't default to Pokémon.
+    function _listingGameLabel(gt) {
+      var g = String(gt || '').toLowerCase().replace(/[^a-z]/g, '');
+      if (g === 'pokemon' || g === 'pkmn' || g === 'pd' || g === 'jp' || g === 'en') return 'Pokémon';
+      if (g === 'mtg' || g === 'magic') return 'Magic: The Gathering';
+      if (g === 'ygo' || g === 'yugioh') return 'Yu-Gi-Oh!';
+      if (g === 'op' || g === 'onepiece') return 'One Piece';
+      if (g === 'gundam' || g === 'gun') return 'Gundam';
+      if (g === 'dbz' || g === 'dragonballz' || g === 'dragonball') return 'Dragon Ball Z';
+      if (g === 'topps' || g === 'pokemontopps') return 'Pokemon Topps';
+      if (g === 'sports') return 'Sports';
+      return 'Other';
     }
 
     function mapListing(l) {
