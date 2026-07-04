@@ -29059,7 +29059,7 @@ function _loadAdmin(){
       _setMultiAdd = !_setMultiAdd;
       var btn = document.getElementById('setMultiAddToggle');
       if (btn) {
-        btn.textContent = _setMultiAdd ? 'DONE' : '+ MULTI-ADD';
+        btn.textContent = _setMultiAdd ? 'CANCEL' : '+ MULTI-ADD';
         btn.style.background = _setMultiAdd ? 'var(--accent)' : 'transparent';
         btn.style.color = _setMultiAdd ? 'var(--text-on-accent)' : 'var(--accent)';
       }
@@ -29076,11 +29076,14 @@ function _loadAdmin(){
       if (existing) { _updateSetMaBar(); return; }
       var bar = document.createElement('div');
       bar.id = 'setMaBar';
-      bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9998;background:var(--surface);border-top:2px solid var(--accent);box-shadow:0 -3px 0 var(--shadow);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+      // Centered floating pill (not a full-width bar) so it clears both the
+      // left- and right-side sidebar layouts instead of hiding the Add button
+      // behind the nav. z-index above the sidebar keeps it fully visible.
+      bar.style.cssText = 'position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:10000;background:var(--surface);border:2px solid var(--accent);box-shadow:4px 4px 0 var(--shadow);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:92vw';
       bar.innerHTML = `
-        <span id="setMaCount" style="font-family:'Space Mono',monospace;font-size:.75rem;color:var(--text);letter-spacing:.04em">0 selected</span>
-        <button onclick="_setMaSelectAllMissing()" style="padding:7px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.04em">Select all missing</button>
-        <button onclick="submitSetMultiAdd()" id="setMaAddBtn" style="margin-left:auto;padding:9px 18px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Add 0 cards</button>`;
+        <span id="setMaCount" style="font-family:'Space Mono',monospace;font-size:.75rem;color:var(--text);letter-spacing:.04em;white-space:nowrap">0 selected</span>
+        <button onclick="_setMaSelectAllMissing()" style="padding:7px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Select all missing</button>
+        <button onclick="submitSetMultiAdd()" id="setMaAddBtn" style="padding:9px 18px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Add 0 cards</button>`;
       document.body.appendChild(bar);
       _updateSetMaBar();
     }
