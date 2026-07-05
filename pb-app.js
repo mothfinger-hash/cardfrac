@@ -1830,6 +1830,10 @@ function _loadAdmin(){
     }
 
     function showPage(pageId) {
+      // Clear any active bulk-select mode so its floating bar doesn't linger
+      // when navigating away from Sets / Collection.
+      try { if (pageId !== 'sets' && pageId !== 'addCard' && typeof _setMaReset === 'function') _setMaReset(); } catch (_) {}
+      try { if (pageId !== 'collection' && pageId !== 'addCard' && typeof _binderSelReset === 'function') _binderSelReset(); } catch (_) {}
       // Add Card is no longer a standalone page — it pops up as an
       // overlay on top of whatever the user was already on (binder
       // most often). Sign-in still required since the search results
@@ -5036,6 +5040,37 @@ function _loadAdmin(){
       const num = ((el && el.value) || '').replace(/[^0-9+]/g, '');
       window.location.href = 'sms:' + num + '?&body=' + encodeURIComponent(_subsidiaryInviteShareText());
     }
+    // Native haptics (Capacitor Haptics plugin) with a Web Vibration fallback.
+    // navigator.vibrate is a no-op on iOS, so this is what actually buzzes on
+    // the native iOS build. Exposed on window for pb-scanner.js.
+    function _pbHaptic(kind) {
+      try {
+        var cap = window.Capacitor;
+        var H = cap && cap.Plugins && cap.Plugins.Haptics;
+        if (H) {
+          if (kind === 'success' && typeof H.notification === 'function') { H.notification({ type: 'SUCCESS' }); return; }
+          if (typeof H.impact === 'function') { H.impact({ style: kind === 'heavy' ? 'HEAVY' : (kind === 'light' ? 'LIGHT' : 'MEDIUM') }); return; }
+        }
+      } catch (_) {}
+      try { if (navigator.vibrate) navigator.vibrate(kind === 'success' ? 60 : (kind === 'heavy' ? 50 : 30)); } catch (_) {}
+    }
+    window._pbHaptic = _pbHaptic;
+
+    // Reusable native-share helper: Capacitor Share sheet → Web Share API →
+    // clipboard fallback. Returns true if a share sheet handled it.
+    async function _pbShare(opts) {
+      opts = opts || {};
+      var payload = { title: opts.title || 'PathBinder', text: opts.text || '', url: opts.url || '' };
+      try {
+        var cap = window.Capacitor;
+        if (cap && cap.Plugins && cap.Plugins.Share) { await cap.Plugins.Share.share(payload); return true; }
+        if (navigator.share) { await navigator.share(payload); return true; }
+      } catch (_) { return true; }
+      try { await navigator.clipboard.writeText(opts.url || opts.text || ''); showToast('Link copied to clipboard'); } catch (_) {}
+      return false;
+    }
+    window._pbShare = _pbShare;
+
     // Native share sheet (Messages, WhatsApp, etc.) in the app; Web Share API
     // in a mobile browser; clipboard fallback everywhere else.
     async function shareSubsidiaryInvite() {
@@ -5967,7 +6002,7 @@ function _loadAdmin(){
             document.body.appendChild(tClone);
             panel.style.opacity = '0.25';
             panel.classList.add('ndash-dragging');
-            if (navigator.vibrate) navigator.vibrate(30);
+            _pbHaptic('light');
           }, 200);
         }, { passive: true });
 
@@ -7487,6 +7522,9 @@ function _loadAdmin(){
       if (!slug) { showToast('Sign in to share your binder'); return; }
       console.log('[Share] currentBinderId:', currentBinderId, '| slug:', slug);
       const url = getShareUrl(slug, currentBinderId);
+      // Native: open the OS share sheet (Messages/WhatsApp/etc.) — the growth
+      // loop. Web: copy to clipboard as before.
+      if (typeof _isNativeApp === 'function' && _isNativeApp()) { _pbShare({ title: 'My PathBinder collection', text: 'Check out my card collection on PathBinder', url: url }); return; }
       navigator.clipboard.writeText(url).then(() => {
         showToast('Share link copied! Send it to anyone.');
       }).catch(() => {
@@ -8186,6 +8224,7 @@ function _loadAdmin(){
       const slug = getShareUsername();
       if (!slug) { showToast('Sign in to access your store link'); return; }
       const url = `${window.location.origin}${window.location.pathname}?store=${encodeURIComponent(slug)}`;
+      if (typeof _isNativeApp === 'function' && _isNativeApp()) { _pbShare({ title: 'My PathBinder store', text: 'Shop my cards on PathBinder', url: url }); return; }
       navigator.clipboard.writeText(url).then(() => {
         showToast('Store link copied! Share it with customers.');
       }).catch(() => {
@@ -13451,6 +13490,36 @@ function _loadAdmin(){
       try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; }
     }
 
+    // ── Native push (FCM/APNs) ─────────────────────────────────────────────
+    // Called by the standalone pb-push.js module (native only). Stores the
+    // device token on the user's profile for the server-side sender.
+    window._pbStorePushToken = async function (token, plat) {
+      try {
+        if (!currentUser || !token) return;
+        await sb.from('profiles').update({
+          push_token: token, push_platform: plat || null, push_updated_at: new Date().toISOString(),
+        }).eq('id', currentUser.id);
+      } catch (e) { console.warn('[push] store token failed:', e && e.message); }
+    };
+    // Deep-link when a notification is tapped. data may carry { page, ... }.
+    window._pbHandlePushTap = function (data) {
+      try { if (data && data.page && typeof showPage === 'function') showPage(data.page); } catch (_) {}
+    };
+    // Lazily load the push module on the native shell ONLY, after first paint,
+    // so it never affects web load performance and never runs on the web build.
+    try {
+      if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            if (document.getElementById('pb-push-mod')) return;
+            var s = document.createElement('script');
+            s.id = 'pb-push-mod'; s.src = 'pb-push.js'; s.async = true;
+            document.body.appendChild(s);
+          }, 2500);
+        });
+      }
+    } catch (_) {}
+
     function upgradeTier(tierId) {
       if (!currentUser) { openModal('loginModal'); closeModal('membershipModal'); return; }
       closeModal('membershipModal');
@@ -14363,6 +14432,7 @@ function _loadAdmin(){
         ? (item.condition.toUpperCase() + (item.grade_value != null ? ' ' + item.grade_value : ''))
         : 'Raw';
       return `<div class="acg-card${isGhost ? ' ghost-card' : ''}"
+        data-cid="${item.id}"
         draggable="true"
         ondragstart="allCardsDragStart(event,'${item.id}')"
         ondragend="allCardsDragEnd(event)"
@@ -16206,7 +16276,7 @@ function _loadAdmin(){
           document.body.appendChild(clone);
           card.style.opacity = '0.25';
           document.body.style.overflow = 'hidden'; // lock scroll while dragging
-          if (navigator.vibrate) navigator.vibrate(35);
+          _pbHaptic('light');
         }, 90);
       }, { passive: true });
 
@@ -21456,6 +21526,123 @@ function _loadAdmin(){
         overlay.addEventListener('click', function(e) { if (e.target === overlay) done(null); });
       });
     }
+
+    // ── Binder bulk-select (All Cards view: delete or move many owned cards) ──
+    // Same capture-interceptor pattern as the set Multi-Add. A tap selects
+    // (blocks open-detail); drag-to-reorder still works (drag fires drag events,
+    // not click). Keyed on collection_item id (data-cid), stable across views.
+    var _binderSel = false;
+    var _binderSelIds = new Set();
+
+    function _binderSelMark(tile, on) {
+      if (!tile) return;
+      tile.style.outline = on ? '3px solid var(--accent)' : '';
+      tile.style.outlineOffset = on ? '-3px' : '';
+    }
+    function _binderSelReset() {
+      _binderSel = false; _binderSelIds.clear();
+      var bar = document.getElementById('binderSelBar'); if (bar) bar.remove();
+      var tgl = document.getElementById('binderSelectToggle'); if (tgl) { tgl.textContent = 'SELECT'; tgl.style.background = 'transparent'; tgl.style.color = ''; }
+      try { document.querySelectorAll('#collectionContent .allcards-row, #collectionContent .acg-card').forEach(function(t){ _binderSelMark(t, false); }); } catch (_) {}
+    }
+    function _binderSelCapture(e) {
+      if (!_binderSel) return;
+      var tile = e.target && e.target.closest ? e.target.closest('.allcards-row, .acg-card') : null;
+      if (!tile || !tile.closest('#collectionContent')) return;
+      var cid = tile.getAttribute('data-cid');
+      if (cid == null) return;
+      e.preventDefault(); e.stopPropagation();
+      cid = String(cid);
+      if (_binderSelIds.has(cid)) { _binderSelIds.delete(cid); _binderSelMark(tile, false); }
+      else { _binderSelIds.add(cid); _binderSelMark(tile, true); }
+      _updateBinderSelBar();
+    }
+    document.addEventListener('click', _binderSelCapture, true);
+
+    function toggleBinderSelect() {
+      if (!currentUser) { showToast('Sign in first'); return; }
+      _binderSel = !_binderSel;
+      var btn = document.getElementById('binderSelectToggle');
+      if (btn) { btn.textContent = _binderSel ? 'CANCEL' : 'SELECT'; btn.style.background = _binderSel ? 'var(--accent)' : 'transparent'; btn.style.color = _binderSel ? 'var(--text-on-accent)' : ''; }
+      if (!_binderSel) {
+        _binderSelIds.clear();
+        document.querySelectorAll('#collectionContent .allcards-row, #collectionContent .acg-card').forEach(function(t){ _binderSelMark(t, false); });
+      }
+      _renderBinderSelBar();
+    }
+    function _renderBinderSelBar() {
+      var ex = document.getElementById('binderSelBar');
+      if (!_binderSel) { if (ex) ex.remove(); return; }
+      if (ex) { _updateBinderSelBar(); return; }
+      var bar = document.createElement('div');
+      bar.id = 'binderSelBar';
+      bar.style.cssText = 'position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:10000;background:var(--surface);border:2px solid var(--accent);box-shadow:4px 4px 0 var(--shadow);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:92vw';
+      bar.innerHTML = `
+        <span id="binderSelCount" style="font-family:'Space Mono',monospace;font-size:.75rem;color:var(--text);letter-spacing:.04em;white-space:nowrap">0 selected</span>
+        <button onclick="_binderBulkMove()" id="binderMoveBtn" style="padding:8px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono',monospace;font-size:.72rem;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Move to binder…</button>
+        <button onclick="_binderBulkDelete()" id="binderDelBtn" style="padding:9px 16px;background:var(--red);color:#fff;border:none;font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Delete 0</button>`;
+      document.body.appendChild(bar);
+      _updateBinderSelBar();
+    }
+    function _updateBinderSelBar() {
+      var n = _binderSelIds.size;
+      var c = document.getElementById('binderSelCount'); if (c) c.textContent = n + ' selected';
+      var d = document.getElementById('binderDelBtn'); if (d) { d.textContent = 'Delete ' + n; d.disabled = n === 0; d.style.opacity = n === 0 ? '.55' : '1'; }
+      var m = document.getElementById('binderMoveBtn'); if (m) { m.disabled = n === 0; m.style.opacity = n === 0 ? '.55' : '1'; }
+    }
+    async function _binderBulkDelete() {
+      var ids = Array.from(_binderSelIds);
+      if (!ids.length) return;
+      var ok = await pbConfirm('Remove ' + ids.length + ' card' + (ids.length === 1 ? '' : 's') + ' from your collection? For multi-copy cards this removes the whole stack.', { confirmText: 'REMOVE ' + ids.length, cancelText: 'CANCEL', danger: true });
+      if (!ok) return;
+      var del = await sb.from('collection_items').delete().in('id', ids);
+      if (del.error) { showToast('Could not delete — please try again.'); console.error('[binder bulk delete]', del.error); return; }
+      try { await sb.from('collection_item_units').delete().in('collection_item_id', ids); } catch (_) {}
+      var idset = new Set(ids.map(String));
+      collectionItems = collectionItems.filter(function(c){ return !idset.has(String(c.id)); });
+      _binderSelReset();
+      try { renderBinder(); } catch (_) {}
+      try { renderCollection(); } catch (_) {}
+      showToast('Removed ' + ids.length + ' card' + (ids.length === 1 ? '' : 's'));
+    }
+    function _binderBulkMove() {
+      var ids = Array.from(_binderSelIds);
+      if (!ids.length) return;
+      var ex = document.getElementById('binderMoveChooser'); if (ex) ex.remove();
+      var ov = document.createElement('div');
+      ov.id = 'binderMoveChooser';
+      ov.className = 'modal-overlay';
+      ov.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:100061';
+      var binderBtns = (binders || []).map(function(b){
+        return '<button onclick="_binderDoBulkMove(\'' + b.id + '\')" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:\'Space Mono\',monospace;font-size:.8rem;cursor:pointer">' + _escHtml(b.name || 'Binder') + '</button>';
+      }).join('');
+      ov.innerHTML = '<div class="modal" style="max-width:360px;padding:20px">'
+        + '<button class="modal-close" aria-label="Close" onclick="document.getElementById(\'binderMoveChooser\').remove()">×</button>'
+        + '<div style="font-family:\'Orbitron\',monospace;font-size:.9rem;font-weight:800;margin-bottom:12px">Move ' + ids.length + ' card' + (ids.length === 1 ? '' : 's') + ' to…</div>'
+        + '<button onclick="_binderDoBulkMove(\'__unsorted__\')" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.8rem;cursor:pointer">Unsorted (no binder)</button>'
+        + binderBtns
+        + '</div>';
+      ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
+      document.body.appendChild(ov);
+    }
+    async function _binderDoBulkMove(binderId) {
+      var chooser = document.getElementById('binderMoveChooser'); if (chooser) chooser.remove();
+      var ids = Array.from(_binderSelIds);
+      if (!ids.length) return;
+      var target = binderId === '__unsorted__' ? null : binderId;
+      var upd = await sb.from('collection_items').update({ binder_id: target }).in('id', ids);
+      if (upd.error) { showToast('Could not move — please try again.'); console.error('[binder bulk move]', upd.error); return; }
+      var idset = new Set(ids.map(String));
+      collectionItems.forEach(function(c){ if (idset.has(String(c.id))) c.binder_id = target; });
+      _binderSelReset();
+      try { renderBinder(); } catch (_) {}
+      try { if (typeof renderBinderSidebar === 'function') renderBinderSidebar(); } catch (_) {}
+      showToast('Moved ' + ids.length + ' card' + (ids.length === 1 ? '' : 's'));
+    }
+    window.toggleBinderSelect = toggleBinderSelect;
+    window._binderBulkDelete = _binderBulkDelete;
+    window._binderBulkMove = _binderBulkMove;
+    window._binderDoBulkMove = _binderDoBulkMove;
 
     async function deleteCollectionItem(id) {
       const _delItem = collectionItems.find(c => String(c.id) === String(id));

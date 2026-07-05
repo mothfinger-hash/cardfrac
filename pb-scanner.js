@@ -238,7 +238,7 @@
       _autoScanOn = false;
       const autoBtn = document.getElementById('autoScanBtn');
       if (autoBtn) { autoBtn.textContent = 'AUTO'; autoBtn.style.color = 'var(--muted)'; autoBtn.style.borderColor = 'var(--border)'; }
-      if (navigator.vibrate) navigator.vibrate(60);
+      if (window._pbHaptic) window._pbHaptic('success'); else if (navigator.vibrate) navigator.vibrate(60);
       await captureAndMatch();
       _autoScanCooldown = false;
       _setStableDot('idle');

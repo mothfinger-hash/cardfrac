@@ -26,6 +26,10 @@ const config: CapacitorConfig = {
     cleartext: false,
     androidScheme: 'https',
     iosScheme: 'https',
+    // If pathbinder.gg fails to load (airplane mode, dead signal, first launch
+    // offline), Capacitor loads this local page from webDir instead of the raw
+    // OS "could not connect" error. The page has a Try again button.
+    errorPath: 'offline.html',
   },
   ios: {
     contentInset: 'always',
