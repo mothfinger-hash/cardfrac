@@ -501,7 +501,15 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
          radius so the landing surface reads as one shape family. */
     .lp-cta-primary,
     .lp-cta-secondary,
-    .lp-tier-cta { border-radius: var(--r-sm) !important; }</style>
+    .lp-tier-cta { border-radius: var(--r-sm) !important; }
+    /* Pricing modal on mobile: stack the tiers as full-width vertical ROWS
+       instead of a 5-col horizontal-scroll grid. Kills all three problems at
+       once — no sideways scroll to discover, full width so feature text stops
+       wrapping into slivers, and the "Most popular" badge has room (grid
+       overflow goes visible; the modal itself handles the vertical scroll). */
+    @media (max-width: 640px) {
+      #pricingGrid { grid-template-columns: 1fr !important; gap: 22px !important; overflow-x: visible !important; }
+    }</style>
   <link rel="preload" href="/pb-styles.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__pbStylesLoaded=true">
   <noscript><link rel="stylesheet" href="/pb-styles.css"></noscript>
 
@@ -1341,7 +1349,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <!-- 5 tiers side by side. minmax(150px,1fr) keeps them equal-width on
            desktop; on a narrow screen the row scrolls horizontally instead of
            wrapping the Shop card to a stretched second row. -->
-      <div id="pricingGrid" style="display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px"></div>
+      <div id="pricingGrid" style="display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px;margin-bottom:12px;overflow-x:auto;padding-top:14px;padding-bottom:4px"></div>
 
       <!-- Subscription disclosure -->
       <p id="pricingDisclosure" style="font-size:.62rem;color:var(--muted);text-align:center;margin:0 0 18px;line-height:1.6">
