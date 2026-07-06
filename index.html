@@ -554,7 +554,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     (function(){
       try {
         var C = window.Capacitor;
-        var isNative = (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform())
+        // Bridge presence (Plugins registry or isNativePlatform) — NOT a call to
+        // isNativePlatform(), which can misreport on remote-URL wraps. window.Capacitor
+        // is injected at documentStart in the native shell and never exists on web.
+        var isNative = (C && (C.Plugins || C.isNativePlatform))
           || /PathBinderApp/i.test(navigator.userAgent || '')
           || (function(){ try { return localStorage.getItem('pb_native') === '1'; } catch(_) { return false; } })();
         if (isNative) document.documentElement.classList.add('pb-native');

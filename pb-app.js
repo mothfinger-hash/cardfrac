@@ -13468,12 +13468,32 @@ function _loadAdmin(){
         // Capacitor native shell (iOS/Android wrap) — authoritative check.
         if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function'
             && window.Capacitor.isNativePlatform()) return true;
+        // Fallback: the Capacitor bridge global (with its plugin registry) is
+        // ONLY injected in the native shell — the web build never loads it. On
+        // remote-server-URL wraps, isNativePlatform() has been observed to
+        // misreport, so treat the bridge's presence as native too. (Stripe's
+        // in-app browser already relies on window.Capacitor.Plugins existing.)
+        if (window.Capacitor && (window.Capacitor.Plugins || window.Capacitor.isNativePlatform)) return true;
         if (window.PB_NATIVE_APP === true) return true;
         if (localStorage.getItem('pb_native') === '1') return true;
         if (/PathBinderApp/i.test(navigator.userAgent || '')) return true;
       } catch (_) {}
       return false;
     }
+
+    // Once the app JS runs, the Capacitor bridge is reliably present. Persist a
+    // flag so the NEXT cold load detects native BEFORE first paint (via the
+    // early <body> script), and re-assert .pb-native now in case that early
+    // script ran before the bridge was injected — hides landing subscription
+    // prices even if the very first detection missed.
+    (function _pbAssertNative(){
+      try {
+        if (_isNativeApp()) {
+          try { localStorage.setItem('pb_native', '1'); } catch (_) {}
+          if (document.documentElement) document.documentElement.classList.add('pb-native');
+        }
+      } catch (_) {}
+    })();
     function _openExternal(url) {
       // On the native shell, open in the Capacitor Browser (in-app Safari/Chrome
       // view with a Done button) so users aren't stranded with no back button.
