@@ -534,7 +534,7 @@ function _loadAdmin(){
           +     'You&rsquo;ll have a 30-day grace period to change your mind.'
           +   '</div>'
           +   '<button type="button" onclick="openDeleteAccountModal()" '
-          +     'style="width:100%;padding:11px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer">'
+          +     'style="width:100%;padding:11px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer">'
           +     'Delete My Account'
           +   '</button>'
           + '</div>';
@@ -2485,7 +2485,7 @@ function _loadAdmin(){
             <div style="margin:20px 0;padding:14px;border:1px solid var(--border);background:var(--surface2)">
               <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">// Your Listing</div>
               <button onclick="deactivateListing('${listingId}')"
-                style="padding:8px 20px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">
+                style="padding:8px 20px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;cursor:pointer">
                 Remove Listing
               </button>
             </div>` : ''}
@@ -2698,39 +2698,10 @@ function _loadAdmin(){
     // handleSlotClick stub (no-op, slots no longer used)
     function handleSlotClick() {}
 
-    function updateCartBar() {
-      const bar = document.getElementById('cartBar');
-      if (cart.length === 0) {
-        bar.classList.remove('visible');
-        return;
-      }
-      bar.classList.add('visible');
-      const basePrice = cart.reduce((sum, c) => {
-        const listing = listings.find(l => l.id === c.listingId);
-        return sum + Math.ceil(listing.value / listing.totalSlots);
-      }, 0);
-      const fee = calcFee(basePrice);
-      const total = basePrice + fee;
-
-      document.getElementById('cartCount').textContent = cart.length;
-      document.getElementById('cartPrice').textContent = '$' + basePrice.toLocaleString();
-      document.getElementById('cartFee').textContent = '$' + fee.toLocaleString();
-      document.getElementById('cartTotal').textContent = '$' + total.toLocaleString();
-      // Referral fee-free callout (cart footer)
-      const cartFooter = document.getElementById('cartBreakdownFooter');
-      if (cartFooter && currentUser?.referred_by && currentUser.referral_discount_used === false) {
-        cartFooter.innerHTML = '<span style="font-size:.72rem;color:var(--green)">Referral reward: your first purchase is fee-free!</span>';
-        cartFooter.style.display = 'block';
-      } else if (cartFooter) {
-        cartFooter.style.display = 'none';
-      }
-
-      const preview = document.getElementById('cartSlots');
-      preview.innerHTML = cart.map(c => {
-        const listing = listings.find(l => l.id === c.listingId);
-        return `<span class="cart-slot-tag">${listing.name.split(' ')[0]} #${c.slotIdx}</span>`;
-      }).join('');
-    }
+    // Buy-Slots cart removed — CardFrac legacy (fractional slots). Kept as a
+    // no-op so the sign-out call site stays harmless; #cartBar markup deleted,
+    // and cart[] is now an unused dead var (nothing ever pushed to it).
+    function updateCartBar() {}
 
     // ===== STRIPE CHECKOUT =====
     async function initiateCheckout(type, items) {
@@ -7349,7 +7320,7 @@ function _loadAdmin(){
               ${l.status !== 'sold' ? `
                 <div style="display:flex;gap:6px;justify-content:flex-end">
                   <button onclick="event.stopPropagation();openEditMarketplaceListing('${l.id}')" style="background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Edit</button>
-                  <button onclick="event.stopPropagation();deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>
+                  <button onclick="event.stopPropagation();deactivateListing('${l.id}')" style="background:transparent;border:1px solid var(--border);color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;padding:4px 8px;cursor:pointer">Remove</button>
                 </div>` : ''}
             </td>
           </tr>`;
@@ -10910,7 +10881,7 @@ function _loadAdmin(){
           + '<div style="position:relative;width:78px;height:78px;border:1px solid var(--border);background:var(--surface2)">'
           +   '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" alt="" / loading="lazy" decoding="async">'
           +   '<button type="button" onclick="removeEditPhoto(\'existing\',' + idx + ')" '
-          +     'style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--red);background:var(--surface);color:var(--red);font-family:\'Space Mono\',monospace;font-size:.75rem;cursor:pointer;line-height:1">×</button>'
+          +     'style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--copper);background:var(--surface);color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.75rem;cursor:pointer;line-height:1">×</button>'
           + '</div>';
       }).join('');
       const queued = _emlState.newPhotos.map(function(file, idx) {
@@ -10922,7 +10893,7 @@ function _loadAdmin(){
           +   '<img src="' + previewUrl + '" style="width:100%;height:100%;object-fit:cover" alt="" / loading="lazy" decoding="async">'
           +   '<div style="position:absolute;bottom:0;left:0;right:0;background:var(--accent);color:var(--text-on-accent);font-family:\'Space Mono\',monospace;font-size:.55rem;letter-spacing:.06em;text-align:center;padding:1px 0">NEW</div>'
           +   '<button type="button" onclick="removeEditPhoto(\'new\',' + idx + ')" '
-          +     'style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--red);background:var(--surface);color:var(--red);font-family:\'Space Mono\',monospace;font-size:.75rem;cursor:pointer;line-height:1">×</button>'
+          +     'style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--copper);background:var(--surface);color:var(--copper);font-family:\'Space Mono\',monospace;font-size:.75rem;cursor:pointer;line-height:1">×</button>'
           + '</div>';
       }).join('');
       grid.innerHTML = existing + queued || '<div style="color:var(--muted);font-size:.74rem">No photos. Buyers can\'t see your listing without at least one.</div>';
@@ -17374,7 +17345,7 @@ function _loadAdmin(){
               onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
             <button onclick="deleteCollectionItem('${item.id}')"
-              style="padding:8px 18px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove</button>
+              style="padding:8px 18px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove</button>
             <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
           </div>
         `;
@@ -17537,7 +17508,7 @@ function _loadAdmin(){
               style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>`;
             })()}
             <button onclick="deleteCollectionItem('${item.id}')"
-              style="flex:1;padding:9px 12px;border:1px solid var(--red);background:transparent;color:var(--red);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
+              style="flex:1;padding:9px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
           </div>
           ${binders.length > 0 ? `<select class="pb-binder-select" onchange="_moveCardFromDetail('${item.id}', this.value)"
             style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer">
@@ -21459,7 +21430,7 @@ function _loadAdmin(){
       opts = opts || {};
       const confirmText = opts.confirmText || 'CONFIRM';
       const cancelText  = opts.cancelText  || 'CANCEL';
-      const confirmBg   = opts.danger ? '#e74c3c' : 'var(--accent)';
+      const confirmBg   = opts.danger ? 'var(--copper)' : 'var(--accent)';
       const confirmFg   = opts.danger ? '#fff'    : 'var(--surface)';
       return new Promise(function(resolve) {
         const overlay = document.createElement('div');
@@ -21507,8 +21478,8 @@ function _loadAdmin(){
           '<input id="_pbRmQty" type="number" inputmode="numeric" min="1" max="' + max + '" value="1" style="width:90px;text-align:center;padding:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:1rem;margin-bottom:16px">' +
           '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
             '<button data-cancel style="flex:1;min-width:88px;padding:10px 12px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.05em">CANCEL</button>' +
-            '<button data-all style="flex:1;min-width:88px;padding:10px 12px;background:transparent;border:1px solid #e74c3c;color:#e74c3c;font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.05em">REMOVE ALL</button>' +
-            '<button data-ok style="flex:1;min-width:88px;padding:10px 12px;background:#e74c3c;border:none;color:#fff;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.05em">REMOVE</button>' +
+            '<button data-all style="flex:1;min-width:88px;padding:10px 12px;background:transparent;border:1px solid var(--copper);color:var(--copper);font-family:inherit;font-size:.72rem;cursor:pointer;letter-spacing:.05em">REMOVE ALL</button>' +
+            '<button data-ok style="flex:1;min-width:88px;padding:10px 12px;background:var(--copper);border:none;color:#fff;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.05em">REMOVE</button>' +
           '</div>';
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
@@ -21580,7 +21551,7 @@ function _loadAdmin(){
       bar.innerHTML = `
         <span id="binderSelCount" style="font-family:'Space Mono',monospace;font-size:.75rem;color:var(--text);letter-spacing:.04em;white-space:nowrap">0 selected</span>
         <button onclick="_binderBulkMove()" id="binderMoveBtn" style="padding:8px 14px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono',monospace;font-size:.72rem;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Move to binder…</button>
-        <button onclick="_binderBulkDelete()" id="binderDelBtn" style="padding:9px 16px;background:var(--red);color:#fff;border:none;font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Delete 0</button>`;
+        <button onclick="_binderBulkDelete()" id="binderDelBtn" style="padding:9px 16px;background:var(--copper);color:#fff;border:none;font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em;white-space:nowrap">Delete 0</button>`;
       document.body.appendChild(bar);
       _updateBinderSelBar();
     }
