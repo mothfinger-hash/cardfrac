@@ -1238,7 +1238,7 @@ function _loadAdmin(){
           window._pendingConfirmEmail = email;
           errorEl.innerHTML = 'Your email hasn\'t been confirmed yet. '
             + '<button type="button" onclick="resendConfirmation()" '
-            + 'style="background:none;border:none;color:var(--accent);text-decoration:underline;'
+            + 'style="background:none;border:none;color:var(--copper);text-decoration:underline;'
             + 'cursor:pointer;font-family:inherit;font-size:inherit;padding:0">Resend confirmation email</button>';
         } else {
           errorEl.textContent = _msg;
@@ -1482,7 +1482,7 @@ function _loadAdmin(){
         errorEl.innerHTML = 'Account created. We sent a confirmation link to '
           + '<strong id="regConfirmEmailSlot"></strong>. Open it, then sign in.<br>'
           + 'Didn\'t get it? <button type="button" onclick="resendConfirmation()" '
-          + 'style="background:none;border:none;color:var(--accent);text-decoration:underline;'
+          + 'style="background:none;border:none;color:var(--copper);text-decoration:underline;'
           + 'cursor:pointer;font-family:inherit;font-size:inherit;padding:0">Resend confirmation email</button>';
         var _slot = document.getElementById('regConfirmEmailSlot');
         if (_slot) _slot.textContent = email;
