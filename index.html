@@ -464,6 +464,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 .lp-tier-price { font-family:'Orbitron',monospace; font-weight:900; font-size:22px; color:var(--text); line-height:1; }
 .lp-tier.featured .lp-tier-price { color:var(--accent); }
 .lp-tier-per { font-family:'Space Mono',monospace; font-size:.56rem; color:var(--muted); margin-bottom:8px; }
+/* Native (App Store) builds must NOT display subscription prices anywhere in
+   the app (Apple 3.1.1). .pb-native is set on <html> before first paint by the
+   early native-detect script in <body>, so these price lines never render on
+   device — no flash. Tier names, features, and the free-signup CTA remain. */
+.pb-native .lp-tier-price, .pb-native .lp-tier-per { display:none !important; }
 .lp-tier-feats { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; flex:1; }
 .lp-tier-feats li { font-family:'Space Mono',monospace; font-size:.58rem; color:var(--muted); padding-left:12px; position:relative; line-height:1.35; }
 .lp-tier-feats li::before { content:'•'; position:absolute; left:0; color:var(--accent); font-weight:700; }
@@ -540,6 +545,22 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     <div class="pb-boot-dots"><span></span><span></span><span></span></div>
   </div>
   <noscript><style>#pb-boot{display:none!important}</style></noscript>
+  <!-- Native-shell detection, as early as possible: adds .pb-native to <html>
+       so the CSS can hide subscription prices on the landing page BEFORE first
+       paint (Apple 3.1.1 — no IAP-bypassing prices shown in the app). Capacitor
+       injects window.Capacitor before page scripts; 'PathBinderApp' in the UA
+       (appendUserAgent) is the fallback; pb_native is a manual override. -->
+  <script>
+    (function(){
+      try {
+        var C = window.Capacitor;
+        var isNative = (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform())
+          || /PathBinderApp/i.test(navigator.userAgent || '')
+          || (function(){ try { return localStorage.getItem('pb_native') === '1'; } catch(_) { return false; } })();
+        if (isNative) document.documentElement.classList.add('pb-native');
+      } catch(_) {}
+    })();
+  </script>
   <!-- ── Sync auth-state hint ──────────────────────────────────────────
        Runs before any page content paints. Probes localStorage for
        Supabase's persisted auth session; if there's a token we
@@ -3784,7 +3805,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     </button>
     <button class="mobile-nav-btn" id="mobileNavScanCard" onclick="openScanCard()">
       <img src="icons/add_card.svg" alt="" aria-hidden="true">
-      Scan Card
+      Scan
     </button>
     <button class="mobile-nav-btn" id="mobileNavSets" onclick="showPage('sets'); setMobileNav('sets')">
       <img src="icons/sets.svg" alt="" aria-hidden="true">

@@ -110,6 +110,18 @@ Then on a **real device / simulator**:
 - [ ] Build `/api/send-push` (FCM HTTP v1 via a service account) wired to the
       in-app events (order sold/shipped, unread DM, trade offer, wishlist-listed).
       The client half (`pb-push.js`, token storage) is already done.
+- [ ] **Native push config** (from the native-integration audit — required or
+      push is a device no-op even with a stored token):
+      - Android: add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>`
+        to `AndroidManifest.xml` (runtime-prompted on Android 13+).
+      - iOS: add an `App.entitlements` with `aps-environment` and reference it via
+        the target's Push Notifications capability in Xcode (+ APNs forwarding in
+        `AppDelegate.swift`).
+- [ ] **Fix push token drop** (`pb-app.js:13491`): `_pbStorePushToken` returns
+      early when `currentUser` is null, and nothing re-stores on `SIGNED_IN`, so a
+      token acquired while logged out (or lost to the load+2.5s race) is never
+      persisted. Buffer the token in a module var and flush it in the SIGNED_IN
+      handler. HIGH but harmless until the push server above exists.
 
 ---
 

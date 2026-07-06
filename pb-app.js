@@ -10060,7 +10060,12 @@ function _loadAdmin(){
           showToast(j.code === 'NOT_CONFIGURED' ? 'Shippo Connect is coming soon' : (j.error || 'Could not start Shippo connect'));
           return;
         }
-        window.location.href = j.url;
+        // On native, open Shippo OAuth in the in-app browser so the WebView
+        // isn't stranded on an external page with no back button (same pattern
+        // as the Stripe checkout / Connect / billing-portal flows). Web keeps
+        // the same-tab redirect so the OAuth callback returns to the app.
+        if (typeof _isNativeApp === 'function' && _isNativeApp()) _openExternal(j.url);
+        else window.location.href = j.url;
       } catch (e) { showToast('Could not start Shippo connect'); }
     }
     window.connectShippo = connectShippo;
