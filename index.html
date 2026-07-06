@@ -481,7 +481,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .lp-cta-primary,
     .lp-cta-secondary,
     .lp-tier-cta { border-radius: var(--r-sm) !important; }</style>
-  <link rel="preload" href="/pb-styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="/pb-styles.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__pbStylesLoaded=true">
   <noscript><link rel="stylesheet" href="/pb-styles.css"></noscript>
 
   <!-- ══════════════════════════════════════════════════════════════════
@@ -556,7 +556,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         var skel = document.createElement('div');
         skel.id = 'pb-restore-skeleton';
         skel.setAttribute('aria-hidden', 'true');
-        skel.style.cssText = 'position:fixed;inset:0;z-index:9998;background:#0a0e1a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;font-family:"Space Mono",monospace';
+        skel.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#0F0D0A;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;font-family:"Space Mono",monospace';
         skel.innerHTML =
           '<div style="font-size:.85rem;letter-spacing:.18em;color:#1ac7a0;font-weight:700;text-transform:uppercase">PATHBINDER</div>' +
           '<div style="display:flex;gap:6px">' +
@@ -582,7 +582,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           // sit on the skeleton for the full 6s timeout.
           var anyPageActive = document.querySelector('.page.active');
           var elapsed = Date.now() - started;
-          if ((accountActive && accountActive.classList.contains('active')) || anyPageActive || elapsed > 6000) {
+          // Hold the skeleton until the app has rendered a page AND the full
+          // stylesheet has applied. Dropping on .page.active alone can reveal
+          // content still styled by the inline critical CSS only, which then
+          // flashes ("strange colors") when the async pb-styles.css lands. The
+          // 6s timeout is the safety net so a failed CSS load can't strand us.
+          var cssReady = (window.__pbStylesLoaded === true);
+          var appReady = (accountActive && accountActive.classList.contains('active')) || anyPageActive;
+          if ((appReady && cssReady) || elapsed > 6000) {
             clearInterval(poll);
             var s = document.getElementById('pb-restore-skeleton');
             if (s) {
