@@ -21457,7 +21457,7 @@ function _loadAdmin(){
     function _binderSelReset() {
       _binderSel = false; _binderSelIds.clear();
       var bar = document.getElementById('binderSelBar'); if (bar) bar.remove();
-      var tgl = document.getElementById('binderSelectToggle'); if (tgl) { tgl.textContent = 'SELECT'; tgl.style.background = 'transparent'; tgl.style.color = ''; }
+      var tgl = document.getElementById('binderSelectToggle'); if (tgl) { tgl.style.background = 'transparent'; tgl.style.color = ''; tgl.title = 'Select cards to delete or move'; }
       try { document.querySelectorAll('#collectionContent .allcards-row, #collectionContent .acg-card').forEach(function(t){ _binderSelMark(t, false); }); } catch (_) {}
     }
     function _binderSelCapture(e) {
@@ -21478,7 +21478,7 @@ function _loadAdmin(){
       if (!currentUser) { showToast('Sign in first'); return; }
       _binderSel = !_binderSel;
       var btn = document.getElementById('binderSelectToggle');
-      if (btn) { btn.textContent = _binderSel ? 'CANCEL' : 'SELECT'; btn.style.background = _binderSel ? 'var(--accent)' : 'transparent'; btn.style.color = _binderSel ? 'var(--text-on-accent)' : ''; }
+      if (btn) { btn.style.background = _binderSel ? 'var(--accent)' : 'transparent'; btn.style.color = _binderSel ? 'var(--text-on-accent)' : ''; btn.title = _binderSel ? 'Cancel selection' : 'Select cards to delete or move'; }
       if (!_binderSel) {
         _binderSelIds.clear();
         document.querySelectorAll('#collectionContent .allcards-row, #collectionContent .acg-card').forEach(function(t){ _binderSelMark(t, false); });

@@ -560,31 +560,24 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         var isNative = (C && (C.Plugins || C.isNativePlatform))
           || /PathBinderApp/i.test(navigator.userAgent || '')
           || (function(){ try { return localStorage.getItem('pb_native') === '1'; } catch(_) { return false; } })();
-        if (isNative) document.documentElement.classList.add('pb-native');
+        if (!isNative) return;
+        document.documentElement.classList.add('pb-native');
+        // Belt AND suspenders: the .pb-native CSS rule SHOULD hide the landing
+        // subscription prices, but on device it didn't (WKWebView not re-matching
+        // a late-added <html> class is the likely cause). So set an INLINE
+        // !important display:none directly on each price element — inline
+        // !important sits at the top of the cascade and nothing can override it.
+        var _hidePrices = function(){
+          try {
+            var els = document.querySelectorAll('.lp-tier-price, .lp-tier-per');
+            for (var i = 0; i < els.length; i++) els[i].style.setProperty('display', 'none', 'important');
+          } catch(_){}
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _hidePrices);
+        else _hidePrices();
+        try { window.addEventListener('load', _hidePrices); } catch(_){}
+        setTimeout(_hidePrices, 600); setTimeout(_hidePrices, 2000);
       } catch(_) {}
-    })();
-  </script>
-  <!-- ===== TEMP NATIVE-DETECTION DIAGNOSTIC — REMOVE once prices confirmed hidden.
-       Prints the raw signals so we can see on-device exactly why .pb-native is or
-       isn't applied. Tap it to dismiss. ===== -->
-  <div id="pb-diag" onclick="this.remove()" style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#000;color:#00ff6a;font:11px/1.45 ui-monospace,monospace;padding:6px 8px;white-space:pre-wrap;word-break:break-word;border-bottom:2px solid #00ff6a">detecting…</div>
-  <script>
-    (function(){
-      function upd(){
-        try {
-          var C = window.Capacitor, ua = navigator.userAgent || '', d = document.getElementById('pb-diag');
-          if (!d) return;
-          d.textContent =
-            'window.Capacitor=' + (C ? 'YES' : 'no') +
-            '  .Plugins=' + (C && C.Plugins ? 'YES' : 'no') +
-            '  isNativePlatform()=' + (C && typeof C.isNativePlatform === 'function' ? String(C.isNativePlatform()) : 'n/a') +
-            '  UA-has-PathBinderApp=' + (/PathBinderApp/i.test(ua) ? 'YES' : 'no') +
-            '  .pb-native-applied=' + (document.documentElement.classList.contains('pb-native') ? 'YES' : 'no') +
-            '\n(tap to dismiss)  UA: ' + ua;
-        } catch(e){ try { document.getElementById('pb-diag').textContent = 'DIAG ERR: ' + (e && e.message); } catch(_){} }
-      }
-      upd(); setTimeout(upd, 1500); setTimeout(upd, 4000);
-      try { window.addEventListener('load', upd); } catch(_){}
     })();
   </script>
   <!-- ── Sync auth-state hint ──────────────────────────────────────────
@@ -2970,14 +2963,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <div class="ac-list-grid-icons" style="display:flex;gap:3px;flex-shrink:0;margin-left:auto">
           <button id="acViewBtnList" class="allcards-sort-btn active" onclick="setAllCardsView('list')"   title="List view"  style="padding:4px 8px;font-size:.7rem"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:middle"><line x1="2" y1="4" x2="12" y2="4"/><line x1="2" y1="7" x2="12" y2="7"/><line x1="2" y1="10" x2="12" y2="10"/></svg></button>
           <button id="acViewBtnGrid" class="allcards-sort-btn"        onclick="setAllCardsView('acgrid')" title="Grid view"  style="padding:4px 8px;font-size:.7rem"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:middle"><rect x="2" y="2" width="4" height="4"/><rect x="8" y="2" width="4" height="4"/><rect x="2" y="8" width="4" height="4"/><rect x="8" y="8" width="4" height="4"/></svg></button>
-          <button id="binderSelectToggle" class="allcards-sort-btn" onclick="toggleBinderSelect()" title="Select cards to delete or move" style="padding:4px 10px;font-size:.62rem;letter-spacing:.06em">SELECT</button>
+          <button id="binderSelectToggle" class="allcards-sort-btn" onclick="toggleBinderSelect()" title="Select cards to delete or move" aria-label="Select cards" style="padding:4px 8px;font-size:.7rem"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:middle"><rect x="2" y="2" width="10" height="10" rx="1.5"/><path d="M4.4 7.2l1.8 1.8 3.4-3.8"/></svg></button>
         </div>
         <!-- Mobile-only Add Card + ⋯ — visually separate group pushed to
              the right edge so the row reads as two clusters:
              [Sort ▾] [List] [Grid] ........ [Add Card] [⋯]. Hidden on
              desktop; the originals in .pb-panel-h take over there. -->
         <div class="ac-mob-actions" style="display:none;align-items:center;gap:4px;flex-shrink:0">
-          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" style="border-color:var(--accent);color:var(--accent)">Add Card</button>
+          <button onclick="showPage('addCard');setMobileNav('addCard')" class="pb-panel-link" title="Add card" aria-label="Add card" style="border-color:var(--accent);color:var(--accent);padding:3px 9px;display:inline-flex;align-items:center"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align:middle"><line x1="7" y1="2.6" x2="7" y2="11.4"/><line x1="2.6" y1="7" x2="11.4" y2="7"/></svg></button>
           <div style="position:relative">
             <button id="acOverflowBtn" class="pb-panel-link"
                     onclick="toggleAcOverflowPop(event)"
