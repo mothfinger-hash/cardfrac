@@ -2026,7 +2026,7 @@ function _loadAdmin(){
           (listing.grade || '').toLowerCase().includes(search);
         if (!matchesSearch) return false;
 
-        const gameTypeMatch = browseGameTypeFilter === 'all' || listing.gameType === browseGameTypeFilter;
+        const gameTypeMatch = browseGameTypeFilter === 'all' || _normGameKey(listing.gameType) === browseGameTypeFilter;
         if (!gameTypeMatch) return false;
 
         // Variant / finish filter. Untagged legacy rows fall under
@@ -2316,20 +2316,42 @@ function _loadAdmin(){
     // actually present in the current listing set. Hidden when there's 0-1
     // game to choose between (nothing to filter). The filter LOGIC already
     // exists (browseGameTypeFilter); this just surfaces the control.
+    // Canonical grouping key for a game_type value: accent-stripped,
+    // lowercased, alphanumerics only. Collapses 'Pokémon' / 'pokemon' /
+    // 'POKEMON' to one key, and 'One Piece' / 'onepiece' likewise. Listings
+    // store game_type inconsistently (some writers use display labels, some
+    // machine keys), so grouping + filtering on this key gives ONE dropdown
+    // entry per game and a filter that matches every spelling of it.
+    function _normGameKey(g) {
+      return String(g == null ? '' : g)
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
     function _populateGameTypeFilter() {
       const sel = document.getElementById('gameTypeFilter');
       if (!sel) return;
-      const seen = {};
+      // Group raw gameType strings by canonical key; keep the prettiest-looking
+      // variant as the display label (prefer uppercase / spaces / accents over
+      // an all-lowercase machine key like 'pokemon').
+      const groups = {};
+      const _pretty = function(g) {
+        return (/[A-Z]/.test(g) ? 2 : 0) + (/\s/.test(g) ? 1 : 0) + (/[^\x00-\x7F]/.test(g) ? 1 : 0);
+      };
       (listings || []).forEach(function(l) {
         const g = l && l.gameType;
-        if (g && g !== 'Other') seen[g] = true;
+        if (!g || g === 'Other') return;
+        const k = _normGameKey(g);
+        if (!k) return;
+        if (!groups[k] || _pretty(g) > _pretty(groups[k])) groups[k] = String(g);
       });
-      const games = Object.keys(seen).sort();
-      if (games.length < 2) { sel.style.display = 'none'; return; }
+      const keys = Object.keys(groups).sort(function(a, b) {
+        return groups[a].localeCompare(groups[b]);
+      });
+      if (keys.length < 2) { sel.style.display = 'none'; return; }
       const cur = browseGameTypeFilter || 'all';
-      const _cap = function(g) { return String(g).charAt(0).toUpperCase() + String(g).slice(1); };
-      sel.innerHTML = '<option value="all">All games</option>' + games.map(function(g) {
-        return '<option value="' + _escHtml(g) + '">' + _escHtml(_cap(g)) + '</option>';
+      sel.innerHTML = '<option value="all">All games</option>' + keys.map(function(k) {
+        return '<option value="' + _escHtml(k) + '">' + _escHtml(groups[k]) + '</option>';
       }).join('');
       sel.value = cur;
       sel.style.display = '';
@@ -23885,21 +23907,12 @@ function _loadAdmin(){
         reader.readAsDataURL(file);
       });
 
-      // Deduct scan — guests tracked in localStorage, members in usage counter
-      if (!currentUser) {
-        ftIncrGuestScan();
-        var gLeft = ftGuestScansLeft();
-        setFtScanStatus('Scanning… (' + (gLeft === 0 ? 'last free guest scan used' : gLeft + ' guest scan' + (gLeft === 1 ? '' : 's') + ' left') + ')');
-      } else {
-        incrementUsage('scan');
-        try { checkBadge_scanner(); } catch(_) {}
-        var left = scannerLimit() - getUsageCount('scan');
-        if (!tierAtLeast('collector') && left <= 2) {
-          setFtScanStatus('Scanning… (' + (left === 0 ? 'last free scan this month' : left + ' free scan' + (left === 1 ? '' : 's') + ' left') + ')');
-        } else {
-          setFtScanStatus('Scanning…');
-        }
-      }
+      // NOTE: the scan quota is consumed AFTER a successful match (below), not
+      // here. Charging up-front burned a free scan on offline / failed /
+      // no-match attempts the user never got a result from. The pre-scan limit
+      // gate already ran in ftScanTrigger, so reaching here means the user had
+      // a scan available to spend.
+      setFtScanStatus('Scanning…');
 
       // Run match silently — no scanner modal, just get back the result array
       var results = [];
@@ -23911,8 +23924,20 @@ function _loadAdmin(){
       }
 
       if (!results.length) {
-        setFtScanStatus('No match found — try a clearer photo or use Search above');
+        setFtScanStatus((navigator.onLine === false)
+          ? 'You are offline — reconnect and try again'
+          : 'No match found — try a clearer photo or use Search above');
         return;
+      }
+
+      // Successful scan (matches found) — consume one scan NOW. Charging here
+      // rather than up-front means a failed / offline / no-match scan never
+      // burns a free scan. Pre-scan limit gate already ran in ftScanTrigger.
+      if (!currentUser) {
+        ftIncrGuestScan();
+      } else {
+        incrementUsage('scan');
+        try { checkBadge_scanner(); } catch(_) {}
       }
 
       // Show top matches (up to 4) as a selectable list
@@ -28645,6 +28670,13 @@ function _loadAdmin(){
         window._tcgSetDetailCards = cards;
         window._tcgSetOwnedMap    = ownedMap;
         window._tcgSetDetailGame  = gameKey;
+        // Also expose as _setDetailGameKey so multi-add (which reads that
+        // global via _setMaCtx) tags cards with the correct game_type even when
+        // the user hits + MULTI-ADD without first opening an individual card
+        // detail. Every catalog loader sets this on load, so it never goes
+        // stale across set navigation (JP -> null -> pokemon/JA fallback;
+        // CN/KR -> CN/KR; TCG -> MTG/YGO/OP/GUN/DBZ/LOR/TOPPS).
+        window._setDetailGameKey  = gameKey;
         // Wire the shared sort handler to this view's data
         window._catalogSetDetailCards  = cards;
         window._catalogSetDetailOwned  = ownedMap;
