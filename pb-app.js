@@ -13513,7 +13513,13 @@ function _loadAdmin(){
     // device token on the user's profile for the server-side sender.
     window._pbStorePushToken = async function (token, plat) {
       try {
-        if (!currentUser || !token) return;
+        if (!token) return;
+        // Buffer the token if the user isn't signed in yet. The OS hands the
+        // device token to pb-push.js once per launch — frequently BEFORE session
+        // restore finishes — so without buffering it's lost until the next cold
+        // launch. onAuthStateChange('SIGNED_IN') flushes _pbPendingPushToken.
+        if (!currentUser) { window._pbPendingPushToken = { token: token, plat: plat || null }; return; }
+        window._pbPendingPushToken = null;
         await sb.from('profiles').update({
           push_token: token, push_platform: plat || null, push_updated_at: new Date().toISOString(),
         }).eq('id', currentUser.id);
@@ -13521,7 +13527,11 @@ function _loadAdmin(){
     };
     // Deep-link when a notification is tapped. data may carry { page, ... }.
     window._pbHandlePushTap = function (data) {
-      try { if (data && data.page && typeof showPage === 'function') showPage(data.page); } catch (_) {}
+      try {
+        if (!data) return;
+        if (data.open === 'inbox' && typeof openInboxModal === 'function') { openInboxModal(); return; }
+        if (data.page && typeof showPage === 'function') showPage(data.page);
+      } catch (_) {}
     };
     // Lazily load the push module on the native shell ONLY, after first paint,
     // so it never affects web load performance and never runs on the web build.
@@ -30042,6 +30052,12 @@ function _loadAdmin(){
           sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false })
         ]).then(([profileRes, listingsRes]) => {
           currentUser = { ...session.user, ...(profileRes.data || {}) };
+          // Flush a push token pb-push.js captured before sign-in completed
+          // (native only) — now that currentUser is set it can persist.
+          try {
+            var _pt = window._pbPendingPushToken;
+            if (_pt && typeof window._pbStorePushToken === 'function') window._pbStorePushToken(_pt.token, _pt.plat);
+          } catch (_) {}
           // If a pending email-grant just landed on this user (or they
           // refreshed mid-onboarding), fire the Discord prompt once.
           try { maybeShowBetaWelcome(); } catch(_) {}

@@ -276,6 +276,20 @@ async function handleMarketplacePurchase(session) {
     console.error('[webhook] seller email failed:', e && e.message);
   }
 
+  // Native push to the seller too (best-effort — never block the webhook).
+  try {
+    const { sendPushToUser } = require('./_lib/push');
+    if (meta.seller_id) {
+      await sendPushToUser(meta.seller_id, {
+        title: 'You sold a card!',
+        body: 'Your listing sold for $' + (amountCents / 100).toFixed(2) + ' — time to ship it.',
+        data: { page: 'account', order: newOrderId || '' },
+      });
+    }
+  } catch (e) {
+    console.error('[webhook] seller push failed:', e && e.message);
+  }
+
   console.log(`[webhook] order created for listing ${meta.listing_id} via ${meta.payment_route || 'platform_only'}`);
 }
 

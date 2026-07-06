@@ -24,6 +24,19 @@
       }
       if (perm.receive !== 'granted') { console.log('[push] permission not granted'); return; }
 
+      // Android 8+ requires a notification channel for the system-tray
+      // notification to display. Its id MUST match the channelId our server
+      // sends (see api/_lib/push.js android.notification.channelId).
+      if (platform() === 'android' && P.createChannel) {
+        try {
+          await P.createChannel({
+            id: 'pathbinder', name: 'PathBinder',
+            description: 'Sales, orders, messages, and wishlist alerts',
+            importance: 5, visibility: 1,
+          });
+        } catch (e) { console.warn('[push] createChannel failed', e && e.message); }
+      }
+
       // Persist the device token to the user's profile for the server sender.
       P.addListener('registration', function (tok) {
         if (tok && tok.value && typeof window._pbStorePushToken === 'function') {
