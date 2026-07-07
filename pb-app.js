@@ -27473,6 +27473,12 @@ function _loadAdmin(){
       const el = document.getElementById('setsPageContent');
       if (!el) return;
 
+      // Rendering the sets LIST means we've left any set detail — tear down
+      // multi-add so its body-level floating bar (#setMaBar) doesn't survive
+      // the navigation and hover over the list. showPage() skips the reset for
+      // pageId 'sets', so this is where the back-to-list case gets handled.
+      try { if (typeof _setMaReset === 'function') _setMaReset(); } catch (_) {}
+
       // POKEMON tab dispatches to JP or EN flow based on _setsPokemonLang
       if (_setsLang === 'POKEMON' && _setsPokemonLang === 'JP') { await loadJpSetsPage(el); return; }
       // CN / KR — full browse via the generic PC-language renderer
@@ -28988,6 +28994,12 @@ function _loadAdmin(){
       const el = document.getElementById('setsPageContent');
       if (!el) return;
 
+      // Opening a (new) set detail: reset multi-add so a selection never
+      // carries across sets and no stale floating bar lingers. The catalog
+      // path resets in _catalogSetSortPillsHtml; the Pokemon path renders its
+      // sort pills inline, so it needs the explicit reset here.
+      try { if (typeof _setMaReset === 'function') _setMaReset(); } catch (_) {}
+
       // SEALED view: redirect to the sealed-products renderer instead
       // of fetching singles. Uses the same #setsPageContent target so
       // the back button + Sets nav still works.
@@ -29173,6 +29185,51 @@ function _loadAdmin(){
             if (!existing.item) existing.item = c;
             ownedMap[c.api_card_id] = existing;
           });
+        }
+
+        // ── Collapse padded/unpadded duplicate catalog rows ──────────────
+        // Two EN catalog builders wrote the same logical card under two
+        // number conventions: a zero-padded row (id en-SSP-001, number
+        // "001") and an unpadded row (id en-ssp-1, number "1"). Both land
+        // in `cards`, so a 200-card set renders ~400 slots and the owned
+        // count / percentage are computed against the inflated denominator.
+        // We collapse each duplicate pair to ONE surviving row here, before
+        // the array is stashed for rendering — so every downstream consumer
+        // (count math at ownedCount/pct, RH math, _buildSetCardRows, the
+        // multi-add indices, and openSetCardDetail) sees the same deduped
+        // array. Runs on ALL load paths (set_code, set_name, API, cached)
+        // because they all funnel into `cards` above.
+        //
+        // Survivor selection is OWNERSHIP-AWARE and must stay that way:
+        // ownership keys on the raw catalog id (ownedMap[card.id]), so if
+        // the user owns the padded variant and we keep the unpadded row,
+        // the card would render as Missing and ownedCount would silently
+        // drop. Priority: (1) the row the user owns, (2) the row that has
+        // an image, (3) a deterministic canonical id so reloads are stable.
+        if (cards && cards.length) {
+          const _dupGroups = new Map();
+          for (const _c of cards) {
+            const _nv = _cardNumValue(_c.number);
+            // Group by normalized number within the set. _cardNumValue
+            // strips "/total" and leading zeros so "001" and "1" collapse
+            // to the same key. Fall back to the raw number+name for
+            // unparseable numbers (letter-only codes, promos) so we never
+            // merge two genuinely different cards into one bucket.
+            const _key = _nv > 0
+              ? 'n:' + _nv
+              : 's:' + String(_c.number || '').toLowerCase().trim() + '|' + String(_c.name || '').toLowerCase().trim();
+            const _g = _dupGroups.get(_key);
+            if (_g) { _g.push(_c); } else { _dupGroups.set(_key, [_c]); }
+          }
+          const _deduped = [];
+          for (const _g of _dupGroups.values()) {
+            if (_g.length === 1) { _deduped.push(_g[0]); continue; }
+            const _owned = _g.find(c => ownedMap[c.id] && ownedMap[c.id].item);
+            const _withImg = _g.find(c => c.images && c.images.small);
+            const _canonical = [..._g].sort((a, b) => String(a.id).localeCompare(String(b.id)))[0];
+            _deduped.push(_owned || _withImg || _canonical);
+          }
+          cards = _deduped;
         }
 
         // Stash for sort re-renders
