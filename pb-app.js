@@ -7058,6 +7058,11 @@ function _loadAdmin(){
             (card.price_source_url
               ? '<a href="' + card.price_source_url + '" target="_blank" rel="noopener" style="display:block;text-align:center;width:100%;padding:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer;text-decoration:none;letter-spacing:.04em">↗ View on PriceCharting</a>'
               : '') +
+            // TCGplayer comp — a name search, wrapped through our Impact
+            // affiliate link (tagged 'movers' for per-surface reporting) so
+            // clicks earn commission. Always shown (search works for singles
+            // and sealed alike, even when there is no PriceCharting URL).
+            '<a href="' + tcgAffiliateUrl('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(card.name || ''), 'movers') + '" target="_blank" rel="noopener" style="display:block;text-align:center;width:100%;padding:9px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer;text-decoration:none;letter-spacing:.04em">↗ View on TCGplayer</a>' +
             '<button onclick="document.getElementById(\'moversCardSheet\').remove()" style="width:100%;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.66rem;cursor:pointer">CLOSE</button>' +
           '</div>' +
         '</div>';
