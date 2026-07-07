@@ -1,6 +1,6 @@
 # PathBinder Privacy Policy
 
-**Last updated: June 23, 2026**
+**Last updated: July 6, 2026**
 
 > _Template prepared for PathBinder LLC. Have a licensed attorney review before publishing._
 
@@ -31,6 +31,7 @@ The Service is intended for users **18 years or older to buy or sell**, and for 
 **Information collected automatically:**
 
 - **Usage and device data** — pages viewed, features used, approximate location derived from IP address, browser type, and device identifiers.
+- **Push notification token** — if you enable notifications in the mobile app, a device push token issued by Apple (APNs) or Google (Firebase Cloud Messaging), used to send you order, message, and wishlist alerts. You can disable notifications at any time in your device settings.
 - **Cookies and local storage** — see Section 7.
 
 **Information from third parties:**
@@ -46,11 +47,13 @@ We use information to: create and operate your account; display and manage your 
 
 We do **not** sell your personal information. We share information as follows:
 
-- **With other users, to complete transactions** — when you buy, the seller receives your shipping details so they can ship your order; when you sell, the buyer sees your shop/profile information. Public profile fields, listings, ratings, and reviews are visible to other users.
+- **With other users, to complete transactions** — when you buy, the seller receives your shipping details so they can ship your order; when you sell, the buyer sees your shop/profile information. Public profile fields, listings (including any card or product images you attach), ratings, and reviews are visible to other users. **Images and content attached to public listings and profiles are stored and served from public URLs, which means they can be viewed by anyone who has the link, including people who are not signed in.**
 - **With service providers ("processors")** who operate the Service on our behalf, including:
   - **Supabase** — database, authentication, and file storage.
   - **Stripe** — payment processing and seller payouts (Stripe Connect). Your payment is governed by [Stripe's Privacy Policy](https://stripe.com/privacy).
   - **Shippo** — shipping rates, label generation, and tracking.
+  - **Google Cloud Vision** — optical character recognition on card and product images you scan, to identify the item. Governed by [Google's Cloud Privacy Notice](https://cloud.google.com/terms/cloud-privacy-notice).
+  - **Firebase Cloud Messaging (Google) and the Apple Push Notification service** — deliver push notifications to your device; they receive a device push token to route notifications.
   - **Resend** — transactional email delivery.
   - **Vercel** — application hosting.
   - **Discord** — optional notifications via our community bot, if you choose to use it.
