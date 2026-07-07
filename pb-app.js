@@ -13768,9 +13768,10 @@ function _loadAdmin(){
       _stack.appendChild(toast);
       _pbToastRefade(_stack);
       // Errors stay on screen long enough to read and act on; confirmations
-      // are quick. Longer messages get a little extra time. Tap to dismiss.
-      const _base = type === 'error' ? 5200 : 2400;
-      const _dur  = Math.min(9000, _base + Math.max(0, (String(message).length - 40)) * 45);
+      // linger a beat longer than before (2.4s felt too quick). Longer messages
+      // get a little extra time. Tap to dismiss.
+      const _base = type === 'error' ? 6000 : 4000;
+      const _dur  = Math.min(11000, _base + Math.max(0, (String(message).length - 40)) * 50);
       let _dismissed = false;
       const _dismiss = () => {
         if (_dismissed) return; _dismissed = true;
