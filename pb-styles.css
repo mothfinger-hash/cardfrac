@@ -1012,6 +1012,26 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     @media(max-width:600px){
       .toast{bottom:calc(72px + env(safe-area-inset-bottom,0px));left:12px;right:12px;max-width:none;font-size:.7rem}
     }
+    /* Toast STACK — concurrent toasts flow vertically instead of piling on the
+       same fixed bottom-left anchor. Before this, two toasts fired together
+       (e.g. "card added" + "limit reached") drew on top of each other into an
+       unreadable smear. The container owns the fixed anchor; each .toast inside
+       is in normal flow. flex-direction:column + a bottom anchor means the
+       newest toast (last child) sits closest to the screen edge and older ones
+       stack upward. pointer-events:none lets taps fall through the gaps; each
+       toast re-enables its own so tap-to-dismiss still works. */
+    #pbToastStack{
+      position:fixed;bottom:20px;left:20px;z-index:100040;
+      display:flex;flex-direction:column;gap:10px;
+      max-width:300px;pointer-events:none;
+    }
+    #pbToastStack .toast{
+      position:static !important;left:auto !important;right:auto !important;
+      bottom:auto !important;top:auto !important;max-width:none;pointer-events:auto;
+    }
+    @media(max-width:600px){
+      #pbToastStack{left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom,0px));max-width:none;}
+    }
     @keyframes slideInLeft{
       from{transform:translateX(-110%) scale(0.96);opacity:0}
       to  {transform:translateX(0)     scale(1);   opacity:1}

@@ -502,13 +502,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .lp-cta-primary,
     .lp-cta-secondary,
     .lp-tier-cta { border-radius: var(--r-sm) !important; }
-    /* Pricing modal on mobile: stack the tiers as full-width vertical ROWS
-       instead of a 5-col horizontal-scroll grid. Kills all three problems at
-       once — no sideways scroll to discover, full width so feature text stops
-       wrapping into slivers, and the "Most popular" badge has room (grid
-       overflow goes visible; the modal itself handles the vertical scroll). */
-    @media (max-width: 640px) {
-      #pricingGrid { grid-template-columns: 1fr !important; gap: 22px !important; overflow-x: visible !important; }
+    /* Pricing modal is MOBILE-FIRST. The base #pricingGrid layout (see its
+       inline style) stacks the tiers as full-width vertical ROWS — one tier
+       per row, no sideways scroll, feature text at full width. That is the
+       SAFE DEFAULT: it renders correctly on phones even if this media query
+       never fires (WebView quirk, stale CSS, odd viewport). Desktop-width
+       screens opt UP to the 5-across grid below. */
+    @media (min-width: 641px) {
+      #pricingGrid { grid-template-columns: repeat(5,minmax(150px,1fr)) !important; gap: 12px !important; overflow-x: auto !important; }
     }</style>
   <link rel="preload" href="/pb-styles.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__pbStylesLoaded=true">
   <noscript><link rel="stylesheet" href="/pb-styles.css"></noscript>
@@ -1100,7 +1101,11 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <button class="modal-close" aria-label="Close" onclick="closeModal('orderMessagesModal')">×</button>
       <div style="font-size:.7rem;color:var(--accent);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">Messages</div>
       <h3 id="orderMessagesTitle" style="margin-bottom:6px;font-size:1.05rem">Messages</h3>
-      <p class="modal-sub" id="orderMessagesSub" style="margin-bottom:12px"></p>
+      <p class="modal-sub" id="orderMessagesSub" style="margin-bottom:8px"></p>
+      <!-- Report/Block the counterparty — populated by openOrderMessagesModal.
+           Mirrors the marketplace DM thread controls (Apple 1.2: report + block
+           must be reachable from any user-to-user surface). -->
+      <div id="orderMessagesActions" style="display:none;gap:14px;align-items:center;margin-bottom:12px"></div>
 
       <input type="hidden" id="orderMessagesOrderId" />
 
@@ -1346,16 +1351,28 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       </div>
 
       <!-- Tier cards -->
-      <!-- 5 tiers side by side. minmax(150px,1fr) keeps them equal-width on
-           desktop; on a narrow screen the row scrolls horizontally instead of
-           wrapping the Shop card to a stretched second row. -->
-      <div id="pricingGrid" style="display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px;margin-bottom:12px;overflow-x:auto;padding-top:14px;padding-bottom:4px"></div>
+      <!-- MOBILE-FIRST base: one full-width tier per row (vertical stack).
+           The min-width:641px media query above widens this to 5-across on
+           desktop. Keeping the stacked layout as the base means phones never
+           fall into a 5-col horizontal-scroll row even if the media query
+           doesn't apply. -->
+      <div id="pricingGrid" style="display:grid;grid-template-columns:1fr;gap:22px;margin-bottom:12px;overflow-x:visible;padding-top:14px;padding-bottom:4px"></div>
 
       <!-- Subscription disclosure -->
       <p id="pricingDisclosure" style="font-size:.62rem;color:var(--muted);text-align:center;margin:0 0 18px;line-height:1.6">
         Paid plans are <strong style="color:var(--text)">monthly subscriptions</strong> that renew automatically at the full plan price until cancelled.
         Cancel anytime from your account settings — no cancellation fees.
         Annual billing locks in a discounted rate for 12 months.
+      </p>
+
+      <!-- Native (App Store / Play) note. No purchase is offered in-app
+           (Apple 3.1.1 / Play Payments), so free users hitting the card limit
+           would otherwise have no idea what to do. This states — factually,
+           with NO tappable link or purchase CTA — where memberships are
+           managed. Shown only on the native build; hidden on web. -->
+      <p id="pricingNativeNote" style="display:none;font-size:.68rem;color:var(--muted);text-align:center;margin:0 0 18px;line-height:1.65">
+        The plans above show what each membership includes. Memberships are
+        managed on the web at <span style="color:var(--text)">pathbinder.gg</span> — not inside the app.
       </p>
 
       <!-- Shop intake form (hidden until Shop CTA is clicked) -->

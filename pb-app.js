@@ -6100,6 +6100,31 @@ function _loadAdmin(){
     // Populate the dashboard "Following" panel with the user's top followed
     // sellers (avatar + name, tap → their profile). Async because it needs the
     // profiles; the panel shell renders synchronously inside renderDashboard.
+    // Cross-user profile lookup for display (name/avatar). Reads the
+    // grant-readable `public_profiles_display` view, NOT the `profiles`
+    // table — RLS on `profiles` denies cross-user SELECT, so a direct
+    // `profiles` read returns nothing and every name falls back to
+    // "Unknown". Falls back to the pre-extension view shape (no shop_name)
+    // if the column-extension migration hasn't run on this DB.
+    async function _fetchPublicProfiles(ids) {
+      var out = {};
+      if (!ids || !ids.length) return out;
+      try {
+        var r = await sb.from('public_profiles_display')
+          .select('id, username, shop_name, avatar_url, subscription_tier')
+          .in('id', ids);
+        if (!r.error && Array.isArray(r.data)) { r.data.forEach(function (p) { out[p.id] = p; }); return out; }
+      } catch (_) {}
+      try {
+        var r2 = await sb.from('public_profiles_display')
+          .select('id, username, avatar_url, subscription_tier')
+          .in('id', ids);
+        if (!r2.error && Array.isArray(r2.data)) { r2.data.forEach(function (p) { out[p.id] = p; }); }
+      } catch (_) {}
+      return out;
+    }
+    window._fetchPublicProfiles = _fetchPublicProfiles;
+
     async function _paintFollowsPanel() {
       var body = document.getElementById('ndashFollowsBody');
       if (!body) return;
@@ -6116,13 +6141,7 @@ function _loadAdmin(){
           return;
         }
         var top = ids.slice(0, 6);
-        var profiles = {};
-        try {
-          var r = await sb.from('profiles')
-            .select('id, username, shop_name, avatar_url, subscription_tier')
-            .in('id', top);
-          if (!r.error && Array.isArray(r.data)) r.data.forEach(function(p) { profiles[p.id] = p; });
-        } catch (_) {}
+        var profiles = await _fetchPublicProfiles(top);
         var rows = top.map(function(id) {
           var p = profiles[id] || {};
           var name = p.shop_name || p.username || 'Unknown';
@@ -9587,6 +9606,30 @@ function _loadAdmin(){
       const sts = document.getElementById('orderMessagesStatus');
       if (sts) sts.textContent = '';
       openModal('orderMessagesModal');
+
+      // Report / Block the counterparty — same controls as the marketplace
+      // DM thread. Reported as target_type 'profile' (renders "Report user").
+      const counterpartyId = isBuyer ? order.seller_id : order.buyer_id;
+      const actionsEl = document.getElementById('orderMessagesActions');
+      if (actionsEl) {
+        if (counterpartyId && counterpartyId !== currentUser.id) {
+          let cpName = counterpartyRole;
+          try {
+            const pm = await _fetchPublicProfiles([counterpartyId]);
+            const p = pm[counterpartyId];
+            if (p) cpName = p.shop_name || p.username || counterpartyRole;
+          } catch (_) {}
+          const safeName = _escJsAttr(cpName);
+          actionsEl.style.display = 'flex';
+          actionsEl.innerHTML = ''
+            + '<button onclick="openReportModal(\'profile\',\'' + counterpartyId + '\',\'' + safeName + '\')" style="background:none;border:none;color:var(--muted);font-size:.68rem;cursor:pointer;letter-spacing:.04em;text-decoration:underline;padding:0">Report</button>'
+            + '<button onclick="if(confirm(\'Block ' + safeName + '?\')){blockUser(\'' + counterpartyId + '\').then(function(){closeModal(\'orderMessagesModal\')})}" style="background:none;border:none;color:var(--red);font-size:.68rem;cursor:pointer;letter-spacing:.04em;text-decoration:underline;padding:0">Block</button>';
+        } else {
+          actionsEl.style.display = 'none';
+          actionsEl.innerHTML = '';
+        }
+      }
+
       await _loadOrderMessages(orderId);
     }
 
@@ -13401,6 +13444,12 @@ function _loadAdmin(){
       if (_toggle) _toggle.style.display = _native ? 'none' : '';
       const _disc = document.getElementById('pricingDisclosure');
       if (_disc) _disc.style.display = _native ? 'none' : '';
+      // Native-only "how upgrading works" note — replaces the auto-renew
+      // disclosure (which only applies to in-app web checkout). Gives free
+      // users hitting the card limit a non-dead-end explanation without a
+      // purchase CTA. Hidden on web.
+      const _note = document.getElementById('pricingNativeNote');
+      if (_note) _note.style.display = _native ? 'block' : 'none';
       const _sub = document.getElementById('pricingSubtitle');
       if (_sub) _sub.textContent = _native
         ? 'Everything each PathBinder membership tier includes.'
@@ -13669,6 +13718,19 @@ function _loadAdmin(){
     function upgradeMembership() { openPricingModal(); }
 
     // ===== TOAST & NOTIFICATIONS =====
+    // Shared toast container so concurrent toasts stack vertically instead of
+    // overlapping on the same fixed anchor. Created lazily on first toast.
+    function _pbToastStack() {
+      var stack = document.getElementById('pbToastStack');
+      if (!stack) {
+        stack = document.createElement('div');
+        stack.id = 'pbToastStack';
+        document.body.appendChild(stack);
+      }
+      return stack;
+    }
+    window._pbToastStack = _pbToastStack;
+
     function showToast(message, type) {
       const toast = document.createElement('div');
       toast.className = 'toast' + (type === 'error' ? ' toast--error' : type === 'success' ? ' toast--success' : '');
@@ -13677,7 +13739,11 @@ function _loadAdmin(){
       toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
       toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
       toast.textContent = message;
-      document.body.appendChild(toast);
+      const _stack = _pbToastStack();
+      // Soft cap: a burst of toasts shouldn't wall off the screen — drop the
+      // oldest (top of the stack) once we exceed the cap.
+      while (_stack.children.length >= 4 && _stack.firstElementChild) { _stack.firstElementChild.remove(); }
+      _stack.appendChild(toast);
       // Errors stay on screen long enough to read and act on; confirmations
       // are quick. Longer messages get a little extra time. Tap to dismiss.
       const _base = type === 'error' ? 5200 : 2400;
@@ -22028,19 +22094,10 @@ function _loadAdmin(){
         if (!r.error && Array.isArray(r.data)) inbox = r.data;
       } catch (_) {}
 
-      // Profile lookup for avatars + names
-      let profiles = {};
+      // Profile lookup for avatars + names — via the public view (a direct
+      // cross-user `profiles` read is RLS-blocked, which showed "Unknown").
       const partnerIds = inbox.map(x => x.partner_id);
-      if (partnerIds.length) {
-        try {
-          const p = await sb.from('profiles')
-            .select('id, username, shop_name, avatar_url, subscription_tier')
-            .in('id', partnerIds);
-          if (!p.error && Array.isArray(p.data)) {
-            p.data.forEach(x => { profiles[x.id] = x; });
-          }
-        } catch (_) {}
-      }
+      let profiles = await _fetchPublicProfiles(partnerIds);
 
       const rowsHtml = inbox.length
         ? inbox.map(row => {
@@ -22089,16 +22146,18 @@ function _loadAdmin(){
       overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
       document.body.appendChild(overlay);
 
-      // Fetch thread + partner profile in parallel.
-      const [partnerRes, msgsRes] = await Promise.all([
-        sb.from('profiles').select('id, username, shop_name, avatar_url, subscription_tier').eq('id', partnerId).maybeSingle(),
+      // Fetch thread + partner profile in parallel. Partner name/avatar
+      // come from the public view (RLS blocks a cross-user `profiles` read
+      // — that read returned nothing and the header showed "Unknown").
+      const [partnerMap, msgsRes] = await Promise.all([
+        _fetchPublicProfiles([partnerId]),
         sb.from('direct_messages')
           .select('id, sender_id, recipient_id, body, created_at, read_at')
           .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${partnerId}),and(sender_id.eq.${partnerId},recipient_id.eq.${currentUser.id})`)
           .order('created_at', { ascending: true }).limit(200),
       ]);
 
-      const partner = partnerRes.data || { username: 'Unknown' };
+      const partner = partnerMap[partnerId] || { username: 'Unknown' };
       const partnerName = partner.shop_name || partner.username || 'Unknown';
       const msgs = msgsRes.data || [];
 
@@ -30534,7 +30593,7 @@ function _loadAdmin(){
             toast.style.cssText = (toast.style.cssText || '') + ';display:flex;align-items:center;gap:10px;cursor:pointer';
             toast.innerHTML = '<span>Update available</span>'
               + '<button onclick="location.reload()" style="padding:4px 10px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.65rem;cursor:pointer;letter-spacing:.06em">REFRESH</button>';
-            document.body.appendChild(toast);
+            (window._pbToastStack ? window._pbToastStack() : document.body).appendChild(toast);
             // Persist longer than a regular toast — user might be
             // mid-task and want to finish before refreshing.
             setTimeout(() => {
