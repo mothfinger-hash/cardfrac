@@ -1028,6 +1028,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     #pbToastStack .toast{
       position:static !important;left:auto !important;right:auto !important;
       bottom:auto !important;top:auto !important;max-width:none;pointer-events:auto;
+      /* Depth fade: JS sets a per-toast opacity by stack position (newest =
+         full, older = dimmer). Transition makes the dim/brighten smooth as
+         toasts arrive and expire. */
+      transition:opacity .28s ease;
     }
     @media(max-width:600px){
       #pbToastStack{left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom,0px));max-width:none;}
@@ -5180,7 +5184,10 @@ nav {
 
 /* ─── 16. TOAST + TOOLTIP ────────────────────────────────────────── */
 
-.toast { background: #000 !important; border: 2px solid var(--accent) !important; border-radius: 0 !important; color: var(--accent) !important; box-shadow: 4px 4px 0 var(--accent) !important; font-family: 'Space Mono', monospace !important; letter-spacing: 0.1em; animation: r404-toast-slide .25s var(--r404-snap); }
+/* Default toast = COPPER (the hologram/callout brand tone) so the stack reads
+   on-theme instead of teal-on-teal. Error/success below keep their semantic
+   red/green so failures/confirmations still read at a glance. */
+.toast { background: #000 !important; border: 2px solid var(--copper) !important; border-radius: 0 !important; color: var(--copper) !important; box-shadow: 4px 4px 0 var(--copper) !important; font-family: 'Space Mono', monospace !important; letter-spacing: 0.1em; animation: r404-toast-slide .25s var(--r404-snap); }
 /* Error/success toast variants — same cyberpunk shape, semantic colour so
    failures read as failures instead of looking like a normal confirmation.
    Higher specificity + !important to beat the base .toast override above. */

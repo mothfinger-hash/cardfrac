@@ -40,9 +40,12 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // Remote-URL wrap loads pathbinder.gg over the network, so give the
-      // splash long enough to cover the first load instead of flashing blank.
-      launchShowDuration: 2500,
+      // Hand the system splash off IMMEDIATELY. NeonSplash (native promise
+      // manifesto on first launch, then the neon video) now owns the visible
+      // intro and covers the first webview load. A non-zero hold here would
+      // keep the OS splash on top of NeonSplash's overlay, so the first-launch
+      // promise screen would run and expire entirely behind it, never seen.
+      launchShowDuration: 0,
       backgroundColor: '#0A0E1A',
       showSpinner: false,
     },

@@ -55,13 +55,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 }
 
-// MARK: - Neon intro video
+// MARK: - Neon intro
 //
-// Full-screen neon reveal played once per cold launch, layered over the
-// webview. Streams from pathbinder.gg (this is a remote-URL wrap, so the app
-// needs the network regardless) and plays WITH sound — native playback isn't
-// subject to the webview's autoplay-muting policy. Failsafes guarantee the
-// overlay is removed even if the stream stalls, so launch is never blocked.
+// Cold-launch intro, once per process, EVERY launch:
+//   promise manifesto (held until the neon video is buffered) -> neon video -> app.
+//
+// The LaunchScreen storyboard already shows the promise image, so it's on screen
+// from the very first frame; NeonSplash then keeps that same image up (on top of
+// the buffering video) until the video is ready, then fades to reveal the video —
+// no dead gap. Streams from pathbinder.gg (remote-URL wrap) and plays WITH sound.
+// A MIN keeps the promise readable; a MAX + failsafes make sure a slow or dead
+// network can never wedge the launch.
 
 final class NeonPlayerView: UIView {
     override class var layerClass: AnyClass { AVPlayerLayer.self }
@@ -69,10 +73,21 @@ final class NeonPlayerView: UIView {
 }
 
 enum NeonSplash {
-    private static var overlay: UIView?
+    private static var videoView: NeonPlayerView?
+    private static var promiseView: UIImageView?
     private static var player: AVPlayer?
+    private static var itemObs: NSKeyValueObservation?
     private static var didRun = false
+    private static var videoReady = false
+    private static var videoStarted = false
+    private static var promiseGone = false
+    private static var dismissed = false
+    private static var startedAt: TimeInterval = 0
     private static let videoURL = "https://pathbinder.gg/pathbinder-neon-splash.mp4"
+    private static let promiseMin: TimeInterval = 1.8   // keep it readable
+    private static let promiseMax: TimeInterval = 6.0   // drop it even if video still buffering
+    private static let videoGiveup: TimeInterval = 9.0  // if video never started, skip to app
+    private static let hardCap: TimeInterval = 15.0     // absolute backstop
 
     static func presentWhenReady() {
         DispatchQueue.main.async {
@@ -86,53 +101,105 @@ enum NeonSplash {
     private static func present(over window: UIWindow) {
         guard !didRun, let url = URL(string: videoURL) else { return }
         didRun = true
+        startedAt = ProcessInfo.processInfo.systemUptime
 
         // Play sound even if the ringer switch is silent — this is a deliberate intro.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
 
+        // ---- Video layer (behind) ----
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
         p.actionAtItemEnd = .pause
         player = p
+        let vv = NeonPlayerView(frame: window.bounds)
+        vv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        vv.backgroundColor = UIColor(red: 10.0/255.0, green: 14.0/255.0, blue: 26.0/255.0, alpha: 1)
+        vv.playerLayer.videoGravity = .resizeAspectFill
+        vv.playerLayer.player = p
+        vv.addGestureRecognizer(UITapGestureRecognizer(target: NeonTapProxy.shared,
+                                                       action: #selector(NeonTapProxy.fire)))
+        window.addSubview(vv)
+        videoView = vv
 
-        let view = NeonPlayerView(frame: window.bounds)
-        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.backgroundColor = UIColor(red: 10.0/255.0, green: 14.0/255.0, blue: 26.0/255.0, alpha: 1)
-        view.playerLayer.videoGravity = .resizeAspectFill
-        view.playerLayer.player = p
-        view.addGestureRecognizer(UITapGestureRecognizer(target: NeonTapProxy.shared,
-                                                         action: #selector(NeonTapProxy.fire)))
-        window.addSubview(view)
-        overlay = view
+        // ---- Promise layer (on top of the video) ----
+        if let img = UIImage(named: "PromiseSplash") {
+            let iv = UIImageView(frame: window.bounds)
+            iv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            iv.backgroundColor = UIColor(red: 10.0/255.0, green: 14.0/255.0, blue: 26.0/255.0, alpha: 1)
+            iv.contentMode = .scaleAspectFit
+            iv.image = img
+            iv.isUserInteractionEnabled = true
+            iv.addGestureRecognizer(UITapGestureRecognizer(target: NeonTapProxy.shared,
+                                                           action: #selector(NeonTapProxy.firePromise)))
+            window.addSubview(iv)
+            promiseView = iv
+        } else {
+            promiseGone = true
+        }
 
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
                                                object: item, queue: .main) { _ in dismiss() }
-        // If the stream hasn't started within 4s, skip straight to the app.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-            if p.currentTime().seconds < 0.1 { dismiss() }
+        itemObs = item.observe(\.status, options: [.new]) { it, _ in
+            if it.status == .readyToPlay { onVideoReady() }
         }
-        // Absolute cap so the overlay can never linger.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 9) { dismiss() }
 
-        p.play()
+        // Failsafes.
+        DispatchQueue.main.asyncAfter(deadline: .now() + promiseMax)  { removePromise() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + videoGiveup) { if !videoStarted { dismiss() } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + hardCap)     { dismiss() }
+    }
+
+    private static func onVideoReady() {
+        guard !videoReady else { return }
+        videoReady = true
+        if promiseGone {
+            startVideo()
+        } else {
+            let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+            let wait = max(0, promiseMin - elapsed)
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { removePromise() }
+        }
+    }
+
+    private static func startVideo() {
+        guard !videoStarted, !dismissed else { return }
+        videoStarted = true
+        player?.play()
+    }
+
+    // Fade the promise away, revealing the (now playing) video underneath.
+    static func removePromise() {
+        guard !promiseGone else { return }
+        promiseGone = true
+        if videoReady { startVideo() }
+        guard let v = promiseView else { return }
+        promiseView = nil
+        UIView.animate(withDuration: 0.35, animations: { v.alpha = 0 }, completion: { _ in
+            v.removeFromSuperview()
+        })
     }
 
     static func dismiss() {
-        guard let v = overlay else { return }
-        overlay = nil
-        player?.pause()
-        player = nil
-        UIView.animate(withDuration: 0.4, animations: { v.alpha = 0 }, completion: { _ in
-            v.removeFromSuperview()
-        })
+        guard !dismissed else { return }
+        dismissed = true
+        itemObs?.invalidate(); itemObs = nil
+        player?.pause(); player = nil
+        if let pv = promiseView { promiseView = nil; pv.removeFromSuperview() }
+        if let v = videoView {
+            videoView = nil
+            UIView.animate(withDuration: 0.4, animations: { v.alpha = 0 }, completion: { _ in
+                v.removeFromSuperview()
+            })
+        }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
 
-// Bridges a tap gesture to NeonSplash's static dismiss (enums take no @objc
+// Bridges tap gestures to NeonSplash's static handlers (enums take no @objc
 // selectors). Must subclass NSObject so the gesture-recognizer target-action works.
 final class NeonTapProxy: NSObject {
     static let shared = NeonTapProxy()
     @objc func fire() { NeonSplash.dismiss() }
+    @objc func firePromise() { NeonSplash.removePromise() }
 }

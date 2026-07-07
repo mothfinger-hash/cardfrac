@@ -13731,6 +13731,23 @@ function _loadAdmin(){
     }
     window._pbToastStack = _pbToastStack;
 
+    // Depth fade: the newest toast (bottom of the column) is fully opaque;
+    // each older one above steps down in opacity so the stack recedes upward.
+    // Re-run on every add/remove so the gradient stays correct as toasts
+    // arrive and expire. The r404 entrance keyframe has no fill-mode, so this
+    // inline opacity takes over once the 0.25s slide-in finishes.
+    function _pbToastRefade(stack) {
+      if (!stack) return;
+      var kids = stack.children, n = kids.length;
+      for (var i = 0; i < n; i++) {
+        // Sticky toasts (e.g. the "Update available" refresh prompt) carry an
+        // action the user must reach — never dim them.
+        if (kids[i].classList && kids[i].classList.contains('pb-toast-sticky')) { kids[i].style.opacity = '1'; continue; }
+        var fromBottom = (n - 1) - i;   // 0 = newest (bottom-most)
+        kids[i].style.opacity = String(Math.max(0.4, 1 - fromBottom * 0.19));
+      }
+    }
+
     function showToast(message, type) {
       const toast = document.createElement('div');
       toast.className = 'toast' + (type === 'error' ? ' toast--error' : type === 'success' ? ' toast--success' : '');
@@ -13741,9 +13758,15 @@ function _loadAdmin(){
       toast.textContent = message;
       const _stack = _pbToastStack();
       // Soft cap: a burst of toasts shouldn't wall off the screen — drop the
-      // oldest (top of the stack) once we exceed the cap.
-      while (_stack.children.length >= 4 && _stack.firstElementChild) { _stack.firstElementChild.remove(); }
+      // oldest NON-sticky toast. Sticky toasts (the update/refresh prompt) are
+      // never auto-evicted so the user can still act on them.
+      while (_stack.children.length >= 4) {
+        var _victim = _stack.querySelector('.toast:not(.pb-toast-sticky)');
+        if (!_victim) break;
+        _victim.remove();
+      }
       _stack.appendChild(toast);
+      _pbToastRefade(_stack);
       // Errors stay on screen long enough to read and act on; confirmations
       // are quick. Longer messages get a little extra time. Tap to dismiss.
       const _base = type === 'error' ? 5200 : 2400;
@@ -13752,7 +13775,7 @@ function _loadAdmin(){
       const _dismiss = () => {
         if (_dismissed) return; _dismissed = true;
         toast.style.animation = 'slideOutLeft .3s ease';
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(() => { toast.remove(); _pbToastRefade(_stack); }, 300);
       };
       toast.style.cursor = 'pointer';
       toast.addEventListener('click', _dismiss);
@@ -30646,16 +30669,22 @@ function _loadAdmin(){
             // refresh action. If showToast doesn't support that shape
             // gracefully, fall back to a plain console nudge.
             const toast = document.createElement('div');
-            toast.className = 'toast';
+            // Sticky: this prompt carries a REFRESH action, so it must not be
+            // evicted by the toast soft-cap or dimmed by the depth-fade when
+            // other toasts arrive — that was making it vanish before it could
+            // be tapped.
+            toast.className = 'toast pb-toast-sticky';
             toast.style.cssText = (toast.style.cssText || '') + ';display:flex;align-items:center;gap:10px;cursor:pointer';
             toast.innerHTML = '<span>Update available</span>'
               + '<button onclick="location.reload()" style="padding:4px 10px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-size:.65rem;cursor:pointer;letter-spacing:.06em">REFRESH</button>';
             (window._pbToastStack ? window._pbToastStack() : document.body).appendChild(toast);
-            // Persist longer than a regular toast — user might be
-            // mid-task and want to finish before refreshing.
+            // Persist well past a regular toast — the user may be mid-task and
+            // want to finish before refreshing. Sticky keeps it visible; this
+            // just clears it eventually if ignored (the update still lands on
+            // the next natural reload).
             setTimeout(() => {
               try { toast.style.animation = 'slideOutLeft .3s ease'; setTimeout(() => toast.remove(), 300); } catch(_) {}
-            }, 15000);
+            }, 60000);
           } catch(_) {}
         });
       });
