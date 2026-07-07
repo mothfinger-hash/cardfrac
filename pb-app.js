@@ -641,13 +641,19 @@ function _loadAdmin(){
       // settings" real (Apple 3.1.2 / Google requirement).
       const _mTier = (typeof userTier === 'function') ? userTier() : ((currentUser && currentUser.subscription_tier) || 'free');
       const _mLabel = (typeof TIER_COLORS !== 'undefined' && TIER_COLORS[_mTier]) ? TIER_COLORS[_mTier].label : _mTier;
+      // Native (App Store / Play): show the current plan only — no "Manage
+      // subscription" button. It opens the Stripe portal (which permits paid
+      // plan upgrades), an external purchase surface Apple 3.1.1 forbids.
+      // Web keeps full manage/cancel. Members manage web-billed plans on the web.
+      const _mNative = (typeof _isNativeApp === 'function') && _isNativeApp();
       const membershipBlock = (_mTier && _mTier !== 'free')
         ? ''
           + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
           +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:8px;text-transform:uppercase">Membership</div>'
-          +   '<div style="font-size:.78rem;color:var(--text);margin-bottom:8px;line-height:1.5">Current plan: <strong style="color:var(--accent)">' + _mLabel + '</strong></div>'
-          +   '<div style="font-size:.66rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Update your payment method, view invoices, or cancel. Cancelling keeps your plan active until the end of the current billing period.</div>'
-          +   '<button type="button" onclick="closeModal(\'accountSettingsModal\');openBillingPortal()" style="width:100%;padding:11px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer">Manage subscription &rarr;</button>'
+          +   '<div style="font-size:.78rem;color:var(--text);' + (_mNative ? '' : 'margin-bottom:8px;') + 'line-height:1.5">Current plan: <strong style="color:var(--accent)">' + _mLabel + '</strong></div>'
+          +   (_mNative ? '' :
+                    '<div style="font-size:.66rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Update your payment method, view invoices, or cancel. Cancelling keeps your plan active until the end of the current billing period.</div>'
+                  + '<button type="button" onclick="closeModal(\'accountSettingsModal\');openBillingPortal()" style="width:100%;padding:11px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.85rem;font-weight:700;cursor:pointer">Manage subscription &rarr;</button>')
           + '</div>'
         : '';
 
@@ -672,11 +678,11 @@ function _loadAdmin(){
           return;
         }
         const emsg = (result && result.error) || '';
-        showToast(/no billing/i.test(emsg) ? 'No billing account yet — subscribe on the web first.' : 'Could not open billing — please try again.', 'error');
+        showToast(/no billing/i.test(emsg) ? 'No active subscription found.' : 'Could not open billing — please try again.', 'error');
       } catch (e) {
         console.error('[billing portal]', e);
         const emsg = (e && e.message) || '';
-        showToast(/no billing/i.test(emsg) ? 'No billing account yet — subscribe on the web first.' : 'Could not open billing — please try again.', 'error');
+        showToast(/no billing/i.test(emsg) ? 'No active subscription found.' : 'Could not open billing — please try again.', 'error');
       }
     }
     window.openBillingPortal = openBillingPortal;
@@ -5589,6 +5595,20 @@ function _loadAdmin(){
               </div>
             </div>
 
+            <!-- Following — sellers you follow, for quick access -->
+            <div class="ndash-panel" data-panel-id="follows">
+              <div class="ndash-panel-h">
+                <div class="ndash-panel-title">Following</div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <button class="ndash-panel-link" onclick="openMyFollowsModal()">MANAGE →</button>
+                  ${_dh}
+                </div>
+              </div>
+              <div class="ndash-panel-body" id="ndashFollowsBody">
+                <div style="text-align:center;padding:16px;color:var(--muted);font-size:.75rem">Loading…</div>
+              </div>
+            </div>
+
             ${tierAtLeast('shop') ? `<div class="ndash-panel" data-panel-id="storefront">
               <div class="ndash-panel-h">
                 <div class="ndash-panel-title">Storefront</div>
@@ -5741,6 +5761,8 @@ function _loadAdmin(){
       loadDashOrder();
       initDashDrag();
       initDashResize();
+      // Fill the Following panel (async — needs the followed profiles).
+      _paintFollowsPanel();
       // Draw YTD SVG line chart after DOM is settled
       drawYtdChart(snapshots, totalValue);
       // Append the Discord-connect panel below everything else so it
@@ -6074,6 +6096,55 @@ function _loadAdmin(){
       try { localStorage.removeItem('pb_dash_order_v1'); } catch(_) {}
       renderDashboard();
     }
+
+    // Populate the dashboard "Following" panel with the user's top followed
+    // sellers (avatar + name, tap → their profile). Async because it needs the
+    // profiles; the panel shell renders synchronously inside renderDashboard.
+    async function _paintFollowsPanel() {
+      var body = document.getElementById('ndashFollowsBody');
+      if (!body) return;
+      try {
+        if (!window._followingMeta || window._followingMeta.size === 0) {
+          try { await _hydrateFollows(); } catch (_) {}
+        }
+        var meta = window._followingMeta || new Map();
+        var ids = Array.from(meta.keys()).sort(function(a, b) {
+          return (meta.get(a).sort_order || 0) - (meta.get(b).sort_order || 0);
+        });
+        if (!ids.length) {
+          body.innerHTML = '<div style="text-align:center;padding:16px 12px;color:var(--muted);font-size:.72rem;line-height:1.55">You aren&rsquo;t following anyone yet.<br>Tap <strong style="color:var(--accent)">Follow</strong> on a seller to pin them here.</div>';
+          return;
+        }
+        var top = ids.slice(0, 6);
+        var profiles = {};
+        try {
+          var r = await sb.from('profiles')
+            .select('id, username, shop_name, avatar_url, subscription_tier')
+            .in('id', top);
+          if (!r.error && Array.isArray(r.data)) r.data.forEach(function(p) { profiles[p.id] = p; });
+        } catch (_) {}
+        var rows = top.map(function(id) {
+          var p = profiles[id] || {};
+          var name = p.shop_name || p.username || 'Unknown';
+          var mono = (name.slice(0, 1) || '?').toUpperCase();
+          var avatar = p.avatar_url
+            ? `<img src="${_escHtml(p.avatar_url)}" style="width:30px;height:30px;border-radius:var(--r-pill,999px);object-fit:cover;flex-shrink:0" loading="lazy" decoding="async">`
+            : `<div style="width:30px;height:30px;border-radius:var(--r-pill,999px);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:.7rem;flex-shrink:0">${_escHtml(mono)}</div>`;
+          return `<div onclick="openSellerProfile('${id}')" style="display:flex;align-items:center;gap:9px;padding:7px 6px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r-sm,6px);margin-bottom:5px;background:var(--surface2)">
+              ${avatar}
+              <div style="flex:1;min-width:0"><div style="font-size:.74rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(name)}</div></div>
+              <span style="color:var(--muted);font-size:.85rem;flex-shrink:0">&rarr;</span>
+            </div>`;
+        }).join('');
+        var more = ids.length > top.length
+          ? `<div style="text-align:center;padding:4px 0 2px"><button class="ndash-panel-link" style="border-color:var(--border)" onclick="openMyFollowsModal()">+${ids.length - top.length} more</button></div>`
+          : '';
+        body.innerHTML = rows + more;
+      } catch (e) {
+        body.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.72rem">Could not load your follows.</div>';
+      }
+    }
+    window._paintFollowsPanel = _paintFollowsPanel;
 
     // ── Dashboard Panel Resize ───────────────────────────────────────────────
     // Adds a drag handle at the bottom of each panel. Heights are stored in
@@ -13327,7 +13398,7 @@ function _loadAdmin(){
       if (_disc) _disc.style.display = _native ? 'none' : '';
       const _sub = document.getElementById('pricingSubtitle');
       if (_sub) _sub.textContent = _native
-        ? 'Manage your membership at pathbinder.gg — changes sync back to the app automatically.'
+        ? 'Everything each PathBinder membership tier includes.'
         : 'All plans include the PathBinder mobile app.';
 
       grid.innerHTML = TIER_DEFS.map(t => {
@@ -13373,8 +13444,11 @@ function _loadAdmin(){
         } else if (t.ctaAction === 'shop_intake') {
           ctaBtn = `<button onclick="openShopIntake()" style="width:100%;padding:9px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px)">Contact us →</button>`;
         } else if (_native && t.ctaAction) {
-          // Native: neutral manage-on-web link instead of a priced Upgrade CTA.
-          ctaBtn = `<button onclick="upgradeTier('${t.id}')" style="width:100%;padding:9px;background:transparent;color:var(--accent);border:1px solid var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;letter-spacing:.04em;border-radius:var(--r-sm,6px)">Manage on the web →</button>`;
+          // Native (App Store / Play): informational only — NO purchase CTA and
+          // no link to any external purchase flow. Apple 3.1.1 / Play Payments
+          // forbid steering digital-subscription buyers off-app. Members manage
+          // their plan on the web themselves; the app must not point them there.
+          ctaBtn = '';
         } else if (t.ctaAction) {
           const isAbove = TIER_ORDER.indexOf(t.id) < TIER_ORDER.indexOf(current);
           const ctaText = isPromoTarget ? (t.ctaLabel + ' — Save 25% →') : (t.ctaLabel + ' →');
@@ -13508,6 +13582,28 @@ function _loadAdmin(){
       try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; }
     }
 
+    // Native shells (iOS WKWebView / Android WebView) silently DROP taps on
+    // <a target="_blank"> — there is no window.open handler — so the legally-
+    // required Privacy / Terms links (signup consent + footer) and any other
+    // _blank link go nowhere. Route every http(s) _blank tap through the
+    // Capacitor Browser so it opens in an in-app view (Apple 5.1.1: the privacy
+    // policy must be reachable in-app). Web is untouched — target="_blank"
+    // works natively there. Delegated on document (capture phase) so it also
+    // covers dynamically-rendered links; mailto:/tel:/etc. fall through to the OS.
+    (function _wireBlankLinksForNative() {
+      try {
+        if (typeof _isNativeApp !== 'function' || !_isNativeApp()) return;
+        document.addEventListener('click', function (e) {
+          var a = (e.target && e.target.closest) ? e.target.closest('a[target="_blank"]') : null;
+          if (!a) return;
+          var url = a.href || '';
+          if (!/^https?:\/\//i.test(url)) return;
+          e.preventDefault();
+          _openExternal(url);
+        }, true);
+      } catch (_) {}
+    })();
+
     // ── Native push (FCM/APNs) ─────────────────────────────────────────────
     // Called by the standalone pb-push.js module (native only). Stores the
     // device token on the user's profile for the server-side sender.
@@ -13551,11 +13647,12 @@ function _loadAdmin(){
     function upgradeTier(tierId) {
       if (!currentUser) { openModal('loginModal'); closeModal('membershipModal'); return; }
       closeModal('membershipModal');
-      // App Store / Play build: subscriptions are sold on the web only (no IAP).
-      // Route the user to the web to subscribe instead of running Stripe in-app.
+      // App Store / Play build: never initiate OR steer to a purchase — Apple
+      // 3.1.1 / Play Payments forbid it for digital subscriptions. Show the
+      // informational tier benefits instead of opening any external checkout.
+      // (No native surface calls this anymore; kept as defense in depth.)
       if (_isNativeApp()) {
-        _openExternal('https://pathbinder.gg/?subscribe=' + encodeURIComponent(tierId || ''));
-        showToast('Manage your membership on pathbinder.gg');
+        openPricingModal();
         return;
       }
       initiateMembershipCheckout(tierId);
@@ -22020,11 +22117,13 @@ function _loadAdmin(){
       }).join('') || '<div style="text-align:center;padding:30px 10px;color:var(--muted);font-size:.78rem">No messages yet. Send the first one below.</div>';
 
       overlay.querySelector('.modal').innerHTML = ''
-        + '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px">'
-        +   `<div style="display:flex;gap:8px;align-items:center;cursor:pointer" onclick="document.getElementById('dmThreadSheet').remove();openSellerProfile('${partnerId}')">`
-        +     `<div style="font-family:'Orbitron',monospace;font-weight:800;font-size:.85rem;color:var(--text)">${_escHtml(partnerName)}</div>`
+        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding-bottom:10px">'
+        +   `<div style="display:flex;gap:8px;align-items:center;cursor:pointer;flex:1;min-width:0" onclick="document.getElementById('dmThreadSheet').remove();openSellerProfile('${partnerId}')">`
+        +     `<div style="font-family:'Orbitron',monospace;font-weight:800;font-size:.85rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(partnerName)}</div>`
         +   '</div>'
-        +   '<div style="display:flex;gap:6px;align-items:center">'
+        +   '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">'
+        +     `<button onclick="openReportModal('message','${partnerId}','${_escJsAttr(partnerName)}')" style="background:none;border:none;color:var(--muted);font-size:.68rem;cursor:pointer;letter-spacing:.04em;text-decoration:underline">Report</button>`
+        +     `<button onclick="if(confirm('Block ${_escJsAttr(partnerName)}?')){blockUser('${partnerId}').then(()=>document.getElementById('dmThreadSheet').remove())}" style="background:none;border:none;color:var(--red);font-size:.68rem;cursor:pointer;letter-spacing:.04em;text-decoration:underline">Block</button>`
         +     '<button onclick="document.getElementById(\'dmThreadSheet\').remove();openInboxModal()" style="background:none;border:none;color:var(--muted);font-size:.7rem;cursor:pointer;letter-spacing:.04em">Inbox</button>'
         +     '<button onclick="document.getElementById(\'dmThreadSheet\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px;color:var(--muted)">×</button>'
         +   '</div>'
@@ -22211,6 +22310,7 @@ function _loadAdmin(){
       }
       window._followingIds.add(targetId);
       window._followingMeta.set(targetId, { sort_order: nextOrder, nickname: null });
+      if (window._paintFollowsPanel) window._paintFollowsPanel();
       showToast('Following');
       return true;
     }
@@ -22221,6 +22321,7 @@ function _loadAdmin(){
       if (del.error) { showToast('Unfollow failed: ' + del.error.message); return false; }
       window._followingIds.delete(targetId);
       window._followingMeta.delete(targetId);
+      if (window._paintFollowsPanel) window._paintFollowsPanel();
       showToast('Unfollowed');
       return true;
     }
@@ -29934,9 +30035,11 @@ function _loadAdmin(){
       }
 
       // ── Web subscribe deep-link ─────────────────────────────────────────
-      // The native app routes "upgrade" taps to pathbinder.gg/?subscribe=<tier>
-      // (subscriptions are web-only to avoid app-store IAP fees). On the web,
-      // open the pricing modal for that tier.
+      // Web-only convenience: a ?subscribe=<tier> link (e.g. from a marketing
+      // email) opens the pricing modal pre-targeted to that tier. The NATIVE
+      // app never generates these links, and its pricing modal is benefits-only
+      // with no purchase CTA, so this is informational there — it never starts
+      // a purchase (Apple 3.1.1 / Play Payments).
       const subscribeTier = urlParams.get('subscribe');
       if (subscribeTier) {
         window.history.replaceState({}, '', window.location.pathname);

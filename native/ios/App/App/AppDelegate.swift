@@ -1,6 +1,7 @@
 import UIKit
 import Capacitor
 import FirebaseCore
+import AVFoundation
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -11,6 +12,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Initialize Firebase (FCM push). Must run before the push plugin
         // registers so @capacitor/push-notifications returns an FCM token.
         FirebaseApp.configure()
+        // Neon reveal video over the webview (once per cold launch).
+        NeonSplash.presentWhenReady()
         // Override point for customization after application launch.
         return true
     }
@@ -50,4 +53,86 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+// MARK: - Neon intro video
+//
+// Full-screen neon reveal played once per cold launch, layered over the
+// webview. Streams from pathbinder.gg (this is a remote-URL wrap, so the app
+// needs the network regardless) and plays WITH sound — native playback isn't
+// subject to the webview's autoplay-muting policy. Failsafes guarantee the
+// overlay is removed even if the stream stalls, so launch is never blocked.
+
+final class NeonPlayerView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
+enum NeonSplash {
+    private static var overlay: UIView?
+    private static var player: AVPlayer?
+    private static var didRun = false
+    private static let videoURL = "https://pathbinder.gg/pathbinder-neon-splash.mp4"
+
+    static func presentWhenReady() {
+        DispatchQueue.main.async {
+            let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow })
+                ?? UIApplication.shared.windows.first
+            guard let w = window else { return }
+            present(over: w)
+        }
+    }
+
+    private static func present(over window: UIWindow) {
+        guard !didRun, let url = URL(string: videoURL) else { return }
+        didRun = true
+
+        // Play sound even if the ringer switch is silent — this is a deliberate intro.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        let item = AVPlayerItem(url: url)
+        let p = AVPlayer(playerItem: item)
+        p.actionAtItemEnd = .pause
+        player = p
+
+        let view = NeonPlayerView(frame: window.bounds)
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.backgroundColor = UIColor(red: 10.0/255.0, green: 14.0/255.0, blue: 26.0/255.0, alpha: 1)
+        view.playerLayer.videoGravity = .resizeAspectFill
+        view.playerLayer.player = p
+        view.addGestureRecognizer(UITapGestureRecognizer(target: NeonTapProxy.shared,
+                                                         action: #selector(NeonTapProxy.fire)))
+        window.addSubview(view)
+        overlay = view
+
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
+                                               object: item, queue: .main) { _ in dismiss() }
+        // If the stream hasn't started within 4s, skip straight to the app.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            if p.currentTime().seconds < 0.1 { dismiss() }
+        }
+        // Absolute cap so the overlay can never linger.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 9) { dismiss() }
+
+        p.play()
+    }
+
+    static func dismiss() {
+        guard let v = overlay else { return }
+        overlay = nil
+        player?.pause()
+        player = nil
+        UIView.animate(withDuration: 0.4, animations: { v.alpha = 0 }, completion: { _ in
+            v.removeFromSuperview()
+        })
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+}
+
+// Bridges a tap gesture to NeonSplash's static dismiss (enums take no @objc
+// selectors). Must subclass NSObject so the gesture-recognizer target-action works.
+final class NeonTapProxy: NSObject {
+    static let shared = NeonTapProxy()
+    @objc func fire() { NeonSplash.dismiss() }
 }

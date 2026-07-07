@@ -43,7 +43,7 @@ const config: CapacitorConfig = {
       // Remote-URL wrap loads pathbinder.gg over the network, so give the
       // splash long enough to cover the first load instead of flashing blank.
       launchShowDuration: 2500,
-      backgroundColor: '#0F0D0A',
+      backgroundColor: '#0A0E1A',
       showSpinner: false,
     },
     StatusBar: {
