@@ -48,12 +48,13 @@ module.exports = async function handler(req, res) {
     // New direct message → notify the recipient.
     if (table === 'direct_messages' && type === 'INSERT' && record.recipient_id) {
       const who = await nameFor(record.sender_id);
-      await sendPushToUser(record.recipient_id, {
+      const push = await sendPushToUser(record.recipient_id, {
         title: 'New message from ' + who,
         body: String(record.body || '').slice(0, 90),
         data: { open: 'inbox', from: record.sender_id || '' },
       });
-      return res.status(200).json({ ok: true, rule: 'dm' });
+      console.log('[push] dm ->', record.recipient_id, JSON.stringify(push));
+      return res.status(200).json({ ok: true, rule: 'dm', push });
     }
 
     // Order marked shipped → notify the buyer (only on the transition INTO
