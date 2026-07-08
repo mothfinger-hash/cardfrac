@@ -132,7 +132,7 @@ enum NeonSplash {
         player = p
         let vv = NeonPlayerView(frame: window.bounds)
         vv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        vv.backgroundColor = UIColor(red: 10.0/255.0, green: 14.0/255.0, blue: 26.0/255.0, alpha: 1)
+        vv.backgroundColor = UIColor.black
         vv.playerLayer.videoGravity = .resizeAspectFill
         vv.playerLayer.player = p
         vv.addGestureRecognizer(UITapGestureRecognizer(target: NeonTapProxy.shared,
@@ -144,7 +144,7 @@ enum NeonSplash {
         if let img = UIImage(named: "PromiseSplash") {
             let iv = UIImageView(frame: window.bounds)
             iv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            iv.backgroundColor = UIColor(red: 10.0/255.0, green: 14.0/255.0, blue: 26.0/255.0, alpha: 1)
+            iv.backgroundColor = UIColor.black
             iv.contentMode = .scaleAspectFit
             iv.image = img
             iv.isUserInteractionEnabled = true

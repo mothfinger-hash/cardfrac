@@ -49,7 +49,7 @@ final class NeonSplash {
 
         // ---- Video layer (behind) ----
         final FrameLayout overlay = new FrameLayout(activity);
-        overlay.setBackgroundColor(Color.parseColor("#0A0E1A"));
+        overlay.setBackgroundColor(Color.BLACK);
         overlay.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         final TextureView texture = new TextureView(activity);
