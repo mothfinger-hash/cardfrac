@@ -28516,7 +28516,10 @@ function _loadAdmin(){
           : 'set_name, set_code, product_type';
         const res = await sb.from('catalog')
           .select(cols)
-          .like('id', prefix + '%')
+          // Include the sealed-<prefix> id namespace too, else sealed-only
+          // sets never get has_sealed (mirrors catalog_sets_summary_v2). Use
+          // * wildcards in .or() per the PostgREST gotcha, not %.
+          .or('id.ilike.' + prefix + '*,id.ilike.sealed-' + prefix + '*')
           .range(offset, offset + 999);
         if (res.error) {
           const msg = (res.error.message || '').toLowerCase();
@@ -29246,7 +29249,13 @@ function _loadAdmin(){
             // to the same key. Fall back to the raw number+name for
             // unparseable numbers (letter-only codes, promos) so we never
             // merge two genuinely different cards into one bucket.
-            const _key = _nv > 0
+            // Only collapse on the numeric value for LETTER-FREE numbers. The
+            // padded/unpadded dupes are always pure-numeric ("001" vs "1"), so
+            // this still catches them — while a lettered subset number (Trainer
+            // Gallery "TG01", Shiny Vault "SV01", Galarian Gallery "GG01") keeps
+            // its full string as the key and can never merge into base card #1.
+            const _hasAlpha = /[a-z]/i.test(String(_c.number || ''));
+            const _key = (!_hasAlpha && _nv > 0)
               ? 'n:' + _nv
               : 's:' + String(_c.number || '').toLowerCase().trim() + '|' + String(_c.name || '').toLowerCase().trim();
             const _g = _dupGroups.get(_key);

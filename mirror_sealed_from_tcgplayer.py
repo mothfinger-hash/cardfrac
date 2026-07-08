@@ -203,8 +203,13 @@ def download(url):
 
 def main():
     ap = argparse.ArgumentParser(description="Upgrade sealed images from PriceCharting to TCGplayer.")
-    ap.add_argument("--group", required=True, help="TCGplayer groupId(s), comma-separated.")
+    ap.add_argument("--group", default=None, help="TCGplayer groupId(s), comma-separated. Omit when using --all.")
     ap.add_argument("--game", required=True, choices=sorted(GAME), help="game_type of the group(s).")
+    ap.add_argument("--all", action="store_true",
+                    help="Upgrade EVERY set for this game — iterates all TCGplayer groups in the "
+                         "category. Idempotent: rows already on a TCGplayer image are skipped "
+                         "(the catalog query only matches PriceCharting image_urls). ALWAYS "
+                         "--dry-run this first; it can touch a lot of sets.")
     ap.add_argument("--min-ratio", type=float, default=0.66,
                     help="Fuzzy name-match threshold (default 0.66). Token-aware scoring means "
                          "true word-order variants score ~1.0; 0.66 filters weak/ambiguous "
@@ -213,10 +218,12 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Show matches; download/upload/write nothing.")
     ap.add_argument("--workers", type=int, default=4)
     args = ap.parse_args()
+    if not args.group and not args.all:
+        ap.error("pass --group <ids> or --all")
 
     cat, seg = GAME[args.game]
-    groups = [int(g) for g in args.group.split(",") if g.strip()]
     gidx = group_index(cat)
+    groups = sorted(gidx.keys()) if args.all else [int(g) for g in args.group.split(",") if g.strip()]
 
     plan = []   # (our_row, tcg_match)
     unmatched = []

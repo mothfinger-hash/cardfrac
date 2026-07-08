@@ -47,9 +47,17 @@ LANGUAGE sql STABLE AS $$
     AND set_name IS NOT NULL
     -- Same Pokemon-EN legacy-id awareness as catalog_sets_summary:
     -- when called with 'en-', also include bare-prefix legacy rows.
+    --
+    -- Sealed products live under a 'sealed-<prefix>' id namespace
+    -- (e.g. sealed-op-pc-123 / sealed-lor-pc-45), NOT the bare singles
+    -- prefix (op- / lor-). Include BOTH arms so a set that has only
+    -- sealed rows still reports has_sealed = true and surfaces under the
+    -- Sealed toggle. Without the 'sealed-' arm, One Piece / Lorcana / MTG
+    -- / YGO sealed products exist in catalog but never appear on the Sets
+    -- page (has_sealed was computed only from singles-prefixed rows).
     AND (
-      (p_prefix = 'en-' AND public.is_pokemon_en_id(id))
-      OR (p_prefix <> 'en-' AND id ILIKE p_prefix || '%')
+      (p_prefix = 'en-' AND (public.is_pokemon_en_id(id) OR id ILIKE 'sealed-en-%'))
+      OR (p_prefix <> 'en-' AND (id ILIKE p_prefix || '%' OR id ILIKE 'sealed-' || p_prefix || '%'))
     )
   GROUP BY set_code, set_name;
 $$;
