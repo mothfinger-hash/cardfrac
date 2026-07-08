@@ -1148,7 +1148,12 @@ function _loadAdmin(){
       });
     })();
     // Convenience wrapper for landing page CTA buttons
-    function openAuthModal(tab) {
+    function openAuthModal(tab, tier) {
+      // Remember a paid-tier "Get Started" intent so we can resume the upgrade
+      // path once the user logs in or creates an account (web only — native has
+      // no in-app purchase). Opening the auth modal without a tier clears any
+      // stale intent, so a later plain Sign In doesn't drag someone to pricing.
+      try { window._pendingUpgradeTier = (tier && tier !== 'free') ? tier : null; } catch (_) {}
       if (tab === 'signup') {
         openModal('registerModal');
       } else {
@@ -13699,7 +13704,9 @@ function _loadAdmin(){
     } catch (_) {}
 
     function upgradeTier(tierId) {
-      if (!currentUser) { openModal('loginModal'); closeModal('membershipModal'); return; }
+      // Logged out: remember the tier so we resume this checkout after sign-in
+      // instead of just dropping them on the dashboard (web only).
+      if (!currentUser) { try { window._pendingUpgradeTier = (tierId && tierId !== 'free') ? tierId : null; } catch (_) {} openModal('loginModal'); closeModal('membershipModal'); return; }
       closeModal('membershipModal');
       // App Store / Play build: never initiate OR steer to a purchase — Apple
       // 3.1.1 / Play Payments forbid it for digital subscriptions. Show the
@@ -30273,6 +30280,18 @@ function _loadAdmin(){
         if (!currentUser) currentUser = { ...session.user };
         updateAuthUI();
         renderAllContent();
+        // Resume a paid-tier "Get Started"/upgrade intent captured before
+        // sign-in — send the user to the pricing/upgrade path instead of just
+        // the dashboard. Web only (native has no in-app purchase). Consumed
+        // once, and placed before either hydration branch so it fires for both.
+        try {
+          var _pendTier = window._pendingUpgradeTier;
+          window._pendingUpgradeTier = null;
+          if (_pendTier && _pendTier !== 'free'
+              && !((typeof _isNativeApp === 'function') && _isNativeApp())) {
+            setTimeout(function () { try { openPricingModal(_pendTier); } catch (_) {} }, 700);
+          }
+        } catch (_) {}
         if (freshSignIn && !isPublicView) { freshSignIn = false; showPage('account'); setMobileNav('account'); }
         // INIT badge is awarded inside syncUserDataFromCloud AFTER the
         // cloud badge list has been merged into localStorage. Awarding

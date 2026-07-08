@@ -38,6 +38,9 @@ pokemon,tcg,card,collection,scanner,binder,magic,yugioh,one piece,price,value,tr
 ```
 PathBinder is where TCG collectors finally feel organized.
 
+BUILD CUSTOM BINDERS
+3x3, 2x2, or 1x1. Change binder background colors or upload an image. Binder slots also allow the Michi Method. Upload up to three images per page, choose which slots you want them to cover, and stare in amazement at your beautifully curated binder pages. Generate shareable links that allow your friends to follow along your collection path.
+
 Scan your cards with your camera and they're logged instantly — name, set,
 number, condition, and live market value. Build digital binders, track what
 your collection is worth over time, and never lose track of a card again.
