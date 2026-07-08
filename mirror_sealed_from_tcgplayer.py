@@ -113,6 +113,19 @@ _PUNCT = _re.compile(r"[^a-z0-9]+")
 def norm(s):
     return _PUNCT.sub(" ", (s or "").lower()).strip()
 
+def _san(s):
+    """Strip PostgREST .or() structural chars (commas/parens) and ilike
+    wildcards so an interpolated group name can't break the clause. Keep
+    apostrophes — they're literal in ilike and appear in real set names."""
+    return _re.sub(r"[,()*%]", " ", s or "").strip()
+
+# Generic sealed-deck product names our catalog uses (from PriceCharting) that
+# carry no set identity — TCGplayer names the same product 'Starter Deck N:
+# Name', so match these against the GROUP name instead of the product name.
+_GENERIC_DECK = {"sealed deck", "sealed starter deck"}
+def _is_generic_deck(name):
+    return norm(name) in _GENERIC_DECK
+
 def is_card_product(p):
     """TCGCSV cards carry a 'Number' extendedData field; sealed products don't."""
     for ed in p.get("extendedData", []):
@@ -127,12 +140,30 @@ def upgrade_image(url):
     return _re.sub(r"_(200w|in_\d+x\d+)\.", "_in_1000x1000.", url) if "_" in url else url
 
 
+# Bandai/TCGplayer set codes live in the group 'abbreviation' (OP01, EB-03,
+# ST-06, ...). Our catalog set_names use the CODE ('One Piece OP01') OR the
+# NAME ('One Piece Paramount War'), so we match on either. Skip promo/event
+# sub-groups (Pre-Release / Release Event / Anniversary) — their shared code
+# would otherwise steal rows from the main set.
+_CODE_RE   = _re.compile(r"(OP\d{2}|EB-?\d{2}|ST-?\d{2}|SD-?\d{2}|PRB-?\d{2}|LT-?\d{2})", _re.I)
+_SUFFIX_RE = _re.compile(r"\b(PRE|RE|ANN|DD|PROMO|CS|WS|TR)\b", _re.I)
+def _group_code(abbr):
+    abbr = abbr or ""
+    if _SUFFIX_RE.search(abbr):
+        return ""
+    m = _CODE_RE.search(abbr.replace(" ", ""))
+    return m.group(1).upper().replace("-", "") if m else ""
+
+
 def group_index(category_id):
+    """Return (names, codes): {groupId: set_name}, {groupId: set_code|''}."""
     data = tcg_get(f"/tcgplayer/{category_id}/groups")
-    out = {}
+    names, codes = {}, {}
     for g in data.get("results", data if isinstance(data, list) else []):
-        out[g.get("groupId")] = g.get("name") or ""
-    return out
+        gid = g.get("groupId")
+        names[gid] = g.get("name") or ""
+        codes[gid] = _group_code(g.get("abbreviation"))
+    return names, codes
 
 
 def sealed_products(category_id, group_id, group_name):
@@ -170,10 +201,25 @@ def _score(a, b):
     return max(ra, rs, dice)
 
 
+# Container / format tokens. A Booster BOX and a Booster PACK are different
+# products at very different prices, yet 'booster box' vs 'booster pack' scores
+# ~0.70 — above threshold. Never let a row take a photo whose container type
+# conflicts (box<->pack<->tin<->deck...). Only rejects when BOTH names name a
+# container and the sets are disjoint; identical-container matches ('booster
+# box' -> 'booster box') and no-container matches are unaffected.
+_CONTAINERS = {"box", "pack", "case", "tin", "display", "blister", "deck", "bundle"}
+def _container_conflict(a, b):
+    ca = _CONTAINERS & set(a.split())
+    cb = _CONTAINERS & set(b.split())
+    return bool(ca and cb and not (ca & cb))
+
+
 def best_match(our_name, tcg_list, min_ratio):
     target = norm(our_name)
     best, best_r = None, 0.0
     for rem, pid, img, full in tcg_list:
+        if _container_conflict(target, rem):
+            continue
         r = _score(target, rem)
         if r > best_r:
             best, best_r = (rem, pid, img, full), r
@@ -207,9 +253,14 @@ def main():
     ap.add_argument("--game", required=True, choices=sorted(GAME), help="game_type of the group(s).")
     ap.add_argument("--all", action="store_true",
                     help="Upgrade EVERY set for this game — iterates all TCGplayer groups in the "
-                         "category. Idempotent: rows already on a TCGplayer image are skipped "
-                         "(the catalog query only matches PriceCharting image_urls). ALWAYS "
-                         "--dry-run this first; it can touch a lot of sets.")
+                         "category. Idempotent: a row already pointing at its computed TCGplayer "
+                         "dest URL is skipped. ALWAYS --dry-run this first; it can touch a lot of sets.")
+    ap.add_argument("--replace-hosted", action="store_true",
+                    help="Also re-photo sealed rows whose image is ALREADY self-hosted on our "
+                         "Supabase storage (or any non-PriceCharting source), not just the "
+                         "PriceCharting-sourced ones. Use this to swap self-hosted sealed art for "
+                         "TCGplayer's. Rows already pointing at their TCGplayer dest URL are "
+                         "skipped, so it stays re-runnable. --dry-run first.")
     ap.add_argument("--min-ratio", type=float, default=0.66,
                     help="Fuzzy name-match threshold (default 0.66). Token-aware scoring means "
                          "true word-order variants score ~1.0; 0.66 filters weak/ambiguous "
@@ -222,35 +273,61 @@ def main():
         ap.error("pass --group <ids> or --all")
 
     cat, seg = GAME[args.game]
-    gidx = group_index(cat)
+    gidx, gcodes = group_index(cat)
     groups = sorted(gidx.keys()) if args.all else [int(g) for g in args.group.split(",") if g.strip()]
 
     plan = []   # (our_row, tcg_match)
     unmatched = []
+    already = 0   # rows already sitting on their computed TCGplayer dest URL
     for gid in groups:
         gname = gidx.get(gid, "")
         if not gname:
             print(f"  ! group {gid} not found in category {cat}; skipping"); continue
+        gcode = gcodes.get(gid, "")
         tcg_list = sealed_products(cat, gid, gname)
-        # Our PC sealed rows for this set, still on PriceCharting's CDN.
-        rows = pg_get("catalog", params={
+        # Our sealed rows for this set. Scope by group NAME or set CODE (our
+        # catalog uses both — 'One Piece Paramount War' vs 'One Piece OP01').
+        # Exclude Japanese rows: this TCGplayer category is English, and we must
+        # never stamp English art onto a Japanese product. By default only
+        # PriceCharting-sourced rows; with --replace-hosted, any source.
+        _or_terms = [f"set_name.ilike.*{_san(gname)}*"]
+        if gcode:
+            _or_terms.append(f"set_name.ilike.*{gcode}*")
+        _params = {
             "select": "id,name,set_code,set_name,image_url",
             "id": f"like.sealed-{seg}-*",
-            "set_name": f"ilike.*{gname}*",
-            "image_url": "ilike.*pricecharting*",
-        })
-        print(f"\n  {args.game} group {gid} '{gname}': "
-              f"{len(tcg_list)} TCGplayer sealed, {len(rows)} PC sealed rows to upgrade")
+            "set_name": "not.ilike.*japanese*",
+            "or": "(" + ",".join(_or_terms) + ")",
+        }
+        if not args.replace_hosted:
+            _params["image_url"] = "ilike.*pricecharting*"
+        rows = pg_get("catalog", params=_params)
+        print(f"\n  {args.game} group {gid} '{gname}'{(' [' + gcode + ']') if gcode else ''}: "
+              f"{len(tcg_list)} TCGplayer sealed, {len(rows)} sealed rows to consider")
         for row in rows:
-            match, r = best_match(row.get("name") or "", tcg_list, args.min_ratio)
-            if match:
-                plan.append((row, match))
-                print(f"    MATCH  {row['name']!r:38} -> {match[3]!r}  (r={r:.2f}, pid={match[1]})")
-            else:
+            our_name = row.get("name") or ""
+            # A generic 'Sealed Deck' can't match TCGplayer's 'Starter Deck N:
+            # Name' by product name — the deck IS the set, so match the GROUP
+            # name instead.
+            target = gname if _is_generic_deck(our_name) else our_name
+            match, r = best_match(target, tcg_list, args.min_ratio)
+            if not match:
                 unmatched.append(row)
-                print(f"    ----   {row['name']!r:38} -> no match >= {args.min_ratio} (best r={r:.2f})")
+                print(f"    ----   {our_name!r:38} -> no match >= {args.min_ratio} (best r={r:.2f})")
+                continue
+            # Skip a row already pointing at the dest URL it would be given —
+            # keeps --replace-hosted re-runnable. In default mode a PriceCharting
+            # url never equals dest, so nothing is spuriously skipped.
+            pid = match[1]
+            sc = (row.get("set_code") or "unknown").lower()
+            dest_url = f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/sealed/{seg}/{sc}/{pid}.webp"
+            if (row.get("image_url") or "") == dest_url:
+                already += 1
+                continue
+            plan.append((row, match))
+            print(f"    MATCH  {our_name!r:38} -> {match[3]!r}  (r={r:.2f}, pid={match[1]})")
 
-    print(f"\n  {len(plan)} matched, {len(unmatched)} unmatched.")
+    print(f"\n  {len(plan)} to replace, {already} already on TCGplayer, {len(unmatched)} unmatched.")
     if args.dry_run:
         print("  --dry-run — nothing written. Re-run without --dry-run to upgrade.")
         return
