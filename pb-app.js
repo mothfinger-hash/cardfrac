@@ -10162,13 +10162,20 @@ function _loadAdmin(){
     // seller's own Shippo account; otherwise they fall back to the platform.
     function _renderShippoConnectRow() {
       var el = document.getElementById('shippoConnectRow');
-      if (!el) return;
+      var form = document.getElementById('shipBuyLabelForm');
       var connected = !!(currentUser && currentUser.shippo_connected_at);
-      if (connected) {
-        el.innerHTML = '<span style="color:var(--green)">Shippo account connected</span> — labels bill to your account.';
-      } else {
-        el.innerHTML = 'Labels bill to the platform. <a href="#" onclick="connectShippo();return false" style="color:var(--accent);text-decoration:none">Connect your Shippo account →</a> to bill them to you.';
+      if (el) {
+        if (connected) {
+          el.innerHTML = '<span style="color:var(--green)">Shippo account connected</span> — labels bill to your account.';
+        } else {
+          el.innerHTML = '<span style="color:var(--yellow)">Connect your Shippo account to buy prepaid labels.</span> '
+            + '<a href="#" onclick="connectShippo();return false" style="color:var(--accent);text-decoration:none">Connect now &rarr;</a>'
+            + '<div style="margin-top:6px;color:var(--muted)">Or ship on your own and enter your tracking number below.</div>';
+        }
       }
+      // Hard-require Shippo Connect: hide the buy-a-label form until connected
+      // (the server also refuses platform billing). Manual tracking stays open.
+      if (form) form.style.display = connected ? '' : 'none';
     }
     async function connectShippo() {
       try {
@@ -10188,11 +10195,63 @@ function _loadAdmin(){
         // isn't stranded on an external page with no back button (same pattern
         // as the Stripe checkout / Connect / billing-portal flows). Web keeps
         // the same-tab redirect so the OAuth callback returns to the app.
-        if (typeof _isNativeApp === 'function' && _isNativeApp()) _openExternal(j.url);
-        else window.location.href = j.url;
+        if (typeof _isNativeApp === 'function' && _isNativeApp()) {
+          _openExternal(j.url);
+          // The OAuth callback (?shippo=connected) loads INSIDE the in-app
+          // browser, so the main app never sees it. While the browser is open,
+          // poll the server for the connection landing; the moment it does,
+          // AUTO-CLOSE the browser and refresh — no manual "Done" tap. If the
+          // user cancels/closes first, browserFinished still refreshes. No
+          // native change needed: Browser.close() is called from the main app,
+          // which keeps running behind the in-app browser.
+          try {
+            var B = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+            var _before = (currentUser && currentUser.shippo_connected_at) || null;
+            var _done = false, _poll = null, _giveUp = null, _sub = null;
+            var _stop = function () {
+              _done = true;
+              if (_poll) { clearInterval(_poll); _poll = null; }
+              if (_giveUp) { clearTimeout(_giveUp); _giveUp = null; }
+              try { _sub && _sub.remove && _sub.remove(); } catch (_) {}
+            };
+            if (B && B.addListener) {
+              _sub = await B.addListener('browserFinished', function () { _stop(); _refreshShippoConnection(); });
+            }
+            _poll = setInterval(async function () {
+              if (_done || !currentUser) return;
+              try {
+                var pr = await sb.from('profiles').select('shippo_connected_at').eq('id', currentUser.id).maybeSingle();
+                if (pr && pr.data && pr.data.shippo_connected_at && pr.data.shippo_connected_at !== _before) {
+                  _stop();
+                  try { if (B && B.close) await B.close(); } catch (_) {}
+                  _refreshShippoConnection();
+                }
+              } catch (_) {}
+            }, 2500);
+            _giveUp = setTimeout(_stop, 150000);
+          } catch (_) {}
+        } else {
+          window.location.href = j.url;
+        }
       } catch (e) { showToast('Could not start Shippo connect'); }
     }
     window.connectShippo = connectShippo;
+
+    // Re-pull the seller's Shippo connection state from the server and refresh
+    // the connect row. Used after the NATIVE OAuth flow, where the callback
+    // lands in the in-app browser and the main app otherwise stays stale.
+    async function _refreshShippoConnection() {
+      if (!currentUser) return;
+      try {
+        var r = await sb.from('profiles').select('shippo_connected_at').eq('id', currentUser.id).maybeSingle();
+        if (!r || r.error || !r.data) return;
+        var was = !!currentUser.shippo_connected_at;
+        currentUser.shippo_connected_at = r.data.shippo_connected_at;
+        _renderShippoConnectRow();
+        if (!was && r.data.shippo_connected_at) showToast('Shippo account connected');
+      } catch (_) {}
+    }
+    window._refreshShippoConnection = _refreshShippoConnection;
 
     function _shipRenderShipTo(o) {
       var el = document.getElementById('shipToDisplay');

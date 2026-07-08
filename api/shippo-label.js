@@ -76,10 +76,12 @@ function platformToken() {
   return process.env.SHIPPO_API_TOKEN;
 }
 
-// Phase 2 hook: if the seller has connected their own Shippo account, bill them.
+// Sellers buy labels on their OWN connected Shippo account — we do NOT front
+// label costs via the platform token. Returns null when unconnected; the
+// handler guards on that (SHIPPO_NOT_CONNECTED) with a "connect" message.
+// platformToken() is retained for env documentation / possible admin use.
 function resolveToken(sellerProfile) {
-  if (sellerProfile && sellerProfile.shippo_oauth_token) return sellerProfile.shippo_oauth_token;
-  return platformToken();
+  return (sellerProfile && sellerProfile.shippo_oauth_token) || null;
 }
 
 async function shippo(path, method, body, token) {
@@ -160,9 +162,15 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'This order has no shipping address on file', code: 'NO_TO_ADDRESS' });
   }
 
+  // Sellers bill labels to their OWN Shippo account — platform billing is off.
+  // Sellers who ship independently use the manual "enter your own tracking"
+  // path (returns above at action === 'notify_shipped'), which needs no label.
   const token = resolveToken(seller);
   if (!token) {
-    return res.status(500).json({ error: 'Shippo not configured (set SHIPPO_API_TOKEN_TEST + SHIPPO_MODE=test)' });
+    return res.status(400).json({
+      error: 'Connect your Shippo account to buy prepaid labels.',
+      code: 'SHIPPO_NOT_CONNECTED',
+    });
   }
 
   const addressFrom = {
