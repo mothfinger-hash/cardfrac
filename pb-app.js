@@ -26909,6 +26909,22 @@ function _loadAdmin(){
     }
 
     // Renders one row for a TCG-driven set (MTG/YGO/OP).
+    // Branded fallback for the set-logo area when a game has no mirrored logo
+    // (only Pokemon has real logos, MTG has symbols; the rest have no clean
+    // source). Renders the set code in the display font over a themed gradient
+    // so blank sets read as intentional, not unfinished. Shared by the no-logo
+    // branch and the <img> onerror handler (called as a helper, not inline HTML,
+    // to avoid attribute-quoting fragility).
+    function _setsTileFallbackHtml(gameKey, code) {
+      var cfg = _TCG_SETS_CONFIG[gameKey] || {};
+      var c = _escHtml(code || cfg.label || '');
+      var g = _escHtml(cfg.name || cfg.label || '');
+      return '<div class="sets-tile-fallback"><span class="stf-code">' + c + '</span><span class="stf-game">' + g + '</span></div>';
+    }
+    window._setsTileFail = function (img, gameKey, code) {
+      try { if (img && img.parentNode) img.parentNode.innerHTML = _setsTileFallbackHtml(gameKey, code); } catch (_) {}
+    };
+
     function _renderTcgSetRow(s, gameKey, owned) {
       const cfg = _TCG_SETS_CONFIG[gameKey];
       const o   = owned[s.set_code] || 0;
@@ -26922,15 +26938,12 @@ function _loadAdmin(){
       // Scryfall's icon doubles as both, and pokemontcg.io ships a
       // wider logo + a compact symbol.
       const logoSrc  = s.logo_url || s.symbol_url || '';
-      // BUG FIX: loading="lazy" decoding="async" used to be embedded
-      // INSIDE the onerror handler's string. Those double quotes
-      // broke the onerror attribute's quoting, terminating it early
-      // and leaking the trailing `'">` as literal text content next
-      // to the [MTG] / [YGO] tags. The attributes belong on the IMG
-      // itself, not on a span being constructed dynamically.
+      // No mirrored logo (most non-Pokemon/MTG sets) → a branded fallback tile
+      // instead of a bare [TAG]. onerror calls a helper (not inline HTML), so
+      // there's no attribute-quoting fragility.
       const logoHtml = logoSrc
-        ? `<img src="${_escHtml(logoSrc)}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.innerHTML='<span class=\\'sets-tile-tag\\'>[${cfg.label}]</span>'">`
-        : `<span class="sets-tile-tag">[${cfg.label}]</span>`;
+        ? `<img src="${_escHtml(logoSrc)}" alt="" loading="lazy" decoding="async" onerror="_setsTileFail(this,'${_escJsAttr(gameKey)}','${_escJsAttr(s.set_code || '')}')">`
+        : _setsTileFallbackHtml(gameKey, s.set_code);
       return `<div class="sets-tile" onclick="loadTcgSetDetail('${_escJsAttr(s.set_code)}','${_escJsAttr(s.set_name)}','${_escJsAttr(gameKey)}')">
         <div class="sets-tile-logo">${logoHtml}</div>
         <div class="sets-tile-body">

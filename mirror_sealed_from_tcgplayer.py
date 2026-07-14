@@ -268,6 +268,11 @@ def main():
                          "raise to be stricter.")
     ap.add_argument("--dry-run", action="store_true", help="Show matches; download/upload/write nothing.")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--log-unmatched", default=None, metavar="PATH",
+                    help="Write a JSON audit of what this run couldn't handle: OUR sealed rows that "
+                         "found no TCGplayer match (fix name / manual-match later) AND TCGplayer "
+                         "sealed products no row of ours matched (missing-product candidates for a "
+                         "future insert-missing importer). Populated even on --dry-run.")
     args = ap.parse_args()
     if not args.group and not args.all:
         ap.error("pass --group <ids> or --all")
@@ -277,7 +282,8 @@ def main():
     groups = sorted(gidx.keys()) if args.all else [int(g) for g in args.group.split(",") if g.strip()]
 
     plan = []   # (our_row, tcg_match)
-    unmatched = []
+    unmatched = []          # OUR sealed rows that matched nothing (audit)
+    tcg_missing = []        # TCGplayer products no row matched = missing candidates
     already = 0   # rows already sitting on their computed TCGplayer dest URL
     for gid in groups:
         gname = gidx.get(gid, "")
@@ -304,6 +310,7 @@ def main():
         rows = pg_get("catalog", params=_params)
         print(f"\n  {args.game} group {gid} '{gname}'{(' [' + gcode + ']') if gcode else ''}: "
               f"{len(tcg_list)} TCGplayer sealed, {len(rows)} sealed rows to consider")
+        _matched_pids = set()
         for row in rows:
             our_name = row.get("name") or ""
             # A generic 'Sealed Deck' can't match TCGplayer's 'Starter Deck N:
@@ -312,9 +319,12 @@ def main():
             target = gname if _is_generic_deck(our_name) else our_name
             match, r = best_match(target, tcg_list, args.min_ratio)
             if not match:
-                unmatched.append(row)
+                unmatched.append({"game": args.game, "group_id": gid, "group_name": gname,
+                                  "code": gcode, "id": row.get("id"), "name": our_name,
+                                  "set_name": row.get("set_name"), "best_ratio": round(r, 3)})
                 print(f"    ----   {our_name!r:38} -> no match >= {args.min_ratio} (best r={r:.2f})")
                 continue
+            _matched_pids.add(match[1])
             # Skip a row already pointing at the dest URL it would be given —
             # keeps --replace-hosted re-runnable. In default mode a PriceCharting
             # url never equals dest, so nothing is spuriously skipped.
@@ -327,7 +337,20 @@ def main():
             plan.append((row, match))
             print(f"    MATCH  {our_name!r:38} -> {match[3]!r}  (r={r:.2f}, pid={match[1]})")
 
+        # TCGplayer sealed in this group that NO row of ours matched — missing-
+        # product candidates (also catches junk like promo singles; review before
+        # importing). Only meaningful in --replace-hosted (full row coverage).
+        for _rem, _pid, _img, _full in tcg_list:
+            if _pid not in _matched_pids:
+                tcg_missing.append({"game": args.game, "group_id": gid, "group_name": gname,
+                                    "code": gcode, "tcg_name": _full, "tcg_pid": _pid})
+
     print(f"\n  {len(plan)} to replace, {already} already on TCGplayer, {len(unmatched)} unmatched.")
+    if args.log_unmatched:
+        with open(args.log_unmatched, "w", encoding="utf-8") as _f:
+            json.dump({"game": args.game, "our_unmatched": unmatched,
+                       "tcg_missing_candidates": tcg_missing}, _f, indent=2, ensure_ascii=False)
+        print(f"  Logged {len(unmatched)} unmatched + {len(tcg_missing)} missing candidates -> {args.log_unmatched}")
     if args.dry_run:
         print("  --dry-run — nothing written. Re-run without --dry-run to upgrade.")
         return

@@ -3630,6 +3630,31 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       top:50%; left:50%;
       transform:translate(-50%, -50%);
     }
+    /* Branded fallback when a set has no mirrored logo (see _setsTileFallbackHtml):
+       the set code in the display font over a themed gradient, so non-Pokemon
+       sets read as intentional instead of a bare [TAG]. */
+    .sets-tile-fallback{
+      position:absolute;
+      top:0; left:0; right:0; bottom:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:5px;
+      background:linear-gradient(155deg, var(--surface2), var(--surface));
+      text-align:center;
+    }
+    .sets-tile-fallback .stf-code{
+      font-family:'Orbitron', monospace;
+      font-weight:800; font-size:1.15rem; letter-spacing:.05em;
+      text-transform:uppercase;
+      color:var(--accent);
+      text-shadow:0 0 12px var(--accent);
+      max-width:86%;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .sets-tile-fallback .stf-game{
+      font-family:'Space Mono','Share Tech Mono',monospace;
+      font-size:.5rem; letter-spacing:.2em; text-transform:uppercase;
+      color:var(--muted);
+    }
     /* Body is fixed-shape too — name + meta both single-line w/
        ellipsis, then the progress bar at a fixed height. All tiles
        end up identical in total height. */
