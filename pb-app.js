@@ -415,7 +415,7 @@ function _loadAdmin(){
           +     '<div>'
           +       '<div style="font-size:.78rem;color:var(--copper);font-weight:700;letter-spacing:.04em;margin-bottom:4px">CONNECT STRIPE TO RECEIVE PAYOUTS</div>'
           +       '<div style="font-size:.7rem;color:var(--muted);line-height:1.5">'
-          +         'Sellers need a Stripe Express account so we can route sale proceeds to your bank. Until you connect, sales sit on the platform pending a manual payout.'
+          +         'Sellers need a Stripe Express account so we can route sale proceeds to your bank. Payouts currently require a US bank account (more countries coming soon). Until you connect, sales sit on the platform pending a manual payout.'
           +       '</div>'
           +     '</div>'
           +     '<button onclick="startStripeConnectOnboarding()" style="padding:9px 18px;background:var(--copper);color:var(--surface);border:none;font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;letter-spacing:.04em;cursor:pointer;white-space:nowrap">'
