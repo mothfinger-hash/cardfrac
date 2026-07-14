@@ -157,6 +157,27 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // Per-listing shipping destinations decide which countries the buyer may
+  // enter at checkout. Defaults to US-only when the row/column is missing so
+  // behavior matches the original hardcoded ['US']. The SUPPORTED allowlist
+  // is the hard server-side cap regardless of what the listing row claims —
+  // widen it (and the client-side picker) when a new market opens.
+  let allowedShipCountries = ['US'];
+  try {
+    const { data: lst } = await sb
+      .from('listings')
+      .select('ships_to')
+      .eq('id', listingId)
+      .maybeSingle();
+    if (lst && Array.isArray(lst.ships_to) && lst.ships_to.length) {
+      const SUPPORTED = new Set(['US', 'CA', 'JP', 'AU']);
+      const codes = lst.ships_to
+        .map(c => String(c || '').toUpperCase().trim())
+        .filter(c => SUPPORTED.has(c));
+      allowedShipCountries = Array.from(new Set(['US', ...codes]));
+    }
+  } catch (_) { /* default to US-only */ }
+
   // Hard block: item price (in dollars) over the seller's tier ceiling.
   // This is the server-side guard that backs up the client-side check
   // in index.html and any DB-trigger enforcement. amount is in cents.
@@ -255,9 +276,11 @@ module.exports = async function handler(req, res) {
     success_url: successUrl || process.env.NEXT_PUBLIC_SITE_URL + '?payment=success&type=purchase',
     cancel_url: cancelUrl || process.env.NEXT_PUBLIC_SITE_URL + '?payment=cancelled',
     // Collect the buyer's shipping address so the seller can buy a label.
-    // Saved onto the order by the webhook (ship_to_* columns). US-only for
-    // now — add country codes here when international shipping is enabled.
-    shipping_address_collection: { allowed_countries: ['US'] },
+    // Saved onto the order by the webhook (ship_to_* columns). Allowed
+    // countries come from the listing's ships_to (US-only default; sellers
+    // can opt into Canada, Japan, Australia). Non-US orders ship via the
+    // seller's own carrier + manual tracking — Shippo labels are US-domestic.
+    shipping_address_collection: { allowed_countries: allowedShipCountries },
     phone_number_collection: { enabled: true },
   };
 

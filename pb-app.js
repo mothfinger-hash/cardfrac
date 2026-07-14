@@ -10152,18 +10152,38 @@ function _loadAdmin(){
       window._shipSelectedRate = null;
 
       var o = (typeof orders !== 'undefined' && orders) ? orders.find(function(x){ return x.id === orderId; }) : null;
+      window._shipCurrentOrder = o;
       _shipRenderShipTo(o);
       _shipPrefillFromAddress();
-      _renderShippoConnectRow();
+      _renderShippoConnectRow(o);
       openModal('addTrackingModal');
     }
 
     // Phase 2: per-seller Shippo Connect. When connected, labels bill to the
     // seller's own Shippo account; otherwise they fall back to the platform.
-    function _renderShippoConnectRow() {
+    function _renderShippoConnectRow(o) {
+      o = o || window._shipCurrentOrder || null;
       var el = document.getElementById('shippoConnectRow');
       var form = document.getElementById('shipBuyLabelForm');
       var connected = !!(currentUser && currentUser.shippo_connected_at);
+
+      // Prepaid Shippo labels are US-domestic only. The integration doesn't
+      // build customs declarations, so any international leg (non-US buyer OR
+      // non-US seller) has no purchasable rate and would dead-end the seller on
+      // a cryptic "no rates" error. Route those orders to manual tracking with
+      // clear copy instead. Both ends default to US so existing US flow is
+      // unchanged.
+      var fromUS = String((currentUser && currentUser.ship_from_country) || 'US').toUpperCase() === 'US';
+      var toUS   = String((o && o.ship_to_country) || 'US').toUpperCase() === 'US';
+      if (!(fromUS && toUS)) {
+        if (el) {
+          el.innerHTML = '<span style="color:var(--yellow)">Prepaid labels are US-only.</span> '
+            + 'Ship with your own carrier and enter the tracking number below.';
+        }
+        if (form) form.style.display = 'none';
+        return;
+      }
+
       if (el) {
         if (connected) {
           el.innerHTML = '<span style="color:var(--green)">Shippo account connected</span> — labels bill to your account.';
@@ -10717,6 +10737,8 @@ function _loadAdmin(){
       // Shipping default is now empty — the seller decides. Was previously
       // hard-coded to $5.00 which baked an assumption into every listing.
       document.getElementById('lcShipping').value = '';
+      // Ships to: US-only by default; extra markets are opt-in per listing.
+      document.querySelectorAll('.lc-ship-country').forEach(function(el){ el.checked = false; });
       // Quantity defaults to 1; only vendor+ can change it.
       const qtyEl = document.getElementById('lcQuantity');
       if (qtyEl) qtyEl.value = '1';
@@ -10941,6 +10963,15 @@ function _loadAdmin(){
       const _qtyRaw = parseInt(document.getElementById('lcQuantity')?.value, 10);
       const _qty    = Math.min(999, Math.max(1, isFinite(_qtyRaw) ? _qtyRaw : 1));
 
+      // Shipping destinations — US is always included (the seller is US-based);
+      // extra markets are opt-in per listing. Drives Stripe's allowed_countries
+      // at checkout via the listings.ships_to column.
+      const _extraShip = [];
+      document.querySelectorAll('.lc-ship-country').forEach(function(el){
+        if (el.checked && el.value) _extraShip.push(el.value);
+      });
+      const shipsTo = Array.from(new Set(['US'].concat(_extraShip)));
+
       const _insertListing = {
         name,
         game_type: game,
@@ -10956,6 +10987,7 @@ function _loadAdmin(){
         photos: photoUrls,
         product_type: productType,
         variant: lcVariant,
+        ships_to: shipsTo,
         api_card_id: (_lcPrefillCatalog && _lcPrefillCatalog.apiCardId)  || null,
         card_number: (_lcPrefillCatalog && _lcPrefillCatalog.cardNumber) || null,
       };
@@ -10964,11 +10996,12 @@ function _loadAdmin(){
       // migration installed should still be able to list (with the
       // legacy fuzzy-match path). Drops api_card_id + card_number
       // and retries.
-      if (error && /api_card_id|card_number|quantity|column|schema cache/i.test((error.message || '') + (error.details || ''))) {
+      if (error && /api_card_id|card_number|quantity|ships_to|column|schema cache/i.test((error.message || '') + (error.details || ''))) {
         // Strip every column that might be missing in an env still
         // running pre-sync migrations. Quantity falls back to the
-        // implicit 1-row=1-card model.
-        const { api_card_id: _a, card_number: _cn, quantity: _q, ..._noLink } = _insertListing;
+        // implicit 1-row=1-card model; ships_to falls back to the
+        // hardcoded US-only checkout behavior.
+        const { api_card_id: _a, card_number: _cn, quantity: _q, ships_to: _st, ..._noLink } = _insertListing;
         const r2 = await sb.from('listings').insert(_noLink).select().single();
         data = r2.data; error = r2.error;
         if (!error) {
