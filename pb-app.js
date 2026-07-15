@@ -7601,7 +7601,7 @@ function _loadAdmin(){
     // skip a listing that's $1 over target on a $50 card.
     function buildPriceAlerts(ghostCards) {
       const alerts = [];
-      const LISTING_WITHIN_PCT = 0.05; // 5%
+      const LISTING_WITHIN_PCT = 0.10; // 10% — matches the wishlist push in db-hook.js
 
       // ── Owned-card price spikes ──────────────────────────────────────────
       // Flag cards the user OWNS whose market price jumped notably over the
@@ -7687,7 +7687,7 @@ function _loadAdmin(){
             var _diffPct = a.goal > 0 ? ((_lv - a.goal) / a.goal * 100) : 0;
             var _diffNote = _lv <= a.goal
               ? 'at or below your target'
-              : '+' + _diffPct.toFixed(1) + '% over your target (within 5%)';
+              : '+' + _diffPct.toFixed(1) + '% over your target (within 10%)';
             // Wishlist card is listed on the marketplace near target → open
             // THAT specific listing (viewDetail), not the generic browse page.
             return `<div class="dash-alert" onclick="viewDetail('${a.listing.id}')">

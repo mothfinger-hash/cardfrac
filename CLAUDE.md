@@ -575,6 +575,40 @@ work from ~42K rows to ~5-8K and execution time from ~4.7s to
 ~380ms. The website's call sites can override with `p_min_value:
 0` to include cheap commons; the bot keeps the default.
 
+## Push notifications & scheduled jobs
+
+Push sends go through `api/_lib/push.js` `sendPushToUser(userId,
+{title, body, data})` — iOS device tokens route via APNs (HTTP/2 +
+ES256 .p8 JWT), Android via FCM. Token + platform live on
+`profiles.push_token` / `push_platform`.
+
+**Supabase Database Webhooks → `api/db-hook.js`** (POST, header
+`x-push-secret: <PUSH_SEND_SECRET>`). Configure each in Supabase →
+Database → Webhooks:
+- `direct_messages` INSERT → DM push to the recipient.
+- `orders` UPDATE → "order shipped" push to the buyer (only on the
+  transition INTO `shipped`).
+- `listings` INSERT → "wishlist card just listed" push to anyone
+  whose ghost/wishlist `collection_items` wants that `api_card_id`
+  within 10% of their `savings_goal` (skips the seller). Respects
+  `profiles.notify_wishlist_listings` (default TRUE — see
+  `migration_wishlist_listing_alerts.sql`). The in-app "LISTED NEAR
+  TARGET" alert (`buildPriceAlerts`) uses the same 10% buffer.
+
+**Vercel crons** (`vercel.json`):
+- `/api/keepalive` + `/api/discord-bot?warm=1` — `*/4` warm-keepers.
+- `/api/discord-movers-cron` — `0 17 * * *`, posts daily movers to a
+  Discord channel via `DISCORD_MOVERS_WEBHOOK_URL`.
+- `/api/spike-alerts-cron` — `0 15 * * *`, "owned card spiked" push
+  via the `get_owned_card_spikes` RPC (owned cards up ≥20% / ≥$10 /
+  24h). Respects `profiles.notify_price_spikes` (default FALSE, opt-in;
+  see `migration_price_spike_alerts.sql`), dedups via
+  `price_spike_notifications`.
+
+Cron endpoints are protected by Vercel's built-in `CRON_SECRET` (sent
+as `Authorization: Bearer` on scheduled runs). Feature crons live on
+Pro (Hobby caps at 2 crons + daily-only frequency).
+
 ## Catalog photo contributions
 
 User-submitted catalog images. Phase 1 ships missing-image fill
