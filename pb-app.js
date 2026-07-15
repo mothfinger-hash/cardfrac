@@ -10682,7 +10682,7 @@ function _loadAdmin(){
         var saveErr = await _shipSaveFromAddress();
         if (saveErr) throw new Error('Could not save return address: ' + saveErr.message);
         var data = await _shipApi({ action: 'rates', orderId: orderId, parcel: _shipParcelFromForm() });
-        _shipRenderRates(data.rates || []);
+        _shipRenderRates(data.rates || [], data.validation);
       } catch (e) {
         var box = document.getElementById('shippoRates');
         if (box) box.innerHTML = '<div style="color:var(--red);font-size:.78rem">' + _shipEsc(e.message || 'Could not get rates') + '</div>';
@@ -10691,15 +10691,49 @@ function _loadAdmin(){
       }
     }
 
-    function _shipRenderRates(rates) {
+    // Renders Shippo's address-validation results (✓ verified / ⚠ warning)
+    // above the rate list so the seller sees any problem before buying a label.
+    function _shipFmtAddr(c) {
+      if (!c) return '';
+      return [c.street1, c.street2, [c.city, c.state].filter(Boolean).join(', '), c.zip].filter(Boolean).join(', ');
+    }
+    function _shipValidationBanner(v) {
+      if (!v) return '';
+      function row(label, which, res) {
+        if (!res) return '';
+        var out = '';
+        if (res.is_valid === false) {
+          var m = (res.messages && res.messages.length) ? res.messages.join(' ') : 'Could not be verified — double-check it.';
+          out += '<div style="color:var(--red);font-size:.72rem;line-height:1.4;margin-bottom:3px">⚠ ' + label + ': ' + _shipEsc(m) + '</div>';
+        } else if (res.messages && res.messages.length) {
+          out += '<div style="color:var(--yellow,#E6B800);font-size:.72rem;line-height:1.4;margin-bottom:3px">⚠ ' + label + ': ' + _shipEsc(res.messages.join(' ')) + '</div>';
+        } else if (res.is_valid === true && !res.changed) {
+          out += '<div style="color:var(--green);font-size:.72rem;margin-bottom:3px">✓ ' + label + ' verified</div>';
+        }
+        if (res.changed && res.corrected) {
+          out += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">' +
+            '<span style="font-size:.7rem;color:var(--muted)">' + _shipEsc(label) + ' — suggested: ' + _shipEsc(_shipFmtAddr(res.corrected)) + '</span>' +
+            '<button onclick="_shipUseCorrection(\'' + which + '\')" style="padding:3px 10px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.66rem;cursor:pointer;white-space:nowrap">Use this</button>' +
+          '</div>';
+        }
+        return out;
+      }
+      var html = row('Return address', 'from', v.from) + row('Delivery address', 'to', v.to);
+      if (!html) return '';
+      return '<div style="padding:8px 10px;border:1px solid var(--border);background:var(--surface2);margin-bottom:8px">' + html + '</div>';
+    }
+
+    function _shipRenderRates(rates, validation) {
       window._shipRates = rates;
       window._shipSelectedRate = null;
+      window._shipLastValidation = validation || null;
       var box = document.getElementById('shippoRates');
       var buyBtn = document.getElementById('shippoBuyBtn');
       if (buyBtn) buyBtn.style.display = 'none';
       if (!box) return;
-      if (!rates.length) { box.innerHTML = '<div style="color:var(--muted);font-size:.78rem">No rates available for this package.</div>'; return; }
-      box.innerHTML = rates.map(function(r) {
+      var banner = _shipValidationBanner(validation);
+      if (!rates.length) { box.innerHTML = banner + '<div style="color:var(--muted);font-size:.78rem">No rates available for this package.</div>'; return; }
+      box.innerHTML = banner + rates.map(function(r) {
         var days = r.days ? (r.days + ' day' + (r.days === 1 ? '' : 's')) : '—';
         return '<label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);margin-bottom:6px;cursor:pointer">' +
           '<input type="radio" name="shipRate" value="' + _shipEsc(r.rate_id) + '" data-carrier="' + _shipEsc(r.provider || '') + '" onchange="_shipSelectRate(this.value, this.dataset.carrier)" style="accent-color:var(--accent)">' +
@@ -10714,6 +10748,47 @@ function _loadAdmin(){
       var buyBtn = document.getElementById('shippoBuyBtn');
       if (buyBtn) buyBtn.style.display = 'block';
     }
+
+    // One-click apply Shippo's suggested (normalized) address, then re-rate.
+    // 'from' updates the seller's saved return address; 'to' patches the
+    // order's delivery address (same destination, standardized formatting).
+    async function _shipUseCorrection(which) {
+      var v = window._shipLastValidation;
+      var res = v && v[which];
+      var c = res && res.corrected;
+      if (!c) { showToast('No suggested address available'); return; }
+      try {
+        if (which === 'from') {
+          _shipSetVal('shipFromStreet1', c.street1 || '');
+          _shipSetVal('shipFromStreet2', c.street2 || '');
+          _shipSetVal('shipFromCity',    c.city    || '');
+          _shipSetVal('shipFromState',   c.state   || '');
+          _shipSetVal('shipFromZip',     c.zip     || '');
+          var err = await _shipSaveFromAddress();
+          if (err) throw new Error(err.message || 'save failed');
+          showToast('Return address updated');
+        } else {
+          var orderId = _shipVal('trackingOrderId');
+          if (!orderId) return;
+          var patch = {
+            ship_to_street1: c.street1 || null, ship_to_street2: c.street2 || null,
+            ship_to_city: c.city || null, ship_to_state: c.state || null,
+            ship_to_zip: c.zip || null, ship_to_country: c.country || null,
+          };
+          var r = await sb.from('orders').update(patch).eq('id', orderId);
+          if (r.error) throw new Error(r.error.message);
+          var o = window._shipCurrentOrder || ((typeof orders !== 'undefined' && orders) ? orders.find(function(x){ return x.id === orderId; }) : null);
+          if (o) { Object.assign(o, patch); _shipRenderShipTo(o); }
+          showToast('Delivery address updated');
+        }
+      } catch (e) {
+        showToast('Could not apply address: ' + (e.message || 'error'));
+        return;
+      }
+      // Re-rate with the corrected address so the banner + rates refresh.
+      shippoGetRates();
+    }
+    window._shipUseCorrection = _shipUseCorrection;
 
     async function shippoBuyLabel() {
       var orderId = _shipVal('trackingOrderId');

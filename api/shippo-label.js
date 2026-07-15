@@ -112,6 +112,32 @@ async function shippo(path, method, body, token) {
   return json;
 }
 
+// Explicit Shippo address validation. POSTs the address with validate:true and
+// returns { is_valid, messages, corrected }. Never throws — a validation hiccup
+// must not block the seller from getting rates / buying a label.
+async function validateAddress(addr, token) {
+  try {
+    const r = await shippo('/addresses/', 'POST', Object.assign({}, addr, { validate: true }), token);
+    const vr = (r && r.validation_results) || {};
+    const messages = Array.isArray(vr.messages) ? vr.messages.map(m => m && m.text).filter(Boolean) : [];
+    const corrected = {
+      name: r.name || null, street1: r.street1 || null, street2: r.street2 || null,
+      city: r.city || null, state: r.state || null, zip: r.zip || null, country: r.country || null,
+    };
+    // Did Shippo normalize/correct any address line vs what we submitted?
+    const norm = s => String(s || '').trim().toLowerCase();
+    const changed = ['street1', 'street2', 'city', 'state', 'zip'].some(k => norm(corrected[k]) !== norm(addr[k]));
+    return {
+      is_valid: (typeof vr.is_valid === 'boolean') ? vr.is_valid : null,
+      messages: messages,
+      corrected: corrected,
+      changed: changed,
+    };
+  } catch (e) {
+    return { is_valid: null, messages: [], corrected: null, changed: false, error: (e && e.message) || 'validation error' };
+  }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -211,12 +237,21 @@ module.exports = async function handler(req, res) {
   try {
     // ── Rates ─────────────────────────────────────────────────────────────
     if (action === 'rates') {
-      const shipment = await shippo('/shipments/', 'POST', {
-        address_from: addressFrom,
-        address_to: addressTo,
-        parcels: [parcelObj],
-        async: false,
-      }, token);
+      // Explicit Shippo address validation on BOTH ends before rating/buying —
+      // run in parallel with shipment creation so it adds no latency. The
+      // validation results (valid flag + messages + Shippo's normalized
+      // address) ride back to the client so the seller sees any problems
+      // before committing to a label.
+      const [validation, shipment] = await Promise.all([
+        Promise.all([validateAddress(addressFrom, token), validateAddress(addressTo, token)])
+          .then(([from, to]) => ({ from, to })),
+        shippo('/shipments/', 'POST', {
+          address_from: addressFrom,
+          address_to: addressTo,
+          parcels: [parcelObj],
+          async: false,
+        }, token),
+      ]);
 
       const rates = (shipment.rates || []).map(r => ({
         rate_id: r.object_id,
@@ -230,9 +265,9 @@ module.exports = async function handler(req, res) {
       if (!rates.length) {
         const m = (shipment.messages && shipment.messages.map(x => x.text).filter(Boolean).join('; ')) ||
           'No rates returned — check the from/to addresses.';
-        return res.status(400).json({ error: m });
+        return res.status(400).json({ error: m, validation });
       }
-      return res.status(200).json({ shipment_id: shipment.object_id, rates });
+      return res.status(200).json({ shipment_id: shipment.object_id, rates, validation });
     }
 
     // ── Buy label ─────────────────────────────────────────────────────────
