@@ -82,10 +82,20 @@ module.exports = async function handler(req, res) {
           .eq('is_ghost', true)
           .eq('api_card_id', record.api_card_id)
           .gt('savings_goal', 0);
+        // Candidates: within 10% of target, and not the seller's own listing.
+        const cand = (wishes || []).filter(w =>
+          w.user_id && w.user_id !== record.seller_id && price <= Number(w.savings_goal) * 1.10);
         let sent = 0;
-        for (const w of (wishes || [])) {
-          if (!w.user_id || w.user_id === record.seller_id) continue;
-          if (price <= Number(w.savings_goal) * 1.10) {
+        if (cand.length) {
+          // Respect the per-user opt-in (notify_wishlist_listings, default ON).
+          // One profile lookup covers every candidate.
+          const ids = [...new Set(cand.map(w => w.user_id))];
+          const { data: profs } = await sb()
+            .from('profiles').select('id, notify_wishlist_listings').in('id', ids);
+          const optedOut = new Set((profs || [])
+            .filter(p => p.notify_wishlist_listings === false).map(p => p.id));
+          for (const w of cand) {
+            if (optedOut.has(w.user_id)) continue;
             await sendPushToUser(w.user_id, {
               title: 'Wishlist card just listed',
               body: (w.card_name || 'A card on your wishlist') + ' is up for $' + price.toFixed(2)

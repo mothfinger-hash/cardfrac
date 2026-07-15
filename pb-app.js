@@ -661,16 +661,25 @@ function _loadAdmin(){
       // read by the spike-alerts cron). Shown everywhere; the copy notes it
       // needs the mobile app, since push only fires with a device token.
       const _spikeOn = !!(currentUser && currentUser.notify_price_spikes);
+      const _wishOn  = !(currentUser && currentUser.notify_wishlist_listings === false); // default ON
       const notifBlock = ''
         + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
         +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:10px;text-transform:uppercase">Notifications</div>'
         +   '<label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text);cursor:pointer">'
+        +     '<input type="checkbox" id="settingNotifyWishlist" ' + (_wishOn ? 'checked' : '') + ' onchange="_toggleWishlistAlerts(this.checked)" style="cursor:pointer">'
+        +     '<span>Wishlist listing alerts</span>'
+        +   '</label>'
+        +   '<div style="font-size:.66rem;color:var(--muted);margin-top:6px;padding-left:22px;margin-bottom:12px">'
+        +     'Get a push when a card on your wishlist is listed near your target price.'
+        +   '</div>'
+        +   '<label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text);cursor:pointer">'
         +     '<input type="checkbox" id="settingNotifyPriceSpikes" ' + (_spikeOn ? 'checked' : '') + ' onchange="_toggleSpikeAlerts(this.checked)" style="cursor:pointer">'
         +     '<span>Price spike alerts</span>'
         +   '</label>'
-        +   '<div style="font-size:.66rem;color:var(--muted);margin-top:6px;padding-left:22px">'
-        +     'Get a push when a card you own jumps 20%+ in a day. Requires notifications enabled on your mobile device.'
+        +   '<div style="font-size:.66rem;color:var(--muted);margin-top:6px;padding-left:22px;margin-bottom:12px">'
+        +     'Get a push when a card you own jumps 20%+ in a day.'
         +   '</div>'
+        +   '<div style="font-size:.64rem;color:var(--muted);padding-left:22px">Requires notifications enabled on your mobile device.</div>'
         + '</div>';
 
       body.innerHTML = emailRow + membershipBlock + prefsBlock + notifBlock + shopBlock + followsBlock + deletionBlock;
@@ -696,6 +705,26 @@ function _loadAdmin(){
       }
     }
     window._toggleSpikeAlerts = _toggleSpikeAlerts;
+
+    // Wishlist "listed near target" push preference (default ON — see
+    // migration_wishlist_listing_alerts.sql + the wishlist rule in db-hook.js).
+    async function _toggleWishlistAlerts(on) {
+      if (!currentUser) return;
+      try {
+        const { error } = await sb.from('profiles')
+          .update({ notify_wishlist_listings: !!on })
+          .eq('id', currentUser.id);
+        if (error) throw error;
+        currentUser.notify_wishlist_listings = !!on;
+        showToast(on ? 'Wishlist listing alerts on' : 'Wishlist listing alerts off');
+      } catch (e) {
+        console.error('[wishlist-pref]', e && e.message);
+        showToast('Could not update setting');
+        var el = document.getElementById('settingNotifyWishlist');
+        if (el) el.checked = !on;
+      }
+    }
+    window._toggleWishlistAlerts = _toggleWishlistAlerts;
 
     // Opens the Stripe billing portal so a subscriber can update payment
     // method, view invoices, or cancel. The Edge Function resolves the

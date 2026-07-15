@@ -12,7 +12,13 @@
 // Env (Vercel):
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY   — DB access
 //   (APNS_* / FCM creds are read by api/_lib/push.js)
-//   SPIKE_CRON_SECRET (optional)         — if set, require ?secret=<value>
+//   CRON_SECRET (optional, recommended)  — Vercel automatically sends this as an
+//                                          `Authorization: Bearer <value>` header
+//                                          on scheduled cron runs, so no secret
+//                                          lands in the committed path. The
+//                                          endpoint also accepts ?secret= for
+//                                          manual testing. One value covers all
+//                                          Vercel crons. Unset = open.
 //
 // Schedule: vercel.json cron at ~15:00 UTC (fresh data + reasonable US morning).
 
@@ -29,9 +35,13 @@ const DEDUP_DAYS     = 7;    // don't re-notify the same card within 7 days...
 const DEDUP_GROW_PTS = 10;   // ...unless it climbed another 10 points
 
 module.exports = async function handler(req, res) {
-  const secret = process.env.SPIKE_CRON_SECRET;
-  if (secret && String((req.query && req.query.secret) || '') !== secret) {
-    return res.status(401).json({ error: 'unauthorized' });
+  // Vercel sends `Authorization: Bearer $CRON_SECRET` on scheduled runs when
+  // CRON_SECRET is set. Accept that; also allow ?secret= for manual testing.
+  const secret = process.env.CRON_SECRET;
+  if (secret) {
+    const ok = req.headers.authorization === 'Bearer ' + secret
+      || String((req.query && req.query.secret) || '') === secret;
+    if (!ok) return res.status(401).json({ error: 'unauthorized' });
   }
 
   try {
