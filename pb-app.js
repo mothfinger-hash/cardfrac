@@ -5096,6 +5096,180 @@ function _loadAdmin(){
     window.sendSubsidiaryInviteSMS = sendSubsidiaryInviteSMS;
     window.shareSubsidiaryInvite = shareSubsidiaryInvite;
 
+    // ── Shareable collection image (growth loop) ────────────────────────────
+    // Renders a branded 1080x1080 "collection card" (total value, card count,
+    // top cards) and shares it via the native share sheet, with a download /
+    // preview fallback. Every "my collection is worth $X" post is a free ad.
+    // Data is queried FRESH from collection_items at share time — the dashboard
+    // `listings` global is legacy marketplace data, not the user's collection.
+    function _shareMoney(n) {
+      n = Number(n) || 0;
+      if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+      if (n >= 1000)    return '$' + (n / 1000).toFixed(1) + 'K';
+      return '$' + n.toFixed(2);
+    }
+
+    async function _collectionShareStats() {
+      const r = await sb.from('collection_items')
+        .select('current_value, quantity, name, game_type')
+        .eq('user_id', currentUser.id);
+      const rows = (r && r.data) || [];
+      let totalCards = 0, totalValue = 0;
+      const byGame = {};
+      for (const row of rows) {
+        const qty = Math.max(1, Number(row.quantity) || 1);
+        const val = Number(row.current_value) || 0;
+        totalCards += qty;
+        totalValue += val * qty;
+        const g = row.game_type || 'other';
+        byGame[g] = (byGame[g] || 0) + qty;
+      }
+      const top = rows.slice()
+        .filter(function (x) { return Number(x.current_value) > 0; })
+        .sort(function (a, b) { return (Number(b.current_value) || 0) - (Number(a.current_value) || 0); })
+        .slice(0, 3)
+        .map(function (x) { return { name: x.name || 'Card', value: Number(x.current_value) || 0 }; });
+      return { totalCards: totalCards, totalValue: totalValue, top: top, games: Object.keys(byGame).length };
+    }
+
+    function _renderCollectionShareCanvas(s) {
+      const W = 1080, H = 1080;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      // Background gradient (PathBinder surface tones).
+      const bg = ctx.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, '#0D1622');
+      bg.addColorStop(1, '#05090F');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+      // Accent frame.
+      ctx.strokeStyle = 'rgba(26,199,160,0.55)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(42, 42, W - 84, H - 84);
+
+      // Wordmark.
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#1AC7A0';
+      ctx.font = "800 48px 'Orbitron', monospace";
+      ctx.fillText('PATHBINDER', 92, 158);
+      ctx.fillStyle = '#7E93B5';
+      ctx.font = "400 26px 'Space Mono', monospace";
+      ctx.fillText('MY COLLECTION', 94, 198);
+
+      // Headline value.
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7E93B5';
+      ctx.font = "400 30px 'Space Mono', monospace";
+      ctx.fillText('TOTAL COLLECTION VALUE', W / 2, 350);
+      ctx.shadowColor = 'rgba(26,199,160,0.5)'; ctx.shadowBlur = 34;
+      ctx.fillStyle = '#1AC7A0';
+      ctx.font = "800 132px 'Orbitron', monospace";
+      ctx.fillText(_shareMoney(s.totalValue), W / 2, 480);
+      ctx.shadowBlur = 0;
+
+      // Cards / games row.
+      ctx.fillStyle = '#DCE8F5';
+      ctx.font = "700 46px 'Orbitron', monospace";
+      ctx.fillText(String(s.totalCards), W / 2 - 190, 600);
+      ctx.fillText(String(s.games), W / 2 + 190, 600);
+      ctx.fillStyle = '#7E93B5';
+      ctx.font = "400 22px 'Space Mono', monospace";
+      ctx.fillText('CARDS', W / 2 - 190, 634);
+      ctx.fillText('GAMES', W / 2 + 190, 634);
+      ctx.strokeStyle = 'rgba(126,147,181,0.4)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(W / 2, 566); ctx.lineTo(W / 2, 636); ctx.stroke();
+
+      // Top cards.
+      if (s.top.length) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#B87333';
+        ctx.font = "700 30px 'Orbitron', monospace";
+        ctx.fillText('TOP CARDS', 94, 738);
+        ctx.font = "400 34px 'Space Mono', monospace";
+        let y = 800;
+        for (let i = 0; i < s.top.length; i++) {
+          const c = s.top[i];
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#DCE8F5';
+          const nm = c.name.length > 24 ? c.name.slice(0, 23) + '…' : c.name;
+          ctx.fillText(nm, 94, y);
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#1AC7A0';
+          ctx.fillText(_shareMoney(c.value), W - 94, y);
+          y += 62;
+        }
+      }
+
+      // Footer.
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7E93B5';
+      ctx.font = "400 30px 'Space Mono', monospace";
+      ctx.fillText('Track yours free at pathbinder.gg', W / 2, H - 92);
+
+      return canvas;
+    }
+
+    async function _shareOrPreviewCanvas(canvas) {
+      const shareText = 'My trading card collection on PathBinder — track yours free at pathbinder.gg';
+      // Native share with the image FILE — works on iOS Safari, the iOS/Android
+      // WebView, and Android Chrome. Falls back to a save/preview overlay.
+      try {
+        const blob = await new Promise(function (res) { canvas.toBlob(res, 'image/png'); });
+        if (blob && navigator.canShare) {
+          const file = new File([blob], 'pathbinder-collection.png', { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: 'My PathBinder collection', text: shareText });
+            return;
+          }
+        }
+      } catch (_) { /* cancelled or unsupported — show the preview instead */ }
+      _showImagePreviewOverlay(canvas.toDataURL('image/png'));
+    }
+
+    function _showImagePreviewOverlay(dataUrl) {
+      const old = document.getElementById('pbSharePreview');
+      if (old) old.remove();
+      const ov = document.createElement('div');
+      ov.id = 'pbSharePreview';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px';
+      ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = 'Your PathBinder collection card';
+      img.style.cssText = 'max-width:min(420px,84vw);max-height:66vh;border:1px solid var(--accent);border-radius:8px';
+      const hint = document.createElement('div');
+      hint.style.cssText = "color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;text-align:center;max-width:420px";
+      hint.textContent = 'Press and hold the image to save it, or tap Download — then post it anywhere.';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:12px';
+      const dl = document.createElement('a');
+      dl.href = dataUrl; dl.download = 'pathbinder-collection.png'; dl.textContent = 'Download';
+      dl.style.cssText = "padding:11px 24px;background:var(--accent);color:var(--text-on-accent);text-decoration:none;font-family:'Space Mono','Share Tech Mono',monospace;font-weight:700;font-size:.8rem;border-radius:5px";
+      const cl = document.createElement('button');
+      cl.textContent = 'Close';
+      cl.style.cssText = "padding:11px 24px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.8rem;border-radius:5px;cursor:pointer";
+      cl.onclick = function () { ov.remove(); };
+      row.appendChild(dl); row.appendChild(cl);
+      ov.appendChild(img); ov.appendChild(hint); ov.appendChild(row);
+      document.body.appendChild(ov);
+    }
+
+    async function shareMyCollection() {
+      if (!currentUser) { showToast('Sign in to share your collection'); openModal('loginModal'); return; }
+      if (typeof _pbHaptic === 'function') _pbHaptic();
+      showToast('Building your collection card…');
+      let stats;
+      try { stats = await _collectionShareStats(); }
+      catch (e) { showToast('Could not load your collection'); return; }
+      if (!stats || stats.totalCards === 0) { showToast('Add some cards first, then share your collection'); return; }
+      try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+      const canvas = _renderCollectionShareCanvas(stats);
+      await _shareOrPreviewCanvas(canvas);
+    }
+    window.shareMyCollection = shareMyCollection;
+
     async function openMySubsidiaryInvitesModal() {
       try {
         const { data } = await sb.from('subsidiary_invites')
@@ -5531,6 +5705,16 @@ function _loadAdmin(){
                   <button class="movers-toggle ${_moversProductType==='single'?'active':''}" onclick="setMoversProductType('single')">SNG</button>
                   <button class="movers-toggle ${_moversProductType==='sealed'?'active':''}" onclick="setMoversProductType('sealed')">SLD</button>
                 </div>
+                <select onchange="setMoversGame(this.value)" aria-label="Game" title="Which game the global movers show" style="background:var(--surface2);color:var(--accent);border:1px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;letter-spacing:.04em;padding:4px 7px;border-radius:3px;cursor:pointer;outline:none;max-width:112px">
+                  <option value="pokemon" ${_moversGame==='pokemon'?'selected':''}>Pokémon</option>
+                  <option value="magic" ${_moversGame==='magic'?'selected':''}>Magic</option>
+                  <option value="yugioh" ${_moversGame==='yugioh'?'selected':''}>Yu-Gi-Oh</option>
+                  <option value="onepiece" ${_moversGame==='onepiece'?'selected':''}>One Piece</option>
+                  <option value="gundam" ${_moversGame==='gundam'?'selected':''}>Gundam</option>
+                  <option value="lorcana" ${_moversGame==='lorcana'?'selected':''}>Lorcana</option>
+                  <option value="dbz" ${_moversGame==='dbz'?'selected':''}>Dragon Ball</option>
+                  <option value="all" ${_moversGame==='all'?'selected':''}>All Games</option>
+                </select>
               </div>
               <div class="ndash-panel-body">
                 ${moversHtml || `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">Price data builds as cards are refreshed</div>`}
@@ -6711,6 +6895,9 @@ function _loadAdmin(){
     // 'single' = TCG singles; 'sealed' = booster_box/etb/utb/tin/deck/
     // any non-single catalog row. Plumbed to the RPC via p_product_type.
     let _moversProductType = 'single'; // 'single' | 'sealed'
+    // Which TCG the Global price-movers panel shows. 'all' fans out across
+    // every game and merges the top movers (see _loadGlobalMovers).
+    let _moversGame = 'pokemon';
 
     // Setters used by the toggle pills in the Price Movers panel.
     window.setMoversScope = function(scope) {
@@ -6733,6 +6920,10 @@ function _loadAdmin(){
       _moversProductType = pt;
       try { renderDashboard(); } catch(_) {}
     };
+    window.setMoversGame = function(g) {
+      _moversGame = g;
+      try { renderDashboard(); } catch(_) {}
+    };
 
     async function _loadGlobalMovers(game_type = 'pokemon', period = null, sort = null, productType = null) {
       var days = period || _moversPeriod;
@@ -6752,28 +6943,43 @@ function _loadAdmin(){
         // DISTINCT-ON-oldest + delta math + sort + top-N in one query.
         // Migration: migration_global_price_movers_rpc.sql (v3 — adds
         // p_product_type for the Singles/Sealed dashboard toggle).
-        const { data, error } = await sb.rpc('get_global_price_movers', {
-          p_game_type:    game_type,
-          p_days_back:    days,
-          p_top_n:        10,
-          p_min_pct:      0.5,
-          p_sort:         srt,
-          p_product_type: pt,
-        });
+        // 'all' fans out across every game (the RPC takes exactly one
+        // game_type) and merges; a single game hits the RPC directly.
+        var rows;
+        if (game_type === 'all') {
+          const _ALL_GAMES = ['pokemon', 'magic', 'yugioh', 'onepiece', 'gundam', 'lorcana', 'dbz'];
+          const _parts = await Promise.all(_ALL_GAMES.map(function(g) {
+            return sb.rpc('get_global_price_movers', {
+              p_game_type: g, p_days_back: days, p_top_n: 10,
+              p_min_pct: 0.5, p_sort: srt, p_product_type: pt,
+            }).then(function(r) {
+              return (r && !r.error && Array.isArray(r.data)) ? r.data : [];
+            }).catch(function() { return []; });
+          }));
+          rows = _parts.reduce(function(a, b) { return a.concat(b); }, []);
+        } else {
+          const { data, error } = await sb.rpc('get_global_price_movers', {
+            p_game_type:    game_type,
+            p_days_back:    days,
+            p_top_n:        10,
+            p_min_pct:      0.5,
+            p_sort:         srt,
+            p_product_type: pt,
+          });
 
-        if (error) {
-          // PGRST202 = RPC function not found (migration not applied yet)
-          if (error.code === 'PGRST202' || (error.message || '').includes('function')) {
-            console.warn('[movers] RPC not installed yet — apply migration_global_price_movers_rpc.sql. Falling back to client-side.');
-            return await _loadGlobalMoversClientFallback(game_type);
+          if (error) {
+            // PGRST202 = RPC function not found (migration not applied yet)
+            if (error.code === 'PGRST202' || (error.message || '').includes('function')) {
+              console.warn('[movers] RPC not installed yet — apply migration_global_price_movers_rpc.sql. Falling back to client-side.');
+              return await _loadGlobalMoversClientFallback(game_type);
+            }
+            console.error('[movers] RPC error:', error);
+            _globalMoversLoading = false;
+            window._globalMoversLoading = false;
+            return null;
           }
-          console.error('[movers] RPC error:', error);
-          _globalMoversLoading = false;
-          window._globalMoversLoading = false;
-          return null;
+          rows = data || [];
         }
-
-        const rows = data || [];
         const up   = rows.filter(r => r.direction === 'up').map(r => ({
           id: r.catalog_id, name: r.name, set_name: r.set_name,
           image_url: r.image_url,
@@ -6796,8 +7002,10 @@ function _loadAdmin(){
           : (m => Math.abs(m.deltaPct));
         up.sort((a, b)   => _sortKeyFn(b) - _sortKeyFn(a));
         down.sort((a, b) => _sortKeyFn(b) - _sortKeyFn(a));
+        // 'all' merges up to 7 games' rows — cap each list to a sane length.
+        const _upTop = up.slice(0, 10), _downTop = down.slice(0, 10);
 
-        _globalMovers = { up, down, game_type, period: days, sort: srt, productType: pt };
+        _globalMovers = { up: _upTop, down: _downTop, game_type, period: days, sort: srt, productType: pt };
         _globalMoversCache[cacheKey] = _globalMovers;
         _globalMoversLoading = false;
         console.log('[movers] loaded via RPC: ' + up.length + ' up, ' + down.length + ' down (key=' + cacheKey + ')');
@@ -7189,9 +7397,9 @@ function _loadAdmin(){
       }
       // Re-load the global movers for the currently-selected period+sort+
       // product_type if we don't already have that combo cached.
-      var _cacheKey = 'p' + _moversPeriod + '-' + _moversSort + '-' + _moversProductType + '-pokemon';
+      var _cacheKey = 'p' + _moversPeriod + '-' + _moversSort + '-' + _moversProductType + '-' + _moversGame;
       if (!_globalMoversCache[_cacheKey] && !_globalMoversLoading) {
-        _loadGlobalMovers('pokemon', _moversPeriod, _moversSort, _moversProductType).then(g => {
+        _loadGlobalMovers(_moversGame, _moversPeriod, _moversSort, _moversProductType).then(g => {
           if (g) renderDashboard();
         });
       }
