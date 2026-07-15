@@ -5444,13 +5444,52 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
   color:#000;
   font-weight:700;
 }
+/* Game selector — themed to sit alongside the pill toggles + the layout
+   dropdown: transparent, muted border, cyan value, a ▾ chevron, and no
+   native OS chrome. Matches .binder-view-btn / .movers-toggle. */
+.movers-game-sel{ position:relative; display:inline-flex; align-items:center; }
+.movers-game-sel::after{
+  content:'▾';
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  font-size:9px; color:var(--accent); opacity:.85; pointer-events:none;
+}
+.movers-game-select{
+  -webkit-appearance:none; -moz-appearance:none; appearance:none;
+  background:transparent;
+  border:1px solid var(--border); border-radius:3px;
+  color:var(--accent);
+  font-family:'Space Mono','Share Tech Mono',monospace;
+  font-size:.6rem; letter-spacing:.06em; font-weight:700;
+  padding:3px 22px 3px 9px;
+  cursor:pointer; outline:none;
+  transition:border-color .15s,background .15s;
+}
+.movers-game-select:hover,.movers-game-select:focus{
+  border-color:var(--accent);
+  background:rgba(26,199,160,.08);
+}
+.movers-game-select option{ background:var(--surface2); color:var(--text); font-weight:400; }
 @media(max-width:600px){
   .movers-toggles{
     justify-content:center;
     padding:8px 10px 0;
   }
   .movers-toggle{ padding:4px 11px; font-size:.62rem; }
+  .movers-game-select{ font-size:.62rem; }
 }
+/* Dashboard price/listing alert rows — clickable, with a hover cue so it's
+   obvious the card they name is a link. Colors match the existing inline
+   copper-alert styling they replace. */
+.dash-alert{
+  background:rgba(210,120,40,.07);
+  border:1px solid rgba(210,120,40,.35);
+  padding:10px 14px; margin-bottom:8px;
+  display:flex; justify-content:space-between; align-items:center; gap:12px;
+  cursor:pointer; transition:background .12s,border-color .12s;
+}
+.dash-alert:hover{ background:rgba(210,120,40,.13); border-color:rgba(210,120,40,.6); }
+.dash-alert:hover .dash-alert-name{ text-decoration:underline; }
+.dash-alert-name{ text-underline-offset:2px; }
 .ndash-panel-title{font-family:'Orbitron',monospace;font-weight:800;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
 .ndash-panel-title-ico{width:22px;height:22px;background:var(--surface3,var(--surface2));color:var(--accent);display:grid;place-items:center;flex-shrink:0}
 .ndash-panel-title-ico svg{width:14px;height:14px}

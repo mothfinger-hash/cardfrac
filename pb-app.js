@@ -5705,16 +5705,18 @@ function _loadAdmin(){
                   <button class="movers-toggle ${_moversProductType==='single'?'active':''}" onclick="setMoversProductType('single')">SNG</button>
                   <button class="movers-toggle ${_moversProductType==='sealed'?'active':''}" onclick="setMoversProductType('sealed')">SLD</button>
                 </div>
-                <select onchange="setMoversGame(this.value)" aria-label="Game" title="Which game the global movers show" style="background:var(--surface2);color:var(--accent);border:1px solid var(--border);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.66rem;letter-spacing:.04em;padding:4px 7px;border-radius:3px;cursor:pointer;outline:none;max-width:112px">
-                  <option value="pokemon" ${_moversGame==='pokemon'?'selected':''}>Pokémon</option>
-                  <option value="magic" ${_moversGame==='magic'?'selected':''}>Magic</option>
-                  <option value="yugioh" ${_moversGame==='yugioh'?'selected':''}>Yu-Gi-Oh</option>
-                  <option value="onepiece" ${_moversGame==='onepiece'?'selected':''}>One Piece</option>
-                  <option value="gundam" ${_moversGame==='gundam'?'selected':''}>Gundam</option>
-                  <option value="lorcana" ${_moversGame==='lorcana'?'selected':''}>Lorcana</option>
-                  <option value="dbz" ${_moversGame==='dbz'?'selected':''}>Dragon Ball</option>
-                  <option value="all" ${_moversGame==='all'?'selected':''}>All Games</option>
-                </select>
+                <span class="movers-game-sel">
+                  <select class="movers-game-select" onchange="setMoversGame(this.value)" aria-label="Game" title="Which game the global movers show">
+                    <option value="pokemon" ${_moversGame==='pokemon'?'selected':''}>Pokémon</option>
+                    <option value="magic" ${_moversGame==='magic'?'selected':''}>Magic</option>
+                    <option value="yugioh" ${_moversGame==='yugioh'?'selected':''}>Yu-Gi-Oh</option>
+                    <option value="onepiece" ${_moversGame==='onepiece'?'selected':''}>One Piece</option>
+                    <option value="gundam" ${_moversGame==='gundam'?'selected':''}>Gundam</option>
+                    <option value="lorcana" ${_moversGame==='lorcana'?'selected':''}>Lorcana</option>
+                    <option value="dbz" ${_moversGame==='dbz'?'selected':''}>Dragon Ball</option>
+                    <option value="all" ${_moversGame==='all'?'selected':''}>All Games</option>
+                  </select>
+                </span>
               </div>
               <div class="ndash-panel-body">
                 ${moversHtml || `<div style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem">Price data builds as cards are refreshed</div>`}
@@ -7535,6 +7537,36 @@ function _loadAdmin(){
       const alerts = [];
       const LISTING_WITHIN_PCT = 0.05; // 5%
 
+      // ── Owned-card price spikes ──────────────────────────────────────────
+      // Flag cards the user OWNS whose market price jumped notably over the
+      // active movers period. Reuses the same price-history snapshot the
+      // movers panel loads (buildMovers triggers it), and falls back to cost
+      // basis when there is no snapshot for the card yet.
+      const SPIKE_PCT = 15;       // minimum % move to raise a spike alert
+      const SPIKE_MIN_VALUE = 5;  // ignore penny-commons whose % is noise
+      const _spikePeriod = _moversPeriod || 7;
+      const _spikeSnap = _priceHistorySnapshots[_spikePeriod] || null;
+      const _spikePeriodLabel = (_spikePeriod === 1) ? '24h' : (_spikePeriod + 'd');
+      const _spikes = [];
+      for (const c of collectionItems) {
+        if (c.is_ghost) continue;                       // owned cards only
+        const cur = Number(c.current_value) || 0;
+        if (cur < SPIKE_MIN_VALUE) continue;
+        let oldVal = null, plabel = _spikePeriodLabel;
+        if (_spikeSnap && _spikeSnap.has(c.id)) {
+          const h = _spikeSnap.get(c.id);
+          if (h && h.value && Math.abs(h.value - cur) > 0.005) oldVal = h.value;
+        }
+        if (!oldVal && c.purchase_price && c.purchase_price !== cur) { oldVal = c.purchase_price; plabel = 'vs cost'; }
+        if (!oldVal) continue;
+        const pct = ((cur - oldVal) / oldVal) * 100;
+        if (pct >= SPIKE_PCT) _spikes.push({ card: c, pct: pct, cur: cur, plabel: plabel });
+      }
+      _spikes.sort((a, b) => b.pct - a.pct);
+      for (const s of _spikes.slice(0, 3)) {
+        alerts.push({ type: 'owned_spike', card: s.card, pct: s.pct, cur: s.cur, plabel: s.plabel });
+      }
+
       for (const c of ghostCards) {
         const goal = c.savings_goal || 0;
         if (!goal) continue;
@@ -7562,14 +7594,25 @@ function _loadAdmin(){
 
       return `<div style="margin-bottom:20px">
         ${alerts.map(a => {
-          if (a.type === 'price_hit') {
-            return `<div style="background:rgba(210,120,40,.07);border:1px solid rgba(210,120,40,.35);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
-              onclick="openBinderCardDetail('${a.card.id}')">
+          if (a.type === 'owned_spike') {
+            // A card the user OWNS jumped notably → open that card's detail.
+            return `<div class="dash-alert" onclick="openBinderCardDetail('${a.card.id}')">
               <div>
-                <div style="font-size:.75rem;color:var(--green);font-weight:700">PRICE TARGET HIT — ${a.card.card_name}</div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">PRICE SPIKE — <span class="dash-alert-name">${a.card.card_name || a.card.name || 'Card'}</span></div>
+                <div style="font-size:.68rem;color:var(--muted);margin-top:2px">A card you own is up ${a.pct.toFixed(0)}% (${a.plabel}) — now worth $${a.cur.toFixed(0)}</div>
+              </div>
+              <span style="font-size:.7rem;color:var(--green);white-space:nowrap">View card →</span>
+            </div>`;
+          }
+          if (a.type === 'price_hit') {
+            // Tracked (wishlist / ghost) card whose market price hit target →
+            // open that card's detail (openBinderCardDetail handles ghosts).
+            return `<div class="dash-alert" onclick="openBinderCardDetail('${a.card.id}')">
+              <div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">PRICE TARGET HIT — <span class="dash-alert-name">${a.card.card_name}</span></div>
                 <div style="font-size:.68rem;color:var(--muted);margin-top:2px">Market price $${a.marketVal.toFixed(0)} is at or below your $${a.goal.toFixed(0)} target</div>
               </div>
-              <span style="font-size:.7rem;color:var(--green)">→</span>
+              <span style="font-size:.7rem;color:var(--green);white-space:nowrap">View card →</span>
             </div>`;
           } else {
             // ±5% window — copy reflects "near target" not "at target"
@@ -7579,13 +7622,14 @@ function _loadAdmin(){
             var _diffNote = _lv <= a.goal
               ? 'at or below your target'
               : '+' + _diffPct.toFixed(1) + '% over your target (within 5%)';
-            return `<div style="background:rgba(210,120,40,.07);border:1px solid rgba(210,120,40,.35);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
-              onclick="showPage('browse');setMobileNav('browse')">
+            // Wishlist card is listed on the marketplace near target → open
+            // THAT specific listing (viewDetail), not the generic browse page.
+            return `<div class="dash-alert" onclick="viewDetail('${a.listing.id}')">
               <div>
-                <div style="font-size:.75rem;color:var(--green);font-weight:700">LISTED NEAR TARGET — ${a.card.card_name}</div>
+                <div style="font-size:.75rem;color:var(--green);font-weight:700">LISTED NEAR TARGET — <span class="dash-alert-name">${a.card.card_name}</span></div>
                 <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${a.listing.name} is on the marketplace for $${_lv.toFixed(0)} — ${_diffNote} (target $${a.goal.toFixed(0)})</div>
               </div>
-              <span style="font-size:.7rem;color:var(--green)">→ Marketplace</span>
+              <span style="font-size:.7rem;color:var(--green);white-space:nowrap">View listing →</span>
             </div>`;
           }
         }).join('')}
