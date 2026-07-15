@@ -76,19 +76,25 @@ module.exports = async function handler(req, res) {
     if (table === 'listings' && type === 'INSERT' && record.api_card_id) {
       const price = Number(record.value || 0);
       if (price > 0) {
+        // Any wishlisted (ghost) copy of this card. Compare the listing to the
+        // user's Target Price (savings_goal) — the field the wishlist modal now
+        // edits — falling back to the card's market value only when no target
+        // has been set.
         const { data: wishes } = await sb()
           .from('collection_items')
-          .select('user_id, savings_goal, card_name')
+          .select('user_id, savings_goal, current_value, card_name')
           .eq('is_ghost', true)
-          .eq('api_card_id', record.api_card_id)
-          .gt('savings_goal', 0);
-        // Candidates: within 10% of target, and not the seller's own listing.
-        const cand = (wishes || []).filter(w =>
-          w.user_id && w.user_id !== record.seller_id && price <= Number(w.savings_goal) * 1.10);
+          .eq('api_card_id', record.api_card_id);
+        const cand = (wishes || []).map(w => {
+          const goal     = Number(w.savings_goal) || 0;
+          const isTarget = goal > 0;
+          const target   = isTarget ? goal : (Number(w.current_value) || 0);
+          return { user_id: w.user_id, card_name: w.card_name, target, isTarget };
+        }).filter(w =>
+          w.user_id && w.user_id !== record.seller_id && w.target > 0 && price <= w.target * 1.10);
         let sent = 0;
         if (cand.length) {
           // Respect the per-user opt-in (notify_wishlist_listings, default ON).
-          // One profile lookup covers every candidate.
           const ids = [...new Set(cand.map(w => w.user_id))];
           const { data: profs } = await sb()
             .from('profiles').select('id, notify_wishlist_listings').in('id', ids);
@@ -96,10 +102,15 @@ module.exports = async function handler(req, res) {
             .filter(p => p.notify_wishlist_listings === false).map(p => p.id));
           for (const w of cand) {
             if (optedOut.has(w.user_id)) continue;
+            const diffPct = ((price - w.target) / w.target) * 100;
+            const ref = w.isTarget ? 'your $' + w.target.toFixed(2) + ' target' : 'market ($' + w.target.toFixed(2) + ')';
+            let rel;
+            if (Math.abs(diffPct) < 0.5) rel = 'right at ' + ref;
+            else if (diffPct < 0)        rel = Math.abs(diffPct).toFixed(0) + '% below ' + ref;
+            else                         rel = diffPct.toFixed(0) + '% above ' + ref;
             await sendPushToUser(w.user_id, {
               title: 'Wishlist card just listed',
-              body: (w.card_name || 'A card on your wishlist') + ' is up for $' + price.toFixed(2)
-                + ' — within 10% of your $' + Number(w.savings_goal).toFixed(2) + ' target.',
+              body: (w.card_name || 'A card on your wishlist') + ' is listed for $' + price.toFixed(2) + ' — ' + rel + '.',
               data: { page: 'browse', listing: record.id || '' },
             });
             sent++;

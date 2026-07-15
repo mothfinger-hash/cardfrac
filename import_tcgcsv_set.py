@@ -60,6 +60,7 @@ GAME_PREFIX = {
     "fab":          "fab",
     "unionarena":   "ua",
     "dbfusion":     "dbf",
+    "dbsccg":       "dbs",
     "dbz":          "dbz",
     "gundam":       "gun",
     "grandarchive": "ga",

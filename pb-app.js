@@ -17838,78 +17838,80 @@ function _loadAdmin(){
         // Target the card's CURRENT market price (daily-refreshed) rather
         // than the user's typed savings_goal. Falls back to savings_goal
         // when the card has no price source attached yet.
+        // Target = the user's editable Target Price (savings_goal). Market
+        // price is a live reference, used as the implicit target only until
+        // the user sets their own. Progress, Remaining, and every wishlist
+        // alert key off `target`.
         const goalEntered = Number(item.savings_goal)  || 0;
         const marketPrice = Number(item.current_value) || 0;
-        const target      = marketPrice > 0 ? marketPrice : goalEntered;
-        const targetLabel = marketPrice > 0 ? 'Market Price' : 'Goal';
+        const target      = goalEntered > 0 ? goalEntered : marketPrice;
         const saved       = Number(item.amount_saved) || 0;
         const pct         = target > 0 ? Math.min(100, (saved / target * 100)).toFixed(1) : 0;
         const remaining   = Math.max(0, target - saved);
-        // Keep `goal` defined for the existing template literals below.
-        const goal = target;
+        const goal = target; // progress-block guard below
         document.getElementById('binderDetailContent').innerHTML = `
-          <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-            <div style="flex-shrink:0;text-align:center;opacity:.7">
+          <div style="max-width:420px;margin:0 auto">
+            <!-- Card centered up top, like the owned card-detail view -->
+            <div style="text-align:center;margin-bottom:6px">
               ${item.card_image_url
-                ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" style="max-height:220px;max-width:160px;border:1px dashed var(--teal);display:block;margin:0 auto;filter:grayscale(30%)"
+                ? `<img src="${_pickThumbVariant(item.card_image_url, 400)}" data-fallback="${item.card_image_url}" style="max-height:250px;max-width:172px;border:1px dashed var(--teal);border-radius:6px;display:inline-block;filter:grayscale(25%);opacity:.9"
                      onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{_binderImgFail(this,'${item.id}')}" loading="lazy" decoding="async">`
-                : `<div style="width:120px;height:168px;background:var(--surface2);border:1px dashed var(--teal);display:flex;align-items:center;justify-content:center;color:var(--teal);font-size:2.5rem">♡</div>`}
-              <div style="margin-top:8px;font-size:.7rem;color:var(--teal);letter-spacing:.06em">WISHLIST</div>
+                : `<div style="width:130px;height:182px;margin:0 auto;background:var(--surface2);border:1px dashed var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--teal);font-size:2.5rem">♡</div>`}
+              <div style="margin-top:8px;font-size:.7rem;color:var(--teal);letter-spacing:.1em">WISHLIST</div>
             </div>
-            <div style="flex:1;min-width:200px">
-              <div style="font-size:1.05rem;color:var(--text);margin-bottom:4px">${item.card_name}</div>
-              ${item.set_name ? `<div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">${item.set_name}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
 
-              ${goal > 0 ? `
-              <div style="margin-bottom:14px">
-                <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--teal);margin-bottom:4px">
-                  <span>Savings Progress</span><span>${pct}%</span>
-                </div>
-                <div class="savings-bar-wrap" style="height:12px">
-                  <div class="savings-bar-fill" style="width:${pct}%"></div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
-                  <div class="coll-stat-box" style="border-color:var(--teal)"><div class="coll-stat-label" style="color:var(--teal)">${targetLabel}</div><div class="coll-stat-value" style="color:var(--teal)">$${goal.toFixed(2)}</div></div>
-                  <div class="coll-stat-box" style="border-color:var(--teal)"><div class="coll-stat-label" style="color:var(--teal)">Saved</div><div class="coll-stat-value" style="color:var(--teal)">$${saved.toFixed(2)}</div></div>
-                  <div class="coll-stat-box"><div class="coll-stat-label">Remaining</div><div class="coll-stat-value">$${remaining.toFixed(2)}</div></div>
-                </div>
+            <div style="text-align:center;margin-bottom:16px">
+              <div style="font-size:1.05rem;color:var(--text)">${item.card_name}</div>
+              ${item.set_name ? `<div style="font-size:.78rem;color:var(--muted);margin-top:3px">${item.set_name}${item.card_number ? ' · #' + item.card_number : ''}</div>` : ''}
+            </div>
+
+            ${goal > 0 ? `
+            <div style="margin-bottom:16px">
+              <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--teal);margin-bottom:4px">
+                <span>Savings Progress</span><span>${pct}%</span>
               </div>
-              ` : `<div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">No savings goal set. Add one to track progress.</div>`}
-
-              <div style="margin-bottom:14px">
-                <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Update Saved Amount</div>
-                <div style="display:flex;gap:8px;align-items:center">
-                  <input type="number" id="savingsAmountInput_${item.id}" value="${saved}" step="0.01" min="0"
-                    style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem"
-                    placeholder="0.00" />
-                  <button id="savingsUpdateBtn_${item.id}" onclick="updateSavingsAmount('${item.id}', document.getElementById('savingsAmountInput_${item.id}').value)"
-                    style="padding:7px 14px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.75rem;cursor:pointer">Update</button>
-                </div>
+              <div class="savings-bar-wrap" style="height:12px">
+                <div class="savings-bar-fill" style="width:${pct}%"></div>
               </div>
+              <!-- repeat(3, minmax(0,1fr)) keeps all three tiles inside the
+                   modal on narrow phones — the old 1fr 1fr 1fr overflowed. -->
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px">
+                <div class="coll-stat-box" style="border-color:var(--teal);padding:12px 6px"><div class="coll-stat-label" style="color:var(--teal)">Target</div><div class="coll-stat-value" style="color:var(--teal);font-size:.95rem">$${target.toFixed(2)}</div></div>
+                <div class="coll-stat-box" style="border-color:var(--teal);padding:12px 6px"><div class="coll-stat-label" style="color:var(--teal)">Saved</div><div class="coll-stat-value" style="color:var(--teal);font-size:.95rem">$${saved.toFixed(2)}</div></div>
+                <div class="coll-stat-box" style="padding:12px 6px"><div class="coll-stat-label">Remaining</div><div class="coll-stat-value" style="font-size:.95rem">$${remaining.toFixed(2)}</div></div>
+              </div>
+              ${marketPrice > 0 ? `<div style="text-align:center;font-size:.68rem;color:var(--muted);margin-top:8px">Market value <span style="color:var(--text)">$${marketPrice.toFixed(2)}</span></div>` : ''}
+            </div>
+            ` : `<div style="font-size:.8rem;color:var(--muted);margin-bottom:16px;text-align:center">Set a target price below to track this card.</div>`}
 
-              <div style="margin-top:10px">
-                <div style="font-size:.72rem;color:var(--muted);margin-bottom:5px;letter-spacing:.04em">Price_Source_URL</div>
-                <div style="display:flex;gap:8px;align-items:center">
-                  <input type="text" id="priceUrlEdit_${item.id}" value="${item.price_source_url || ''}"
-                    placeholder="PriceCharting or TCGPlayer URL"
-                    style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.73rem;min-width:0" />
-                  <button onclick="savePriceSourceUrl('${item.id}')"
-                    style="padding:6px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Save</button>
-                  ${item.price_source_url ? `<a href="${item.price_source_url}" target="_blank" style="font-size:.8rem;color:var(--accent);text-decoration:none;white-space:nowrap">↗ Open</a>` : ''}
-                </div>
+            <div style="margin-bottom:14px">
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Target Price <span style="opacity:.65">— alert me when it hits this</span></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="number" id="targetPriceInput_${item.id}" value="${goalEntered || ''}" step="0.01" min="0"
+                  placeholder="${marketPrice > 0 ? marketPrice.toFixed(2) : '0.00'}"
+                  style="flex:1;min-width:0;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem" />
+                <button onclick="setTargetPrice('${item.id}', document.getElementById('targetPriceInput_${item.id}').value)"
+                  style="padding:8px 16px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Set</button>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Amount Saved</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="number" id="savingsAmountInput_${item.id}" value="${saved}" step="0.01" min="0"
+                  style="flex:1;min-width:0;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem"
+                  placeholder="0.00" />
+                <button id="savingsUpdateBtn_${item.id}" onclick="updateSavingsAmount('${item.id}', document.getElementById('savingsAmountInput_${item.id}').value)"
+                  style="padding:8px 16px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Update</button>
               </div>
             </div>
           </div>
-          <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center">
+
+          <div style="display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;justify-content:center;align-items:center">
             <button onclick="convertGhostToOwned('${item.id}')"
-              style="padding:8px 18px;border:1px solid var(--green);background:rgba(210,120,40,.08);color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Mark_As_Owned</button>
-            <button id="binderRefreshBtn_${item.id}" onclick="refreshBinderCardPrice('${item.id}')"
-              style="padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer"
-              onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'"
-              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ Refresh_Price</button>
+              style="padding:9px 18px;border:1px solid var(--green);background:rgba(210,120,40,.08);color:var(--green);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Mark_As_Owned</button>
             <button onclick="deleteCollectionItem('${item.id}')"
-              style="padding:8px 18px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove</button>
-            <div id="binderRefreshStatus_${item.id}" style="font-size:.75rem;color:var(--muted);display:none"></div>
+              style="padding:9px 18px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Remove</button>
           </div>
         `;
         const titleEl = document.getElementById('binderDetailTitle');
@@ -18620,6 +18622,26 @@ function _loadAdmin(){
       renderDashboard();
       setTimeout(() => openBinderCardDetail(itemId), 200);
     }
+
+    // Save a wishlist card's Target Price (savings_goal). Drives savings
+    // progress + the "PRICE TARGET HIT" / "LISTED NEAR TARGET" alerts and the
+    // wishlist-listing push. Mirrors updateSavingsAmount.
+    async function setTargetPrice(itemId, value) {
+      const amount = Math.max(0, parseFloat(value) || 0);
+      const btn = document.querySelector(`button[onclick*="setTargetPrice('${itemId}'"]`);
+      if (btn) { btn.textContent = '…'; btn.disabled = true; }
+      const { error } = await sb.from('collection_items')
+        .update({ savings_goal: amount })
+        .eq('id', itemId);
+      if (btn) { btn.textContent = 'Set'; btn.disabled = false; }
+      if (error) { showToast('Error: ' + error.message); return; }
+      const local = collectionItems.find(c => String(c.id) === String(itemId));
+      if (local) local.savings_goal = amount;
+      showToast(amount > 0 ? 'Target price set!' : 'Target cleared');
+      renderDashboard();
+      setTimeout(() => openBinderCardDetail(itemId), 200);
+    }
+    window.setTargetPrice = setTargetPrice;
 
     async function convertGhostToOwned(itemId) {
       const item = collectionItems.find(c => String(c.id) === String(itemId));
