@@ -17849,6 +17849,12 @@ function _loadAdmin(){
         const pct         = target > 0 ? Math.min(100, (saved / target * 100)).toFixed(1) : 0;
         const remaining   = Math.max(0, target - saved);
         const goal = target; // progress-block guard below
+        // Quick price-check links — PriceCharting (the card's linked source, or
+        // a name search) + TCGplayer (affiliate-wrapped, same as elsewhere).
+        const _pcUrl  = item.price_source_url || ('https://www.pricecharting.com/search-products?q=' + encodeURIComponent(item.card_name || '') + '&type=prices');
+        const _tcgUrl = (typeof tcgAffiliateUrl === 'function')
+          ? tcgAffiliateUrl('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(item.card_name || ''), 'wishlist')
+          : ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(item.card_name || ''));
         document.getElementById('binderDetailContent').innerHTML = `
           <div style="max-width:420px;margin:0 auto">
             <!-- Card centered up top, like the owned card-detail view -->
@@ -17904,6 +17910,11 @@ function _loadAdmin(){
                 <button id="savingsUpdateBtn_${item.id}" onclick="updateSavingsAmount('${item.id}', document.getElementById('savingsAmountInput_${item.id}').value)"
                   style="padding:8px 16px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Update</button>
               </div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:16px">
+              <a href="${_pcUrl}" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:9px 8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;text-decoration:none;letter-spacing:.03em">↗ PriceCharting</a>
+              <a href="${_tcgUrl}" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:9px 8px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;text-decoration:none;letter-spacing:.03em">↗ TCGplayer</a>
             </div>
           </div>
 
