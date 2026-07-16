@@ -414,7 +414,9 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     /* CARD GRID */
     .card-section{display:none}
     .card-section.active{display:block}
-    .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+    /* 2px gutters: the art carries the grid. Only possible because .listing-card
+       has no offset shadow — see the note there. */
+    .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:2px}
 
     /* ── Gap rails ────────────────────────────────────────────────────
        Personalised curation feathered INTO the browse grid rather than
@@ -505,12 +507,21 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     }
 
     /* LISTING CARD */
-    .listing-card{background:var(--surface);border:2px solid var(--border);border-radius:0;overflow:hidden;cursor:pointer;transition:all .1s;position:relative;box-shadow:4px 4px 0 var(--shadow)}
-    .listing-card:hover{transform:translate(-2px,-2px);border-color:var(--accent);box-shadow:6px 6px 0 var(--shadow)}
+    /* Marketplace tiles drop the hard offset shadow the rest of the app uses.
+   Deliberate divergence, not drift: Market is a dense scanning surface where
+   the art should carry the grid, so the gutters tighten to 2px — and a
+   `4px 4px 0` shadow physically cannot coexist with a 2px gutter (it lands
+   ON the next tile, measured). Binder and Sets keep the brutalist chrome:
+   those are display surfaces, this is a feed.
+   The 2px border STAYS — it is not decoration. hover, .early-access-card and
+   .locked-card all encode state through border-color, and it separates a tile
+   from the page background at the grid edge. */
+.listing-card{background:var(--surface);border:2px solid var(--border);border-radius:0;overflow:hidden;cursor:pointer;transition:border-color .1s,filter .1s;position:relative}
+    .listing-card:hover{border-color:var(--accent);filter:brightness(1.06)}
     .listing-card.early-access-card{border-color:rgba(240,192,64,.35)}
     .listing-card.early-access-card:hover{border-color:var(--gold)}
     .listing-card.locked-card{position:relative}
-    .listing-card.locked-card:hover{transform:translateY(-3px);border-color:var(--accent)}
+    .listing-card.locked-card:hover{border-color:var(--accent)}
     .ea-ribbon{position:absolute;top:0;left:0;right:0;background:linear-gradient(90deg,rgba(240,192,64,.95),rgba(251,146,60,.95));color:#000;font-size:.7rem;font-weight:800;text-align:center;padding:5px 0;text-transform:uppercase;letter-spacing:.06em;z-index:2}
     .ea-lock-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3;border-radius:11px;gap:6px}
     .ea-lock-overlay .ea-lock-icon{font-size:2rem}
@@ -973,7 +984,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       #binderSidebar{left:0}
     }
     @media(max-width:768px) {
-      .card-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+      .card-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:2px}
       .detail-layout{grid-template-columns:1fr}
       .page{padding:20px 14px}
       h2{font-size:.85rem}
@@ -1005,8 +1016,6 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       .page{padding-bottom:80px;padding-left:12px;padding-right:12px}
       .cart-bar{bottom:64px}
       .stat-box .stat-val{font-size:.85rem}
-      .listing-card{box-shadow:3px 3px 0 var(--shadow)}
-      .listing-card:hover{box-shadow:4px 4px 0 var(--shadow)}
 
       /* Account tabs — horizontal scroll */
       .account-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:6px;gap:4px;scrollbar-width:none}
@@ -4478,10 +4487,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .auth-btn:active{transform:translate(2px,2px)!important;box-shadow:0 0 0 var(--shadow)!important}
     .join-btn:active,.member-chip:active{transform:translate(2px,2px)!important;box-shadow:0 0 0 var(--shadow)!important}
     .coll-btn-primary:active,.coll-btn-secondary:active{transform:translate(2px,2px)!important}
-    .listing-card:active{transform:translate(2px,2px)!important;box-shadow:2px 2px 0 var(--shadow)!important}
+    /* .listing-card:active lives in the r404 LISTING CARDS section with the
+       rest of the tile's identity — keeping a second copy here just meant two
+       rules fighting over which brightness won. */
 
     /* ── SCROLL-IN CARDS ── */
-    .listing-card,.stat-box,.slot-card,.offer-card{opacity:0;transform:translateY(18px);transition:opacity .35s ease,transform .35s ease,box-shadow .1s,border-color .1s}
+    .listing-card,.stat-box,.slot-card,.offer-card{opacity:0;transform:translateY(18px);transition:opacity .35s ease,transform .35s ease,border-color .1s}
     .listing-card.card-visible,.stat-box.card-visible,.slot-card.card-visible,.offer-card.card-visible{opacity:1;transform:translateY(0)}
 
     /* ── LOGO GLITCH ── */
@@ -4727,21 +4738,44 @@ nav {
 
 /* ─── 5. LISTING CARDS ───────────────────────────────────────────── */
 
+/* Market tiles: no offset shadow — the art carries the grid.
+   A `4px 4px 0` shadow and a 2px gutter are mutually exclusive; measured, the
+   shadow lands ON the neighbouring tile. Binder and Sets keep the brutalist
+   chrome — those are display surfaces, this is a scanning feed.
+
+   TWO TRAPS, both of which cost time in the session that wrote this:
+
+   1. THIS is the .listing-card block that renders. The one near the top of
+      the file is fully overridden by the !important here. Editing that one
+      changes nothing on screen.
+   2. --accent HERE IS TEAL (#1AC7A0), not the #FF5C00 orange defined at the
+      top of the file. The r404 `:root` above is unconditional and at equal
+      specificity, so it simply wins — the orange palette is dead. Read the
+      r404 palette, not the first one you find.
+
+   The border drops from --accent to --border. A full-strength teal frame on
+   EVERY tile meant the accent was everywhere, so it wasn't an accent — and it
+   made `:hover{border-color:var(--accent)}` a literal no-op, which is why
+   hover had to borrow the shadow to say anything at all. Now the border is
+   quiet at rest and lights teal on hover. */
 .listing-card {
   background: var(--surface);
-  border: 2px solid var(--accent) !important;
-  box-shadow: 4px 4px 0 var(--accent) !important;
+  border: 2px solid var(--border) !important;
   border-radius: 0 !important;
-  transition: transform .15s var(--r404-snap), box-shadow .15s var(--r404-glide), border-color .15s;
-  will-change: transform;
+  transition: border-color .15s, filter .15s var(--r404-glide);
+  will-change: auto;
 }
 .listing-card:hover {
-  transform: translate(-3px, -3px) rotate(-0.4deg) !important;
-  box-shadow: 7px 7px 0 var(--accent) !important;
+  transform: none !important;
+  border-color: var(--accent) !important;
+  filter: brightness(1.07);
 }
+/* The press cue used to be the shadow collapsing 4px->2px as the tile moved
+   into it. With no shadow that reads as nothing — and a tap with no feedback
+   feels broken — so it gets its own cue rather than being deleted. */
 .listing-card:active {
-  transform: translate(1px, 1px) rotate(0deg) !important;
-  box-shadow: 2px 2px 0 var(--accent) !important;
+  transform: scale(.975) !important;
+  filter: brightness(.9);
   transition-duration: .05s;
 }
 
@@ -4795,8 +4829,9 @@ nav {
   font-family: 'Space Mono', monospace !important; letter-spacing: 0.18em !important;
   border-bottom: 2px solid #000;
 }
-.listing-card.early-access-card { border-color: var(--gold) !important; box-shadow: 4px 4px 0 var(--gold) !important; }
-.listing-card.early-access-card:hover { box-shadow: 7px 7px 0 var(--gold) !important; }
+/* Early access reads through a gold BORDER now that the gold shadow is gone. */
+.listing-card.early-access-card { border-color: var(--gold) !important; }
+.listing-card.early-access-card:hover { border-color: var(--gold) !important; filter:brightness(1.1); }
 
 .card-name  { font-weight: 800 !important; letter-spacing: -0.01em !important; text-transform: uppercase; color: var(--text); }
 .card-meta  { font-family: 'Space Mono', monospace !important; font-size: 0.7rem !important; letter-spacing: 0.12em !important; text-transform: uppercase; color: var(--muted) !important; }
@@ -5377,7 +5412,11 @@ input::placeholder, textarea::placeholder { color: var(--muted) !important; }
 @media (max-width: 600px) {
   :root { --r404-marquee-h: 20px; }
   .r404-marquee { font-size: 8px; }
-  .listing-card:hover { transform: translate(-2px,-2px) !important; }
+  /* The mobile .listing-card:hover translate is gone with the shadow. It was
+     scaled down (-2px vs -3px) to fit the old 10px gutter; against a 2px
+     gutter it would slide the tile onto its neighbour. On touch, :hover also
+     sticks after a tap, so it left a tile parked off-grid until you tapped
+     elsewhere. Hover is a mouse affordance; the tap cue is :active. */
 }
 
 /* ─── 22. BADGE SYSTEM ──────────────────────────────────────────── */
