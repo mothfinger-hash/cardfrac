@@ -305,6 +305,28 @@ TCG_CONFIG = {
     },
 }
 
+# ── game_type is the KEY, not the label ─────────────────────────────────────
+# Every "game_type" above is a human display name ("Pokémon", "Magic: The
+# Gathering", "Dragon Ball Super CCG"). That value is written straight into
+# catalog.game_type at the row build below — and catalog.game_type is a SLUG
+# everywhere else in the system: lowercase, no spaces, matching the key of this
+# very dict. pokedata_sync.get_game_type() returns 'dbfusion'; pb-scanner.js
+# scores { pokemon, magic, …, dbsccg, dbfusion }; pb-app.js keys its card-back
+# map on m['dbsccg']. A display name in that column is invisible to all of them.
+#
+# It already happened: 102 rows landed as 'Dragon Ball Super CCG' and 32 as
+# 'Dragon Ball Super Fusion World', orphaned from their own 10,069 / 3,154
+# singles. Every other game escaped only because its sealed rows were written by
+# a different script — run `--tcg pokemon` through here today and it would file
+# 933 correctly-slugged pokemon sealed rows under 'Pokémon'.
+#
+# Rather than fix ten string literals that can drift again, derive the slug from
+# the key (which is canonical by construction) and keep the pretty name as a
+# separate `label` used only for console output.
+for _slug, _cfg in TCG_CONFIG.items():
+    _cfg["label"] = _cfg.get("game_type", _slug)   # display only — never persisted
+    _cfg["game_type"] = _slug                      # what actually hits the DB
+
 # Patterns covering every TCG's sealed product naming. Specific → generic;
 # first match wins. Adds MTG-specific (set booster, draft booster, fat pack,
 # collector booster) and YGO/OP-specific (structure deck, starter deck, etc.)
@@ -645,7 +667,7 @@ def main():
     args = ap.parse_args()
 
     tcg_cfg = TCG_CONFIG[args.tcg]
-    print(f"  TCG: {args.tcg}  ({tcg_cfg['game_type']})  category={tcg_cfg['category_path']}")
+    print(f"  TCG: {args.tcg}  ({tcg_cfg['label']})  category={tcg_cfg['category_path']}")
 
     if args.debug_dump:
         # Pick the first discovered set of this TCG and dump it.

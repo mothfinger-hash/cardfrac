@@ -93,23 +93,52 @@ def upload_variants(sb, bucket, base_path, source, sizes=VARIANT_SIZES, quality=
     src_w, src_h = im.width, im.height
     results = []
 
+    # EVERY requested width gets an object. This is the whole contract, and it
+    # used to be broken.
+    #
+    # This loop used to `continue` when w >= src_w, on the reasoning that
+    # upscaling is pointless and "the browser will just use it directly."
+    # The first half is right. The second half is false, and it cost real
+    # performance for months: _pickThumbVariant() in pb-app.js rewrites a URL
+    # to '<stem>-400.webp' knowing ONLY that the path contains /card-images/ or
+    # /card-photos/. It has no idea how wide the source is. So the client asks
+    # for every variant this function decided not to write, gets a 400, and
+    # limps through the <img> onerror cascade to the full-size original.
+    #
+    # Measured on the live catalog: 36% of '-400.webp' requests 400, and 56% of
+    # those are sources <= 400px wide — 245px (the canonical card width, see
+    # CLAUDE.md) and 200px dominate. That is ~10,000 catalog rows whose 400 is
+    # PERMANENT and which no amount of backfilling could ever fix, because this
+    # function was correctly declining to upscale them.
+    #
+    # Two bad ways to paper over it, both rejected: teach the client the source
+    # width (needs a schema column and keeps the two halves coupled), or let the
+    # service worker negatively-cache the 400 (hides the symptom, still pays a
+    # round trip per TTL, and adds SW complexity we would have to maintain).
+    #
+    # Instead, make the assumption TRUE. For w >= src_w, upload the source at
+    # its native size under the variant name — a passthrough, not an upscale.
+    # No pixels are invented and nothing is enlarged. These sources are
+    # 150-400px / ~11-36 KB, so the duplicate costs roughly 20 KB a row.
+    # In exchange every variant URL unconditionally 200s, _pickThumbVariant
+    # becomes correct by construction, and the onerror cascade goes quiet.
     for w in sizes:
         if w >= src_w:
-            # No upscaling — skip variants for tiny sources. The original
-            # is already smaller than the requested variant, so the
-            # browser will just use it directly.
-            results.append((w, False, f"source {src_w}px not wider than {w}px"))
-            continue
-
-        target_h = round(src_h * w / src_w)
-        try:
-            vim = im.resize((w, target_h), Image.LANCZOS)
-        except Exception as e:
-            results.append((w, False, f"resize: {e}"))
-            continue
+            vim = im                       # passthrough at native size
+        else:
+            target_h = round(src_h * w / src_w)
+            try:
+                vim = im.resize((w, target_h), Image.LANCZOS)
+            except Exception as e:
+                results.append((w, False, f"resize: {e}"))
+                continue
 
         buf = io.BytesIO()
         try:
+            # Always re-encode rather than byte-copying the source: the object
+            # is named .webp and served as image/webp, so it had better BE webp.
+            # A .webp name over PNG/JPEG bytes is exactly the bug we just spent
+            # a day removing from the browser upload path.
             vim.save(buf, format="WEBP", quality=quality, method=6)
         except Exception as e:
             results.append((w, False, f"encode: {e}"))

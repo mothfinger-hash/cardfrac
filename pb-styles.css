@@ -416,6 +416,94 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     .card-section.active{display:block}
     .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
 
+    /* ── Gap rails ────────────────────────────────────────────────────
+       Personalised curation feathered INTO the browse grid rather than
+       stacked above it: the grid is the marketplace, and a rail band just
+       pushes real listings below the fold. Each rail is a full-width child
+       of .card-grid (same grid-column:1/-1 the empty state uses), so there
+       is no second scroll container and no DOM restructuring.
+       Built by _featherGapRails() in pb-app.js. */
+    .gap-rail{
+      grid-column:1/-1;
+      border-top:2px solid var(--border);
+      border-bottom:2px solid var(--border);
+      background:var(--surface2);
+      padding:14px 0 12px;
+      margin:6px 0;
+      opacity:0; transform:translateY(8px);
+      transition:opacity .32s ease, transform .32s ease;
+    }
+    .gap-rail.gr-seen{opacity:1;transform:none}
+    /* Stage 1 asks for nothing — it just mirrors what they're already doing.
+       No fill, no bottom rule: a soft interruption, not furniture. */
+    .gap-rail.gr-mirror{background:transparent;border-bottom:none;padding-bottom:4px}
+    .gap-rail.gr-term{background:var(--surface);border-bottom:none;padding-bottom:18px}
+
+    .gap-rail .gr-head{
+      display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+      padding:0 2px 7px;
+    }
+    .gap-rail .gr-kicker{
+      font-size:.56rem;letter-spacing:.18em;text-transform:uppercase;
+      color:var(--copper);font-weight:700;
+    }
+    .gap-rail .gr-more{
+      font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--accent);cursor:pointer;white-space:nowrap;
+    }
+    .gap-rail .gr-more:hover{text-decoration:underline}
+    .gap-rail .gr-title{
+      font-size:.8rem;font-weight:700;letter-spacing:.04em;padding:0 2px 6px;
+    }
+    .gap-rail .gr-title span{
+      color:var(--muted);font-weight:400;letter-spacing:.06em;margin-left:8px;font-size:.68rem;
+      font-variant-numeric:tabular-nums;
+    }
+    .gap-rail .gr-bar{height:3px;background:var(--border);margin:0 2px 7px;overflow:hidden}
+    .gap-rail .gr-fill{height:100%;background:var(--accent)}
+    .gap-rail .gr-sub{
+      font-size:.62rem;color:var(--muted);letter-spacing:.05em;padding:0 2px 9px;
+      font-variant-numeric:tabular-nums;
+    }
+    /* The honest number. "10 cheapest gaps — $6.09" is true; "close it for
+       $6.09" would be a lie (that buys 10 of 42). Do not overpromise here. */
+    .gap-rail .gr-sub strong{color:var(--accent);font-weight:700}
+
+    .gap-rail .gr-scroll{
+      display:flex;gap:8px;overflow-x:auto;padding:0 2px 4px;
+      scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+    }
+    .gap-rail .gr-scroll::-webkit-scrollbar{display:none}
+    .gap-rail .gr-item{flex:0 0 88px;scroll-snap-align:start;cursor:pointer}
+    .gap-rail .gr-thumb{
+      position:relative;aspect-ratio:245/342;background:var(--surface);
+      border:1px solid var(--border);overflow:hidden;
+    }
+    /* A gap is a card they do NOT own — dim it, so the ones they hold stand
+       apart. Lights up on hover: it becomes ownable. */
+    .gap-rail .gr-thumb img{
+      width:100%;height:100%;object-fit:cover;display:block;
+      opacity:.62;filter:saturate(.55);transition:opacity .15s, filter .15s;
+    }
+    .gap-rail .gr-item:hover .gr-thumb img{opacity:1;filter:saturate(1)}
+    .gap-rail .gr-item:hover .gr-thumb{border-color:var(--accent)}
+    .gap-rail .gr-price{
+      font-size:.66rem;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;
+    }
+    .gap-rail .gr-none{
+      font-size:.46rem;letter-spacing:.06em;text-transform:uppercase;color:var(--copper);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .gap-rail .gr-termcopy{
+      font-size:.66rem;line-height:1.65;color:var(--muted);padding:0 2px 8px;max-width:56ch;
+    }
+    .gap-rail.gr-term .gap-rail{
+      border:none;background:transparent;padding:8px 0 0;margin:0;opacity:1;transform:none;
+    }
+    @media(prefers-reduced-motion:reduce){
+      .gap-rail{opacity:1;transform:none;transition:none}
+    }
+
     /* LISTING CARD */
     .listing-card{background:var(--surface);border:2px solid var(--border);border-radius:0;overflow:hidden;cursor:pointer;transition:all .1s;position:relative;box-shadow:4px 4px 0 var(--shadow)}
     .listing-card:hover{transform:translate(-2px,-2px);border-color:var(--accent);box-shadow:6px 6px 0 var(--shadow)}

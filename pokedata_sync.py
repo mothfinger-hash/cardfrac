@@ -1684,6 +1684,28 @@ def mode_mirror_images():
             return (row["id"], "failed", f"upload: {last_err}")
         new_url = f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{storage_path}"
 
+        # 2b. Thumbnail variants — the sibling -200/-400.webp objects that
+        # _pickThumbVariant() in pb-app.js unconditionally asks for.
+        #
+        # This script mirrored images for months without this call while
+        # mirror_singles_images.py / mirror_sealed_images.py /
+        # mirror_tcgplayer_images.py all had it, so which script wrote a row
+        # decided whether its thumbnails existed. Measured, same bucket and
+        # same convention: dbfusion (mirror-written) is 0/20 missing a -400;
+        # pokemon en- (written here) is 8/20. That is the leak that left
+        # ~172k catalog rows serving full-size art into thumbnail slots — the
+        # client asks for the variant, gets a 400, and falls back to the
+        # original on every single load.
+        #
+        # Non-fatal: a variant failure must not fail the mirror. The row is
+        # still usable (it just falls back), and the nightly backfill can
+        # pick it up.
+        try:
+            from image_variants import upload_variants
+            upload_variants(sb, STORAGE_BUCKET, storage_path, img_bytes)
+        except Exception as e:
+            print(f"  [variants] {storage_path}: {e}", flush=True)
+
         # 3. Rewrite catalog row's image_url
         try:
             sb.table("catalog").update({"image_url": new_url}).eq("id", row["id"]).execute()

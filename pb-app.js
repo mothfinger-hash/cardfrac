@@ -2067,9 +2067,217 @@ function _loadAdmin(){
     }
     window.unlockMarketplace = unlockMarketplace;
 
+    // ── Gap rails — personalised curation feathered into browse ─────────
+    // A collection is a stated intent: owning 7 of the 49 Mega Evolution
+    // Promos is a goal with 42 steps left. user_gap_cards() (see
+    // migration_user_gap_rails.sql) returns the sets a user is closest to
+    // finishing plus the cheapest cards in each they don't own — derived
+    // from collection_items ∩ catalog, no goal-picker, no onboarding.
+    //
+    // Loaded ONCE per session, not per render: renderBrowse re-runs on every
+    // keystroke of the search box (see the filter chain below) and this must
+    // not become a query per render. Same discipline as the N+1 warning in
+    // CLAUDE.md.
+    var _gapRails = null;          // null = not loaded, [] = loaded and empty
+    var _gapRailsLoading = false;
+
+    // Deliberate order — this is the escalation, and it is the whole design.
+    // Scroll depth is a proxy for intent: one screen in they may know what they
+    // want; several screens in they are browsing and have earned a suggestion.
+    // So the ask grows: mirror -> nearly-done -> cheap list -> a second
+    // collection -> breadth -> aspiration. Chase is LAST on purpose; a $400
+    // card up front reads as an ad, the same card after four cheap rails reads
+    // as a goal.
+    var _RAIL_ORDER = ['closest', 'almost', 'cheap', 'revholo', 'era', 'chase'];
+    var _RAIL_COPY = {
+      closest: { kicker: 'Closest to done' },
+      almost:  { kicker: "You're nearly there" },
+      cheap:   { kicker: 'Cheapest gaps you have' },
+      revholo: { kicker: 'Reverse holos you\'re missing' },
+      era:     { kicker: 'Your era' },
+      chase:   { kicker: 'Your chase card' },
+    };
+
+    async function _loadGapRails() {
+      if (_gapRails !== null || _gapRailsLoading || !currentUser) return;
+      _gapRailsLoading = true;
+      try {
+        const r = await sb.rpc('user_rails', { p_user: currentUser.id });
+        if (r.error) throw new Error(r.error.message);
+        // One row per CARD; fold to one entry per (rail_kind, rail_key).
+        const byRail = new Map();
+        (r.data || []).forEach(row => {
+          const k = row.rail_kind + '|' + (row.rail_key || '');
+          let g = byRail.get(k);
+          if (!g) {
+            g = { kind: row.rail_kind, key: row.rail_key, label: row.rail_label,
+                  owned: row.owned, total: row.total, gap_count: row.gap_count, cards: [] };
+            byRail.set(k, g);
+          }
+          if (row.id) g.cards.push(row);
+        });
+        // Sort into the escalation order; drop anything the data can't fill.
+        // era returns zero rows until catalog.release_date is backfilled on the
+        // en- shard — it simply won't appear, which is the intended behaviour.
+        _gapRails = [...byRail.values()]
+          .filter(g => g.cards.length)
+          .sort((a, b) => _RAIL_ORDER.indexOf(a.kind) - _RAIL_ORDER.indexOf(b.kind));
+      } catch (e) {
+        // Non-fatal — the marketplace works without rails. Most likely cause is
+        // migration_user_rails_v2.sql not being installed yet.
+        console.warn('[rails] unavailable:', e && e.message);
+        _gapRails = [];
+      } finally {
+        _gapRailsLoading = false;
+      }
+      if (_gapRails.length) renderBrowse();   // one re-render, with rails
+    }
+
+    function _gapRailCardHtml(c) {
+      const img = c.image_url ? _pickThumbVariant(c.image_url, 200) : '';
+      const v = Number(c.current_value || 0);
+      return `<div class="gr-item" onclick="_gapRailArm('${_escJsAttr(c.id)}')">
+        <div class="gr-thumb">${img
+          ? `<img src="${_escHtml(img)}" data-fallback="${_escHtml(c.image_url)}" alt="${_escHtml(c.name || '')}"
+                 loading="lazy" decoding="async" onerror="_thumbFail(this)">`
+          : ''}</div>
+        <div class="gr-price">$${v.toFixed(2)}</div>
+        <div class="gr-none">not listed</div>
+      </div>`;
+    }
+
+    // Build one feathered stage.
+    function _gapRailHtml(rail, stage) {
+      const copy  = _RAIL_COPY[rail.kind] || { kicker: rail.label || '' };
+      const shown = rail.cards.slice(0, rail.kind === 'chase' ? 1 : 10);
+      const cost  = shown.reduce((s, c) => s + Number(c.current_value || 0), 0);
+      // Only set-scoped rails have a completion figure. cheap/revholo/era are
+      // cross-set, so a progress bar there would be a lie.
+      const isSet = (rail.kind === 'closest' || rail.kind === 'almost' || rail.kind === 'chase')
+                    && rail.total > 0;
+      const pct   = isSet ? (rail.owned / rail.total * 100) : 0;
+      // stage 1 asks for nothing: it just mirrors what they're already doing.
+      const isMirror = stage === 1;
+
+      let sub;
+      if (rail.kind === 'chase')        sub = 'The one that finishes it';
+      else if (rail.kind === 'almost')  sub = rail.gap_count + ' left in ' + _escHtml(rail.label || '');
+      else if (rail.kind === 'revholo') sub = shown.length + ' you own in Normal only';
+      // "10 cheapest gaps — $6.09" is TRUE. "Close it for $6.09" would be a lie
+      // (that buys 10 of 42). Never write a cheque the number does not cash.
+      else                              sub = shown.length + ' cheapest gaps — <strong>$' + cost.toFixed(2) + '</strong>';
+
+      const more = (rail.key && isSet)
+        ? `<span class="gr-more" onclick="loadSetDetail('${_escJsAttr(rail.key)}','${_escJsAttr(rail.label || '')}')">${rail.gap_count} gaps</span>`
+        : '';
+
+      return `<div class="gap-rail${isMirror ? ' gr-mirror' : ''}${rail.kind === 'chase' ? ' gr-chase' : ''}" data-gr-stage="${stage}">
+        <div class="gr-head"><span class="gr-kicker">${copy.kicker}</span>${more}</div>
+        ${isSet ? `<div class="gr-title">${_escHtml(rail.label || '')}<span>${rail.owned} of ${rail.total}</span></div>
+        <div class="gr-bar"><div class="gr-fill" style="width:${pct.toFixed(1)}%"></div></div>` : ''}
+        <div class="gr-sub">${sub}</div>
+        <div class="gr-scroll">${shown.map(_gapRailCardHtml).join('')}</div>
+      </div>`;
+    }
+
+    // Splice rails BETWEEN tiles rather than stacking them above the grid.
+    // The grid is the marketplace; a rail band just pushes it below the fold.
+    // Rails are full-width children of the existing .card-grid — the same
+    // grid-column:1/-1 trick the empty state already uses, so no DOM
+    // restructuring and no second scroll container.
+    function _featherGapRails(tiles) {
+      // Do NOT interrupt a search. A query IS intent — someone hunting a
+      // Blastoise does not want to hear about their set completion. Rails are
+      // for browsing, which is what an unfiltered grid means.
+      const browsing = !browseSearchQuery && browseGameTypeFilter === 'all'
+                    && browseProductTypeFilter === 'all' && browseTabFilter !== 'sold';
+      if (!browsing || !_gapRails || !_gapRails.length) return tiles.join('');
+
+      const out = [];
+      // First rail lands after roughly one screen of grid, then every ~8 tiles.
+      const FIRST = 6, EVERY = 8;
+      let rail = 0;
+      tiles.forEach((t, i) => {
+        out.push(t);
+        const at = (i + 1 === FIRST) || (i + 1 > FIRST && (i + 1 - FIRST) % EVERY === 0);
+        if (at && rail < _gapRails.length) out.push(_gapRailHtml(_gapRails[rail], ++rail));
+      });
+      // Terminal: the feed never says "no more results". Whatever rails did not
+      // fit above become the tail, so an empty-ish marketplace turns into a
+      // want-list builder instead of a dead end. This is the state that matters
+      // most right now — with few listings the grid runs dry almost at once.
+      if (rail < _gapRails.length) {
+        const rest = _gapRails.slice(rail);
+        out.push(`<div class="gap-rail gr-term" data-gr-stage="term">
+          <div class="gr-head"><span class="gr-kicker">That's every listing</span></div>
+          <div class="gr-termcopy">You've seen all ${tiles.length}. Here's what your binder is still
+            missing — open one to add it to your wishlist and we'll notify you when it's listed.</div>
+          ${rest.map(r => _gapRailHtml(r, 'term')).join('')}
+        </div>`);
+      }
+      return out.join('');
+    }
+
+    // Reveal each rail as it is reached. A rail already sitting there when you
+    // arrive reads as furniture; one that arrives with you reads as a suggestion.
+    var _gapRailObserver = null;
+    function _attachGapRailObserver() {
+      if (_gapRailObserver) _gapRailObserver.disconnect();
+      const rails = document.querySelectorAll('#browseGrid .gap-rail');
+      if (!rails.length) return;
+      if (!('IntersectionObserver' in window) ||
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        rails.forEach(r => r.classList.add('gr-seen'));   // no motion: just show them
+        return;
+      }
+      _gapRailObserver = new IntersectionObserver(es => es.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('gr-seen'); _gapRailObserver.unobserve(e.target); }
+      }), { threshold: 0.12 });
+      rails.forEach(r => _gapRailObserver.observe(r));
+    }
+
+    // Tapping a gap arms the wishlist — which is the whole point of the rail.
+    // saveToWishlist() writes is_ghost:true + savings_goal, and api/db-hook.js's
+    // listings-INSERT rule already pushes the moment a seller lists that card
+    // within 10% of the goal. So the rail manufactures the demand signal that
+    // makes sellers list, which is the actual fix for a cold marketplace.
+    //
+    // Routes through openAddToWishlistModal (the real entry point) rather than
+    // a card-detail sheet: every existing detail opener is index-based
+    // (openSetCardDetail(idx) reads window._setsDetailCards[idx]) and there is
+    // no by-catalog-id opener to reuse.
+    window._gapRailArm = function _gapRailArm(catalogId) {
+      if (!currentUser) { showToast('Sign in to track cards you need'); openModal('loginModal'); return; }
+      var card = null;
+      (_gapRails || []).some(function (r) {
+        return (r.cards || []).some(function (c) { if (c.id === catalogId) { card = c; return true; } });
+      });
+      if (!card) { showToast('Card unavailable'); return; }
+      openAddToWishlistModal({
+        apiCardId:    card.id,
+        cardName:     card.name,
+        // card_set_*, NOT rail_key/rail_label: on the cheap / revholo / era
+        // rails the cards come from many different sets, so the rail's own
+        // label is not this card's set. Reading the rail here would save a
+        // ghost row with the wrong set — or a null one.
+        setName:      card.card_set_name,
+        setCode:      card.card_set_code,
+        cardNumber:   card.card_number,
+        cardImageUrl: card.image_url,
+        // Straight from the RPC — defaulting to 'pokemon' would misfile every
+        // Gundam / One Piece gap, and this account collects all three.
+        gameType:     card.game_type || 'pokemon',
+        // The revholo rail is asking for a DIFFERENT FINISH of a card they
+        // already own. Without this the wishlist row would duplicate the
+        // Normal they already have.
+        variant:      card.variant || 'normal',
+      });
+    };
+
     function renderBrowse() {
       const grid = document.getElementById('browseGrid');
       if (!grid) return;
+      _loadGapRails();   // fire-and-forget; re-renders itself once when ready
 
       // Marketplace browse is open to everyone — all tiers, including
       // logged-out visitors, can browse and buy. Selling is gated
@@ -2224,7 +2432,9 @@ function _loadAdmin(){
         return;
       }
 
-      grid.innerHTML = filtered.map(listing => {
+      // Build the tiles as an ARRAY, not a joined string — _featherGapRails
+      // needs to splice rails between them. Joined immediately below either way.
+      const _tiles = filtered.map(listing => {
         const price = listing.list_price || listing.value || 0;
         const displayPrice = price ? '$' + Number(price).toLocaleString() : 'Make Offer';
         const photoSrc = (listing.photos && listing.photos[0]) ? listing.photos[0] : PLACEHOLDER_IMG;
@@ -2324,7 +2534,10 @@ function _loadAdmin(){
           ${marketPriceHtml}
           ${!isSold && !isOwn ? `<button class="lc-buy" onclick="event.stopPropagation();buyCard('${listing.id}')">Buy Now →</button>` : ''}
         </div>`;
-      }).join('');
+      });
+
+      grid.innerHTML = _featherGapRails(_tiles);
+      _attachGapRailObserver();
     }
 
     function filterListings(filter) {
@@ -10969,6 +11182,25 @@ function _loadAdmin(){
           <button class="rm-btn" onclick="removeLcPhoto(${i})">×</button>
         </div>`;
       }).join('');
+      // Advice, not a gate. Fires at exactly one photo — the moment it's useful
+      // and before the seller has moved on. It says WHY (a dispute is decided on
+      // what you can show) rather than just "add another": a reason changes
+      // behaviour, a nag gets dismissed. Mirrors the isSealed derivation at the
+      // submit path — a box front really is enough for sealed.
+      const _hintEl = document.getElementById('lcPhotoHint');
+      if (_hintEl) {
+        // NOT TCG_TYPES — that's a `const` local to openListCardModal and is out
+        // of scope here, which would throw a ReferenceError on every photo add.
+        // (node --check passes it happily; it only validates syntax, not scope.)
+        // Same values, same derivation as the submit path at openListCardModal.
+        const _isProduct  = ['single', 'sealed', 'tcg_sealed', 'tcg_single'].indexOf(lcProductType) === -1;
+        const _sealedNow  = lcProductType !== 'single' && !_isProduct;
+        const _showHint   = lcPhotos.length === 1 && !_sealedNow;
+        _hintEl.textContent = _showHint
+          ? 'Add a back photo — if a buyer opens a dispute, your photos are the evidence.'
+          : '';
+        _hintEl.style.display = _showHint ? 'block' : 'none';
+      }
       document.getElementById('lcPhotoArea').style.display = lcPhotos.length >= 8 ? 'none' : '';
     }
 
@@ -11295,12 +11527,21 @@ function _loadAdmin(){
         showToast(_msg);
         return;
       }
+      // ONE photo required, two strongly encouraged.
+      //
+      // The hard minimum used to be 2 for singles (front + back). A back photo
+      // is genuinely the seller's best evidence in a dispute — Stripe
+      // chargebacks are decided on what you can show — but making it a BLOCK
+      // meant a seller with one good photo could not list at all. That trade is
+      // wrong for a marketplace with almost no inventory: a listing with one
+      // photo beats a listing that never happens. So the nudge lives in
+      // renderLcPhotoPreview() as advice at exactly 1 photo, and the gate only
+      // stops a listing with none.
       const errEl = document.getElementById('lcPhotoError');
-      const minPhotos = isSealed ? 1 : 2;
-      if (lcPhotos.length < minPhotos) {
+      if (lcPhotos.length < 1) {
         errEl.textContent = isSealed
-          ? 'At least 1 photo required (box front)'
-          : 'At least 2 photos required (front + back)';
+          ? 'Add at least 1 photo (box front)'
+          : 'Add at least 1 photo of the card';
         errEl.style.display = 'block';
         return;
       }
@@ -18640,6 +18881,14 @@ function _loadAdmin(){
         card_number:      pendingCollectionCard.cardNumber   || null,
         card_image_url:   pendingCollectionCard.cardImageUrl || null,
         game_type:        pendingCollectionCard.gameType     || 'pokemon',
+        // Finish matters, and this used to be dropped on the floor. The
+        // two-row variant model means (api_card_id, variant) is the real
+        // identity of a card — a Reverse Holo Umbreon is a different product
+        // from the Normal, with a different price. Wishing for the RH of a
+        // card you already own in Normal is a legitimate and common goal (it's
+        // what the "reverse holos you're missing" rail is for), and without
+        // this it saved as 'normal' and duplicated the card they already had.
+        variant:          pendingCollectionCard.variant      || 'normal',
         condition:        'raw',
         quantity:         1,
         is_ghost:         true,

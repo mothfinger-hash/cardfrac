@@ -20,7 +20,7 @@
 
     "dbsccg": {
         "category_path": None,
-        "game_type":     "Dragon Ball Super CCG",
+        "game_type":     "dbsccg",   # SLUG — catalog.game_type is a slug everywhere (was the display name; produced 102 orphaned rows)
         "slug_prefix":   "dragon-ball-super-",
         "id_segment":    "dbs",   # matches singles prefix (GAME_PREFIX dbsccg->dbs)
         "lang_aware":    False,
@@ -37,7 +37,7 @@
     },
     "dbfusion": {
         "category_path": None,
-        "game_type":     "Dragon Ball Super Fusion World",
+        "game_type":     "dbfusion", # SLUG — see above (produced 32 orphaned rows)
         "slug_prefix":   "dragon-ball-fusion-world-",
         "id_segment":    "dbf",   # matches singles prefix (GAME_PREFIX dbfusion->dbf)
         "lang_aware":    False,
