@@ -1,0 +1,83 @@
+name: Backfill card-photo variants
+
+# Generates the -200.webp / -400.webp thumbnails for user-uploaded photos in
+# the card-photos bucket, server-side, every night.
+#
+# WHY THIS IS A CRON AND NOT JUST A CLIENT FIX
+# --------------------------------------------
+# Variants are supposed to be produced in the browser at upload time by
+# _imgToWebpAndVariants (pb-app.js). They cannot be relied on, by design of
+# the platform rather than by bug:
+#
+#   canvas.toBlob(cb, 'image/webp') is SPEC-MANDATED to silently fall back to
+#   image/png when the engine cannot encode WebP. The client now rejects a
+#   non-WebP blob rather than uploading PNG bytes under a .webp name — which
+#   is correct, but it means those clients produce NO variant at all. Nothing
+#   the client does can make an engine encode a format it does not support.
+#
+# So the browser is best-effort and this job is the guarantee. Measured on the
+# first full run: 128 originals, 195.3 MB -> 5.79 MB (34x), 0 errors — including
+# every 4032x3024 12 MP still that makes the browser canvas throw. 44 of those
+# needed EXIF transposition that the browser path never applied.
+#
+# The card-images bucket has ~70% coverage precisely because it has always been
+# written by this same Python/Pillow path. This gives card-photos the same
+# guarantee: whatever any browser does or fails to do, coverage converges to
+# 100% within a day.
+#
+# WHAT IT COSTS
+#   Idempotent by construction: a stem whose -200/-400 already validate as real
+#   WebP (magic bytes, not filename) is skipped without downloading it. A run
+#   over a fully-covered bucket is a listing plus a handful of HEADs. Only NEW
+#   photos since the last run do real work.
+#
+# Schedule: 09:00 UTC daily (~4-5 AM ET) — off-peak, and well clear of the
+# 07:00 UTC nightly price refresh so the two don't contend for the runner.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      prefix:
+        description: 'Storage prefix to walk (default: collection).'
+        required: false
+        default: 'collection'
+      dry_run:
+        description: 'Measure only, write nothing.'
+        type: boolean
+        required: false
+        default: false
+      force:
+        description: 'Regenerate even where variants already validate.'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  # Never let two runs write the same objects. A long first run must not be
+  # lapped by the next night's schedule.
+  group: backfill-card-photo-variants
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: self-hosted
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: pip3 install --quiet --break-system-packages pillow supabase requests
+
+      - name: Backfill variants
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 backfill_card_photo_variants.py \
+            --prefix "${{ github.event.inputs.prefix || 'collection' }}" \
+            --workers 4 \
+            ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} \
+            ${{ github.event.inputs.force  == 'true' && '--force'   || '' }}

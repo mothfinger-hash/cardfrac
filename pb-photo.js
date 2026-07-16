@@ -336,7 +336,14 @@
         var canvas = _cpCropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1600 });
         var blob = await new Promise(function(res) { canvas.toBlob(res, 'image/webp', 0.85); });
         var ext = 'webp', contentType = 'image/webp';
-        if (!blob) {
+        // toBlob does NOT return null when the engine can't encode WebP — it is
+        // spec-mandated to silently substitute image/png and hand back a
+        // perfectly truthy blob, with blob.type telling the truth. The old
+        // `if (!blob)` therefore never fired on the very case this fallback was
+        // written for, and PNG bytes shipped under a .webp name with
+        // contentType 'image/webp'. Measured live: 2 of 14 .webp-named
+        // originals in card-photos are actually PNG. Test the TYPE, not nullness.
+        if (!blob || blob.type !== 'image/webp') {
           blob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
           ext = 'png'; contentType = 'image/png';
         }
@@ -366,6 +373,20 @@
               vc.getContext('2d').drawImage(canvas, 0, 0, w, th);
               vc.toBlob(function(vb) {
                 if (!vb) return;
+                // Same PNG-fallback guard as the main blob above and as
+                // _imgToWebpAndVariants in pb-app.js. Uploading a non-WebP blob
+                // here is worse than uploading nothing: it lands under a .webp
+                // name stamped contentType 'image/webp', so the URL returns 200,
+                // the <img> onerror cascade never fires, and the client
+                // downloads a ~141 KB PNG believing it is a ~13 KB thumbnail.
+                // A missing variant 400s and falls back honestly. Skip it — the
+                // nightly backfill-card-photo-variants job uses Pillow and will
+                // generate the real one.
+                if (vb.type !== 'image/webp') {
+                  console.warn('[variants] engine cannot encode WebP (got ' + vb.type +
+                               ') — skipping ' + w + 'px; nightly backfill will handle it');
+                  return;
+                }
                 var vpath = path.replace(/(\.[^.]+)?$/, '-' + w + '.webp');
                 sb.storage.from('card-photos').upload(vpath, vb, {
                   upsert: false, contentType: 'image/webp',

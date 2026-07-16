@@ -26470,16 +26470,36 @@ function _loadAdmin(){
         // 1. Full-size WebP — same logic as _imgToWebpBlob. Keep the
         //    original input if WebP encoding is larger (already-optimized
         //    JPEGs sometimes are) or if the input is already WebP.
+        //
+        //    Its own try/catch, deliberately. This canvas is the size of the
+        //    source — 4032x3024 for a phone still, ~46 MB as a decoded RGBA
+        //    bitmap — and it is the thing that throws under WebView memory
+        //    pressure. It used to share one try with the variant loop below,
+        //    so a full-size failure took the variants down with it even though
+        //    the variant canvases are only 200/400px and would have succeeded.
+        //    That is why the entire 12 MP cohort (16/16 probed originals are
+        //    exactly 4032x3024) has zero variants. Failing here must cost us
+        //    the re-encode and nothing else.
         let original = fallbackOrig;
         if (input.type !== 'image/webp') {
-          const fullCanvas = document.createElement('canvas');
-          fullCanvas.width = drawW; fullCanvas.height = drawH;
-          fullCanvas.getContext('2d').drawImage(bitmap, 0, 0);
-          const fullWebp = await new Promise((resolve) => {
-            fullCanvas.toBlob(resolve, 'image/webp', quality);
-          });
-          if (fullWebp && fullWebp.size < input.size) {
-            original = { blob: fullWebp, ext: 'webp', contentType: 'image/webp' };
+          try {
+            const fullCanvas = document.createElement('canvas');
+            fullCanvas.width = drawW; fullCanvas.height = drawH;
+            fullCanvas.getContext('2d').drawImage(bitmap, 0, 0);
+            const fullWebp = await new Promise((resolve) => {
+              fullCanvas.toBlob(resolve, 'image/webp', quality);
+            });
+            // toBlob is SPEC-MANDATED to fall back to image/png when the engine
+            // cannot encode WebP, and it reports the REAL type on the blob. This
+            // check used to be absent, so PNG bytes were stored under a .webp
+            // name with contentType 'image/webp' — measured live: 2 of 14
+            // .webp-named originals in card-photos are actually PNG. Trust
+            // blob.type, never the requested type.
+            if (fullWebp && fullWebp.type === 'image/webp' && fullWebp.size < input.size) {
+              original = { blob: fullWebp, ext: 'webp', contentType: 'image/webp' };
+            }
+          } catch (e) {
+            console.warn('[webp variants] full-size re-encode failed, storing original as-is:', e);
           }
         } else {
           original = { blob: input, ext: 'webp', contentType: 'image/webp' };
@@ -26491,14 +26511,35 @@ function _loadAdmin(){
         const variants = {};
         for (const w of sizes) {
           if (w >= drawW) continue; // no upscaling
-          const targetH = Math.round(drawH * (w / drawW));
-          const vCanvas = document.createElement('canvas');
-          vCanvas.width = w; vCanvas.height = targetH;
-          vCanvas.getContext('2d').drawImage(bitmap, 0, 0, w, targetH);
-          const vBlob = await new Promise((resolve) => {
-            vCanvas.toBlob(resolve, 'image/webp', 0.8);
-          });
-          if (vBlob) variants[w] = vBlob;
+          try {
+            const targetH = Math.round(drawH * (w / drawW));
+            const vCanvas = document.createElement('canvas');
+            vCanvas.width = w; vCanvas.height = targetH;
+            vCanvas.getContext('2d').drawImage(bitmap, 0, 0, w, targetH);
+            const vBlob = await new Promise((resolve) => {
+              vCanvas.toBlob(resolve, 'image/webp', 0.8);
+            });
+            if (!vBlob) {
+              console.warn('[webp variants] toBlob returned null at', w + 'px — skipping variant');
+              continue;
+            }
+            // The PNG-fallback guard. Uploading a non-WebP blob here is WORSE
+            // than uploading nothing: _uploadPhotoVariants stamps it
+            // contentType 'image/webp', the URL then returns 200, so the <img>
+            // onerror cascade never fires and the client downloads a ~141 KB
+            // PNG believing it got a ~13 KB thumbnail. A missing variant 400s
+            // and falls back honestly; a fake one lies. Skip it and let the
+            // nightly server-side backfill (which uses Pillow and always
+            // succeeds) produce the real one.
+            if (vBlob.type !== 'image/webp') {
+              console.warn('[webp variants] engine cannot encode WebP (got ' + vBlob.type +
+                           ') — skipping ' + w + 'px variant; the nightly backfill will generate it');
+              continue;
+            }
+            variants[w] = vBlob;
+          } catch (e) {
+            console.warn('[webp variants] variant', w + 'px failed:', e);
+          }
         }
 
         return { original, variants };
@@ -26530,6 +26571,15 @@ function _loadAdmin(){
       for (const w of Object.keys(variants)) {
         const vBlob = variants[w];
         if (!vBlob) continue;
+        // Belt-and-braces: _imgToWebpAndVariants already rejects non-WebP blobs,
+        // but this function stamps contentType 'image/webp' unconditionally, so
+        // it is the last place a PNG could be laundered into a .webp object.
+        // Any future caller that builds `variants` itself gets caught here.
+        if (vBlob.type && vBlob.type !== 'image/webp') {
+          console.warn('[variant upload] refusing to upload a ' + vBlob.type +
+                       ' blob as image/webp at ' + w + 'px — skipping');
+          continue;
+        }
         const vPath = originalPath.replace(/(\.[^.]+)?$/, '-' + w + '.webp');
         uploads.push(
           sb.storage.from(bucket).upload(vPath, vBlob, {
