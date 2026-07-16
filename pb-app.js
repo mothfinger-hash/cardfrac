@@ -29673,6 +29673,62 @@ function _loadAdmin(){
             } catch(_) { catalogFailed = true; }
           }
 
+          // ── Prefer the canonical PokeData shard ───────────────────────
+          // The catalog stores most modern EN sets TWICE:
+          //
+          //   stale legacy shard — keyed by pokemontcg.io's set id, ids like
+          //     'sv3pt5-24'. Written by a one-off import that stopped at card
+          //     #99 on 25 sets. Unmirrored images.pokemontcg.io art. This is
+          //     what the query above just found (when it found anything).
+          //   canonical PokeData shard — keyed by PokeData's set code, ids
+          //     like 'en-mew-001'. Complete, with images mirrored to our own
+          //     storage. set_map bridges ptcg_code -> pd_code.
+          //
+          // Without this step "151" (sv3pt5) resolves to 99 of its 207 cards,
+          // and swsh2/3/4/6/8-12 silently render 99 of ~209-285 — scoring set
+          // completion against a denominator that is simply wrong. sv3pt5's
+          // legacy shard is excluded by _pokemonENOrFilter entirely, so that
+          // set found NOTHING above and fell through to the flaky
+          // pokemontcg.io backup: the "Couldn't load this set right now" report.
+          //
+          // Take whichever shard has MORE cards rather than always preferring
+          // PokeData — a few pd shards are themselves partial (ecard2 -> AQ is
+          // 9 rows against the legacy shard's 181, and blindly preferring it
+          // would drop 172 cards). Comparing counts also renders a wrong
+          // mapping harmless whenever the bad target is smaller.
+          //
+          // It does NOT make a wrong mapping harmless when the bad target is
+          // BIGGER, so set_map has to be right: base1 -> SVI (Scarlet & Violet
+          // Base, 258 rows) would beat the real Base Set's 102 and render the
+          // wrong century of Pokemon. All 138 rows were audited by content
+          // (card names compared per card number, not set-name fuzz); exactly
+          // two are both wrong AND larger, and both are corrected in
+          // migration_set_map_corrections.sql — which MUST be run before this
+          // ships. Rows that are wrong but smaller stay inert by construction.
+          // Runs even when the query above threw: a transient error on the
+          // legacy shard shouldn't cost us the canonical one. allCards is []
+          // in that case, so any pd result wins the comparison, and a
+          // non-empty `cards` makes catalogFailed moot downstream.
+          try {
+            const { data: mapRow } = await sb.from('set_map')
+              .select('pd_code').eq('ptcg_code', setId).maybeSingle();
+            const pdCode = mapRow && mapRow.pd_code;
+            if (pdCode) {
+              // Keep the EN filter: it stops a pd_code that collides with a
+              // non-EN set_code (JP/CN/KR reuse short codes) from leaking in.
+              const { data: pdRows } = await sb.from('catalog')
+                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                .or(_pokemonENOrFilter())
+                .eq('set_code', pdCode)
+                .order('card_number', { ascending: true })
+                .limit(600);
+              if (pdRows && pdRows.length > allCards.length) {
+                allCards = pdRows.map(_catalogRowToApiShape);
+                catalogFailed = false;
+              }
+            }
+          } catch (_) { /* bridge is best-effort; fall through to set_name/API */ }
+
           // Still empty? Match by set NAME — the reliable bridge for when the
           // list's id (e.g. set_metadata 'me4') doesn't equal the catalog's
           // set_code (e.g. 'CRI'). NOTE: no id-prefix filter here — those
