@@ -867,7 +867,7 @@ const GAME_LABEL = {
   yugioh:  'Yu-Gi-Oh!',
   onepiece:'One Piece',
   gundam:  'Gundam',
-  dbz:     'Dragon Ball Z Fusion World',
+  dbz:     'Dragon Ball Z',
   all:     'All TCGs',
 };
 

@@ -2147,6 +2147,7 @@
         var gamePretty = ({
           pokemon: 'Pokemon', mtg: 'Magic', yugioh: 'Yu-Gi-Oh',
           onepiece: 'One Piece', gundam: 'Gundam', dbz: 'Dragon Ball',
+          dbsccg: 'Dragon Ball Super CCG', dbfusion: 'Dragon Ball Super Fusion World',
         })[ex.game_type || ''] || '';
         var cardName = [gamePretty, ex.set_name, fmtPretty].filter(Boolean).join(' ');
         var isVendor = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
@@ -3981,7 +3982,7 @@
     function detectScanTcg(text) {
       if (!text) return 'pokemon';
       var t = text.toLowerCase();
-      var scores = { pokemon: 0, magic: 0, yugioh: 0, onepiece: 0, gundam: 0, dbz: 0, lorcana: 0 };
+      var scores = { pokemon: 0, magic: 0, yugioh: 0, onepiece: 0, gundam: 0, dbz: 0, dbsccg: 0, dbfusion: 0, lorcana: 0 };
 
       // Pokemon signals
       if (/\bhp\s*\d{2,3}\b/i.test(text))      scores.pokemon += 2;
@@ -4059,6 +4060,30 @@
       if (/\b(dbz|db)\d+-\d+/i.test(text))     scores.dbz += 2;
       if (/\b(saiyan|namekian|frieza\s*saga|cell\s*saga|buu\s*saga)\b/i.test(t)) scores.dbz += 1;
 
+      // Dragon Ball Super CCG signals (Bandai 2017+ — sits between the vintage
+      // Panini/Score dbz above and Fusion World below). Anchored on BT##-###,
+      // unique to Super CCG and present on most cards even when reprinted into
+      // expansion/starter/theme sets. Combo Power/Energy + Leader/Battle/Extra/
+      // Unison card types are Super-CCG vocab absent from the Style/Power-Level
+      // vintage cards, so this can't poach the dbz block.
+      if (/\bbt\d+-\d+/i.test(text))            scores.dbsccg += 3; // BT31-055 — unique
+      if (/\b(combo\s*power|combo\s*energy)\b/i.test(t)) scores.dbsccg += 2;
+      if (/\b(leader|battle|extra|unison)\s*card\b/i.test(t)) scores.dbsccg += 1;
+      // Native expansion/starter numbers are EX##-### / SD##-### (NOT "EB",
+      // which is a One Piece / Gundam prefix — deliberately excluded). Guarded
+      // with a DB word so a stray SD/EX elsewhere can't drag a card here.
+      if (/\b(ex|sd)\d+-\d+/i.test(text) &&
+          /\b(goku|vegeta|gohan|saiyan|dragon\s*ball|combo)\b/i.test(t)) scores.dbsccg += 2;
+
+      // Dragon Ball Super Fusion World signals (Bandai 2024+ — current DB game).
+      // Anchored on FB/FS/SB set codes (all unique to Fusion World) + the
+      // "Fusion World" wordmark. Fusion World uses "Combo" too, so that word is
+      // only credited with a DB name; the set code separates it from Super CCG.
+      if (/\b(fb|fs|sb)\d+-\d+/i.test(text))    scores.dbfusion += 3; // FB10-001 / FS11-01 — unique
+      if (/\bfusion\s*world\b/i.test(t))        scores.dbfusion += 3;
+      if (/\bcombo\b/i.test(t) &&
+          /\b(goku|vegeta|gohan|saiyan|dragon\s*ball)\b/i.test(t)) scores.dbfusion += 1;
+
       // Disney Lorcana signals (Ravensburger). Distinct vocabulary: ink cost,
       // lore + willpower stats, inkwell, Illumineer, and card types
       // Character/Action/Item/Location/Song. The generic type words are only
@@ -4074,7 +4099,7 @@
       // single-word hits dragging a Pokemon card into another search).
       var best  = 'pokemon';
       var bestN = scores.pokemon;
-      ['magic','yugioh','onepiece','gundam','dbz','lorcana'].forEach(function(g) {
+      ['magic','yugioh','onepiece','gundam','dbz','dbsccg','dbfusion','lorcana'].forEach(function(g) {
         if (scores[g] > bestN && scores[g] >= 2) { best = g; bestN = scores[g]; }
       });
       try { console.log('[Scanner] TCG detect:', JSON.stringify(scores), '→', best); } catch(_) {}
@@ -4880,7 +4905,7 @@
           //     Peronas across sets with no way to disambiguate.
           //     YGO set codes can include a trailing letter ("045b") that
           //     gets folded into the padded form via numRaw.
-          ((scanTcg === 'yugioh' || scanTcg === 'onepiece' || scanTcg === 'gundam') && parsedSetCode && numStripped)
+          ((scanTcg === 'yugioh' || scanTcg === 'onepiece' || scanTcg === 'gundam' || scanTcg === 'dbsccg' || scanTcg === 'dbfusion') && parsedSetCode && numStripped)
             ? (() => {
                 // Reuse the full _cardNumVariants set so this query covers
                 // both bare-number storage ('108') AND full SETCODE-NUMBER

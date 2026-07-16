@@ -26236,6 +26236,12 @@ function _loadAdmin(){
       ['pokemon', 'magic', 'yugioh', 'onepiece', 'dbz', 'gundam'].forEach(function(g) {
         m[g] = base + g + '.webp';
       });
+      // Modern Dragon Ball games — temporary shared placeholder (official DBS
+      // Fusion World "no image" art). TODO: self-host these in the card-backs
+      // bucket as dbsccg.webp / dbfusion.webp so we're not hotlinking Bandai.
+      var _dbNoImg = 'https://www.dbs-cardgame.com/fw/images/cards/card/noimage.webp';
+      m['dbsccg']   = _dbNoImg;
+      m['dbfusion'] = _dbNoImg;
       return m;
     })();
     window._cardBackFor = function(gameType) {
