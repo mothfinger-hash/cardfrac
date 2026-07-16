@@ -3831,14 +3831,25 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       }
       body.nav-collapsed .pb-setd > .pb-setd-prog{ right:calc(var(--sb-w-coll) + 24px); }
     }
-    /* Mobile: smaller title, tracker pinned above the 60px nav bar. */
+    /* Mobile: smaller title, tracker pinned above the bottom nav.
+       The nav is calc(60px + env(safe-area-inset-bottom)) tall — on a
+       device with a home indicator that is ~94px, not 60px. A bare
+       `bottom:68px` therefore sat 26px BEHIND the nav on every notched
+       iPhone, hiding the bottom half of the completion tracker.
+       72px + the inset is the same expression .page, .toast and
+       #pbToastStack already use to clear this nav; keep them in sync. */
     @media (max-width:900px){
       .pb-setd > .pb-setd-title{ font-size:.95rem !important; }
       .pb-setd > .pb-setd-list{
         max-height:calc(100svh - 232px) !important;
+        /* Matches the tracker's own height so the last card row can
+           scroll clear of it (the tracker is a fixed overlay, not in flow). */
         padding-bottom:56px !important;
       }
-      .pb-setd > .pb-setd-prog{ left:12px; right:12px; bottom:68px; }
+      .pb-setd > .pb-setd-prog{
+        left:12px; right:12px;
+        bottom:calc(72px + env(safe-area-inset-bottom,0px));
+      }
     }
     /* Search input — keep the teal focus accent (the page's accent
        palette is still teal); just use the default border at rest. */
