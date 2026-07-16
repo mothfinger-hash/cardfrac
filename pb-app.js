@@ -26921,7 +26921,18 @@ function _loadAdmin(){
     var _jpSetsCache     = null;  // { timestamp, sets: [{set_name, set_code, total}] }
     var _setsDetailCache = {};  // setId → { timestamp, cards }
     var _setsDetailSort    = 'number'; // 'number' | 'rarity-asc' | 'rarity-desc'
-    var _setsOwnedFirst    = false;    // independent toggle layered on top of sort
+    // Independent toggle layered on top of sort (groups owned cards first
+    // while keeping the number/rarity order). Its pill was REMOVED from the
+    // sort row: with SORT: + NUMBER + RARITY + OWNED FIRST + MULTI-ADD the row
+    // wrapped to two lines at every width below 430px — measured 393/375/360/
+    // 320 — and MULTI-ADD is the one people reach for. Shortening the label to
+    // "OWNED" or dropping the "SORT:" span each buy exactly one line and still
+    // wrap at <=375px, so neither is a real fix.
+    // The plumbing is left intact (sortSetCards/sortCatalogSetCards still honour
+    // 'owned', _buildSetCardRows still takes the flag) so this is a one-line
+    // restore if it ever gets a home — an overflow menu, or the desktop row,
+    // which has the width for it.
+    var _setsOwnedFirst    = false;    // no UI entry point; see note above
     var _setsDetailOwnedMap = {};
     var _RARITY_RANK = {
       // Pokemon
@@ -27116,7 +27127,7 @@ function _loadAdmin(){
     // (card_number / image_url instead of number / images.small) and is
     // shared by both loadJpSetDetail and loadTcgSetDetail.
     var _catalogSetDetailSort = 'number';
-    var _catalogSetOwnedFirst = false;
+    var _catalogSetOwnedFirst = false;  // no UI entry point — see the note on _setsOwnedFirst
     // Set by the set-detail loaders so the sort handlers can rebuild the
     // list without duplicating the source-of-truth.
     window._catalogSetDetailCards   = [];
@@ -27258,7 +27269,6 @@ function _loadAdmin(){
         <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
         ${pill(isNum,    '#  NUMBER',                                        "sortCatalogSetCards('number')",  'number')}
         ${pill(isRarity, _catalogSetDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓', "toggleCatalogRarity(this)",       'rarity')}
-        ${pill(_catalogSetOwnedFirst, 'OWNED FIRST',                       "sortCatalogSetCards('owned')",   'owned')}
         <button id="setMultiAddToggle" onclick="toggleSetMultiAdd()" class="catalog-sort-pill" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid var(--accent);color:var(--accent);cursor:pointer;white-space:nowrap;margin-left:auto">+ MULTI-ADD</button>
       </div>
       <div id="catalogSortHint" style="display:none;font-size:.58rem;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;padding-left:2px"></div>`;
@@ -29614,7 +29624,6 @@ function _loadAdmin(){
           <span style="font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-right:2px">SORT:</span>
           <button ${sortPillStyle('number')}>#  NUMBER</button>
           <button class="sets-sort-pill" data-sort="rarity" id="setsRarityPill" onclick="toggleSetsRarity(this)" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid ${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--border)'};color:${_setsDetailSort.startsWith('rarity')?'var(--accent)':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${_setsDetailSort==='rarity-asc'?'RARITY ↑':'RARITY ↓'}</button>
-          <button ${sortPillStyle('owned')}>OWNED FIRST</button>
           <button id="setMultiAddToggle" onclick="toggleSetMultiAdd()" class="sets-sort-pill" style="padding:4px 10px;font-size:.6rem;letter-spacing:.07em;font-family:inherit;background:transparent;border:1px solid var(--accent);color:var(--accent);cursor:pointer;white-space:nowrap;margin-left:auto">+ MULTI-ADD</button>
         </div>
         <div id="setsCardList" class="pb-setd-list" style="background:var(--surface);border:1px solid var(--border);max-height:calc(100svh - 290px);overflow-y:auto;overflow-x:hidden">
