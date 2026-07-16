@@ -26600,6 +26600,22 @@ function _loadAdmin(){
     // _POKEMON_EN_LEGACY_RE matches any id that begins with one of
     // them followed by a digit OR hyphen (so `sm12-45` and `g1-7`
     // match but `something-else` doesn't).
+    //
+    // DO NOT "complete" this list by adding sv/me/rsv/zsv/pgo/hgss/tk/sve.
+    // It looks like a rotted allowlist and it is not. Those stems name a
+    // STALE, TRUNCATED duplicate shard: the catalog holds the modern sets
+    // twice — once under bare pokemontcg.io ids (`sv3pt5-24`, capped at
+    // card #99, unmirrored images, set_name '151.0') and once, complete,
+    // under PokeData's set code (`en-mew-001`..`en-mew-207`, set_code
+    // 'MEW', mirrored images). Verified: sv3pt5 holds 99 of 207; MEW holds
+    // all 207. Admitting the bare shard would add ~36 duplicate sets to the
+    // Sets page and render truncated versions of sets we already hold whole.
+    // The list does not rot, either — every NEW row syncs as `en-*` and is
+    // matched by the first clause below.
+    //
+    // The real gap is that loadSetDetail looks up pokemontcg.io's set id
+    // ('sv3pt5') against catalog.set_code and never consults `set_map`
+    // (ptcg_code -> pd_code), which already maps sv3pt5 -> MEW correctly.
     var POKEMON_EN_LEGACY_PREFIXES = [
       'sm', 'swsh', 'xy', 'bw', 'ex', 'dp', 'pl',
       'neo', 'base', 'gym', 'pop', 'ecard',

@@ -136,22 +136,29 @@ done. Example pipeline at the bottom of this file.
 Either use double quotes, template literals, or rephrase. Backslash
 escapes inside string concatenation are easy to get wrong.
 
-### Service worker cache — you usually DON'T need to bump it
+### Service worker cache — you DO need to bump it for any JS/CSS change
 
-`sw.js` has a `CACHE = 'pathbinder-vXX'` constant. As of v523 the app-code
-bundles (`pb-app.js`, `pb-styles.css`, `pb-critical.css`, `pb-scanner.js`,
-anything matching `/pb-[\w-]+\.(js|css)$/`) are served
-**stale-while-revalidate**: the SW returns the cached copy instantly but
-always refetches in the background and updates the cache, so a deploy
-reaches users within a load or two **without** a version bump. HTML is
-already network-only (navigations never cache).
+`sw.js` has a `CACHE = 'pathbinder-vXX'` constant. Bump it on **every**
+change to an app-code bundle (`pb-app.js`, `pb-styles.css`,
+`pb-critical.css`, `pb-scanner.js`, `pb-avatar.js`, `pb-photo.js`,
+`pb-store.js`). Without a bump, `git push` deploys the file but existing
+users keep running the old bytes indefinitely — the fix silently never
+reaches them.
 
-So for ordinary UI / JS / CSS changes you do **not** need to touch
-`CACHE`. Only bump it when you genuinely need to force an *instant*,
-same-load purge for every user — e.g. changing the SW's own caching
-strategy, or shipping a fix that must not wait one extra load (a security
-or data-corruption fix). Bumping needlessly just throws away every user's
-warm cache for no benefit. Images/fonts/icons remain cache-first.
+Why: those bundles are listed in `PRECACHE` and served **cache-first** by
+the generic static-asset handler at the bottom of the fetch listener
+(`caches.match(...).then(cached => cached || fetch(...))`). There is no
+revalidation on that path. Stale-while-revalidate exists in `sw.js`, but
+only for the **data** cache (`pb-data-cache`) — not for app code.
+
+HTML is network-only (navigations never cache), so `index.html` changes
+land without a bump. Images/fonts/icons are cache-first and keyed by URL.
+
+An earlier version of this file claimed the opposite ("as of v523 …
+stale-while-revalidate … you do not need to bump"). That was wrong and
+cost real debugging time — a session chased a phantom `updateCartBar`
+crash that was only a stale cached bundle. Trust the code in `sw.js` over
+this paragraph if they ever disagree again, and fix the paragraph.
 
 ### Don't N+1 the marketplace render
 
