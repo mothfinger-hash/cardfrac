@@ -74,12 +74,22 @@ UA = "PathBinderSync/1.0 (+https://pathbinder.gg)"
 
 # game_type -> (TCGplayer categoryId, catalog id segment used by sealed rows)
 GAME = {
-    "magic":    (1,  "mtg"),
-    "yugioh":   (2,  "ygo"),
-    "pokemon":  (3,  "en"),
-    "onepiece": (68, "op"),
-    "lorcana":  (71, "lor"),
-    "gundam":   (86, "gun"),
+    "magic":         (1,  "mtg"),
+    "yugioh":        (2,  "ygo"),
+    "pokemon":       (3,  "en"),
+    # TCGplayer's "Pokemon Japan" is a SEPARATE category (85) from English
+    # Pokemon (3). Our JP sealed rows (id prefix sealed-jp-*) are PriceCharting-
+    # sourced white-bg photos that were background-removed in place — this maps
+    # them to their clean 1000x1000 shots in the JP category. seg 'jp' both
+    # scopes the catalog query to sealed-jp-* AND lifts the *japanese*
+    # set_name exclusion below (which exists only to stop English art landing
+    # on JP products — moot when the art itself comes from the JP category).
+    # Korean/Chinese (sealed-kr-*/sealed-cn-*) are NOT here: TCGplayer has no
+    # KR/CN Pokemon sealed category, so those stay uncovered.
+    "pokemon_japan": (85, "jp"),
+    "onepiece":      (68, "op"),
+    "lorcana":       (71, "lor"),
+    "gundam":        (86, "gun"),
 }
 
 _tcg = requests.Session(); _tcg.headers.update({"User-Agent": UA, "Accept": "application/json"})
@@ -127,7 +137,13 @@ def _is_generic_deck(name):
     return norm(name) in _GENERIC_DECK
 
 def is_card_product(p):
-    """TCGCSV cards carry a 'Number' extendedData field; sealed products don't."""
+    """TCGCSV cards carry a 'Number' extendedData field; sealed products don't.
+    Also skip digital 'Code Card' products: they're online redemption codes, not
+    sealed product, yet their names embed the container ('Code Card - <set>
+    Pokemon Center Elite Trainer Box') so they'd otherwise mis-match our real
+    ETB/box rows and stamp a code-card thumbnail onto them."""
+    if str(p.get("name") or "").strip().lower().startswith("code card"):
+        return True
     for ed in p.get("extendedData", []):
         if ed.get("name") == "Number":
             return True
@@ -173,17 +189,24 @@ def sealed_products(category_id, group_id, group_name):
     data = tcg_get(f"/tcgplayer/{category_id}/{group_id}/products")
     prods = data.get("results", data if isinstance(data, list) else [])
     gn = norm(group_name)
+    # tcgcsv group names may carry a 'CODE: ' prefix (Pokemon Japan:
+    # 'S4a: Shiny Star V') that never appears in the product names, so also try
+    # the core name with the prefix stripped — otherwise 'Shiny Star V Booster
+    # Box' never reduces to 'Booster Box' and can't match our short PC name.
+    gn_core = norm(_re.sub(r"^[^:]{1,10}:\s*", "", group_name))
     out = []
     for p in prods:
         if is_card_product(p):
             continue
         full = p.get("name") or ""
         nfull = norm(full)
-        # strip everything up to & including the group name if present
+        # strip everything up to & including the group name (full, then core)
         rem = nfull
-        idx = nfull.find(gn)
-        if gn and idx != -1:
-            rem = nfull[idx + len(gn):].strip()
+        for _g in (gn, gn_core):
+            idx = nfull.find(_g) if _g else -1
+            if _g and idx != -1:
+                rem = nfull[idx + len(_g):].strip()
+                break
         rem = rem or nfull
         out.append((rem, p.get("productId"), p.get("imageUrl"), full))
     return out
@@ -297,14 +320,26 @@ def main():
         # never stamp English art onto a Japanese product. By default only
         # PriceCharting-sourced rows; with --replace-hosted, any source.
         _or_terms = [f"set_name.ilike.*{_san(gname)}*"]
+        # tcgcsv group names are often 'CODE: Name' — especially Pokemon Japan
+        # ('S4a: Shiny Star V', 'SM3+: Shining Legends') — while our set_name is
+        # 'Pokemon Japanese Shiny Star V'. The code prefix breaks the ilike, so
+        # also scope by the core name with any leading 'CODE: ' stripped.
+        _core = _re.sub(r"^[^:]{1,10}:\s*", "", gname).strip()
+        if _core and _core != gname:
+            _or_terms.append(f"set_name.ilike.*{_san(_core)}*")
         if gcode:
             _or_terms.append(f"set_name.ilike.*{gcode}*")
         _params = {
             "select": "id,name,set_code,set_name,image_url",
             "id": f"like.sealed-{seg}-*",
-            "set_name": "not.ilike.*japanese*",
             "or": "(" + ",".join(_or_terms) + ")",
         }
+        # English categories must never stamp English art onto a Japanese
+        # product, so English runs exclude *japanese* set_names. The Pokemon
+        # Japan category (seg 'jp') is the exception — there we WANT the
+        # Japanese products and the art comes from the JP category itself.
+        if seg != "jp":
+            _params["set_name"] = "not.ilike.*japanese*"
         if not args.replace_hosted:
             _params["image_url"] = "ilike.*pricecharting*"
         rows = pg_get("catalog", params=_params)

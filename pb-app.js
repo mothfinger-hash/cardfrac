@@ -17881,7 +17881,7 @@ function _loadAdmin(){
       try {
         const [catRes, cpRes] = await Promise.all([
           sb.from('catalog')
-            .select('id, current_value, pricecharting_id, price_source_url')
+            .select('id, current_value, pricecharting_id, price_source_url, tcgplayer_url')
             .eq('id', catalogId)
             .maybeSingle(),
           sb.from('card_prices')
@@ -17891,7 +17891,8 @@ function _loadAdmin(){
         const catRow = catRes.data || null;
         const cps    = cpRes.data || [];
         if (!catRow && !cps.length) return null;
-        const result = { catalog_id: catalogId, pricecharting: null, tcgplayer: null };
+        const result = { catalog_id: catalogId, pricecharting: null, tcgplayer: null,
+                         tcgplayer_url: (catRow && catRow.tcgplayer_url) || null };
         if (catRow && catRow.current_value && Number(catRow.current_value) > 0) {
           const pcUrl = catRow.price_source_url
             || (catRow.pricecharting_id
@@ -17945,23 +17946,31 @@ function _loadAdmin(){
       const pcRow  = extras && extras.pricecharting;
       const tcgRow = extras && extras.tcgplayer;
       const tcgUrl = tcgAffiliateUrl((tcgRow && tcgRow.source_url)
+        || (extras && extras.tcgplayer_url)
         || fallbackTcgUrl
         || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || '')), 'card-detail');
       const pcUrl  = (pcRow && pcRow.source_url) || null;
-      // Each price IS its own link now — the source name + value open that
-      // product page, so the two big TCGPLAYER / PRICECHARTING buttons are
-      // gone. PriceCharting (copper) links only when we have its URL;
-      // TCGplayer (cyan) always has at least a name-search fallback URL.
+      // Each price IS its own link — the source name + value open that product
+      // page. PriceCharting (copper) shows only when we have a price. TCGplayer
+      // (teal) ALWAYS renders a link: with its market price when card_prices has
+      // a row, else link-only. A dual-shard EN card whose canonical row has no
+      // card_prices row (the TCGplayer data sits on its legacy twin) used to
+      // show PriceCharting but NO TCGplayer link at all — this restores it, and
+      // the URL prefers an exact product link (card_prices source_url, then
+      // catalog.tcgplayer_url) before falling back to a name search.
       const rows = [];
       if (pcRow)  rows.push({ label: 'PriceCharting', val: pcRow.value, url: pcUrl,  color: '184,115,51' });
-      if (tcgRow) rows.push({ label: 'TCGplayer',     val: tcgRow.value, url: tcgUrl, color: '26,199,160' });
+      rows.push({ label: 'TCGplayer', val: (tcgRow ? tcgRow.value : null), url: tcgUrl, color: '26,199,160' });
       if (!rows.length) return '';
       return `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);background:rgba(26,199,160,.02);border-radius:var(--r-md);overflow:hidden">
         ${rows.map(function(r, i) {
           const last  = i === rows.length - 1;
           const base  = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;text-decoration:none' + (last ? '' : ';border-bottom:1px solid rgba(26,199,160,.08)');
-          const inner = `<span style="font-size:.62rem;color:rgba(${r.color},.85);letter-spacing:.06em">${r.label}${r.url ? ' <span style="opacity:.55">&#8599;</span>' : ''}</span>`
-            + `<span style="font-size:.78rem;font-weight:700;color:rgb(${r.color})">$${Number(r.val).toFixed(2)}</span>`;
+          const right = (r.val != null)
+            ? `<span style="font-size:.78rem;font-weight:700;color:rgb(${r.color})">$${Number(r.val).toFixed(2)}</span>`
+            : `<span style="font-size:.62rem;color:rgba(${r.color},.7);letter-spacing:.04em">View price &#8599;</span>`;
+          const inner = `<span style="font-size:.62rem;color:rgba(${r.color},.85);letter-spacing:.06em">${r.label}${(r.url && r.val != null) ? ' <span style="opacity:.55">&#8599;</span>' : ''}</span>`
+            + right;
           return r.url
             ? `<a href="${r.url}" target="_blank" rel="noopener" style="${base};cursor:pointer" onmouseover="this.style.background='rgba(${r.color},.08)'" onmouseout="this.style.background='transparent'">${inner}</a>`
             : `<div style="${base}">${inner}</div>`;
@@ -18031,7 +18040,7 @@ function _loadAdmin(){
         // Fetch ALL matching catalog rows in one round-trip (in.<list>).
         const inList = '(' + candidates.map(function(c){ return '"' + c.replace(/"/g,'\\"') + '"'; }).join(',') + ')';
         const catRes = await sb.from('catalog')
-          .select('id, current_value, pricecharting_id, price_source_url')
+          .select('id, current_value, pricecharting_id, price_source_url, tcgplayer_url')
           .filter('id', 'in', inList);
         const catRows = (catRes.data || []);
         if (!catRows.length) {
@@ -18053,6 +18062,12 @@ function _loadAdmin(){
           catalog_id:    catalogIds[0],
           pricecharting: null,
           tcgplayer:     null,
+          // Exact TCGplayer product link from any matched shard. The Sets modal
+          // fetches BOTH the en- and bare- dual-shard rows, so it can pull the
+          // link off the legacy twin even when the canonical row's is null —
+          // prefer an en- row's, else any non-null.
+          tcgplayer_url: (catRows.find(function(r){ return String(r.id).indexOf('en-') === 0 && r.tcgplayer_url; }) ||
+                          catRows.find(function(r){ return r.tcgplayer_url; }) || {}).tcgplayer_url || null,
         };
         // PriceCharting: prefer any catalog.current_value > 0. If
         // multiple, pick the FRESHER one by checking whether a
