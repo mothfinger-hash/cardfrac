@@ -2460,7 +2460,7 @@ function _loadAdmin(){
         const condLabel = cond === 'Graded'
           ? `${listing.grade || 'PSA'} ${gradeVal || ''}`
           : cond;
-        const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
+        const condClass = {NM:'cond-nm',LP:'cond-lp',MP:'cond-mp',HP:'cond-hp',Damaged:'cond-damaged',Graded:'cond-graded',Sealed:'cond-sealed'}[cond] || 'cond-nm';
         // Sealed listings get a small copper "SEALED" chip next to the
         // condition pill so the grid can be skimmed visually.
         const _ptype = listing.product_type || 'single';
@@ -2508,7 +2508,7 @@ function _loadAdmin(){
 
         // Condition chip with color-coded outline. lc-cond-graded shown
         // for graded cards with PSA/CGC grade inline.
-        const _condChipClass = {NM:'lc-cond-nm',LP:'lc-cond-lp',HP:'lc-cond-hp',Graded:'lc-cond-graded'}[cond] || 'lc-cond-nm';
+        const _condChipClass = {NM:'lc-cond-nm',LP:'lc-cond-lp',MP:'lc-cond-mp',HP:'lc-cond-hp',Damaged:'lc-cond-damaged',Graded:'lc-cond-graded',Sealed:'lc-cond-sealed'}[cond] || 'lc-cond-nm';
         const condChip = `<span class="lc-chip ${_condChipClass}">${condLabel}</span>`;
 
         // Watchlist heart — fills with accent when watched. SVG path so
@@ -2721,7 +2721,7 @@ function _loadAdmin(){
       const isSold = listing.status === 'sold';
       const isOwn = currentUser && (listing.seller_id === currentUser.id || listing.sellerId === currentUser.id);
       const cond = listing.condition || 'NM';
-      const condClass = {NM:'cond-nm',LP:'cond-lp',HP:'cond-hp',Graded:'cond-graded'}[cond] || 'cond-nm';
+      const condClass = {NM:'cond-nm',LP:'cond-lp',MP:'cond-mp',HP:'cond-hp',Damaged:'cond-damaged',Graded:'cond-graded',Sealed:'cond-sealed'}[cond] || 'cond-nm';
       const condLabel = cond === 'Graded'
         ? `${listing.grade || 'PSA'} ${listing.grade_value || listing.gradeValue || ''}`
         : cond;
@@ -11462,8 +11462,11 @@ function _loadAdmin(){
           condEl.innerHTML = ''
             + '<option value="NM">NM — Near Mint</option>'
             + '<option value="LP">LP — Lightly Played</option>'
+            + '<option value="MP">MP — Moderately Played</option>'
             + '<option value="HP">HP — Heavily Played</option>'
-            + '<option value="Graded">Graded / Slabbed</option>';
+            + '<option value="Damaged">DMG — Damaged</option>'
+            + '<option value="Graded">Graded / Slabbed</option>'
+            + '<option value="Sealed">Sealed — Unopened Single</option>';
           condEl.value = prefill?.condition || 'NM';
         }
       }
@@ -27961,6 +27964,12 @@ function _loadAdmin(){
       { key: 'GUN',     label: 'GUNDAM'    },
       { key: 'LOR',     label: 'LORCANA'   },
       { key: 'DBZ',     label: 'DRAGON BALL Z' },
+      // Bandai's modern Dragon Ball games are SEPARATE catalog id-prefixes
+      // (dbs- for the Super Card Game, dbf- for Fusion World) from the old
+      // Score/Panini DBZ (dbz-). Each needs its own tab + _TCG_SETS_CONFIG
+      // entry or its sets never surface on the Sets page.
+      { key: 'DBS',     label: 'DB SUPER'  },
+      { key: 'DBF',     label: 'DB FUSION' },
       { key: 'TOPPS',   label: 'POKEMON TOPPS' }
     ];
 
@@ -28485,11 +28494,26 @@ function _loadAdmin(){
       if (_setsBackgroundRefreshInflight) return;
       _setsBackgroundRefreshInflight = true;
       try {
+        // Snapshot what the user is currently seeing so we can tell whether the
+        // server's set list actually changed (a new release landed).
+        var prevIds = new Set(((_setsCache && _setsCache.sets) || []).map(function (s) { return String(s.id); }));
         var fresh = await _loadEnSetsFromDb();
         if (fresh && fresh.length) {
           var now = Date.now();
           try { localStorage.setItem(lsKey, JSON.stringify({ timestamp: now, sets: fresh })); } catch (_) {}
           _setsCache = { timestamp: now, sets: fresh };
+          // Stale-while-revalidate only helps if we actually re-paint when the
+          // data moved. Without this, a set added on the backend sat in the
+          // refreshed cache but stayed invisible until the user's NEXT visit.
+          // Re-render only when a set is new/removed AND the EN Pokemon list is
+          // the active view — and only after _setsCache is warm, so the nested
+          // loadSetsPage serves the mem cache and can't re-trigger this refresh.
+          var changed = fresh.length !== prevIds.size ||
+                        fresh.some(function (s) { return !prevIds.has(String(s.id)); });
+          if (changed && _setsLang === 'POKEMON' && _setsPokemonLang === 'EN' &&
+              document.getElementById('setsPageContent')) {
+            try { loadSetsPage(); } catch (_) {}
+          }
         }
       } catch (_) {} finally { _setsBackgroundRefreshInflight = false; }
     }
@@ -29232,6 +29256,8 @@ function _loadAdmin(){
       GUN:   { prefix: 'gun-',   label: 'GUN',   name: 'Gundam'    },
       LOR:   { prefix: 'lor-',   label: 'LOR',   name: 'Lorcana'   },
       DBZ:   { prefix: 'dbz-',   label: 'DBZ',   name: 'Dragon Ball Z' },
+      DBS:   { prefix: 'dbs-',   label: 'DBS',   name: 'Dragon Ball Super' },
+      DBF:   { prefix: 'dbf-',   label: 'DBF',   name: 'Dragon Ball Fusion World' },
       TOPPS: { prefix: 'topps-', label: 'TOPPS', name: 'Pokemon Topps' }
     };
     var _tcgSetsCache       = {}; // { MTG: {timestamp, sets}, YGO: {...}, OP: {...} }
