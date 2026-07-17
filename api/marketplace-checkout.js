@@ -11,12 +11,15 @@
 //     Lower-tier sellers pay a higher commission because their subscription
 //     contribution is smaller; higher-tier sellers pay less per sale because
 //     they're already paying more in subscription up front.
-//   - Implemented as a Connect "destination charge" when the seller has a
-//     stripe_connect_account_id on their profile
-//   - If the seller has not yet completed Connect onboarding (no account id),
-//     the charge falls back to platform-only mode (funds held on platform
-//     account, manual payout by admin). Existing TOS-compliant — funds are
-//     not held conditionally pending delivery confirmation.
+//   - Implemented as a Connect "destination charge" — Stripe routes the sale
+//     proceeds straight to the seller's connected account, minus the
+//     application_fee_amount (platform commission). The platform never takes
+//     custody of a third party's funds.
+//   - A third-party seller who is NOT Connect-ready (charges_enabled false) is
+//     REFUSED at checkout with a 409 — we do NOT fall back to holding their
+//     money in the platform account. The only platform-only charges are
+//     ADMIN/first-party listings (the platform selling its own inventory and
+//     keeping its own proceeds), which is not money transmission.
 //
 // Required env vars (Vercel dashboard):
 //   STRIPE_SECRET_KEY     — from Stripe Dashboard → Developers → API keys
@@ -99,7 +102,11 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'STRIPE_SECRET_KEY not configured. Add it in Vercel → Settings → Environment Variables.' });
   }
 
-  const { listingId, sellerId, amount, cardName, successUrl, cancelUrl } = req.body || {};
+  // NOTE: sellerId is deliberately NOT read from the body. Seller identity is
+  // derived from the listing row below — trusting a client-supplied sellerId
+  // let a crafted checkout aim the readiness gate and payout routing at a
+  // different profile than the card's real owner. See the authoritative lookup.
+  const { listingId, amount, cardName, successUrl, cancelUrl } = req.body || {};
 
   if (!listingId || !amount || amount < 100) {
     return res.status(400).json({ error: 'listingId and amount (cents) required' });
@@ -115,19 +122,69 @@ module.exports = async function handler(req, res) {
   const { data: { user }, error: authErr } = await sb.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
 
-  // Look up the seller's Stripe Connect account id (Phase 2 onboarding column)
-  // AND their subscription tier (drives the commission rate). One round trip.
-  // Also pull verified_high_value so the Shop high-ceiling gate is enforced.
+  // ── Authoritative listing lookup ─────────────────────────────────────
+  // SECURITY: seller identity, shipping, and the expected price all come from
+  // the LISTING row — never from the request body. The buyer controls only
+  // which listing they are buying. (A prior version trusted req.body.sellerId,
+  // which let a crafted request point the Connect readiness gate and the
+  // destination-charge routing at a DIFFERENT profile than the card's owner —
+  // e.g. an admin uuid to slip past the gate, or another seller's uuid to
+  // misdirect the payout.)
+  let listingRow = null;
+  try {
+    const { data: lr, error: lrErr } = await sb
+      .from('listings')
+      .select('seller_id, value, shipping_price, ships_to, status')
+      .eq('id', listingId)
+      .maybeSingle();
+    if (lrErr) throw lrErr;
+    listingRow = lr;
+  } catch (e) {
+    console.error('[marketplace-checkout] listing lookup failed:', e);
+    return res.status(503).json({ error: 'Could not verify this listing right now. Please try again in a moment.' });
+  }
+  if (!listingRow) {
+    return res.status(404).json({ error: 'This listing is no longer available.' });
+  }
+  // Only a live listing can be bought. NULL / 'active' / 'available' = live
+  // (matches enforce_listing_cap's notion of a slot-consuming listing).
+  if (listingRow.status && !['active', 'available'].includes(String(listingRow.status))) {
+    return res.status(409).json({ error: 'This listing is no longer available.' });
+  }
+  const sellerId = listingRow.seller_id || null;
+
+  // Server-recomputed expected total (card value + shipping) in cents. The
+  // buyer processing fee is a separate Stripe line item, so it is excluded
+  // here — matching what the client sends as `amount`. Reject UNDERPAYMENT so
+  // a crafted request can't buy a $440 card for $1; overpayment (e.g. a stale-
+  // high client price) is harmless and allowed through.
+  const expectedAmount = Math.round(((Number(listingRow.value) || 0) + (Number(listingRow.shipping_price) || 0)) * 100);
+  if (expectedAmount > 0 && amount < expectedAmount) {
+    return res.status(400).json({ error: 'Price mismatch — please reopen the listing and try again.' });
+  }
+
+  // Look up the SELLER's Stripe Connect account id + subscription tier (drives
+  // the commission rate) + verified_high_value (Shop high-ceiling gate), keyed
+  // on the authoritative sellerId resolved from the listing above.
   let sellerConnectId = null;
   let sellerTier      = null;
   let sellerVerifiedHighValue = false;
+  let sellerIsAdmin   = false;
   if (sellerId) {
     try {
-      const { data: profile } = await sb
+      const { data: profile, error: profErr } = await sb
         .from('profiles')
-        .select('stripe_connect_account_id, subscription_tier, is_vendor, is_premium, verified_high_value, vacation_mode_until')
+        .select('stripe_connect_account_id, stripe_connect_charges_enabled, is_admin, subscription_tier, is_vendor, is_premium, verified_high_value, vacation_mode_until')
         .eq('id', sellerId)
         .maybeSingle();
+      // A READ error is transient — surface 503 (retryable) rather than
+      // silently falling through to the readiness gate, which would 409 and
+      // wrongly tell the buyer the SELLER isn't set up. (A genuinely-missing
+      // profile leaves `profile` null and correctly reaches the 409.)
+      if (profErr) {
+        console.error('[marketplace-checkout] seller profile lookup error:', profErr);
+        return res.status(503).json({ error: 'Could not verify the seller right now. Please try again in a moment.' });
+      }
       if (profile) {
         // Hard block: seller paused their shop. Refuse the checkout
         // so a buyer who sees a stale browse cache can't sneak through.
@@ -136,7 +193,16 @@ module.exports = async function handler(req, res) {
             error: 'This seller has paused their shop. Please try again later.',
           });
         }
-        if (profile.stripe_connect_account_id) {
+        sellerIsAdmin = !!profile.is_admin;
+        // Only route a destination charge when the seller can ACTUALLY receive
+        // it. The account id is written the instant onboarding STARTS
+        // (connect-onboard.js persists it before minting the onboarding link),
+        // so id-presence is not readiness — a destination charge to an account
+        // whose `transfers` capability is still inactive is rejected by Stripe,
+        // and the raw error used to reach the buyer. charges_enabled is the
+        // mirrored capability flag (stripe-webhook.js account.updated), true
+        // only once Stripe has cleared the account to transact.
+        if (profile.stripe_connect_account_id && profile.stripe_connect_charges_enabled) {
           sellerConnectId = profile.stripe_connect_account_id;
         }
         sellerVerifiedHighValue = !!profile.verified_high_value;
@@ -151,10 +217,27 @@ module.exports = async function handler(req, res) {
         }
       }
     } catch (_) {
-      // Profile lookup failed — silently fall back to platform-only charging
-      // and the default commission rate. Worst case the order succeeds but
-      // seller payout requires manual action.
+      // Profile lookup failed — leave sellerConnectId null and sellerIsAdmin
+      // false so the readiness gate below fails CLOSED. We must not fall back
+      // to a platform-only charge for a third-party seller: holding a third
+      // party's sale proceeds in the platform account is custodial money
+      // transmission (see CLAUDE.md Stripe ToS), regardless of intent to pay
+      // out manually later.
     }
+  }
+
+  // Readiness gate. A third-party seller MUST have a live Connect account
+  // (charges_enabled) before we take a buyer's money — otherwise the funds
+  // land in the platform account with no compliant way out. Admins are the
+  // one exception: an admin/platform listing is FIRST-PARTY (the platform is
+  // the actual merchant keeping its own proceeds), which is not money
+  // transmission, so platform-only is legitimate there. This is the load-
+  // bearing money-safety check; the client listing gate and the DB trigger
+  // are the earlier layers, this is the one that actually guards the charge.
+  if (!sellerConnectId && !sellerIsAdmin) {
+    return res.status(409).json({
+      error: 'This seller has not finished payment setup yet, so their items cannot be purchased right now. Please check back soon.',
+    });
   }
 
   // Per-listing shipping destinations decide which countries the buyer may
@@ -163,20 +246,13 @@ module.exports = async function handler(req, res) {
   // is the hard server-side cap regardless of what the listing row claims —
   // widen it (and the client-side picker) when a new market opens.
   let allowedShipCountries = ['US'];
-  try {
-    const { data: lst } = await sb
-      .from('listings')
-      .select('ships_to')
-      .eq('id', listingId)
-      .maybeSingle();
-    if (lst && Array.isArray(lst.ships_to) && lst.ships_to.length) {
-      const SUPPORTED = new Set(['US', 'CA', 'JP', 'AU']);
-      const codes = lst.ships_to
-        .map(c => String(c || '').toUpperCase().trim())
-        .filter(c => SUPPORTED.has(c));
-      allowedShipCountries = Array.from(new Set(['US', ...codes]));
-    }
-  } catch (_) { /* default to US-only */ }
+  if (listingRow && Array.isArray(listingRow.ships_to) && listingRow.ships_to.length) {
+    const SUPPORTED = new Set(['US', 'CA', 'JP', 'AU']);
+    const codes = listingRow.ships_to
+      .map(c => String(c || '').toUpperCase().trim())
+      .filter(c => SUPPORTED.has(c));
+    allowedShipCountries = Array.from(new Set(['US', ...codes]));
+  }
 
   // Hard block: item price (in dollars) over the seller's tier ceiling.
   // This is the server-side guard that backs up the client-side check
@@ -284,9 +360,10 @@ module.exports = async function handler(req, res) {
     phone_number_collection: { enabled: true },
   };
 
-  // Destination-charge wiring — only enabled when the seller has finished
-  // Connect onboarding. Until Phase 2 ships, this branch never executes and
-  // checkout works exactly as before.
+  // Destination-charge wiring — set only when the seller is Connect-ready
+  // (charges_enabled, resolved above). A non-admin seller without this has
+  // already been 409'd, so reaching here with no sellerConnectId means an
+  // admin/first-party listing charging platform-only, which is intended.
   if (sellerConnectId) {
     sessionParams.payment_intent_data = {
       application_fee_amount: platformFee,
@@ -311,7 +388,10 @@ module.exports = async function handler(req, res) {
     const session = await stripe.checkout.sessions.create(sessionParams);
     return res.status(200).json({ url: session.url, sessionId: session.id });
   } catch(e) {
-    console.error('Stripe error:', e);
-    return res.status(500).json({ error: e.message });
+    // Log the real Stripe error for us; never forward e.message to the buyer.
+    // Raw Stripe messages (e.g. an inactive-capability rejection) are confusing
+    // at best and information-leaking at worst.
+    console.error('[marketplace-checkout] Stripe error:', e);
+    return res.status(500).json({ error: 'Could not start checkout. Please try again in a moment.' });
   }
 };

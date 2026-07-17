@@ -132,7 +132,16 @@ function _loadAdmin(){
     let _atcEditMode   = false;       // true when modal is editing an existing item
     let _atcEditItemId = null;        // collection_items.id being edited
     let orders = []; // marketplace orders
-    let lcPhotos = []; // photo blobs staged for listing upload
+    let lcPhotos = []; // NEW photo Files staged for upload (blobs)
+    // Already-hosted /card-photos/ URLs the seller reused from their binder.
+    // Kept SEPARATE from lcPhotos on purpose: lcPhotos is a homogeneous File[]
+    // and the upload path calls _imgToWebpAndVariants(file) on each entry —
+    // pushing a URL string in there uploads a ~60-byte text blob named .jpg
+    // (a broken image for every buyer, no error thrown). These are already
+    // public in the card-photos bucket, so they're concatenated onto the final
+    // photos array WITHOUT re-uploading. Mirrors the edit-modal's
+    // existingPhotos / newPhotos split.
+    let lcExistingPhotos = [];
     let selectedRating = 0; // current star rating selection
 
     // ===== FEE TIER SYSTEM =====
@@ -362,16 +371,20 @@ function _loadAdmin(){
     let _connectPromptPending = false;
     function _maybePromptConnectSetup() {
       if (!currentUser || !tierAtLeast('enthusiast')) return;
+      // Admins list first-party (platform-only is legitimate for them), so
+      // there's no payout account to nudge them toward.
+      if (currentUser.is_admin) return;
       var _shown = false;
       var _show = function() {
-        // Only skip if we POSITIVELY know payouts are already enabled. A
-        // no-account seller has payoutsEnabled=false, so they get prompted.
+        // Only skip if we POSITIVELY know payouts are already enabled. A seller
+        // can be charges_enabled (so the listing went live) while payouts are
+        // still pending bank verification — that's exactly who this nudges.
         if (_shown || _connectPromptPending || connectStatus.payoutsEnabled) return;
         _shown = true; _connectPromptPending = true;
-        var started = connectStatus.detailsSubmitted || connectStatus.accountId;
-        var msg = started
-          ? 'Your listing is live. Your Stripe payout setup is not finished yet — finish it so sales pay out to you automatically.'
-          : 'Your listing is live! Set up Stripe payouts so you get paid automatically when it sells. Until then, a sale is held until your payouts are set up.';
+        // No "held until" language: a non-admin listing only reaches this point
+        // because charges are already enabled, so proceeds route to the seller
+        // via Stripe's standard payout schedule — nothing is held by us.
+        var msg = 'Your listing is live. Finish your Stripe payout setup so sale proceeds land in your bank automatically.';
         Promise.resolve(pbConfirm(msg, { confirmText: 'SET UP PAYOUTS', cancelText: 'LATER' })).then(function(ok) { _connectPromptPending = false; if (ok) startStripeConnectOnboarding(); });
       };
       if (connectStatus.loaded) { _show(); return; }
@@ -413,9 +426,9 @@ function _loadAdmin(){
           + '<div style="padding:12px 16px;background:var(--surface2);border:1px solid var(--copper-dim);border-left:3px solid var(--copper);margin-bottom:12px;font-family:\'Space Mono\',monospace">'
           +   '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
           +     '<div>'
-          +       '<div style="font-size:.78rem;color:var(--copper);font-weight:700;letter-spacing:.04em;margin-bottom:4px">CONNECT STRIPE TO RECEIVE PAYOUTS</div>'
+          +       '<div style="font-size:.78rem;color:var(--copper);font-weight:700;letter-spacing:.04em;margin-bottom:4px">CONNECT STRIPE TO START SELLING</div>'
           +       '<div style="font-size:.7rem;color:var(--muted);line-height:1.5">'
-          +         'Sellers need a Stripe Express account so we can route sale proceeds to your bank. Payouts currently require a US bank account (more countries coming soon). Until you connect, sales sit on the platform pending a manual payout.'
+          +         'Sellers need a Stripe Express account so sale proceeds route straight to your bank. Payouts currently require a US bank account (more countries coming soon). Your listings go live once this is connected.'
           +       '</div>'
           +     '</div>'
           +     '<button onclick="startStripeConnectOnboarding()" style="padding:9px 18px;background:var(--copper);color:var(--surface);border:none;font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;letter-spacing:.04em;cursor:pointer;white-space:nowrap">'
@@ -9130,7 +9143,7 @@ function _loadAdmin(){
     // ─── Payments tab ──────────────────────────────────────────────────
     // Seller-side payments dashboard:
     //   1. Stripe Connect status banner (reuses the My Listings one)
-    //   2. Lifetime totals — total earned, total fees paid, pending payout
+    //   2. Lifetime totals — total earned, total fees paid, sales in progress
     //   3. Commission rate explainer for the user's current tier
     //   4. Recent payouts list — last 20 sales ordered by date
     //
@@ -9191,7 +9204,7 @@ function _loadAdmin(){
           +   '<h2 style="font-family:\'Orbitron\',monospace;font-size:1.2rem;color:var(--text);margin:0 0 12px;letter-spacing:.04em">Once your first sale lands, this is where you\'ll track it.</h2>'
           +   '<p style="color:var(--muted);font-size:.85rem;line-height:1.65;max-width:520px;margin:0 auto 22px">'
           +     'Every sale shows up here with the gross amount, the ' + myRatePct + ' platform fee deducted, and your net payout. '
-          +     'Lifetime totals and pending balance update in real time as orders move through paid → shipped → completed.'
+          +     'Lifetime totals and in-progress orders update in real time as orders move through paid → shipped → completed. Stripe deposits your net payout to your bank on its standard schedule — PathBinder never holds your funds.'
           +   '</p>'
           +   '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
           +     '<button onclick="openListCardModal()" style="padding:11px 22px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:\'Space Mono\',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.04em;border-radius:8px">List your first item &rarr;</button>'
@@ -9210,7 +9223,7 @@ function _loadAdmin(){
       const statsHtml = ''
         + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">'
         +   _paymentsStatCard('Lifetime payouts',  '$' + lifetimePayouts.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}), 'completed sales',  'var(--green)')
-        +   _paymentsStatCard('Pending payout',    '$' + pendingPayout.toLocaleString(undefined,   {minimumFractionDigits:2, maximumFractionDigits:2}),  inFlight.length + ' order' + (inFlight.length === 1 ? '' : 's'), 'var(--yellow)')
+        +   _paymentsStatCard('Sales in progress', '$' + pendingPayout.toLocaleString(undefined,   {minimumFractionDigits:2, maximumFractionDigits:2}),  inFlight.length + ' order' + (inFlight.length === 1 ? '' : 's') + ' paid, not yet completed', 'var(--yellow)')
         +   _paymentsStatCard('Platform fees paid','$' + lifetimeFees.toLocaleString(undefined,    {minimumFractionDigits:2, maximumFractionDigits:2}),  myRatePct + ' on ' + tierLabel + ' tier', 'var(--copper)')
         +   _paymentsStatCard('Refunded',          '$' + lifetimeRefunded.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}), refunded.length + ' order' + (refunded.length === 1 ? '' : 's'), 'var(--red)')
         + '</div>';
@@ -11157,7 +11170,7 @@ function _loadAdmin(){
     function addLcPhotos(files) {
       const errEl = document.getElementById('lcPhotoError');
       errEl.style.display = 'none';
-      const remaining = 8 - lcPhotos.length;
+      const remaining = 8 - (lcPhotos.length + lcExistingPhotos.length);
       if (remaining <= 0) { errEl.textContent = 'Maximum 8 photos allowed'; errEl.style.display = 'block'; return; }
       const toAdd = files.slice(0, remaining);
       toAdd.forEach(file => {
@@ -11172,16 +11185,33 @@ function _loadAdmin(){
     function renderLcPhotoPreview() {
       const preview = document.getElementById('lcPhotoPreview');
       if (!preview) return;
-      preview.innerHTML = lcPhotos.map((file, i) => {
-        const url = URL.createObjectURL(file);
-        const label = i === 0 ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:.55rem;text-align:center;color:#fff;padding:2px">FRONT</div>'
-          : i === 1 ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:.55rem;text-align:center;color:#fff;padding:2px">BACK</div>' : '';
+      // One ordered grid: reused binder photos first (already hosted), then
+      // newly-added Files. Position 0/1 across the COMBINED list gets the
+      // FRONT/BACK labels, so a reused front photo reads as FRONT even before
+      // the seller adds a back shot.
+      const posLabel = (pos) => pos === 0
+        ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:.55rem;text-align:center;color:#fff;padding:2px">FRONT</div>'
+        : pos === 1
+          ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:.55rem;text-align:center;color:#fff;padding:2px">BACK</div>'
+          : '';
+      const existingHtml = lcExistingPhotos.map((url, i) => {
         return `<div class="lc-photo-thumb">
-          <img src="${url}" alt="Photo ${i+1}" loading="lazy" decoding="async">
-          ${label}
-          <button class="rm-btn" onclick="removeLcPhoto(${i})">×</button>
+          <img src="${_pickThumbVariant(url, 200)}" alt="Reused photo ${i+1}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${url}'">
+          ${posLabel(i)}
+          <div style="position:absolute;top:0;left:0;background:var(--accent);color:var(--text-on-accent);font-size:.5rem;letter-spacing:.05em;padding:1px 4px">SAVED</div>
+          <button class="rm-btn" onclick="removeLcPhoto('existing',${i})">×</button>
         </div>`;
       }).join('');
+      const base = lcExistingPhotos.length;
+      const newHtml = lcPhotos.map((file, i) => {
+        const url = URL.createObjectURL(file);
+        return `<div class="lc-photo-thumb">
+          <img src="${url}" alt="Photo ${base + i + 1}" loading="lazy" decoding="async">
+          ${posLabel(base + i)}
+          <button class="rm-btn" onclick="removeLcPhoto('new',${i})">×</button>
+        </div>`;
+      }).join('');
+      preview.innerHTML = existingHtml + newHtml;
       // Advice, not a gate. Fires at exactly one photo — the moment it's useful
       // and before the seller has moved on. It says WHY (a dispute is decided on
       // what you can show) rather than just "add another": a reason changes
@@ -11195,17 +11225,19 @@ function _loadAdmin(){
         // Same values, same derivation as the submit path at openListCardModal.
         const _isProduct  = ['single', 'sealed', 'tcg_sealed', 'tcg_single'].indexOf(lcProductType) === -1;
         const _sealedNow  = lcProductType !== 'single' && !_isProduct;
-        const _showHint   = lcPhotos.length === 1 && !_sealedNow;
+        const _total      = lcPhotos.length + lcExistingPhotos.length;
+        const _showHint   = _total === 1 && !_sealedNow;
         _hintEl.textContent = _showHint
           ? 'Add a back photo — if a buyer opens a dispute, your photos are the evidence.'
           : '';
         _hintEl.style.display = _showHint ? 'block' : 'none';
       }
-      document.getElementById('lcPhotoArea').style.display = lcPhotos.length >= 8 ? 'none' : '';
+      document.getElementById('lcPhotoArea').style.display = (lcPhotos.length + lcExistingPhotos.length) >= 8 ? 'none' : '';
     }
 
-    function removeLcPhoto(idx) {
-      lcPhotos.splice(idx, 1);
+    function removeLcPhoto(kind, idx) {
+      if (kind === 'existing') lcExistingPhotos.splice(idx, 1);
+      else lcPhotos.splice(idx, 1);
       renderLcPhotoPreview();
       document.getElementById('lcPhotoArea').style.display = '';
     }
@@ -11277,6 +11309,34 @@ function _loadAdmin(){
         + payoutLine;
     }
 
+    // Opens the listing modal for a card the seller already owns — carrying its
+    // catalog link AND the photos they already uploaded for it, so they don't
+    // re-shoot a card that's already photographed in their binder. Only the
+    // user's OWN uploads (card-photos bucket) are offered as reuse candidates;
+    // openListCardModal filters out anything that isn't, so a catalog STOCK
+    // image is never passed off as the actual item. Resolves the item from
+    // collectionItems at click time (keeps the inline onclick tiny + safe).
+    function _listFromBinderItem(itemId) {
+      const item = collectionItems.find(function (c) { return String(c.id) === String(itemId); });
+      if (!item) { showToast('Card not found'); return; }
+      const isSealedItem = (item.product_type && item.product_type !== 'single')
+        || (typeof item.api_card_id === 'string' && item.api_card_id.indexOf('sealed-') === 0);
+      const cond = isSealedItem ? 'Sealed' : (item.condition === 'graded' ? 'Graded' : 'NM');
+      const pt   = isSealedItem ? (item.product_type || 'booster_box') : 'single';
+      const reusablePhotos = [item.photo_url, item.card_image_url, item.card_back_image_url]
+        .filter(function (u) { return typeof u === 'string' && u.indexOf('/card-photos/') !== -1; });
+      openListCardModal({
+        cardName:       item.card_name || '',
+        gameType:       _listingGameLabel(item.game_type, item.api_card_id),
+        condition:      cond,
+        productType:    pt,
+        apiCardId:      item.api_card_id || null,
+        cardNumber:     item.card_number || null,
+        variant:        item.variant || 'normal',
+        reusablePhotos: reusablePhotos,
+      });
+    }
+
     function openListCardModal(prefill) {
       if (!currentUser) { showToast('Sign in to list a card'); openModal('loginModal'); return; }
       // Marketplace is live. Selling access is gated by subscription tier below.
@@ -11333,6 +11393,15 @@ function _loadAdmin(){
         return;
       }
       lcPhotos = [];
+      // Reused binder photos: only the seller's OWN uploads (URLs in the
+      // card-photos bucket), never the catalog STOCK image — listing a stock
+      // image as if it were the actual item invites disputes. Deduped, capped
+      // at 8. The card-photos bucket is public, so buyers can load these.
+      lcExistingPhotos = (prefill && Array.isArray(prefill.reusablePhotos))
+        ? Array.from(new Set(prefill.reusablePhotos.filter(function (u) {
+            return typeof u === 'string' && u.indexOf('/card-photos/') !== -1;
+          }))).slice(0, 8)
+        : [];
       lcProductType = (prefill && prefill.productType) ? prefill.productType : 'single';
       // Stash the catalog link fields so the listing insert can
       // populate listings.api_card_id / card_number / variant.
@@ -11538,7 +11607,7 @@ function _loadAdmin(){
       // renderLcPhotoPreview() as advice at exactly 1 photo, and the gate only
       // stops a listing with none.
       const errEl = document.getElementById('lcPhotoError');
-      if (lcPhotos.length < 1) {
+      if (lcPhotos.length + lcExistingPhotos.length < 1) {
         errEl.textContent = isSealed
           ? 'Add at least 1 photo (box front)'
           : 'Add at least 1 photo of the card';
@@ -11546,12 +11615,52 @@ function _loadAdmin(){
         return;
       }
 
+      // ── Connect readiness gate — FAIL CLOSED ─────────────────────────────
+      // A listing must not go live unless the seller can actually RECEIVE the
+      // sale. Without a live Connect account a buyer's money would land in the
+      // platform account with no compliant payout — custodial money
+      // transmission (CLAUDE.md Stripe ToS). The server 409s such a checkout
+      // too; blocking here means the listing never appears in the first place.
+      // Admins are exempt: an admin/platform listing is first-party, so
+      // platform-only is legitimate.
+      if (!currentUser.is_admin) {
+        // Get a FRESH read unless we already positively know charges are on.
+        // Skipping the refetch on a cached `false` would wrongly block a seller
+        // whom Stripe enabled after this tab loaded (the cache never expires in
+        // a session). If charges are already cached-true, trust it — the
+        // checkout 409 backstops the rare mid-session capability loss.
+        if (!connectStatus.chargesEnabled && !connectStatus.loading) { await refreshConnectStatus(); }
+        // If a background refresh was already in flight, our call no-op'd —
+        // wait (capped ~3s) for it to settle so a fully-onboarded seller isn't
+        // wrongly blocked by a race or a cold connect-status endpoint.
+        for (var _cw = 0; _cw < 30 && connectStatus.loading; _cw++) {
+          await new Promise(function (r) { setTimeout(r, 100); });
+        }
+        if (!connectStatus.loaded) {
+          // Could not verify — do NOT list, but don't push to onboarding on a
+          // transient failure. Let them retry.
+          errEl.textContent = 'Could not verify your payout setup. Check your connection and try again.';
+          errEl.style.display = 'block';
+          return;
+        }
+        if (!connectStatus.chargesEnabled) {
+          var _cMsg = connectStatus.accountId
+            ? 'Your Stripe payout setup is not finished yet. Finish it and you can list right away — this is how sale proceeds reach your bank.'
+            : 'Set up Stripe payouts before you list. It takes a couple of minutes and is how sale proceeds reach your bank.';
+          var _goSetup = await pbConfirm(_cMsg, { confirmText: 'SET UP PAYOUTS', cancelText: 'LATER' });
+          if (_goSetup) startStripeConnectOnboarding();
+          return;
+        }
+      }
+
       const saveBtn = document.querySelector('#listCardModal .lc-save-btn');
       if (saveBtn) { saveBtn.textContent = 'Uploading...'; saveBtn.disabled = true; }
 
       // Upload photos to Supabase Storage (re-encoded as webp on-the-fly
-      // for smaller file sizes; falls back to original if encoding fails)
-      const photoUrls = [];
+      // for smaller file sizes; falls back to original if encoding fails).
+      // Seed with the reused binder photos — they're already hosted in the
+      // card-photos bucket, so they are NOT re-uploaded, just carried through.
+      const photoUrls = lcExistingPhotos.slice();
       for (const file of lcPhotos) {
         // Generate full-size WebP + 200/400px variants in one decode.
         // Variants are uploaded non-blocking after the main upload so
@@ -11688,6 +11797,7 @@ function _loadAdmin(){
         });
       }
       lcPhotos = [];
+      lcExistingPhotos = [];
       // Reset product type back to single so the next open of the modal
       // (without a prefill) defaults to a normal card listing.
       lcProductType = 'single';
@@ -11695,8 +11805,10 @@ function _loadAdmin(){
       showToast(name + ' listed for sale!');
       renderBrowse();
       renderMyListings();
-      // Nudge the seller to finish Stripe payouts if they haven't — until then
-      // a sale lands in platform-hold and needs manual payout. Non-blocking.
+      // Nudge a charges-enabled seller to finish PAYOUTS if pending, so Stripe
+      // can deposit to their bank. (A seller can only reach this point with
+      // charges enabled — the gate above blocks listing otherwise — so nothing
+      // is ever held by the platform.) Non-blocking.
       _maybePromptConnectSetup();
     }
 
@@ -11987,6 +12099,29 @@ function _loadAdmin(){
           // full-page redirect.
           if (typeof _isNativeApp === 'function' && _isNativeApp()) _openExternal(result.url);
           else window.location.href = result.url;
+        } else if (res.status === 400 && /price mismatch/i.test(result.error || '')) {
+          // The server rejected a stale-low price (seller raised it after our
+          // browse cache loaded). Pull the live listing, refresh the modal, and
+          // let the buyer re-decide at the current price instead of looping on
+          // the same stale amount. Without this the "reopen the listing" advice
+          // has nothing to reopen — the cache is what's stale.
+          try {
+            const { data: fresh } = await sb.from('listings')
+              .select('value, shipping_price').eq('id', listingId).maybeSingle();
+            if (fresh) {
+              const idx = listings.findIndex(l => String(l.id) === String(listingId));
+              if (idx >= 0) { listings[idx].value = fresh.value; listings[idx].shipping_price = fresh.shipping_price; }
+              const np = fresh.value || 0, ns = fresh.shipping_price || 0;
+              const pEl = document.getElementById('buyCardPrice');
+              const sEl = document.getElementById('buyCardShipping');
+              const tEl = document.getElementById('buyCardTotal');
+              if (pEl) pEl.textContent = '$' + np.toFixed(2);
+              if (sEl) sEl.textContent = ns > 0 ? '$' + ns.toFixed(2) : 'Free';
+              if (tEl) tEl.textContent = '$' + (np + ns + 0.30).toFixed(2);
+            }
+          } catch (_) { /* fall through to the toast */ }
+          showToast('This listing’s price changed — updated above. Review and try again.');
+          if (btn) { btn.textContent = 'Proceed to Payment'; btn.disabled = false; }
         } else {
           showToast('Checkout error: ' + (result.error || 'No URL returned'));
           if (btn) { btn.textContent = 'Proceed to Payment'; btn.disabled = false; }
@@ -18379,26 +18514,8 @@ function _loadAdmin(){
         <!-- Actions -->
         <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;gap:8px">
-            ${(() => {
-              // Sealed items route through openListCardModal with productType
-              // so the modal flips to sealed-specific labels + 1-photo rule.
-              const _isSealedItem = (item.product_type && item.product_type !== 'single')
-                || (typeof item.api_card_id === 'string' && item.api_card_id.startsWith('sealed-'));
-              const _cond = _isSealedItem
-                ? 'Sealed'
-                : (item.condition === 'graded' ? 'Graded' : 'NM');
-              const _pt = _isSealedItem ? (item.product_type || 'booster_box') : 'single';
-              // Carry the catalog link forward — apiCardId + cardNumber +
-              // variant — so the listing INSERT can populate
-              // listings.api_card_id and the inventory backfill /
-              // Step 4 auto-decrement can match this listing back to
-              // the right collection_items row.
-              const _api = _escJsAttr(item.api_card_id || '');
-              const _cnm = _escJsAttr(item.card_number || '');
-              const _var = _escJsAttr(item.variant || 'normal');
-              return `<button onclick="closeModal('binderDetailModal');openListCardModal({cardName:'${item.card_name.replace(/'/g,"\\'")}',gameType:'${_listingGameLabel(item.game_type, item.api_card_id)}',condition:'${_cond}',productType:'${_pt}',apiCardId:'${_api}',cardNumber:'${_cnm}',variant:'${_var}'})"
-              style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>`;
-            })()}
+            <button onclick="closeModal('binderDetailModal');_listFromBinderItem('${_escJsAttr(item.id)}')"
+              style="flex:1;padding:9px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">+ List for Sale</button>
             <button onclick="deleteCollectionItem('${item.id}')"
               style="flex:1;padding:9px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;white-space:nowrap">Remove Card</button>
           </div>
