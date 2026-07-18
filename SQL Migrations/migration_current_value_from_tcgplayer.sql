@@ -128,6 +128,45 @@ GRANT EXECUTE ON FUNCTION public.reseat_tcgplayer_batch(int) TO service_role;
 -- Editor path (repeat until it returns 0):
 --   SELECT public.reseat_tcgplayer_batch();
 
+-- ── Daily TCGplayer HISTORY snapshot ─────────────────────────────────────────
+-- The marketplace price-history chart now prefers source='tcgplayer' for spine
+-- cards (their PriceCharting history is the wrong number — a $71 card charted as
+-- a flat $0.40). This builds that TCG series: one snapshot per spine card per
+-- day, from current_value (which the reseat keeps = the TCGplayer price).
+-- Batched like the reseat so the gateway can't time it out; idempotent per day.
+-- reseat_tcgplayer.py calls this right after the reseat, and it should run daily
+-- (add to the sync-tcgplayer-prices workflow) so the chart fills in over time.
+CREATE OR REPLACE FUNCTION public.snapshot_tcgplayer_history_batch(p_limit int DEFAULT 20000)
+RETURNS integer
+LANGUAGE plpgsql
+AS $$
+DECLARE n integer;
+BEGIN
+  SET LOCAL statement_timeout = '120s';
+  WITH todo AS (
+    SELECT c.id, c.current_value, c.game_type, c.set_code
+    FROM public.catalog c
+    WHERE c.market_price_source = 'tcgplayer'
+      AND c.current_value IS NOT NULL AND c.current_value > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM public.catalog_price_history h
+        WHERE h.catalog_id = c.id AND h.recorded_at = CURRENT_DATE AND h.source = 'tcgplayer'
+      )
+    LIMIT p_limit
+  )
+  INSERT INTO public.catalog_price_history (catalog_id, recorded_value, recorded_at, source, game_type, set_code)
+  SELECT id, current_value, CURRENT_DATE, 'tcgplayer', game_type, set_code FROM todo
+  ON CONFLICT (catalog_id, recorded_at)
+    DO UPDATE SET recorded_value = EXCLUDED.recorded_value, source = 'tcgplayer';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END $$;
+
+GRANT EXECUTE ON FUNCTION public.snapshot_tcgplayer_history_batch(int) TO service_role;
+
+-- Editor path (repeat until it returns 0):
+--   SELECT public.snapshot_tcgplayer_history_batch();
+
 -- Verify:
 --   SELECT market_price_source, count(*) FROM catalog
 --    WHERE market_price_source IS NOT NULL GROUP BY 1;

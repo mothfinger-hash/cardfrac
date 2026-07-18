@@ -43,42 +43,47 @@ def _scalar(payload):
     return int(payload or 0)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--batch", type=int, default=20000, help="rows per batch (default 20000)")
-    args = ap.parse_args()
-
-    endpoint = f"{URL.rstrip('/')}/rest/v1/rpc/reseat_tcgplayer_batch"
-    headers = {
-        "apikey": KEY,
-        "Authorization": f"Bearer {KEY}",
-        "Content-Type": "application/json",
-    }
-    total = 0
-    rounds = 0
-    print(f"Reseating current_value from TCGplayer in batches of {args.batch:,}…")
+def _run_loop(rpc_name, verb, batch, headers):
+    """Loop a batched RPC (returns rows-affected) until it returns 0."""
+    endpoint = f"{URL.rstrip('/')}/rest/v1/rpc/{rpc_name}"
+    total = rounds = 0
+    print(f"{verb} in batches of {batch:,}…")
     while True:
         try:
             r = requests.post(endpoint, headers=headers,
-                              data=json.dumps({"p_limit": args.batch}), timeout=180)
+                              data=json.dumps({"p_limit": batch}), timeout=180)
         except requests.RequestException as e:
             print(f"  network blip ({type(e).__name__}); retrying in 3s…")
             time.sleep(3)
             continue
         if not r.ok:
-            sys.exit(f"RPC failed HTTP {r.status_code}: {r.text[:400]}\n"
+            sys.exit(f"RPC {rpc_name} failed HTTP {r.status_code}: {r.text[:400]}\n"
                      "Did you run the CREATE FUNCTION + GRANT in the SQL editor first?")
         n = _scalar(r.json())
         total += n
         rounds += 1
-        print(f"  batch {rounds:>3}: reseated {n:>6,}   (total {total:,})")
+        print(f"  batch {rounds:>3}: {n:>6,}   (total {total:,})")
         if n == 0:
             break
         time.sleep(0.2)
+    print(f"  {verb.lower()} done — {total:,} rows across {rounds} batches.\n")
+    return total
 
-    print(f"\nDone — reseated {total:,} rows across {rounds} batches.")
-    print("Marketplace Mkt + the '+/- % vs market' badge now read TCGplayer for "
-          "every card with a TCGplayer price (JP included).")
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch", type=int, default=20000, help="rows per batch (default 20000)")
+    ap.add_argument("--no-snapshot", action="store_true",
+                    help="reseat only; skip the daily TCGplayer history snapshot")
+    args = ap.parse_args()
+    headers = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+
+    _run_loop("reseat_tcgplayer_batch", "Reseating current_value from TCGplayer", args.batch, headers)
+    if not args.no_snapshot:
+        _run_loop("snapshot_tcgplayer_history_batch", "Snapshotting today's TCGplayer history", args.batch, headers)
+
+    print("Done. Marketplace Mkt + the '+/- % vs market' badge read TCGplayer for every card "
+          "with a TCGplayer price, and the price-history chart's TCG series gains today's point.")
 
 
 if __name__ == "__main__":

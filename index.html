@@ -86,7 +86,7 @@
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
       --bg:#0F0D0A;--surface:#1C1810;--surface2:#241C10;--surface3:#2C2218;--border:#3D3020;
-      --accent:#FF5C00;--accent2:#FFD23F;--green:#D2783A;--red:#C8002A;
+      --accent:#FF5C00;--accent-rgb:26, 199, 160;--accent2:#FFD23F;--green:#D2783A;--red:#C8002A;
       --yellow:#FFD23F;--gold:#FFD23F;--orange:#FF5C00;--teal:#1AC7A0;
       --copper:#B87333;--copper-dim:rgba(184,115,51,.55);--copper-glow:rgba(184,115,51,.18);
       --text:#F2ECD8;--muted:#8B7A60;--text-on-accent:#1a1a1a;
@@ -183,7 +183,7 @@
       height:auto;
       object-fit:contain;
       image-rendering:auto;
-      filter:drop-shadow(0 4px 12px rgba(26,199,160,.18));
+      filter:drop-shadow(0 4px 12px rgba(var(--accent-rgb),.18));
     }
     nav.sb-collapsed .sidebar-avatar-wrap{ display:none !important; }
     @media (max-width: 780px){ .sidebar-avatar-wrap{ display:none !important; } }
@@ -391,7 +391,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 .lp-features { display:grid; grid-template-columns:repeat(3,1fr); border-top:1.5px solid var(--border); border-bottom:1.5px solid var(--border); background:var(--surface2); }
 .lp-feat-card { padding:14px 18px; border-right:1.5px solid var(--border); cursor:pointer; transition:background .12s; display:flex; align-items:center; gap:12px; }
 .lp-feat-card:last-child { border-right:none; }
-.lp-feat-card:hover { background:rgba(26,199,160,.04); }
+.lp-feat-card:hover { background:rgba(var(--accent-rgb),.04); }
 .lp-feat-ico { display:none; width:24px; height:24px; border:1.5px solid var(--accent); display:grid; place-items:center; font-family:'Orbitron',monospace; font-weight:900; font-size:9px; color:var(--accent); flex-shrink:0; }
 .lp-feat-body { flex:1; min-width:0; }
 .lp-feat-title { font-family:'Orbitron',monospace; font-weight:800; font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); margin-bottom:3px; }
@@ -460,7 +460,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 .lp-tier-name { font-family:'Orbitron',monospace; font-weight:800; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text); }
 .lp-tier.featured .lp-tier-name { color:var(--accent); }
 .lp-tier-jp { font-family:'Space Mono','Share Tech Mono',monospace; font-weight:400; font-size:9px; letter-spacing:.08em; color:var(--muted); margin-top:2px; }
-.lp-tier.featured .lp-tier-jp { color:rgba(26,199,160,.55); }
+.lp-tier.featured .lp-tier-jp { color:rgba(var(--accent-rgb),.55); }
 .lp-tier-tagline { font-family:'Space Mono',monospace; font-size:.56rem; color:var(--muted); margin-bottom:4px; }
 .lp-tier-price { font-family:'Orbitron',monospace; font-weight:900; font-size:22px; color:var(--text); line-height:1; }
 .lp-tier.featured .lp-tier-price { color:var(--accent); }
@@ -532,7 +532,26 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           if (pr) st.setProperty('--accent2', pr[1]);
           var h = a.replace('#', ''); if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
           var n = parseInt(h, 16);
-          if (!isNaN(n)) st.setProperty('--r404-grid', 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',0.04)');
+          if (!isNaN(n)) {
+            st.setProperty('--accent-rgb', ((n>>16)&255) + ', ' + ((n>>8)&255) + ', ' + (n&255));
+            st.setProperty('--r404-grid', 'rgba(var(--accent-rgb),0.04)');
+          }
+        }
+        var PBG = { black:'#05060A', charcoal:'#101114', slate:'#0C131F', plum:'#130C1A', forest:'#08130F' };
+        var bgv = localStorage.getItem('pb_bg');
+        if (bgv && bgv !== 'default') {
+          var bg = PBG[bgv] || bgv, st2 = document.documentElement.style;
+          var lighten = function (hex, amt) {
+            var x = hex.replace('#', ''); if (x.length === 3) x = x[0]+x[0]+x[1]+x[1]+x[2]+x[2];
+            var v = parseInt(x, 16); if (isNaN(v)) return hex;
+            var mix = function (c) { return ('0' + Math.round(c + (255 - c) * amt).toString(16)).slice(-2); };
+            return '#' + mix((v>>16)&255) + mix((v>>8)&255) + mix(v&255);
+          };
+          st2.setProperty('--bg', bg);
+          st2.setProperty('--surface', lighten(bg, 0.06));
+          st2.setProperty('--surface2', lighten(bg, 0.10));
+          st2.setProperty('--surface3', lighten(bg, 0.15));
+          st2.setProperty('--border', lighten(bg, 0.24));
         }
         if (localStorage.getItem('pb_no_frills') === '1') document.documentElement.classList.add('no-frills');
       } catch (e) {}
@@ -1663,7 +1682,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         </select>
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(26,199,160,.15);border:1px solid var(--teal);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add to Wishlist</button>
+        <button onclick="saveToWishlist()" style="flex:1;padding:12px;background:rgba(var(--accent-rgb),.15);border:1px solid var(--teal);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.04em">♡ Add to Wishlist</button>
         <button onclick="closeModal('addToWishlistModal')" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.88rem;cursor:pointer">Cancel</button>
       </div>
     </div>
@@ -2338,14 +2357,14 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     <div class="modal" style="width:min(420px,92vw);padding:28px 24px">
       <button class="modal-close" aria-label="Close" onclick="closeModal('acMobSearchModal');acMobSearchOpen=false">×</button>
       <div style="font-family:'Space Mono','Share Tech Mono',monospace">
-        <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(26,199,160,.65);margin-bottom:14px">CARD SEARCH</div>
+        <div style="font-size:.62rem;letter-spacing:.2em;color:rgba(var(--accent-rgb),.65);margin-bottom:14px">CARD SEARCH</div>
         <!-- Game / TCG selector — mirrors the desktop dropdown so mobile
              search isn't pinned to Pokemon. acSetMobGame() handles the
              selection and toggles the EN/JA strip below (Pokemon-only). -->
         <div style="margin-bottom:12px">
-          <div style="font-size:.5rem;letter-spacing:.14em;color:rgba(26,199,160,.45);margin-bottom:5px">GAME</div>
+          <div style="font-size:.5rem;letter-spacing:.14em;color:rgba(var(--accent-rgb),.45);margin-bottom:5px">GAME</div>
           <select id="acMobGame" onchange="acSetMobGame(this.value)"
-            style="width:100%;padding:9px 30px 9px 10px;background-color:rgba(255,255,255,.04);color:rgba(225,238,252,.9);font-family:inherit;font-size:.72rem;letter-spacing:.06em;border:1px solid rgba(26,199,160,.22);border-radius:4px;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#1AC7A0 50%),linear-gradient(135deg,#1AC7A0 50%,transparent 50%);background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat">
+            style="width:100%;padding:9px 30px 9px 10px;background-color:rgba(255,255,255,.04);color:rgba(225,238,252,.9);font-family:inherit;font-size:.72rem;letter-spacing:.06em;border:1px solid rgba(var(--accent-rgb),.22);border-radius:4px;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#1AC7A0 50%),linear-gradient(135deg,#1AC7A0 50%,transparent 50%);background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat">
             <option value="pokemon">Pokémon</option>
             <option value="magic">Magic: The Gathering</option>
             <option value="yugioh">Yu-Gi-Oh!</option>
@@ -2361,7 +2380,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
              fit without crowding the mobile screen. -->
         <div id="acMobLangRow" style="margin-bottom:16px">
           <select id="acMobLangSelect" onchange="acSetSearchLang(this.value)"
-            style="width:100%;padding:8px 10px;background:rgba(26,199,160,.06);color:#1AC7A0;font-family:inherit;font-size:.78rem;letter-spacing:.08em;font-weight:700;border:1px solid rgba(26,199,160,.35);border-radius:4px;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#1AC7A0 50%),linear-gradient(135deg,#1AC7A0 50%,transparent 50%);background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat">
+            style="width:100%;padding:8px 10px;background:rgba(var(--accent-rgb),.06);color:#1AC7A0;font-family:inherit;font-size:.78rem;letter-spacing:.08em;font-weight:700;border:1px solid rgba(var(--accent-rgb),.35);border-radius:4px;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#1AC7A0 50%),linear-gradient(135deg,#1AC7A0 50%,transparent 50%);background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat">
             <option value="EN">English</option>
             <option value="JA">Japanese</option>
             <option value="CN">Chinese</option>
@@ -2374,7 +2393,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           type="text"
           placeholder="Charizard, Pikachu, Mewtwo..."
           onkeydown="if(event.key==='Enter')acMobSearch()"
-          style="width:100%;background:rgba(255,255,255,.04);border:none;border-bottom:1px solid rgba(26,199,160,.25);color:rgba(225,238,252,.9);font-family:inherit;font-size:16px;padding:10px 6px;outline:none;margin-bottom:22px;letter-spacing:.03em;box-sizing:border-box;display:block;touch-action:manipulation">
+          style="width:100%;background:rgba(255,255,255,.04);border:none;border-bottom:1px solid rgba(var(--accent-rgb),.25);color:rgba(225,238,252,.9);font-family:inherit;font-size:16px;padding:10px 6px;outline:none;margin-bottom:22px;letter-spacing:.03em;box-sizing:border-box;display:block;touch-action:manipulation">
         <button onclick="acMobSearch()" style="display:block;width:100%;padding:13px;background:#1AC7A0;color:#060810;font-family:inherit;font-weight:bold;font-size:.82rem;letter-spacing:.14em;border:none;cursor:pointer;border-radius:4px;transition:filter .2s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">SEARCH CARDS</button>
       </div>
     </div>
@@ -3739,7 +3758,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <!-- Front / Back side tabs -->
       <div style="display:flex;gap:6px;margin-bottom:12px">
         <button id="cpSideFront" type="button" onclick="cpSwitchSide('front')"
-          style="flex:1;padding:7px 10px;border:1px solid var(--accent);background:rgba(26,199,160,.10);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;cursor:pointer;letter-spacing:.04em">
+          style="flex:1;padding:7px 10px;border:1px solid var(--accent);background:rgba(var(--accent-rgb),.10);color:var(--accent);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.74rem;cursor:pointer;letter-spacing:.04em">
           Front
         </button>
         <button id="cpSideBack" type="button" onclick="cpSwitchSide('back')"
@@ -3808,10 +3827,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <h3 style="margin-bottom:6px">Report Card Issue</h3>
         <p class="modal-sub" style="font-size:.74rem;margin-bottom:14px">Spotted wrong data, a missing photo, or a card in the wrong set? Tell us — admins will review it.</p>
 
-        <div id="crCardSummary" style="font-size:.7rem;color:var(--muted);background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.2);padding:8px 10px;margin-bottom:12px;line-height:1.5"></div>
+        <div id="crCardSummary" style="font-size:.7rem;color:var(--muted);background:rgba(var(--accent-rgb),.04);border:1px solid rgba(var(--accent-rgb),.2);padding:8px 10px;margin-bottom:12px;line-height:1.5"></div>
 
         <textarea id="crDescription" placeholder="Please describe your issue…" rows="5"
-          style="width:100%;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.2);color:rgba(210,240,255,.9);padding:10px 12px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;line-height:1.5;resize:vertical;margin-bottom:14px;box-sizing:border-box"></textarea>
+          style="width:100%;background:rgba(var(--accent-rgb),.04);border:1px solid rgba(var(--accent-rgb),.2);color:rgba(210,240,255,.9);padding:10px 12px;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;line-height:1.5;resize:vertical;margin-bottom:14px;box-sizing:border-box"></textarea>
 
         <div id="crStatus" style="font-size:.68rem;color:var(--muted);min-height:1em;margin-bottom:8px"></div>
 

@@ -606,14 +606,17 @@ function _loadAdmin(){
       // Both live in localStorage (per-browser) and apply via _setAccent /
       // _toggleNoFrills, mirrored by the early inline script in index.html.
       const _curAccent = (function () { try { return localStorage.getItem('pb_accent') || 'default'; } catch (_) { return 'default'; } })();
+      const _curBg = (function () { try { return localStorage.getItem('pb_bg') || 'default'; } catch (_) { return 'default'; } })();
       const _noFrillsOn = (function () { try { return localStorage.getItem('pb_no_frills') === '1'; } catch (_) { return false; } })();
-      const _acSwatch = function (key, color, label) {
-        const on = _curAccent === key;
-        return '<button type="button" title="' + label + '" onclick="_setAccent(\'' + key + '\')" '
+      const _swatchBtn = function (setter, cur, key, color, label) {
+        const on = cur === key;
+        return '<button type="button" title="' + label + '" onclick="' + setter + '(\'' + key + '\')" '
           + 'style="width:30px;height:30px;border-radius:50%;cursor:pointer;padding:0;background:' + color + ';'
           + 'border:2px solid ' + (on ? 'var(--text)' : 'transparent') + ';box-shadow:0 0 0 1px var(--border)'
           + (on ? (',0 0 8px ' + color) : '') + '"></button>';
       };
+      const _acSwatch = function (key, color, label) { return _swatchBtn('_setAccent', _curAccent, key, color, label); };
+      const _bgSwatch = function (key, color, label) { return _swatchBtn('_setBg', _curBg, key, color, label); };
       const appearanceBlock = ''
         + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
         +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:10px;text-transform:uppercase">Appearance</div>'
@@ -629,7 +632,19 @@ function _loadAdmin(){
         +     '<label title="Custom color" style="width:30px;height:30px;border-radius:50%;cursor:pointer;position:relative;overflow:hidden;display:inline-block;border:2px solid transparent;box-shadow:0 0 0 1px var(--border);background:conic-gradient(#ff004d,#ff8a00,#ffe600,#59ff00,#00e5ff,#3b5bff,#c400ff,#ff004d)">'
         +       '<input type="color" onchange="_setAccent(this.value)" style="position:absolute;top:-6px;left:-6px;width:160%;height:160%;border:none;padding:0;margin:0;cursor:pointer;opacity:0"></label>'
         +   '</div>'
-        +   '<div style="font-size:.66rem;color:var(--muted);margin-bottom:14px">Recolors buttons, highlights, and active states. Stored in this browser only.</div>'
+        +   '<div style="font-size:.66rem;color:var(--muted);margin-bottom:14px">Recolors buttons, highlights, glows, and active states. Stored in this browser only.</div>'
+        +   '<div style="font-size:.72rem;color:var(--text);margin-bottom:8px">Background</div>'
+        +   '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px">'
+        +     _bgSwatch('default', '#04080E', 'Navy (default)')
+        +     _bgSwatch('black', '#05060A', 'Black')
+        +     _bgSwatch('charcoal', '#101114', 'Charcoal')
+        +     _bgSwatch('slate', '#0C131F', 'Slate')
+        +     _bgSwatch('plum', '#130C1A', 'Plum')
+        +     _bgSwatch('forest', '#08130F', 'Forest')
+        +     '<label title="Custom background" style="width:30px;height:30px;border-radius:50%;cursor:pointer;position:relative;overflow:hidden;display:inline-block;border:2px solid transparent;box-shadow:0 0 0 1px var(--border);background:conic-gradient(#ff004d,#ff8a00,#ffe600,#59ff00,#00e5ff,#3b5bff,#c400ff,#ff004d)">'
+        +       '<input type="color" onchange="_setBg(this.value)" style="position:absolute;top:-6px;left:-6px;width:160%;height:160%;border:none;padding:0;margin:0;cursor:pointer;opacity:0"></label>'
+        +   '</div>'
+        +   '<div style="font-size:.66rem;color:var(--muted);margin-bottom:14px">Sets the app background; panels and borders derive from it. Stored in this browser only.</div>'
         +   '<label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text);cursor:pointer">'
         +     '<input type="checkbox" id="settingNoFrills" ' + (_noFrillsOn ? 'checked' : '') + ' onchange="_toggleNoFrills(this.checked)" style="cursor:pointer">'
         +     '<span>No-frills mode</span>'
@@ -893,7 +908,7 @@ function _loadAdmin(){
     function _pbApplyAccent(val) {
       var s = document.documentElement.style;
       if (!val || val === 'default') {
-        ['--accent', '--accent2', '--sets-teal', '--r404-grid'].forEach(function (p) { s.removeProperty(p); });
+        ['--accent', '--accent-rgb', '--accent2', '--sets-teal', '--r404-grid'].forEach(function (p) { s.removeProperty(p); });
         return;
       }
       var pair = PB_ACCENTS[val];
@@ -901,9 +916,10 @@ function _loadAdmin(){
       var a2 = pair ? pair[1] : _pbLighten(val, 0.35);
       var rgb = _pbHexRgb(a);
       s.setProperty('--accent', a);
+      s.setProperty('--accent-rgb', rgb.join(', '));   // drives every rgba(var(--accent-rgb),…) glow
       s.setProperty('--accent2', a2);
       s.setProperty('--sets-teal', a);
-      s.setProperty('--r404-grid', 'rgba(' + rgb.join(',') + ',0.04)');
+      s.setProperty('--r404-grid', 'rgba(var(--accent-rgb),0.04)');
     }
     function _setAccent(val) {
       try { if (!val || val === 'default') localStorage.removeItem('pb_accent'); else localStorage.setItem('pb_accent', val); } catch (_) {}
@@ -918,9 +934,40 @@ function _loadAdmin(){
       try { if (on) localStorage.setItem('pb_no_frills', '1'); else localStorage.removeItem('pb_no_frills'); } catch (_) {}
       _pbApplyNoFrills(on);
     }
+
+    // Background presets. 'default' clears the override (base navy-black). A
+    // custom hex derives the panel/border shades by lightening the base, so the
+    // whole surface stack stays coherent with whatever background you pick.
+    var PB_BGS = {
+      default:  null,
+      black:    '#05060A',
+      charcoal: '#101114',
+      slate:    '#0C131F',
+      plum:     '#130C1A',
+      forest:   '#08130F',
+    };
+    function _pbApplyBg(val) {
+      var s = document.documentElement.style;
+      var props = ['--bg', '--surface', '--surface2', '--surface3', '--border'];
+      if (!val || val === 'default') { props.forEach(function (p) { s.removeProperty(p); }); return; }
+      var bg = PB_BGS[val] || val;
+      s.setProperty('--bg', bg);
+      s.setProperty('--surface',  _pbLighten(bg, 0.06));
+      s.setProperty('--surface2', _pbLighten(bg, 0.10));
+      s.setProperty('--surface3', _pbLighten(bg, 0.15));
+      s.setProperty('--border',   _pbLighten(bg, 0.24));
+    }
+    function _setBg(val) {
+      try { if (!val || val === 'default') localStorage.removeItem('pb_bg'); else localStorage.setItem('pb_bg', val); } catch (_) {}
+      _pbApplyBg(val);
+      try { renderAccountSettingsModal(); } catch (_) {}
+    }
+
     try {
       var _pbSavedAccent = localStorage.getItem('pb_accent');
       if (_pbSavedAccent) _pbApplyAccent(_pbSavedAccent);
+      var _pbSavedBg = localStorage.getItem('pb_bg');
+      if (_pbSavedBg) _pbApplyBg(_pbSavedBg);
       if (localStorage.getItem('pb_no_frills') === '1') _pbApplyNoFrills(true);
     } catch (_) {}
 
@@ -2626,7 +2673,7 @@ function _loadAdmin(){
               <div class="lc-chips">
                 ${condChip}
                 ${sealedChip}
-                ${(listing.variant && listing.variant !== 'normal') ? `<span class="cond-badge" style="background:rgba(26,199,160,.18);color:var(--accent);border:1px solid var(--accent)">${(listing.variant === 'reverse_holo' ? 'REVERSE HOLO' : listing.variant.toUpperCase().replace(/_/g,' '))}</span>` : ''}
+                ${(listing.variant && listing.variant !== 'normal') ? `<span class="cond-badge" style="background:rgba(var(--accent-rgb),.18);color:var(--accent);border:1px solid var(--accent)">${(listing.variant === 'reverse_holo' ? 'REVERSE HOLO' : listing.variant.toUpperCase().replace(/_/g,' '))}</span>` : ''}
               </div>
               <button class="lc-watch ${isWatched ? 'watched' : ''}"
                 title="${isWatched ? 'Remove from watchlist' : 'Add to watchlist'}"
@@ -2961,14 +3008,14 @@ function _loadAdmin(){
         var catRow = null;
         if (listing.apiCardId) {
           var exact = await sb.from('catalog')
-            .select('id, name, set_name, price_source_url, current_value')
+            .select('id, name, set_name, price_source_url, current_value, market_price_source')
             .eq('id', listing.apiCardId)
             .maybeSingle();
           catRow = exact.data || null;
         }
         if (!catRow) {
           var cat = await sb.from('catalog')
-            .select('id, name, set_name, price_source_url, current_value')
+            .select('id, name, set_name, price_source_url, current_value, market_price_source')
             .ilike('name', '%' + String(listing.name || '').replace(/[%_]/g, '') + '%')
             .eq('game_type', 'pokemon')
             .order('current_value', { ascending: false, nullsFirst: false })
@@ -2988,14 +3035,23 @@ function _loadAdmin(){
         listing._catalogPriceSourceUrl = catRow.price_source_url || null;
         listing._catalogId = catalogId;
 
-        // Step 2: pull the last 30 days of history snapshots
+        // Step 2: pull the last 30 days of history snapshots. Prefer the
+        // TCGplayer-sourced series when this card's value comes from the
+        // TCGplayer spine — its PriceCharting snapshots are the wrong number
+        // (a $71 card charted as a flat $0.40). Non-spine cards keep their
+        // PriceCharting history. TCG history builds forward from the daily
+        // snapshot job, so a spine card reads "building history" until it has
+        // 2+ TCG points (rather than plotting a wrong PC line).
         var cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
           .toISOString().slice(0, 10);
-        var hist = await sb.from('catalog_price_history')
+        var _tcgSpine = String(catRow.market_price_source || '').toLowerCase() === 'tcgplayer';
+        var _histQ = sb.from('catalog_price_history')
           .select('recorded_at, recorded_value')
           .eq('catalog_id', catalogId)
           .gte('recorded_at', cutoff)
           .order('recorded_at', { ascending: true });
+        if (_tcgSpine) _histQ = _histQ.eq('source', 'tcgplayer');
+        var hist = await _histQ;
         if (hist.error || !hist.data || hist.data.length < 2) {
           if (statusEl) statusEl.textContent = 'Building history — need at least 2 daily snapshots';
           return;
@@ -5400,7 +5456,7 @@ function _loadAdmin(){
         const box = document.getElementById('subsidiaryInviteCodeBox');
         if (box) {
           box.innerHTML = `
-            <div style="background:rgba(26,199,160,.08);border:1px dashed var(--accent);padding:14px;text-align:center;border-radius:6px">
+            <div style="background:rgba(var(--accent-rgb),.08);border:1px dashed var(--accent);padding:14px;text-align:center;border-radius:6px">
               <div style="font-size:.62rem;color:var(--muted);letter-spacing:.12em;margin-bottom:6px;text-transform:uppercase">Invite Code</div>
               <div style="font-family:'Courier New',monospace;font-size:1.25rem;letter-spacing:.18em;color:var(--accent);font-weight:700;margin-bottom:8px">${row.code}</div>
               <button type="button" onclick="navigator.clipboard.writeText('${row.code}').then(function(){showToast('Code copied')})" style="background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'Space Mono',monospace;font-size:.66rem;padding:5px 12px;cursor:pointer;letter-spacing:.04em">Copy</button>
@@ -6285,12 +6341,12 @@ function _loadAdmin(){
                 <div class="ndash-panel-body">
                   <!-- 6-month bar chart -->
                   <div style="display:flex;height:72px;gap:3px;margin-bottom:10px;padding:0 2px">${bars}</div>
-                  <div style="height:1px;background:rgba(26,199,160,.1);margin-bottom:10px"></div>
+                  <div style="height:1px;background:rgba(var(--accent-rgb),.1);margin-bottom:10px"></div>
                   <!-- Summary rows -->
                   <div class="ndash-sum-row"><div class="ndash-sum-l">Realized</div><div class="ndash-sum-r" style="color:${realizedTotal>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${realizedTotal>=0?'+':''}$${Math.abs(realizedTotal).toFixed(2)}</div></div>
                   <div class="ndash-sum-row"><div class="ndash-sum-l">Unrealized</div><div class="ndash-sum-r" style="color:${unrealized>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${unrealized>=0?'+':''}$${Math.abs(unrealized).toFixed(2)}</div></div>
                   <div class="ndash-sum-row"><div class="ndash-sum-l">Combined</div><div class="ndash-sum-r" style="font-weight:700;color:${(realizedTotal+unrealized)>=0?'var(--accent)':'var(--red,#FF4D3D)'}">${(realizedTotal+unrealized)>=0?'+':''}$${Math.abs(realizedTotal+unrealized).toFixed(2)}</div></div>
-                  ${soldOffline.length>0||totalEarned>0?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(26,199,160,.08)">
+                  ${soldOffline.length>0||totalEarned>0?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(var(--accent-rgb),.08)">
                     <button class="ndash-panel-link" onclick="showPage('account');setMobileNav('account');setTimeout(()=>document.querySelector('[data-tab=sales]')?.click(),200)">FULL REPORT →</button>
                   </div>`:''}
                 </div>
@@ -7601,7 +7657,7 @@ function _loadAdmin(){
         if (!r || r.data !== true) return;
         slot.style.display = '';
         slot.innerHTML =
-            '<div style="background:rgba(26,199,160,.08);border:1px solid var(--accent);border-radius:6px;padding:10px 12px">'
+            '<div style="background:rgba(var(--accent-rgb),.08);border:1px solid var(--accent);border-radius:6px;padding:10px 12px">'
           +   '<div style="font-size:.6rem;letter-spacing:.1em;color:var(--accent);margin-bottom:4px">HELP FILL THIS IN?</div>'
           +   '<div style="font-size:.66rem;color:var(--text);margin-bottom:8px;line-height:1.5">'
           +     'Got this card in hand? Upload a clean photo and credit goes to you.'
@@ -7711,7 +7767,7 @@ function _loadAdmin(){
             priceLine +
           '</div>' +
           '<div style="display:flex;flex-direction:column;gap:8px">' +
-            '<button onclick="document.getElementById(\'moversCardSheet\').remove();openAddToWishlistModal({cardName:\'' + safeName + '\',setName:\'' + safeSet + '\',cardNumber:\'' + safeNum + '\',cardImageUrl:\'' + safeImg + '\',rarity:\'' + safeRar + '\',apiCardId:\'' + catalogId + '\'})" style="width:100%;padding:11px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.06em">♡ ADD TO WISHLIST</button>' +
+            '<button onclick="document.getElementById(\'moversCardSheet\').remove();openAddToWishlistModal({cardName:\'' + safeName + '\',setName:\'' + safeSet + '\',cardNumber:\'' + safeNum + '\',cardImageUrl:\'' + safeImg + '\',rarity:\'' + safeRar + '\',apiCardId:\'' + catalogId + '\'})" style="width:100%;padding:11px;border:1px solid var(--teal);background:rgba(var(--accent-rgb),.1);color:var(--teal);font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.06em">♡ ADD TO WISHLIST</button>' +
             (card.price_source_url
               ? '<a href="' + card.price_source_url + '" target="_blank" rel="noopener" style="display:block;text-align:center;width:100%;padding:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:\'Space Mono\',monospace;font-size:.7rem;cursor:pointer;text-decoration:none;letter-spacing:.04em">↗ View on PriceCharting</a>'
               : '') +
@@ -8869,10 +8925,10 @@ function _loadAdmin(){
 
       const wishlistAction = currentUser
         ? `<button onclick="addPublicCardToWishlist(${idx})"
-            style="padding:9px;width:100%;border:1px solid rgba(26,199,160,.22);background:transparent;color:rgba(26,199,160,.5);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
-            onmouseover="this.style.borderColor='rgba(26,199,160,.55)';this.style.color='rgba(26,199,160,.88)'"
-            onmouseout="this.style.borderColor='rgba(26,199,160,.22)';this.style.color='rgba(26,199,160,.5)'">&#9825; ADD TO WISHLIST</button>`
-        : `<div style="text-align:center;padding:12px;font-size:.65rem;color:rgba(26,199,160,.35);letter-spacing:.08em">
+            style="padding:9px;width:100%;border:1px solid rgba(var(--accent-rgb),.22);background:transparent;color:rgba(var(--accent-rgb),.5);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
+            onmouseover="this.style.borderColor='rgba(var(--accent-rgb),.55)';this.style.color='rgba(var(--accent-rgb),.88)'"
+            onmouseout="this.style.borderColor='rgba(var(--accent-rgb),.22)';this.style.color='rgba(var(--accent-rgb),.5)'">&#9825; ADD TO WISHLIST</button>`
+        : `<div style="text-align:center;padding:12px;font-size:.65rem;color:rgba(var(--accent-rgb),.35);letter-spacing:.08em">
              SIGN IN TO ADD TO WISHLIST
            </div>`;
 
@@ -8896,22 +8952,22 @@ function _loadAdmin(){
               title="Click to enlarge" style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${img}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(var(--accent-rgb),.04);border:1px solid rgba(var(--accent-rgb),.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(var(--accent-rgb),.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
           <div style="text-align:center;margin-bottom:14px">
             <div style="font-size:.9rem;font-weight:700;color:rgba(210,240,255,.95);margin-bottom:5px">${_escHtml(c.card_name)}</div>
-            ${c.set_name ? `<div style="font-size:.63rem;color:rgba(26,199,160,.5);margin-bottom:6px">${_escHtml(c.set_name)}${c.card_number ? ` &middot; #${c.card_number}` : ''}</div>` : ''}
-            ${c.rarity ? `<div style="margin-bottom:6px"><span style="padding:2px 10px;border:1px solid rgba(26,199,160,.28);font-size:.57rem;color:rgba(26,199,160,.55);letter-spacing:.08em">${_escHtml(c.rarity)}</span></div>` : ''}
-            <div style="margin-top:6px"><span style="padding:2px 8px;border:1px solid rgba(26,199,160,.18);font-size:.57rem;color:rgba(26,199,160,.42);letter-spacing:.06em">${condLabel}</span></div>
-            ${c.quantity > 1 ? `<div style="font-size:.58rem;color:rgba(26,199,160,.35);margin-top:4px;letter-spacing:.06em">×${c.quantity} in collection</div>` : ''}
-            ${value ? `<div style="font-size:1.05rem;font-weight:700;color:#1AC7A0;margin-top:12px;text-shadow:0 0 12px rgba(26,199,160,.5)">~$${Number(value).toFixed(2)}</div>
-              <div style="font-size:.56rem;color:rgba(26,199,160,.38);letter-spacing:.06em">estimated value</div>` : ''}
+            ${c.set_name ? `<div style="font-size:.63rem;color:rgba(var(--accent-rgb),.5);margin-bottom:6px">${_escHtml(c.set_name)}${c.card_number ? ` &middot; #${c.card_number}` : ''}</div>` : ''}
+            ${c.rarity ? `<div style="margin-bottom:6px"><span style="padding:2px 10px;border:1px solid rgba(var(--accent-rgb),.28);font-size:.57rem;color:rgba(var(--accent-rgb),.55);letter-spacing:.08em">${_escHtml(c.rarity)}</span></div>` : ''}
+            <div style="margin-top:6px"><span style="padding:2px 8px;border:1px solid rgba(var(--accent-rgb),.18);font-size:.57rem;color:rgba(var(--accent-rgb),.42);letter-spacing:.06em">${condLabel}</span></div>
+            ${c.quantity > 1 ? `<div style="font-size:.58rem;color:rgba(var(--accent-rgb),.35);margin-top:4px;letter-spacing:.06em">×${c.quantity} in collection</div>` : ''}
+            ${value ? `<div style="font-size:1.05rem;font-weight:700;color:#1AC7A0;margin-top:12px;text-shadow:0 0 12px rgba(var(--accent-rgb),.5)">~$${Number(value).toFixed(2)}</div>
+              <div style="font-size:.56rem;color:rgba(var(--accent-rgb),.38);letter-spacing:.06em">estimated value</div>` : ''}
           </div>
 
           <!-- Divider -->
-          <div style="height:1px;background:rgba(26,199,160,.1);margin-bottom:14px"></div>
+          <div style="height:1px;background:rgba(var(--accent-rgb),.1);margin-bottom:14px"></div>
 
           <!-- Wishlist only -->
           ${wishlistAction}
@@ -9434,7 +9490,7 @@ function _loadAdmin(){
         { tier: 'Enthusiast', rate: '8%', isMe: currentTier === 'enthusiast' },
         { tier: 'Vendor',     rate: '7%', isMe: currentTier === 'vendor'     },
         { tier: 'Shop',       rate: '6%', isMe: currentTier === 'shop'       },
-      ].map(r => '<tr' + (r.isMe ? ' style="background:rgba(26,199,160,0.08)"' : '') + '>'
+      ].map(r => '<tr' + (r.isMe ? ' style="background:rgba(var(--accent-rgb),0.08)"' : '') + '>'
         + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--text)') + ';font-weight:' + (r.isMe ? '700' : '400') + '">' + r.tier + (r.isMe ? ' (you)' : '') + '</td>'
         + '<td style="padding:8px 12px;color:' + (r.isMe ? 'var(--accent)' : 'var(--muted)') + ';text-align:right;font-family:\'Space Mono\',monospace">' + r.rate + '</td>'
         + '</tr>'
@@ -10356,7 +10412,7 @@ function _loadAdmin(){
         return ''
           + '<div style="display:flex;justify-content:' + (mine ? 'flex-end' : 'flex-start') + '">'
           +   '<div style="max-width:80%">'
-          +     '<div style="background:' + (mine ? 'rgba(26,199,160,0.12)' : 'var(--surface)') + ';border:1px solid ' + (mine ? 'var(--accent)' : 'var(--border)') + ';border-radius:10px;padding:9px 12px;font-size:.82rem;color:var(--text);line-height:1.4;white-space:pre-wrap;word-break:break-word">'
+          +     '<div style="background:' + (mine ? 'rgba(var(--accent-rgb),0.12)' : 'var(--surface)') + ';border:1px solid ' + (mine ? 'var(--accent)' : 'var(--border)') + ';border-radius:10px;padding:9px 12px;font-size:.82rem;color:var(--text);line-height:1.4;white-space:pre-wrap;word-break:break-word">'
           +       safe
           +     '</div>'
           +     '<div style="font-size:.6rem;color:var(--muted);margin-top:3px;text-align:' + (mine ? 'right' : 'left') + ';font-family:\'Space Mono\',monospace">' + ts + '</div>'
@@ -11178,7 +11234,7 @@ function _loadAdmin(){
         var resBox = document.getElementById('shippoResult');
         if (resBox) {
           resBox.style.display = 'block';
-          resBox.innerHTML = '<div style="padding:10px 12px;border:1px solid var(--green);background:rgba(26,199,160,.06)">' +
+          resBox.innerHTML = '<div style="padding:10px 12px;border:1px solid var(--green);background:rgba(var(--accent-rgb),.06)">' +
             '<div style="color:var(--green);font-size:.82rem;font-weight:700;margin-bottom:4px">Label purchased</div>' +
             '<div style="font-size:.74rem;color:var(--muted);margin-bottom:8px">' + _shipEsc(data.carrier || '') + ' · ' + _shipEsc(data.tracking_number || '') + '</div>' +
             (data.label_url ? '<a href="' + _shipEsc(data.label_url) + '" target="_blank" rel="noopener" style="display:inline-block;padding:9px 14px;background:var(--accent);color:var(--text-on-accent);text-decoration:none;font-size:.8rem;font-weight:700">Print Label (PDF)</a>' : '') +
@@ -13480,7 +13536,7 @@ function _loadAdmin(){
       if (!window._FEATURE_SHOP_MARKETING) return '';
       var p = await _fetchShopTierPlatformMetrics();
       if (!p || p._missing || p._error) return '';
-      return '<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(26,199,160,.3);background:rgba(26,199,160,.05);border-radius:4px">' +
+      return '<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(var(--accent-rgb),.3);background:rgba(var(--accent-rgb),.05);border-radius:4px">' +
         '<div style="font-size:.55rem;letter-spacing:.1em;color:var(--accent);margin-bottom:6px">SHOPS ON PATHBINDER</div>' +
         '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.68rem">' +
           '<span><strong style="color:var(--green)">' + _fmtMoney(p.total_platform_gmv) + '</strong> <span style="color:var(--muted)">moved</span></span>' +
@@ -16000,7 +16056,7 @@ function _loadAdmin(){
         for (var c = 0; c < bb.cols; c++) {
           var slot = (bb.minR + r) * cols + (bb.minC + c);
           var on = reg.pockets.indexOf(slot) !== -1;
-          html += '<div style="' + (on ? '' : 'background:rgba(5,10,18,.8);') + 'border:1px solid rgba(26,199,160,.14)"></div>';
+          html += '<div style="' + (on ? '' : 'background:rgba(5,10,18,.8);') + 'border:1px solid rgba(var(--accent-rgb),.14)"></div>';
         }
       }
       grid.innerHTML = html;
@@ -16547,7 +16603,7 @@ function _loadAdmin(){
                    (the old 20×20 version blended into the cover art). -->
               <button onclick="event.stopPropagation();openEditBinder('${b.id}')"
                 title="Edit binder (rename, change colour, change cover)"
-                style="position:absolute;top:5px;right:5px;z-index:10;background:rgba(0,0,0,.78);border:1.5px solid var(--accent);color:var(--accent);font-size:.72rem;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:3px;line-height:1;padding:0;font-family:'Space Mono','Share Tech Mono',monospace;box-shadow:0 0 6px rgba(26,199,160,.35)">✎</button>
+                style="position:absolute;top:5px;right:5px;z-index:10;background:rgba(0,0,0,.78);border:1.5px solid var(--accent);color:var(--accent);font-size:.72rem;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:3px;line-height:1;padding:0;font-family:'Space Mono','Share Tech Mono',monospace;box-shadow:0 0 6px rgba(var(--accent-rgb),.35)">✎</button>
             </div>
             <div class="binder-book-label">${active ? '▸ ' : ''}${b.name}</div>
           </div>`;
@@ -18105,10 +18161,10 @@ function _loadAdmin(){
       if (_pcVal != null) rows.push({ label: 'PriceCharting', val: _pcVal, url: pcUrl, color: '184,115,51' });
       rows.push({ label: 'TCGplayer', val: (tcgRow ? tcgRow.value : null), url: tcgUrl, color: '26,199,160' });
       if (!rows.length) return '';
-      return `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);background:rgba(26,199,160,.02);border-radius:var(--r-md);overflow:hidden">
+      return `<div style="margin-top:10px;border:1px solid rgba(var(--accent-rgb),.12);background:rgba(var(--accent-rgb),.02);border-radius:var(--r-md);overflow:hidden">
         ${rows.map(function(r, i) {
           const last  = i === rows.length - 1;
-          const base  = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;text-decoration:none' + (last ? '' : ';border-bottom:1px solid rgba(26,199,160,.08)');
+          const base  = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;text-decoration:none' + (last ? '' : ';border-bottom:1px solid rgba(var(--accent-rgb),.08)');
           const right = (r.val != null)
             ? `<span style="font-size:.78rem;font-weight:700;color:rgb(${r.color})">$${Number(r.val).toFixed(2)}</span>`
             : `<span style="font-size:.62rem;color:rgba(${r.color},.7);letter-spacing:.04em">View price &#8599;</span>`;
@@ -18295,7 +18351,7 @@ function _loadAdmin(){
         // placeholder filled in. Centralizing the empty-state here
         // eliminates that race.
         const emptyStateHtml = (!hadPokemontcgPrices && !extraPriceRows.length)
-          ? `<div style="margin-top:8px;font-size:.63rem;color:rgba(26,199,160,.35);text-align:center">No price data available</div>`
+          ? `<div style="margin-top:8px;font-size:.63rem;color:rgba(var(--accent-rgb),.35);text-align:center">No price data available</div>`
           : '';
         // Per-source price rows ARE the links now (shared _buildExtrasHtml) —
         // the source name + value open that product page, so the two big
@@ -18506,7 +18562,7 @@ function _loadAdmin(){
                   placeholder="${marketPrice > 0 ? marketPrice.toFixed(2) : '0.00'}"
                   style="flex:1;min-width:0;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem" />
                 <button onclick="setTargetPrice('${item.id}', document.getElementById('targetPriceInput_${item.id}').value)"
-                  style="padding:8px 16px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Set</button>
+                  style="padding:8px 16px;border:1px solid var(--teal);background:rgba(var(--accent-rgb),.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Set</button>
               </div>
             </div>
 
@@ -18517,7 +18573,7 @@ function _loadAdmin(){
                   style="flex:1;min-width:0;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.82rem"
                   placeholder="0.00" />
                 <button id="savingsUpdateBtn_${item.id}" onclick="updateSavingsAmount('${item.id}', document.getElementById('savingsAmountInput_${item.id}').value)"
-                  style="padding:8px 16px;border:1px solid var(--teal);background:rgba(26,199,160,.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Update</button>
+                  style="padding:8px 16px;border:1px solid var(--teal);background:rgba(var(--accent-rgb),.1);color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;cursor:pointer">Update</button>
               </div>
             </div>
 
@@ -18613,7 +18669,7 @@ function _loadAdmin(){
         <!-- Badge -->
         <div style="text-align:center;margin-bottom:${item.notes ? '8px' : '12px'}">
           <span class="${isGraded ? 'grade-badge' : 'raw-badge'}">${condLabel}</span>
-          ${item.variant && item.variant !== 'normal' ? `<span style="margin-left:6px;padding:2px 8px;border:1px solid var(--accent);color:var(--accent);font-size:.58rem;letter-spacing:.06em;border-radius:var(--r-pill,999px);background:rgba(26,199,160,.08)">${(item.variant === 'reverse_holo' ? 'REVERSE HOLO' : item.variant.toUpperCase().replace(/_/g,' '))}</span>` : ''}
+          ${item.variant && item.variant !== 'normal' ? `<span style="margin-left:6px;padding:2px 8px;border:1px solid var(--accent);color:var(--accent);font-size:.58rem;letter-spacing:.06em;border-radius:var(--r-pill,999px);background:rgba(var(--accent-rgb),.08)">${(item.variant === 'reverse_holo' ? 'REVERSE HOLO' : item.variant.toUpperCase().replace(/_/g,' '))}</span>` : ''}
         </div>
 
         <!-- Variant chips — when this card's printing has a reverse-holo
@@ -19402,7 +19458,7 @@ function _loadAdmin(){
     async function searchJapaneseCards(query) {
       const grid = document.getElementById('acMobGrid');
       if (!grid) return;
-      grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" id="_jpSearchStatus" style="color:rgba(26,199,160,.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING JP DATABASE…</div></div>';
+      grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" id="_jpSearchStatus" style="color:rgba(var(--accent-rgb),.35);font-size:.55em;letter-spacing:.1em;text-align:center">SEARCHING JP DATABASE…</div></div>';
       _setProcessingText(document.getElementById('_jpSearchStatus'), 'SEARCHING JP DATABASE…');
 
       try {
@@ -19425,7 +19481,7 @@ function _loadAdmin(){
         if (error) throw new Error(error.message);
 
         if (!items || !items.length) {
-          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(26,199,160,.3);font-size:.5em;text-align:center;padding:12px;line-height:1.7">NO JP CARDS FOUND<br><span style="opacity:.5;font-size:.9em">Try a different name</span></div></div>';
+          grid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(var(--accent-rgb),.3);font-size:.5em;text-align:center;padding:12px;line-height:1.7">NO JP CARDS FOUND<br><span style="opacity:.5;font-size:.9em">Try a different name</span></div></div>';
           return;
         }
 
@@ -19444,7 +19500,7 @@ function _loadAdmin(){
         const html = normalised.map((card, idx) => {
           return `<div class="ac-mc" onclick="openSearchCardDetail(${idx}, true)">
             ${card.images.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
-            <div class="ac-mc-name">${card.name} <span style="color:rgba(26,199,160,.5);font-size:.8em">[JP]</span></div>
+            <div class="ac-mc-name">${card.name} <span style="color:rgba(var(--accent-rgb),.5);font-size:.8em">[JP]</span></div>
             <div class="ac-mc-sub">${card.set.name} ${card.number ? '#' + card.number : ''}</div>
             <div class="ac-mc-add">VIEW DETAILS</div>
           </div>`;
@@ -19786,7 +19842,7 @@ function _loadAdmin(){
       if (deskCount)  deskCount.textContent = '—';
       if (deskGrid)   deskGrid.innerHTML = '';
       if (mobGrid) {
-        mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" id="_mobSearchStatus" style="color:rgba(26,199,160,.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
+        mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" id="_mobSearchStatus" style="color:rgba(var(--accent-rgb),.35);font-size:.55em;text-align:center">SEARCHING…</div></div>';
         _setProcessingText(document.getElementById('_mobSearchStatus'), 'SEARCHING…');
       }
 
@@ -19829,7 +19885,7 @@ function _loadAdmin(){
         if (!cards.length) {
           if (deskStatus) deskStatus.textContent = `// NO ${langLabel} RESULTS FOR "${query.toUpperCase()}"`;
           if (deskCount)  deskCount.textContent = '0 results';
-          if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(26,199,160,.3);font-size:.5em;text-align:center;padding:12px">NO ' + langLabel + ' CARDS FOUND</div></div>';
+          if (mobGrid)    mobGrid.innerHTML = '<div class="ac-mc" style="grid-column:1/-1"><div class="ac-mc-ph" style="color:rgba(var(--accent-rgb),.3);font-size:.5em;text-align:center;padding:12px">NO ' + langLabel + ' CARDS FOUND</div></div>';
           return;
         }
 
@@ -19846,7 +19902,7 @@ function _loadAdmin(){
         // Desktop grid
         const deskHTML = cards.map((card, idx) => `
           <div class="card-result" onclick="openSearchCardDetail(${idx}, true)" style="cursor:pointer">
-            ${card.images.small ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div style="height:70px;background:rgba(26,199,160,.04);display:flex;align-items:center;justify-content:center;color:rgba(26,199,160,.18);font-size:.5rem">NO IMG</div>'}
+            ${card.images.small ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div style="height:70px;background:rgba(var(--accent-rgb),.04);display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-rgb),.18);font-size:.5rem">NO IMG</div>'}
             <div class="card-result-name">${card.name} [${langLabel}]</div>
             <div class="card-result-set">${card.set.name} ${card.number ? '#' + card.number : ''}</div>
           </div>`).join('');
@@ -19855,7 +19911,7 @@ function _loadAdmin(){
         const mobHTML = cards.map((card, idx) => `
           <div class="ac-mc" onclick="openSearchCardDetail(${idx}, true)">
             ${card.images.small ? `<img class="ac-mc-img" src="${card.images.small}" alt="${card.name}" loading="lazy">` : '<div class="ac-mc-ph"></div>'}
-            <div class="ac-mc-name">${card.name} <span style="color:rgba(26,199,160,.5);font-size:.8em">[${langLabel}]</span></div>
+            <div class="ac-mc-name">${card.name} <span style="color:rgba(var(--accent-rgb),.5);font-size:.8em">[${langLabel}]</span></div>
             <div class="ac-mc-sub">${card.set.name} ${card.number ? '#' + card.number : ''}</div>
             <div class="ac-mc-add">VIEW DETAILS</div>
           </div>`).join('');
@@ -20190,7 +20246,7 @@ function _loadAdmin(){
           return `<div class="card-result" onclick="openSearchCardDetail(${idx}, false)" style="cursor:pointer">
               ${card.images && card.images.small
                 ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">`
-                : '<div style="height:70px;background:rgba(26,199,160,.04);display:flex;align-items:center;justify-content:center;color:rgba(26,199,160,.18);font-size:.5rem;letter-spacing:.1em">NO IMG</div>'}
+                : '<div style="height:70px;background:rgba(var(--accent-rgb),.04);display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-rgb),.18);font-size:.5rem;letter-spacing:.1em">NO IMG</div>'}
               <div class="card-result-name">${card.name}</div>
               <div class="card-result-set">${(card.set && card.set.name) || ''} #${card.number || '?'}</div>
           </div>`;
@@ -20317,7 +20373,7 @@ function _loadAdmin(){
           return `<div class="card-result" onclick="openSearchCardDetail(${idx}, false)" style="cursor:pointer">
               ${card.images && card.images.small
                 ? `<img src="${card.images.small}" alt="${card.name}" loading="lazy">`
-                : '<div style="height:70px;background:rgba(26,199,160,.04);display:flex;align-items:center;justify-content:center;color:rgba(26,199,160,.18);font-size:.5rem;letter-spacing:.1em">NO IMG</div>'}
+                : '<div style="height:70px;background:rgba(var(--accent-rgb),.04);display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-rgb),.18);font-size:.5rem;letter-spacing:.1em">NO IMG</div>'}
               <div class="card-result-name">${card.name}</div>
               <div class="card-result-set">${(card.set && card.set.name) || ''} #${card.number || '?'}</div>
           </div>`;
@@ -20346,7 +20402,7 @@ function _loadAdmin(){
       const lb = document.createElement('div');
       lb.id = 'pbImgLightbox';
       lb.style.cssText = 'position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px';
-      lb.innerHTML = `<img src="${url}" style="max-width:92vw;max-height:92vh;width:auto;height:auto;object-fit:contain;border:1px solid rgba(26,199,160,.35);border-radius:4px;box-shadow:0 0 50px rgba(26,199,160,.25),0 0 120px rgba(26,199,160,.08)" loading="lazy" decoding="async">`;
+      lb.innerHTML = `<img src="${url}" style="max-width:92vw;max-height:92vh;width:auto;height:auto;object-fit:contain;border:1px solid rgba(var(--accent-rgb),.35);border-radius:4px;box-shadow:0 0 50px rgba(var(--accent-rgb),.25),0 0 120px rgba(var(--accent-rgb),.08)" loading="lazy" decoding="async">`;
       lb.addEventListener('click', () => lb.remove());
       const _esc = e => { if (e.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', _esc); } };
       document.addEventListener('keydown', _esc);
@@ -20459,11 +20515,11 @@ function _loadAdmin(){
       const bestPrice = priceRows[0]?.val || null;
 
       const priceHtml = priceRows.length
-        ? `<div style="margin-top:12px;border:1px solid rgba(26,199,160,.15);padding:10px 12px;background:rgba(26,199,160,.03)">
-            <div style="font-size:.54rem;letter-spacing:.12em;color:rgba(26,199,160,.4);margin-bottom:8px">MARKET PRICES</div>
+        ? `<div style="margin-top:12px;border:1px solid rgba(var(--accent-rgb),.15);padding:10px 12px;background:rgba(var(--accent-rgb),.03)">
+            <div style="font-size:.54rem;letter-spacing:.12em;color:rgba(var(--accent-rgb),.4);margin-bottom:8px">MARKET PRICES</div>
             ${priceRows.map(r => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(26,199,160,.07)">
-                <span style="font-size:.63rem;color:rgba(26,199,160,.5)">${r.label}</span>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(var(--accent-rgb),.07)">
+                <span style="font-size:.63rem;color:rgba(var(--accent-rgb),.5)">${r.label}</span>
                 <span style="font-size:.76rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
               </div>`).join('')}
            </div>`
@@ -20503,7 +20559,7 @@ function _loadAdmin(){
       overlay.innerHTML = `
         <div class="modal" style="width:100%;max-width:360px;padding:22px 20px;max-height:92vh;overflow-y:auto;overflow-x:hidden">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-            <h3 style="font-size:.6rem;letter-spacing:.14em;margin:0">CARD DETAIL${isJp ? ' <span style="color:rgba(26,199,160,.5);font-size:.9em">[JP]</span>' : ''}</h3>
+            <h3 style="font-size:.6rem;letter-spacing:.14em;margin:0">CARD DETAIL${isJp ? ' <span style="color:rgba(var(--accent-rgb),.5);font-size:.9em">[JP]</span>' : ''}</h3>
             <button class="modal-close" onclick="document.getElementById('setCardDetailSheet').remove()"
               style="background:none;border:none;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 2px">×</button>
           </div>
@@ -20513,15 +20569,15 @@ function _loadAdmin(){
               style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${imgLarge}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(var(--accent-rgb),.04);border:1px solid rgba(var(--accent-rgb),.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(var(--accent-rgb),.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
           <div style="text-align:center;margin-bottom:12px">
             <div style="font-size:.9rem;font-weight:700;color:rgba(210,240,255,.95);margin-bottom:5px">${_escHtml(card.name)}</div>
-            <div style="font-size:.63rem;color:rgba(26,199,160,.5);margin-bottom:6px">${_escHtml(card.set?.name || '')} &middot; #${card.number || '?'}</div>
-            ${card.rarity ? `<span style="padding:2px 10px;border:1px solid rgba(26,199,160,.28);font-size:.57rem;color:rgba(26,199,160,.55);letter-spacing:.08em">${_escHtml(card.rarity)}</span>` : ''}
-            ${card.artist ? `<div style="font-size:.57rem;color:rgba(26,199,160,.32);margin-top:6px">&#10022; ${_escHtml(card.artist)}</div>` : ''}
-            ${bestPrice ? `<div style="font-size:1.05rem;font-weight:700;color:#1AC7A0;margin-top:10px;text-shadow:0 0 12px rgba(26,199,160,.5)">~$${Number(bestPrice).toFixed(2)}</div>
-              <div style="font-size:.56rem;color:rgba(26,199,160,.38);letter-spacing:.06em">best market price</div>` : ''}
+            <div style="font-size:.63rem;color:rgba(var(--accent-rgb),.5);margin-bottom:6px">${_escHtml(card.set?.name || '')} &middot; #${card.number || '?'}</div>
+            ${card.rarity ? `<span style="padding:2px 10px;border:1px solid rgba(var(--accent-rgb),.28);font-size:.57rem;color:rgba(var(--accent-rgb),.55);letter-spacing:.08em">${_escHtml(card.rarity)}</span>` : ''}
+            ${card.artist ? `<div style="font-size:.57rem;color:rgba(var(--accent-rgb),.32);margin-top:6px">&#10022; ${_escHtml(card.artist)}</div>` : ''}
+            ${bestPrice ? `<div style="font-size:1.05rem;font-weight:700;color:#1AC7A0;margin-top:10px;text-shadow:0 0 12px rgba(var(--accent-rgb),.5)">~$${Number(bestPrice).toFixed(2)}</div>
+              <div style="font-size:.56rem;color:rgba(var(--accent-rgb),.38);letter-spacing:.06em">best market price</div>` : ''}
           </div>
           ${priceHtml}
           <!-- Extra prices (PriceCharting from catalog, TCGplayer from
@@ -20531,24 +20587,24 @@ function _loadAdmin(){
                when neither source has data. -->
           ${_renderSetsModalExtrasPlaceholder(card.id, isJp, card.tcgplayer?.url || null, card.name, priceRows.length > 0)}
           ${currentUser ? `
-          <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(26,199,160,.1);padding-top:16px">
-            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(26,199,160,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(var(--accent-rgb),.1);padding-top:16px">
+            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(var(--accent-rgb),.38);text-align:center;margin-bottom:2px">ADD CARD</div>
             <div style="display:flex;gap:0;width:100%">
               <select id="searchCardBinderSelect" onchange="handleBinderDropdownChange(this)"
-                style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(26,199,160,.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
+                style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(var(--accent-rgb),.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
                 <option value="" style="background:#030c14;color:rgba(210,240,255,.88)">Unsorted</option>
                 ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : ''}
                 <option value="_new_binder" style="background:#030c14;color:#1AC7A0">＋ New Binder</option>
               </select>
               <button onclick="addSearchCardFromDetail()"
-                style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(26,199,160,.55);background:rgba(26,199,160,.08);color:#1AC7A0;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
-                onmouseover="this.style.background='rgba(26,199,160,.18)'" onmouseout="this.style.background='rgba(26,199,160,.08)'">ADD CARD</button>
+                style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(var(--accent-rgb),.55);background:rgba(var(--accent-rgb),.08);color:#1AC7A0;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
+                onmouseover="this.style.background='rgba(var(--accent-rgb),.18)'" onmouseout="this.style.background='rgba(var(--accent-rgb),.08)'">ADD CARD</button>
             </div>
             <button onclick="wishlistFromDetail()"
-              style="width:100%;padding:7px;border:1px solid rgba(26,199,160,.22);background:transparent;color:rgba(26,199,160,.55);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
-              onmouseover="this.style.borderColor='rgba(26,199,160,.55)';this.style.color='rgba(26,199,160,.9)'"
-              onmouseout="this.style.borderColor='rgba(26,199,160,.22)';this.style.color='rgba(26,199,160,.55)'">&#9825; ADD TO WISHLIST</button>
-          </div>` : `<div style="text-align:center;padding:16px;color:rgba(26,199,160,.38);font-size:.68rem;letter-spacing:.08em;margin-top:12px">SIGN IN TO ADD CARDS</div>`}
+              style="width:100%;padding:7px;border:1px solid rgba(var(--accent-rgb),.22);background:transparent;color:rgba(var(--accent-rgb),.55);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
+              onmouseover="this.style.borderColor='rgba(var(--accent-rgb),.55)';this.style.color='rgba(var(--accent-rgb),.9)'"
+              onmouseout="this.style.borderColor='rgba(var(--accent-rgb),.22)';this.style.color='rgba(var(--accent-rgb),.55)'">&#9825; ADD TO WISHLIST</button>
+          </div>` : `<div style="text-align:center;padding:16px;color:rgba(var(--accent-rgb),.38);font-size:.68rem;letter-spacing:.08em;margin-top:12px">SIGN IN TO ADD CARDS</div>`}
         </div>
       `;
 
@@ -20967,7 +21023,7 @@ function _loadAdmin(){
         return '<button type="button" data-variant="' + v + '"'
              + ' onclick="_atcSetVariant(\'' + v + '\')"'
              + ' style="padding:6px 12px;border:1px solid ' + (active ? 'var(--accent)' : 'var(--border)') + ';'
-             + 'background:' + (active ? 'rgba(26,199,160,.12)' : 'transparent') + ';'
+             + 'background:' + (active ? 'rgba(var(--accent-rgb),.12)' : 'transparent') + ';'
              + 'color:' + (active ? 'var(--accent)' : 'var(--muted)') + ';'
              + 'font-family:\'Space Mono\',\'Share Tech Mono\',monospace;font-size:.68rem;'
              + 'letter-spacing:.05em;cursor:pointer;border-radius:var(--r-sm,6px);transition:all .12s">'
@@ -22204,7 +22260,7 @@ function _loadAdmin(){
             (prof ? '<button onclick="event.stopPropagation();adminToggleBetaHistory(\'' + safeId + '\')" style="font-family:\'Space Mono\',monospace;font-size:.5rem;letter-spacing:.04em;padding:2px 6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Log</button>' : '') +
             '<button onclick="event.stopPropagation();adminRevokeBetaTester(\'' + safeId + '\',\'' + safeWho + '\')" style="font-family:\'Space Mono\',monospace;font-size:.5rem;letter-spacing:.04em;padding:2px 6px;border:1px solid rgba(255,60,60,.5);background:transparent;color:rgba(255,100,100,.85);cursor:pointer">Revoke</button>' +
           '</div>' +
-          '<div id="' + historyId + '" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid rgba(26,199,160,.1);font-family:\'Space Mono\',monospace;font-size:.55rem;color:var(--muted)"></div>' +
+          '<div id="' + historyId + '" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid rgba(var(--accent-rgb),.1);font-family:\'Space Mono\',monospace;font-size:.55rem;color:var(--muted)"></div>' +
         '</div>';
       }).join('');
     }
@@ -25218,7 +25274,7 @@ function _loadAdmin(){
           var isActive = g.key === active;
           var borderCol = isActive ? 'var(--ft-cyan)' : 'var(--border)';
           var textCol   = isActive ? 'var(--ft-cyan)' : 'var(--muted)';
-          var bg        = isActive ? 'rgba(26,199,160,.1)' : 'transparent';
+          var bg        = isActive ? 'rgba(var(--accent-rgb),.1)' : 'transparent';
           html += '<button class="ft-game-pill" data-game="' + g.key + '"'
                 + ' onclick="ftSetSearchGame(\'' + side + '\',\'' + g.key + '\')"'
                 + ' style="padding:4px 10px;font-size:.6rem;letter-spacing:.06em;'
@@ -25241,7 +25297,7 @@ function _loadAdmin(){
           var active = p.dataset.game === game;
           p.style.borderColor = active ? 'var(--ft-cyan)' : 'var(--border)';
           p.style.color       = active ? 'var(--ft-cyan)' : 'var(--muted)';
-          p.style.background  = active ? 'rgba(26,199,160,.1)' : 'transparent';
+          p.style.background  = active ? 'rgba(var(--accent-rgb),.1)' : 'transparent';
         });
       }
       // Update placeholder hint from the _FT_GAMES config
@@ -30832,11 +30888,11 @@ function _loadAdmin(){
       const bestPrice = priceRows[0]?.val || null;
 
       const priceHtml = priceRows.length
-        ? `<div style="margin-top:12px;border:1px solid rgba(26,199,160,.15);padding:10px 12px;background:rgba(26,199,160,.03)">
-            <div style="font-size:.54rem;letter-spacing:.12em;color:rgba(26,199,160,.4);margin-bottom:8px">MARKET PRICES</div>
+        ? `<div style="margin-top:12px;border:1px solid rgba(var(--accent-rgb),.15);padding:10px 12px;background:rgba(var(--accent-rgb),.03)">
+            <div style="font-size:.54rem;letter-spacing:.12em;color:rgba(var(--accent-rgb),.4);margin-bottom:8px">MARKET PRICES</div>
             ${priceRows.map(r => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(26,199,160,.07)">
-                <span style="font-size:.63rem;color:rgba(26,199,160,.5)">${r.label}</span>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(var(--accent-rgb),.07)">
+                <span style="font-size:.63rem;color:rgba(var(--accent-rgb),.5)">${r.label}</span>
                 <span style="font-size:.76rem;font-weight:700;color:#1AC7A0">$${Number(r.val).toFixed(2)}</span>
               </div>`).join('')}
            </div>`
@@ -30871,17 +30927,17 @@ function _loadAdmin(){
               style="max-width:200px;width:100%;height:auto;border-radius:6px;cursor:zoom-in;transition:transform .15s"
               onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"
               onclick="openImageLightbox('${card.images?.large || img}')"
-              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(26,199,160,.04);border:1px solid rgba(26,199,160,.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(26,199,160,.25)\\'>NO IMAGE</span></div>'">
+              onerror="this.parentElement.innerHTML='<div style=\\'width:200px;height:280px;background:rgba(var(--accent-rgb),.04);border:1px solid rgba(var(--accent-rgb),.15);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px\\'><span style=\\'font-size:2rem;opacity:.2\\'></span><span style=\\'font-size:.55rem;letter-spacing:.1em;color:rgba(var(--accent-rgb),.25)\\'>NO IMAGE</span></div>'">
           </div>` : ''}
 
           <!-- Card info — centered -->
           <div style="text-align:center;margin-bottom:12px">
             <div style="font-size:.9rem;font-weight:700;color:rgba(210,240,255,.95);margin-bottom:5px">${_escHtml(card.name)}</div>
-            <div style="font-size:.63rem;color:rgba(26,199,160,.5);margin-bottom:6px">${_escHtml(card.set?.name || '')} &middot; #${card.number || '?'}</div>
-            ${card.rarity ? `<span style="padding:2px 10px;border:1px solid rgba(26,199,160,.28);font-size:.57rem;color:rgba(26,199,160,.55);letter-spacing:.08em">${_escHtml(card.rarity)}</span>` : ''}
-            ${card.artist ? `<div style="font-size:.57rem;color:rgba(26,199,160,.32);margin-top:6px">&#10022; ${_escHtml(card.artist)}</div>` : ''}
-            ${bestPrice ? `<div style="font-size:1.05rem;font-weight:700;color:#1AC7A0;margin-top:10px;text-shadow:0 0 12px rgba(26,199,160,.5)">~$${Number(bestPrice).toFixed(2)}</div>
-              <div style="font-size:.56rem;color:rgba(26,199,160,.38);letter-spacing:.06em">best market price</div>` : ''}
+            <div style="font-size:.63rem;color:rgba(var(--accent-rgb),.5);margin-bottom:6px">${_escHtml(card.set?.name || '')} &middot; #${card.number || '?'}</div>
+            ${card.rarity ? `<span style="padding:2px 10px;border:1px solid rgba(var(--accent-rgb),.28);font-size:.57rem;color:rgba(var(--accent-rgb),.55);letter-spacing:.08em">${_escHtml(card.rarity)}</span>` : ''}
+            ${card.artist ? `<div style="font-size:.57rem;color:rgba(var(--accent-rgb),.32);margin-top:6px">&#10022; ${_escHtml(card.artist)}</div>` : ''}
+            ${bestPrice ? `<div style="font-size:1.05rem;font-weight:700;color:#1AC7A0;margin-top:10px;text-shadow:0 0 12px rgba(var(--accent-rgb),.5)">~$${Number(bestPrice).toFixed(2)}</div>
+              <div style="font-size:.56rem;color:rgba(var(--accent-rgb),.38);letter-spacing:.06em">best market price</div>` : ''}
           </div>
 
           ${priceHtml}
@@ -30894,24 +30950,24 @@ function _loadAdmin(){
 
           <!-- Actions -->
           ${currentUser ? `
-          <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(26,199,160,.1);padding-top:16px">
-            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(26,199,160,.38);text-align:center;margin-bottom:2px">ADD CARD</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid rgba(var(--accent-rgb),.1);padding-top:16px">
+            <div style="font-size:.52rem;letter-spacing:.14em;color:rgba(var(--accent-rgb),.38);text-align:center;margin-bottom:2px">ADD CARD</div>
             <div style="display:flex;gap:0;width:100%">
               <select id="setCardBinderSelect" class="pb-binder-select" onchange="if(this.value==='_new_binder'){this.value='';openNewBinder()}"
-                style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(26,199,160,.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
+                style="flex:1;min-width:0;padding:7px 8px;background:#030c14;border:1px solid rgba(var(--accent-rgb),.28);border-right:none;color:rgba(210,240,255,.88);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;-webkit-appearance:none;appearance:none;cursor:pointer">
                 <option value="" style="background:#030c14;color:rgba(210,240,255,.88)">Unsorted</option>
-                ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : '<option value="" style="background:#030c14;color:rgba(26,199,160,.4)">— no binders yet —</option>'}
+                ${(currentUser && binders.length > 0) ? binders.map(b => `<option value="${b.id}" style="background:#030c14;color:rgba(210,240,255,.88)">${_escHtml(b.name)}</option>`).join('') : '<option value="" style="background:#030c14;color:rgba(var(--accent-rgb),.4)">— no binders yet —</option>'}
                 <option value="_new_binder" style="background:#030c14;color:#1AC7A0">＋ New Binder</option>
               </select>
               <button onclick="addSetCardDirectly(${idx})"
-                style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(26,199,160,.55);background:rgba(26,199,160,.08);color:#1AC7A0;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
-                onmouseover="this.style.background='rgba(26,199,160,.18)'" onmouseout="this.style.background='rgba(26,199,160,.08)'">ADD CARD</button>
+                style="flex:0 0 auto;padding:7px 16px;border:1px solid rgba(var(--accent-rgb),.55);background:rgba(var(--accent-rgb),.08);color:#1AC7A0;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;white-space:nowrap;letter-spacing:.08em;transition:all .15s"
+                onmouseover="this.style.background='rgba(var(--accent-rgb),.18)'" onmouseout="this.style.background='rgba(var(--accent-rgb),.08)'">ADD CARD</button>
             </div>
             <button onclick="addSetCardToWishlist(${idx})"
-              style="width:100%;padding:7px;border:1px solid rgba(26,199,160,.22);background:transparent;color:rgba(26,199,160,.55);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
-              onmouseover="this.style.borderColor='rgba(26,199,160,.55)';this.style.color='rgba(26,199,160,.9)'"
-              onmouseout="this.style.borderColor='rgba(26,199,160,.22)';this.style.color='rgba(26,199,160,.55)'">&#9825; ADD TO WISHLIST</button>
-          </div>` : `<div style="text-align:center;padding:16px;color:rgba(26,199,160,.38);font-size:.68rem;letter-spacing:.08em;margin-top:12px">SIGN IN TO ADD CARDS</div>`}
+              style="width:100%;padding:7px;border:1px solid rgba(var(--accent-rgb),.22);background:transparent;color:rgba(var(--accent-rgb),.55);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.08em;transition:all .15s"
+              onmouseover="this.style.borderColor='rgba(var(--accent-rgb),.55)';this.style.color='rgba(var(--accent-rgb),.9)'"
+              onmouseout="this.style.borderColor='rgba(var(--accent-rgb),.22)';this.style.color='rgba(var(--accent-rgb),.55)'">&#9825; ADD TO WISHLIST</button>
+          </div>` : `<div style="text-align:center;padding:16px;color:rgba(var(--accent-rgb),.38);font-size:.68rem;letter-spacing:.08em;margin-top:12px">SIGN IN TO ADD CARDS</div>`}
         </div>
       `;
 

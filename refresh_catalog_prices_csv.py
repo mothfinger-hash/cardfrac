@@ -315,11 +315,17 @@ def process_row(row, pmap, today_iso, dry_run):
     if dry_run:
         return ("would_update", rid, f"${price:.2f}" + (" [skip: tcg-spine]" if tcg_spine else ""))
 
-    if not tcg_spine:
-        try:
-            patch_catalog(rid, price)
-        except Exception as e:
-            return ("failed", rid, f"patch: {e}")
+    # Spine rows: leave BOTH current_value AND history to TCGplayer (the daily
+    # snapshot_tcgplayer_history job). Writing a PC history snapshot here would
+    # compete with the TCG one on (catalog_id, recorded_at) and re-introduce the
+    # wrong number into the chart.
+    if tcg_spine:
+        return ("skipped", rid, "tcg-spine (left to TCGplayer)")
+
+    try:
+        patch_catalog(rid, price)
+    except Exception as e:
+        return ("failed", rid, f"patch: {e}")
 
     try:
         upsert_history({
