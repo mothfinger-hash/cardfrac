@@ -238,7 +238,7 @@ def load_catalog_rows(game_type, limit=None):
     up. Pages with keyset (id > last_seen) so we don't hit Supabase
     statement timeouts on deep offset scans."""
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
-    select = "id,name,game_type,pricecharting_id"
+    select = "id,name,game_type,pricecharting_id,market_price_source"
     flt = "pricecharting_id=not.is.null"
     if game_type and game_type != "all":
         flt += f"&game_type=eq.{game_type}"
@@ -304,13 +304,22 @@ def process_row(row, pmap, today_iso, dry_run):
         return ("not_in_csv", rid, f"pc_id {pcid} not in any CSV (niche / new release / un-indexed)")
     price = entry["price"]
 
-    if dry_run:
-        return ("would_update", rid, f"${price:.2f}")
+    # TCGplayer is the price spine (migration_current_value_from_tcgplayer.sql).
+    # Rows stamped market_price_source='tcgplayer' must NOT have current_value
+    # overwritten by a PriceCharting number. This CSV refresh runs TWICE a day
+    # and was silently reverting the reseat — the marketplace "Mkt" snapped back
+    # to a wrong PC value, giving absurd "+X% vs market" badges. Still record the
+    # PC history snapshot (fuels the dashboard chart), just skip current_value.
+    tcg_spine = str(row.get("market_price_source") or "").lower() == "tcgplayer"
 
-    try:
-        patch_catalog(rid, price)
-    except Exception as e:
-        return ("failed", rid, f"patch: {e}")
+    if dry_run:
+        return ("would_update", rid, f"${price:.2f}" + (" [skip: tcg-spine]" if tcg_spine else ""))
+
+    if not tcg_spine:
+        try:
+            patch_catalog(rid, price)
+        except Exception as e:
+            return ("failed", rid, f"patch: {e}")
 
     try:
         upsert_history({
