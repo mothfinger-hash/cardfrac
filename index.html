@@ -515,6 +515,30 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
   <link rel="preload" href="/pb-styles.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__pbStylesLoaded=true">
   <noscript><link rel="stylesheet" href="/pb-styles.css"></noscript>
 
+  <!-- Appearance: apply saved accent + No-Frills BEFORE first paint so there's
+       no flash of the default theme/backgrounds. Mirrors _pbApplyAccent /
+       _pbApplyNoFrills in pb-app.js (which re-apply once it runs). -->
+  <script>
+    (function () {
+      try {
+        var P = { copper:['#FF7A18','#FFC24D'], crimson:['#FF3B5C','#FF87A0'],
+                  violet:['#9D7BFF','#C4ADFF'], emerald:['#25C875','#79E7AC'],
+                  gold:['#FFC53D','#FFE08A'], sky:['#38BDF8','#7DD3FC'] };
+        var acc = localStorage.getItem('pb_accent');
+        if (acc && acc !== 'default') {
+          var st = document.documentElement.style, pr = P[acc], a = pr ? pr[0] : acc;
+          st.setProperty('--accent', a);
+          st.setProperty('--sets-teal', a);
+          if (pr) st.setProperty('--accent2', pr[1]);
+          var h = a.replace('#', ''); if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+          var n = parseInt(h, 16);
+          if (!isNaN(n)) st.setProperty('--r404-grid', 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',0.04)');
+        }
+        if (localStorage.getItem('pb_no_frills') === '1') document.documentElement.classList.add('no-frills');
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- ══════════════════════════════════════════════════════════════════
        RABBIT//404 — theme override (acid green · Y2K · cyber-Tokyo)
        ════════════════════════════════════════════════════════════════ -->

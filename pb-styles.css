@@ -4658,6 +4658,15 @@ body::after {
   100% { transform: translateY(3px); }
 }
 
+/* ── No-Frills mode ─────────────────────────────────────────────────
+   Account Settings → Appearance. Strips the page background art and the
+   animated grid + scanline overlays for a plain, fast, low-distraction
+   view (sounds are muted in JS via _pbAudioMuted). Applied as a class on
+   <html> by the early inline script in index.html + _pbApplyNoFrills. */
+html.no-frills body { background-image: none !important; background-color: var(--bg) !important; }
+html.no-frills body::before,
+html.no-frills body::after { display: none !important; content: none !important; animation: none !important; }
+
 
 /* ─── 3. TOP MARQUEE STRIP — disabled ───────────────────────────── */
 

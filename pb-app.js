@@ -602,6 +602,41 @@ function _loadAdmin(){
         +   '</div>'
         + '</div>';
 
+      // Appearance — accent color swatches (+ custom) and No-Frills mode.
+      // Both live in localStorage (per-browser) and apply via _setAccent /
+      // _toggleNoFrills, mirrored by the early inline script in index.html.
+      const _curAccent = (function () { try { return localStorage.getItem('pb_accent') || 'default'; } catch (_) { return 'default'; } })();
+      const _noFrillsOn = (function () { try { return localStorage.getItem('pb_no_frills') === '1'; } catch (_) { return false; } })();
+      const _acSwatch = function (key, color, label) {
+        const on = _curAccent === key;
+        return '<button type="button" title="' + label + '" onclick="_setAccent(\'' + key + '\')" '
+          + 'style="width:30px;height:30px;border-radius:50%;cursor:pointer;padding:0;background:' + color + ';'
+          + 'border:2px solid ' + (on ? 'var(--text)' : 'transparent') + ';box-shadow:0 0 0 1px var(--border)'
+          + (on ? (',0 0 8px ' + color) : '') + '"></button>';
+      };
+      const appearanceBlock = ''
+        + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
+        +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:10px;text-transform:uppercase">Appearance</div>'
+        +   '<div style="font-size:.72rem;color:var(--text);margin-bottom:8px">Accent color</div>'
+        +   '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px">'
+        +     _acSwatch('default', '#1AC7A0', 'Hologram (default)')
+        +     _acSwatch('copper', '#FF7A18', 'Copper')
+        +     _acSwatch('crimson', '#FF3B5C', 'Crimson')
+        +     _acSwatch('violet', '#9D7BFF', 'Violet')
+        +     _acSwatch('emerald', '#25C875', 'Emerald')
+        +     _acSwatch('gold', '#FFC53D', 'Gold')
+        +     _acSwatch('sky', '#38BDF8', 'Sky')
+        +     '<label title="Custom color" style="width:30px;height:30px;border-radius:50%;cursor:pointer;position:relative;overflow:hidden;display:inline-block;border:2px solid transparent;box-shadow:0 0 0 1px var(--border);background:conic-gradient(#ff004d,#ff8a00,#ffe600,#59ff00,#00e5ff,#3b5bff,#c400ff,#ff004d)">'
+        +       '<input type="color" onchange="_setAccent(this.value)" style="position:absolute;top:-6px;left:-6px;width:160%;height:160%;border:none;padding:0;margin:0;cursor:pointer;opacity:0"></label>'
+        +   '</div>'
+        +   '<div style="font-size:.66rem;color:var(--muted);margin-bottom:14px">Recolors buttons, highlights, and active states. Stored in this browser only.</div>'
+        +   '<label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text);cursor:pointer">'
+        +     '<input type="checkbox" id="settingNoFrills" ' + (_noFrillsOn ? 'checked' : '') + ' onchange="_toggleNoFrills(this.checked)" style="cursor:pointer">'
+        +     '<span>No-frills mode</span>'
+        +   '</label>'
+        +   '<div style="font-size:.66rem;color:var(--muted);margin-top:6px;padding-left:22px">Cuts page backgrounds and animated overlays, and mutes all sounds &mdash; a plain, fast, distraction-free view. Stored in this browser only.</div>'
+        + '</div>';
+
       // Shop pause / vacation mode — vendor+ only. Listings hidden
       // from browse + checkout blocked server-side until the picked
       // date. Capped at 14 days out (max two weeks per spec).
@@ -695,7 +730,7 @@ function _loadAdmin(){
         +   '<div style="font-size:.64rem;color:var(--muted);padding-left:22px">Requires notifications enabled on your mobile device.</div>'
         + '</div>';
 
-      body.innerHTML = emailRow + membershipBlock + prefsBlock + notifBlock + shopBlock + followsBlock + deletionBlock;
+      body.innerHTML = emailRow + membershipBlock + prefsBlock + appearanceBlock + notifBlock + shopBlock + followsBlock + deletionBlock;
     }
 
     // Server-side push preference — persisted to profiles so it syncs across
@@ -825,6 +860,68 @@ function _loadAdmin(){
       if (localStorage.getItem('pb_unc_mode') === '1') {
         _pbApplyUncMode(true);
       }
+    } catch (_) {}
+
+    // ── Appearance: accent color + No-Frills mode ───────────────────────
+    // Accent presets — coordinated [accent, accent2] pairs. 'default' clears
+    // the override (keeps the base teal hologram theme). A custom hex derives
+    // accent2 by lightening. Applied as inline CSS vars on <html>, which
+    // override the stylesheet :root. The early inline script in index.html
+    // applies these BEFORE first paint to avoid a flash; this re-applies once
+    // pb-app.js runs (belt-and-suspenders) and powers the live toggles.
+    var PB_ACCENTS = {
+      default: null,
+      copper:  ['#FF7A18', '#FFC24D'],
+      crimson: ['#FF3B5C', '#FF87A0'],
+      violet:  ['#9D7BFF', '#C4ADFF'],
+      emerald: ['#25C875', '#79E7AC'],
+      gold:    ['#FFC53D', '#FFE08A'],
+      sky:     ['#38BDF8', '#7DD3FC'],
+    };
+    function _pbHexRgb(hex) {
+      var h = String(hex || '').replace('#', '');
+      if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+      var n = parseInt(h, 16);
+      return isNaN(n) ? [26, 199, 160] : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function _pbLighten(hex, amt) {
+      return '#' + _pbHexRgb(hex).map(function (v) {
+        var m = Math.round(v + (255 - v) * amt);
+        return ('0' + m.toString(16)).slice(-2);
+      }).join('');
+    }
+    function _pbApplyAccent(val) {
+      var s = document.documentElement.style;
+      if (!val || val === 'default') {
+        ['--accent', '--accent2', '--sets-teal', '--r404-grid'].forEach(function (p) { s.removeProperty(p); });
+        return;
+      }
+      var pair = PB_ACCENTS[val];
+      var a  = pair ? pair[0] : val;
+      var a2 = pair ? pair[1] : _pbLighten(val, 0.35);
+      var rgb = _pbHexRgb(a);
+      s.setProperty('--accent', a);
+      s.setProperty('--accent2', a2);
+      s.setProperty('--sets-teal', a);
+      s.setProperty('--r404-grid', 'rgba(' + rgb.join(',') + ',0.04)');
+    }
+    function _setAccent(val) {
+      try { if (!val || val === 'default') localStorage.removeItem('pb_accent'); else localStorage.setItem('pb_accent', val); } catch (_) {}
+      _pbApplyAccent(val);
+      try { renderAccountSettingsModal(); } catch (_) {}   // refresh the active-swatch highlight
+    }
+    function _pbApplyNoFrills(on) {
+      document.documentElement.classList.toggle('no-frills', !!on);
+      try { _pbAudioMuted = !!on; } catch (_) {}
+    }
+    function _toggleNoFrills(on) {
+      try { if (on) localStorage.setItem('pb_no_frills', '1'); else localStorage.removeItem('pb_no_frills'); } catch (_) {}
+      _pbApplyNoFrills(on);
+    }
+    try {
+      var _pbSavedAccent = localStorage.getItem('pb_accent');
+      if (_pbSavedAccent) _pbApplyAccent(_pbSavedAccent);
+      if (localStorage.getItem('pb_no_frills') === '1') _pbApplyNoFrills(true);
     } catch (_) {}
 
     function openAccountSettingsModal() {
@@ -17995,15 +18092,17 @@ function _loadAdmin(){
         || ('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(cardName || '')), 'card-detail');
       const pcUrl  = (pcRow && pcRow.source_url) || null;
       // Each price IS its own link — the source name + value open that product
-      // page. PriceCharting (copper) shows only when we have a price. TCGplayer
-      // (teal) ALWAYS renders a link: with its market price when card_prices has
-      // a row, else link-only. A dual-shard EN card whose canonical row has no
-      // card_prices row (the TCGplayer data sits on its legacy twin) used to
-      // show PriceCharting but NO TCGplayer link at all — this restores it, and
-      // the URL prefers an exact product link (card_prices source_url, then
-      // catalog.tcgplayer_url) before falling back to a name search.
+      // page. PriceCharting (copper) renders ONLY when we have an actual PC
+      // price; a link-only PC row ("View price ↗") is hidden, because now that
+      // TCGplayer is the price spine most cards have no real PC value and its
+      // stored id may be stale/cleared — a link to nothing is just noise.
+      // TCGplayer (teal) ALWAYS renders a link: with its market price when
+      // card_prices has a row, else link-only (a name search is honest — it
+      // helps the user find the card). URL prefers an exact product link
+      // (card_prices source_url, then catalog.tcgplayer_url) before a search.
+      const _pcVal = pcRow && pcRow.value != null && Number(pcRow.value) > 0 ? Number(pcRow.value) : null;
       const rows = [];
-      if (pcRow)  rows.push({ label: 'PriceCharting', val: pcRow.value, url: pcUrl,  color: '184,115,51' });
+      if (_pcVal != null) rows.push({ label: 'PriceCharting', val: _pcVal, url: pcUrl, color: '184,115,51' });
       rows.push({ label: 'TCGplayer', val: (tcgRow ? tcgRow.value : null), url: tcgUrl, color: '26,199,160' });
       if (!rows.length) return '';
       return `<div style="margin-top:10px;border:1px solid rgba(26,199,160,.12);background:rgba(26,199,160,.02);border-radius:var(--r-md);overflow:hidden">
@@ -23798,7 +23897,10 @@ function _loadAdmin(){
     //   /sounds/slap.opus              — hand slap for QR slam landing
     //   /sounds/swipe.opus             — short whoosh for card navigation
     var _pbAudioCtx = null;
-    var _pbAudioMuted = false; // hook for a future user toggle
+    // Muted when No-Frills mode is on (Account Settings → Appearance). Read
+    // from localStorage at init so mute is correct no matter when this line
+    // runs relative to _pbApplyNoFrills's early apply-on-load.
+    var _pbAudioMuted = (function () { try { return localStorage.getItem('pb_no_frills') === '1'; } catch (_) { return false; } })();
     var _pbMasterVolume = 0.5; // applied to Howler samples AND synth bus
     var _pbMasterGain = null;
     function _pbAudio() {

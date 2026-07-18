@@ -381,15 +381,24 @@ def resolve_categories(wanted_games):
     out = {}
     for gt in wanted_games:
         matchers = CATEGORY_MATCHERS.get(gt, [])
-        found = None
+        matches = []
         for c in cats:
             blob = f"{c.get('name','')} {c.get('displayName','')}".lower()
             if any(m in blob for m in matchers):
-                found = c["categoryId"]
-                break
-        if not found:
+                matches.append(c)
+        if not matches:
             _log(f"  ! no TCGplayer category matched game_type '{gt}' — skipping")
             continue
+        # 'pokemon' matches BOTH 'Pokemon' (3) and 'Pokemon Japan' (85). We want
+        # the base English category — Japanese is enriched separately from
+        # category 85 (enrich_tcgcsv_existing.py). Prefer the most specific
+        # match: shortest category name (base 'Pokemon' < 'Pokemon Japan').
+        # Don't rely on TCGplayer's list order, which can change.
+        matches.sort(key=lambda c: len(c.get("name", "")))
+        found = matches[0]["categoryId"]
+        if len(matches) > 1:
+            _log(f"    {gt}: matched {len(matches)} categories "
+                 f"{[(c['categoryId'], c['name']) for c in matches]}; using {found}.")
         # Verify the game actually exists in the catalog — the key must equal
         # catalog.game_type, so a 0-row result means a naming mismatch, not an
         # empty game. Skip loudly rather than silently match nothing.

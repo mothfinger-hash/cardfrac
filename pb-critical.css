@@ -216,6 +216,10 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
     body[data-page-bg] #accountPage,
     body[data-page-bg] #setsPage    { background: transparent; }
     body[data-page-bg] .social-footer { background: transparent; }
+    /* No-Frills mode (Account Settings → Appearance): strip page background
+       art here in critical CSS too, so it never flashes before pb-styles
+       loads. The grid/scanline overlays + sound muting are handled there. */
+    html.no-frills body[data-page-bg] { background-image: none !important; background-color: var(--bg) !important; }
     /* Mobile tuning. Dashboard / dash2 art doesn't read on portrait
        viewports — wide landscape gets cropped to an unrecognizable
        middle slice — so we strip those bgs entirely on mobile and
