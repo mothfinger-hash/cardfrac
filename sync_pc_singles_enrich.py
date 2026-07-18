@@ -602,7 +602,7 @@ def _norm(s):
     return re.sub(r'[^a-z0-9]', '', s.lower())
 
 
-def build_catalog_index(catalog_rows, slug, cfg):
+def build_catalog_index(catalog_rows, slug, cfg, scope_extra=None):
     """Build a multi-key index over the ENTIRE catalog for this TCG
     (no per-set filter — PC's per-set pages contain reprints from
     other sets, so the catalog row matching the PC card may live in
@@ -617,9 +617,20 @@ def build_catalog_index(catalog_rows, slug, cfg):
     # Set-scoped matching (e.g. pokemon-jp): only index rows in the SAME set
     # as the slug, so JP cards can't match English rows by bare number/name.
     if cfg.get("scope_to_set"):
-        tgt = _norm(slug.replace(cfg["slug_prefix"], ""))
+        # Target set derived from the slug (e.g. pokemon-japanese-abyss-eye ->
+        # 'abysseye'). But PC's slug often doesn't equal our set_code/set_name
+        # (slug 'mega-dream-ex' -> 'megadreamex' vs our set_code 'M2a' /
+        # set_name 'Mega Dream'), which silently indexes ZERO rows and marks
+        # every PC card unmatched. Accept extra targets from --set-code /
+        # --set-name so the operator can pin the alignment for such sets.
+        targets = {_norm(slug.replace(cfg["slug_prefix"], ""))}
+        for x in (scope_extra or []):
+            t = _norm(x)
+            if t:
+                targets.add(t)
+        targets.discard("")
         catalog_rows = [r for r in catalog_rows
-                        if _norm(r.get("set_code")) == tgt or _norm(r.get("set_name")) == tgt]
+                        if _norm(r.get("set_code")) in targets or _norm(r.get("set_name")) in targets]
     by_code      = {}
     by_name_code = {}
     by_name      = {}
@@ -690,6 +701,13 @@ def main():
                          "(e.g. ones that stored raw HTML-entity-encoded paths). "
                          "Without this flag, rows that already have BOTH a "
                          "pricecharting_id and a price_source_url are skipped.")
+    ap.add_argument("--force-refresh-ids", action="store_true",
+                    help="Overwrite pricecharting_id on a MATCHED row with the id read "
+                         "from PC's current console page. That page IS the set (scoped "
+                         "match), so its id is authoritative — use this to REPAIR "
+                         "collided/wrong ids on existing rows. Pair with --set-code for "
+                         "sets whose PC slug != our set_code (e.g. mega-dream-ex vs M2a). "
+                         "Dry-run first and eyeball the [dry] lines.")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--debug-unmatched", type=int, default=0,
                     help="With --dry-run, print first N PC rows that "
@@ -743,7 +761,8 @@ def main():
             html_text = fetch(f"{PC_BASE}/console/{slug}")
         except Exception as e:
             return [(slug, "fail", f"fetch: {e}", 0, 0, 0)]
-        by_name = build_catalog_index(catalog_rows, slug, cfg)
+        by_name = build_catalog_index(catalog_rows, slug, cfg,
+                                      scope_extra=[args.set_code, args.set_name])
         n_enr = 0; n_unm = 0; n_already = 0; n_url_only = 0
         unmatched_samples = []   # for --debug-unmatched
         for pc in parse_console_page(slug, html_text):
@@ -766,14 +785,25 @@ def main():
                 # — e.g. after the HTML-entity-encoding bug was fixed and
                 # we need to replace the broken `&amp;` URLs in bulk.
                 force_url = args.force_refresh_urls
-                if has_pcid and has_url and not force_url:
+                # --force-refresh-ids REPAIRS a collided/wrong id: overwrite the
+                # stored pricecharting_id with the one from this set's console
+                # page (authoritative, since the match is set-scoped). Only when
+                # it actually differs — a no-op rewrite is skipped so the summary
+                # and the [dry] output reflect real changes.
+                force_id   = args.force_refresh_ids
+                id_differs = force_id and str(match.get("pricecharting_id") or "") \
+                                            != str(pc["pricecharting_id"])
+                if has_pcid and has_url and not force_url and not id_differs:
                     n_already += 1
                     continue
                 payload = {}
-                if not has_pcid:
+                if not has_pcid or id_differs:
                     payload["pricecharting_id"] = pc["pricecharting_id"]
                 if not has_url or force_url:
                     payload["price_source_url"] = pc["product_url"]
+                if not payload:
+                    n_already += 1
+                    continue
                 if args.dry_run:
                     cols = "+".join(payload.keys())
                     print(f"     [dry] {match['id']:<35} → {cols:<40}  ({pc['name'][:40]})")
@@ -786,10 +816,10 @@ def main():
                 # summary tells the operator whether the existing
                 # catalog was mostly URL-deficient (the common case
                 # post-bugfix) vs missing both.
-                if has_pcid and not has_url:
-                    n_url_only += 1
+                if "pricecharting_id" in payload:
+                    n_enr += 1        # wrote an id (new row OR forced repair)
                 else:
-                    n_enr += 1
+                    n_url_only += 1   # url-only backfill on a row that kept its id
             else:
                 n_unm += 1
                 if args.debug_unmatched and len(unmatched_samples) < args.debug_unmatched:

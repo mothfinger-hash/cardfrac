@@ -96,6 +96,12 @@ if not (SUPABASE_URL and SUPABASE_KEY):
 PC_DOWNLOAD_URL = "https://www.pricecharting.com/price-guide/download-custom"
 KNOWN_CATEGORIES = [
     "pokemon-cards",
+    # NOTE: Japanese Pokemon is NOT available as a bulk-CSV category — PC only
+    # exposes it per-console (pricecharting.com/console/pokemon-japanese-<set>).
+    # JP singles are linked by sync_pc_singles_enrich.py --tcg pokemon-jp
+    # --only "pokemon-japanese-<set>" (see RUNBOOK_add_jp_set.md), which writes
+    # rows as jp-pc-{pricecharting_id} with the id resolved directly from that
+    # console page. Do NOT try to CSV-match jp- rows here.
     "magic-cards",
     "yugioh-cards",
     "one-piece-cards",
@@ -422,15 +428,20 @@ def _sb_headers(extra=None):
     return h
 
 
-def load_catalog(game_type):
+def load_catalog(game_type, id_prefix=None):
     """Pull every catalog row with no pricecharting_id (the only rows
     we have anything to do for). Includes name + set_name + price_source_url
-    so we can match by URL or fall back to name + console."""
+    so we can match by URL or fall back to name + console.
+    id_prefix (e.g. 'jp-') scopes to one language/shard — used to run the
+    Japanese CSV against only jp- rows so English rows aren't processed
+    against a JP-only CSV."""
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
     select = "id,name,set_name,set_code,game_type,price_source_url"
     flt = "pricecharting_id=is.null"
     if game_type and game_type != "all":
         flt += f"&game_type=eq.{game_type}"
+    if id_prefix:
+        flt += f"&id=like.{id_prefix}*"
     rows = []
     page = 0; page_size = 1000
     while True:
@@ -817,6 +828,277 @@ def match_row(row, by_url, by_text, by_setnum, by_unique_num):
     return (None, None)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# STRICT matcher (--strict)
+# ══════════════════════════════════════════════════════════════════════════════
+# The default match_row() n-grams set names down to single shared tokens, so a
+# catalog "016" from ANY set can collide onto one PC product that merely shares
+# a token + the number. Measured fallout: ~33% of pc-linked Pokemon rows share
+# a pricecharting_id with an unrelated same-numbered card.
+#
+# Strict mode keys on (set, card_number) with NO token fallback:
+#   1. It maps each PC console to a SPECIFIC catalog set two ways:
+#      (a) direct — the PC console (game-prefix stripped) equals our set_name,
+#      (b) crosswalk — learned from UNAMBIGUOUS (name, number) anchors, i.e.
+#          cards whose (name, number) resolves to exactly ONE PC product in the
+#          entire CSV. Those anchors vote console→set; a console adopts a set
+#          only on a clear majority (>=2 votes, >=60%). This catches sets PC
+#          names differently (JP sets, "Best of XY").
+#   2. A row matches only when (a trusted console, its number) resolves to a
+#      SINGLE pc_id — confirmed by name similarity. Anything ambiguous is
+#      REFUSED (no write) — a null link beats a wrong one.
+# It writes pricecharting_id ONLY; current_value stays the TCGplayer-sourced
+# spine (see migration_current_value_from_tcgplayer.sql).
+from collections import defaultdict, Counter
+from difflib import SequenceMatcher
+
+
+def _set_key(row):
+    """Stable set identity for a catalog row: normalized set_code, else the
+    id-derived set, else normalized set_name. Both sides of the crosswalk use
+    this so a PC console ties to one specific catalog set."""
+    sc = _normalize_text(row.get("set_code") or "")
+    if sc:
+        return sc
+    id_set, _ = _extract_catalog_setnum(row.get("id") or "")
+    if id_set:
+        return _normalize_text(id_set)
+    return _normalize_text(row.get("set_name") or "")
+
+
+def load_catalog_all(game_type, id_prefix=None):
+    """Minimal columns for EVERY catalog row (regardless of pricecharting_id).
+    Used only to build the console→set crosswalk from as many unambiguous
+    (name, number) anchors as possible — including rows that already have a
+    (correct) id, which are our best anchors. id_prefix scopes to one
+    language/shard so a JP run learns JP consoles from JP anchors only (and
+    English 'Charizard-EX #10' can't collide with the JP one in by_namenum)."""
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
+    select = "id,name,set_name,set_code"
+    flt = "" if (not game_type or game_type == "all") else f"&game_type=eq.{game_type}"
+    if id_prefix:
+        flt += f"&id=like.{id_prefix}*"
+    rows = []
+    page = 0; page_size = 1000
+    while True:
+        params = f"?select={select}&id=not.is.null{flt}&order=id.asc&limit={page_size}&offset={page * page_size}"
+        r = requests.get(url + params, headers=_sb_headers(), timeout=60)
+        r.raise_for_status()
+        batch = r.json()
+        if not batch:
+            break
+        rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        page += 1
+    return rows
+
+
+def load_csv_index_strict(paths):
+    """Strict indexes — FULL normalized console only (no n-grams/tokens):
+        by_fc_num  : (console_norm, card_number) -> {pc_id: entry}
+        by_namenum : (name_norm,    card_number) -> {pc_id: entry}
+    Each entry carries console_norm + name_norm precomputed."""
+    by_fc_num  = defaultdict(dict)
+    by_namenum = defaultdict(dict)
+    total = 0
+    for path in paths:
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                total += 1
+                pc_id     = _pick(row, "id")
+                full_name = _pick(row, "name")
+                console   = _pick(row, "console")
+                if not (pc_id and full_name and console):
+                    continue
+                card_number = _extract_pc_card_number(full_name)
+                if not card_number:
+                    continue
+                card_name = _extract_pc_card_name(full_name) or full_name
+                price = _cents_to_dollars(_pick(row, "loose")) \
+                     or _cents_to_dollars(_pick(row, "cib"))   \
+                     or _cents_to_dollars(_pick(row, "new"))
+                entry = {
+                    "pc_id":        str(pc_id),
+                    "name":         card_name,
+                    "console":      console,
+                    "card_number":  card_number,
+                    "price":        price,
+                    "console_norm": _normalize_console(console),
+                    "name_norm":    _normalize_text(card_name),
+                }
+                by_fc_num[(entry["console_norm"], card_number)][entry["pc_id"]] = entry
+                by_namenum[(entry["name_norm"], card_number)][entry["pc_id"]] = entry
+    return by_fc_num, by_namenum, total
+
+
+def build_console_crosswalk(anchor_rows, by_namenum, min_votes=2, min_frac=0.6):
+    """Learn console_norm → set_key from catalog rows whose (name, number) is
+    globally UNIQUE in the CSV (one PC product only) — those are unambiguous,
+    so the PC product's console reliably belongs to that row's set. A console
+    adopts a set only on a clear majority. Returns (crosswalk, inv, stats)."""
+    votes = defaultdict(Counter)   # console_norm -> Counter(set_key)
+    for row in anchor_rows:
+        name = row.get("name") or ""
+        _, id_num = _extract_catalog_setnum(row.get("id") or "")
+        if not (name and id_num):
+            continue
+        cands = by_namenum.get((_normalize_text(name), id_num))
+        if not cands or len(cands) != 1:
+            continue
+        entry = next(iter(cands.values()))
+        votes[entry["console_norm"]][_set_key(row)] += 1
+    crosswalk = {}
+    ambiguous = 0
+    for console, ctr in votes.items():
+        winner, n = ctr.most_common(1)[0]
+        total = sum(ctr.values())
+        if n >= min_votes and n / total >= min_frac:
+            crosswalk[console] = winner
+        else:
+            ambiguous += 1
+    inv = defaultdict(set)
+    for c, s in crosswalk.items():
+        inv[s].add(c)
+    return crosswalk, inv, {"consoles_voted": len(votes), "mapped": len(crosswalk), "ambiguous": ambiguous}
+
+
+def match_row_strict(row, by_fc_num, by_namenum, crosswalk_inv, name_thresh=0.35):
+    """Return (entry, source) or (None, reason). Keys on (trusted console,
+    number) → single pc_id, name-confirmed. Refuses on any ambiguity."""
+    name = row.get("name") or ""
+    _, id_num = _extract_catalog_setnum(row.get("id") or "")
+    if not id_num:
+        return (None, "no_number")
+    nn = _normalize_text(name)
+    sk = _set_key(row)
+
+    # Trusted console candidates: direct (our own set strings) + learned crosswalk.
+    consoles = set()
+    for s in (_normalize_console(row.get("set_name") or ""),
+              _normalize_text(row.get("set_name") or ""),
+              sk):
+        if s:
+            consoles.add(s)
+    consoles |= crosswalk_inv.get(sk, set())
+
+    found = {}   # pc_id -> entry
+    for c in consoles:
+        d = by_fc_num.get((c, id_num))
+        if d:
+            found.update(d)
+
+    if len(found) == 1:
+        entry = next(iter(found.values()))
+        if (not nn) or (not entry["name_norm"]) or \
+           SequenceMatcher(None, nn, entry["name_norm"]).ratio() >= name_thresh:
+            return (entry, "setnum")
+        return (None, "name_disagree")   # single hit but wrong card name → refuse
+    if len(found) > 1:
+        # Several trusted consoles carry this number — let a strong name pick one.
+        named = [e for e in found.values()
+                 if nn and SequenceMatcher(None, nn, e["name_norm"]).ratio() >= 0.6]
+        if len(named) == 1:
+            return (named[0], "setnum_name")
+        return (None, "ambiguous_console")
+
+    # Last resort: (name, number) globally unique in the CSV — safe by construction.
+    if nn:
+        cands = by_namenum.get((nn, id_num))
+        if cands and len(cands) == 1:
+            return (next(iter(cands.values())), "namenum")
+    return (None, "no_candidate")
+
+
+def _run_ingest_strict(paths, args):
+    print("STRICT mode — (set, card #) keying via a self-calibrating console→set crosswalk.")
+    print("  Writes pricecharting_id ONLY. current_value stays the TCGplayer spine.\n")
+    by_fc_num, by_namenum, csv_total = load_csv_index_strict(paths)
+    print(f"  Indexed {csv_total:,} CSV rows.  by_fc_num={len(by_fc_num):,} keys  by_namenum={len(by_namenum):,} keys")
+
+    _idp = getattr(args, "id_prefix", None)
+    _scope = f"game_type={args.tcg!r}" + (f", id LIKE {_idp!r}*" if _idp else "")
+    print(f"\n  Building console→set crosswalk from the catalog ({_scope})…")
+    anchor_rows = load_catalog_all(args.tcg, _idp)
+    crosswalk, inv, cstat = build_console_crosswalk(anchor_rows, by_namenum)
+    print(f"  {len(anchor_rows):,} anchor rows → {cstat['mapped']:,} consoles mapped "
+          f"({cstat['ambiguous']:,} left ambiguous, refused).")
+    # Show a sample of what was learned so the operator can sanity-check it.
+    sample = list(crosswalk.items())[:12]
+    if sample:
+        print("  Sample console→set mappings:")
+        for cn, sk in sample:
+            print(f"    {cn[:40]:<40} → {sk}")
+
+    cat_rows = load_catalog(args.tcg, _idp)
+    print(f"\n  {len(cat_rows):,} catalog rows in scope (missing pricecharting_id).")
+    if not cat_rows:
+        print("Nothing to do — every in-scope row already has an id.")
+        return 100.0
+
+    n_setnum = n_namenum = n_nomatch = 0
+    refusals = Counter()
+    write_jobs = []
+    match_samples = []
+    for row in cat_rows:
+        entry, source = match_row_strict(row, by_fc_num, by_namenum, inv)
+        if not entry:
+            n_nomatch += 1
+            refusals[source] += 1
+            continue
+        if source == "namenum":
+            n_namenum += 1
+        else:
+            n_setnum += 1
+        if len(match_samples) < 25:
+            match_samples.append((row, entry, source))
+        if not args.dry_run:
+            write_jobs.append((row["id"], entry["pc_id"]))
+
+    matched = n_setnum + n_namenum
+    # Always show sample matches — this is what the operator eyeballs before committing.
+    if match_samples:
+        print("\n  Sample matches (catalog → PriceCharting):")
+        for row, entry, source in match_samples:
+            print(f"    {str(row.get('id'))[:16]:<16} {str(row.get('name'))[:20]:<20} "
+                  f"[{row.get('set_code')}] → pc {entry['pc_id']:<9} {str(entry['console'])[:26]:<26} "
+                  f"{str(entry['name'])[:18]:<18} ({source})")
+
+    if args.dry_run:
+        print(f"\n  DRY-RUN — no writes. {matched:,} strict matches "
+              f"({n_setnum:,} by console+#, {n_namenum:,} by unique name+#).")
+    else:
+        WRITE_WORKERS = int(os.environ.get("SUPABASE_WRITE_WORKERS", "20"))
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        n_failed = 0
+        print(f"\n  Writing {len(write_jobs):,} pricecharting_id patches with {WRITE_WORKERS} workers…")
+        def _w(job):
+            rid, pcid = job
+            try:
+                patch_row(rid, {"pricecharting_id": pcid})
+                return None
+            except Exception as e:
+                return f"{rid}: {e}"
+        with ThreadPoolExecutor(max_workers=WRITE_WORKERS) as pool:
+            for err in pool.map(_w, write_jobs):
+                if err:
+                    n_failed += 1
+                    if n_failed <= 10:
+                        print(f"  FAIL {err}")
+        print(f"  Done. {len(write_jobs) - n_failed:,} written, {n_failed:,} failed.")
+
+    rate = matched / max(len(cat_rows), 1) * 100
+    print(f"\n  ─────────────────────────────────────────────────")
+    print(f"  matched by (set, #)      : {n_setnum:>7,}")
+    print(f"  matched by unique name+# : {n_namenum:>7,}")
+    print(f"  refused / no match       : {n_nomatch:>7,}")
+    for reason, cnt in refusals.most_common():
+        print(f"      · {reason:<18}: {cnt:>7,}")
+    print(f"\n  Strict match rate: {rate:.1f}%  (refused rows keep a NULL id — safe)")
+    return rate
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     ap = argparse.ArgumentParser(
@@ -839,6 +1121,16 @@ def main():
     ap.add_argument("--skip-prices", action="store_true",
                     help="Only write pricecharting_id — don't update current_value or "
                          "write a catalog_price_history snapshot.")
+    ap.add_argument("--strict", action="store_true",
+                    help="STRICT (set, card #) matching with a self-calibrating console→set "
+                         "crosswalk; refuses ambiguous matches. Writes pricecharting_id ONLY "
+                         "(never current_value — TCGplayer stays the price spine). Use this to "
+                         "re-link rows cleared by audit_pricecharting_ids.py --clear-bad.")
+    ap.add_argument("--id-prefix", default=None, metavar="PREFIX",
+                    help="Scope the catalog match to ids starting with PREFIX (e.g. 'jp-'). "
+                         "Use with the matching-language CSV: --category pokemon-japanese-cards "
+                         "--id-prefix jp- keeps English rows out of a JP-only run and stops "
+                         "EN/JP name collisions from polluting the crosswalk anchors.")
     ap.add_argument("--keep-downloads", action="store_true",
                     help="Keep downloaded category CSVs on disk after the run (default: delete). "
                          "Useful for re-runs without re-downloading.")
@@ -951,6 +1243,8 @@ def _run_ingest(paths, args):
     print(f"Loading {len(paths)} CSV file(s)…")
     for p in paths:
         print(f"  • {p}")
+    if getattr(args, "strict", False):
+        return _run_ingest_strict(paths, args)
     by_url, by_text, by_setnum, by_unique_num, csv_total = load_csv_index(paths)
     print(f"  Indexed {csv_total:,} CSV rows.")
     print(f"  by-setnum keys:    {len(by_setnum):,}   (set + card number — primary key)")
@@ -959,7 +1253,7 @@ def _run_ingest(paths, args):
 
     # ── Load catalog ──────────────────────────────────────────────────
     print(f"\nLoading catalog rows (game_type={args.tcg!r}) missing pricecharting_id…")
-    cat_rows = load_catalog(args.tcg)
+    cat_rows = load_catalog(args.tcg, getattr(args, "id_prefix", None))
     print(f"  {len(cat_rows):,} rows in scope.")
     if not cat_rows:
         print("Nothing to do. Every in-scope row already has an id.")

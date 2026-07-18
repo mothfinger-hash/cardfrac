@@ -2855,16 +2855,30 @@ function _loadAdmin(){
     async function _loadListingPriceHistory(listing) {
       var statusEl = document.getElementById('priceHistoryStatus_' + listing.id);
       try {
-        // Step 1: catalog lookup by name. Take the highest-priced hit
-        // when multiple variants share the name — same heuristic as
-        // openTradeCardDetail since "Charizard" might match dozens.
-        var cat = await sb.from('catalog')
-          .select('id, name, set_name, price_source_url, current_value')
-          .ilike('name', '%' + String(listing.name || '').replace(/[%_]/g, '') + '%')
-          .eq('game_type', 'pokemon')
-          .order('current_value', { ascending: false, nullsFirst: false })
-          .limit(1);
-        if (cat.error || !cat.data || !cat.data.length) {
+        // Step 1: resolve the catalog row. PREFER the exact api_card_id the
+        // listing carries — that's the card the seller actually listed. Only
+        // when it's absent (sealed / non-TCG / legacy pre-catalog-link
+        // listing) fall back to the old name-max guess, which can land on a
+        // same-named card from a different set and is the reason this chart
+        // used to disagree with the binder card-detail chart.
+        var catRow = null;
+        if (listing.apiCardId) {
+          var exact = await sb.from('catalog')
+            .select('id, name, set_name, price_source_url, current_value')
+            .eq('id', listing.apiCardId)
+            .maybeSingle();
+          catRow = exact.data || null;
+        }
+        if (!catRow) {
+          var cat = await sb.from('catalog')
+            .select('id, name, set_name, price_source_url, current_value')
+            .ilike('name', '%' + String(listing.name || '').replace(/[%_]/g, '') + '%')
+            .eq('game_type', 'pokemon')
+            .order('current_value', { ascending: false, nullsFirst: false })
+            .limit(1);
+          catRow = (cat.data && cat.data[0]) || null;
+        }
+        if (!catRow) {
           if (statusEl) statusEl.textContent = 'No catalog match — chart unavailable';
           // Fall back to whatever the listing has stored locally
           if (listing.priceHistory && listing.priceHistory.length >= 2) {
@@ -2872,9 +2886,9 @@ function _loadAdmin(){
           }
           return;
         }
-        var catalogId = cat.data[0].id;
+        var catalogId = catRow.id;
         // Stash the URL on the listing so the comps renderer can use it
-        listing._catalogPriceSourceUrl = cat.data[0].price_source_url || null;
+        listing._catalogPriceSourceUrl = catRow.price_source_url || null;
         listing._catalogId = catalogId;
 
         // Step 2: pull the last 30 days of history snapshots
@@ -2893,7 +2907,7 @@ function _loadAdmin(){
         var formatted = hist.data.map(function(r) {
           return { date: String(r.recorded_at).slice(0, 10), price: Number(r.recorded_value) || 0 };
         });
-        if (statusEl) statusEl.textContent = formatted.length + ' days · ' + cat.data[0].set_name;
+        if (statusEl) statusEl.textContent = formatted.length + ' days · ' + catRow.set_name;
         drawPriceChart(listing.id, formatted);
         // Refresh comps now that we have the catalog URL
         _renderListingPriceComps(listing);
@@ -2932,17 +2946,37 @@ function _loadAdmin(){
     function _renderListingPriceComps(listing) {
       var compsEl = document.getElementById('priceComps_' + listing.id);
       if (!compsEl) return;
-      var pcUrl = listing._catalogPriceSourceUrl || listing.priceSourceUrl || '';
       var name = String(listing.name || '').trim();
-      var tcgUrl = tcgAffiliateUrl('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(name), 'listing-comps');
       var ebayUrl = 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(name) + '&_sacat=183454'; // Trading Card Singles category
-
       var btnStyle = 'padding:8px 12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:Space Mono,monospace;font-size:.7rem;text-decoration:none;letter-spacing:.05em;display:inline-flex;align-items:center;gap:6px;transition:border-color .12s,color .12s';
+      var ebayBtn = '<a href="' + ebayUrl + '" target="_blank" rel="noopener" style="' + btnStyle + '" onmouseover="this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--text)\'">eBay ↗</a>';
+
+      // FOOLPROOF PATH — when the listing links to an exact catalog row,
+      // render the SAME PriceCharting + TCGplayer block the binder/store
+      // card detail shows, resolved by exact api_card_id (correct PC id +
+      // exact TCGplayer product URL), not a name guess. This is what makes
+      // the marketplace comps match card detail instead of "differing
+      // entirely." eBay stays a name search — it has no per-card product id.
+      if (listing.apiCardId) {
+        _loadExtraPricesByCatalogId(listing.apiCardId, listing.variant || 'normal')
+          .then(function (extras) {
+            var el = document.getElementById('priceComps_' + listing.id);
+            if (!el) return;
+            el.innerHTML = _buildExtrasHtml(extras, null, name)
+              + '<div style="margin-top:8px">' + ebayBtn + '</div>';
+          })
+          .catch(function () { /* leave whatever was rendered */ });
+        return;
+      }
+
+      // FALLBACK — sealed / non-TCG / legacy listing with no catalog link.
+      // Honest name searches only; there is no exact product to point at.
+      var pcUrl = listing._catalogPriceSourceUrl || listing.priceSourceUrl || '';
+      var tcgUrl = tcgAffiliateUrl('https://www.tcgplayer.com/search/all/product?q=' + encodeURIComponent(name), 'listing-comps');
       var pcBtn = pcUrl
         ? '<a href="' + pcUrl + '" target="_blank" rel="noopener" style="' + btnStyle + ';border-color:var(--copper-dim);color:var(--copper)" onmouseover="this.style.borderColor=\'var(--copper)\'" onmouseout="this.style.borderColor=\'var(--copper-dim)\'">PriceCharting ↗</a>'
         : '<span style="' + btnStyle + ';opacity:.4">PriceCharting (no link)</span>';
       var tcgBtn = '<a href="' + tcgUrl + '" target="_blank" rel="noopener" style="' + btnStyle + ';border-color:var(--accent);color:var(--accent)" onmouseover="this.style.borderColor=\'var(--accent2)\';this.style.color=\'var(--accent2)\'" onmouseout="this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'">TCGplayer ↗</a>';
-      var ebayBtn = '<a href="' + ebayUrl + '" target="_blank" rel="noopener" style="' + btnStyle + '" onmouseover="this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--text)\'">eBay ↗</a>';
 
       compsEl.innerHTML = pcBtn + tcgBtn + ebayBtn;
     }
@@ -17896,25 +17930,32 @@ function _loadAdmin(){
         if (!catRow && !cps.length) return null;
         const result = { catalog_id: catalogId, pricecharting: null, tcgplayer: null,
                          tcgplayer_url: (catRow && catRow.tcgplayer_url) || null };
-        if (catRow && catRow.current_value && Number(catRow.current_value) > 0) {
-          const pcUrl = catRow.price_source_url
-            || (catRow.pricecharting_id
-                  ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(catRow.pricecharting_id)
-                  : null);
-          result.pricecharting = { value: Number(catRow.current_value), source_url: pcUrl };
-        }
+        // PriceCharting LINK is always available if we have any PC pointer,
+        // but the VALUE comes ONLY from a real PriceCharting card_price
+        // (source='pricecharting'), never from current_value. current_value is
+        // the card's canonical market value — sourced from TCGplayer after the
+        // reseat — so borrowing it for the PriceCharting row would misattribute
+        // a TCG number as a PC number. Missing PC price -> link-only row.
+        const pcLink = (catRow && catRow.price_source_url)
+          || (catRow && catRow.pricecharting_id
+                ? 'https://www.pricecharting.com/offers?product=' + encodeURIComponent(catRow.pricecharting_id)
+                : null);
         // Collect every tcgplayer* finish; pick the one matching the owned
         // variant for display, falling back to the base price.
         const tcgMap = {};
+        let pcPrice = null, pcPriceUrl = null;
         cps.forEach(function(r) {
           const val = Number(r.value);
           if (!(val > 0)) return;
           if (String(r.source).indexOf('tcgplayer') === 0) {
             tcgMap[r.source] = { value: val, source_url: r.source_url || null, recorded_at: r.recorded_at };
-          } else if (r.source === 'pricecharting' && !result.pricecharting) {
-            result.pricecharting = { value: val, source_url: r.source_url || null, recorded_at: r.recorded_at };
+          } else if (r.source === 'pricecharting' && pcPrice == null) {
+            pcPrice = val; pcPriceUrl = r.source_url || null;
           }
         });
+        if (pcPrice != null || pcLink) {
+          result.pricecharting = { value: pcPrice, source_url: pcPriceUrl || pcLink };
+        }
         const VARIANT_SOURCE = {
           reverse_holo:       'tcgplayer_reverse_holo',
           holo:               'tcgplayer_holo',
@@ -23436,14 +23477,23 @@ function _loadAdmin(){
       // exact catalog row, with the price from ITS pricecharting_id). Listings
       // with no api_card_id (sealed, or pre-link legacy rows) get no comp —
       // better to show nothing than a wrong number.
+      // The in-memory `listings` are mapListing() output, so the exact-card
+      // link is `apiCardId` (camelCase). Reading the raw column name
+      // `api_card_id` here — as the first version of this function did —
+      // matched nothing, silently emptied `needs`, and left market_price
+      // unset, which is what made the "+/- % vs market" badge disappear.
+      // Read the mapped field; keep the raw name as a fallback in case a
+      // caller ever passes unmapped rows.
+      const _aid = l => l.apiCardId || l.api_card_id || null;
+      const _DEAD = new Set(['sold','inactive','cancelled','canceled','refunded','disputed','removed']);
       const needs = listings.filter(l =>
         !(l.market_price || l.marketPrice) &&
-        l.api_card_id &&
-        (l.status === 'active' || l.status === 'available')
+        _aid(l) &&
+        !_DEAD.has(String(l.status || '').toLowerCase())
       );
       if (!needs.length) return;
 
-      const uniqIds = [...new Set(needs.map(l => l.api_card_id).filter(Boolean))];
+      const uniqIds = [...new Set(needs.map(_aid).filter(Boolean))];
       const priceById = new Map();   // catalog id → number
 
       const CHUNK = 80;   // short ids; keep under PostgREST URL limits
@@ -23467,7 +23517,7 @@ function _loadAdmin(){
       // newly-populated market_price appears in the browse grid.
       let any = false;
       for (const l of needs) {
-        const v = priceById.get(l.api_card_id);
+        const v = priceById.get(_aid(l));
         if (v) { l.market_price = v; l.marketPrice = v; any = true; }
       }
       if (any && typeof renderBrowse === 'function') {
@@ -23514,6 +23564,12 @@ function _loadAdmin(){
         type: l.card_type || '',
         gameType: l.game_type || 'Other',
         set_name: l.set_name || '',
+        // Exact catalog link — the FOOLPROOF key. When present, price
+        // comps + history resolve by this id (same path as binder/store
+        // card detail) instead of a name-max guess, so the two surfaces
+        // can never show different PC/TCG links for the same card.
+        apiCardId: l.api_card_id || null,
+        variant: l.variant || 'normal',
         value: l.value,
         list_price: l.list_price || l.value || 0,
         condition: l.condition || 'NM',

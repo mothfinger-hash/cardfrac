@@ -608,11 +608,22 @@ def process_row(row, dry_run=False, force_scrape=False):
     # pricecharting_id we extracted from a sealed row id, so the column
     # is populated for future runs (eliminates the re-extract step and
     # speeds up the next nightly).
-    patch = {"current_value": price}
+    #
+    # TCGplayer is the authoritative price spine (migration_current_value_
+    # from_tcgplayer.sql). Rows stamped market_price_source='tcgplayer' must
+    # NOT have current_value overwritten by a PriceCharting number — doing so
+    # would silently undo the reseat every single night. We still record the
+    # PC history snapshot below (useful for movers/history) and still backfill
+    # a sealed pricecharting_id. Rows PC covers that TCG can't (promos / JP)
+    # have no such stamp, so they still refresh from PriceCharting as before.
+    patch = {}
+    if str(row.get("market_price_source") or "").lower() != "tcgplayer":
+        patch["current_value"] = price
     if is_sealed and not row.get("pricecharting_id") and pc_id:
         patch["pricecharting_id"] = pc_id
     try:
-        pg_patch_catalog(rid, patch)
+        if patch:
+            pg_patch_catalog(rid, patch)
     except Exception as e:
         # Don't bail — still try to log to history so we have at least one
         # data point even if catalog write hit a transient error.
