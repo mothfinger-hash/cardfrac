@@ -149,6 +149,11 @@ def main():
     ap.add_argument("--lang", default="EN", help="Pokemon language for id prefix (EN/JA)")
     ap.add_argument("--limit", type=int, default=0, help="cap cards (testing)")
     ap.add_argument("--commit", action="store_true", help="actually write (default: dry-run)")
+    ap.add_argument("--sealed", action="store_true",
+                    help="Import the SEALED products (booster boxes, ETBs, blisters) this group "
+                         "carries instead of the singles. Rows get id sealed-<prefix>-tcg-<pid>, "
+                         "product_type via detect_product_type, set_name matching the singles so the "
+                         "Sets-page sealed toggle finds them. Run once for singles, once with --sealed.")
     args = ap.parse_args()
 
     set_code = args.set_code.strip()
@@ -192,35 +197,90 @@ def main():
     collision_check(set_code, game_type, set_name)
 
     rows, skipped_sealed, skipped_nonum = [], 0, 0
-    for p in prods:
-        if args.limit and len(rows) >= args.limit:
-            break
-        if not tc.is_card_product(p):
-            skipped_sealed += 1
-            continue
-        num = card_number_raw(p)
-        if not num:
-            skipped_nonum += 1
-            continue
-        cat_id = f"{prefix}-{set_code.lower()}-{num}"
-        row = {
-            "id":                   cat_id,
-            "game_type":            game_type,
-            "set_code":             set_code,
-            "set_name":             set_name,
-            "card_number":          num,
-            "product_type":         "single",
-            "tcgplayer_product_id": p["productId"],
-        }
-        name = (p.get("cleanName") or p.get("name") or "").strip()
-        img  = upgrade_image(p.get("imageUrl"))
-        rar  = card_rarity(p)
-        url  = p.get("url")
-        if name: row["name"] = name
-        if img:  row["image_url"] = img
-        if rar:  row["rarity"] = rar
-        if url:  row["tcgplayer_url"] = url
-        rows.append(row)
+    if args.sealed:
+        # SEALED mode: create the sealed-product rows the singles importer skips
+        # (booster boxes, ETBs, blisters, bundles) from the SAME tcgcsv group.
+        # These are keyed by tcgplayer product id (this set isn't on PriceCharting
+        # yet, so there's no pricecharting_id) and matched to the set on the Sets
+        # page by set_name — so set_name MUST equal the singles' set_name.
+        from sync_sealed_products import detect_product_type
+        # Prices: prefer the 'Normal' subtype's marketPrice per product.
+        prices = {}
+        try:
+            for pr in tc.tcg_get(f"/tcgplayer/{category_id}/{args.group}/prices").get("results", []):
+                pid = pr.get("productId")
+                mp  = pr.get("marketPrice") or pr.get("midPrice")
+                if pid and mp and (pid not in prices or pr.get("subTypeName") == "Normal"):
+                    prices[pid] = mp
+        except Exception as e:
+            print(f"  ! price fetch failed (rows will have no value): {e}")
+        for p in prods:
+            if args.limit and len(rows) >= args.limit:
+                break
+            if tc.is_card_product(p):        # skip the singles
+                continue
+            # Prefer the RAW name for sealed — the bracketed variant ([Gengar
+            # Line], [Target Exclusive]) distinguishes otherwise-identical
+            # blisters and is stripped from cleanName.
+            name = (p.get("name") or p.get("cleanName") or "").strip()
+            # Digital redemption codes are not sealed product.
+            if not name or name.lower().startswith("code card"):
+                skipped_nonum += 1
+                continue
+            ptype, _is = detect_product_type(name)
+            # A non-card that still classifies as 'single' is an unrecognized
+            # sealed shape — never store it as a single (it would vanish from the
+            # sealed view, which filters product_type <> 'single').
+            if ptype == "single":
+                ptype = "blister" if "blister" in name.lower() else "sealed_other"
+            pid    = p["productId"]
+            cat_id = f"sealed-{prefix}-tcg-{pid}"
+            # Every row MUST carry the identical key set — PostgREST bulk insert
+            # rejects a batch with "All object keys must match" (PGRST102) if one
+            # row omits a column another has. So the optional fields are always
+            # present, null when absent (some new-set products have no price yet).
+            row = {
+                "id":                   cat_id,
+                "game_type":            game_type,
+                "set_code":             set_code,
+                "set_name":             set_name,
+                "product_type":         ptype,
+                "tcgplayer_product_id": pid,
+                "name":                 name or None,
+                "image_url":            upgrade_image(p.get("imageUrl")) or None,
+                "tcgplayer_url":        p.get("url") or None,
+                "current_value":        prices.get(pid),
+            }
+            rows.append(row)
+    else:
+        for p in prods:
+            if args.limit and len(rows) >= args.limit:
+                break
+            if not tc.is_card_product(p):
+                skipped_sealed += 1
+                continue
+            num = card_number_raw(p)
+            if not num:
+                skipped_nonum += 1
+                continue
+            cat_id = f"{prefix}-{set_code.lower()}-{num}"
+            # Uniform key set across every row — a batch where one row omits a
+            # column another has trips PostgREST's PGRST102 "All object keys
+            # must match". Optional fields are always present, null when absent.
+            row = {
+                "id":                   cat_id,
+                "game_type":            game_type,
+                "set_code":             set_code,
+                "set_name":             set_name,
+                "card_number":          num,
+                "product_type":         "single",
+                "tcgplayer_product_id": p["productId"],
+                "name":                 (p.get("cleanName") or p.get("name") or "").strip() or None,
+                "image_url":            upgrade_image(p.get("imageUrl")) or None,
+                "rarity":               card_rarity(p) or None,
+                "tcgplayer_url":        p.get("url") or None,
+            }
+            rows.append(row)
 
     # Dedupe by catalog id. MTG (and some other games) ship multiple products
     # that share one collector number — borderless / extended-art / showcase /

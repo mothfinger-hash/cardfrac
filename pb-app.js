@@ -19764,6 +19764,10 @@ function _loadAdmin(){
         // Flag so downstream code can tell where this came from
         _source: 'catalog',
         _gameType: r.game_type || 'pokemon',
+        // Carried so the set-detail completion bar can count Reverse Holo slots
+        // for catalog-sourced sets (tcgcsv imports like ME05 that have no live
+        // pokemontcg.io prices). Populated by sync_tcgplayer_via_free_apis.py.
+        has_reverse_holo: !!r.has_reverse_holo,
       };
     }
 
@@ -20128,7 +20132,7 @@ function _loadAdmin(){
         if (cards.length === 0) {
           try {
             const { data: direct, error: directErr } = await sb.from('catalog')
-              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
               .or(_pokemonENOrFilter())
               .ilike('name', '%' + query + '%')
               .limit(1000);
@@ -23423,35 +23427,37 @@ function _loadAdmin(){
 
     async function _enrichListingsWithMarketPrice() {
       if (!Array.isArray(listings) || !listings.length) return;
+      // FOOLPROOF LINK: a listing's market price comes from its EXACT card —
+      // catalog.id === listing.api_card_id — not from its name. The old code
+      // matched by name and took the MAX current_value across every printing
+      // sharing that name, so a $5 promo Squirtle showed the $1,262 Base Set
+      // Squirtle, a $3 Charmander showed $530, and both Riolus collapsed to the
+      // same number. A name is not a card's identity; api_card_id is (it's the
+      // exact catalog row, with the price from ITS pricecharting_id). Listings
+      // with no api_card_id (sealed, or pre-link legacy rows) get no comp —
+      // better to show nothing than a wrong number.
       const needs = listings.filter(l =>
         !(l.market_price || l.marketPrice) &&
-        l.name && (l.status === 'active' || l.status === 'available')
+        l.api_card_id &&
+        (l.status === 'active' || l.status === 'available')
       );
       if (!needs.length) return;
 
-      // Dedupe by lowercase name; chunk to avoid PostgREST URL limits.
-      const uniqNames = [...new Set(needs.map(l => l.name.trim()).filter(Boolean))];
-      const priceByName = new Map();   // lower-cased name → number
+      const uniqIds = [...new Set(needs.map(l => l.api_card_id).filter(Boolean))];
+      const priceById = new Map();   // catalog id → number
 
-      const CHUNK = 50;
-      for (let i = 0; i < uniqNames.length; i += CHUNK) {
-        const slice = uniqNames.slice(i, i + CHUNK);
+      const CHUNK = 80;   // short ids; keep under PostgREST URL limits
+      for (let i = 0; i < uniqIds.length; i += CHUNK) {
+        const slice = uniqIds.slice(i, i + CHUNK);
         try {
           const { data } = await sb.from('catalog')
-            .select('name, current_value, game_type')
-            .in('name', slice)
-            .not('current_value', 'is', null)
-            .eq('product_type', 'single');
+            .select('id, current_value')
+            .in('id', slice)
+            .not('current_value', 'is', null);
           if (data) {
             for (const row of data) {
-              const k = (row.name || '').toLowerCase().trim();
-              // Keep the highest current_value when multiple catalog rows
-              // share a name (e.g. en + jp version) — buyers care about
-              // the typical market high for comp purposes.
               const v = Number(row.current_value || 0);
-              if (!v) continue;
-              const prev = priceByName.get(k) || 0;
-              if (v > prev) priceByName.set(k, v);
+              if (v > 0) priceById.set(row.id, v);
             }
           }
         } catch(_) { /* keep going on transient errors */ }
@@ -23461,8 +23467,7 @@ function _loadAdmin(){
       // newly-populated market_price appears in the browse grid.
       let any = false;
       for (const l of needs) {
-        const k = (l.name || '').toLowerCase().trim();
-        const v = priceByName.get(k);
+        const v = priceById.get(l.api_card_id);
         if (v) { l.market_price = v; l.marketPrice = v; any = true; }
       }
       if (any && typeof renderBrowse === 'function') {
@@ -25169,7 +25174,7 @@ function _loadAdmin(){
     async function _pbSearchCatalogBySetCode(codeVariants, idPrefix, limit) {
       if (!codeVariants || !codeVariants.length) return [];
       var query = sb.from('catalog')
-        .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+        .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
         .in('card_number', codeVariants)
         .limit(limit || 1000);
       if (idPrefix) query = query.ilike('id', idPrefix + '%');
@@ -25180,7 +25185,7 @@ function _loadAdmin(){
       var variants = _pbCardNumberVariants(numSpec);
       if (!variants.length) return [];
       var query = sb.from('catalog')
-        .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+        .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
         .in('card_number', variants)
         .limit(limit || 1000);
       if (idPrefix) query = query.ilike('id', idPrefix + '%');
@@ -25233,7 +25238,7 @@ function _loadAdmin(){
           // populated per row.
           if (!cards.length) try {
             var directQuery = sb.from('catalog')
-              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
               .ilike('name', '%' + q + '%')
               .limit(1000);
             if (idPrefix) directQuery = directQuery.ilike('id', idPrefix + '%');
@@ -25275,7 +25280,7 @@ function _loadAdmin(){
           // back to pokemontcg.io if the catalog returns nothing.
           try {
             var pkRpc = await sb.from('catalog')
-              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+              .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
               .or(_pokemonENOrFilter())
               .ilike('name', '%' + q + '%')
               .limit(1000);
@@ -28494,22 +28499,23 @@ function _loadAdmin(){
       if (_setsBackgroundRefreshInflight) return;
       _setsBackgroundRefreshInflight = true;
       try {
-        // Snapshot what the user is currently seeing so we can tell whether the
-        // server's set list actually changed (a new release landed).
-        var prevIds = new Set(((_setsCache && _setsCache.sets) || []).map(function (s) { return String(s.id); }));
+        // Snapshot the ORDERED id sequence the user is currently seeing, so we
+        // can tell whether the server's list changed in ANY way — a set added,
+        // removed, OR reordered (e.g. a new release that should jump to the top
+        // but was cached mid-list under a since-corrected release_date).
+        var prevKey = ((_setsCache && _setsCache.sets) || []).map(function (s) { return String(s.id); }).join(',');
         var fresh = await _loadEnSetsFromDb();
         if (fresh && fresh.length) {
           var now = Date.now();
           try { localStorage.setItem(lsKey, JSON.stringify({ timestamp: now, sets: fresh })); } catch (_) {}
           _setsCache = { timestamp: now, sets: fresh };
           // Stale-while-revalidate only helps if we actually re-paint when the
-          // data moved. Without this, a set added on the backend sat in the
-          // refreshed cache but stayed invisible until the user's NEXT visit.
-          // Re-render only when a set is new/removed AND the EN Pokemon list is
-          // the active view — and only after _setsCache is warm, so the nested
-          // loadSetsPage serves the mem cache and can't re-trigger this refresh.
-          var changed = fresh.length !== prevIds.size ||
-                        fresh.some(function (s) { return !prevIds.has(String(s.id)); });
+          // data moved. Without this, a set added/reordered on the backend sat
+          // in the refreshed cache but stayed invisible until the user's NEXT
+          // visit. Compare the full ordered id list so a reorder repaints too.
+          // Only after _setsCache is warm, so the nested loadSetsPage serves the
+          // mem cache and can't re-trigger this refresh.
+          var changed = fresh.map(function (s) { return String(s.id); }).join(',') !== prevKey;
           if (changed && _setsLang === 'POKEMON' && _setsPokemonLang === 'EN' &&
               document.getElementById('setsPageContent')) {
             try { loadSetsPage(); } catch (_) {}
@@ -30044,6 +30050,49 @@ function _loadAdmin(){
       }
     }
 
+    // Renders the EN set-detail completion bar (Base + Reverse Holo). Pulled
+    // out of loadSetDetail so multi-add can refresh it in place — before this
+    // was inline, so adding cards left the counter frozen until a page reload.
+    function _setsDetailRenderProgress(cards, ownedMap) {
+      const progEl = document.getElementById('setsDetailProgress');
+      if (!progEl) return;
+      cards = cards || [];
+      ownedMap = ownedMap || {};
+      const ownedCount = cards.filter(c => ownedMap[c.id]).length;
+      // A card has a Reverse Holo printing if catalog.has_reverse_holo is set
+      // (populated by sync_tcgplayer_via_free_apis.py) OR pokemontcg.io's live
+      // tcgplayer.prices carries a reverseHolofoil entry. Catalog-sourced sets
+      // (tcgcsv imports like ME05, loaded via the set-name bridge) have no live
+      // prices, so the flag is the only signal for them.
+      const _hasRH = (c) => {
+        if (c && c.has_reverse_holo) return true;
+        const p = c && c.tcgplayer && c.tcgplayer.prices;
+        return !!(p && p.reverseHolofoil);
+      };
+      const rhCards = cards.filter(_hasRH);
+      const rhOwned = rhCards.filter(c => ownedMap[c.id] && ownedMap[c.id].reverse_holo).length;
+      const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
+      const barFill = pct >= 100
+        ? 'var(--green)'
+        : 'linear-gradient(90deg, var(--sets-teal), var(--ft-pink))';
+      const pctColor = pct >= 100 ? 'var(--green)'
+                      : pct >= 50 ? 'var(--ft-pink)'
+                      : 'var(--sets-teal)';
+      const barShadow = pct >= 100 ? '0 0 12px rgba(58,237,127,.45)' : 'none';
+      const rhLine = rhCards.length > 0
+        ? `<div style="font-size:.62rem;color:var(--muted);margin-top:3px">Reverse Holo: <strong style="color:var(--accent)">${rhOwned}</strong> / ${rhCards.length}</div>`
+        : '';
+      progEl.innerHTML = `
+        <div style="flex:1">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Base: <strong style="color:var(--text)">${ownedCount}</strong> / ${cards.length} cards owned</div>
+          <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden;border:1px solid var(--border)">
+            <div style="height:100%;width:${pct}%;background:${barFill};border-radius:4px;transition:width .5s;box-shadow:${barShadow}"></div>
+          </div>
+          ${rhLine}
+        </div>
+        <div style="font-size:1.4rem;font-weight:700;color:${pctColor};flex-shrink:0">${pct}%</div>`;
+    }
+
     async function loadSetDetail(setId, setName) {
       const el = document.getElementById('setsPageContent');
       if (!el) return;
@@ -30119,14 +30168,14 @@ function _loadAdmin(){
               // ilike cost on every lookup.
               const setIdLower = (setId || '').toLowerCase();
               let { data: catRows } = await sb.from('catalog')
-                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
                 .or(_pokemonENOrFilter())
                 .eq('set_code', setIdLower)
                 .order('card_number', { ascending: true })
                 .limit(500);
               if (!catRows || !catRows.length) {
                 const fallback = await sb.from('catalog')
-                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
                   .or(_pokemonENOrFilter())
                   .ilike('set_code', setId)
                   .order('card_number', { ascending: true })
@@ -30183,7 +30232,7 @@ function _loadAdmin(){
               // Keep the EN filter: it stops a pd_code that collides with a
               // non-EN set_code (JP/CN/KR reuse short codes) from leaking in.
               const { data: pdRows } = await sb.from('catalog')
-                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type')
+                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, has_reverse_holo')
                 .or(_pokemonENOrFilter())
                 .eq('set_code', pdCode)
                 .order('card_number', { ascending: true })
@@ -30205,13 +30254,13 @@ function _loadAdmin(){
           if (!allCards.length && setName) {
             try {
               let { data: nameRows } = await sb.from('catalog')
-                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, product_type')
+                .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, product_type, has_reverse_holo')
                 .eq('set_name', setName)
                 .order('card_number', { ascending: true })
                 .limit(800);
               if (!nameRows || !nameRows.length) {
                 const ni = await sb.from('catalog')
-                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, product_type')
+                  .select('id, name, card_number, rarity, set_code, set_name, image_url, game_type, product_type, has_reverse_holo')
                   .ilike('set_name', setName)
                   .order('card_number', { ascending: true })
                   .limit(800);
@@ -30354,54 +30403,9 @@ function _loadAdmin(){
         _setsOwnedFirst  = false;
 
         // ── Phase 3: swap ONLY the cards list + progress block ────
-        const ownedCount = cards.filter(c => ownedMap[c.id]).length;
-        // Reverse-holo set-completion math. A card has an RH variant if
-        // pokemontcg.io's tcgplayer.prices includes a reverseHolofoil
-        // entry (we mirror this into catalog.has_reverse_holo via the
-        // sync, but the EN path reads pokemontcg.io live so we can
-        // detect it without a DB roundtrip). Owned count = cards where
-        // the user has a collection_items row with variant='reverse_holo'.
-        const _hasRH = (c) => {
-          const p = c && c.tcgplayer && c.tcgplayer.prices;
-          return !!(p && p.reverseHolofoil);
-        };
-        const rhCards = cards.filter(_hasRH);
-        const rhOwned = rhCards.filter(c => ownedMap[c.id] && ownedMap[c.id].reverse_holo).length;
-        const pct = cards.length > 0 ? Math.round((ownedCount / cards.length) * 100) : 0;
-        // Bar fill: teal→magenta gradient at every percent < 100, solid
-        // green (with glow) at completion. Ties teal + magenta — the
-        // two anchors of the sets palette — into one continuous gauge.
-        const barFill = pct >= 100
-          ? 'var(--green)'
-          : 'linear-gradient(90deg, var(--sets-teal), var(--ft-pink))';
-        // Percent text color picks whichever anchor is "winning" — teal
-        // under 50%, magenta over 50%, green at 100%.
-        const pctColor = pct >= 100 ? 'var(--green)'
-                        : pct >= 50 ? 'var(--ft-pink)'
-                        : 'var(--sets-teal)';
-        const barShadow = pct >= 100 ? '0 0 12px rgba(58,237,127,.45)' : 'none';
-
         const jpSub = document.getElementById('setsDetailJpSub');
         if (jpSub) jpSub.textContent = `セット ・ ${cards.length} カード`;
-
-        const progEl = document.getElementById('setsDetailProgress');
-        if (progEl) {
-          // Split base vs reverse-holo so "master set" completion is
-          // visible at a glance. RH line only shows when the set has
-          // any reverse-holo printings to count.
-          const rhLine = rhCards.length > 0
-            ? `<div style="font-size:.62rem;color:var(--muted);margin-top:3px">Reverse Holo: <strong style="color:var(--accent)">${rhOwned}</strong> / ${rhCards.length}</div>`
-            : '';
-          progEl.innerHTML = `
-            <div style="flex:1">
-              <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Base: <strong style="color:var(--text)">${ownedCount}</strong> / ${cards.length} cards owned</div>
-              <div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden;border:1px solid var(--border)">
-                <div style="height:100%;width:${pct}%;background:${barFill};border-radius:4px;transition:width .5s;box-shadow:${barShadow}"></div>
-              </div>
-              ${rhLine}
-            </div>
-            <div style="font-size:1.4rem;font-weight:700;color:${pctColor};flex-shrink:0">${pct}%</div>`;
-        }
+        _setsDetailRenderProgress(cards, ownedMap);
 
         const listEl = document.getElementById('setsCardList');
         if (listEl) {
@@ -30636,6 +30640,9 @@ function _loadAdmin(){
           } else {
             grid.innerHTML = _buildSetCardRows(window._setsDetailCards, _setsDetailOwnedMap, _setsDetailSort, _setsOwnedFirst);
             if (typeof _attachSetsObserver === 'function') _attachSetsObserver();
+            // Refresh the completion bar in place — it was frozen at its
+            // page-load value before, so adding cards left it stuck (e.g. at 0).
+            try { _setsDetailRenderProgress(ctx.cards, ctx.owned); } catch (_) {}
           }
         }
       } catch (_) {}

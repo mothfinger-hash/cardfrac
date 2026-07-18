@@ -359,6 +359,13 @@ SEALED_PATTERNS = [
     ("booster bundle",               "booster_bundle"),
     ("display box",                  "booster_box"),
     ("half booster box",             "booster_box"),
+    ("sleeved booster",              "booster_pack"),
+
+    # — Retail blisters (checklane / 3-pack / single-pack — display-rack sealed).
+    # Without these, Pokemon blisters fall through to "single" and vanish from
+    # the sealed view. "blister" is a catch-all after the specific booster
+    # tokens above so a "Booster ... Blister" still classifies by its box/pack.
+    ("blister",                      "blister"),
 
     # — Bundles
     ("gift bundle",                  "gift_bundle"),
