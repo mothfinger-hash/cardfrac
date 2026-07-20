@@ -17934,12 +17934,27 @@ function _loadAdmin(){
         let points = [];
 
         if (item && item.api_card_id) {
-          const cph = await sb
+          // Mirror the marketplace chart's source discipline. For a TCGplayer-
+          // spine catalog row, plot ONLY the source='tcgplayer' series —
+          // otherwise old PriceCharting points splice into the new tcgplayer
+          // points and the % label reports that source switch as a fake price
+          // move (e.g. a sealed box's PC $5 line jumping to its TCG $12 level).
+          let _spine = false;
+          try {
+            const _cat = await sb.from('catalog')
+              .select('market_price_source')
+              .eq('id', item.api_card_id).limit(1);
+            _spine = !_cat.error && _cat.data && _cat.data[0]
+                     && String(_cat.data[0].market_price_source || '').toLowerCase() === 'tcgplayer';
+          } catch (_) {}
+          let _cphQ = sb
             .from('catalog_price_history')
             .select('recorded_at, recorded_value')
             .eq('catalog_id', item.api_card_id)
             .gte('recorded_at', ninetyAgo)
             .order('recorded_at', { ascending: true });
+          if (_spine) _cphQ = _cphQ.eq('source', 'tcgplayer');
+          const cph = await _cphQ;
           if (!cph.error && cph.data && cph.data.length >= 2) {
             points = cph.data.map(h => ({ date: h.recorded_at.slice(0, 10), value: Number(h.recorded_value) }));
           }

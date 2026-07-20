@@ -436,7 +436,11 @@ def load_catalog(game_type, id_prefix=None):
     Japanese CSV against only jp- rows so English rows aren't processed
     against a JP-only CSV."""
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog"
-    select = "id,name,set_name,set_code,game_type,price_source_url"
+    # market_price_source lets _do_write leave TCGplayer-spine rows' price +
+    # history alone (the spine's snapshot owns them; a same-day pricecharting_csv
+    # history write would clobber the tcgplayer point on the source-less
+    # UNIQUE(catalog_id, recorded_at) key). We still backfill their pc_id.
+    select = "id,name,set_name,set_code,game_type,price_source_url,market_price_source"
     flt = "pricecharting_id=is.null"
     if game_type and game_type != "all":
         flt += f"&game_type=eq.{game_type}"
@@ -1334,7 +1338,10 @@ def _run_ingest(paths, args):
             row, matched, source = job
             rid = row["id"]
             payload = {"pricecharting_id": matched["pc_id"]}
-            write_price = (not args.skip_prices) and (matched["price"] is not None)
+            # TCGplayer-spine rows keep their current_value + tcgplayer history;
+            # only backfill the pc_id cross-reference for them, never a price.
+            tcg_spine = str(row.get("market_price_source") or "").lower() == "tcgplayer"
+            write_price = (not args.skip_prices) and (matched["price"] is not None) and not tcg_spine
             if write_price:
                 payload["current_value"] = matched["price"]
             try:

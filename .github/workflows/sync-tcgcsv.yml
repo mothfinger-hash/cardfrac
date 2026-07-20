@@ -4,8 +4,11 @@ name: Sync TCGCSV (TCGplayer product links)
 # (tcgcsv.com — a once-daily cache of TCGplayer's own API). New sets and
 # cards get linked as they appear upstream.
 #
-# Phase 1 today: product IDs + URLs only (no price writes). When pricing
-# (Phase 2) is added to sync_tcgcsv.py, this same workflow carries it.
+# Phase 1: product IDs + URLs from sync_tcgcsv.py.
+# Phase 2 (sealed pricing): sync_sealed_prices_tcgcsv.py feeds
+# card_prices(source='tcgplayer') for sealed rows, then reseat_tcgplayer.py
+# reseats current_value + snapshots catalog_price_history for the whole
+# TCGplayer spine (singles + sealed). Both steps run after the sync below.
 #
 # Etiquette is enforced in the script (custom User-Agent, 100ms spacing,
 # and a last-updated.txt guard that no-ops when TCGCSV hasn't rebuilt).
@@ -100,3 +103,34 @@ jobs:
         run: |
           # -u forces unbuffered stdout/stderr so progress streams live.
           python3 -u sync_tcgcsv.py ${{ steps.args.outputs.value }}
+
+      # Phase 2 — sealed pricing. Sealed rows (product_type != single) carry a
+      # tcgplayer_product_id but no card_prices feed, so their price freezes at
+      # import time. Re-pull each one's current tcgcsv market price by product id
+      # and upsert card_prices(source='tcgplayer'). Maps by unique product id
+      # (Pokemon EN cat 3 + JP cat 85), so coverage is complete, not set-name-
+      # dependent. Writes ONLY card_prices — reseat (below) owns current_value.
+      - name: Refresh sealed prices from TCGCSV
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 -u sync_sealed_prices_tcgcsv.py --categories 3,85 --commit
+
+      # Finalize the whole TCGplayer spine (singles + sealed — both RPCs are
+      # product_type-agnostic): reseat card_prices(source='tcgplayer') into
+      # catalog.current_value, then snapshot today's value into
+      # catalog_price_history (source='tcgplayer'). Runs LAST, after every
+      # card_prices writer (08:00 free-API singles + 09:00 tcgcsv + the sealed
+      # step above). if: always() so history still gets a daily point when the
+      # tcgcsv last-updated guard no-ops the sync step.
+      # PREREQ: reseat_tcgplayer_batch + snapshot_tcgplayer_history_batch must
+      # exist in the DB (SQL Migrations/migration_current_value_from_tcgplayer.sql).
+      - name: Reseat + snapshot TCGplayer spine
+        if: ${{ always() && github.event.inputs.dry_run != 'true' }}
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 -u reseat_tcgplayer.py --batch 20000
