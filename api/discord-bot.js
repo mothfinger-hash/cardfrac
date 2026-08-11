@@ -1037,6 +1037,7 @@ async function handleMovers(interaction) {
         // movers and they make up ~80% of the catalog scan.
         // Drops RPC time from ~1.2s to ~200ms per game.
         p_min_value:    1.0,
+        p_max_pct:      500,   // drop cross-source / collided fabrications (+99,000%)
       };
       console.log(`[discord-bot] /movers RPC call (${gt}):`, JSON.stringify(params));
       return _withTimeout(sb.rpc('get_global_price_movers', params), RPC_TIMEOUT_MS, gt).then(r => {

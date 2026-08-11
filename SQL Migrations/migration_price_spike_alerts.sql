@@ -32,12 +32,31 @@ create policy spike_notif_owner_read on public.price_spike_notifications
 -- 3) Detector RPC. For every owned (non-ghost, in-stock) catalog card held by
 --    an opted-in user with a push token, compare the current catalog price to
 --    the latest snapshot at/before (now - p_days_back). Returns cards up by at
---    least p_min_pct and worth at least p_min_value. The cron groups by user,
---    dedups, and sends one push each.
+--    least p_min_pct, worth at least p_min_value, and (when p_max_pct is set)
+--    up by NO MORE than p_max_pct. The cron groups by user, dedups, sends one
+--    push each.
+--
+-- SOURCE-CONSISTENCY (critical): current_value and catalog_price_history can be
+-- fed by DIFFERENT price sources. After the TCGplayer-spine reseat, ~162k rows'
+-- current_value is a TCGplayer price while their only recent history points are
+-- PriceCharting ('pricecharting*'). Comparing a TCG current against a stale /
+-- collided PC baseline fabricates enormous fake spikes (a $0.40 PC point vs a
+-- $399 TCG value = +99,000%), which re-fire daily because the frozen PC point
+-- is always >= 1 day old and never ages out. So a card on the TCGplayer spine
+-- MUST baseline only against source='tcgplayer' history; non-spine cards keep
+-- using whatever (PriceCharting) history they have. Mirrors the app's chart
+-- read path, which filters source='tcgplayer' for market_price_source='tcgplayer'.
+--
+-- p_max_pct is an optional sanity ceiling: even within one source a bad/collided
+-- link can jump wildly day-over-day; a physically-implausible 24h move (e.g.
+-- > 500%) is almost always a data artifact, not a real spike, and a push is too
+-- intrusive to fire on it. NULL = no ceiling.
+drop function if exists public.get_owned_card_spikes(numeric, numeric, int);
 create or replace function public.get_owned_card_spikes(
   p_min_pct   numeric default 20,
   p_min_value numeric default 10,
-  p_days_back int     default 1
+  p_days_back int     default 1,
+  p_max_pct   numeric default null
 )
 returns table (
   user_id       uuid,
@@ -70,6 +89,11 @@ as $$
          from public.catalog_price_history h
         where h.catalog_id = o.api_card_id
           and h.recorded_at <= (now() - make_interval(days => p_days_back))
+          -- Baseline against the SAME source as current_value: TCGplayer-spine
+          -- rows only see source='tcgplayer' history; everything else (NULL /
+          -- pricecharting market_price_source) sees any history it has.
+          and (c.market_price_source is distinct from 'tcgplayer'
+               or h.source = 'tcgplayer')
         order by h.recorded_at desc
         limit 1)      as old_val
     from owned o
@@ -84,7 +108,8 @@ as $$
   where old_val is not null and old_val > 0
     and cur >= p_min_value
     and ((cur - old_val) / old_val) * 100 >= p_min_pct
+    and (p_max_pct is null or ((cur - old_val) / old_val) * 100 <= p_max_pct)
   order by user_id, delta_pct desc;
 $$;
 
-grant execute on function public.get_owned_card_spikes(numeric, numeric, int) to service_role;
+grant execute on function public.get_owned_card_spikes(numeric, numeric, int, numeric) to service_role;

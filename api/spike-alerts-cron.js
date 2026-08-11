@@ -1,11 +1,15 @@
 // api/spike-alerts-cron.js
 // Daily "your owned card spiked" push notification.
 //
-// Runs AFTER the nightly catalog price refresh (GitHub Action at 07:00 UTC,
-// which updates catalog.current_value + writes a daily catalog_price_history
-// snapshot). Detects owned cards that jumped via the get_owned_card_spikes RPC,
-// dedups against price_spike_notifications, and sends ONE push per opted-in
-// user via sendPushToUser (APNs on iOS, FCM on Android — same path as DMs).
+// Runs AFTER the nightly catalog price refresh. Detects owned cards that jumped
+// via the get_owned_card_spikes RPC, dedups against price_spike_notifications,
+// and sends ONE push per opted-in user via sendPushToUser (APNs on iOS, FCM on
+// Android — same path as DMs).
+//
+// NOTE: current_value and catalog_price_history may be fed by different sources
+// (TCGplayer spine vs PriceCharting). The RPC compares like-with-like by source
+// and caps at p_max_pct so a cross-source / collided baseline can't fire a fake
+// "+99,000%" spike. See migration_price_spike_alerts.sql.
 //
 // Requires migration_price_spike_alerts.sql.
 //
@@ -29,6 +33,10 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_K
 
 // Push is more intrusive than the in-app alert, so the bar is higher.
 const MIN_PCT        = 20;   // owned card must be up >= 20%
+const MAX_PCT        = 500;  // ...but NOT more than 500% in 24h — a bigger move
+                             // is almost always a data artifact (cross-source
+                             // baseline / collided price link), not a real
+                             // spike, and a push is too intrusive to fire on it.
 const MIN_VALUE      = 10;   // ...and worth >= $10 (skip penny-common noise)
 const DAYS_BACK      = 1;    // 24h move ("just spiked")
 const DEDUP_DAYS     = 7;    // don't re-notify the same card within 7 days...
@@ -46,7 +54,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const { data: spikes, error } = await sb.rpc('get_owned_card_spikes', {
-      p_min_pct: MIN_PCT, p_min_value: MIN_VALUE, p_days_back: DAYS_BACK,
+      p_min_pct: MIN_PCT, p_min_value: MIN_VALUE, p_days_back: DAYS_BACK, p_max_pct: MAX_PCT,
     });
     if (error) {
       console.error('[spike-cron] RPC error', error.message);

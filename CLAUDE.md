@@ -575,12 +575,28 @@ long, leaving Discord stuck on "thinking…" forever.
 `Promise.all` so one slow game can't block the others. Tunable via
 the `MOVERS_RPC_TIMEOUT_MS` env var.
 
-**Movers RPC scaling.** `get_global_price_movers` v8 takes
-`p_min_value` (defaults to `1.0`) — skips catalog rows under $X
-before the LATERAL join into `catalog_price_history`. Drops scan
-work from ~42K rows to ~5-8K and execution time from ~4.7s to
-~380ms. The website's call sites can override with `p_min_value:
-0` to include cheap commons; the bot keeps the default.
+**Movers RPC scaling.** `get_global_price_movers` (v10 is current —
+`migration_global_price_movers_v10.sql`) takes `p_min_value`
+(defaults to `1.0`) — skips catalog rows under $X before the LATERAL
+join into `catalog_price_history`. Drops scan work from ~42K rows to
+~5-8K and execution time from ~4.7s to ~380ms. All call sites (bot +
+website) currently use the `1.0` default; `p_min_value: 0` (all cheap
+commons) times out on the ~42K-row Pokemon scan, so don't set it
+without an index/limit rethink.
+
+**Movers RPC — source-consistency (v10).** current_value and
+`catalog_price_history` can be fed by DIFFERENT sources (TCGplayer
+spine vs PriceCharting). v10 baselines a `market_price_source=
+'tcgplayer'` row ONLY against `source='tcgplayer'` history (spine
+cards drop out until the daily snapshot accrues points) and takes a
+`p_max_pct` sanity cap (all callers pass `500`). This kills the
+cross-source fake movers (a TCG current ÷ a stale PC baseline once
+produced +559,868% One Piece "movers"). Same fix shape as
+`get_owned_card_spikes` in `migration_price_spike_alerts.sql` and the
+app's chart/movers read paths (which filter `source='tcgplayer'` for
+spine cards). Any NEW surface that deltas current_value against
+`catalog_price_history` MUST apply the same source filter, or it will
+splice sources and fabricate spikes.
 
 ## Push notifications & scheduled jobs
 

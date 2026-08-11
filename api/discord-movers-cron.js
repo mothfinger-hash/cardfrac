@@ -46,6 +46,7 @@ async function getMovers(days) {
       p_sort:         'pct',
       p_product_type: 'single',
       p_min_value:    1.0,
+      p_max_pct:      500,   // drop cross-source / collided fabrications (+99,000%)
     }).then((r) => (Array.isArray(r.data) ? r.data : []).map((x) => ({ ...x, _game: gt })))
   ));
   const merged = results.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value || []);

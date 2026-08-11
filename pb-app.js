@@ -7432,7 +7432,7 @@ function _loadAdmin(){
           const _parts = await Promise.all(_ALL_GAMES.map(function(g) {
             return sb.rpc('get_global_price_movers', {
               p_game_type: g, p_days_back: days, p_top_n: 10,
-              p_min_pct: 0.5, p_sort: srt, p_product_type: pt,
+              p_min_pct: 0.5, p_sort: srt, p_product_type: pt, p_max_pct: 500,
             }).then(function(r) {
               return (r && !r.error && Array.isArray(r.data)) ? r.data : [];
             }).catch(function() { return []; });
@@ -7446,6 +7446,7 @@ function _loadAdmin(){
             p_min_pct:      0.5,
             p_sort:         srt,
             p_product_type: pt,
+            p_max_pct:      500,
           });
 
           if (error) {
@@ -7521,7 +7522,7 @@ function _loadAdmin(){
         while (true) {
           const { data: chunk, error: histErr } = await sb
             .from('catalog_price_history')
-            .select('catalog_id, recorded_value, recorded_at')
+            .select('catalog_id, recorded_value, recorded_at, source')
             .eq('game_type', game_type)
             .gte('recorded_at', cutoff)
             .order('recorded_at', { ascending: true })
@@ -7532,11 +7533,17 @@ function _loadAdmin(){
           offset += PAGE;
           if (offset > 500000) break;
         }
+        // Track the earliest in-window value overall (.any) AND the earliest
+        // tcgplayer-source value (.tcg), so a TCGplayer-spine card can baseline
+        // ONLY against tcgplayer history — never a cross-source PriceCharting
+        // point (which fabricates +99,000% moves). Mirrors the movers RPC.
         const oldByCatalog = new Map();
         for (const row of hist) {
-          if (!oldByCatalog.has(row.catalog_id)) {
-            oldByCatalog.set(row.catalog_id, Number(row.recorded_value));
-          }
+          let e = oldByCatalog.get(row.catalog_id);
+          if (!e) { e = { any: null, tcg: null }; oldByCatalog.set(row.catalog_id, e); }
+          const v = Number(row.recorded_value);
+          if (e.any === null) e.any = v;
+          if (e.tcg === null && row.source === 'tcgplayer') e.tcg = v;
         }
         if (!oldByCatalog.size) {
           // Cache empty result too, so we don't spam the network.
@@ -7552,7 +7559,7 @@ function _loadAdmin(){
         for (let i = 0; i < ids.length; i += CHUNK) {
           const slice = ids.slice(i, i + CHUNK);
           const { data } = await sb.from('catalog')
-            .select('id, name, set_name, image_url, current_value, game_type, product_type')
+            .select('id, name, set_name, image_url, current_value, game_type, product_type, market_price_source')
             .in('id', slice);
           if (data) cards.push(...data);
         }
@@ -7565,11 +7572,15 @@ function _loadAdmin(){
           if (pt === 'single' && cpt !== 'single') continue;
           if (pt === 'sealed' && cpt === 'single') continue;
           const cur = Number(c.current_value || 0);
-          const old = oldByCatalog.get(c.id) || 0;
+          const _e = oldByCatalog.get(c.id) || {};
+          const _spine = String(c.market_price_source || '').toLowerCase() === 'tcgplayer';
+          const old = _spine ? _e.tcg : _e.any;   // spine cards: tcgplayer baseline only
           if (!cur || !old || Math.abs(cur - old) < 0.01) continue;
           const delta    = cur - old;
           const deltaPct = (delta / old) * 100;
           if (Math.abs(deltaPct) < 0.5) continue;
+          if (Math.abs(deltaPct) > 500) continue;   // sanity cap, mirrors RPC p_max_pct
+
           movers.push({
             id: c.id, name: c.name, set_name: c.set_name,
             image_url: c.image_url,
@@ -7935,6 +7946,9 @@ function _loadAdmin(){
         const delta    = currentVal - oldVal;
         const deltaPct = (delta / oldVal) * 100;
         if (Math.abs(deltaPct) < 0.1) continue; // skip <0.1% noise
+        // Sanity ceiling on the period move (NOT vs-cost, where a big long-run
+        // gain is real) — a >500% short-period move is a data artifact.
+        if (periodLabel !== 'vs cost' && Math.abs(deltaPct) > 500) continue;
         movers.push({ ...c, delta, deltaPct, oldVal, currentVal, periodLabel });
       }
 
@@ -8039,6 +8053,10 @@ function _loadAdmin(){
         if (!oldVal && c.purchase_price && c.purchase_price !== cur) { oldVal = c.purchase_price; plabel = 'vs cost'; }
         if (!oldVal) continue;
         const pct = ((cur - oldVal) / oldVal) * 100;
+        // Sanity ceiling on the short-period spike (NOT the vs-cost path, where
+        // a big long-run gain is real): a >500% move over 24h/Nd is a data
+        // artifact (source divergence / collided link), not a real spike.
+        if (plabel !== 'vs cost' && pct > 500) continue;
         if (pct >= SPIKE_PCT) _spikes.push({ card: c, pct: pct, cur: cur, plabel: plabel });
       }
       _spikes.sort((a, b) => b.pct - a.pct);
@@ -17849,25 +17867,43 @@ function _loadAdmin(){
         if (!valueEl) return;
 
         const addedAt = new Date(item.created_at).toISOString();
+        // Source discipline (mirrors the chart above): a TCGplayer-spine card
+        // must baseline against a source='tcgplayer' history point, never a
+        // PriceCharting one — a PC $0.51 baseline vs a TCG current fabricates a
+        // "+279,000% Since Added". Until tcgplayer history accrues, a spine card
+        // has no valid baseline and correctly shows the cost-basis placeholder.
+        let _spineSrc = null;
+        try {
+          const _cat = await sb.from('catalog').select('market_price_source')
+            .eq('id', item.api_card_id).limit(1);
+          if (_cat.data && _cat.data[0]
+              && String(_cat.data[0].market_price_source || '').toLowerCase() === 'tcgplayer') {
+            _spineSrc = 'tcgplayer';
+          }
+        } catch (_) {}
         // First try: snapshot AT-OR-BEFORE the added date.
         let baselineRow = null;
-        const before = await sb.from('catalog_price_history')
+        let _beforeQ = sb.from('catalog_price_history')
           .select('recorded_at, recorded_value')
           .eq('catalog_id', item.api_card_id)
           .lte('recorded_at', addedAt.slice(0, 10))
           .order('recorded_at', { ascending: false })
           .limit(1);
+        if (_spineSrc) _beforeQ = _beforeQ.eq('source', _spineSrc);
+        const before = await _beforeQ;
         if (before.data && before.data[0]) {
           baselineRow = before.data[0];
         } else {
           // Fallback: earliest known snapshot (in case the user added
           // the card BEFORE any history was tracked). Better than
           // nothing — gives "since first tracked" semantics.
-          const after = await sb.from('catalog_price_history')
+          let _afterQ = sb.from('catalog_price_history')
             .select('recorded_at, recorded_value')
             .eq('catalog_id', item.api_card_id)
             .order('recorded_at', { ascending: true })
             .limit(1);
+          if (_spineSrc) _afterQ = _afterQ.eq('source', _spineSrc);
+          const after = await _afterQ;
           if (after.data && after.data[0]) baselineRow = after.data[0];
         }
 
