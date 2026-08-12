@@ -33,54 +33,54 @@ if not (URL and KEY):
     sys.exit("Set SUPABASE_URL and SUPABASE_SERVICE_KEY in your environment.")
 
 
-def _scalar(payload):
-    """PostgREST returns a scalar function result directly, but tolerate the
-    list/dict wrappings too."""
-    if isinstance(payload, list):
-        payload = payload[0] if payload else 0
-    if isinstance(payload, dict):
-        payload = next(iter(payload.values()), 0)
-    return int(payload or 0)
-
-
-def _run_loop(rpc_name, verb, batch, headers):
-    """Loop a batched RPC (returns rows-affected) until it returns 0."""
+def _run_keyset(rpc_name, verb, batch, headers, changed_key):
+    """Loop a KEYSET-paginated RPC that returns (processed, <changed_key>,
+    last_id) per call. Feed last_id back as p_after each round; stop when a
+    short slice (processed < batch) or a null cursor signals the end. Each call
+    scans/updates only its slice, so no batch trips the statement timeout."""
     endpoint = f"{URL.rstrip('/')}/rest/v1/rpc/{rpc_name}"
-    total = rounds = 0
-    print(f"{verb} in batches of {batch:,}…")
+    after, total, rounds = "", 0, 0
+    print(f"{verb} in keyset batches of {batch:,}…")
     while True:
         try:
             r = requests.post(endpoint, headers=headers,
-                              data=json.dumps({"p_limit": batch}), timeout=180)
+                              data=json.dumps({"p_after": after, "p_limit": batch}),
+                              timeout=180)
         except requests.RequestException as e:
             print(f"  network blip ({type(e).__name__}); retrying in 3s…")
             time.sleep(3)
             continue
         if not r.ok:
             sys.exit(f"RPC {rpc_name} failed HTTP {r.status_code}: {r.text[:400]}\n"
-                     "Did you run the CREATE FUNCTION + GRANT in the SQL editor first?")
-        n = _scalar(r.json())
-        total += n
+                     "Did you run the latest migration_current_value_from_tcgplayer.sql "
+                     "(keyset functions) in the SQL editor first?")
+        rows = r.json()
+        row = rows[0] if isinstance(rows, list) and rows else (rows if isinstance(rows, dict) else {})
+        processed = int(row.get("processed") or 0)
+        changed = int(row.get(changed_key) or 0)
+        last = row.get("last_id")
+        total += changed
         rounds += 1
-        print(f"  batch {rounds:>3}: {n:>6,}   (total {total:,})")
-        if n == 0:
+        print(f"  batch {rounds:>3}: scanned {processed:>6,}  changed {changed:>6,}   (total {total:,})")
+        if processed < batch or not last:
             break
+        after = last
         time.sleep(0.2)
-    print(f"  {verb.lower()} done — {total:,} rows across {rounds} batches.\n")
+    print(f"  {verb.lower()} done — {total:,} rows changed across {rounds} batches.\n")
     return total
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--batch", type=int, default=20000, help="rows per batch (default 20000)")
+    ap.add_argument("--batch", type=int, default=10000, help="rows per keyset batch (default 10000)")
     ap.add_argument("--no-snapshot", action="store_true",
                     help="reseat only; skip the daily TCGplayer history snapshot")
     args = ap.parse_args()
     headers = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
 
-    _run_loop("reseat_tcgplayer_batch", "Reseating current_value from TCGplayer", args.batch, headers)
+    _run_keyset("reseat_tcgplayer_batch", "Reseating current_value from TCGplayer", args.batch, headers, "updated")
     if not args.no_snapshot:
-        _run_loop("snapshot_tcgplayer_history_batch", "Snapshotting today's TCGplayer history", args.batch, headers)
+        _run_keyset("snapshot_tcgplayer_history_batch", "Snapshotting today's TCGplayer history", args.batch, headers, "inserted")
 
     print("Done. Marketplace Mkt + the '+/- % vs market' badge read TCGplayer for every card "
           "with a TCGplayer price, and the price-history chart's TCG series gains today's point.")

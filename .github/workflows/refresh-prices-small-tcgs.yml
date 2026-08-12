@@ -55,9 +55,12 @@ name: Refresh Prices — Small TCGs
 # is fresh by Sunday morning.
 
 on:
-  schedule:
-    - cron: '0 3 * * *'    # nightly  → OP + Gundam
-    - cron: '0 4 * * 0'    # weekly   → DBZ + Topps
+  # RETIRED 2026-08-12 — this scrapes PriceCharting, whose access expired
+  # (HTTP 410), so runs hung until the 6h job cap cancelled them. Cron removed
+  # so it stops failing; kept manual-only, re-enable by restoring the schedule
+  # if the PriceCharting subscription is renewed.
+  #   - cron: '0 3 * * *'    # nightly  → OP + Gundam
+  #   - cron: '0 4 * * 0'    # weekly   → DBZ + Topps
   workflow_dispatch:
     inputs:
       tcg:

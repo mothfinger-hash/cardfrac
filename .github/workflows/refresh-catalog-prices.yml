@@ -31,12 +31,13 @@ name: Refresh Catalog Prices
 # personal Mac.
 
 on:
-  schedule:
-    # Note: GitHub cron is in UTC and does NOT auto-adjust for DST.
-    # Times here are tuned for EST (winter); during EDT (summer) they
-    # fire 1 hour earlier. Acceptable drift for nightly batch jobs.
-    - cron: '0 7 * * *'    # 2 AM EST / 3 AM EDT  →  all TCGs (see Determine scope below)
-    - cron: '0 17 * * *'   # 12 PM EST / 1 PM EDT →  pokemon only
+  # RETIRED 2026-08-12 — PriceCharting price-guide access expired (HTTP 410
+  # "Access to this price guide has expired"), so every scheduled run failed.
+  # Catalog pricing now rides the TCGplayer spine (sync-tcgcsv + reseat). The
+  # cron is removed so this stops failing daily; kept as manual-only so it can
+  # be re-enabled by restoring the schedule if the PriceCharting sub is renewed.
+  #   - cron: '0 7 * * *'    # all TCGs
+  #   - cron: '0 17 * * *'   # pokemon only
   workflow_dispatch:
     inputs:
       scope:

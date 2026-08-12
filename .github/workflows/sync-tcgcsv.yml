@@ -133,4 +133,7 @@ jobs:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python3 -u reseat_tcgplayer.py --batch 20000
+          # Keyset-paginated RPCs (migration_current_value_from_tcgplayer.sql):
+          # each batch scans/updates only its slice, so it finishes well under
+          # Supabase's ~8s statement timeout — no timeout tuning needed.
+          python3 -u reseat_tcgplayer.py --batch 10000
