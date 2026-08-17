@@ -86,7 +86,7 @@
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
       --bg:#0F0D0A;--surface:#1C1810;--surface2:#241C10;--surface3:#2C2218;--border:#3D3020;
-      --accent:#FF5C00;--accent-rgb:26, 199, 160;--accent2:#FFD23F;--green:#D2783A;--red:#C8002A;
+      --accent:#FF5C00;--accent-rgb:255, 92, 0;--accent2:#FFD23F;--green:#D2783A;--red:#C8002A;
       --yellow:#FFD23F;--gold:#FFD23F;--orange:#FF5C00;--teal:#1AC7A0;
       --copper:#B87333;--copper-dim:rgba(184,115,51,.55);--copper-glow:rgba(184,115,51,.18);
       --text:#F2ECD8;--muted:#8B7A60;--text-on-accent:#1a1a1a;
@@ -450,7 +450,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
 .lp-pricing-header { display:flex; align-items:baseline; gap:14px; margin-bottom:12px; }
 .lp-pricing-eyebrow { font-family:'Press Start 2P',monospace; font-size:6px; letter-spacing:.16em; color:var(--accent); }
 .lp-pricing-title { display:none; }
-/* Five tiers now (Free + Collector + Enthusiast + Vendor + Shop).
+/* Four tiers (Free + Enthusiast + Vendor + Shop).
    At desktop width, five equal columns get cramped at the standard
    1160px page width — use auto-fit so the grid drops to 3 cols at
    ~900px and 2 cols at ~600px before collapsing to 1. */
@@ -1388,7 +1388,7 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <h3 style="margin-bottom:2px;font-size:1.15rem">PathBinder Subscription</h3>
       <p class="modal-sub" id="pricingSubtitle" style="margin-bottom:18px">All plans include the PathBinder mobile app.</p>
 
-      <!-- Billing toggle — hidden by JS for Collector tier context -->
+      <!-- Billing toggle — monthly vs yearly -->
       <div class="billing-toggle" id="pricingBillingToggle" style="margin-bottom:20px">
         <button class="billing-opt active" id="pricingMonthlyBtn" onclick="setPricingBilling('monthly')">Monthly</button>
         <button class="billing-opt" id="pricingYearlyBtn" onclick="setPricingBilling('yearly')">Yearly</button>
@@ -1628,8 +1628,8 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
         <!-- Inline upsell shown when free user hits binder limit -->
         <div id="atcBinderUpsell" style="display:none;margin-top:8px;padding:12px 14px;background:var(--surface2);border:2px solid var(--accent2);font-family:'Space Mono','Share Tech Mono',monospace">
           <div style="font-size:.62rem;color:var(--accent2);font-weight:700;letter-spacing:.06em;margin-bottom:4px">MAX BINDERS REACHED</div>
-          <div style="font-size:.6rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Free plan is limited to 4 binders. Upgrade to Collector for unlimited binders — <span style="color:var(--accent);font-weight:700">25% off your first month</span> as a welcome offer.</div>
-          <button onclick="openPricingModal('collector')" style="padding:7px 16px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">UPGRADE → COLLECTOR</button>
+          <div style="font-size:.6rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Free plan is limited to 4 binders. Upgrade to Enthusiast for unlimited binders — <span style="color:var(--accent);font-weight:700">25% off your first month</span> as a welcome offer.</div>
+          <button onclick="openPricingModal('enthusiast')" style="padding:7px 16px;background:var(--accent);color:var(--text-on-accent);border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;font-weight:700;cursor:pointer;letter-spacing:.05em">UPGRADE → ENTHUSIAST</button>
         </div>
       </div>
       <div class="form-group" style="margin-bottom:18px">
@@ -2487,48 +2487,33 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
       <!-- Landing-page tier cards. Mirrors the canonical TIER_DEFS in
            the JS module (search for "TIER_DEFS" further down) — if you
            change pricing or feature copy in one place, change it in
-           both. Five tiers; the layout is responsive so they wrap on
-           narrower viewports. 'Collector' carries the featured ribbon
-           since it's the highest-conversion entry-paid tier. -->
+           both. Four tiers; Enthusiast carries the featured ribbon as
+           the entry-paid tier. -->
       <div class="lp-tiers">
         <div class="lp-tier">
           <div class="lp-tier-name">Free</div>
           <div class="lp-tier-jp">無料</div>
-          <div class="lp-tier-tagline">Start your journey</div>
+          <div class="lp-tier-tagline">Track your whole collection</div>
           <div class="lp-tier-price">$0</div>
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
-            <li>Up to 200 cards</li>
+            <li>Unlimited card tracking</li>
+            <li>Live market prices + trend charts</li>
+            <li>100 photo scans / month</li>
             <li>Marketplace browse + buy</li>
-            <li>Basic catalog access</li>
-            <li>Community access</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup')">Get Started</button>
         </div>
         <div class="lp-tier featured">
-          <div class="lp-tier-name">Collector</div>
-          <div class="lp-tier-jp">コレクター</div>
-          <div class="lp-tier-tagline">For serious collectors</div>
-          <div class="lp-tier-price">$5</div>
-          <div class="lp-tier-per">/ mo</div>
-          <ul class="lp-tier-feats">
-            <li>Unlimited cards</li>
-            <li>Live market prices + daily refresh</li>
-            <li>Biggest Movers + portfolio chart</li>
-            <li>Ghost Card Fund</li>
-          </ul>
-          <button class="lp-tier-cta" onclick="openAuthModal('signup', 'collector')">Get Started</button>
-        </div>
-        <div class="lp-tier">
           <div class="lp-tier-name">Enthusiast</div>
           <div class="lp-tier-jp">愛好家</div>
-          <div class="lp-tier-tagline">For active sellers</div>
+          <div class="lp-tier-tagline">Start selling</div>
           <div class="lp-tier-price">$10</div>
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
-            <li>Everything in Collector</li>
-            <li>Marketplace listings — 40 active</li>
-            <li>8% commission · bulk CSV import</li>
+            <li>Everything in Free</li>
+            <li>Sell on the marketplace — 40 listings</li>
+            <li>1,000 scans/mo · bulk CSV import</li>
             <li>Sales archive + PDF reports</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup', 'enthusiast')">Get Started</button>
@@ -2537,13 +2522,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           <div class="lp-tier-name">Vendor</div>
           <div class="lp-tier-jp">ベンダー</div>
           <div class="lp-tier-tagline">For resellers &amp; shops</div>
-          <div class="lp-tier-price">$50</div>
+          <div class="lp-tier-price">$29</div>
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Everything in Enthusiast</li>
             <li>7% commission · 150 active listings</li>
-            <li>Sealed product · non-TCG listings</li>
-            <li>Non-TCG products (Funko, manga, etc.)</li>
+            <li>Sell sealed + non-TCG product</li>
             <li>Product scanner access</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup', 'vendor')">Get Started</button>
@@ -2552,13 +2536,13 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
           <div class="lp-tier-name">Shop</div>
           <div class="lp-tier-jp">ショップ</div>
           <div class="lp-tier-tagline">For high-volume sellers</div>
-          <div class="lp-tier-price">$150</div>
+          <div class="lp-tier-price">$99</div>
           <div class="lp-tier-per">/ mo</div>
           <ul class="lp-tier-feats">
             <li>Everything in Vendor</li>
             <li>6% commission · unlimited listings</li>
-            <li>Full P&amp;L report + featured placement</li>
-            <li>Dedicated account manager</li>
+            <li>Storefront + inventory/POS</li>
+            <li>Full P&amp;L report + account manager</li>
           </ul>
           <button class="lp-tier-cta" onclick="openAuthModal('signup', 'shop')">Contact Us</button>
         </div>

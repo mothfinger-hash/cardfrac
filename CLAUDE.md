@@ -213,18 +213,23 @@ Received" action just flips paid→completed for UX, not for money flow.
 ## Schema / Supabase
 
 - `profiles` is the canonical user table. Tier resolution goes through
-  `subscription_tier` (text: `free` / `collector` / `enthusiast` / `vendor` / `shop`)
-  with legacy boolean fallback (`is_premium`, `is_vendor`, `is_admin`).
-  **The old `vendor` tier was renamed to `enthusiast`** (see migration
-  `migration_tier_rename_vendor_to_enthusiast.sql`) — same feature set,
-  dropped to $10/mo, added a 40-listing concurrent active marketplace
-  cap. The NEW `vendor` tier sits between enthusiast and shop at $50/mo,
-  150-listing cap, and unlocks non-TCG product listing + product scanner
-  access. `shop` is $150/mo / unlimited. (Collector is $5/mo.) Anywhere old code
-  wrote `tierAtLeast('vendor')` for OLD vendor features (bulk CSV, sales
-  archive, multi-binder, etc.) has been retargeted to
-  `tierAtLeast('enthusiast')`. New `tierAtLeast('vendor')` references
-  now mean the new vendor tier. Listing caps live in `TIER_LISTING_CAPS`
+  `subscription_tier` (text: `free` / `enthusiast` / `vendor` / `shop`)
+  with legacy boolean fallback (`is_premium`, `is_vendor`, `is_admin` — both
+  `is_premium` and `is_vendor` now map to `enthusiast`).
+  **2026 restructure:** the `collector` tier was REMOVED entirely and `free`
+  became UNLIMITED collection tracking (was 200 cards; also 100 scans/mo,
+  5 wishlist, 3 card funds). Every `tierAtLeast('collector')` gate was
+  re-pointed to `enthusiast` (or absorbed into free). Current prices —
+  monthly / yearly: **enthusiast $10 / $108** (entry paid, sell TCG singles,
+  40-listing cap), **vendor $29 / $289** (sealed + non-TCG listing, product
+  scanner, 150-listing cap), **shop $99 / $891** (unlimited + storefront/POS).
+  Yearly discount ramps 10% / 17% / 25% by tier. Stripe Price IDs are edge-
+  function env vars `STRIPE_PRICE_<TIER>_<MONTHLY|ANNUAL>` (in
+  `supabase/functions/create-checkout-session`); each Price's `metadata.tier`
+  drives `api/stripe-webhook.js`. Anywhere old code wrote `tierAtLeast('vendor')`
+  for OLD vendor features (bulk CSV, sales archive, multi-binder, etc.) has
+  been retargeted to `tierAtLeast('enthusiast')`. New `tierAtLeast('vendor')`
+  references now mean the new vendor tier. Listing caps live in `TIER_LISTING_CAPS`
   and are enforced via `canCreateListing()` / `listingsRemaining()`.
   Enthusiast tier is restricted to TCG SINGLES only — sealed products
   (booster boxes, ETBs, tins, decks) and non-TCG products (Funko, Manga,

@@ -158,23 +158,24 @@ function _loadAdmin(){
       return Math.round(amount * getFeeRate());
     }
     // ── Subscription tier system ──────────────────────────────────────────────
-    // Tiers (in order): 'free' | 'collector' | 'enthusiast' | 'vendor' | 'shop'
+    // Tiers (in order): 'free' | 'enthusiast' | 'vendor' | 'shop'
     //
-    // The old 'vendor' tier ($25/mo) was renamed to 'enthusiast' (now
-    // $10/mo as of 2026-06-05) and gained a 40-listing/mo marketplace cap.
-    // A NEW 'vendor' tier ($50/mo) sits between enthusiast and shop —
-    // adds 150-listing cap, non-TCG product listing, and product scanner
-    // access. Shop is the top tier ($150/mo, unlimited).
+    // 2026 restructure: the Collector tier was REMOVED and free became
+    // unlimited collection tracking. Enthusiast ($10/mo, $108/yr) is the entry
+    // paid tier — sell on the marketplace (40-listing cap, TCG singles), all
+    // pro collection tools. Vendor ($29/mo, $289/yr) adds sealed + non-TCG
+    // listing, product scanner, 150-listing cap. Shop ($99/mo, $891/yr) is
+    // unlimited + storefront/POS. Annual discount ramps 10/17/25% by tier.
+    // Legacy is_premium / is_vendor booleans map to 'enthusiast'.
     //
     // Migration: existing rows with subscription_tier='vendor' are renamed
     // to 'enthusiast' via migration_tier_rename_vendor_to_enthusiast.sql.
     // Legacy boolean fallback (is_vendor) now maps to 'enthusiast' too.
     //
     // Reads subscription_tier from profile; falls back to legacy flags for existing users.
-    const TIER_ORDER = ['free', 'collector', 'enthusiast', 'vendor', 'shop'];
+    const TIER_ORDER = ['free', 'enthusiast', 'vendor', 'shop'];
     const TIER_COLORS = {
       free:        { label: 'FREE'         },
-      collector:   { label: 'COLLECTOR'    },
       enthusiast:  { label: 'ENTHUSIAST'   },
       vendor:      { label: 'VENDOR'       },
       shop:        { label: 'SHOP'         },
@@ -183,7 +184,6 @@ function _loadAdmin(){
     // 0 = no marketplace selling. Infinity = no cap.
     const TIER_LISTING_CAPS = {
       free:        0,
-      collector:   0,
       enthusiast:  40,
       vendor:      150,
       shop:        Infinity,
@@ -199,7 +199,6 @@ function _loadAdmin(){
     // SERVER-SIDE MIRROR: TIER_PRICE_CEILINGS in /api/marketplace-checkout.js.
     const TIER_PRICE_CEILINGS = {
       free:        0,
-      collector:   0,
       enthusiast:  150,    // entry tier — keeps cheap items in the cheap-flow band
       vendor:      1000,   // mid tier — covers most sealed product and most graded singles
       shop:        50000,  // high tier — additionally requires verified_high_value=true
@@ -227,7 +226,6 @@ function _loadAdmin(){
     // browser JS and Vercel serverless.
     const TIER_COMMISSION_RATES = {
       free:        0.00,
-      collector:   0.00,
       enthusiast:  0.08,
       vendor:      0.07,
       shop:        0.06,
@@ -255,7 +253,9 @@ function _loadAdmin(){
       // (the tier that inherited the former vendor's feature set).
       if (currentUser.is_admin)   return 'shop';
       if (currentUser.is_vendor)  return 'enthusiast';
-      if (currentUser.is_premium || currentUser.membershipActive) return 'collector';
+      // Legacy is_premium (the retired Collector signal) now maps to the entry
+      // paid tier, Enthusiast — Collector was removed 2026.
+      if (currentUser.is_premium || currentUser.membershipActive) return 'enthusiast';
       return 'free';
     }
 
@@ -897,7 +897,7 @@ function _loadAdmin(){
       var h = String(hex || '').replace('#', '');
       if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
       var n = parseInt(h, 16);
-      return isNaN(n) ? [26, 199, 160] : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      return isNaN(n) ? [255, 92, 0] : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
     }
     function _pbLighten(hex, amt) {
       return '#' + _pbHexRgb(hex).map(function (v) {
@@ -1143,26 +1143,19 @@ function _loadAdmin(){
     }
 
     // Feature gate helpers
-    function canAddMoreCards() {
-      if (tierAtLeast('collector')) return true;
-      const owned = collectionItems.filter(c => !c.sold_offline && !c.is_ghost).length;
-      return owned < 200;
-    }
-    function remainingCardSlots() {
-      if (tierAtLeast('collector')) return Infinity;
-      const owned = collectionItems.filter(c => !c.sold_offline && !c.is_ghost).length;
-      return Math.max(0, 200 - owned);
-    }
+    // Collection tracking is now UNLIMITED + free — logging your whole
+    // collection is the activation + retention hook, so we don't cap it. We
+    // monetize the marketplace + pro tools, not collection size.
+    function canAddMoreCards() { return true; }
+    function remainingCardSlots() { return Infinity; }
     function canAddGhostCard() {
-      if (tierAtLeast('collector')) return true;
-      return collectionItems.filter(c => c.is_ghost && !c.sold_offline).length < 2;
+      if (tierAtLeast('enthusiast')) return true;   // unlimited wishlist for paid tiers
+      return collectionItems.filter(c => c.is_ghost && !c.sold_offline).length < 5;   // free: 5
     }
     function canAddCardFund() {
       const funds = collectionItems.filter(c => c.is_ghost && c.savings_goal > 0 && !c.sold_offline).length;
-      // Unlimited card funds for enthusiast and up (was 'vendor' pre-rename).
-      if (tierAtLeast('enthusiast')) return true;
-      if (tierAtLeast('collector'))  return funds < 3;
-      return funds < 1;
+      if (tierAtLeast('enthusiast')) return true;   // unlimited for paid tiers
+      return funds < 3;   // free: 3 (absorbed the retired Collector allowance)
     }
     // Price tracking is FREE for everyone — a collector binder isn't
     // useful if the values don't update, and we'd rather give it away
@@ -1228,21 +1221,19 @@ function _loadAdmin(){
 
     // ── Per-tier limits ──────────────────────────────────────────────────────
     function scannerLimit() {
-      if (tierAtLeast('shop'))      return Infinity;   // unlimited
-      if (tierAtLeast('collector')) return 1000;       // vendor inherits this too
-      return 25;                                       // free — bumped from 5 to 25/month
+      if (tierAtLeast('shop'))       return Infinity;  // unlimited
+      if (tierAtLeast('enthusiast')) return 1000;      // paid tiers
+      return 100;                                      // free — generous onboarding (was 25); scans cost vision-API $, so this is the real cost lever to watch
     }
     function bulkSessionLimit() {
       if (tierAtLeast('shop'))       return Infinity;
       // Bulk-import sessions were the OLD vendor headline feature; that
       // tier got renamed to enthusiast (same features, lower price + cap).
       if (tierAtLeast('enthusiast')) return 1000;
-      if (tierAtLeast('collector'))  return 5;
       return 0;  // free: bulk scan not available
     }
     function bulkCardsPerSession() {
       if (tierAtLeast('enthusiast')) return Infinity;
-      if (tierAtLeast('collector'))  return 35;
       return 0;
     }
 
@@ -1265,7 +1256,7 @@ function _loadAdmin(){
     // otherwise paying subscribers kept seeing the "upgrade to Premium" chip.
     function userIsPremium() {
       if (currentUser && currentUser.is_admin) return true;
-      if (currentUser && typeof tierAtLeast === 'function' && tierAtLeast('collector')) return true;
+      if (currentUser && typeof tierAtLeast === 'function' && tierAtLeast('enthusiast')) return true;
       return !!(currentUser && (currentUser.is_premium || currentUser.membershipActive));
     }
 
@@ -1704,6 +1695,7 @@ function _loadAdmin(){
         if (data && data.session) {
           // Auto-confirmed (email confirmation disabled) — already signed in.
           showToast('Account created!');
+          try { logEvent('signup', { uid: data.user && data.user.id }); } catch (_) {}
           freshSignIn = true;
           closeModal('registerModal');
           showPage('account'); setMobileNav('account');
@@ -2521,7 +2513,7 @@ function _loadAdmin(){
       // recency. Cache-friendly: reads the tier off the listing if
       // it's been denormalized, otherwise off the in-memory profiles
       // cache (_browseSellerCache, hydrated on browse load).
-      const TIER_RANK = { shop: 4, vendor: 3, enthusiast: 2, collector: 1, free: 0 };
+      const TIER_RANK = { shop: 4, vendor: 3, enthusiast: 2, free: 0 };
       function _sellerSignals(listing) {
         // Prefer denormalized fields on the listing itself if a sync
         // process has populated them. Otherwise look up the seller's
@@ -2737,6 +2729,19 @@ function _loadAdmin(){
         } catch (_) { /* never block the UI on analytics */ }
       }, 800);
     }
+
+    // Fire-and-forget activation event -> user_events (see
+    // migration_activation_analytics.sql). Never blocks a user action.
+    function logEvent(name, meta) {
+      try {
+        sb.from('user_events').insert({
+          user_id: (currentUser && currentUser.id) || null,
+          event:   name,
+          meta:    meta || null,
+        });
+      } catch (_) { /* analytics must never break the UI */ }
+    }
+    window.logEvent = logEvent;
 
     function clearBrowseFilters() {
       browseSearchQuery = '';
@@ -3268,9 +3273,6 @@ function _loadAdmin(){
         // Feature loss warnings
         if (currentTier === 'vendor' && tier === 'enthusiast') {
           warnings.push('You will lose: non-TCG product listings, product scanner access.');
-        }
-        if ((currentTier === 'shop' || currentTier === 'vendor') && tier === 'collector') {
-          warnings.push('You will lose: bulk CSV import, sales archive analytics, multi-binder, marketplace selling.');
         }
         var msg = 'You\'re downgrading from ' + TIER_COLORS[currentTier].label +
           ' to ' + TIER_COLORS[tier].label + '.\n\n' +
@@ -5590,9 +5592,10 @@ function _loadAdmin(){
 
     async function _collectionShareStats() {
       const r = await sb.from('collection_items')
-        .select('current_value, quantity, name, game_type')
+        .select('current_value, quantity, name, game_type, set_code, set_name, api_card_id, product_type, is_ghost')
         .eq('user_id', currentUser.id);
-      const rows = (r && r.data) || [];
+      // Owned cards only — wishlist ghosts aren't part of "what my collection is worth".
+      const rows = ((r && r.data) || []).filter(function (x) { return !x.is_ghost; });
       let totalCards = 0, totalValue = 0;
       const byGame = {};
       for (const row of rows) {
@@ -5608,7 +5611,48 @@ function _loadAdmin(){
         .sort(function (a, b) { return (Number(b.current_value) || 0) - (Number(a.current_value) || 0); })
         .slice(0, 3)
         .map(function (x) { return { name: x.name || 'Card', value: Number(x.current_value) || 0 }; });
-      return { totalCards: totalCards, totalValue: totalValue, top: top, games: Object.keys(byGame).length };
+      // Best set completion — a compelling flex ("Base Set 187/204"). Best-effort:
+      // wrapped so a failure never blocks the share card.
+      let bestSet = null;
+      try { bestSet = await _bestSetCompletion(rows); } catch (_) {}
+      return { totalCards: totalCards, totalValue: totalValue, top: top, games: Object.keys(byGame).length, bestSet: bestSet };
+    }
+
+    // Highest set-completion % the user has, within the game/language they own
+    // the most singles in. One catalog_sets_summary RPC (per the dominant id
+    // prefix, e.g. 'en-'), matched to owned distinct singles by set_code.
+    async function _bestSetCompletion(rows) {
+      const bySet = {};   // "prefix|set_code" -> { name, prefix, code, ids:Set }
+      for (const row of rows) {
+        const pt = String(row.product_type || 'single').toLowerCase();
+        if (pt !== 'single' && pt !== 'tcg_single') continue;     // singles only
+        const code = row.set_code, id = row.api_card_id;
+        if (!code || !id) continue;
+        const prefix = String(id).split('-')[0] + '-';            // 'en-swsh1-1' -> 'en-'
+        const key = prefix + '|' + code;
+        if (!bySet[key]) bySet[key] = { name: row.set_name || code, prefix: prefix, code: code, ids: new Set() };
+        bySet[key].ids.add(id);
+      }
+      const sets = Object.keys(bySet).map(function (k) { return bySet[k]; });
+      if (!sets.length) return null;
+      // Dominant prefix = where the user owns the most distinct singles.
+      const prefOwned = {};
+      sets.forEach(function (s) { prefOwned[s.prefix] = (prefOwned[s.prefix] || 0) + s.ids.size; });
+      const domPrefix = Object.keys(prefOwned).sort(function (a, b) { return prefOwned[b] - prefOwned[a]; })[0];
+      // Per-set totals for that prefix (one call).
+      const totals = {};
+      const rr = await sb.rpc('catalog_sets_summary', { p_prefix: domPrefix });
+      if (rr && rr.data) rr.data.forEach(function (t) { totals[t.set_code] = Number(t.total) || 0; });
+      let best = null;
+      sets.forEach(function (s) {
+        if (s.prefix !== domPrefix) return;
+        const total = totals[s.code] || 0;
+        if (total < 10) return;                                   // skip tiny/unknown sets
+        const owned = Math.min(s.ids.size, total);
+        const pct = owned / total;
+        if (!best || pct > best.pct) best = { name: s.name, owned: owned, total: total, pct: pct };
+      });
+      return best;
     }
 
     function _renderCollectionShareCanvas(s) {
@@ -5617,75 +5661,111 @@ function _loadAdmin(){
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
 
-      // Background gradient (PathBinder surface tones).
+      // Read the LIVE theme so the card always matches the app (and the user's
+      // chosen accent). Hardcoding drifted off-brand after the orange rebrand.
+      function cv(name, fb) {
+        try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; }
+        catch (_) { return fb; }
+      }
+      function rgba(hex, a) {
+        hex = String(hex || '').replace('#', '');
+        if (hex.length === 3) hex = hex.split('').map(function (c) { return c + c; }).join('');
+        var n = parseInt(hex || 'ff5c00', 16);
+        return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+      }
+      const accent = cv('--accent', '#FF5C00');
+      const copper = cv('--copper', '#B87333');
+      const text   = cv('--text', '#F2ECD8');
+      const muted  = cv('--muted', '#8B7A60');
+      const surf   = cv('--surface', '#1C1810');
+      const bgCol  = cv('--bg', '#0F0D0A');
+
+      // Background gradient (warm surface tones).
       const bg = ctx.createLinearGradient(0, 0, W, H);
-      bg.addColorStop(0, '#0D1622');
-      bg.addColorStop(1, '#05090F');
+      bg.addColorStop(0, surf);
+      bg.addColorStop(1, bgCol);
       ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
       // Accent frame.
-      ctx.strokeStyle = 'rgba(26,199,160,0.55)';
+      ctx.strokeStyle = rgba(accent, 0.55);
       ctx.lineWidth = 4;
       ctx.strokeRect(42, 42, W - 84, H - 84);
 
       // Wordmark.
       ctx.textAlign = 'left';
-      ctx.fillStyle = '#1AC7A0';
+      ctx.fillStyle = accent;
       ctx.font = "800 48px 'Orbitron', monospace";
-      ctx.fillText('PATHBINDER', 92, 158);
-      ctx.fillStyle = '#7E93B5';
+      ctx.fillText('PATHBINDER', 92, 152);
+      ctx.fillStyle = muted;
       ctx.font = "400 26px 'Space Mono', monospace";
-      ctx.fillText('MY COLLECTION', 94, 198);
+      ctx.fillText('MY COLLECTION', 94, 192);
 
       // Headline value.
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#7E93B5';
+      ctx.fillStyle = muted;
       ctx.font = "400 30px 'Space Mono', monospace";
-      ctx.fillText('TOTAL COLLECTION VALUE', W / 2, 350);
-      ctx.shadowColor = 'rgba(26,199,160,0.5)'; ctx.shadowBlur = 34;
-      ctx.fillStyle = '#1AC7A0';
+      ctx.fillText('TOTAL COLLECTION VALUE', W / 2, 320);
+      ctx.shadowColor = rgba(accent, 0.5); ctx.shadowBlur = 34;
+      ctx.fillStyle = accent;
       ctx.font = "800 132px 'Orbitron', monospace";
-      ctx.fillText(_shareMoney(s.totalValue), W / 2, 480);
+      ctx.fillText(_shareMoney(s.totalValue), W / 2, 450);
       ctx.shadowBlur = 0;
 
       // Cards / games row.
-      ctx.fillStyle = '#DCE8F5';
+      ctx.fillStyle = text;
       ctx.font = "700 46px 'Orbitron', monospace";
-      ctx.fillText(String(s.totalCards), W / 2 - 190, 600);
-      ctx.fillText(String(s.games), W / 2 + 190, 600);
-      ctx.fillStyle = '#7E93B5';
+      ctx.fillText(String(s.totalCards), W / 2 - 190, 560);
+      ctx.fillText(String(s.games), W / 2 + 190, 560);
+      ctx.fillStyle = muted;
       ctx.font = "400 22px 'Space Mono', monospace";
-      ctx.fillText('CARDS', W / 2 - 190, 634);
-      ctx.fillText('GAMES', W / 2 + 190, 634);
-      ctx.strokeStyle = 'rgba(126,147,181,0.4)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(W / 2, 566); ctx.lineTo(W / 2, 636); ctx.stroke();
+      ctx.fillText('CARDS', W / 2 - 190, 594);
+      ctx.fillText('GAMES', W / 2 + 190, 594);
+      ctx.strokeStyle = rgba(muted, 0.4); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(W / 2, 526); ctx.lineTo(W / 2, 596); ctx.stroke();
 
-      // Top cards.
-      if (s.top.length) {
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#B87333';
-        ctx.font = "700 30px 'Orbitron', monospace";
-        ctx.fillText('TOP CARDS', 94, 738);
+      // Best set completion (optional — a flex).
+      if (s.bestSet) {
+        const b = s.bestSet;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = copper;
+        ctx.font = "700 26px 'Orbitron', monospace";
+        ctx.fillText('TOP SET COMPLETION', W / 2, 668);
+        ctx.fillStyle = text;
         ctx.font = "400 34px 'Space Mono', monospace";
-        let y = 800;
-        for (let i = 0; i < s.top.length; i++) {
-          const c = s.top[i];
+        const bn = b.name.length > 22 ? b.name.slice(0, 21) + '…' : b.name;
+        ctx.fillText(bn + '   ' + b.owned + '/' + b.total, W / 2, 712);
+        ctx.fillStyle = accent;
+        ctx.font = "800 40px 'Orbitron', monospace";
+        ctx.fillText(Math.round(b.pct * 100) + '%', W / 2, 760);
+      }
+
+      // Top cards (2 when the set block is shown, 3 otherwise, to fit).
+      const topList = s.bestSet ? s.top.slice(0, 2) : s.top;
+      if (topList.length) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = copper;
+        ctx.font = "700 30px 'Orbitron', monospace";
+        ctx.fillText('TOP CARDS', 94, s.bestSet ? 826 : 738);
+        let y = s.bestSet ? 884 : 800;
+        for (let i = 0; i < topList.length; i++) {
+          const c = topList[i];
+          ctx.font = "400 34px 'Space Mono', monospace";
           ctx.textAlign = 'left';
-          ctx.fillStyle = '#DCE8F5';
+          ctx.fillStyle = text;
           const nm = c.name.length > 24 ? c.name.slice(0, 23) + '…' : c.name;
           ctx.fillText(nm, 94, y);
           ctx.textAlign = 'right';
-          ctx.fillStyle = '#1AC7A0';
+          ctx.fillStyle = accent;
           ctx.fillText(_shareMoney(c.value), W - 94, y);
-          y += 62;
+          y += 58;
         }
       }
 
       // Footer.
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#7E93B5';
+      ctx.fillStyle = muted;
       ctx.font = "400 30px 'Space Mono', monospace";
-      ctx.fillText('Track yours free at pathbinder.gg', W / 2, H - 92);
+      ctx.fillText('Track yours free at pathbinder.gg', W / 2, H - 70);
 
       return canvas;
     }
@@ -5746,6 +5826,7 @@ function _loadAdmin(){
       try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
       const canvas = _renderCollectionShareCanvas(stats);
       await _shareOrPreviewCanvas(canvas);
+      try { logEvent('share_card', { value: Math.round(stats.totalValue), cards: stats.totalCards }); } catch (_) {}
     }
     window.shareMyCollection = shareMyCollection;
 
@@ -5794,7 +5875,7 @@ function _loadAdmin(){
       const remain = (expMs - now) / dayMs;
       if (remain <= 0)  return ''; // expired case handled by downgrade modal
       if (remain > 14)  return '';
-      const tier   = (currentUser.subscription_tier || 'collector').toUpperCase();
+      const tier   = (currentUser.subscription_tier || 'enthusiast').toUpperCase();
       const days   = Math.ceil(remain);
       return `<div style="margin-bottom:14px;border:1.5px solid var(--yellow);border-left:3px solid var(--yellow);background:rgba(255,217,61,.06);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
         <div style="flex:1;min-width:240px">
@@ -5809,7 +5890,7 @@ function _loadAdmin(){
           </div>
         </div>
         <div style="flex-shrink:0">
-          <button type="button" onclick="openPricingModalWithPromo('${(currentUser.subscription_tier || 'collector').toLowerCase()}')" style="background:var(--yellow);color:#000;border:none;padding:9px 18px;font-family:'Space Mono',monospace;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.06em">
+          <button type="button" onclick="openPricingModalWithPromo('${(currentUser.subscription_tier || 'enthusiast').toLowerCase()}')" style="background:var(--yellow);color:#000;border:none;padding:9px 18px;font-family:'Space Mono',monospace;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.06em">
             Subscribe to keep it &rarr;
           </button>
         </div>
@@ -6298,8 +6379,8 @@ function _loadAdmin(){
               </div>
             </div>` : ''}
 
-            <!-- P&L Overview — collector+ -->
-            ${tierAtLeast('collector') ? (() => {
+            <!-- P&L Overview — enthusiast+ -->
+            ${tierAtLeast('enthusiast') ? (() => {
               // Build last-6-months P&L from offline sales + marketplace orders
               const now = new Date();
               const months = Array.from({length:6}, (_,i) => {
@@ -7255,8 +7336,8 @@ function _loadAdmin(){
           </div>
           <!-- Upgrade overlay -->
           <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,5,0,.7);gap:10px">
-            <div style="font-size:.78rem;color:var(--text);text-align:center">Live price tracking is a<br><strong style="color:#1D9E75">Collector</strong> feature</div>
-            <button onclick="openPricingModal('collector')" style="padding:8px 20px;background:#1D9E75;color:#fff;border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Upgrade →</button>
+            <div style="font-size:.78rem;color:var(--text);text-align:center">Live price tracking is a<br><strong style="color:#1D9E75">Enthusiast</strong> feature</div>
+            <button onclick="openPricingModal('enthusiast')" style="padding:8px 20px;background:#1D9E75;color:#fff;border:none;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.78rem;font-weight:700;cursor:pointer">Upgrade →</button>
           </div>
         </div>`;
       }
@@ -8805,8 +8886,8 @@ function _loadAdmin(){
         const totalValue  = (items||[]).reduce((s,c) => s + ((c.current_value||c.purchase_price||0) * (c.quantity||1)), 0);
 
         // Tier badge
-        const tierColors = { free:'var(--muted)', collector:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
-        const tier = profile.subscription_tier || (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'collector' : 'free');
+        const tierColors = { free:'var(--muted)', enthusiast:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
+        const tier = profile.subscription_tier || (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'enthusiast' : 'free');
         const tierBadge = tier !== 'free'
           ? `<span style="font-size:.62rem;padding:2px 7px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;margin-left:8px">${tier.toUpperCase()}</span>`
           : '';
@@ -9152,8 +9233,8 @@ function _loadAdmin(){
 
         // Must be at least vendor to have a public storefront
         const tier = profile.subscription_tier ||
-          (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'collector' : 'free');
-        const tierOrder = ['free','collector','vendor','shop'];
+          (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'enthusiast' : 'free');
+        const tierOrder = ['free','enthusiast','vendor','shop'];
         const tierIdx   = tierOrder.indexOf(tier);
         if (tierIdx < tierOrder.indexOf('vendor')) {
           el.innerHTML = `<div style="text-align:center;padding:80px;color:var(--muted)">This user doesn't have a public storefront.</div>`;
@@ -9180,7 +9261,7 @@ function _loadAdmin(){
         const website    = profile.shop_website || '';
 
         // Tier badge
-        const tierColors = { free:'var(--muted)', collector:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
+        const tierColors = { free:'var(--muted)', enthusiast:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
         const tierBadge = tier !== 'free'
           ? `<span style="font-size:.6rem;padding:2px 8px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.1em;vertical-align:middle">${tier.toUpperCase()}</span>`
           : '';
@@ -14387,111 +14468,83 @@ function _loadAdmin(){
         ctaLabel: 'Get started free', ctaAction: null,
         badge: null,
         features: [
-          'Up to 200 cards logged',
+          'Unlimited card tracking',
           'Card catalog search & auto-fill (unlimited)',
-          '25 photo card scans / month',
+          '100 photo card scans / month',
           'Live market prices on your cards',
           'Price trend charts',
-          'Condition & grade tracking',
-          'Collection dashboard',
-          '2 Wishlist goals',
-          '1 Card Fund goal',
-          'Shareable binder link',
-          'Marketplace access',
-        ],
-        locked: ['Bulk CSV import','Multi-binder org','Bulk photo scanning'],
-      },
-      {
-        id: 'collector', label: 'Collector', jpLabel: 'コレクター', monthly: 5, annual: null,
-        ctaLabel: 'Start Collector', ctaAction: 'checkout_collector',
-        badge: 'Most popular',
-        features: [
-          'Unlimited cards',
-          '1,000 photo card scans / month',
-          '5 bulk photo scan sessions / month',
-          'Up to 35 cards per bulk session',
-          'Unlimited Wishlist goals',
-          'Up to 3 Card Fund goals',
           'Watchlist price alerts',
           'Biggest Movers dashboard',
-          'Marketplace access',
+          'Condition & grade tracking',
+          'Collection dashboard',
+          '5 Wishlist goals',
+          '3 Card Fund goals',
+          'Shareable collection card',
+          'Browse the marketplace',
         ],
-        locked: ['Bulk CSV import','Multi-binder org','Sales archive & trade log'],
+        locked: ['Sell on the marketplace','Bulk CSV import','Bulk photo scanning'],
       },
       {
-        // Yearly discount scales with tier price: Collector 0% (no annual),
-        // Enthusiast 0% (no annual — entry tier should be commitment-free),
-        // Vendor 20%, Shop 25%. Bigger savings as price climbs.
-        // 2026-06-05 price drop: Enthusiast 20→10, Vendor 75→50, Shop 200→150
-        // — easier ramp for early users; we can revisit when seller volume
-        // is up. NOTE: Stripe price IDs in env vars must be updated to
-        // match these new amounts (existing subscribers stay grandfathered
-        // at their original price; new sign-ups hit the new prices).
-        id: 'enthusiast', label: 'Enthusiast', jpLabel: '愛好家', monthly: 10, annual: null,
+        // Entry paid tier. Annual discount ramps by tier — Enthusiast 10%,
+        // Vendor 17%, Shop 25% (bigger savings as price climbs). Stripe Price
+        // IDs live in the create-checkout-session edge function env vars
+        // (STRIPE_PRICE_<TIER>_<MONTHLY|ANNUAL>); each Price's metadata.tier
+        // drives the webhook that grants the plan.
+        id: 'enthusiast', label: 'Enthusiast', jpLabel: '愛好家', monthly: 10, annual: 108,
         ctaLabel: 'Start Enthusiast', ctaAction: 'checkout_enthusiast',
-        badge: null,
+        badge: 'Most popular',
         features: [
-          'Everything in Collector',
-          'Marketplace selling — TCG singles only',
+          'Everything in Free, plus:',
+          'Sell on the marketplace — TCG singles',
           '40 concurrent active listings',
           '8% commission on sales',
-          '1,000 bulk photo scan sessions / month',
-          'Bulk CSV import',
+          '1,000 photo card scans / month',
+          'Bulk photo scanning + CSV import',
           'Multi-binder organization',
-          'Sales archive — daily/weekly/monthly/yearly filters',
-          'Combined offline + marketplace sales view',
-          'CSV export for accounting',
-          'PDF sales report (itemized, tax-ready)',
-          'Unlimited Card Fund goals',
+          'Unlimited Wishlist & Card Fund goals',
+          'Sales archive — daily/weekly/monthly/yearly',
+          'CSV export + tax-ready PDF sales report',
           'Grading submission tracker',
           'Early feature access',
           '48-hour support response',
         ],
-        locked: ['Sealed product listings (boxes/ETBs/tins)','Non-TCG product listings','Product scanner (Funko/Manga/etc.)','150 listing slots','Monthly revenue chart','Top cards & channel analytics','Full P&L report PDF'],
+        locked: ['Sealed product listings (boxes/ETBs/tins)','Non-TCG product listings','Product scanner (Funko/Manga/etc.)','150 listing slots','Full P&L report PDF'],
       },
       {
-        id: 'vendor', label: 'Vendor', jpLabel: 'ベンダー', monthly: 50, annual: 480,
+        id: 'vendor', label: 'Vendor', jpLabel: 'ベンダー', monthly: 29, annual: 289,
         ctaLabel: 'Start Vendor', ctaAction: 'checkout_vendor',
         badge: null,
         features: [
-          'Everything in Enthusiast',
+          'Everything in Enthusiast, plus:',
           '7% commission on sales',
-          'Marketplace selling — singles AND sealed product',
+          'Sell sealed product (booster boxes, ETBs, UTBs, tins, decks)',
+          'Sell non-TCG product (Funko, Manga, Posters, Plush, Statues)',
+          'Product scanner (auto-identify non-TCG products)',
           '150 concurrent active listings',
-          'Sealed TCG products (booster boxes, ETBs, UTBs, tins, decks)',
-          'Non-TCG product listings (Funko Pops, Manga, Posters, Plush, Statues)',
-          'Product scanner access (auto-identify non-TCG products)',
           'Priority order management',
-          'Vendor-specific analytics',
+          'Vendor analytics',
           '24-hour support response',
         ],
         locked: ['Unlimited listings','White-label storefront page','Full P&L report PDF','Dedicated account manager','Featured placement'],
       },
       {
-        id: 'shop', label: 'Shop', jpLabel: 'ショップ', monthly: 150, annual: 1350,
+        id: 'shop', label: 'Shop', jpLabel: 'ショップ', monthly: 99, annual: 891,
         ctaLabel: 'Contact us', ctaAction: 'shop_intake',
         badge: null,
         features: [
-          'Everything in Vendor',
+          'Everything in Vendor, plus:',
           '6% commission on sales',
           'Unlimited concurrent active listings',
-          'Unlimited photo card scans',
-          'Unlimited bulk scan sessions',
-          'Monthly revenue bar chart',
-          'Top-5 cards by revenue',
-          'Channel breakdown (online vs offline)',
-          'Full P&L Report PDF (multi-section, cover page)',
-          'Monthly breakdown table in PDF',
+          'Unlimited photo & bulk scans',
+          'Full P&L Report PDF (multi-section)',
+          'Monthly revenue + channel analytics',
           'White-label storefront page',
+          'Inventory management + POS',
           'Multi-user account access',
           'Staff grading pipeline',
-          'Custom reporting',
-          'Inventory management',
           'PathBinder partner badge',
           'Dedicated account manager',
-          'Monthly strategy session',
-          'Onboarding call',
-          '24-hour support response',
+          'Onboarding + monthly strategy session',
         ],
         locked: [],
       },
@@ -14538,7 +14591,7 @@ function _loadAdmin(){
           priceLine = `<span style="font-size:1.5rem;font-weight:700;color:var(--text)">Free</span><span style="font-size:.72rem;color:var(--muted)"> forever</span>`;
         } else if (_pricingBilling === 'yearly' && t.annual != null) {
           const perMo = (t.annual / 12).toFixed(2);
-          const savePct = t.id === 'vendor' ? '20' : '25';
+          const savePct = Math.round((1 - t.annual / (t.monthly * 12)) * 100);   // ramps 10/17/25% by tier
           priceLine = `<span style="font-size:1.5rem;font-weight:700;color:var(--text)">$${perMo}</span><span style="font-size:.72rem;color:var(--muted)">/mo</span>
             <div style="font-size:.65rem;color:var(--accent);margin-top:2px">$${t.annual}/yr — save ${savePct}%</div>`;
         } else {
@@ -17011,26 +17064,8 @@ function _loadAdmin(){
       const gainSign   = totalGain >= 0 ? '+' : '';
       const soldCount  = collectionItems.filter(c => c.sold_offline).length;
 
-      // Free tier: show card count + upgrade nudge when approaching / at limit
-      if (summary) {
-        if (!tierAtLeast('collector')) {
-          const owned = ownedItems.reduce((s, c) => s + (c.quantity || 1), 0);
-          const barColor = owned >= 200 ? '#e74c3c' : owned >= 160 ? 'var(--gold)' : '#1D9E75';
-          // Single-line free-plan status. Sits ABOVE the binder controls
-          // panel, left-aligned, no bounding box (per design ask). Just
-          // a label + count + optional upgrade nudge — the progress bar
-          // and surface card were dropped to keep the strip skinny.
-          summary.innerHTML = `
-            <div style="padding:4px 0 8px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-family:'Space Mono','Share Tech Mono',monospace">
-              <span style="font-size:.72rem;color:var(--muted);letter-spacing:.06em">FREE PLAN</span>
-              <span style="font-size:.72rem;color:${barColor};font-weight:700">${owned} / 200 cards added</span>
-              ${owned >= 200 ? `<span style="font-size:.68rem;color:#e74c3c">— limit reached, <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` :
-                owned >= 160 ? `<span style="font-size:.68rem;color:var(--gold)">— ${200 - owned} left, <span onclick="openPricingModal()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">upgrade</span></span>` : ''}
-            </div>`;
-        } else {
-          summary.innerHTML = '';
-        }
-      }
+      // Collection tracking is unlimited + free now — no card-cap strip.
+      if (summary) summary.innerHTML = '';
 
       // Paginate active items only (owned + ghost, no sold).
       // When a search query is active in list view, show ALL matching
@@ -18772,7 +18807,7 @@ function _loadAdmin(){
                </svg>
              </div>`
           : `<div style="padding:8px 10px;background:var(--surface2);border:1px dashed var(--border);border-radius:var(--r-md);text-align:center;margin-bottom:12px">
-               <div style="font-size:.62rem;color:var(--muted)">// PRICE_TREND — <span style="color:var(--teal)">Collector+</span></div>
+               <div style="font-size:.62rem;color:var(--muted)">// PRICE_TREND — <span style="color:var(--teal)">Enthusiast+</span></div>
                <button onclick="closeModal('binderDetailModal');renderPricingGrid()" style="margin-top:5px;padding:3px 10px;border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:'Space Mono','Share Tech Mono',monospace;font-size:.62rem;cursor:pointer;border-radius:var(--r-sm)">Upgrade →</button>
              </div>`}
 
@@ -19144,9 +19179,9 @@ function _loadAdmin(){
     function openAddToWishlistModal(cardData) {
       if (!currentUser) { showToast('Sign in to add cards to your wishlist'); return; }
       if (!canAddGhostCard()) {
-        showToast('Free plan: 2 Wishlist goals. Upgrade to Collector for unlimited.');
-        setTimeout(() => openPricingModalWithPromo('collector'), 800);
-        openPricingModal('collector');
+        showToast('Free plan: 5 Wishlist goals. Upgrade to Enthusiast for unlimited.');
+        setTimeout(() => openPricingModalWithPromo('enthusiast'), 800);
+        openPricingModal('enthusiast');
         return;
       }
       pendingCollectionCard = cardData;
@@ -20667,7 +20702,7 @@ function _loadAdmin(){
       const cardData = window._searchCardDetailData;
       if (!cardData) return;
       if (!currentUser) { showToast('Sign in to add cards'); return; }
-      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('collector'); return; }
+      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('enthusiast'); return; }
 
       const b = document.getElementById('searchCardBinderSelect')?.value || null;
       const lang = cardData.language || (window._pendingJpCard ? 'JA' : 'EN');
@@ -20753,7 +20788,7 @@ function _loadAdmin(){
       // Free tier: hard cap at 200 cards
       if (!canAddMoreCards()) {
         showToast('Free plan limit: 200 cards reached');
-        openPricingModal('collector');
+        openPricingModal('enthusiast');
         return;
       }
       pendingCollectionCard = cardData;
@@ -25163,8 +25198,7 @@ function _loadAdmin(){
       var used  = getUsageCount('scan');
       var limit = scannerLimit();
       if (used >= limit) {
-        var nextTier = tierAtLeast('enthusiast') ? null
-                     : tierAtLeast('collector') ? 'enthusiast' : 'collector';
+        var nextTier = tierAtLeast('enthusiast') ? null : 'enthusiast';
         showToast('Monthly scan limit reached (' + limit + '/month).');
         setTimeout(function() {
           if (nextTier) openPricingModalWithPromo(nextTier);
@@ -30247,7 +30281,7 @@ function _loadAdmin(){
     async function addJpSetCardToCollection(idx) {
       const card = (window._jpSetDetailCards || [])[idx];
       if (!card || !currentUser) { showToast('Sign in to add cards'); return; }
-      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('collector'); return; }
+      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('enthusiast'); return; }
 
       const binderId = document.getElementById('jpSetCardBinderSelect')?.value || null;
       document.getElementById('setCardDetailSheet')?.remove();
@@ -30848,7 +30882,7 @@ function _loadAdmin(){
       var remain = (typeof remainingCardSlots === 'function') ? remainingCardSlots() : Infinity;
       if (remain !== Infinity && idxs.length > remain) {
         showToast('Free plan: only ' + Math.max(0, remain) + ' more card(s). Upgrade for unlimited.');
-        if (remain <= 0) { if (typeof openPricingModal === 'function') openPricingModal('collector'); return; }
+        if (remain <= 0) { if (typeof openPricingModal === 'function') openPricingModal('enthusiast'); return; }
         idxs = idxs.slice(0, remain);
       }
 
@@ -31051,7 +31085,7 @@ function _loadAdmin(){
       const card = window._setsDetailCards && window._setsDetailCards[idx];
       if (!card) return;
       if (!currentUser) { showToast('Sign in to add cards'); return; }
-      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('collector'); return; }
+      if (!canAddMoreCards()) { showToast('Free plan limit: 200 cards reached'); openPricingModal('enthusiast'); return; }
 
       const b = document.getElementById('setCardBinderSelect')?.value || null;
       document.getElementById('setCardDetailSheet')?.remove();

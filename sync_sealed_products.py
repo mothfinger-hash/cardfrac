@@ -123,6 +123,7 @@ TCG_CONFIG = {
             "gundam-dual-impact",
             "gundam-edition-beta",
             "gundam-eternal-nexus",           # EB01, released 2026-06-26 (PC console page confirmed)
+            "gundam-freedom-ascension",       # GD05, released 2026-07-24 (1st-anniversary booster; confirm slug on PC)
             "gundam-starter-deck-10-generation-pulse",  # ST10, released 2026-06-26 (matches ST01 slug convention; confirm on PC)
             "gundam-newtype-rising",
             "gundam-phantom-aria",
