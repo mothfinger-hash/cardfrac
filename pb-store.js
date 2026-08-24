@@ -566,6 +566,9 @@
       variant:    item.variant || 'normal',
       condition:  item.condition === 'graded' ? 'Graded' : 'NM',
       productType: 'single',
+      // Carry the item's stored value so the asking-price field is
+      // pre-filled — vendors who bulk-imported with prices don't retype.
+      price:      item.current_value || null,
     });
   }
 

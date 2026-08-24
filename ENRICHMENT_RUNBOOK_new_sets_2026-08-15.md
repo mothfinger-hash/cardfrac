@@ -43,12 +43,23 @@ python3 enrich_from_pc_csv.py --category magic-cards --tcg magic
 python3 sync_sealed_products.py --tcg magic --only magic-the-hobbit --dry-run
 python3 sync_sealed_products.py --tcg magic --only magic-the-hobbit
 
-# 1e) Scanner embeddings so the scanner can match the new cards
+# 1e) Mirror images off the TCGplayer CDN into the card-images bucket
+#     (self-hosts images + rewrites image_url; removes the hotlink dependency)
+python3 mirror_tcgplayer_images.py --set-code HOB --game magic --dry-run   # preview 320 targets
+python3 mirror_tcgplayer_images.py --set-code HOB --game magic
+#     Sealed images (only if HOB sealed products were synced in 1d):
+python3 mirror_sealed_from_tcgplayer.py --group 24683 --game magic --dry-run
+python3 mirror_sealed_from_tcgplayer.py --group 24683 --game magic
+
+# 1f) Scanner embeddings so the scanner can match the new cards
 python3 embed_catalog_rows.py --only HOB
 ```
 
-Magic serves images straight from the TCGplayer CDN (step 1a fills `image_url`),
-so no separate `mirror_tcgplayer_images.py` step is required for HOB.
+Note: step 1a fills `image_url` from the TCGplayer CDN, so cards render even
+before mirroring — but mirroring (1e) self-hosts them in the `card-images`
+bucket so you don't depend on TCGplayer hotlinks. As of this run all 320 HOB
+singles are still on the CDN (0 mirrored), so 1e is pending. Run 1e **after**
+the singles land (they have) — it reads the `mtg-hob-*` rows and their CDN URLs.
 
 **Optional — HOC (eternal-legal variant), group 24691.** Only if you want it as
 a separate set_code; same recipe with `--group 24691 --set-code HOC`.

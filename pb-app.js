@@ -8261,8 +8261,13 @@ function _loadAdmin(){
           return `<tr onclick="viewDetail('${l.id}')" style="cursor:pointer">
             <td>
               <div style="display:flex;align-items:center;gap:8px">
-                ${l.photos && l.photos[0] ? `<img src="${_pickThumbVariant(l.photos[0], 200)}" data-fallback="${l.photos[0]}" style="height:40px;width:auto;border:1px solid var(--border)" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.display='none';this.onerror=null}" loading="lazy" decoding="async">` : ''}
+                ${l.photos && l.photos[0]
+                  ? `<img src="${_pickThumbVariant(l.photos[0], 200)}" data-fallback="${l.photos[0]}" style="height:40px;width:auto;border:1px solid var(--border)" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.display='none';this.onerror=null}" loading="lazy" decoding="async">`
+                  : `<div title="No photo yet" style="height:40px;width:29px;flex:0 0 auto;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.85rem">?</div>`}
                 <span style="color:var(--text)">${l.name}</span>
+                ${(l.status !== 'sold' && (!l.photos || l.photos.length === 0))
+                  ? `<span title="Add a photo so buyers trust this listing — tap Edit" style="font-size:.58rem;letter-spacing:.05em;padding:2px 6px;border:1px solid var(--copper);color:var(--copper);white-space:nowrap">NEEDS PHOTO</span>`
+                  : ''}
               </div>
             </td>
             <td><span class="${l.grade && l.grade !== 'Raw' ? 'grade-badge' : 'raw-badge'}">${l.grade || 'Raw'}</span></td>
@@ -11619,6 +11624,7 @@ function _loadAdmin(){
         apiCardId:      item.api_card_id || null,
         cardNumber:     item.card_number || null,
         variant:        item.variant || 'normal',
+        price:          item.current_value || null,
         reusablePhotos: reusablePhotos,
       });
     }
@@ -11713,7 +11719,14 @@ function _loadAdmin(){
 
       document.getElementById('lcName').value = prefill?.cardName || '';
       document.getElementById('lcGame').value = prefill?.gameType || 'Pokémon';
-      document.getElementById('lcPrice').value = '';
+      // Prefill the asking price when the caller passes one. The binder
+      // "List for Sale" button and the My Store LIST button both pass the
+      // item's stored value, so a vendor who bulk-imported inventory WITH
+      // prices doesn't retype them — they just confirm. Bare "list your own
+      // card" CTAs pass no prefill, so the field stays blank.
+      const _lcPrefillPrice = (prefill && prefill.price != null) ? Number(prefill.price) : NaN;
+      document.getElementById('lcPrice').value =
+        (Number.isFinite(_lcPrefillPrice) && _lcPrefillPrice > 0) ? _lcPrefillPrice.toFixed(2) : '';
       // Shipping default is now empty — the seller decides. Was previously
       // hard-coded to $5.00 which baked an assumption into every listing.
       document.getElementById('lcShipping').value = '';
@@ -12501,13 +12514,24 @@ function _loadAdmin(){
     ];
 
     let vendorImportRows = [];
+    // Post-import batch used by the one-tap "List all for sale" offer. Each
+    // entry is a successfully-inserted collection_items row with the fields
+    // needed to create a marketplace listing at the uploaded price. Reset on
+    // every import so re-imports never accumulate stale rows.
+    let _bulkListBatch = [];
+    // Re-entrancy guard so a double-click / duplicate overlay can't fire two
+    // concurrent publishes over the same batch (which would double-list).
+    let _bulkListInFlight = false;
 
     function openVendorImportModal() {
       vendorImportRows = [];
+      _bulkListBatch = [];
       document.getElementById('importPreview').style.display = 'none';
       document.getElementById('importError').style.display = 'none';
       document.getElementById('importProgress').style.display = 'none';
       document.getElementById('importSubmitBtn').style.display = 'none';
+      var _blOffer = document.getElementById('bulkListOfferBtn');
+      if (_blOffer) _blOffer.style.display = 'none';
       const fi = document.getElementById('vendorImportFile');
       if (fi) fi.value = '';
       openModal('vendorImportModal');
@@ -12676,6 +12700,7 @@ function _loadAdmin(){
 
       let success = 0, failed = 0;
       const insertedIds = [];
+      _bulkListBatch = [];
 
       const isVendorPlus = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
       const VALID_GAMES = new Set(['pokemon','mtg','yugioh','onepiece','gundam','dbz']);
@@ -12783,7 +12808,30 @@ function _loadAdmin(){
         }
 
         if (error) { console.error('Import row error:', error.message); failed++; }
-        else { success++; if (newRow?.id) insertedIds.push(newRow.id); }
+        else {
+          success++;
+          if (newRow?.id) {
+            insertedIds.push(newRow.id);
+            // Stash everything the "List all for sale" offer needs so it
+            // can create a marketplace listing at the uploaded price
+            // without re-reading the DB. api_card_id is intentionally
+            // absent — imported rows aren't catalog-linked until the
+            // background enrichment pass, and (matching submitListCard)
+            // listings without a catalog id simply skip inventory
+            // bookkeeping, so there's no counter to keep in sync here.
+            _bulkListBatch.push({
+              collectionItemId: newRow.id,
+              name:        cardName,
+              gameType:    gameType,
+              productType: productType,
+              condition:   condition,
+              gradeVal:    gradeVal,
+              price:       price,
+              cardNumber:  cardNumber || null,
+              qty:         qty,
+            });
+          }
+        }
       }
 
       progEl.textContent = `// Done — ${success} card${success !== 1 ? 's' : ''} added. Matching images…`;
@@ -12791,8 +12839,6 @@ function _loadAdmin(){
       btn.disabled = false;
       vendorImportRows = [];
       document.getElementById('importSubmitBtn').style.display = 'none';
-      showToast(`${success} card${success !== 1 ? 's' : ''} added — matching images in background`);
-      closeModal('vendorImportModal');
 
       // Show cards immediately (no images yet), then enrich in background
       await loadCollection();
@@ -12801,6 +12847,220 @@ function _loadAdmin(){
 
       // Background enrichment: match each card against Pokémon TCG API
       if (insertedIds.length) enrichImportedCards(insertedIds);
+
+      // Offer one-tap bulk listing to sellers (enthusiast+). The uploaded
+      // Price already rode in on each row (current_value); this publishes
+      // eligible rows to the marketplace at that price with nothing to
+      // re-enter. Photoless per the shop-onboarding decision; the Stripe
+      // Connect gate is enforced at publish time. Non-sellers, or an import
+      // with nothing eligible, just get the toast and close as before.
+      const _blOffer = document.getElementById('bulkListOfferBtn');
+      const _canOfferList = _bulkListBatch.length
+        && typeof tierAtLeast === 'function' && tierAtLeast('enthusiast');
+      if (_canOfferList && _blOffer) {
+        const _elig = _bulkListEligibility();
+        if (_elig.eligible.length) {
+          progEl.textContent = `// ${success} added · ${_elig.eligible.length} ready to list for sale`;
+          _blOffer.textContent = `List ${_elig.eligible.length} for sale →`;
+          _blOffer.style.display = 'block';
+          showToast(`${success} added — list them for sale, or close`);
+          return; // keep the modal open so they can choose
+        }
+      }
+
+      showToast(`${success} card${success !== 1 ? 's' : ''} added — matching images in background`);
+      _bulkListBatch = [];
+      closeModal('vendorImportModal');
+    }
+
+    // ── Bulk "List all uploaded items for sale" ─────────────────────────
+    // Turns the just-imported batch into live marketplace listings at the
+    // uploaded prices, photoless, so a shop onboarding its inventory never
+    // re-enters pricing. Deliberately mirrors submitListCard's rules:
+    //   • Stripe Connect gate FAILS CLOSED (no live listing without payouts)
+    //   • per-tier listing caps + price ceilings + product-type gating
+    //   • inventory bookkeeping only when the listing is catalog-linked
+    //     (bulk rows aren't yet, so it's skipped — same as a typed listing)
+
+    // Eligibility split for the current _bulkListBatch. Pure/synchronous so
+    // both the confirmation summary and the executor agree on the same set.
+    function _bulkListEligibility() {
+      const eligible = [];
+      const skipped  = { noPrice: 0, overCeiling: 0, tierGated: 0, capExceeded: 0 };
+      const ceiling  = (typeof myPriceCeiling === 'function') ? myPriceCeiling() : 0;
+      const canNonSingle = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
+      let slots = (typeof listingsRemaining === 'function') ? listingsRemaining() : 0;
+      for (const it of _bulkListBatch) {
+        const isSingle = it.productType === 'single' || it.productType === 'tcg_single';
+        if (!(it.price > 0))                       { skipped.noPrice++;     continue; }
+        if (ceiling > 0 && it.price > ceiling)     { skipped.overCeiling++; continue; }
+        if (!isSingle && !canNonSingle)            { skipped.tierGated++;   continue; }
+        if (slots !== Infinity && slots <= 0)      { skipped.capExceeded++; continue; }
+        if (slots !== Infinity) slots--;
+        eligible.push(it);
+      }
+      return { eligible, skipped };
+    }
+
+    // Listing "grade" text (display only) from the imported condition.
+    function _bulkListGradeText(it) {
+      const c = String(it.condition || '').toLowerCase();
+      if (c === 'sealed') return 'Sealed';
+      if (c === 'graded') return it.gradeVal ? ('Graded ' + it.gradeVal) : 'Graded';
+      if (/gem|mint|near|\bnm\b/.test(c) && !/lightly/.test(c)) return 'NM';
+      if (/lightly|\blp\b/.test(c))     return 'LP';
+      if (/moderat|\bmp\b/.test(c))     return 'MP';
+      if (/heav|\bhp\b/.test(c))        return 'HP';
+      if (/damage|\bdmg\b/.test(c))     return 'Damaged';
+      return 'NM';
+    }
+
+    // Confirmation overlay — summarizes the eligible count, what's being
+    // skipped and why, warns that this publishes publicly, and collects a
+    // single flat shipping price for the whole batch.
+    function openBulkListConfirm() {
+      const { eligible, skipped } = _bulkListEligibility();
+      if (!eligible.length) { showToast('Nothing eligible to list right now.'); return; }
+
+      const skipBits = [];
+      if (skipped.noPrice)     skipBits.push(skipped.noPrice + ' with no price');
+      if (skipped.overCeiling) skipBits.push(skipped.overCeiling + ' over your $' + myPriceCeiling().toFixed(0) + ' price cap');
+      if (skipped.tierGated)   skipBits.push(skipped.tierGated + ' sealed/product (Vendor+ only)');
+      if (skipped.capExceeded) skipBits.push(skipped.capExceeded + ' over your listing cap');
+      const skipTotal = skipped.noPrice + skipped.overCeiling + skipped.tierGated + skipped.capExceeded;
+
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,5,0,.92);z-index:10100;display:flex;align-items:center;justify-content:center;padding:16px';
+      const box = document.createElement('div');
+      box.style.cssText = "background:var(--surface);border:1px solid var(--border);padding:22px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;box-shadow:3px 3px 0 var(--shadow);font-family:'Space Mono','Share Tech Mono',monospace";
+      box.innerHTML = ''
+        + '<div style="font-size:.72rem;color:var(--copper);letter-spacing:.08em;margin-bottom:6px">// LIST FOR SALE</div>'
+        + '<div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:10px">List ' + eligible.length + ' item' + (eligible.length !== 1 ? 's' : '') + ' at your uploaded prices</div>'
+        + '<div style="font-size:.78rem;color:var(--muted);line-height:1.5;margin-bottom:14px">These publish <b style="color:var(--text)">publicly</b> on the marketplace right away, at the prices from your sheet. No photos yet — add a photo to each listing later for the best results and dispute protection.'
+        + (skipBits.length ? '<br><br><b style="color:var(--text)">Skipping ' + skipTotal + ':</b> ' + skipBits.join(' · ') + '.' : '')
+        + '</div>'
+        + '<label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:5px">Flat shipping per item (USD) — optional</label>'
+        + '<input id="_blShip" type="text" inputmode="decimal" placeholder="0.00" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.9rem;margin-bottom:16px">'
+        + '<div style="display:flex;gap:10px">'
+        + '  <button id="_blGo" style="flex:1;padding:11px;background:var(--copper);color:var(--text-on-accent);border:none;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer">Publish ' + eligible.length + ' listing' + (eligible.length !== 1 ? 's' : '') + '</button>'
+        + '  <button id="_blCancel" style="flex:1;padding:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer">Cancel</button>'
+        + '</div>';
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      const close = () => { if (overlay.parentNode) document.body.removeChild(overlay); };
+      box.querySelector('#_blCancel').onclick = close;
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+      box.querySelector('#_blGo').onclick = async () => {
+        const shipVal = parseFloat(box.querySelector('#_blShip').value) || 0;
+        const goBtn = box.querySelector('#_blGo');
+        goBtn.disabled = true; goBtn.textContent = 'Publishing…';
+        try {
+          await _executeBulkList(shipVal);
+        } finally {
+          close();
+        }
+      };
+    }
+
+    // Publishes the eligible batch. Connect-gated (fail closed), one insert
+    // per row with submitListCard's schema-fallback, tolerant of partial
+    // failure (reports how many landed).
+    async function _executeBulkList(shipping) {
+      if (!currentUser) return;
+      if (_bulkListInFlight) return;      // a publish is already running
+      _bulkListInFlight = true;
+      try {
+        await _executeBulkListInner(shipping);
+      } finally {
+        _bulkListInFlight = false;
+      }
+    }
+
+    async function _executeBulkListInner(shipping) {
+      // ── Connect readiness — FAIL CLOSED (mirror submitListCard) ──────────
+      // A listing must not go live unless the seller can actually receive the
+      // sale; otherwise buyer funds land in the platform account with no
+      // compliant payout (CLAUDE.md Stripe ToS). Admins are exempt.
+      if (!currentUser.is_admin) {
+        if (!connectStatus.chargesEnabled && !connectStatus.loading) { await refreshConnectStatus(); }
+        for (let _cw = 0; _cw < 30 && connectStatus.loading; _cw++) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+        if (!connectStatus.loaded) {
+          showToast('Could not verify your payout setup. Check your connection and try again.');
+          return;
+        }
+        if (!connectStatus.chargesEnabled) {
+          const go = await pbConfirm(
+            'Set up Stripe payouts before you list — it is how sale proceeds reach your bank. Nothing was published yet.',
+            { confirmText: 'SET UP PAYOUTS', cancelText: 'LATER' });
+          if (go && typeof startStripeConnectOnboarding === 'function') startStripeConnectOnboarding();
+          return;
+        }
+      }
+
+      const { eligible } = _bulkListEligibility();
+      if (!eligible.length) { showToast('Nothing eligible to list.'); return; }
+
+      let listed = 0, failed = 0;
+      for (const it of eligible) {
+        const _insert = {
+          name:            it.name,
+          game_type:       _listingGameLabel(it.gameType, null),
+          grade:           _bulkListGradeText(it),
+          value:           it.price,
+          shipping_price:  shipping || 0,
+          status:          'active',
+          seller_id:       currentUser.id,
+          seller_name:     currentUser.shop_name || currentUser.username || currentUser.name || null,
+          is_vendor_listing: true,
+          total_slots:     1,
+          // Multi-qty per listing is a vendor+ capability (mirrors the
+          // single-list modal, where the quantity input is hidden below
+          // vendor and falls back to 1).
+          quantity:        ((typeof tierAtLeast === 'function') && tierAtLeast('vendor'))
+                             ? Math.min(999, Math.max(1, it.qty || 1)) : 1,
+          photos:          [],
+          product_type:    it.productType,
+          variant:         'normal',
+          ships_to:        ['US'],
+          api_card_id:     null,
+          card_number:     it.cardNumber || null,
+        };
+        let { data, error } = await sb.from('listings').insert(_insert).select().single();
+        // Same schema-fallback cascade as submitListCard for envs missing
+        // the catalog-link / quantity / ships_to columns.
+        if (error && /api_card_id|card_number|quantity|ships_to|column|schema cache/i.test((error.message || '') + (error.details || ''))) {
+          const { api_card_id: _a, card_number: _cn, quantity: _q, ships_to: _st, ..._noLink } = _insert;
+          const r2 = await sb.from('listings').insert(_noLink).select().single();
+          data = r2.data; error = r2.error;
+        }
+        if (error) { console.error('[bulk-list] row error:', error.message); failed++; }
+        else {
+          listed++;
+          // Inventory bookkeeping only fires for catalog-linked listings —
+          // bulk rows aren't, so this no-ops (same as a typed listing).
+          if (data && data.api_card_id) {
+            try { await _invOnListingCreated(currentUser.id, data.api_card_id, data.variant || 'normal', data.quantity || 1); }
+            catch (e) { console.warn('[inv] bulk post-list bookkeeping failed:', e && e.message); }
+          }
+        }
+      }
+
+      _bulkListBatch = [];
+      showToast(listed + ' item' + (listed !== 1 ? 's' : '') + ' listed for sale'
+        + (failed ? (' · ' + failed + ' failed') : ''));
+      closeModal('vendorImportModal');
+
+      // Refresh the listings cache + My Store so the new listings show without
+      // a reload. Best-effort — the listing inserts already succeeded.
+      try {
+        const { data: freshL } = await sb.from('listings')
+          .select('*').neq('status', 'inactive').order('created_at', { ascending: false });
+        if (freshL && typeof mapListing === 'function') listings = freshL.map(mapListing);
+      } catch (e) { /* view reload on next navigation */ }
+      if (typeof renderMyListings === 'function') renderMyListings();
     }
 
     // ── Card version picker — shown when multiple different sets are found ─────
@@ -21826,7 +22086,7 @@ function _loadAdmin(){
     // PathBinder Discord invite URL. Swap this in once the Discord exists.
     // Used by the post-claim "join Discord" prompt for new beta testers.
     var PATHBINDER_DISCORD_URL = 'https://discord.gg/JEwDTxWs4';
-    var BETA_LIMITS = { founding: 10, collector: 50 };
+    var BETA_LIMITS = { founding: 25, founding_shop: 1 };
 
     // Global lookup of active beta tester user_id → tier. Loaded once at
     // app startup (publicly readable via RLS) and refreshed after any admin
@@ -21865,14 +22125,19 @@ function _loadAdmin(){
     function renderBetaBadge(userId, variant) {
       var tier = getBetaTier(userId);
       if (!tier) return '';
-      var label = tier === 'founding' ? 'Founding' : 'Beta';
-      var title = tier === 'founding'
-        ? 'Founding Beta tester — permanent Vendor tier'
-        : 'Collector Beta tester';
+      // founding + founding_shop are the permanent "founding partner" tiers;
+      // both wear the gold Founding badge. founding_shop reuses the founding
+      // CSS class so it gets the same styling without a new rule.
+      var isFounding = (tier === 'founding' || tier === 'founding_shop');
+      var label = isFounding ? 'Founding' : 'Beta';
+      var title = tier === 'founding'      ? 'Founding Beta tester — permanent Vendor tier'
+                : tier === 'founding_shop' ? 'Founding Shop — permanent Shop tier'
+                :                            'Beta tester';
+      var cls = isFounding ? 'founding' : tier;
       if (variant === 'dot') {
-        return '<span class="beta-dot ' + tier + '" title="' + title + '"></span>';
+        return '<span class="beta-dot ' + cls + '" title="' + title + '"></span>';
       }
-      return '<span class="beta-badge ' + tier + '" title="' + title + '"><span class="bb-glyph"></span>' + label + '</span>';
+      return '<span class="beta-badge ' + cls + '" title="' + title + '"><span class="bb-glyph"></span>' + label + '</span>';
     }
 
     function printBetaTesterSQL() {
@@ -22210,7 +22475,7 @@ function _loadAdmin(){
     }
 
     // Collapse/expand cache (defaults: all expanded)
-    var _betaCollapsed = { founding: false, enthusiast: false, collector: false, vendor: false, shop: false };
+    var _betaCollapsed = { founding: false, founding_shop: false, enthusiast: false, vendor: false, shop: false };
     // Tier → suffix used in DOM ids (PascalCase) so toggling/rendering can
     // resolve the right elements from a single tier string.
     // founding kept as the historical "early supporter" bucket that grants
@@ -22218,18 +22483,18 @@ function _loadAdmin(){
     // vendor is the NEW $75/mo tier (post-rename), distinct from old vendor
     // which was renamed to enthusiast.
     var _BETA_TIER_SUFFIX = {
-      founding:   'Founding',
-      enthusiast: 'Enthusiast',
-      collector:  'Collector',
-      vendor:     'Vendor',
-      shop:       'Shop',
+      founding:      'Founding',
+      founding_shop: 'FoundingShop',
+      enthusiast:    'Enthusiast',
+      vendor:        'Vendor',
+      shop:          'Shop',
     };
     var _BETA_TIER_CAPS   = {
-      founding:   10,
-      enthusiast: 20,
-      collector:  50,
-      vendor:     5,
-      shop:       3,
+      founding:      25,
+      founding_shop: 1,
+      enthusiast:    20,
+      vendor:        5,
+      shop:          3,
     };
 
     function adminToggleBetaSection(tier) {
@@ -22273,28 +22538,27 @@ function _loadAdmin(){
 
       if (res.error) {
         var msg = (res.error.message || '').toLowerCase();
-        var lF = document.getElementById('betaListFounding');
-        var lE = document.getElementById('betaListEnthusiast');
-        var lV = document.getElementById('betaListVendor');
-        var lC = document.getElementById('betaListCollector');
-        var lS = document.getElementById('betaListShop');
+        var lF  = document.getElementById('betaListFounding');
+        var lFS = document.getElementById('betaListFoundingShop');
+        var lE  = document.getElementById('betaListEnthusiast');
+        var lV  = document.getElementById('betaListVendor');
+        var lS  = document.getElementById('betaListShop');
         if (msg.indexOf('relation') !== -1 || msg.indexOf('does not exist') !== -1 || msg.indexOf('schema') !== -1 || msg.indexOf('column') !== -1) {
-          var warn = '<div style="font-size:.6rem;color:var(--copper)">Run the beta SQL migration first — click "Print SQL" above and paste into Supabase.</div>';
-          [lF, lE, lV, lC, lS].forEach(function(el){ if (el) el.innerHTML = warn; });
-          printBetaTesterSQL();
+          var warn = '<div style="font-size:.6rem;color:var(--copper)">Run migration_beta_founding_shop_and_cleanup.sql in Supabase, then reload.</div>';
+          [lF, lFS, lE, lV, lS].forEach(function(el){ if (el) el.innerHTML = warn; });
         } else {
           var err = '<div style="font-size:.6rem;color:var(--red)">Error: ' + res.error.message + '</div>';
-          [lF, lE, lV, lC, lS].forEach(function(el){ if (el) el.innerHTML = err; });
+          [lF, lFS, lE, lV, lS].forEach(function(el){ if (el) el.innerHTML = err; });
         }
         return;
       }
 
       var rows = res.data || [];
-      _renderBetaList('Founding',   rows.filter(function(r){ return r.tier === 'founding';   }), 10);
-      _renderBetaList('Enthusiast', rows.filter(function(r){ return r.tier === 'enthusiast'; }), 20);
-      _renderBetaList('Collector',  rows.filter(function(r){ return r.tier === 'collector';  }), 50);
-      _renderBetaList('Vendor',     rows.filter(function(r){ return r.tier === 'vendor';     }), 5);
-      _renderBetaList('Shop',       rows.filter(function(r){ return r.tier === 'shop';       }), 3);
+      _renderBetaList('Founding',     rows.filter(function(r){ return r.tier === 'founding';      }), 25);
+      _renderBetaList('FoundingShop', rows.filter(function(r){ return r.tier === 'founding_shop'; }), 1);
+      _renderBetaList('Enthusiast',   rows.filter(function(r){ return r.tier === 'enthusiast';    }), 20);
+      _renderBetaList('Vendor',       rows.filter(function(r){ return r.tier === 'vendor';        }), 5);
+      _renderBetaList('Shop',         rows.filter(function(r){ return r.tier === 'shop';          }), 3);
     }
 
     function _renderBetaList(label, rows, cap) {
@@ -22470,11 +22734,11 @@ function _loadAdmin(){
     // so the cap slot frees up for a new invite.
     async function adminSweepExpiredShopBeta() {
       if (!currentUser?.is_admin) return;
-      if (!confirm('Sweep all expired Shop-tier betas?\n\nAny user still on the free 1-year shop tier whose window has lapsed will be moved to enthusiast. Users on a paid shop subscription are not affected.')) return;
-      var res = await sb.rpc('downgrade_expired_shop_beta');
+      if (!confirm('Sweep all expired betas?\n\nAny beta whose 1-year window has lapsed will be moved to Free. Permanent tiers (Founding, Founding Shop) and users on a paid subscription are not affected.')) return;
+      var res = await sb.rpc('downgrade_expired_beta');
       if (res.error) { showToast('Sweep failed: ' + res.error.message); return; }
       var n = (res.data == null) ? 0 : res.data;
-      showToast(n === 0 ? 'No expired shop betas — nothing to sweep' : 'Downgraded ' + n + ' shop beta' + (n === 1 ? '' : 's') + ' to enthusiast');
+      showToast(n === 0 ? 'No expired betas — nothing to sweep' : 'Downgraded ' + n + ' expired beta' + (n === 1 ? '' : 's') + ' to Free');
       renderAdminBetaTesters();
       loadBetaUserCache().then(function() { try { renderBrowse(); } catch(_) {} updateAuthUI(); });
     }
@@ -22580,6 +22844,9 @@ function _loadAdmin(){
           switch (tier) {
             case 'founding':
               msg = 'Founding Beta access — Vendor tier features unlocked (sealed + non-TCG listings + product scanner).';
+              break;
+            case 'founding_shop':
+              msg = 'Founding Shop — permanent Shop tier unlocked (unlimited listings, POS, storefront, full pro toolkit).';
               break;
             case 'enthusiast':
               msg = 'Enthusiast Beta access — bulk import, sales archive, multi-binder.';

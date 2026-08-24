@@ -141,21 +141,21 @@ function _pbInjectAdminMarkup(){
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
         <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Beta Testers</div>
-        <button onclick="printBetaTesterSQL();showToast('Beta tester SQL printed to console')"
-          style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Print SQL</button>
+        <button onclick="showToast('Beta schema lives in SQL Migrations/migration_beta_founding_shop_and_cleanup.sql — run that in Supabase.')"
+          style="font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer" title="The old Print SQL generator was stale and would revert the current schema — the migration file is the source of truth.">Beta SQL</button>
       </div>
       <div style="font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:12px;line-height:1.6">
         Invite-only access for pre-launch testers. Email-grant applies the tier immediately if the email matches a user, or waits for them to sign up. Codes can be redeemed from the user dropdown. Email changes on beta accounts are logged automatically.
       </div>
 
-      <!-- Founding Beta (vendor tier × 10) -->
+      <!-- Founding Beta (vendor tier × 25) -->
       <div id="betaSectionFounding" style="margin-bottom:14px;border:1px solid rgba(184,115,51,.35);background:rgba(184,115,51,.04)">
         <div onclick="adminToggleBetaSection('founding')"
           style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
           <div style="display:flex;align-items:center;gap:10px">
             <span id="betaCaretFounding" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--copper);transition:transform .15s">▾</span>
             <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Founding Beta — Vendor</span>
-            <span id="betaCountFounding" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 10</span>
+            <span id="betaCountFounding" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 25</span>
           </div>
           <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent vendor access · no subscription required</span>
         </div>
@@ -226,42 +226,46 @@ function _pbInjectAdminMarkup(){
         </div>
       </div>
 
-      <!-- Collector Beta (collector tier × 50) -->
-      <div id="betaSectionCollector" style="border:1px solid rgba(26,199,160,.25);background:rgba(26,199,160,.03)">
-        <div onclick="adminToggleBetaSection('collector')"
+      <!-- Founding Shop (shop tier × 1) — the single permanent flagship partner.
+           Grants permanent Shop tier. Inviting by email before the shop signs
+           up stays permanent (the auto-claim trigger honors founding_shop).
+           To switch the flagship to a different shop: Revoke the current one
+           (drops them to Free + frees the slot), then invite the new shop. -->
+      <div id="betaSectionFoundingShop" style="border:1px solid rgba(255,233,74,.4);background:rgba(255,233,74,.05)">
+        <div onclick="adminToggleBetaSection('founding_shop')"
           style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
           <div style="display:flex;align-items:center;gap:10px">
-            <span id="betaCaretCollector" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--accent);transition:transform .15s">▾</span>
-            <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Collector Beta</span>
-            <span id="betaCountCollector" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 50</span>
+            <span id="betaCaretFoundingShop" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--gold,#FFE94A);transition:transform .15s">▾</span>
+            <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--gold,#FFE94A);text-transform:uppercase">Founding Shop — Shop</span>
+            <span id="betaCountFoundingShop" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 1</span>
           </div>
-          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent collector access · upgrade-eligible</span>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Single permanent Shop partner · no subscription required</span>
         </div>
-        <div id="betaBodyCollector" style="padding:0 14px 14px 14px">
-          <div id="betaListCollector" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
-            <div style="font-size:.6rem;color:rgba(26,199,160,.4);letter-spacing:.06em">Loading…</div>
+        <div id="betaBodyFoundingShop" style="padding:0 14px 14px 14px">
+          <div id="betaListFoundingShop" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+            <div style="font-size:.6rem;color:rgba(255,233,74,.5);letter-spacing:.06em">Loading…</div>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px solid rgba(26,199,160,.15)">
-            <input type="text" id="betaInviteEmailCollector" placeholder="email@example.com"
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px solid rgba(255,233,74,.2)">
+            <input type="text" id="betaInviteEmailFoundingShop" placeholder="email@example.com"
               style="flex:1;min-width:170px;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);outline:none">
-            <button onclick="adminInviteBetaTester('collector','email')"
+            <button onclick="adminInviteBetaTester('founding_shop','email')"
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
-            <button onclick="adminInviteBetaTester('collector','code')"
-              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">Generate Code</button>
+            <button onclick="adminInviteBetaTester('founding_shop','code')"
+              style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--gold,#FFE94A);background:transparent;color:var(--gold,#FFE94A);cursor:pointer;white-space:nowrap">Generate Code</button>
           </div>
         </div>
       </div>
 
-      <!-- Shop Beta (shop tier × 10) — 1-year membership, then auto-downgrades to vendor -->
+      <!-- Shop Beta (shop tier × 3) — 1-year free membership, then converts to Free -->
       <div id="betaSectionShop" style="border:1px solid rgba(255,233,74,.3);background:rgba(255,233,74,.03);margin-top:10px">
         <div onclick="adminToggleBetaSection('shop')"
           style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none">
           <div style="display:flex;align-items:center;gap:10px">
             <span id="betaCaretShop" style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--gold,#FFE94A);transition:transform .15s">▾</span>
             <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--gold,#FFE94A);text-transform:uppercase">Shop Beta</span>
-            <span id="betaCountShop" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 10</span>
+            <span id="betaCountShop" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 3</span>
           </div>
-          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Single-card shop access · 1-year free · auto-downgrades to vendor</span>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Shop-tier access · 1-year free · then converts to Free</span>
         </div>
         <div id="betaBodyShop" style="padding:0 14px 14px 14px">
           <div id="betaListShop" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
@@ -274,7 +278,7 @@ function _pbInjectAdminMarkup(){
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer;white-space:nowrap">Invite by Email</button>
             <button onclick="adminInviteBetaTester('shop','code')"
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--gold,#FFE94A);background:transparent;color:var(--gold,#FFE94A);cursor:pointer;white-space:nowrap">Generate Code</button>
-            <button onclick="adminSweepExpiredShopBeta()" title="Downgrades any shop beta whose 1-year window has lapsed → enthusiast"
+            <button onclick="adminSweepExpiredShopBeta()" title="Downgrades any beta whose 1-year window has lapsed → Free"
               style="font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.06em;padding:6px 12px;border:1px solid rgba(255,100,100,.5);background:transparent;color:rgba(255,100,100,.85);cursor:pointer;white-space:nowrap">Sweep Expired</button>
           </div>
         </div>
@@ -1653,10 +1657,10 @@ async function renderAdminOverview(){
     try{ var q = sb.from(table).select('*', {count:'exact', head:true}); if (build) q = build(q); var r = await q; if (r.error) return null; return r.count || 0; }
     catch(e){ return null; }
   }
-  var PRICE = { collector:5, enthusiast:10, vendor:50, shop:150 };
+  var PRICE = { enthusiast:10, vendor:29, shop:99 };  // current monthly prices; collector retired
 
   // Users & subscriptions
-  var tiers = ['free','collector','enthusiast','vendor','shop'];
+  var tiers = ['free','enthusiast','vendor','shop'];
   var tc = {};
   for (var i=0;i<tiers.length;i++){
     tc[tiers[i]] = await cnt('profiles', (function(t){ return function(q){ return q.eq('subscription_tier', t); }; })(tiers[i]));
@@ -1667,7 +1671,7 @@ async function renderAdminOverview(){
   // Beta testers are comped (free for the term of their code), so subtract
   // them from the paying counts before computing MRR. public_beta_testers
   // exposes active grants; we look up those users' current tiers.
-  var betaPerTier = { collector:0, enthusiast:0, vendor:0, shop:0 };
+  var betaPerTier = { enthusiast:0, vendor:0, shop:0 };  // founding→vendor, founding_shop→shop count here by subscription_tier
   var betaTotal = 0;
   try{
     var bt = await sb.from('public_beta_testers').select('user_id');
@@ -1679,7 +1683,7 @@ async function renderAdminOverview(){
     }
   }catch(e){}
   function _paying(t){ return Math.max(0, (tc[t]||0) - (betaPerTier[t]||0)); }
-  var mrr = _paying('collector')*PRICE.collector + _paying('enthusiast')*PRICE.enthusiast + _paying('vendor')*PRICE.vendor + _paying('shop')*PRICE.shop;
+  var mrr = _paying('enthusiast')*PRICE.enthusiast + _paying('vendor')*PRICE.vendor + _paying('shop')*PRICE.shop;
 
   // Marketplace revenue (net of Stripe 2.9% + $0.30/txn). GMV is informational.
   var fees=0, gmv=0, ord=0;
@@ -1717,10 +1721,9 @@ async function renderAdminOverview(){
 
   if ($('ovUsers')) $('ovUsers').innerHTML =
       _ovTile(show(totalUsers), 'Total users', show(new30) + ' new / 30d')
-    + _ovTile(show(tc.collector), 'Collector', '$5/mo')
     + _ovTile(show(tc.enthusiast), 'Enthusiast', '$10/mo')
-    + _ovTile(show(tc.vendor), 'Vendor', '$50/mo')
-    + _ovTile(show(tc.shop), 'Shop', '$150/mo')
+    + _ovTile(show(tc.vendor), 'Vendor', '$29/mo')
+    + _ovTile(show(tc.shop), 'Shop', '$99/mo')
     + _ovTile(show(tc.free), 'Free', 'cannot sell')
     + _ovTile(show(betaTotal), 'Beta (comped)', 'free via code, not in MRR');
 

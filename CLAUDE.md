@@ -315,6 +315,23 @@ When adding a new finish (e.g. `'cosmos_holo'`, `'reverse_holo_promo'`):
   (`create if not exists`, `create or replace`, `drop policy if exists`).
 - Beta testers have their own table `beta_testers` with a public-read
   view `public_beta_testers` that exposes only `(user_id, tier)`.
+  **Authoritative grant/claim/sweep logic** lives in
+  `migration_beta_founding_shop_and_cleanup.sql` (supersedes
+  `migration_beta_tier_remap.sql`; the `printBetaTesterSQL()` "Print SQL"
+  button in pb-app.js is an OLDER stale copy — trust the migration).
+  Beta tiers → grant: `founding` (cap 25) → permanent **Vendor**;
+  `founding_shop` (cap **1**, the single flagship partner) → permanent
+  **Shop**; `enthusiast`/`vendor`/`shop` → that tier for **1 year then
+  Free**; `collector` is retired and **aliased to `enthusiast`** in every
+  grant path. Permanence = `expires_at = NULL` (the sweep
+  `downgrade_expired_beta` skips NULL) AND an explicit
+  `tier NOT IN ('founding','founding_shop')` guard. `admin_invite_beta`
+  is admin-gated on `auth.uid()`, so it can't run from the SQL editor —
+  grant the flagship shop with the direct-SQL `do` block at the bottom of
+  that migration (run it AFTER the owner signs up, or the signup
+  auto-claim trigger resets the expiry to 1 year). Prices anywhere in the
+  beta code/email must track the current tiers: enthusiast $10, vendor
+  $29, shop $99; commissions enthusiast 8% / vendor 7% / shop 6%.
 
 ### Per-unit metadata (Vendor+ tier)
 
@@ -706,6 +723,55 @@ means adding it to both lists.
 inventory pattern). Same schema-fallback cascade as
 `quickAddScannedCard` — strips `on_shelf_qty` then `product_type`
 if the DB is on an older schema.
+
+### Pricing already flows — Price → current_value, Cost → purchase_price
+
+Both sheets carry `Cost` + `Price` (Price = "asking price, required").
+The import maps `Price → collection_items.current_value` and
+`Cost → purchase_price` — so a shop's uploaded prices are captured, NOT
+discarded. That stored value then:
+- **Pre-fills the POS "Mark Sold" unit price** (`openMarkSoldModal`,
+  `msUnitPrice` from `item.current_value`) — in-store sales are ready.
+- **Pre-fills the marketplace list price.** `openListCardModal` reads
+  `prefill.price` (blank when absent). The binder "List for Sale"
+  (`_listFromBinderItem`) and My Store "LIST" (`_storeOpenListFor`,
+  pb-store.js) both pass `price: item.current_value`, so a vendor who
+  bulk-imported with prices confirms instead of retyping. Bare
+  "list your own card" CTAs pass no prefill → field stays blank.
+
+So there is NO separate "pricing column" to add — it exists. The friction
+was only that listing re-typed the price; the prefill closes it.
+
+### One-tap "List all for sale" after import (photoless)
+
+After a successful import, sellers (enthusiast+) see a **List N for sale**
+button (`bulkListOfferBtn`) that publishes the just-imported batch to the
+marketplace at the uploaded prices, with nothing to re-enter. Flow:
+`submitVendorImport` stashes each inserted row in `_bulkListBatch` →
+`openBulkListConfirm` (summary + skip breakdown + flat-shipping input +
+public warning) → `_executeBulkList` → `_executeBulkListInner`.
+
+Deliberately mirrors `submitListCard`'s invariants (do NOT relax these):
+- **Stripe Connect gate FAILS CLOSED** — no live listing without
+  `connectStatus.chargesEnabled` (admins exempt). Routes to
+  `startStripeConnectOnboarding` and publishes nothing otherwise.
+- **Photoless by product decision** — imported rows have no photos and the
+  catalog STOCK image is deliberately never used as a listing photo
+  (dispute risk), so bulk listings ship with `photos: []`. This is the one
+  place the single-list ≥1-photo gate is intentionally bypassed; the shop
+  adds photos later.
+- `_bulkListEligibility` skips rows with no price, over the tier price
+  ceiling (`myPriceCeiling`), sealed/non-TCG below vendor, or past the
+  listing cap (`listingsRemaining`). The server `enforce_listing_cap`
+  trigger backstops all of it.
+- **No inventory bookkeeping** — bulk listings are catalog-unlinked
+  (`api_card_id: null` until enrichment), and `_invOnListingCreated` only
+  runs for linked listings, so `on_shelf → listed_online` is skipped —
+  exactly like a hand-typed listing. Avoids a stuck-counter bug.
+- `_bulkListInFlight` re-entrancy guard prevents a double-click from
+  double-publishing the batch.
+Listing insert shape is byte-identical to `submitListCard`'s
+`_insertListing` (same columns, same schema-fallback cascade).
 
 ## Service worker — must-revalidate strategy
 

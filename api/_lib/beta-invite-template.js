@@ -21,10 +21,10 @@ const PATHBINDER_BLURB = [
 ].join('|');   // joined with a pipe so the render fn can split + double-paragraph
 
 // `expires` field controls the post-beta conversion behavior:
-//   'permanent'  → founders only, no expiry, no conversion
-//   'to-free'    → every other tier (enthusiast, collector, vendor,
-//                  shop) — account drops to Free after 1 year unless
-//                  they subscribe at any point during the window
+//   'permanent'  → founders (founding, founding_shop) — no expiry, no conversion
+//   'to-free'    → every other tier (enthusiast, vendor, shop) — account
+//                  drops to Free after 1 year unless they subscribe at any
+//                  point during the window
 const TIER_COPY = {
   founding: {
     title:   'Founding Beta — Vendor tier, permanent',
@@ -56,21 +56,6 @@ const TIER_COPY = {
       'Easy shipping — buy + print Shippo labels in-app when you sell',
     ],
   },
-  collector: {
-    title:   'Collector Beta',
-    pitch:   "Collector tier is for people who want to actually know what their collection is worth and get pinged when something they're watching moves. No selling required — just better visibility into the pile.",
-    expires: 'to-free',
-    features: [
-      'Card scanner — point your phone at any TCG card, auto-fill it into your binder',
-      'Live price tracking on every card in your binder, refreshed daily',
-      'Daily / weekly market movers panel — see what is heating up before it spikes',
-      'Watchlist alerts when prices on cards you want move',
-      'Up to 3 card funds for goal-based collecting (save toward a specific grail)',
-      'Multi-binder organization to split collections by set, era, or build',
-      'Trade analyzer — see if a proposed trade is balanced before you accept',
-      'Unlimited cards in your binder (free tier caps at 200)',
-    ],
-  },
   vendor: {
     title:   'Vendor Beta',
     pitch:   "Vendor tier is for people running an actual store-on-the-side — sealed product, non-TCG items, product scanner, and a lower commission rate than Enthusiast.",
@@ -82,7 +67,7 @@ const TIER_COPY = {
       'Easy shipping — buy + print Shippo labels in-app, batched packing slips for multi-sales days',
       'Sales archive aggregating every channel (PathBinder + offline)',
       'Live price tracking + daily / weekly market movers + watchlist alerts',
-      'Trade analyzer + 6% commission (vs 7% on Enthusiast)',
+      'Trade analyzer + 7% commission (vs 8% on Enthusiast)',
       'Vendor-tier badge on your profile so buyers see you mean business',
     ],
   },
@@ -93,11 +78,28 @@ const TIER_COPY = {
     features: [
       'Unlimited concurrent marketplace listings — no monthly sales cap',
       'Card scanner + product scanner — TCG cards AND every non-TCG category',
-      '5% commission — lowest rate on the platform',
+      '6% commission — lowest rate on the platform',
       'Easy shipping — Shippo labels + batched packing slips for bulk fulfillment',
       'Bulk CSV import + sales archive + revenue dashboard across every channel',
       'Live price tracking + daily / weekly market movers + trade analyzer',
       'Shop-tier badge on your profile (your storefront looks the part)',
+    ],
+  },
+  // Flagship partner — a single permanent Shop-tier slot (beta tier
+  // 'founding_shop'). Same permanence promise as 'founding', at the top tier.
+  founding_shop: {
+    title:   'Founding Shop — permanent Shop tier',
+    pitch:   "You're our flagship shop. The deal: permanent, top-tier access — unlimited listings, the lowest commission on the platform, POS, your storefront, and every pro tool. Like our founders, yours has no clock and never auto-converts.",
+    expires: 'permanent',
+    features: [
+      'Permanent Shop-tier access — never expires, never auto-converts',
+      'Unlimited concurrent marketplace listings — no monthly sales cap',
+      'Point of sale + shelf-vs-online inventory reconciliation in one place',
+      'Card scanner + product scanner — TCG cards AND every non-TCG category',
+      '6% commission — the lowest rate on the platform',
+      'Bulk CSV import + sales archive + revenue dashboard across every channel',
+      'Live price tracking + daily / weekly market movers + trade analyzer',
+      'Founding-partner badge on your storefront + early access to new features',
     ],
   },
 };
