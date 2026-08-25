@@ -183,7 +183,7 @@ function _pbInjectAdminMarkup(){
             <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Enthusiast Beta</span>
             <span id="betaCountEnthusiast" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 20</span>
           </div>
-          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent enthusiast access · marketplace selling · 40 listing cap</span>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">1-year free · marketplace selling · 40 cap · then converts to Free</span>
         </div>
         <div id="betaBodyEnthusiast" style="padding:0 14px 14px 14px">
           <div id="betaListEnthusiast" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
@@ -209,7 +209,7 @@ function _pbInjectAdminMarkup(){
             <span style="font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--copper);text-transform:uppercase">Vendor Beta</span>
             <span id="betaCountVendor" style="font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted)">0 / 5</span>
           </div>
-          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">Permanent vendor access · sealed + non-TCG listings · 150 cap</span>
+          <span style="font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.06em">1-year free · sealed + non-TCG · 150 cap · then converts to Free</span>
         </div>
         <div id="betaBodyVendor" style="padding:0 14px 14px 14px">
           <div id="betaListVendor" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
