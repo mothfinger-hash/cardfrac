@@ -649,10 +649,39 @@ Database → Webhooks:
   24h). Respects `profiles.notify_price_spikes` (default FALSE, opt-in;
   see `migration_price_spike_alerts.sql`), dedups via
   `price_spike_notifications`.
+- `/api/expire-grants-cron` — `0 16 * * *`, reverts EXPIRED granted
+  tiers to Free via the `expire_granted_tiers` RPC. This is the ONLY
+  thing that ends a temporary grant — both the activation trial and
+  friend-invite (`subsidiary_invite`) grants. **Load-bearing:** nothing
+  swept these before, so friend-invite grants had been effectively
+  permanent (a revenue leak). The RPC skips anyone with a live
+  `stripe_subscription_id` so a mid-grant upgrade is never clobbered,
+  and never clears `trial_claimed_at` (the write-once "trial consumed"
+  guard). See `migration_activation_trial_and_grant_expiry.sql`.
 
 Cron endpoints are protected by Vercel's built-in `CRON_SECRET` (sent
 as `Authorization: Bearer` on scheduled runs). Feature crons live on
 Pro (Hobby caps at 2 crons + daily-only frequency).
+
+### Activation trial + temporary tier grants
+
+Temporary tier grants (activation trial, friend invites) live on
+`profiles.subscription_tier` + `granted_tier_expires_at` +
+`granted_tier_source`. **Entitlement (`userTier`/`tierAtLeast`) never
+checks any expiry column** — a grant only ends when the daily
+`expire_granted_tiers` sweep (via `/api/expire-grants-cron`) rewrites
+`subscription_tier='free'`. So EVERY temporary grant MUST set
+`granted_tier_source` to a value the sweep recognizes
+(`subsidiary_invite`, `activation_trial`) or it lasts forever.
+
+The **activation trial** ("50 cards → 1 free month of Enthusiast"):
+`claim_activation_trial()` RPC (server-authoritative) gates on the real
+owned-card count (`collection_items` non-ghost/non-sold ≥ 50 — the
+client scan counter is localStorage-only and untrustworthy), a
+write-once `profiles.trial_claimed_at` reclaim guard, and a no-downgrade
++ no-clobber-paid-user guard. Client surface: `_activationTrialBanner()`
+on the dashboard (claim at ≥50, progress nudge 10–49) + `claimActivationTrial()`.
+`maybeShowGrantedTierExpiredModal()` handles both grant sources.
 
 ## Catalog photo contributions
 

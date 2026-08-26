@@ -5909,7 +5909,7 @@ function _loadAdmin(){
       // landed on the new state and hasn't seen the message yet.
       const exp = currentUser.granted_tier_expires_at;
       const src = currentUser.granted_tier_source;
-      if (!exp || src !== 'subsidiary_invite') return;
+      if (!exp || (src !== 'subsidiary_invite' && src !== 'activation_trial')) return;
       if (Date.parse(exp) > Date.now()) return;
       // localStorage gate so we don't re-show on every page load
       const key = 'pathbinder_subsidiary_expired_seen_' + exp;
@@ -5921,7 +5921,7 @@ function _loadAdmin(){
             <button class="modal-close" onclick="document.getElementById('grantedExpiredModal').remove()">&times;</button>
             <div style="font-size:.7rem;color:var(--copper);letter-spacing:.14em;margin-bottom:4px;text-transform:uppercase">&#9672; Your trial just ended</div>
             <h3 style="margin-bottom:8px;font-size:1.15rem">Free again &mdash; here's what changes</h3>
-            <p class="modal-sub" style="margin-bottom:12px">Your friend's invite gave you a taste of the paid tier. Your binder data, listings, and scans are all preserved &mdash; but the perks revert.</p>
+            <p class="modal-sub" style="margin-bottom:12px">${src === 'activation_trial' ? 'Your free month of Enthusiast just ended.' : "Your friend's invite gave you a taste of the paid tier."} Your binder data, listings, and scans are all preserved &mdash; but the perks revert.</p>
             <div style="background:rgba(255,77,61,.06);border:1px solid var(--border);border-left:3px solid var(--red,#FF4D3D);padding:12px 16px;margin-bottom:14px">
               <div style="font-size:.66rem;letter-spacing:.12em;color:var(--red,#FF4D3D);text-transform:uppercase;margin-bottom:6px;font-weight:700">No longer available</div>
               <ul style="margin:0;padding-left:18px;font-size:.78rem;color:var(--text);line-height:1.7">
@@ -5939,6 +5939,71 @@ function _loadAdmin(){
           </div>
         </div>`;
       document.body.insertAdjacentHTML('beforeend', html);
+    }
+
+    // ── Activation trial banner: "50 cards → 1 free month of Enthusiast" ──
+    // Only for FREE users who haven't used the trial and aren't paying. At 50+
+    // owned cards it's a one-tap CLAIM; below that it's a progress nudge toward
+    // the goal. The server RPC re-verifies the count, so a tampered banner can't
+    // grant anything — this is purely presentational.
+    function _activationTrialBanner() {
+      if (!currentUser) return '';
+      if (currentUser.trial_claimed_at) return '';            // already used it
+      if (currentUser.stripe_subscription_id) return '';      // paying subscriber
+      if (typeof tierAtLeast === 'function' && tierAtLeast('enthusiast')) return ''; // already Enthusiast+
+      var owned = 0;
+      try { owned = (collectionItems || []).filter(function(c){ return !c.is_ghost && !c.sold_offline; }).length; } catch(_) {}
+      if (owned < 10) return '';                              // don't nag brand-new users
+      if (owned >= 50) {
+        return '<div style="margin-bottom:14px;border:1.5px solid var(--accent);border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.06);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">'
+          + '<div style="flex:1;min-width:240px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:4px">You unlocked a free month</div>'
+          +   '<div style="font-size:.78rem;color:var(--text);font-weight:700;margin-bottom:2px">50 cards tracked &mdash; here\'s a free month of Enthusiast</div>'
+          +   '<div style="font-size:.72rem;color:var(--muted);line-height:1.5">Sell on the marketplace, bulk import, multi-binder, and higher scan limits. Expires in a month &mdash; no card, no auto-charge.</div>'
+          + '</div>'
+          + '<div style="flex-shrink:0"><button type="button" onclick="claimActivationTrial(this)" style="background:var(--accent);color:var(--text-on-accent);border:none;padding:9px 18px;font-family:\'Space Mono\',monospace;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.06em">Claim free month &rarr;</button></div>'
+          + '</div>';
+      }
+      var pct = Math.round(owned / 50 * 100);
+      return '<div style="margin-bottom:14px;border:1px solid var(--border);border-left:3px solid var(--copper);background:var(--surface2);padding:12px 16px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px">'
+        +   '<div style="font-size:.74rem;color:var(--text);font-weight:700">' + owned + ' / 50 cards &mdash; reach 50 for a free month of Enthusiast</div>'
+        +   '<div style="font-size:.66rem;color:var(--muted)">' + (50 - owned) + ' to go</div>'
+        + '</div>'
+        + '<div style="height:6px;background:var(--surface);border:1px solid var(--border);overflow:hidden"><div style="height:100%;width:' + pct + '%;background:var(--copper)"></div></div>'
+        + '</div>';
+    }
+
+    // Claim the one-time activation trial. The RPC is authoritative (re-checks
+    // the 50-card count, the one-time guard, and no-downgrade); this just calls
+    // it and refreshes the entitlement fields on currentUser.
+    async function claimActivationTrial(btnEl) {
+      if (!currentUser) return;
+      if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Claiming…'; }
+      var _reset = function(){ if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = 'Claim free month &rarr;'; } };
+      try {
+        var res = await sb.rpc('claim_activation_trial');
+        var row = (res && res.data && res.data[0]) || null;
+        if (res.error || !row) { showToast((res.error && res.error.message) || 'Could not claim right now.'); _reset(); return; }
+        if (!row.success) { showToast(row.message || 'Not eligible yet.'); _reset(); return; }
+        try {
+          var prof = await sb.from('profiles')
+            .select('subscription_tier, granted_tier_expires_at, granted_tier_source, trial_claimed_at')
+            .eq('id', currentUser.id).maybeSingle();
+          if (prof.data) {
+            currentUser.subscription_tier      = prof.data.subscription_tier || currentUser.subscription_tier;
+            currentUser.granted_tier_expires_at = prof.data.granted_tier_expires_at || null;
+            currentUser.granted_tier_source     = prof.data.granted_tier_source || null;
+            currentUser.trial_claimed_at        = prof.data.trial_claimed_at || currentUser.trial_claimed_at;
+          }
+        } catch(_) {}
+        showToast(row.message || 'Enthusiast unlocked for 1 month.');
+        try { updateAuthUI(); } catch(_) {}
+        try { renderDashboard(); } catch(_) {}
+        try { if (typeof renderAccount === 'function') renderAccount(); } catch(_) {}
+      } catch (e) {
+        showToast('Could not claim right now.'); _reset();
+      }
     }
 
     let dashboardRefreshing = false;
@@ -6156,6 +6221,7 @@ function _loadAdmin(){
       content.innerHTML = `<div class="ndash-wrap">
 
         <!-- ── Stat Ribbon ───────────────────────────────── -->
+        ${_activationTrialBanner()}
         ${_grantedTierExpiryWarning()}
         ${_subsidiaryInvitesBanner()}
         <div class="ndash-ribbon-wrap">
