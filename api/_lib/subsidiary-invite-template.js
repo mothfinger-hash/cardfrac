@@ -33,9 +33,9 @@ const TIER_BLURB = {
     "Unlimited cards in your binder, 1,000 photo card scans / month, " +
     "live market price tracking, watchlist alerts, and Marketplace access.",
   enthusiast:
-    "Everything in Collector, plus bulk CSV import, multi-binder organization, " +
-    "sales archive across every channel, and a 40-listing concurrent active cap " +
-    "on the marketplace.",
+    "Unlimited collection tracking, live market price tracking + watchlist alerts, " +
+    "bulk CSV import, multi-binder organization, sales archive across every channel, " +
+    "and marketplace selling with a 40-listing active cap.",
   vendor:
     "Everything in Enthusiast, plus sealed product + non-TCG product listings, " +
     "the product scanner, and a 150-listing concurrent active cap on the marketplace.",

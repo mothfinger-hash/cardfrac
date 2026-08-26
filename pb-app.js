@@ -5348,6 +5348,32 @@ function _loadAdmin(){
       })();
       return _subsidiaryQuotaInflight;
     }
+    // Dismissible dashboard banners — persist a per-banner "hidden" flag so the
+    // promotional banners (invite, trial nudge) don't clutter the dashboard for
+    // people who don't want them. Genuine one-time rewards use their OWN key, so
+    // dismissing a nudge never buries the actual reward.
+    function _bannerDismissed(key) {
+      try { return localStorage.getItem(key) === '1'; } catch (_) { return false; }
+    }
+    function dismissDashboardBanner(key, btn) {
+      if (key) { try { localStorage.setItem(key, '1'); } catch (_) {} }
+      var el = (btn && btn.closest) ? btn.closest('[data-dash-banner]') : null;
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+    window.dismissDashboardBanner = dismissDashboardBanner;
+    // Small × control shared by the dismissible banners.
+    function _bannerDismissBtn(key) {
+      return '<button type="button" aria-label="Hide" title="Hide this" onclick="dismissDashboardBanner(\'' + key + '\', this)" '
+        + 'style="position:absolute;top:6px;right:8px;background:transparent;border:none;color:var(--muted);font-size:1.05rem;line-height:1;cursor:pointer;padding:2px 6px">&times;</button>';
+    }
+
+    // Owned (non-ghost, non-sold) card count — the "activated" signal shared by
+    // the trial and invite surfaces.
+    function _ownedCardCount() {
+      try { return (collectionItems || []).filter(function(c){ return !c.is_ghost && !c.sold_offline; }).length; }
+      catch (_) { return 0; }
+    }
+
     function _subsidiaryInvitesBanner() {
       // Synchronous render — uses whatever cache value we have. The
       // caller schedules _loadSubsidiaryQuota() async on first
@@ -5355,37 +5381,45 @@ function _loadAdmin(){
       const q = _subsidiaryQuotaCache;
       if (!q || q.user_id !== currentUser?.id) return '';
       if (!q.granted_tier || (q.remaining + q.used) === 0) return '';
+      if (_bannerDismissed('pb_dismiss_invite_v1')) return '';
+      // Only surface invites to activated users — a brand-new 0-card account
+      // has nothing to show a friend yet, and activated users refer better.
+      if (_ownedCardCount() < 10) return '';
       const tierUpper = q.granted_tier.toUpperCase();
       const dur = q.duration_months + ' month' + (q.duration_months === 1 ? '' : 's');
       const totalSlots = q.remaining + q.used;
       const cta = q.remaining > 0
         ? `<button type="button" onclick="openGenerateSubsidiaryInviteModal()" class="ndash-banner-cta">Generate Invite Code &rarr;</button>`
         : `<div style="font-size:.7rem;color:var(--muted)">All invites used. Manage from <a href="#" onclick="openMySubsidiaryInvitesModal();return false" style="color:var(--accent)">My Invites</a>.</div>`;
-      return `<div class="ndash-invite-banner" style="margin-bottom:14px;border:1.5px solid var(--copper);border-left:3px solid var(--copper);background:rgba(184,115,51,.06);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+      return `<div class="ndash-invite-banner" data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--copper);border-left:3px solid var(--copper);background:rgba(184,115,51,.06);padding:14px 30px 14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+        ${_bannerDismissBtn('pb_dismiss_invite_v1')}
         <div style="flex:1;min-width:240px">
           <div style="font-family:'Orbitron',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:4px">
-            &#9672; Beta perk &mdash; share with a friend
+            &#9672; Invite a friend &mdash; give them a free month
           </div>
           <div style="font-size:.85rem;color:var(--text);font-weight:700;margin-bottom:2px">
             ${q.remaining}/${totalSlots} invite${totalSlots === 1 ? '' : 's'} left
           </div>
           <div style="font-size:.72rem;color:var(--muted);line-height:1.5">
-            Each grants <strong style="color:var(--accent)">${tierUpper}</strong> tier for ${dur}. After that, they're prompted to subscribe or revert to free.
+            Each grants a friend <strong style="color:var(--accent)">${tierUpper}</strong> tier for ${dur}. After that, they're prompted to subscribe or revert to free.
           </div>
         </div>
         <div style="flex-shrink:0">${cta}</div>
       </div>`;
     }
     // Modal — generate a new code
-    // Account-dropdown "Invite Friends" item: only beta testers have a quota
-    // (granted_tier non-null), so show/hide accordingly and surface how many
-    // invites remain. Called when the dropdown opens.
+    // Account-dropdown "Invite Friends" item. Every signed-in user now has an
+    // invite quota (beta testers by their tier; everyone else via the 'default'
+    // config — 3 invites granting a friend a 1-month Enthusiast trial), so the
+    // button shows whenever the quota RPC returns a granted_tier. Surfaces how
+    // many invites remain. Called when the dropdown opens.
     async function _refreshBetaInviteMenu() {
       const item = document.getElementById('betaInviteBtn');
       if (!item) return;
       try {
         const q = await _loadSubsidiaryQuota(false);
-        const eligible = !!(q && q.granted_tier);
+        // Gate to activated users (≥10 owned cards), same floor as the banner.
+        const eligible = !!(q && q.granted_tier) && _ownedCardCount() >= 10;
         item.style.display = eligible ? '' : 'none';
         if (eligible) {
           const c = document.getElementById('betaInviteCount');
@@ -5955,7 +5989,11 @@ function _loadAdmin(){
       try { owned = (collectionItems || []).filter(function(c){ return !c.is_ghost && !c.sold_offline; }).length; } catch(_) {}
       if (owned < 10) return '';                              // don't nag brand-new users
       if (owned >= 50) {
-        return '<div style="margin-bottom:14px;border:1.5px solid var(--accent);border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.06);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">'
+        // The earned-reward state. Uses its OWN dismiss key so hiding the
+        // progress nudge earlier never buries an actual free month.
+        if (_bannerDismissed('pb_dismiss_trial_claim_v1')) return '';
+        return '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--accent);border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.06);padding:14px 30px 14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">'
+          + _bannerDismissBtn('pb_dismiss_trial_claim_v1')
           + '<div style="flex:1;min-width:240px">'
           +   '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:4px">You unlocked a free month</div>'
           +   '<div style="font-size:.78rem;color:var(--text);font-weight:700;margin-bottom:2px">50 cards tracked &mdash; here\'s a free month of Enthusiast</div>'
@@ -5964,8 +6002,10 @@ function _loadAdmin(){
           + '<div style="flex-shrink:0"><button type="button" onclick="claimActivationTrial(this)" style="background:var(--accent);color:var(--text-on-accent);border:none;padding:9px 18px;font-family:\'Space Mono\',monospace;font-size:.72rem;font-weight:700;cursor:pointer;letter-spacing:.06em">Claim free month &rarr;</button></div>'
           + '</div>';
       }
+      if (_bannerDismissed('pb_dismiss_trial_v1')) return '';
       var pct = Math.round(owned / 50 * 100);
-      return '<div style="margin-bottom:14px;border:1px solid var(--border);border-left:3px solid var(--copper);background:var(--surface2);padding:12px 16px">'
+      return '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1px solid var(--border);border-left:3px solid var(--copper);background:var(--surface2);padding:12px 30px 12px 16px">'
+        + _bannerDismissBtn('pb_dismiss_trial_v1')
         + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px">'
         +   '<div style="font-size:.74rem;color:var(--text);font-weight:700">' + owned + ' / 50 cards &mdash; reach 50 for a free month of Enthusiast</div>'
         +   '<div style="font-size:.66rem;color:var(--muted)">' + (50 - owned) + ' to go</div>'

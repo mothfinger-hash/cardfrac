@@ -683,6 +683,27 @@ write-once `profiles.trial_claimed_at` reclaim guard, and a no-downgrade
 on the dashboard (claim at ≥50, progress nudge 10–49) + `claimActivationTrial()`.
 `maybeShowGrantedTierExpiredModal()` handles both grant sources.
 
+**Friend invites are open to ALL users** (were beta-only). The
+`subsidiary_invite_config` has a `'default'` branch (non-beta callers):
+**3 invites, each granting the FRIEND a 1-month Enthusiast trial**,
+friend-only (no inviter reward — keeps farming incentive near zero).
+`beta_subsidiary_quota` / `create_subsidiary_invite` fall back to
+`'default'` when the caller has no `beta_testers` row; `inviter_tier`
+is stored as `'default'` (CHECK widened). See
+`migration_open_subsidiary_invites_to_all.sql`. The friend's grant is a
+normal `granted_tier_source='subsidiary_invite'` grant → reverted by the
+same expiry cron. Beta testers' invite config is unchanged. Client
+surfacing (the dashboard banner + the avatar-menu "Invite Friends" item)
+is gated to **activated users (≥10 owned cards, `_ownedCardCount()`)** —
+the RPC still works below that, it just isn't advertised to brand-new
+accounts.
+
+Dashboard promo banners are **dismissible** (`_bannerDismissBtn` /
+`dismissDashboardBanner` / `_bannerDismissed`, localStorage-persisted per
+key). The invite banner and the trial *nudge* each hide on dismiss; the
+trial *claim* (earned free month) uses a separate key so dismissing the
+nudge never buries the reward.
+
 ## Catalog photo contributions
 
 User-submitted catalog images. Phase 1 ships missing-image fill
