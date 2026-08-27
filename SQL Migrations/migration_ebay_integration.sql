@@ -42,6 +42,17 @@ ALTER TABLE public.ebay_connections ENABLE ROW LEVEL SECURITY;
 -- through my_ebay_connection() below, never the tokens themselves.
 DROP POLICY IF EXISTS "no client access to ebay tokens" ON public.ebay_connections;
 
+-- 1b. Short-lived OAuth state (CSRF + maps the eBay redirect back to the user).
+-- Mirrors shippo_oauth_states. Service-role only (the /api/ebay-* endpoints
+-- read/write it); no client policies.
+CREATE TABLE IF NOT EXISTS public.ebay_oauth_states (
+  state      text primary key,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+ALTER TABLE public.ebay_oauth_states ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "no client access to ebay oauth states" ON public.ebay_oauth_states;
+
 -- 2. PathBinder item ↔ eBay listing map (owner-readable; no secrets) -------
 CREATE TABLE IF NOT EXISTS public.ebay_listing_links (
   id                 uuid primary key default gen_random_uuid(),

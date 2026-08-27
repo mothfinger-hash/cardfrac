@@ -745,8 +745,85 @@ function _loadAdmin(){
         +   '<div style="font-size:.64rem;color:var(--muted);padding-left:22px">Requires notifications enabled on your mobile device.</div>'
         + '</div>';
 
-      body.innerHTML = emailRow + membershipBlock + prefsBlock + appearanceBlock + notifBlock + shopBlock + followsBlock + deletionBlock;
+      // eBay inventory sync (vendor+). The row is async-filled after render by
+      // _renderEbayConnectRow() → my_ebay_connection() RPC (status only; tokens
+      // never reach the client).
+      var _ebayEligible = (typeof tierAtLeast === 'function') && tierAtLeast('vendor');
+      var ebayBlock = '';
+      if (_ebayEligible) {
+        ebayBlock = ''
+          + '<div style="border:1px solid var(--border);background:var(--surface2);padding:14px 16px;margin-top:14px">'
+          +   '<div style="font-family:\'Orbitron\',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);margin-bottom:10px;text-transform:uppercase">Connected accounts</div>'
+          +   '<div style="font-size:.72rem;color:var(--text);font-weight:700;margin-bottom:4px">eBay</div>'
+          +   '<div style="font-size:.66rem;color:var(--muted);line-height:1.5;margin-bottom:10px">Sync inventory with eBay &mdash; when you sell a card here, we end or decrement the matching eBay listing so you never oversell.</div>'
+          +   '<div id="ebayConnectRow" style="font-size:.74rem;color:var(--muted)">Checking eBay connection&hellip;</div>'
+          + '</div>';
+      }
+
+      body.innerHTML = emailRow + membershipBlock + prefsBlock + appearanceBlock + notifBlock + shopBlock + ebayBlock + followsBlock + deletionBlock;
+      if (_ebayEligible) { try { _renderEbayConnectRow(); } catch (_) {} }
     }
+
+    // ── eBay inventory sync — client (Phase 1: connect / status / disconnect) ─
+    async function _renderEbayConnectRow() {
+      var el = document.getElementById('ebayConnectRow');
+      if (!el) return;
+      try {
+        var r = await sb.rpc('my_ebay_connection');
+        var row = (r && r.data && r.data[0]) || null;
+        if (row && row.connected) {
+          var who = row.ebay_username
+            ? (' as <span style="color:var(--text)">' + _escHtml(row.ebay_username) + '</span>') : '';
+          el.innerHTML = '<span style="color:var(--green)">eBay connected</span>' + who
+            + ' &middot; <a href="#" onclick="disconnectEbay();return false" style="color:var(--copper);text-decoration:none">Disconnect</a>';
+        } else {
+          el.innerHTML = '<button type="button" onclick="connectEbay(this)" '
+            + 'style="padding:9px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:\'Space Mono\',monospace;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.04em">Connect eBay &rarr;</button>';
+        }
+      } catch (_) {
+        el.innerHTML = '<span style="color:var(--muted)">Could not check eBay status.</span>';
+      }
+    }
+    window._refreshEbayConnection = _renderEbayConnectRow;
+
+    async function connectEbay(btn) {
+      if (!currentUser) { showToast('Sign in first'); return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+      var _reset = function () { if (btn) { btn.disabled = false; btn.innerHTML = 'Connect eBay &rarr;'; } };
+      try {
+        var sess = await sb.auth.getSession();
+        var tok = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { showToast('Sign in first'); _reset(); return; }
+        var r = await fetch('/api/ebay-connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok || !j.url) {
+          showToast(j.code === 'NOT_CONFIGURED' ? 'eBay sync is coming soon' : (j.error || 'Could not start eBay connect'));
+          _reset(); return;
+        }
+        window.location.href = j.url;   // redirect to eBay's consent page
+      } catch (e) {
+        showToast('Could not start eBay connect'); _reset();
+      }
+    }
+    window.connectEbay = connectEbay;
+
+    async function disconnectEbay() {
+      if (!currentUser) return;
+      var ok = await (typeof pbConfirm === 'function'
+        ? pbConfirm('Disconnect your eBay account? We\'ll stop syncing listings.', { confirmText: 'DISCONNECT', cancelText: 'CANCEL' })
+        : Promise.resolve(confirm('Disconnect your eBay account?')));
+      if (!ok) return;
+      try {
+        var r = await sb.rpc('disconnect_ebay');
+        if (r.error) { showToast('Could not disconnect: ' + r.error.message); return; }
+        showToast('eBay disconnected');
+        _renderEbayConnectRow();
+      } catch (_) { showToast('Could not disconnect'); }
+    }
+    window.disconnectEbay = disconnectEbay;
 
     // Server-side push preference — persisted to profiles so it syncs across
     // devices and the spike-alerts cron can read it. Uses the same owner-update
@@ -31936,6 +32013,18 @@ function _loadAdmin(){
           }
         } else if (shippoResult === 'error') {
           showToast('Shippo connect failed' + (urlParams.get('reason') ? ': ' + urlParams.get('reason') : ''));
+        }
+      }
+
+      // ── eBay Connect return (?ebay=connected|error) ─────────────────────
+      const ebayResult = urlParams.get('ebay');
+      if (ebayResult) {
+        window.history.replaceState({}, '', window.location.pathname);
+        if (ebayResult === 'connected') {
+          showToast('eBay account connected');
+          if (typeof _refreshEbayConnection === 'function') { try { _refreshEbayConnection(); } catch (_) {} }
+        } else if (ebayResult === 'error') {
+          showToast('eBay connect failed' + (urlParams.get('reason') ? ': ' + urlParams.get('reason') : ''));
         }
       }
 
