@@ -775,6 +775,8 @@ function _loadAdmin(){
           var who = row.ebay_username
             ? (' as <span style="color:var(--text)">' + _escHtml(row.ebay_username) + '</span>') : '';
           el.innerHTML = '<span style="color:var(--green)">eBay connected</span>' + who
+            + ' &middot; <a href="#" onclick="syncEbayListings(this);return false" style="color:var(--accent);text-decoration:none">Sync listings</a>'
+            + ' &middot; <a href="#" onclick="createEbayTestListing(this);return false" title="Sandbox seeding aid — remove before production" style="color:var(--muted);text-decoration:none">+ test listing</a>'
             + ' &middot; <a href="#" onclick="disconnectEbay();return false" style="color:var(--copper);text-decoration:none">Disconnect</a>';
         } else {
           el.innerHTML = '<button type="button" onclick="connectEbay(this)" '
@@ -824,6 +826,56 @@ function _loadAdmin(){
       } catch (_) { showToast('Could not disconnect'); }
     }
     window.disconnectEbay = disconnectEbay;
+
+    // Pull the seller's active eBay listings into ebay_listing_links (Phase 2a).
+    async function syncEbayListings(el) {
+      var label = (el && (el.tagName === 'A')) ? el : null;
+      if (label) label.textContent = 'Syncing…';
+      try {
+        var sess = await sb.auth.getSession();
+        var tok = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { showToast('Sign in first'); if (label) label.textContent = 'Sync listings'; return; }
+        var r = await fetch('/api/ebay-sync-listings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok) { showToast(j.error || 'eBay sync failed'); }
+        else {
+          var n = j.pulled || 0;
+          showToast('Pulled ' + n + ' eBay listing' + (n === 1 ? '' : 's')
+            + (j.stored != null ? ' (' + j.stored + ' stored)' : ''));
+        }
+      } catch (e) { showToast('eBay sync failed'); }
+      finally { if (label) label.textContent = 'Sync listings'; }
+    }
+    window.syncEbayListings = syncEbayListings;
+
+    // TEMPORARY sandbox seeding aid — creates one test listing on the connected
+    // account via /api/ebay-create-test-listing so we can test the pull without
+    // the (often-broken) sandbox web UI. Remove this + the endpoint before prod.
+    async function createEbayTestListing(el) {
+      var link = (el && el.tagName === 'A') ? el : null;
+      if (link) link.textContent = 'Creating…';
+      try {
+        var sess = await sb.auth.getSession();
+        var tok = sess && sess.data && sess.data.session && sess.data.session.access_token;
+        if (!tok) { showToast('Sign in first'); return; }
+        var r = await fetch('/api/ebay-create-test-listing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok || !j.itemId) {
+          showToast('Test listing failed: ' + ((j.errors && j.errors[0]) || j.error || 'unknown'));
+          console.warn('[ebay-test-listing]', j);
+        } else {
+          showToast('Test listing created — ItemID ' + j.itemId + '. Now hit Sync listings.');
+        }
+      } catch (e) { showToast('Test listing failed'); }
+      finally { if (link) link.textContent = '+ test listing'; }
+    }
+    window.createEbayTestListing = createEbayTestListing;
 
     // Server-side push preference — persisted to profiles so it syncs across
     // devices and the spike-alerts cron can read it. Uses the same owner-update

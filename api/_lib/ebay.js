@@ -81,4 +81,59 @@ async function refreshUserToken(refreshToken) {
   return _tokenRequest({ grant_type: 'refresh_token', refresh_token: refreshToken, scope: SCOPES });
 }
 
-module.exports = { HOSTS, SCOPES, config, isConfigured, authorizeUrl, exchangeCodeForToken, refreshUserToken };
+// Return a valid access token for a connected user, refreshing (and caching the
+// new access token on the row) if the cached one is missing or within 2 min of
+// expiry. `sb` is a service-role Supabase client. Returns { token } or { error }.
+async function getValidAccessToken(sb, userId) {
+  const { data: conn, error } = await sb.from('ebay_connections')
+    .select('refresh_token, access_token, token_expires_at').eq('user_id', userId).maybeSingle();
+  if (error || !conn) return { error: 'not_connected' };
+
+  const now = Date.now();
+  if (conn.access_token && conn.token_expires_at
+      && new Date(conn.token_expires_at).getTime() - now > 120000) {
+    return { token: conn.access_token };
+  }
+  const r = await refreshUserToken(conn.refresh_token);
+  if (!r.ok || !r.data || !r.data.access_token) {
+    await sb.from('ebay_connections')
+      .update({ status: 'error', last_error: 'refresh_failed', updated_at: new Date().toISOString() })
+      .eq('user_id', userId);
+    return { error: 'refresh_failed', detail: r.data };
+  }
+  const accessExp = new Date(now + (Number(r.data.expires_in || 7200) * 1000)).toISOString();
+  await sb.from('ebay_connections').update({
+    access_token: r.data.access_token,
+    token_expires_at: accessExp,
+    status: 'active', last_error: null,
+    updated_at: new Date().toISOString(),
+  }).eq('user_id', userId);
+  return { token: r.data.access_token };
+}
+
+// Low-level Trading API (XML) call. eBay accepts the OAuth user token via the
+// X-EBAY-API-IAF-TOKEN header, so both REST and Trading run off one consent.
+async function tradingCall(accessToken, callName, innerXml) {
+  const body = '<?xml version="1.0" encoding="utf-8"?>'
+    + '<' + callName + 'Request xmlns="urn:ebay:apis:eBLBaseComponents">'
+    + (innerXml || '')
+    + '</' + callName + 'Request>';
+  const r = await fetch(HOSTS.api + '/ws/api.dll', {
+    method: 'POST',
+    headers: {
+      'X-EBAY-API-CALL-NAME': callName,
+      'X-EBAY-API-SITEID': '0',                    // 0 = eBay US
+      'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+      'X-EBAY-API-IAF-TOKEN': accessToken,
+      'Content-Type': 'text/xml',
+    },
+    body,
+  });
+  const text = await r.text();
+  return { ok: r.ok, status: r.status, text };
+}
+
+module.exports = {
+  HOSTS, SCOPES, config, isConfigured, authorizeUrl,
+  exchangeCodeForToken, refreshUserToken, getValidAccessToken, tradingCall,
+};
