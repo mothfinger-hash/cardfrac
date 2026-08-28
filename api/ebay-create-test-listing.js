@@ -78,6 +78,7 @@ module.exports = async function handler(req, res) {
     +       '<ShippingServicePriority>1</ShippingServicePriority>'
     +       '<ShippingService>USPSFirstClass</ShippingService>'
     +       '<ShippingServiceCost>3.99</ShippingServiceCost>'
+    +       '<ShippingServiceAdditionalCost>0.99</ShippingServiceAdditionalCost>'
     +     '</ShippingServiceOptions>'
     +   '</ShippingDetails>'
     + '</Item>';
@@ -88,8 +89,10 @@ module.exports = async function handler(req, res) {
   const errors = _collectErrors(call.text);
 
   if (ack === 'Failure' || !itemId) {
-    console.error('[ebay-test-listing] failed:', ack, errors, (call.text || '').slice(0, 900));
-    return res.status(502).json({ error: 'eBay could not create the listing', ack, errors });
+    console.error('[ebay-test-listing] failed:', ack, errors, (call.text || '').slice(0, 1500));
+    // Include a raw snippet (dev aid) so the browser console has the full
+    // eBay error without needing to dig into Vercel logs.
+    return res.status(502).json({ error: 'eBay could not create the listing', ack, errors, raw: (call.text || '').slice(0, 2000) });
   }
   return res.status(200).json({ ok: true, ack, itemId, errors });
 };

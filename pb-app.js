@@ -867,8 +867,9 @@ function _loadAdmin(){
         });
         var j = await r.json().catch(function () { return {}; });
         if (!r.ok || !j.itemId) {
-          showToast('Test listing failed: ' + ((j.errors && j.errors[0]) || j.error || 'unknown'));
-          console.warn('[ebay-test-listing]', j);
+          var allErrs = (j.errors && j.errors.length) ? j.errors.join(' | ') : (j.error || 'unknown');
+          showToast('Test listing failed: ' + allErrs);
+          console.warn('[ebay-test-listing] full response →', j);   // expand this for ack + all errors + raw XML
         } else {
           showToast('Test listing created — ItemID ' + j.itemId + '. Now hit Sync listings.');
         }
