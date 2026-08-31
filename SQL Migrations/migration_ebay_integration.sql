@@ -102,6 +102,38 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION public.disconnect_ebay() TO authenticated;
 
+-- 4. Manual link / unlink (Phase 2b) — client-callable, scoped to the caller's
+-- own rows. Auto-matching by SKU happens in /api/ebay-sync-listings; this is the
+-- fallback for listings whose SKU doesn't map to a PathBinder card.
+CREATE OR REPLACE FUNCTION public.ebay_link_listing(p_ebay_item_id text, p_collection_item_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_item public.collection_items;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Must be signed in'; END IF;
+  SELECT * INTO v_item FROM public.collection_items
+    WHERE collection_items.id = p_collection_item_id AND collection_items.user_id = auth.uid();
+  IF NOT FOUND THEN RAISE EXCEPTION 'Card not found'; END IF;
+  UPDATE public.ebay_listing_links SET
+    collection_item_id = p_collection_item_id,
+    api_card_id        = v_item.api_card_id,
+    variant            = coalesce(v_item.variant, 'normal'),
+    condition          = v_item.condition
+  WHERE ebay_listing_links.user_id = auth.uid()
+    AND ebay_listing_links.ebay_item_id = p_ebay_item_id;
+END $$;
+GRANT EXECUTE ON FUNCTION public.ebay_link_listing(text, uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.ebay_unlink_listing(p_ebay_item_id text)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Must be signed in'; END IF;
+  UPDATE public.ebay_listing_links SET
+    collection_item_id = NULL, api_card_id = NULL, variant = 'normal', condition = NULL
+  WHERE ebay_listing_links.user_id = auth.uid()
+    AND ebay_listing_links.ebay_item_id = p_ebay_item_id;
+END $$;
+GRANT EXECUTE ON FUNCTION public.ebay_unlink_listing(text) TO authenticated;
+
 -- Verify:
---   SELECT proname FROM pg_proc WHERE proname IN ('my_ebay_connection','disconnect_ebay');
+--   SELECT proname FROM pg_proc WHERE proname IN ('my_ebay_connection','disconnect_ebay','ebay_link_listing','ebay_unlink_listing');
 --   SELECT * FROM public.my_ebay_connection();   -- empty until a seller connects

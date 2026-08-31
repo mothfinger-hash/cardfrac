@@ -776,6 +776,7 @@ function _loadAdmin(){
             ? (' as <span style="color:var(--text)">' + _escHtml(row.ebay_username) + '</span>') : '';
           el.innerHTML = '<span style="color:var(--green)">eBay connected</span>' + who
             + ' &middot; <a href="#" onclick="syncEbayListings(this);return false" style="color:var(--accent);text-decoration:none">Sync listings</a>'
+            + ' &middot; <a href="#" onclick="openEbayListingsReview();return false" style="color:var(--accent);text-decoration:none">Review listings</a>'
             + ' &middot; <a href="#" onclick="createEbayTestListing(this);return false" title="Sandbox seeding aid — remove before production" style="color:var(--muted);text-decoration:none">+ test listing</a>'
             + ' &middot; <a href="#" onclick="disconnectEbay();return false" style="color:var(--copper);text-decoration:none">Disconnect</a>';
         } else {
@@ -843,8 +844,9 @@ function _loadAdmin(){
         if (!r.ok) { showToast(j.error || 'eBay sync failed'); }
         else {
           var n = j.pulled || 0;
-          showToast('Pulled ' + n + ' eBay listing' + (n === 1 ? '' : 's')
-            + (j.stored != null ? ' (' + j.stored + ' stored)' : ''));
+          var msg = 'Pulled ' + n + ' eBay listing' + (n === 1 ? '' : 's');
+          if (j.linked != null) msg += ' — ' + j.linked + ' linked, ' + (j.unlinked || 0) + ' need linking';
+          showToast(msg);
         }
       } catch (e) { showToast('eBay sync failed'); }
       finally { if (label) label.textContent = 'Sync listings'; }
@@ -877,6 +879,113 @@ function _loadAdmin(){
       finally { if (link) link.textContent = '+ test listing'; }
     }
     window.createEbayTestListing = createEbayTestListing;
+
+    // ── eBay listing review + manual matching (Phase 2b) ────────────────────
+    // Shows the pulled listings and their match status. SKU auto-matches happen
+    // server-side in /api/ebay-sync-listings; this is where the seller links the
+    // rest by hand (the piece the mark-sold sync rides on).
+    async function openEbayListingsReview() {
+      if (!currentUser) return;
+      var overlay = document.getElementById('ebayReviewOverlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'ebayReviewOverlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,5,0,.92);z-index:10100;display:flex;align-items:center;justify-content:center;padding:16px';
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+      }
+      overlay.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);padding:22px;width:100%;max-width:640px;max-height:88vh;overflow-y:auto;box-shadow:3px 3px 0 var(--shadow);font-family:\'Space Mono\',\'Share Tech Mono\',monospace">'
+        + '<div style="font-size:.72rem;color:var(--accent);letter-spacing:.08em;margin-bottom:4px">// EBAY LISTINGS</div>'
+        + '<div style="font-size:.66rem;color:var(--muted);margin-bottom:12px">Linked listings get their eBay quantity synced when you sell here. Link the rest to the right card.</div>'
+        + '<div id="ebayReviewBody" style="font-size:.75rem;color:var(--muted)">Loading&hellip;</div>'
+        + '<button onclick="document.getElementById(\'ebayReviewOverlay\').remove()" style="margin-top:14px;width:100%;padding:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:.8rem;cursor:pointer">Close</button>'
+        + '</div>';
+      _ebayRenderReviewBody();
+    }
+    window.openEbayListingsReview = openEbayListingsReview;
+
+    async function _ebayRenderReviewBody() {
+      var el = document.getElementById('ebayReviewBody');
+      if (!el) return;
+      var res = await sb.from('ebay_listing_links')
+        .select('ebay_item_id, ebay_title, ebay_sku, quantity, collection_item_id, condition, collection_items(card_name, set_name)')
+        .eq('user_id', currentUser.id).order('ebay_title', { ascending: true });
+      if (res.error) { el.innerHTML = '<span style="color:var(--red)">' + _escHtml(res.error.message) + '</span>'; return; }
+      var rows = res.data || [];
+      if (!rows.length) { el.innerHTML = 'No eBay listings pulled yet — hit &ldquo;Sync listings&rdquo; first.'; return; }
+      el.innerHTML = rows.map(function (l) {
+        var linked = !!l.collection_item_id;
+        var ci = l.collection_items || null;
+        var id = _escHtml(l.ebay_item_id);
+        var right = linked
+          ? '<span style="color:var(--green)">&rarr; ' + _escHtml((ci && ci.card_name) || 'linked') + '</span>'
+            + ' &middot; <a href="#" onclick="_ebayUnlink(\'' + _escJsAttr(l.ebay_item_id) + '\');return false" style="color:var(--copper);text-decoration:none;font-size:.66rem">unlink</a>'
+          : '<a href="#" onclick="_ebayLinkPrompt(\'' + _escJsAttr(l.ebay_item_id) + '\');return false" style="color:var(--accent);text-decoration:none">Link to a card</a>';
+        return '<div style="border:1px solid var(--border);background:rgba(0,0,0,.2);padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">'
+          + '<div style="flex:1;min-width:200px">'
+          +   '<div style="color:var(--text)">' + _escHtml(l.ebay_title || '(no title)') + '</div>'
+          +   '<div style="color:var(--muted);font-size:.62rem">SKU ' + _escHtml(l.ebay_sku || '—') + ' &middot; qty ' + (l.quantity != null ? l.quantity : '—') + '</div>'
+          + '</div>'
+          + '<div style="flex-shrink:0">' + right + '</div>'
+          + '<div id="ebayLinkPick_' + id + '" style="flex-basis:100%"></div>'
+          + '</div>';
+      }).join('');
+    }
+
+    function _ebayLinkPrompt(ebayItemId) {
+      var box = document.getElementById('ebayLinkPick_' + ebayItemId);
+      if (!box) return;
+      box.innerHTML = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)">'
+        + '<input type="text" placeholder="Search your cards by name…" oninput="_ebayLinkSearch(\'' + _escJsAttr(ebayItemId) + '\', this.value)" '
+        + 'style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.72rem">'
+        + '<div id="ebayLinkResults_' + _escHtml(ebayItemId) + '" style="margin-top:6px"></div></div>';
+    }
+    window._ebayLinkPrompt = _ebayLinkPrompt;
+
+    var _ebayLinkSearchTimer = null;
+    function _ebayLinkSearch(ebayItemId, q) {
+      clearTimeout(_ebayLinkSearchTimer);
+      _ebayLinkSearchTimer = setTimeout(async function () {
+        var out = document.getElementById('ebayLinkResults_' + ebayItemId);
+        if (!out) return;
+        q = (q || '').trim();
+        if (q.length < 2) { out.innerHTML = ''; return; }
+        var res = await sb.from('collection_items')
+          .select('id, card_name, set_name, condition')
+          .eq('user_id', currentUser.id)
+          .eq('is_ghost', false)
+          .ilike('card_name', '%' + q + '%').limit(8);
+        var rows = (res && res.data) || [];
+        if (!rows.length) { out.innerHTML = '<div style="color:var(--muted);font-size:.66rem">No matching cards.</div>'; return; }
+        out.innerHTML = rows.map(function (c) {
+          var lbl = _escHtml(c.card_name) + (c.set_name ? ' &middot; ' + _escHtml(c.set_name) : '')
+            + (c.condition ? ' &middot; ' + _escHtml(c.condition) : '');
+          return '<div onclick="_ebayDoLink(\'' + _escJsAttr(ebayItemId) + '\',\'' + _escJsAttr(c.id) + '\')" '
+            + 'style="padding:6px 8px;border:1px solid var(--border);margin-bottom:4px;cursor:pointer;color:var(--text);font-size:.7rem">' + lbl + '</div>';
+        }).join('');
+      }, 250);
+    }
+    window._ebayLinkSearch = _ebayLinkSearch;
+
+    async function _ebayDoLink(ebayItemId, collectionItemId) {
+      try {
+        var r = await sb.rpc('ebay_link_listing', { p_ebay_item_id: ebayItemId, p_collection_item_id: collectionItemId });
+        if (r.error) { showToast('Link failed: ' + r.error.message); return; }
+        showToast('Listing linked');
+        _ebayRenderReviewBody();
+      } catch (e) { showToast('Link failed'); }
+    }
+    window._ebayDoLink = _ebayDoLink;
+
+    async function _ebayUnlink(ebayItemId) {
+      try {
+        var r = await sb.rpc('ebay_unlink_listing', { p_ebay_item_id: ebayItemId });
+        if (r.error) { showToast('Unlink failed: ' + r.error.message); return; }
+        showToast('Listing unlinked');
+        _ebayRenderReviewBody();
+      } catch (e) { showToast('Unlink failed'); }
+    }
+    window._ebayUnlink = _ebayUnlink;
 
     // Server-side push preference — persisted to profiles so it syncs across
     // devices and the spike-alerts cron can read it. Uses the same owner-update
@@ -2229,6 +2338,21 @@ function _loadAdmin(){
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       targetEl.classList.add('active');
       _pushPageState(pageId);
+      // Per-route <title> (shareability + tab/history UX). The SPA shipped one
+      // generic title for every route before this.
+      try {
+        var _routeTitles = {
+          landing:    'PathBinder — Card Collection & Marketplace',
+          collection: 'My Collection · PathBinder',
+          sets:       'Sets & Set Completion · PathBinder',
+          browse:     'Browse Marketplace · PathBinder',
+          market:     'Browse Marketplace · PathBinder',
+          account:    'My Account · PathBinder',
+          admin:      'Admin · PathBinder',
+        };
+        document.title = _routeTitles[pageId]
+          || (pageId ? (pageId.charAt(0).toUpperCase() + pageId.slice(1) + ' · PathBinder') : 'PathBinder');
+      } catch (_) {}
       // Body state classes
       document.body.classList.toggle('on-binder', pageId === 'collection');
       document.body.classList.toggle('on-landing', pageId === 'landing');

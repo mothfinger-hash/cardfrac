@@ -133,7 +133,20 @@ async function tradingCall(accessToken, callName, innerXml) {
   return { ok: r.ok, status: r.status, text };
 }
 
+// Set a listing's absolute available quantity (Trading ReviseInventoryStatus).
+// eBay ends the listing automatically when quantity reaches 0. Up to 4 listings
+// per call, but we do one at a time keyed on ItemID.
+async function reviseListingQuantity(accessToken, itemId, newQty) {
+  const inner = '<ErrorLanguage>en_US</ErrorLanguage><WarningLevel>High</WarningLevel>'
+    + '<InventoryStatus>'
+    +   '<ItemID>' + itemId + '</ItemID>'
+    +   '<Quantity>' + Math.max(0, parseInt(newQty, 10) || 0) + '</Quantity>'
+    + '</InventoryStatus>';
+  return tradingCall(accessToken, 'ReviseInventoryStatus', inner);
+}
+
 module.exports = {
   HOSTS, SCOPES, config, isConfigured, authorizeUrl,
   exchangeCodeForToken, refreshUserToken, getValidAccessToken, tradingCall,
+  reviseListingQuantity,
 };

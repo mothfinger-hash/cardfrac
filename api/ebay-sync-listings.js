@@ -77,8 +77,20 @@ module.exports = async function handler(req, res) {
   }
 
   const items = _parseActiveItems(call.text);
-  let stored = 0;
+
+  // Load the seller's inventory SKUs once, for auto-matching by SKU.
+  const { data: invRows } = await sb.from('collection_items')
+    .select('id, api_card_id, variant, condition, shop_sku')
+    .eq('user_id', user.id).not('shop_sku', 'is', null);
+  const bySku = {};
+  (invRows || []).forEach(function (r) {
+    if (r.shop_sku) bySku[String(r.shop_sku).trim().toLowerCase()] = r;
+  });
+
+  let stored = 0, skuMatched = 0;
   for (const it of items) {
+    // 1) Upsert the raw listing fields ONLY (no match columns), so a re-sync
+    //    never clobbers an existing (manual or prior) link.
     const up = await sb.from('ebay_listing_links').upsert({
       user_id:        user.id,
       ebay_item_id:   it.itemId,
@@ -87,9 +99,33 @@ module.exports = async function handler(req, res) {
       quantity:       it.quantity,
       last_synced_at: new Date().toISOString(),
     }, { onConflict: 'user_id,ebay_item_id' }).select('id');
-    if (!up.error) stored++;
-    else console.warn('[ebay-sync] upsert error:', up.error.message);
+    if (up.error) { console.warn('[ebay-sync] upsert error:', up.error.message); continue; }
+    stored++;
+
+    // 2) Auto-match by SKU — but only fill links that aren't already linked
+    //    (the `.is('collection_item_id', null)` guard preserves manual links).
+    const skuKey = it.sku ? String(it.sku).trim().toLowerCase() : null;
+    const m = skuKey ? bySku[skuKey] : null;
+    if (m) {
+      const upd = await sb.from('ebay_listing_links')
+        .update({ collection_item_id: m.id, api_card_id: m.api_card_id || null,
+                  variant: m.variant || 'normal', condition: m.condition || null })
+        .eq('user_id', user.id).eq('ebay_item_id', it.itemId)
+        .is('collection_item_id', null)
+        .select('id');
+      if (!upd.error && upd.data && upd.data.length) skuMatched++;
+    }
   }
 
-  return res.status(200).json({ ok: true, pulled: items.length, stored, ack, sample: items.slice(0, 5) });
+  // Linked / unlinked totals across ALL of the seller's eBay listings.
+  const { count: linked } = await sb.from('ebay_listing_links')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id).not('collection_item_id', 'is', null);
+  const { count: total } = await sb.from('ebay_listing_links')
+    .select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+
+  return res.status(200).json({
+    ok: true, pulled: items.length, stored, skuMatched,
+    linked: linked || 0, unlinked: Math.max(0, (total || 0) - (linked || 0)), ack,
+  });
 };
