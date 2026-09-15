@@ -8196,9 +8196,13 @@ function _loadAdmin(){
         '<div style="position:relative;width:100%;max-width:480px;background:var(--surface);border:2px solid var(--copper-dim);border-radius:6px;padding:20px 18px 24px;max-height:90svh;overflow-y:auto;box-shadow:0 0 30px var(--copper-glow)">' +
           '<button onclick="document.getElementById(\'moversCardSheet\').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted)">×</button>' +
           '<div style="font-size:.52rem;letter-spacing:.14em;color:var(--copper);margin-bottom:14px">CARD DETAIL</div>' +
-          (card.image_url
+          // Known hotlink-blocked hosts (tcgplayer-cdn 403) have a non-null
+          // image_url but never load, so route them to the "NO IMAGE YET"
+          // placeholder below instead of rendering a broken <img>. The onerror
+          // is a safety net for any other host that 4xx-es transiently.
+          (card.image_url && !(window._brokenImgHost && window._brokenImgHost(card.image_url))
             ? '<div style="display:flex;justify-content:center;margin-bottom:14px">' +
-                '<img src="' + card.image_url + '" alt="' + _escHtml(card.name || '') + '" onclick="openImageLightbox(\'' + safeImg + '\')" style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;cursor:zoom-in;box-shadow:0 0 20px var(--copper-glow)" loading="lazy" decoding="async">' +
+                '<img src="' + card.image_url + '" alt="' + _escHtml(card.name || '') + '" onclick="openImageLightbox(\'' + safeImg + '\')" onerror="this.onerror=null;this.src=window.PLACEHOLDER_IMG;this.style.cursor=\'default\';this.onclick=null" style="max-width:180px;width:100%;height:auto;border:1px solid var(--copper-dim);border-radius:4px;cursor:zoom-in;box-shadow:0 0 20px var(--copper-glow)" loading="lazy" decoding="async">' +
               '</div>'
             // Catalog row has no image (common for newly-synced rows
             // from recent sets — the image-mirror job hasn't run yet).
@@ -27538,6 +27542,18 @@ function _loadAdmin(){
     // reach it regardless of which scope they execute in.
     window.PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220' viewBox='0 0 300 220'%3E%3Crect width='300' height='220' fill='%231a0a00'/%3E%3Crect x='110' y='60' width='80' height='100' rx='4' fill='%232e1500'/%3E%3Ctext x='150' y='185' font-family='monospace' font-size='11' fill='%238a5a30' text-anchor='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
 
+    // Hosts that return 4xx for hotlinked images, so an <img> pointed at one
+    // shows a broken glyph. tcgplayer-cdn.tcgplayer.com hard-blocks hotlinking
+    // (403) — ~2.7K catalog rows imported from tcgcsv still point there because
+    // the image-mirror step never covered them (mostly sealed products, which
+    // have no free re-source). Detect these centrally and swap in a placeholder
+    // up front: no failed request, no broken flash. Extend the list if another
+    // host starts 4xx-ing hotlinks.
+    window._brokenImgHost = function _brokenImgHost(url) {
+      if (!url || typeof url !== 'string') return false;
+      return url.indexOf('tcgplayer-cdn.tcgplayer.com') !== -1;
+    };
+
     // Per-game card-back placeholders for catalog cards with no image. Upload
     // the official backs to a PUBLIC Supabase bucket named "card-backs" as
     // <game_type>.png (pokemon.png, magic.png, yugioh.png, ...). Any game
@@ -27931,6 +27947,10 @@ function _loadAdmin(){
     // See task #41 (user uploads) and task #42 (catalog mirrors).
     function _pickThumbVariant(url, targetWidth) {
       if (!url) return url;
+      // Known hotlink-blocked host (e.g. tcgplayer-cdn 403) → don't attempt the
+      // request; show the placeholder instead of a broken image. Every callsite
+      // is an <img src>, so this is safe. See window._brokenImgHost.
+      if (window._brokenImgHost && window._brokenImgHost(url)) return window.PLACEHOLDER_IMG;
       if (!targetWidth) return url;
       // Only Supabase Storage buckets have variants. Anything else
       // (pokemontcg.io API, raw PriceCharting, etc.) passes through.

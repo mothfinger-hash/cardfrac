@@ -288,15 +288,23 @@ def main():
     # collapse to the same `{prefix}-{set}-{num}` id. A batch upsert with
     # on_conflict=id raises "ON CONFLICT DO UPDATE command cannot affect row a
     # second time" (Postgres 500) if the same id appears twice in one statement.
-    # Keep the first occurrence per id and report how many were folded.
-    seen, deduped, dup_count = set(), [], 0
+    # Among duplicates keep the BASE printing — the one with the shortest name.
+    # Variant products carry a suffix ("… GMR", "… Extended Art", "… (Borderless)",
+    # "… (Parallel)"), and TCGplayer sometimes lists the variant first: in
+    # Magnificent Monsters the 100-copy serialized "Grand Master Rare" rows came
+    # before the standard Ultra Rare for 18 numbers, so keep-first would have
+    # made the serialized version the canonical row. Ties keep the first seen.
+    by_id, order, dup_count = {}, [], 0
     for row in rows:
-        if row["id"] in seen:
-            dup_count += 1
+        cur = by_id.get(row["id"])
+        if cur is None:
+            by_id[row["id"]] = row
+            order.append(row["id"])
             continue
-        seen.add(row["id"])
-        deduped.append(row)
-    rows = deduped
+        dup_count += 1
+        if len(row.get("name") or "") < len(cur.get("name") or ""):
+            by_id[row["id"]] = row
+    rows = [by_id[i] for i in order]
 
     print(f"  {len(rows)} card rows ready "
           f"({skipped_sealed} sealed-skipped, {skipped_nonum} no-number-skipped"

@@ -488,6 +488,34 @@ Treat this list as the required checklist for any TCG addition:
 Forgetting #2 is the most common silent failure — scans for the new
 game return Pokemon false positives instead of relevant cards.
 
+## Ingesting missing sets (batch)
+
+`ingest_missing_sets.py` + `ingest_manifest.json` drive `import_tcgcsv_set.py`
+for every missing set in one run (plan → singles → sealed → embed → enrich →
+fixes → verify). Dry-run by default; `--commit` writes. Full usage in
+`RUNBOOK_batch_ingest.md`. Rules that keep it safe:
+
+- The biweekly `new_sets_<date>.md` probe is the input: add each gap as a
+  manifest entry with its tcgcsv group id (or a `group_match` that hits
+  exactly one group name). Upcoming sets go in with `"enabled": false`.
+- **Always pass `--set-name`** to `import_tcgcsv_set.py` (the runner does).
+  The importer falls back to the set code when the group is not in
+  `tcgplayer_group_map`, which is how JP `M5`/`M6` shipped with
+  `set_name = "M5"` / `"M6"`.
+- The importer's duplicate-id fold keeps the **shortest-named** product per
+  card number — the base printing — because TCGplayer sometimes lists
+  variants first (Magnificent Monsters listed the serialized Grand Master
+  Rares before the standard Ultra Rares).
+- `embed_catalog_rows.py` takes `--id-prefix <prefix>-<code>-`, not
+  `--only`. PC-singles enrichment (`sync_pc_singles_enrich.py`) only has
+  configs for gundam / lorcana / dbz / onepiece / pokemon-jp / pokemon_topps;
+  other games get prices from the TCGplayer spine.
+- Existence probes: Pokemon EN ids are lower-case (`en-me05-006`, so `ilike`),
+  One Piece starter decks are hyphenated (`op-st-31-…`), release-event sets
+  carry a space (`op-op17 re-…`), and `set_code` is not unique across games
+  (`OP17` is also a Yu-Gi-Oh set; `ST01` is also Gundam) — always pair with
+  `game_type`.
+
 ## Background workers / sync scripts
 
 - `pokedata_sync.py` is the consolidated multi-TCG sync. Use
