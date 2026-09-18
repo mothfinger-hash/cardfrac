@@ -36,7 +36,7 @@ ENVIRONMENT:
     SUPABASE_SERVICE_KEY    service-role key (bypasses RLS)
 """
 
-import os, sys, io, time, argparse
+import os, sys, io, time, json, argparse, threading, collections
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
@@ -67,6 +67,9 @@ ap.add_argument("--dry-run", action="store_true", help="Fetch+embed but don't wr
 ap.add_argument("--reembed", action="store_true", help="Re-embed rows that already have an embedding. Default skips them.")
 ap.add_argument("--batch-size", type=int, default=32, help="CLIP batch size (default 32). Lower if VRAM-bound.")
 ap.add_argument("--download-workers", type=int, default=8, help="Parallel image-fetch threads (default 8). Lower if your bandwidth is constrained.")
+ap.add_argument("--retry-passes", type=int, default=1,
+                help="After the main pass, re-try rows that failed on rate limiting (429/5xx) this many "
+                     "more times at reduced concurrency (default 1). 0 disables.")
 args = ap.parse_args()
 
 
@@ -141,49 +144,105 @@ if not candidates:
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
-def fetch_image(url, retries=2):
-    """Download + decode a card image. Retries on transient network
-    errors (connection refused, timeout, DNS hiccup) which are common
-    during long unattended runs. HTTP 4xx / 5xx are NOT retried — the
-    image is just missing or banned."""
-    last_err = None
+# Download throttling. Supabase Storage rate-limits by client IP and the
+# TCGplayer CDN can too. A 429 is "slow down", not "missing image" — the
+# previous version treated every non-200 as permanent and skipped the row,
+# so one throttled window silently left thousands of rows un-embedded
+# (2026-09-15: a 74K-row --all-missing run failed most rows this way).
+# Now: honor Retry-After, back off exponentially, pause EVERY worker during
+# the cool-down (one 429 means the others are about to get one too), halve
+# the worker count when a batch keeps hitting 429, and re-queue throttled
+# rows for a slower pass at the end. 400 / 403 / 404 stay permanent — the
+# object is missing or the CDN refuses it — and are written to a JSON
+# report so they can be fixed as data, not retried forever.
+_UA = {"User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")}
+_http = requests.Session()
+_http.headers.update(_UA)
+_cooldown_until = [0.0]
+_cooldown_lock = threading.Lock()
+_stats = collections.Counter()      # outcome class -> count (for the final summary)
+_permanent = []                     # {"id","url","status"} — 4xx other than 429
+_retry_queue = []                   # cards that gave up after repeated 429/5xx
+
+
+def _wait_cooldown():
+    while True:
+        wait = _cooldown_until[0] - time.time()
+        if wait <= 0:
+            return
+        time.sleep(min(wait, 5))
+
+
+def _set_cooldown(seconds):
+    with _cooldown_lock:
+        _cooldown_until[0] = max(_cooldown_until[0], time.time() + seconds)
+
+
+def fetch_image(card, retries=5):
+    """Download + decode one card image.
+    Returns (image, None) on success, (None, reason) on failure, where
+    reason is 'throttled' (re-queued), 'permanent' (4xx, reported) or a
+    network/decode error string."""
+    url = card["image_url"]
+    backoff = 2.0
     for attempt in range(retries + 1):
+        _wait_cooldown()
         try:
-            r = requests.get(url, timeout=REQUEST_TIMEOUT)
-            r.raise_for_status()
-            return Image.open(io.BytesIO(r.content)).convert("RGB")
+            r = _http.get(url, timeout=REQUEST_TIMEOUT)
         except (requests.ConnectionError, requests.Timeout) as e:
-            last_err = e
+            _stats["network error"] += 1
             if attempt < retries:
-                time.sleep(1 + attempt * 2)  # 1s, 3s back-off
+                time.sleep(1 + attempt * 2)
                 continue
-        except Exception as e:
-            last_err = e
-            break
-    print(f"\n  ! {url[:70]} — {last_err}")
-    return None
+            return None, f"network: {type(e).__name__}"
+        if r.status_code == 200:
+            try:
+                return Image.open(io.BytesIO(r.content)).convert("RGB"), None
+            except Exception as e:
+                _stats["undecodable image"] += 1
+                _permanent.append({"id": card["id"], "url": url, "status": f"decode: {e}"})
+                return None, "permanent"
+        if r.status_code == 429 or r.status_code >= 500:
+            ra = r.headers.get("Retry-After")
+            try:
+                wait = float(ra) if ra else backoff
+            except ValueError:
+                wait = backoff
+            _set_cooldown(min(max(wait, 1.0), 60.0))
+            _stats[f"http {r.status_code} (backed off)"] += 1
+            backoff = min(backoff * 2, 60.0)
+            continue
+        # 400 / 403 / 404 / anything else: object missing or refused. Permanent.
+        _stats[f"http {r.status_code} (permanent)"] += 1
+        _permanent.append({"id": card["id"], "url": url, "status": r.status_code})
+        return None, "permanent"
+    _stats["throttled, re-queued"] += 1
+    return None, "throttled"
 
 
 def fetch_batch_parallel(batch, workers):
-    """Fetch every image in `batch` concurrently. Returns a list of
-    (card, image) tuples in original order, plus a count of failures.
-    Parallel I/O is the biggest single speedup for this script — going
-    from 1 worker (~300ms/card) to 8 workers (~50ms/card) shrinks an
-    overnight 100K-row run from ~12h to ~2-3h."""
+    """Fetch every image in `batch` concurrently. Returns (loaded, failed,
+    throttled): loaded = [(card, image)] in original order; failed = count
+    of rows that will not be retried this pass; throttled = count re-queued
+    for the retry pass. Parallel I/O is the biggest single speedup for this
+    script, but the worker count is now adaptive (see main loop)."""
     loaded_by_idx = [None] * len(batch)
-    failed = 0
+    failed = throttled = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(fetch_image, c["image_url"]): i
-                   for i, c in enumerate(batch)}
+        futures = {pool.submit(fetch_image, c): i for i, c in enumerate(batch)}
         for fut in as_completed(futures):
             idx = futures[fut]
-            img = fut.result()
+            img, reason = fut.result()
             if img is not None:
                 loaded_by_idx[idx] = (batch[idx], img)
+            elif reason == "throttled":
+                throttled += 1
+                _retry_queue.append(batch[idx])
             else:
                 failed += 1
     loaded = [pair for pair in loaded_by_idx if pair is not None]
-    return loaded, failed
+    return loaded, failed, throttled
 
 def embed_batch(pil_images):
     inputs = processor(images=pil_images, return_tensors="pt", padding=True).to(device)
@@ -197,10 +256,12 @@ _upsert_errors = 0
 _abort_threshold = 500  # high tolerance for overnight runs. Transient
                         # 'Server disconnected' errors auto-retry now,
                         # so most won't reach this counter at all.
-_UPDATE_WORKERS  = 8    # parallel UPDATEs per batch. Reduced from 12 —
-                        # 12 was tripping Supabase's connection pool
-                        # ('Server disconnected'). 8 + retries is more
-                        # stable for long unattended runs.
+_UPDATE_WORKERS  = 4    # parallel UPDATEs per batch. Was 12, then 8 —
+                        # 12 tripped Supabase's connection pool ('Server
+                        # disconnected'); 8 produced '[Errno 35] Resource
+                        # temporarily unavailable' (EAGAIN — too many
+                        # sockets in flight from one client) on the
+                        # 2026-09-15 backlog run. 4 + retries is stable.
 
 def _is_transient_error(err_str):
     """Errors that should be retried (network/connection blips)."""
@@ -214,6 +275,11 @@ def _is_transient_error(err_str):
         "timeout",
         "broken pipe",
         "max retries exceeded",
+        "temporarily unavailable",   # EAGAIN / errno 35
+        "errno 35",
+        "too many requests",         # PostgREST 429
+        "429",
+        "502", "503", "504",
     ])
 
 def upsert(rows):
@@ -236,14 +302,14 @@ def upsert(rows):
 
     def do_update(row):
         last_err = None
-        for attempt in range(3):  # 1 initial + 2 retries
+        for attempt in range(5):  # 1 initial + 4 retries
             try:
                 sb.table("catalog").update({"embedding": row["embedding"]}).eq("id", row["id"]).execute()
                 return None
             except Exception as e:
                 last_err = e
-                if _is_transient_error(e) and attempt < 2:
-                    time.sleep(0.2 + attempt * 0.3)  # 0.2s, 0.5s back-off
+                if _is_transient_error(e) and attempt < 4:
+                    time.sleep(0.5 * (2 ** attempt))  # 0.5, 1, 2, 4s back-off
                     continue
                 break
         return (row.get("id", "?"), str(last_err))
@@ -261,56 +327,107 @@ def upsert(rows):
 
 
 # ── Main loop ───────────────────────────────────────────────────────────
-total     = len(candidates)
 succeeded = 0
 failed    = 0
 buf       = []
 t0        = time.time()
 
-for i in range(0, total, BATCH_SIZE):
-    batch = candidates[i : i + BATCH_SIZE]
-    elapsed = time.time() - t0
-    per     = elapsed / max(succeeded + failed, 1)
-    eta     = int((total - i) * per)
-    rate    = (succeeded + failed) / elapsed if elapsed else 0
-    print(f"  [{i+1:>6}/{total}]  ETA {eta//3600}h {(eta%3600)//60}m  ({rate:.1f}/s)", end="\r", flush=True)
 
-    # Parallel image downloads — was the slowest part of the previous
-    # loop. 8 workers default; tunable via --download-workers.
-    loaded, batch_failed = fetch_batch_parallel(batch, args.download_workers)
-    failed += batch_failed
-    if not loaded:
-        continue
+def run_pass(cards, workers, label):
+    """Embed every card in `cards`. Worker count adapts: halve it when a
+    batch keeps getting throttled (floor 2), creep back up after a run of
+    clean batches. Throttled rows land in _retry_queue for the next pass."""
+    global succeeded, failed
+    total = len(cards)
+    clean_batches = 0
+    for i in range(0, total, BATCH_SIZE):
+        batch = cards[i : i + BATCH_SIZE]
+        elapsed = time.time() - t0
+        done = succeeded + failed + len(_retry_queue)
+        per  = elapsed / max(done, 1)
+        eta  = int((total - i) * per)
+        rate = done / elapsed if elapsed else 0
+        print(f"  [{label} {i+1:>6}/{total}]  ETA {eta//3600}h {(eta%3600)//60}m  ({rate:.1f}/s, {workers} workers)",
+              end="\r", flush=True)
 
-    cards_b, imgs_b = zip(*loaded)
-    try:
-        vectors = embed_batch(list(imgs_b))
-    except Exception as e:
-        print(f"\n  Embed failed: {e}")
-        failed += len(loaded)
-        continue
+        loaded, batch_failed, batch_throttled = fetch_batch_parallel(batch, workers)
+        failed += batch_failed
+        if batch_throttled >= max(2, len(batch) // 8):
+            workers = max(2, workers // 2)
+            clean_batches = 0
+        elif batch_throttled == 0:
+            clean_batches += 1
+            if clean_batches >= 25 and workers < args.download_workers:
+                workers += 1
+                clean_batches = 0
+        if not loaded:
+            continue
 
-    for card, vec in zip(cards_b, vectors):
-        # Only carry id + embedding into the upsert — never overwrite
-        # other catalog fields like name / image_url etc.
-        buf.append({"id": card["id"], "embedding": vec})
-        succeeded += 1
+        cards_b, imgs_b = zip(*loaded)
+        try:
+            vectors = embed_batch(list(imgs_b))
+        except Exception as e:
+            print(f"\n  Embed failed: {e}")
+            failed += len(loaded)
+            continue
 
-    if len(buf) >= UPSERT_BATCH:
-        upsert(buf)
-        buf.clear()
+        for card, vec in zip(cards_b, vectors):
+            # Only carry id + embedding into the upsert — never overwrite
+            # other catalog fields like name / image_url etc.
+            buf.append({"id": card["id"], "embedding": vec})
+            succeeded += 1
 
-    time.sleep(0.05)
+        if len(buf) >= UPSERT_BATCH:
+            upsert(buf)
+            buf.clear()
+
+        time.sleep(0.05)
+
+
+try:
+    run_pass(candidates, args.download_workers, "pass 1")
+    # Rows that gave up on 429/5xx get another go at low concurrency once
+    # the rate-limit window has had time to clear.
+    for n in range(args.retry_passes):
+        if not _retry_queue:
+            break
+        again, _retry_queue[:] = list(_retry_queue), []
+        print(f"\n  {len(again):,} rows were throttled — waiting 60s, then retry pass {n + 1} at 2 workers…")
+        time.sleep(60)
+        run_pass(again, 2, f"retry {n + 1}")
+except KeyboardInterrupt:
+    # Flush embeddings already computed but not yet written, so a Ctrl-C
+    # never throws away finished work. Failed / queued rows stay NULL and
+    # are picked up by the next --all-missing run.
+    print(f"\n  Interrupted — writing {len(buf)} pending embeddings before exit…")
+    upsert(buf)
+    buf.clear()
+    print("  Pending rows will be picked up by the next --all-missing run.")
 
 if buf:
     upsert(buf)
+
+still_throttled = len(_retry_queue)
+report_path = None
+if _permanent:
+    report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               f"embed_failures_{time.strftime('%Y%m%d_%H%M%S')}.json")
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(_permanent, f, indent=2)
 
 elapsed_total = int(time.time() - t0)
 print(f"""
 
 ════════════════════════════════════════
   Done!  ({elapsed_total//60}m {elapsed_total%60}s)
-  Embedded:  {succeeded:,}
-  Failed:    {failed:,}{'  (DRY RUN — nothing written)' if args.dry_run else ''}
-════════════════════════════════════════
-""")
+  Embedded:   {succeeded:,}
+  Failed:     {failed:,}  (permanent — missing / refused images){'  (DRY RUN — nothing written)' if args.dry_run else ''}
+  Throttled:  {still_throttled:,}  (still NULL; re-run --all-missing later)
+════════════════════════════════════════""")
+if _stats:
+    print("  Download outcomes:")
+    for k, v in sorted(_stats.items(), key=lambda kv: -kv[1]):
+        print(f"    {v:>7,}  {k}")
+if report_path:
+    print(f"  Permanent failures written to {report_path}")
+    print("  (400 = object missing from the bucket, 403 = TCGplayer has no image for that product.)")

@@ -491,9 +491,17 @@ game return Pokemon false positives instead of relevant cards.
 ## Ingesting missing sets (batch)
 
 `ingest_missing_sets.py` + `ingest_manifest.json` drive `import_tcgcsv_set.py`
-for every missing set in one run (plan → singles → sealed → embed → enrich →
-fixes → verify). Dry-run by default; `--commit` writes. Full usage in
+for every missing set in one run (plan → singles → sealed → mirror → embed →
+enrich → fixes → verify). Dry-run by default; `--commit` writes. Full usage in
 `RUNBOOK_batch_ingest.md`. Rules that keep it safe:
+
+- `import_tcgcsv_set.py` hotlinks TCGplayer's CDN in `image_url`; the
+  `mirror` stage copies those into the `card-images` bucket like every
+  earlier import. Singles: `mirror_tcgplayer_images.py`. Sealed:
+  `mirror_sealed_from_tcgplayer.py --replace-hosted`, which matches our
+  `sealed-*-tcg-*` rows by `tcgplayer_product_id` — never by name, because its
+  fuzzy matcher (tuned for PriceCharting names) pairs 'Display' with the plain
+  deck and '… Collection' with '… Collection Case'.
 
 - The biweekly `new_sets_<date>.md` probe is the input: add each gap as a
   manifest entry with its tcgcsv group id (or a `group_match` that hits
@@ -505,7 +513,14 @@ fixes → verify). Dry-run by default; `--commit` writes. Full usage in
 - The importer's duplicate-id fold keeps the **shortest-named** product per
   card number — the base printing — because TCGplayer sometimes lists
   variants first (Magnificent Monsters listed the serialized Grand Master
-  Rares before the standard Ultra Rares).
+  Rares before the standard Ultra Rares). It folds only when the FULL
+  printed number matches; distinct cards that share a prefix (Classic
+  Collection reprints: `106/106` vs `106/160` vs `106/105`) get
+  `{id}-{denominator}` ids and store the full number in `card_number`.
+- Re-importing a present set (`ingest_missing_sets.py --only X --force`) is
+  the launch-week refresh path: the importer upserts by id and strips
+  `image_url` for rows that already have a mirrored image, so a refresh
+  never un-mirrors a set.
 - `embed_catalog_rows.py` takes `--id-prefix <prefix>-<code>-`, not
   `--only`. PC-singles enrichment (`sync_pc_singles_enrich.py`) only has
   configs for gundam / lorcana / dbz / onepiece / pokemon-jp / pokemon_topps;

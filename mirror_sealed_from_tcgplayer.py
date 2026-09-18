@@ -90,6 +90,10 @@ GAME = {
     "onepiece":      (68, "op"),
     "lorcana":       (71, "lor"),
     "gundam":        (86, "gun"),
+    # Dragon Ball Super: Fusion World. Sealed rows imported straight from
+    # tcgcsv (sealed-dbf-tcg-*) hotlink the TCGplayer CDN until this mirrors
+    # them; PriceCharting-sourced ones (sealed-dbf-pc-*) work like the others.
+    "dbfusion":      (80, "dbf"),
 }
 
 _tcg = requests.Session(); _tcg.headers.update({"User-Agent": UA, "Accept": "application/json"})
@@ -330,7 +334,7 @@ def main():
         if gcode:
             _or_terms.append(f"set_name.ilike.*{gcode}*")
         _params = {
-            "select": "id,name,set_code,set_name,image_url",
+            "select": "id,name,set_code,set_name,image_url,tcgplayer_product_id",
             "id": f"like.sealed-{seg}-*",
             "or": "(" + ",".join(_or_terms) + ")",
         }
@@ -343,16 +347,45 @@ def main():
         if not args.replace_hosted:
             _params["image_url"] = "ilike.*pricecharting*"
         rows = pg_get("catalog", params=_params)
+        # Name scoping misses rows whose set_name does not contain the group
+        # name verbatim (quote-style differences — TCGplayer's 'Eustass"Captain"
+        # Kid' vs our 'Eustass "Captain" Kid' — or a set named by code). Rows
+        # that carry tcgplayer_product_id can be scoped by that instead: pull
+        # every sealed row of this game whose pid is one of this group's
+        # products, same source/language guards, and merge by id.
+        _pids = [str(t[1]) for t in tcg_list if t[1] is not None]
+        if _pids:
+            _seen_ids = {r["id"] for r in rows}
+            for _i in range(0, len(_pids), 100):
+                _p2 = {k: v for k, v in _params.items() if k != "or"}
+                _p2["tcgplayer_product_id"] = "in.(" + ",".join(_pids[_i:_i + 100]) + ")"
+                for _r in pg_get("catalog", params=_p2):
+                    if _r["id"] not in _seen_ids:
+                        rows.append(_r)
+                        _seen_ids.add(_r["id"])
         print(f"\n  {args.game} group {gid} '{gname}'{(' [' + gcode + ']') if gcode else ''}: "
               f"{len(tcg_list)} TCGplayer sealed, {len(rows)} sealed rows to consider")
         _matched_pids = set()
+        _by_pid = {str(t[1]): t for t in tcg_list}
         for row in rows:
             our_name = row.get("name") or ""
-            # A generic 'Sealed Deck' can't match TCGplayer's 'Starter Deck N:
-            # Name' by product name — the deck IS the set, so match the GROUP
-            # name instead.
-            target = gname if _is_generic_deck(our_name) else our_name
-            match, r = best_match(target, tcg_list, args.min_ratio)
+            # Exact first: rows that already carry tcgplayer_product_id (the
+            # sealed-*-tcg-* rows import_tcgcsv_set.py --sealed creates, and
+            # anything this script stamped on an earlier pass) name the product
+            # outright. The fuzzy matcher below was tuned for PriceCharting
+            # names and mis-pairs near-identical TCGplayer names — 'Display'
+            # vs the plain deck, '… Collection' vs '… Collection Case' — so it
+            # must never run for a row whose product is already known.
+            match, r = None, 0.0
+            _rpid = row.get("tcgplayer_product_id")
+            if _rpid is not None and str(_rpid) in _by_pid:
+                match, r = _by_pid[str(_rpid)], 1.0
+            if not match:
+                # A generic 'Sealed Deck' can't match TCGplayer's 'Starter Deck
+                # N: Name' by product name — the deck IS the set, so match the
+                # GROUP name instead.
+                target = gname if _is_generic_deck(our_name) else our_name
+                match, r = best_match(target, tcg_list, args.min_ratio)
             if not match:
                 unmatched.append({"game": args.game, "group_id": gid, "group_name": gname,
                                   "code": gcode, "id": row.get("id"), "name": our_name,

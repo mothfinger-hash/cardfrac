@@ -70,15 +70,23 @@ GAME_PREFIX = {
 }
 
 
-def card_number_raw(product):
-    """Canonical card number for storage: the part before '/', trimmed."""
+def card_number_full(product):
+    """The printed number exactly as TCGplayer lists it ('106/160'), spaces
+    stripped. Used to tell 'same card, another finish' (identical) apart from
+    'different card that shares a prefix' (differs — see the dedupe below)."""
     for ed in product.get("extendedData", []):
         if ed.get("name") == "Number":
-            v = str(ed.get("value") or "").strip()
-            if "/" in v:
-                v = v.split("/", 1)[0].strip()
-            return v.replace(" ", "") or None
+            v = str(ed.get("value") or "").strip().replace(" ", "")
+            return v or None
     return None
+
+
+def card_number_raw(product):
+    """Canonical card number for storage: the part before '/', trimmed."""
+    v = card_number_full(product)
+    if v and "/" in v:
+        v = v.split("/", 1)[0].strip()
+    return v or None
 
 
 def card_rarity(product):
@@ -119,22 +127,54 @@ def collision_check(set_code, game_type, intended_name):
               f"different set, choose a different --set-code.")
 
 
-def upsert_catalog(rows):
-    for i in range(0, len(rows), 100):
-        chunk = rows[i:i + 100]
-        r = tc._sb.post(
-            f"{tc.SUPABASE_URL.rstrip('/')}/rest/v1/catalog?on_conflict=id",
-            headers={
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates,return=minimal",
-            },
-            data=json.dumps(chunk),
-            timeout=60,
-        )
-        if not r.ok:
-            print(f"  ! upsert failed (HTTP {r.status_code}) on rows {i}-{i + len(chunk) - 1}")
-            print(f"    response body: {r.text[:1000]}")
-            r.raise_for_status()
+TCG_CDN_HOST = "tcgplayer-cdn.tcgplayer.com"
+
+
+def hosted_image_ids(rows):
+    """ids among `rows` that already exist in the catalog with an image_url
+    that is NOT the TCGplayer CDN — i.e. a mirrored (self-hosted) image, or
+    one from another source. Re-importing a set must not clobber those back
+    to the CDN hotlink, or every refresh silently un-mirrors the set."""
+    hosted = set()
+    ids = [r["id"] for r in rows]
+    for i in range(0, len(ids), 100):
+        # Double-quote each value: ids can contain spaces ('op-op16 re-…').
+        vals = ",".join('"' + x.replace('"', '') + '"' for x in ids[i:i + 100])
+        q = tc.requests.utils.quote(f"({vals})", safe="(),\"")
+        for r in tc.sb_get(f"catalog?select=id,image_url&id=in.{q}"):
+            url = r.get("image_url") or ""
+            if url and TCG_CDN_HOST not in url:
+                hosted.add(r["id"])
+    return hosted
+
+
+def upsert_catalog(rows, keep_hosted_images=True):
+    """Upsert in chunks of 100. Rows that already exist with a self-hosted
+    image are sent WITHOUT image_url (PostgREST merge-duplicates only touches
+    the columns present), so their mirrored image survives the refresh. The
+    two shapes go in separate batches — PostgREST rejects a batch whose rows
+    do not share one key set (PGRST102)."""
+    hosted = hosted_image_ids(rows) if keep_hosted_images else set()
+    fresh = [r for r in rows if r["id"] not in hosted]
+    keep = [{k: v for k, v in r.items() if k != "image_url"} for r in rows if r["id"] in hosted]
+    if keep:
+        print(f"  {len(keep)} existing rows keep their mirrored image_url (metadata refreshed only)")
+    for group in (fresh, keep):
+        for i in range(0, len(group), 100):
+            chunk = group[i:i + 100]
+            r = tc._sb.post(
+                f"{tc.SUPABASE_URL.rstrip('/')}/rest/v1/catalog?on_conflict=id",
+                headers={
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=merge-duplicates,return=minimal",
+                },
+                data=json.dumps(chunk),
+                timeout=60,
+            )
+            if not r.ok:
+                print(f"  ! upsert failed (HTTP {r.status_code}) on rows {i}-{i + len(chunk) - 1}")
+                print(f"    response body: {r.text[:1000]}")
+                r.raise_for_status()
 
 
 def main():
@@ -279,42 +319,90 @@ def main():
                 "image_url":            upgrade_image(p.get("imageUrl")) or None,
                 "rarity":               card_rarity(p) or None,
                 "tcgplayer_url":        p.get("url") or None,
+                "_full":                card_number_full(p) or num,   # transient, stripped below
             }
             rows.append(row)
 
-    # Dedupe by catalog id. MTG (and some other games) ship multiple products
-    # that share one collector number — borderless / extended-art / showcase /
-    # promo treatments. Our id scheme is one row per (set, number), so those
-    # collapse to the same `{prefix}-{set}-{num}` id. A batch upsert with
-    # on_conflict=id raises "ON CONFLICT DO UPDATE command cannot affect row a
-    # second time" (Postgres 500) if the same id appears twice in one statement.
-    # Among duplicates keep the BASE printing — the one with the shortest name.
-    # Variant products carry a suffix ("… GMR", "… Extended Art", "… (Borderless)",
-    # "… (Parallel)"), and TCGplayer sometimes lists the variant first: in
-    # Magnificent Monsters the 100-copy serialized "Grand Master Rare" rows came
-    # before the standard Ultra Rare for 18 numbers, so keep-first would have
-    # made the serialized version the canonical row. Ties keep the first seen.
-    by_id, order, dup_count = {}, [], 0
+    # Dedupe by catalog id. Our id scheme is one row per (set, number-before-
+    # slash), and two different situations land on the same id:
+    #
+    #  (a) VARIANTS — same printed number, several products: MTG borderless /
+    #      extended-art / showcase, Yu-Gi-Oh rarities, One Piece parallels.
+    #      Keep ONE row: the BASE printing, i.e. the shortest name (variants
+    #      carry a suffix — "… GMR", "… Extended Art", "… (Borderless)"), ties
+    #      keep the first seen. TCGplayer sometimes lists the variant first —
+    #      Magnificent Monsters listed the 100-copy serialized Grand Master
+    #      Rares before the standard Ultra Rares — so keep-first was wrong.
+    #
+    #  (b) DIFFERENT CARDS whose printed numbers share a prefix but differ in
+    #      the denominator — reprint sets that keep original numbering:
+    #      30th Celebration Classic Collection has Palkia LV.X 106/106,
+    #      M Gardevoir EX 106/160 AND Shining Celebi 106/105. Folding those
+    #      silently dropped 3 of 30 cards on 2026-09-15. Now: the base-
+    #      printing rule still decides who gets the plain id (so a re-run
+    #      never moves an existing row), every other distinct card is
+    #      re-keyed as `{id}-{denominator}`, and ALL members of the collision
+    #      store the FULL printed number ("106/160") as card_number so the
+    #      ambiguity is visible in the data.
+    #
+    # A batch upsert with on_conflict=id would otherwise raise "ON CONFLICT DO
+    # UPDATE command cannot affect row a second time" (Postgres 500).
+    groups, order = {}, []
     for row in rows:
-        cur = by_id.get(row["id"])
-        if cur is None:
-            by_id[row["id"]] = row
+        if row["id"] not in groups:
             order.append(row["id"])
+        groups.setdefault(row["id"], []).append(row)
+    deduped, dup_count, split_count = [], 0, 0
+    for rid in order:
+        g = groups[rid]
+        if len(g) == 1:
+            deduped.append(g[0])
             continue
-        dup_count += 1
-        if len(row.get("name") or "") < len(cur.get("name") or ""):
-            by_id[row["id"]] = row
-    rows = [by_id[i] for i in order]
+        # Fold true variants first: one winner per distinct printed number.
+        by_full, full_order = {}, []
+        for r in g:
+            f = r["_full"]
+            if f not in by_full:
+                by_full[f] = r
+                full_order.append(f)
+            elif len(r.get("name") or "") < len(by_full[f].get("name") or ""):
+                by_full[f] = r
+        dup_count += len(g) - len(by_full)
+        winners = [by_full[f] for f in full_order]
+        if len(winners) == 1:
+            deduped.append(winners[0])
+            continue
+        # Distinct cards sharing a prefix: plain id to the base-printing
+        # winner, denominator-suffixed ids to the rest, full numbers for all.
+        plain = min(winners, key=lambda r: len(r.get("name") or ""))
+        for r in winners:
+            r["card_number"] = r["_full"]
+            if r is not plain:
+                denom = r["_full"].split("/", 1)[1] if "/" in r["_full"] else r["_full"]
+                r["id"] = f"{rid}-{denom.replace('/', '-')}"
+                split_count += 1
+        deduped.extend(winners)
+    rows = deduped
+    for r in rows:
+        r.pop("_full", None)
 
     print(f"  {len(rows)} card rows ready "
           f"({skipped_sealed} sealed-skipped, {skipped_nonum} no-number-skipped"
-          f"{f', {dup_count} duplicate-id folded' if dup_count else ''})")
+          f"{f', {dup_count} duplicate-id folded' if dup_count else ''}"
+          f"{f', {split_count} same-prefix collisions re-keyed with denominator' if split_count else ''})")
     for r in rows[:5]:
         print(f"    {r['id']:<28} {r.get('name','')}  [{r.get('rarity','')}]")
     if len(rows) > 5:
         print(f"    … and {len(rows) - 5} more")
 
     if not args.commit:
+        try:
+            hosted = hosted_image_ids(rows)
+            if hosted:
+                print(f"  {len(hosted)} of these already exist with a mirrored image_url — "
+                      f"a --commit refreshes their metadata but keeps that image.")
+        except Exception as e:
+            print(f"  (could not check existing rows: {e})")
         print("\nDRY RUN — nothing written. Re-run with --commit to create these rows.")
         return
 

@@ -10,6 +10,9 @@ existing per-set tools for ALL of them, in order:
              skipped (singles and sealed are checked independently)
     singles  import_tcgcsv_set.py --group … --set-code … --set-name …
     sealed   import_tcgcsv_set.py --sealed   (same group; boxes / packs / ETBs)
+    mirror   mirror_tcgplayer_images.py (singles) + mirror_sealed_from_tcgplayer.py
+             --replace-hosted (sealed): copy the TCGplayer CDN images the
+             importer hotlinks into the card-images bucket and rewrite image_url
     embed    embed_catalog_rows.py --id-prefix <prefix>-<set_code>-   (scanner CLIP)
     enrich   sync_pc_singles_enrich.py --tcg <game>  +  sync_sealed_products.py --tcg <game>
              once per affected game (whole-game PriceCharting passes)
@@ -79,7 +82,14 @@ GAME_PREFIX = {
     "grandarchive": "ga", "metazoo": "mz", "starwars": "sw", "sorcery": "sor",
 }
 
-ALL_STAGES = ["singles", "sealed", "embed", "enrich", "fixes"]
+ALL_STAGES = ["singles", "sealed", "mirror", "embed", "enrich", "fixes"]
+
+# game_type -> --game value for mirror_sealed_from_tcgplayer.py. Japanese
+# Pokemon is a separate TCGplayer category there ('pokemon_japan').
+SEALED_MIRROR_GAME = {
+    "pokemon": "pokemon", "magic": "magic", "yugioh": "yugioh", "onepiece": "onepiece",
+    "lorcana": "lorcana", "gundam": "gundam", "dbfusion": "dbfusion",
+}
 
 
 # ── small helpers ───────────────────────────────────────────────────────────
@@ -477,6 +487,55 @@ def main():
             elif r["sealed"] == "no-products" and e["key"] not in retry_later:
                 retry_later.append(e["key"])
 
+    # ── mirror ──────────────────────────────────────────────────────────
+    # import_tcgcsv_set.py stores TCGplayer's CDN URL in image_url. Every
+    # earlier import was then mirrored into the card-images bucket, so do the
+    # same here: singles by set_code (per game), sealed by group with
+    # --replace-hosted (our sealed-*-tcg-* rows are CDN-hosted, not
+    # PriceCharting-hosted, so the default filter would skip them). Both
+    # scripts skip rows already on the bucket, so re-runs are cheap. Runs
+    # before embed so the scanner embeds from the hosted copies.
+    if "mirror" in stages:
+        log_line("\n=== MIRROR (TCGplayer CDN -> card-images bucket) ===", logf)
+        targets = [e for e in entries if not e["problems"]
+                   and results[e["key"]]["singles"] not in ("no-products", "FAILED")]
+        by_game = {}
+        for e in targets:
+            by_game.setdefault(e["game"], []).append(e)
+        for g, es in by_game.items():
+            codes = ",".join(e["set_code"] for e in es)
+            cmd = [py, "mirror_tcgplayer_images.py", "--set-code", codes, "--game", g]
+            if not args.commit:
+                cmd.append("--dry-run")
+            log_line(f"\n-- {g} singles: {codes}", logf)
+            rc, _ = run(cmd, env, logf, args.timeout)
+            for e in es:
+                results[e["key"]]["mirror_singles"] = "ok" if rc == 0 else "FAILED"
+            if rc != 0:
+                fails += 1
+        # Sealed: one call per (mirror game, group list). Japanese Pokemon
+        # groups live in TCGplayer category 85 -> 'pokemon_japan'.
+        sealed_groups = {}
+        for e in targets:
+            if not e["sealed"] or results[e["key"]]["sealed"] in ("no-products", "FAILED", "off"):
+                continue
+            mg = "pokemon_japan" if e["prefix"] == "jp" else SEALED_MIRROR_GAME.get(e["game"])
+            if not mg:
+                log_line(f"-- {e['key']}: no sealed-mirror game mapping for {e['game']}, skipping", logf)
+                continue
+            sealed_groups.setdefault(mg, []).append(str(e["group"]))
+        for mg, gids in sealed_groups.items():
+            cmd = [py, "mirror_sealed_from_tcgplayer.py", "--game", mg, "--group", ",".join(gids), "--replace-hosted"]
+            if not args.commit:
+                cmd.append("--dry-run")
+            log_line(f"\n-- {mg} sealed: groups {','.join(gids)}", logf)
+            rc, _ = run(cmd, env, logf, args.timeout)
+            for e in targets:
+                if str(e.get("group")) in gids:
+                    results[e["key"]]["mirror_sealed"] = "ok" if rc == 0 else "FAILED"
+            if rc != 0:
+                fails += 1
+
     # ── embed ───────────────────────────────────────────────────────────
     if "embed" in stages:
         log_line("\n=== EMBED (scanner CLIP embeddings) ===", logf)
@@ -592,6 +651,8 @@ def main():
             extra += f" singles_rows={r['singles_ready']}"
         if r.get("sealed_ready") is not None:
             extra += f" sealed_rows={r['sealed_ready']}"
+        if r.get("mirror_singles") or r.get("mirror_sealed"):
+            extra += f" mirror={r.get('mirror_singles', '-')}/{r.get('mirror_sealed', '-')}"
         if r.get("embed"):
             extra += f" embed={r['embed']}"
         log_line(f"  {r['key']:<9} singles={r['singles']:<10} sealed={r['sealed']:<10}{extra}", logf)
