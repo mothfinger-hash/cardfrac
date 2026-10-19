@@ -28739,8 +28739,16 @@ function _loadAdmin(){
     // sets that don't carry a real release date.
     function _pbSortSetsNewestFirst(sets) {
       return sets.slice().sort(function(a, b) {
-        var da = a.releaseDate && a.releaseDate !== '0000/00/00' ? a.releaseDate : '';
-        var db = b.releaseDate && b.releaseDate !== '0000/00/00' ? b.releaseDate : '';
+        // Read every date field the different loaders use: Pokemon EN sets carry
+        // `releaseDate` (camelCase), the TCG enrichment sets `release_date`
+        // (snake_case), and the JP loader uses `max_release`. Previously only
+        // `releaseDate` was checked, so TCG/JP sets looked undated here and fell
+        // through to a set_code sort (OP17 sank below every ST-* deck despite
+        // being the newest release).
+        var ra = a.releaseDate || a.release_date || a.max_release || '';
+        var rb = b.releaseDate || b.release_date || b.max_release || '';
+        var da = ra && ra !== '0000/00/00' ? ra : '';
+        var db = rb && rb !== '0000/00/00' ? rb : '';
         if (da || db) return (db || '').localeCompare(da || '');
         return (b.set_code || b.id || '').localeCompare(a.set_code || a.id || '');
       });
