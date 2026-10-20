@@ -61,6 +61,20 @@ async function handleSubscriptionCheckout(session) {
     return;
   }
 
+  // Capture billing interval (month/year) — the checkout session only carries
+  // the subscription ID, so retrieve it for the price's recurring.interval.
+  // Used by the giveaway tracker to weight monthly vs yearly subscriber entries.
+  // Guarded: a lookup failure must never block the tier upgrade.
+  let interval = null;
+  if (session.subscription) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(session.subscription);
+      interval = sub.items?.data?.[0]?.price?.recurring?.interval || null;
+    } catch (e) {
+      console.error('[webhook] interval lookup failed:', e.message);
+    }
+  }
+
   // Store the Stripe customer ID alongside the tier so we can look up
   // the user later when a subscription.deleted event arrives (which only
   // carries customer ID, not our user_id).
@@ -68,6 +82,7 @@ async function handleSubscriptionCheckout(session) {
     subscription_tier:      tier,
     stripe_customer_id:     session.customer || null,
     stripe_subscription_id: session.subscription || null,
+    subscription_interval:  interval,
     subscription_updated_at: new Date().toISOString(),
   }).eq('id', userId);
 
@@ -108,9 +123,12 @@ async function handleSubscriptionUpdated(subscription) {
     return;
   }
 
+  const interval = subscription.items?.data?.[0]?.price?.recurring?.interval || null;
+
   const { error } = await sb.from('profiles').update({
     subscription_tier:       tier,
     stripe_subscription_id:  subscription.id,
+    subscription_interval:   interval,
     subscription_updated_at: new Date().toISOString(),
   }).eq('id', profile.id);
 
@@ -181,6 +199,7 @@ async function handleSubscriptionDeleted(subscription) {
   const { error } = await sb.from('profiles').update({
     subscription_tier:       'free',
     stripe_subscription_id:  null,
+    subscription_interval:   null,
     subscription_updated_at: new Date().toISOString(),
   }).eq('id', profile.id);
 

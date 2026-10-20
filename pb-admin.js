@@ -37,6 +37,7 @@ function _pbInjectAdminMarkup(){
       <button class="admin-tab"        data-tab="adminModeration" onclick="switchAdminTab('adminModeration')">Moderation</button>
       <button class="admin-tab"        data-tab="adminBeta"       onclick="switchAdminTab('adminBeta')">Beta &amp; Vendors</button>
       <button class="admin-tab"        data-tab="adminCardData"   onclick="switchAdminTab('adminCardData')">Card Data</button>
+      <button class="admin-tab"        data-tab="adminGiveaways"  onclick="switchAdminTab('adminGiveaways')">Giveaways</button>
       <button class="admin-tab"        data-tab="adminSystem"     onclick="switchAdminTab('adminSystem')">System</button>
     </div>
 <div class="admin-panel active" id="adminOverview">
@@ -452,6 +453,36 @@ function _pbInjectAdminMarkup(){
         <div style="font-size:.6rem;color:rgba(26,199,160,.4);letter-spacing:.08em">Loading users…</div>
       </div>
     </div>
+    </div>
+<div class="admin-panel" id="adminGiveaways">
+    <div style="margin-top:4px;border:1px solid var(--border);background:var(--surface);padding:16px 18px;margin-bottom:20px">
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase;margin-bottom:12px">Create Giveaway</div>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:540px">
+        <input type="text" id="gaName" placeholder="Internal name (e.g. October Team Rocket Briefcase)"
+          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none">
+        <input type="text" id="gaPrize" placeholder="Prize shown to users (e.g. Sealed SV10 Team Rocket Briefcase)"
+          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">WINNERS
+            <input type="number" id="gaWinners" value="1" min="1" step="1" inputmode="numeric"
+              style="width:80px;background:var(--surface2);border:1px solid var(--border);padding:7px 10px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none"></label>
+          <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">CLOSES (optional)
+            <input type="datetime-local" id="gaCloses"
+              style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.74rem;color:var(--text);outline:none"></label>
+        </div>
+        <button type="button" onclick="adminCreateGiveaway()"
+          style="align-self:flex-start;background:var(--accent);color:var(--text-on-accent);border:none;padding:9px 20px;font-family:'Space Mono',monospace;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer">Create as draft</button>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted);margin-top:12px;line-height:1.6">
+        New giveaways start as <strong style="color:var(--text)">draft</strong> (hidden from users). <strong style="color:var(--text)">Open</strong> it to make it live and auto-enter paying subscribers. Entry totals are visible to admins only &mdash; each user sees only their own entry count.
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase">Giveaways</div>
+      <button type="button" onclick="renderAdminGiveaways()"
+        style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Refresh</button>
+    </div>
+    <div id="adminGiveawaysList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
     </div>`;
 }
 
@@ -1559,7 +1590,174 @@ function switchAdminTab(tab){
     root.querySelectorAll('.admin-panel').forEach(function(p){ p.classList.toggle('active', p.id === tab); });
     if (tab === 'adminOverview' && typeof renderAdminOverview === 'function') renderAdminOverview();
     if (tab === 'adminModeration' && typeof loadContentReports === 'function') loadContentReports();
+    if (tab === 'adminGiveaways' && typeof renderAdminGiveaways === 'function') renderAdminGiveaways();
   } catch(e){ console.warn('[admin] switchAdminTab', e); }
+}
+
+// ── Giveaways admin ────────────────────────────────────────────────────────
+// Create/open/close/draw drawings and auto-enter paying subscribers. Entry
+// totals come from giveaway_stats (admin-gated RPC); regular users never have
+// a path to the pool size. Draw calls giveaway_draw_winners (seeded weighted).
+async function renderAdminGiveaways(){
+  var box = document.getElementById('adminGiveawaysList');
+  if (!box) return;
+  box.innerHTML = '<div style="font-size:.7rem;color:var(--muted)">Loading…</div>';
+  try {
+    var res = await sb.from('giveaways')
+      .select('id,name,prize,num_winners,status,opens_at,closes_at,drawn_at,created_at')
+      .order('created_at', { ascending: false });
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    if (!rows.length) {
+      box.innerHTML = '<div style="font-size:.72rem;color:var(--muted)">No giveaways yet. Create one above.</div>';
+      return;
+    }
+    box.innerHTML = rows.map(_gaCardHtml).join('');
+    rows.forEach(function(g){ _gaLoadStats(g.id); if (g.status === 'drawn') _gaLoadWinners(g.id); });
+  } catch(e){
+    box.innerHTML = '<div style="font-size:.72rem;color:var(--red)">Error: ' + _escHtml(e.message || String(e)) + '</div>';
+  }
+}
+
+function _gaStatusColor(s){
+  return s === 'open' ? 'var(--green)' : s === 'drawn' ? 'var(--accent)'
+       : s === 'closed' ? 'var(--yellow)' : 'var(--muted)';
+}
+
+function _gaBtn(label, onclick, color){
+  return '<button type="button" onclick="' + onclick + '" style="font-family:\'Space Mono\',monospace;'
+    + 'font-size:.62rem;letter-spacing:.04em;padding:6px 12px;border:1px solid ' + color + ';'
+    + 'background:transparent;color:' + color + ';cursor:pointer">' + label + '</button>';
+}
+
+function _gaCardHtml(g){
+  var sc = _gaStatusColor(g.status);
+  var name = _escHtml(g.name || '');
+  var prize = _escHtml(g.prize || '');
+  var closes = g.closes_at ? _escHtml(new Date(g.closes_at).toLocaleString()) : '';
+  var actions = '';
+  if (g.status === 'draft') {
+    actions = _gaBtn('Open &amp; enter subscribers', "adminOpenGiveaway('" + g.id + "')", 'var(--green)');
+  } else if (g.status === 'open') {
+    actions = _gaBtn('Re-grant subscribers', "adminGrantSubs('" + g.id + "')", 'var(--copper)')
+            + _gaBtn('Close', "adminSetGiveawayStatus('" + g.id + "','closed')", 'var(--yellow)')
+            + _gaBtn('Draw winners', "adminDrawGiveaway('" + g.id + "')", 'var(--accent)');
+  } else if (g.status === 'closed') {
+    actions = _gaBtn('Re-open', "adminSetGiveawayStatus('" + g.id + "','open')", 'var(--muted)')
+            + _gaBtn('Draw winners', "adminDrawGiveaway('" + g.id + "')", 'var(--accent)');
+  } else {
+    actions = '<span style="font-size:.6rem;color:var(--muted)">Drawn'
+      + (g.drawn_at ? ' ' + _escHtml(new Date(g.drawn_at).toLocaleDateString()) : '') + '</span>';
+  }
+  return '<div style="border:1px solid var(--border);background:var(--surface);padding:14px 16px;margin-bottom:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
+    +   '<div style="font-size:.82rem;color:var(--text);font-weight:700">' + (prize || name || 'Giveaway') + '</div>'
+    +   '<div style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:' + sc + '">' + _escHtml(g.status) + '</div>'
+    + '</div>'
+    + (name && prize ? '<div style="font-size:.62rem;color:var(--muted);margin-top:2px">' + name + '</div>' : '')
+    + '<div style="font-size:.62rem;color:var(--muted);margin-top:4px">Winners: ' + (g.num_winners || 1)
+        + (closes ? ' &middot; Closes ' + closes : '') + '</div>'
+    + '<div id="gaStats-' + g.id + '" style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--accent);margin-top:8px">&mdash;</div>'
+    + '<div id="gaWinners-' + g.id + '"></div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">' + actions + '</div>'
+    + '</div>';
+}
+
+async function _gaLoadStats(id){
+  var el = document.getElementById('gaStats-' + id);
+  if (!el) return;
+  try {
+    var r = await sb.rpc('giveaway_stats', { p_giveaway_id: id });
+    var row = (r && r.data && r.data[0]) || null;
+    if (r.error || !row) { el.textContent = '—'; return; }
+    var ent = row.entrants || 0;
+    el.innerHTML = (row.total_entries || 0) + ' entries '
+      + '<span style="color:var(--muted);font-size:.6rem">from ' + ent + ' entrant' + (ent === 1 ? '' : 's') + '</span>';
+  } catch(_) { el.textContent = '—'; }
+}
+
+async function _gaLoadWinners(id){
+  var el = document.getElementById('gaWinners-' + id);
+  if (!el) return;
+  try {
+    var r = await sb.from('giveaway_winners')
+      .select('prize_rank,user_id,email,entries_held')
+      .eq('giveaway_id', id).order('prize_rank', { ascending: true });
+    if (r.error) return;
+    var ws = r.data || [];
+    if (!ws.length) return;
+    el.innerHTML = '<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">'
+      + '<div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--copper);margin-bottom:4px">Winners</div>'
+      + ws.map(function(w){
+          var who = _escHtml(w.user_id || w.email || 'unknown');
+          return '<div style="font-size:.62rem;color:var(--text)">#' + w.prize_rank
+            + ' &mdash; <code style="color:var(--accent)">' + who + '</code> '
+            + '<span style="color:var(--muted)">(' + (w.entries_held || 0) + ' entries)</span></div>';
+        }).join('')
+      + '</div>';
+  } catch(_){}
+}
+
+async function adminCreateGiveaway(){
+  var name = ((document.getElementById('gaName') || {}).value || '').trim();
+  var prize = ((document.getElementById('gaPrize') || {}).value || '').trim();
+  var winners = parseInt((document.getElementById('gaWinners') || {}).value, 10) || 1;
+  var closesRaw = (document.getElementById('gaCloses') || {}).value || '';
+  if (!name) { showToast('Enter an internal name'); return; }
+  if (winners < 1) winners = 1;
+  var payload = { name: name, prize: prize || null, num_winners: winners, status: 'draft' };
+  if (closesRaw) { try { payload.closes_at = new Date(closesRaw).toISOString(); } catch(_){} }
+  try {
+    var r = await sb.from('giveaways').insert(payload);
+    if (r.error) throw r.error;
+    showToast('Giveaway created (draft)');
+    var n = document.getElementById('gaName'); if (n) n.value = '';
+    var p = document.getElementById('gaPrize'); if (p) p.value = '';
+    renderAdminGiveaways();
+  } catch(e){ showToast('Create failed: ' + (e.message || e)); }
+}
+
+async function adminSetGiveawayStatus(id, status){
+  try {
+    var r = await sb.from('giveaways')
+      .update({ status: status, updated_at: new Date().toISOString() }).eq('id', id);
+    if (r.error) throw r.error;
+    showToast('Status → ' + status);
+    renderAdminGiveaways();
+  } catch(e){ showToast('Update failed: ' + (e.message || e)); }
+}
+
+async function adminOpenGiveaway(id){
+  try {
+    var u = await sb.from('giveaways')
+      .update({ status: 'open', opens_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (u.error) throw u.error;
+    var g = await sb.rpc('giveaway_grant_subscriber_entries', { p_giveaway_id: id });
+    if (g.error) throw g.error;
+    showToast('Opened — entered ' + (g.data || 0) + ' subscriber(s)');
+    renderAdminGiveaways();
+  } catch(e){ showToast('Open failed: ' + (e.message || e)); }
+}
+
+async function adminGrantSubs(id){
+  try {
+    var g = await sb.rpc('giveaway_grant_subscriber_entries', { p_giveaway_id: id });
+    if (g.error) throw g.error;
+    showToast('Entered ' + (g.data || 0) + ' new subscriber(s)');
+    _gaLoadStats(id);
+  } catch(e){ showToast('Grant failed: ' + (e.message || e)); }
+}
+
+async function adminDrawGiveaway(id){
+  if (!confirm('Draw winners now? This picks the winner(s) and marks the giveaway drawn. It cannot be undone from here.')) return;
+  try {
+    var r = await sb.rpc('giveaway_draw_winners', { p_giveaway_id: id });
+    if (r.error) throw r.error;
+    var ws = r.data || [];
+    showToast('Drew ' + ws.length + ' winner' + (ws.length === 1 ? '' : 's'));
+    renderAdminGiveaways();
+  } catch(e){ showToast('Draw failed: ' + (e.message || e)); }
 }
 
 function _ovTile(val, lbl, sub){
