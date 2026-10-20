@@ -62,6 +62,12 @@ declare
   bio_expr       text;
   social_expr    text;
   vac_expr       text;
+  has_created     boolean;
+  has_shopbanner  boolean;
+  has_shoploc     boolean;
+  created_expr    text;
+  shopbanner_expr text;
+  shoploc_expr    text;
   cols           text;
 begin
   -- Probe each optional column. We rebuild the SELECT list from only
@@ -118,6 +124,15 @@ begin
   select exists (select 1 from information_schema.columns
                  where table_schema='public' and table_name='profiles' and column_name='vacation_mode_until')
                  into has_vacation;
+  select exists (select 1 from information_schema.columns
+                 where table_schema='public' and table_name='profiles' and column_name='created_at')
+                 into has_created;
+  select exists (select 1 from information_schema.columns
+                 where table_schema='public' and table_name='profiles' and column_name='shop_banner_color')
+                 into has_shopbanner;
+  select exists (select 1 from information_schema.columns
+                 where table_schema='public' and table_name='profiles' and column_name='shop_location')
+                 into has_shoploc;
 
   -- Name: prefer display_name, then name, then username. Mask if
   -- the row is soft-deleted (so the marketplace shows "[deleted]"
@@ -222,6 +237,25 @@ begin
     vac_expr := 'null::timestamptz as vacation_mode_until';
   end if;
 
+  -- created_at is innocuous ("member since") so it is not masked on delete.
+  if has_created then
+    created_expr := 'p.created_at';
+  else
+    created_expr := 'null::timestamptz as created_at';
+  end if;
+
+  if has_shopbanner then
+    shopbanner_expr := 'case when p.is_deleted then null else p.shop_banner_color end as shop_banner_color';
+  else
+    shopbanner_expr := 'null::text as shop_banner_color';
+  end if;
+
+  if has_shoploc then
+    shoploc_expr := 'case when p.is_deleted then null else p.shop_location end as shop_location';
+  else
+    shoploc_expr := 'null::text as shop_location';
+  end if;
+
   cols := 'p.id, '
        || name_expr     || ', ' || uname_expr     || ', '
        || avatar_expr   || ', ' || avstate_expr   || ', '
@@ -230,7 +264,9 @@ begin
        || shopdesc_expr || ', ' || shopig_expr    || ', '
        || shopweb_expr  || ', ' || banner_expr    || ', '
        || rating_expr   || ', ' || bio_expr       || ', '
-       || social_expr   || ', ' || vac_expr;
+       || social_expr   || ', ' || vac_expr      || ', '
+       || created_expr  || ', ' || shopbanner_expr || ', '
+       || shoploc_expr;
 
   execute 'create or replace view public.public_profiles_display as
              select ' || cols || ' from public.profiles p';

@@ -1381,6 +1381,20 @@ function _loadAdmin(){
       return TIER_ORDER.indexOf(userTier()) >= TIER_ORDER.indexOf(tier);
     }
 
+    // Owner/staff "DEV" badge accounts. Keyed on username (present in every
+    // profile select that renders a badge) so no schema change or per-select
+    // threading is needed. Cosmetic only — takes precedence over the tier
+    // badge. NOTE: matched by username, so renaming one of these accounts
+    // drops its DEV badge; move to an is_dev column if this needs to be
+    // data-driven for more accounts.
+    var _DEV_ACCOUNT_USERNAMES = ['moth', 'mothfinger'];
+    function _isDevAccount(profile) {
+      try {
+        var u = (profile && profile.username ? String(profile.username) : '').toLowerCase();
+        return u !== '' && _DEV_ACCOUNT_USERNAMES.indexOf(u) !== -1;
+      } catch (_) { return false; }
+    }
+
     // Feature gate helpers
     // Collection tracking is now UNLIMITED + free — logging your whole
     // collection is the activation + retention hook, so we don't cap it. We
@@ -1920,8 +1934,8 @@ function _loadAdmin(){
         }
 
         if (referralCode) {
-          const { data: referrer } = await sb.from('profiles').select('id').eq('referral_code', referralCode).single().catch(() => ({ data: null }));
-          if (referrer && data.user) {
+          const { data: referrerId } = await sb.rpc('resolve_referral_code', { p_code: referralCode }).catch(() => ({ data: null }));
+          if (referrerId && data.user) {
             await sb.from('profiles').update({ referred_by: referralCode, referral_discount_used: false }).eq('id', data.user.id).catch(err => console.error('Referral link error:', err));
           }
         }
@@ -9316,7 +9330,7 @@ function _loadAdmin(){
         // Look up profile by username first, then by UUID
         let profile = null;
         console.log('[PublicBinder] looking up:', usernameOrId);
-        const { data: byUsername, error: e1 } = await sb.from('profiles')
+        const { data: byUsername, error: e1 } = await sb.from('public_profiles_display')
           .select('*')
           .eq('username', usernameOrId)
           .maybeSingle();
@@ -9324,7 +9338,7 @@ function _loadAdmin(){
         if (byUsername) {
           profile = byUsername;
         } else {
-          const { data: byId, error: e2 } = await sb.from('profiles')
+          const { data: byId, error: e2 } = await sb.from('public_profiles_display')
             .select('*')
             .eq('id', usernameOrId)
             .maybeSingle();
@@ -9376,8 +9390,10 @@ function _loadAdmin(){
 
         // Tier badge
         const tierColors = { free:'var(--muted)', enthusiast:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
-        const tier = profile.subscription_tier || (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'enthusiast' : 'free');
-        const tierBadge = tier !== 'free'
+        const tier = profile.subscription_tier || (profile.is_admin ? 'shop' : (profile.is_vendor || profile.is_premium) ? 'enthusiast' : 'free');
+        const tierBadge = _isDevAccount(profile)
+          ? `<span style="font-size:.62rem;padding:2px 7px;border:1px solid var(--copper);color:var(--copper);letter-spacing:.08em;margin-left:8px">DEV</span>`
+          : tier !== 'free'
           ? `<span style="font-size:.62rem;padding:2px 7px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;margin-left:8px">${tier.toUpperCase()}</span>`
           : '';
 
@@ -9440,7 +9456,7 @@ function _loadAdmin(){
             ${avatarHtml}
             <div>
               <div style="font-family:'Orbitron',monospace;font-weight:700;font-size:1.5rem;color:var(--copper);line-height:1.15">${_escHtml(heroLabel)}</div>
-              ${(subLabel || tier !== 'free') ? `<div style="margin-top:6px;display:flex;gap:8px;align-items:center;justify-content:center;font-size:.8rem;color:var(--muted)">${subLabel ? `<span>${_escHtml(subLabel)}</span>` : ''}${tier !== 'free' ? `<span style="font-size:.62rem;padding:3px 9px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;border-radius:var(--r-pill,999px)">${tier.toUpperCase()}</span>` : ''}</div>` : ''}
+              ${(subLabel || tier !== 'free' || _isDevAccount(profile)) ? `<div style="margin-top:6px;display:flex;gap:8px;align-items:center;justify-content:center;font-size:.8rem;color:var(--muted)">${subLabel ? `<span>${_escHtml(subLabel)}</span>` : ''}${_isDevAccount(profile) ? `<span style="font-size:.62rem;padding:3px 9px;border:1px solid var(--copper);color:var(--copper);letter-spacing:.08em;border-radius:var(--r-pill,999px)">DEV</span>` : tier !== 'free' ? `<span style="font-size:.62rem;padding:3px 9px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.08em;border-radius:var(--r-pill,999px)">${tier.toUpperCase()}</span>` : ''}</div>` : ''}
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;font-family:'Space Mono','Share Tech Mono',monospace;font-size:.72rem;color:var(--muted)">
               <span><strong style="color:var(--text)">${cardCount}</strong> card${cardCount!==1?'s':''}</span>
@@ -9703,14 +9719,14 @@ function _loadAdmin(){
       try {
         // Resolve profile
         let profile = null;
-        const { data: byUsername } = await sb.from('profiles')
-          .select('id, name, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, shop_banner_color, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+        const { data: byUsername } = await sb.from('public_profiles_display')
+          .select('id, name, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, shop_banner_color, subscription_tier, avatar_url, created_at')
           .eq('username', usernameOrId).maybeSingle();
         if (byUsername) {
           profile = byUsername;
         } else {
-          const { data: byId } = await sb.from('profiles')
-            .select('id, name, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, shop_banner_color, subscription_tier, is_premium, is_vendor, is_admin, avatar_url, created_at')
+          const { data: byId } = await sb.from('public_profiles_display')
+            .select('id, name, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, shop_banner_color, subscription_tier, avatar_url, created_at')
             .eq('id', usernameOrId).maybeSingle();
           profile = byId;
         }
@@ -9722,7 +9738,7 @@ function _loadAdmin(){
 
         // Must be at least vendor to have a public storefront
         const tier = profile.subscription_tier ||
-          (profile.is_admin ? 'shop' : profile.is_vendor ? 'vendor' : profile.is_premium ? 'enthusiast' : 'free');
+          (profile.is_admin ? 'shop' : (profile.is_vendor || profile.is_premium) ? 'enthusiast' : 'free');
         const tierOrder = ['free','enthusiast','vendor','shop'];
         const tierIdx   = tierOrder.indexOf(tier);
         if (tierIdx < tierOrder.indexOf('vendor')) {
@@ -9751,7 +9767,9 @@ function _loadAdmin(){
 
         // Tier badge
         const tierColors = { free:'var(--muted)', enthusiast:'var(--teal)', vendor:'var(--gold)', shop:'var(--accent)' };
-        const tierBadge = tier !== 'free'
+        const tierBadge = _isDevAccount(profile)
+          ? `<span style="font-size:.6rem;padding:2px 8px;border:1px solid var(--copper);color:var(--copper);letter-spacing:.1em;vertical-align:middle">DEV</span>`
+          : tier !== 'free'
           ? `<span style="font-size:.6rem;padding:2px 8px;border:1px solid ${tierColors[tier]||'var(--muted)'};color:${tierColors[tier]||'var(--muted)'};letter-spacing:.1em;vertical-align:middle">${tier.toUpperCase()}</span>`
           : '';
 
@@ -18613,14 +18631,14 @@ function _loadAdmin(){
         if (cat.error || !cat.data || !cat.data.image_contributed_by) return;
         const contributorId = cat.data.image_contributed_by;
         // Look up the contributor's display name.
-        const prof = await sb.from('profiles')
-          .select('username, email')
+        const prof = await sb.from('public_profiles_display')
+          .select('username')
           .eq('id', contributorId)
           .maybeSingle();
         if (prof.error || !prof.data) return;
         const label = prof.data.username
           ? '@' + prof.data.username
-          : (prof.data.email ? prof.data.email.split('@')[0] : 'a curator');
+          : 'a curator';
         // Subtle italic link. Profile URL is /?page=publicProfile&id=X
         // — the existing public-profile route.
         slot.innerHTML = 'Photo by '
@@ -23855,7 +23873,7 @@ function _loadAdmin(){
         //    current user reading their own row (RLS owner check) but
         //    keeps "view own shop preview" functional.
         try {
-          const r = await sb.from('profiles')
+          const r = await sb.from('public_profiles_display')
             .select('id, username, shop_name, shop_tagline, shop_description, shop_instagram, shop_website, avatar_url, subscription_tier')
             .eq('id', sellerId).maybeSingle();
           if (r.data) return r.data;
@@ -23924,8 +23942,9 @@ function _loadAdmin(){
       // Bio sources from new bio column first, then legacy shop_description / shop_tagline.
       const effectiveBio = profile.bio || profile.shop_description || profile.shop_tagline || '';
 
-      const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
-      const tierBadgeBg = tier === 'shop' ? 'var(--gold)' : tier === 'vendor' ? 'var(--copper)' : tier === 'enthusiast' ? 'var(--accent)' : 'var(--muted)';
+      const _dev = _isDevAccount(profile);
+      const tierLabel = _dev ? 'DEV' : (tier.charAt(0).toUpperCase() + tier.slice(1));
+      const tierBadgeBg = _dev ? 'var(--copper)' : (tier === 'shop' ? 'var(--gold)' : tier === 'vendor' ? 'var(--copper)' : tier === 'enthusiast' ? 'var(--accent)' : 'var(--muted)');
 
       const isFollowing = window._followingIds && window._followingIds.has(sellerId);
       const followBtn = (!isSelf && currentUser)
@@ -24237,7 +24256,7 @@ function _loadAdmin(){
       let profiles = {};
       if (ids.length) {
         try {
-          const r = await sb.from('profiles')
+          const r = await sb.from('public_profiles_display')
             .select('id, username, shop_name, avatar_url, subscription_tier')
             .in('id', ids);
           if (!r.error && Array.isArray(r.data)) {
@@ -24436,15 +24455,15 @@ function _loadAdmin(){
         // Tolerant column list — request seller_rating; if it doesn't
         // exist server-side the request 404s on that column and we
         // re-try without it.
-        let q = await sb.from('profiles')
+        let q = await sb.from('public_profiles_display')
           .select('id, subscription_tier, seller_rating, vacation_mode_until').in('id', ids);
         if (q.error && /column/.test(q.error.message || '')) {
           // Step down through optional columns. seller_rating was the
           // historical optional; vacation_mode_until is the newer one.
-          q = await sb.from('profiles')
+          q = await sb.from('public_profiles_display')
             .select('id, subscription_tier, vacation_mode_until').in('id', ids);
           if (q.error && /column/.test(q.error.message || '')) {
-            q = await sb.from('profiles').select('id, subscription_tier').in('id', ids);
+            q = await sb.from('public_profiles_display').select('id, subscription_tier').in('id', ids);
           }
         }
         if (!q.error && Array.isArray(q.data)) {
@@ -32252,7 +32271,7 @@ function _loadAdmin(){
               ...offerResult.data.map(o => o.from_user_id),
               ...offerResult.data.map(o => o.to_user_id)
             ]).values()];
-            const { data: pRows } = await sb.from('profiles').select('id, name, username').in('id', uids);
+            const { data: pRows } = await sb.from('public_profiles_display').select('id, name, username').in('id', uids);
             const pm = {};
             (pRows || []).forEach(p => { pm[p.id] = p; });
             tradeOffers = offerResult.data.map(o => ({
@@ -32520,7 +32539,7 @@ function _loadAdmin(){
               ...offersRes.data.map(o => o.from_user_id),
               ...offersRes.data.map(o => o.to_user_id)
             ]).values()];
-            sb.from('profiles').select('id, name, username').in('id', uids)
+            sb.from('public_profiles_display').select('id, name, username').in('id', uids)
               .then(({ data: pRows }) => {
                 const pm = {};
                 (pRows || []).forEach(p => { pm[p.id] = p; });
