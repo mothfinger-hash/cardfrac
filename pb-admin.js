@@ -1646,8 +1646,9 @@ function _gaCardHtml(g){
     actions = _gaBtn('Re-open', "adminSetGiveawayStatus('" + g.id + "','open')", 'var(--muted)')
             + _gaBtn('Draw winners', "adminDrawGiveaway('" + g.id + "')", 'var(--accent)');
   } else {
-    actions = '<span style="font-size:.6rem;color:var(--muted)">Drawn'
-      + (g.drawn_at ? ' ' + _escHtml(new Date(g.drawn_at).toLocaleDateString()) : '') + '</span>';
+    actions = '<span style="font-size:.6rem;color:var(--muted);align-self:center;margin-right:4px">Drawn'
+      + (g.drawn_at ? ' ' + _escHtml(new Date(g.drawn_at).toLocaleDateString()) : '') + '</span>'
+      + _gaBtn('Email winners', "adminEmailWinners('" + g.id + "')", 'var(--copper)');
   }
   return '<div style="border:1px solid var(--border);background:var(--surface);padding:14px 16px;margin-bottom:12px">'
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
@@ -1758,6 +1759,27 @@ async function adminDrawGiveaway(id){
     showToast('Drew ' + ws.length + ' winner' + (ws.length === 1 ? '' : 's'));
     renderAdminGiveaways();
   } catch(e){ showToast('Draw failed: ' + (e.message || e)); }
+}
+
+// Email the winner(s) via /api/send-giveaway-winner (admin-gated server side).
+async function adminEmailWinners(id){
+  if (!confirm('Send the winner email to all winners of this giveaway now?')) return;
+  var highValue = confirm('Does any single prize have a value of $600 or more?\n\nOK = yes (adds the W-9 / 1099 tax note to the email)\nCancel = no (omit the tax note)');
+  try {
+    var sess = await sb.auth.getSession();
+    var tok = sess && sess.data && sess.data.session && sess.data.session.access_token;
+    var r = await fetch('/api/send-giveaway-winner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify({ giveaway_id: id, highValue: highValue })
+    });
+    var j = await r.json().catch(function(){ return {}; });
+    if (!r.ok || !j.ok) {
+      showToast('Winner email: sent ' + (j.sent || 0) + ', failed ' + (j.failed || 0) + (j.error ? ' — ' + j.error : ''));
+    } else {
+      showToast('Winner email sent to ' + (j.sent || 0) + ' winner(s)');
+    }
+  } catch(e){ showToast('Email send failed: ' + (e.message || e)); }
 }
 
 function _ovTile(val, lbl, sub){

@@ -6277,6 +6277,7 @@ function _loadAdmin(){
     var _giveawayDashCache = null;   // { user_id, giveaway: row|null, entries }
     async function _loadGiveawayForDash() {
       if (!currentUser) return;
+      var cache = { user_id: currentUser.id, giveaway: null, entries: null, wins: [] };
       try {
         var g = await sb.from('giveaways')
           .select('id,name,prize,closes_at,num_winners')
@@ -6284,18 +6285,45 @@ function _loadAdmin(){
           .order('created_at', { ascending: false })
           .limit(1);
         var row = (g && g.data && g.data[0]) || null;
-        if (!row) {
-          _giveawayDashCache = { user_id: currentUser.id, giveaway: null };
-          try { renderDashboard(); } catch (_) {}
-          return;
+        if (row) {
+          cache.giveaway = row;
+          var e = await sb.rpc('giveaway_my_entries', { p_giveaway_id: row.id });
+          cache.entries = (e && e.data && e.data[0]) || { total: 0, breakdown: {} };
         }
-        var e = await sb.rpc('giveaway_my_entries', { p_giveaway_id: row.id });
-        var ent = (e && e.data && e.data[0]) || { total: 0, breakdown: {} };
-        _giveawayDashCache = { user_id: currentUser.id, giveaway: row, entries: ent };
-        try { renderDashboard(); } catch (_) {}
-      } catch (_) {
-        _giveawayDashCache = { user_id: currentUser.id, giveaway: null };
-      }
+      } catch (_) {}
+      // The viewer's OWN wins (self-scoped RPC — no other entrants, no counts).
+      try {
+        var w = await sb.rpc('giveaway_my_wins');
+        cache.wins = (w && w.data) || [];
+      } catch (_) {}
+      _giveawayDashCache = cache;
+      try { renderDashboard(); } catch (_) {}
+    }
+
+    // "You won" banner — one per undismissed win. Reads only the cache filled
+    // by giveaway_my_wins (the caller's own wins); shows nothing about the pool.
+    function _giveawayWinBanner() {
+      if (!currentUser) return '';
+      var c = _giveawayDashCache;
+      if (!c || c.user_id !== currentUser.id) return '';
+      var wins = c.wins || [];
+      if (!wins.length) return '';
+      var html = '';
+      wins.forEach(function(wn){
+        var key = 'pb_dismiss_gwin_' + wn.giveaway_id;
+        if (_bannerDismissed(key)) return;
+        var prize = (typeof _escHtml === 'function')
+          ? _escHtml(wn.prize || wn.name || 'a prize')
+          : (wn.prize || wn.name || 'a prize');
+        var rankTxt = (wn.num_winners > 1 && wn.prize_rank) ? (' &mdash; prize #' + wn.prize_rank) : '';
+        html += '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--gold);border-left:3px solid var(--gold);background:rgba(212,175,55,.08);padding:14px 30px 14px 18px">'
+          + _bannerDismissBtn(key)
+          + '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-bottom:4px">&#9670; You won' + rankTxt + '</div>'
+          + '<div style="font-size:.9rem;color:var(--text);font-weight:700;margin-bottom:3px">' + prize + '</div>'
+          + '<div style="font-size:.72rem;color:var(--muted);line-height:1.5">Congratulations! Check your email &mdash; we\'ll be in touch to arrange delivery. Make sure your account email is current.</div>'
+          + '</div>';
+      });
+      return html;
     }
 
     function _giveawayBanner() {
@@ -6608,6 +6636,7 @@ function _loadAdmin(){
         ${_activationTrialBanner()}
         ${_grantedTierExpiryWarning()}
         ${_subsidiaryInvitesBanner()}
+        ${_giveawayWinBanner()}
         ${_giveawayBanner()}
         <div class="ndash-ribbon-wrap">
           <div class="ndash-ribbon-photo">
