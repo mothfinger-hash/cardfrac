@@ -6392,8 +6392,40 @@ function _loadAdmin(){
         +     '<div style="font-size:.58rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-top:2px">Your entries</div>'
         +   '</div>'
         + '</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">'
+        +   _gaFreeBtn(g.id, 'free_base', 'Enter free', '')
+        +   _gaFreeBtn(g.id, 'social_follow', 'Follow +1', 'https://x.com/PathBindertcg')
+        +   _gaFreeBtn(g.id, 'social_share', 'Share +1', '__SHARE__')
+        + '</div>'
         + '</div>';
     }
+
+    // Free-entry buttons for the dashboard banner (the AMOE path). Each calls
+    // giveaway_enter_free; the RPC is idempotent per (giveaway, user, source).
+    function _gaFreeBtn(gid, source, label, url) {
+      return '<button type="button" onclick="_giveawayEnterFree(\'' + gid + '\',\'' + source + '\',\'' + url + '\',this)" '
+        + 'style="font-family:\'Space Mono\',monospace;font-size:.62rem;letter-spacing:.04em;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:var(--r-pill,999px)">' + label + '</button>';
+    }
+
+    async function _giveawayEnterFree(gid, source, url, btn) {
+      if (url === '__SHARE__') {
+        var shareUrl = 'https://pathbinder.gg/giveaway';
+        var txt = 'Win sealed TCG product with PathBinder. No purchase necessary.';
+        try { window.open('https://x.com/intent/tweet?text=' + encodeURIComponent(txt) + '&url=' + encodeURIComponent(shareUrl), '_blank', 'noopener'); } catch (_) {}
+      } else if (url) {
+        try { window.open(url, '_blank', 'noopener'); } catch (_) {}
+      }
+      if (btn) btn.disabled = true;
+      try {
+        var r = await sb.rpc('giveaway_enter_free', { p_giveaway_id: gid, p_source: source });
+        if (r.error) { showToast(r.error.message || 'Could not add entry.'); if (btn) btn.disabled = false; return; }
+        showToast('Entry added.');
+        try { await _loadGiveawayForDash(); } catch (_) {}
+      } catch (e) {
+        showToast('Could not add entry.'); if (btn) btn.disabled = false;
+      }
+    }
+    window._giveawayEnterFree = _giveawayEnterFree;
 
     // Claim the one-time activation trial. The RPC is authoritative (re-checks
     // the 50-card count, the one-time guard, and no-downgrade); this just calls

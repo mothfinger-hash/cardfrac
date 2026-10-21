@@ -296,6 +296,7 @@ function _pbInjectAdminMarkup(){
     </div>
 
     </div>
+    </div>
 <div class="admin-panel" id="adminCardData">
     <!-- Card Editor — admin-curated overrides driven by user error reports -->
     <div style="margin-top:24px;border:1px solid var(--border);background:var(--surface);padding:16px 18px">
