@@ -3824,7 +3824,7 @@ function _loadAdmin(){
       toast.className = 'badge-unlock-toast';
       const displayName = def.hidden ? '[DATA EXPUNGED]' : def.name;
       toast.innerHTML = `
-        <div class="but-icon">${def.svg}</div>
+        <div class="but-icon">${_badgeIcon(def)}</div>
         <div class="but-text">
           <div class="but-label">★ BADGE UNLOCKED</div>
           <div class="but-name">${displayName}</div>
@@ -3887,6 +3887,18 @@ function _loadAdmin(){
     function checkBadge_signal_discord() { if (!_hasBadge('signal')) _awardBadge('signal'); }
 
     // ── Badge renderer ───────────────────────────────────────────────
+    // The 8 achievement badges now use designed webp art (badges/<id>.webp);
+    // the tier badges (free/enthusiast/vendor/shop) keep their inline SVGs.
+    // The art is a hexagonal badge on a near-black bg, so object-fit:contain
+    // + the hex-clipped container blend cleanly.
+    var _BADGE_IMG_IDS = { stacked:1, phantom:1, linked:1, init:1, archived:1, rendered:1, scanner:1, signal:1 };
+    function _badgeIcon(def) {
+      if (def && _BADGE_IMG_IDS[def.id]) {
+        return '<img src="badges/' + def.id + '.webp" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;display:block">';
+      }
+      return def.svg;
+    }
+
     function renderBadges() {
       const grid = document.getElementById('badgesGrid');
       if (!grid) return;
@@ -3953,7 +3965,7 @@ function _loadAdmin(){
             : def.desc;
 
           return `<div class="badge-tile${isEarned?' earned':''}${isPartial?' partial':''}">
-            <div class="badge-hex" ${svgStyle}>${def.svg}</div>
+            <div class="badge-hex" ${svgStyle}>${_badgeIcon(def)}</div>
             <div class="badge-name" style="color:${isEarned?'#1AC7A0':isPartial?'#888':'#444'}">${displayName}</div>
             ${progressHtml}
             <div class="badge-desc" style="color:${isEarned?'var(--muted)':'#333'}">${displayDesc}</div>
@@ -3995,7 +4007,7 @@ function _loadAdmin(){
           hexInlineStyle = ` style="opacity:${opacity.toFixed(2)};filter:grayscale(${gray.toFixed(2)}) brightness(${bright.toFixed(2)})"`;
         }
         return `<div class="dd-badge-pip" title="${isHidden ? '???' : def.desc}" onclick="document.getElementById('avatarDropdown').classList.remove('open');showPage('account');setMobileNav('account');setTimeout(()=>switchAccountTab('badges'),120)">
-          <div class="dd-hex"${hexInlineStyle}>${def.svg}</div>
+          <div class="dd-hex"${hexInlineStyle}>${_badgeIcon(def)}</div>
           <div class="${nameClass}">${displayName}</div>
         </div>`;
       }).join('');
