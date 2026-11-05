@@ -70,7 +70,7 @@ GITHUB ACTIONS:
 
 import os, sys, re, time, random, argparse, threading, json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from urllib.parse import quote
 
 try:
@@ -443,6 +443,71 @@ def pg_upsert_history(row):
         raise RuntimeError(f"POST history HTTP {r.status_code}: {r.text[:200]}")
 
 
+def _content_range_total(resp):
+    """Parse the row count out of PostgREST's Content-Range header
+    (e.g. '0-0/12345' or '*/12345'). Returns an int, or None if the
+    header is absent/unparseable (count only appears when the request
+    sent Prefer: count=exact)."""
+    cr = resp.headers.get("Content-Range", "")
+    if "/" in cr:
+        tail = cr.rsplit("/", 1)[-1].strip()
+        if tail.isdigit():
+            return int(tail)
+    return None
+
+
+def prune_price_history(days=90, dry_run=False):
+    """Retention prune for catalog_price_history.
+
+    The table is append-only and grows ~168K rows/day forever; left
+    unbounded it became the dominant consumer of the project disk (it is
+    why the disk auto-scaled past the 8 GB included size). The app never
+    reads history older than 30 days — movers use 24h/7d windows, the
+    single-card chart uses 30d — so a 90-day window keeps 3x the longest
+    window any feature uses. See SQL Migrations/migration_price_history_retention.sql
+    (this is the code-based equivalent of that migration's pg_cron job, so
+    pg_cron does NOT need to be enabled).
+
+    Deletes rows with recorded_at older than `days` days. Served by
+    idx_cph_recorded_at (recorded_at DESC), so the range scan is cheap even
+    when it matches nothing — safe to run on every invocation: the first
+    run of the day does the work, the rest no-op on 0 matching rows.
+
+    Best-effort: any failure logs a warning and returns, so a prune problem
+    never aborts the price refresh (the script's primary job). Honors
+    dry_run (counts instead of deleting).
+    """
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    base = (f"{SUPABASE_URL.rstrip('/')}/rest/v1/catalog_price_history"
+            f"?recorded_at=lt.{cutoff}")
+    try:
+        if dry_run:
+            r = requests.get(
+                base + "&select=catalog_id",
+                headers=_supabase_headers({"Prefer": "count=exact", "Range": "0-0"}),
+                timeout=60,
+            )
+            n = _content_range_total(r)
+            print(f"  [prune] DRY RUN — would delete "
+                  f"{n if n is not None else '?'} rows older than {cutoff} "
+                  f"(> {days}d retention).")
+            return
+        r = requests.delete(
+            base,
+            headers=_supabase_headers({"Prefer": "count=exact,return=minimal"}),
+            timeout=180,
+        )
+        if not r.ok:
+            print(f"  [prune] WARNING: delete failed HTTP {r.status_code}: "
+                  f"{r.text[:200]} (continuing with price refresh)")
+            return
+        n = _content_range_total(r)
+        print(f"  [prune] deleted {n if n is not None else '?'} rows older "
+              f"than {cutoff} (> {days}d retention).")
+    except Exception as e:
+        print(f"  [prune] WARNING: {e} (continuing with price refresh)")
+
+
 # ─── Loading + processing ─────────────────────────────────────────────────────
 def load_catalog(game_type, resume):
     """Pull every catalog row of the target TCG with a price_source_url
@@ -667,6 +732,13 @@ def main():
     ap.add_argument("--force-scrape", action="store_true",
                     help="Bypass API mode even when key + pricecharting_id are available "
                          "(useful for debugging or if PC API is down).")
+    ap.add_argument("--prune-days", type=int, default=90,
+                    help="Retention window for catalog_price_history. Rows older than "
+                         "this many days are deleted at the start of each run so the "
+                         "append-only table never grows unbounded (~168K rows/day). The "
+                         "app reads at most 30 days, so 90 keeps 3x headroom. Default 90.")
+    ap.add_argument("--no-prune", action="store_true",
+                    help="Skip the catalog_price_history retention prune this run.")
     args = ap.parse_args()
 
     # Auto-pick workers based on which mode we'll be running in.
@@ -693,6 +765,14 @@ def main():
         print(f"  Mode: API (rows with pricecharting_id) + scrape fallback (rows without)")
     else:
         print(f"  Mode: SCRAPE (PRICECHARTING_API_KEY not set — slow path)")
+
+    # Retention prune FIRST, so the append-only history table never grows
+    # back toward the disk ceiling. Cheap (idx_cph_recorded_at), best-effort,
+    # and idempotent across the nightly per-TCG invocations.
+    if args.no_prune:
+        print("  [prune] skipped (--no-prune)")
+    else:
+        prune_price_history(days=args.prune_days, dry_run=args.dry_run)
 
     rows = load_catalog(args.tcg.lower(), args.resume)
     if args.limit:
