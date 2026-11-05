@@ -1784,6 +1784,154 @@ function _loadAdmin(){
     }
     window.resendConfirmation = resendConfirmation;
 
+    // ── Passwordless login (magic link + 6-digit email OTP) ─────────────
+    // Phase 1 of the password -> passwordless move. ADDITIVE: the password
+    // form still exists behind the "Use a password instead" toggle and
+    // existing users keep their passwords. One signInWithOtp email carries
+    // BOTH a magic link ({{ .ConfirmationURL }}) and a 6-digit code
+    // ({{ .Token }}) — the link is the clean path on web/desktop, the code
+    // is the mobile-safe path for the Capacitor WebView (a tapped link opens
+    // the system browser, not the app, until Universal/App Links are set up;
+    // the typed code works everywhere). The magic-link return is handled by
+    // supabase-js detectSessionInUrl -> onAuthStateChange SIGNED_IN, which
+    // now enforces the same deleted/banned gate (see that handler).
+    //
+    // REQUIRES: Supabase Dashboard -> Auth -> Email Templates -> "Magic Link"
+    // must include {{ .Token }} (the default template only renders the link),
+    // or the code-entry box has no code to match. The link alone works
+    // without the edit; the code lights up once {{ .Token }} is added.
+    //
+    // shouldCreateUser:true makes this double as frictionless signup; the
+    // inline Terms/Privacy microcopy under the button captures consent for
+    // OTP-created accounts (the register modal uses an explicit checkbox).
+
+    // Shared deleted/banned gate — parity with handleLogin's inline check,
+    // reused by the OTP verify path. Returns true (and signs out) if blocked.
+    async function _enforceAccountStatus(userId, errorEl) {
+      try {
+        const { data: prof } = await sb.from('profiles')
+          .select('is_deleted, is_banned').eq('id', userId).maybeSingle();
+        if (prof && prof.is_deleted) {
+          await sb.auth.signOut().catch(() => {});
+          if (errorEl) { errorEl.style.color = 'var(--red)'; errorEl.textContent = 'This account has been deleted.'; }
+          else showToast('This account has been deleted.');
+          return true;
+        }
+        if (prof && prof.is_banned) {
+          await sb.auth.signOut().catch(() => {});
+          if (errorEl) { errorEl.style.color = 'var(--red)'; errorEl.textContent = 'This account has been suspended. Contact support if you believe this is in error.'; }
+          else showToast('This account has been suspended.');
+          return true;
+        }
+      } catch (_) {
+        // Transient lookup failure — let them through; the restore-session
+        // path re-checks on next load.
+      }
+      return false;
+    }
+    window._enforceAccountStatus = _enforceAccountStatus;
+
+    // Toggle the login modal between passwordless (default) and password.
+    function toggleLoginMode() {
+      const pw   = document.getElementById('loginPwSection');
+      const otp  = document.getElementById('loginOtpSection');
+      const link = document.getElementById('loginToggleMode');
+      const sub  = document.getElementById('loginSub');
+      const err  = document.getElementById('loginError');
+      if (err) { err.textContent = ''; err.style.color = 'var(--red)'; }
+      const showingPw = pw && pw.style.display !== 'none';
+      if (showingPw) {
+        if (pw)  pw.style.display  = 'none';
+        if (otp) otp.style.display = '';
+        if (link) link.textContent = 'Use a password instead';
+        if (sub) sub.textContent = "We'll email you a login link and a code — no password needed.";
+      } else {
+        if (pw)  pw.style.display  = '';
+        if (otp) otp.style.display = 'none';
+        if (link) link.textContent = 'Email me a login link instead';
+        if (sub) sub.textContent = 'Enter your email and password to sign in.';
+      }
+    }
+    window.toggleLoginMode = toggleLoginMode;
+
+    // Send the passwordless email (link + code) and reveal the code box.
+    async function sendLoginLink() {
+      const email = (document.getElementById('loginEmail').value || '').trim();
+      const errorEl = document.getElementById('loginError');
+      if (errorEl) { errorEl.style.color = 'var(--red)'; errorEl.textContent = ''; }
+      if (!email || !email.includes('@')) {
+        if (errorEl) errorEl.textContent = 'Enter your email to get a login link.';
+        return;
+      }
+      if (window._otpSendInFlight) return;
+      window._otpSendInFlight = true;
+      showToast('Sending your login link...');
+      try {
+        const { error } = await sb.auth.signInWithOtp({
+          email: email,
+          options: { shouldCreateUser: true, emailRedirectTo: location.origin }
+        });
+        if (error) {
+          if (errorEl) errorEl.textContent = error.message || 'Could not send — try again.';
+          return;
+        }
+        window._pendingOtpEmail = email;
+        const v = document.getElementById('loginOtpVerify');
+        if (v) v.style.display = '';
+        if (errorEl) {
+          errorEl.style.color = 'var(--muted)';
+          errorEl.innerHTML = 'We emailed <strong>' + email + '</strong> a login link and a 6-digit code. '
+            + 'Tap the link, or enter the code below. Check spam if it is not there in a minute.';
+        }
+        const codeEl = document.getElementById('loginOtpCode');
+        if (codeEl) { try { codeEl.focus(); } catch (_) {} }
+        showToast('Login link sent — check your email.');
+      } catch (e) {
+        if (errorEl) errorEl.textContent = 'Could not send right now — try again in a minute.';
+      } finally {
+        window._otpSendInFlight = false;
+      }
+    }
+    window.sendLoginLink = sendLoginLink;
+
+    // Verify the typed 6-digit code and complete sign-in.
+    async function verifyLoginCode() {
+      const email = window._pendingOtpEmail || (document.getElementById('loginEmail').value || '').trim();
+      const code  = (document.getElementById('loginOtpCode').value || '').trim().replace(/\s+/g, '');
+      const errorEl = document.getElementById('loginError');
+      if (errorEl) { errorEl.style.color = 'var(--red)'; errorEl.textContent = ''; }
+      if (!email) { if (errorEl) errorEl.textContent = 'Enter your email and request a code first.'; return; }
+      if (!/^\d{6}$/.test(code)) { if (errorEl) errorEl.textContent = 'Enter the 6-digit code from your email.'; return; }
+      if (window._otpVerifyInFlight) return;
+      window._otpVerifyInFlight = true;
+      showToast('Verifying...');
+      try {
+        const { data: authData, error } = await sb.auth
+          .verifyOtp({ email: email, token: code, type: 'email' })
+          .catch(e => ({ data: null, error: e }));
+        if (error || !authData?.user) {
+          if (errorEl) errorEl.textContent = (error && error.message)
+            ? error.message : 'That code did not work — check it or request a new one.';
+          return;
+        }
+        // Deleted/banned gate — same enforcement as handleLogin.
+        const blocked = await _enforceAccountStatus(authData.user.id, errorEl);
+        if (blocked) return;
+        freshSignIn = true;
+        currentUser = { ...authData.user };
+        window._pendingOtpEmail = null;
+        closeModal('loginModal');
+        updateAuthUI();
+        showPage('account'); setMobileNav('account');
+        showToast('Welcome!');
+      } catch (e) {
+        if (errorEl) errorEl.textContent = 'Could not verify right now — try again.';
+      } finally {
+        window._otpVerifyInFlight = false;
+      }
+    }
+    window.verifyLoginCode = verifyLoginCode;
+
     // ── Password reset flow ────────────────────────────────────────────
     // Two-stage:
     //   1. User clicks "Forgot password?" → requestPasswordReset() fires
@@ -32225,10 +32373,12 @@ function _loadAdmin(){
           if (!profile) { try { profile = await _loadCachedProfile(session.user.id); } catch (_) {} }
           // Already-purged accounts (deleted_at set, is_deleted = true) shouldn't
           // have an active session — sign them out and bail so the auth UI
-          // reverts to the signed-out state.
-          if (profile && profile.is_deleted) {
+          // reverts to the signed-out state. Banned accounts (is_banned) get the
+          // same treatment: with passwordless logins a ban must be enforced on
+          // session restore too, not just at the password gate.
+          if (profile && (profile.is_deleted || profile.is_banned)) {
             try { await sb.auth.signOut(); } catch(_) {}
-            showToast('This account has been deleted.');
+            showToast(profile.is_banned ? 'This account has been suspended.' : 'This account has been deleted.');
           } else {
             currentUser = { ...session.user, ...(profile || {}) };
             if (_profileFromNet) { try { _cacheProfile(profile); } catch (_) {} }
@@ -32559,6 +32709,17 @@ function _loadAdmin(){
           sb.from('listings').select('*').neq('status','inactive').order('created_at', { ascending: false })
         ]).then(([profileRes, listingsRes]) => {
           currentUser = { ...session.user, ...(profileRes.data || {}) };
+          // Security gate: a magic-link tap or OTP verify lands here via
+          // detectSessionInUrl WITHOUT passing through handleLogin's
+          // deleted/banned check. Enforce it centrally so no sign-in method
+          // (password, OTP code, or magic link) can bypass a ban.
+          if (profileRes.data && (profileRes.data.is_deleted || profileRes.data.is_banned)) {
+            try { sb.auth.signOut(); } catch(_) {}
+            showToast(profileRes.data.is_banned ? 'This account has been suspended.' : 'This account has been deleted.');
+            currentUser = null;
+            try { updateAuthUI(); } catch(_) {}
+            return;
+          }
           // Flush a push token pb-push.js captured before sign-in completed
           // (native only) — now that currentUser is set it can persist.
           try {
