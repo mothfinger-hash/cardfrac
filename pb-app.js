@@ -1784,11 +1784,11 @@ function _loadAdmin(){
     }
     window.resendConfirmation = resendConfirmation;
 
-    // ── Passwordless login (magic link + 6-digit email OTP) ─────────────
+    // ── Passwordless login (magic link + email OTP code) ───────────────
     // Phase 1 of the password -> passwordless move. ADDITIVE: the password
     // form still exists behind the "Use a password instead" toggle and
     // existing users keep their passwords. One signInWithOtp email carries
-    // BOTH a magic link ({{ .ConfirmationURL }}) and a 6-digit code
+    // BOTH a magic link ({{ .ConfirmationURL }}) and an OTP code
     // ({{ .Token }}) — the link is the clean path on web/desktop, the code
     // is the mobile-safe path for the Capacitor WebView (a tapped link opens
     // the system browser, not the app, until Universal/App Links are set up;
@@ -1880,8 +1880,12 @@ function _loadAdmin(){
         if (v) v.style.display = '';
         if (errorEl) {
           errorEl.style.color = 'var(--muted)';
-          errorEl.innerHTML = 'We emailed <strong>' + email + '</strong> a login link and a 6-digit code. '
-            + 'Tap the link, or enter the code below. Check spam if it is not there in a minute.';
+          const _native = (typeof _isNativeApp === 'function') && _isNativeApp();
+          errorEl.innerHTML = _native
+            ? ('We emailed <strong>' + email + '</strong> a sign-in code. '
+               + 'Enter it below. Check spam if it is not there in a minute.')
+            : ('We emailed <strong>' + email + '</strong> a login link and a sign-in code. '
+               + 'Tap the link, or enter the code below. Check spam if it is not there in a minute.');
         }
         const codeEl = document.getElementById('loginOtpCode');
         if (codeEl) { try { codeEl.focus(); } catch (_) {} }
@@ -1894,14 +1898,14 @@ function _loadAdmin(){
     }
     window.sendLoginLink = sendLoginLink;
 
-    // Verify the typed 6-digit code and complete sign-in.
+    // Verify the typed OTP code (Supabase OTP length is configurable, 6-10) and complete sign-in.
     async function verifyLoginCode() {
       const email = window._pendingOtpEmail || (document.getElementById('loginEmail').value || '').trim();
       const code  = (document.getElementById('loginOtpCode').value || '').trim().replace(/\s+/g, '');
       const errorEl = document.getElementById('loginError');
       if (errorEl) { errorEl.style.color = 'var(--red)'; errorEl.textContent = ''; }
       if (!email) { if (errorEl) errorEl.textContent = 'Enter your email and request a code first.'; return; }
-      if (!/^\d{6}$/.test(code)) { if (errorEl) errorEl.textContent = 'Enter the 6-digit code from your email.'; return; }
+      if (!/^\d{6,10}$/.test(code)) { if (errorEl) errorEl.textContent = 'Enter the code from your email.'; return; }
       if (window._otpVerifyInFlight) return;
       window._otpVerifyInFlight = true;
       showToast('Verifying...');
