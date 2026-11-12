@@ -3428,15 +3428,26 @@
           console.warn('[GCV] empty image data');
           return '';
         }
+        // Vision OCR now requires a valid Supabase session server-side
+        // (only logged-in users may spend Vision budget). Attach the token.
+        const sess = await sb.auth.getSession();
+        const tok  = sess && sess.data && sess.data.session && sess.data.session.access_token;
         const res = await fetch('/api/vision-ocr', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + (tok || ''),
+          },
           body: JSON.stringify({ image: base64 }),
         });
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
           const reason = (errJson && errJson.error) || ('HTTP ' + res.status);
-          if (res.status === 502 || res.status === 503) {
+          if (res.status === 401 || res.status === 403) {
+            // Session missing/expired — the endpoint is auth-gated.
+            console.error('[GCV] auth required:', reason);
+            setScanStatus('Please sign in again to scan.');
+          } else if (res.status === 502 || res.status === 503) {
             // Upstream (Google) issue surfaced through the proxy.
             console.error('[GCV] proxy reported upstream issue:', reason);
             setScanStatus('Vision API temporarily unavailable — try again');

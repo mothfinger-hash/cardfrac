@@ -28,9 +28,20 @@
 //   • Only TEXT_DETECTION is exposed — other Vision features (face
 //     detection, label detection, etc.) need separate endpoints if ever
 //     wanted. Keeps the attack surface tight.
-//   • No auth check on the endpoint itself yet. Vision API calls are
-//     cheap (~$1.50 / 1000 requests) but if abuse becomes a problem the
-//     fix is to verify a Supabase JWT on the request before proxying.
+//   • AUTH REQUIRED: the request must carry a valid Supabase session
+//     (Authorization: Bearer <access_token>). Only logged-in users can
+//     spend Vision budget — this closes the cost-abuse hole where anyone
+//     could POST images and burn our GCV quota. A Vercel WAF rate-limit
+//     rule on this path (60 req/min/IP) is the second layer. Requires
+//     SUPABASE_URL + SUPABASE_SERVICE_KEY in the Vercel env (the same
+//     vars the marketplace endpoints already use).
+
+const { createClient } = require('@supabase/supabase-js');
+
+const sb = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 module.exports = async (req, res) => {
   // CORS — same as our other /api/ endpoints
@@ -43,6 +54,23 @@ module.exports = async (req, res) => {
   }
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed — POST only' });
+    return;
+  }
+
+  // ── Auth gate ─────────────────────────────────────────────────────────
+  // Only authenticated users may spend Vision budget. Mirror of the JWT
+  // check in marketplace-checkout.js (same Supabase service-key client).
+  // The WAF rate-limit rule on this path is the second layer; this is the
+  // first — a bot without a valid session can't call it at all.
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+  if (!token || !token.startsWith('eyJ')) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  const { data: { user }, error: authErr } = await sb.auth.getUser(token);
+  if (authErr || !user) {
+    res.status(401).json({ error: 'Invalid session' });
     return;
   }
 
