@@ -30,6 +30,21 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// Resolve a winner's prize_rank to its label from the giveaway's prize_tiers
+// ([{from,to,label}], to=null = open-ended). Falls back to the giveaway's
+// single `prize` text when no tier covers the rank.
+function resolveTierLabel(tiers, rank, fallback) {
+  if (Array.isArray(tiers)) {
+    for (const t of tiers) {
+      if (!t || t.label == null) continue;
+      const from = parseInt(t.from, 10);
+      const to = (t.to == null || t.to === '') ? Infinity : parseInt(t.to, 10);
+      if (!isNaN(from) && rank >= from && rank <= to) return String(t.label);
+    }
+  }
+  return fallback;
+}
+
 async function sendEmail({ to, subject, html, text }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { ok: false, reason: 'resend_not_configured' };
@@ -85,7 +100,7 @@ module.exports = async function handler(req, res) {
 
   // ── Load giveaway + its winners ───────────────────────────────
   const { data: giveaway, error: gErr } = await sb
-    .from('giveaways').select('id, name, prize, num_winners, status').eq('id', giveawayId).maybeSingle();
+    .from('giveaways').select('id, name, prize, num_winners, status, prize_tiers').eq('id', giveawayId).maybeSingle();
   if (gErr || !giveaway) return res.status(404).json({ error: 'Giveaway not found' });
 
   const { data: winners, error: wErr } = await sb
@@ -120,11 +135,15 @@ module.exports = async function handler(req, res) {
     if (!to) { failed++; details.push({ prize_rank: w.prize_rank, status: 'no_email' }); continue; }
 
     const winnerName = prof.name || prof.username || 'PathBinder Collector';
+    // Per-rank prize: rank 1 = the briefcase, ranks 2+ = their tier label
+    // (e.g. "a pull from the second box, revealed in the video"). prizeOverride
+    // still wins when the admin passes one.
+    const thisPrize = prizeOverride || resolveTierLabel(giveaway.prize_tiers, w.prize_rank, prizeLabel);
     const result = await sendEmail({
       to,
       subject: '[PathBinder] You won ' + giveawayName + '!',
-      html: renderEmailHtml({ winnerName, prizeLabel, giveawayName, prizeRank: w.prize_rank, numWinners: giveaway.num_winners, claimDays, highValue, siteOrigin }),
-      text: renderEmailText({ winnerName, prizeLabel, giveawayName, prizeRank: w.prize_rank, numWinners: giveaway.num_winners, claimDays, highValue, siteOrigin }),
+      html: renderEmailHtml({ winnerName, prizeLabel: thisPrize, giveawayName, prizeRank: w.prize_rank, numWinners: giveaway.num_winners, claimDays, highValue, siteOrigin }),
+      text: renderEmailText({ winnerName, prizeLabel: thisPrize, giveawayName, prizeRank: w.prize_rank, numWinners: giveaway.num_winners, claimDays, highValue, siteOrigin }),
     });
     if (result.ok) { sent++; details.push({ prize_rank: w.prize_rank, status: 'sent' }); }
     else { failed++; details.push({ prize_rank: w.prize_rank, status: 'failed', reason: result.reason }); }

@@ -463,6 +463,10 @@ function _pbInjectAdminMarkup(){
           style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none">
         <input type="text" id="gaPrize" placeholder="Prize shown to users (e.g. Sealed SV10 Team Rocket Briefcase)"
           style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none">
+        <input type="text" id="gaPrizeGrand" placeholder="Grand prize — rank 1, in winner email (defaults to the prize above)"
+          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text);outline:none">
+        <input type="text" id="gaPrizeRest" placeholder="Other winners — ranks 2+, in winner email (e.g. a card pulled from the second box, revealed in our opening video)"
+          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text);outline:none">
         <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
           <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">WINNERS
             <input type="number" id="gaWinners" value="1" min="1" step="1" inputmode="numeric"
@@ -1642,6 +1646,8 @@ function _gaCardHtml(g){
   var opens = g.opens_at ? _escHtml(new Date(g.opens_at).toLocaleString()) : '';
   var closes = g.closes_at ? _escHtml(new Date(g.closes_at).toLocaleString()) : '';
   var dupBtn = _gaBtn('Review duplicates', "adminReviewDupes('" + g.id + "')", 'var(--yellow)');
+  var prizeBtn = _gaBtn('Edit prizes', "adminEditPrizes('" + g.id + "')", 'var(--copper)');
+  var liveBtn = _gaBtn('Live draw (stream)', "adminLiveDraw('" + g.id + "')", 'var(--accent)');
   var actions = '';
   if (g.status === 'draft') {
     actions = _gaBtn('Announce (starting soon)', "adminSetGiveawayStatus('" + g.id + "','scheduled')", 'var(--copper)')
@@ -1663,7 +1669,10 @@ function _gaCardHtml(g){
       + (g.drawn_at ? ' ' + _escHtml(new Date(g.drawn_at).toLocaleDateString()) : '') + '</span>'
       + _gaBtn('Email winners', "adminEmailWinners('" + g.id + "')", 'var(--copper)');
   }
+  if (g.status !== 'drawn') actions += prizeBtn;                 // edit per-rank prizes
+  if (g.status === 'open' || g.status === 'closed' || g.status === 'drawn') actions += liveBtn;
   return '<div style="border:1px solid var(--border);background:var(--surface);padding:14px 16px;margin-bottom:12px">'
+    + '<div id="gaPrizeEdit-' + g.id + '"></div>'
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
     +   '<div style="font-size:.82rem;color:var(--text);font-weight:700">' + (prize || name || 'Giveaway') + '</div>'
     +   '<div style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:' + sc + '">' + _escHtml(g.status) + '</div>'
@@ -1790,6 +1799,322 @@ async function adminRequalify(id, userId){
   } catch(e){ showToast('Failed: ' + (e.message || e)); }
 }
 
+function _gaAttr(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Resolve a prize_rank to its tier label (mirrors the server resolver).
+function _gaTierLabel(g, rank){
+  var tiers = (g && Array.isArray(g.prize_tiers)) ? g.prize_tiers : [];
+  for (var i = 0; i < tiers.length; i++){
+    var t = tiers[i]; if (!t || t.label == null) continue;
+    var from = parseInt(t.from, 10);
+    var to = (t.to == null || t.to === '') ? Infinity : parseInt(t.to, 10);
+    if (!isNaN(from) && rank >= from && rank <= to) return String(t.label);
+  }
+  return (g && g.prize) || 'Prize';
+}
+
+// ── Edit prizes by rank (inline on the card) ─────────────────────────────────
+async function adminEditPrizes(id){
+  var box = document.getElementById('gaPrizeEdit-' + id);
+  if (!box) return;
+  if (box.getAttribute('data-open') === '1'){ box.innerHTML = ''; box.removeAttribute('data-open'); return; }
+  box.setAttribute('data-open', '1');
+  box.innerHTML = '<div style="font-size:.62rem;color:var(--muted);padding:8px 0">Loading prizes…</div>';
+  var grand = '', rest = '';
+  try {
+    var r = await sb.from('giveaways').select('prize_tiers,prize').eq('id', id).maybeSingle();
+    var tiers = (r.data && Array.isArray(r.data.prize_tiers)) ? r.data.prize_tiers : [];
+    tiers.forEach(function(t){
+      var from = parseInt(t.from, 10);
+      if (from === 1) grand = t.label || '';
+      else if (from >= 2) rest = t.label || '';
+    });
+    if (!grand) grand = (r.data && r.data.prize) || '';
+  } catch(_){}
+  box.innerHTML = '<div style="border:1px solid var(--copper-dim);background:var(--copper-glow);padding:10px 12px;margin-bottom:10px">'
+    + '<div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--copper);margin-bottom:8px">Prizes by rank (used in the winner email)</div>'
+    + '<label style="display:block;font-size:.56rem;color:var(--muted);margin-bottom:3px">Rank 1 — grand prize</label>'
+    + '<input id="gaEP-grand-' + id + '" value="' + _gaAttr(grand) + '" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);padding:7px 10px;font-family:\'Space Mono\',monospace;font-size:.72rem;color:var(--text);outline:none;margin-bottom:8px">'
+    + '<label style="display:block;font-size:.56rem;color:var(--muted);margin-bottom:3px">Ranks 2+ — everyone else (TBD until the pull video)</label>'
+    + '<input id="gaEP-rest-' + id + '" value="' + _gaAttr(rest) + '" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);padding:7px 10px;font-family:\'Space Mono\',monospace;font-size:.72rem;color:var(--text);outline:none;margin-bottom:10px">'
+    + '<div style="display:flex;gap:6px">'
+    +   _gaBtn('Save prizes', "adminSavePrizes('" + id + "')", 'var(--green)')
+    +   _gaBtn('Cancel', "adminEditPrizes('" + id + "')", 'var(--muted)')
+    + '</div></div>';
+}
+
+async function adminSavePrizes(id){
+  var g = ((document.getElementById('gaEP-grand-' + id) || {}).value || '').trim();
+  var rt = ((document.getElementById('gaEP-rest-' + id) || {}).value || '').trim();
+  var tiers = [{ from: 1, to: 1, label: g || 'Grand prize' }];
+  if (rt) tiers.push({ from: 2, to: null, label: rt });
+  try {
+    var r = await sb.from('giveaways').update({ prize_tiers: tiers, updated_at: new Date().toISOString() }).eq('id', id);
+    if (r.error) throw r.error;
+    showToast('Prizes saved');
+    var box = document.getElementById('gaPrizeEdit-' + id);
+    if (box){ box.innerHTML = ''; box.removeAttribute('data-open'); }
+  } catch(e){ showToast('Save failed: ' + (e.message || e)); }
+}
+
+// ── Live-draw spinner (stream) ───────────────────────────────────────────────
+// A reel that spins through the (weighted) entrant pool and lands on the REAL
+// winner. The winner is chosen by the authoritative seeded draw
+// (giveaway_draw_winners) — the reel is theatre rigged to the recorded result,
+// so it stays auditable/reproducible. Labels are public usernames.
+function _gaInjectDrawStyles(){
+  if (document.getElementById('gaLdStyles')) return;
+  var s = document.createElement('style'); s.id = 'gaLdStyles';
+  s.textContent =
+    '.ga-ld-overlay{position:fixed;inset:0;z-index:99999;background:rgba(8,6,4,.93);display:flex;align-items:center;justify-content:center;padding:20px}'
+    + '.ga-ld-card{position:relative;width:100%;max-width:720px;background:var(--surface);border:1px solid var(--copper);box-shadow:0 0 44px rgba(184,115,51,.25);padding:28px 24px 22px;text-align:center;font-family:\'Space Mono\',monospace}'
+    + '.ga-ld-close{position:absolute;top:8px;right:14px;background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1}'
+    + '.ga-ld-title{font-family:\'Orbitron\',monospace;font-size:1.05rem;font-weight:800;color:var(--text);margin-bottom:6px;line-height:1.3}'
+    + '.ga-ld-rank{font-size:.7rem;color:var(--copper);letter-spacing:.05em;margin-bottom:16px;min-height:1.1em}'
+    + '.ga-ld-reel-wrap{position:relative;overflow:hidden;border:1px solid var(--border);background:var(--bg);height:276px;margin-bottom:14px}'
+    + '.ga-ld-marker{position:absolute;left:0;right:0;top:50%;height:46px;transform:translateY(-23px);border-top:2px solid var(--accent);border-bottom:2px solid var(--accent);box-shadow:inset 0 0 16px rgba(var(--accent-rgb),.28);z-index:2;pointer-events:none}'
+    + '.ga-ld-reel{position:absolute;top:0;left:0;right:0;display:flex;flex-direction:column;will-change:transform}'
+    + '.ga-ld-tile{height:44px;margin-bottom:2px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:.82rem;overflow:hidden;padding:0 10px}'
+    + '.ga-ld-arm{font-family:\'Orbitron\',monospace;font-size:.66rem;font-weight:800;letter-spacing:.1em;padding:12px 20px;border:1px solid var(--copper);background:transparent;color:var(--copper);cursor:pointer}'
+    + '.ga-ld-tile.ga-ld-win{color:var(--text);border-color:var(--copper)}'
+    + '.ga-ld-tile.ga-ld-landed{color:var(--accent);border-color:var(--accent);background:rgba(var(--accent-rgb),.14);box-shadow:0 0 18px rgba(var(--accent-rgb),.45)}'
+    + '.ga-ld-winner{opacity:0;transition:opacity .4s;margin-bottom:14px}'
+    + '.ga-ld-winner.show{opacity:1}'
+    + '.ga-ld-win-rank{font-family:\'Orbitron\',monospace;font-size:.58rem;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-bottom:4px}'
+    + '.ga-ld-win-name{font-family:\'Orbitron\',monospace;font-size:1.5rem;font-weight:800;color:var(--accent);word-break:break-word}'
+    + '.ga-ld-win-prize{font-size:.78rem;color:var(--text);margin-top:4px}'
+    + '.ga-ld-win-entries{font-size:.62rem;color:var(--muted);margin-top:2px}'
+    + '.ga-ld-controls{display:flex;justify-content:center;gap:10px;margin-bottom:10px}'
+    + '.ga-ld-btn{font-family:\'Orbitron\',monospace;font-size:.78rem;font-weight:800;letter-spacing:.08em;padding:12px 26px;border:1px solid var(--muted);background:transparent;color:var(--text);cursor:pointer}'
+    + '.ga-ld-btn.primary{border-color:var(--accent);color:var(--accent)}'
+    + '.ga-ld-btn[disabled]{opacity:.5;cursor:default}'
+    + '.ga-ld-note{font-size:.58rem;color:var(--muted);line-height:1.5}';
+  document.head.appendChild(s);
+}
+
+function _gaWinnerToObj(w){
+  var key = w.user_id ? String(w.user_id) : ('email:' + (w.email || ''));
+  var found = (window._gaLD && window._gaLD.pool || []).find(function(p){ return p.entrant_key === key; });
+  return { rank: w.prize_rank, key: key, label: (found && found.label) || (w.email || 'winner'), entries: w.entries_held || 0 };
+}
+
+async function adminLiveDraw(id){
+  _gaInjectDrawStyles();
+  var ov = document.getElementById('gaLiveDraw');
+  if (!ov){ ov = document.createElement('div'); ov.id = 'gaLiveDraw'; document.body.appendChild(ov); }
+  ov.className = 'ga-ld-overlay';
+  ov.innerHTML = '<div class="ga-ld-card"><div style="color:var(--muted);font-size:.8rem;padding:30px">Loading entrant pool…</div></div>';
+  window._gaLD = { id: id, pool: [], winners: [], revealIdx: 0, giveaway: null, drawing: false, armed: false };
+  try {
+    var gi = await sb.from('giveaways').select('id,name,prize,num_winners,status,prize_tiers,closes_at').eq('id', id).maybeSingle();
+    if (gi.error) throw gi.error;
+    window._gaLD.giveaway = gi.data || {};
+    var pr = await sb.rpc('giveaway_entrant_pool', { p_giveaway_id: id });
+    if (pr.error) throw pr.error;
+    window._gaLD.pool = pr.data || [];
+    if (gi.data && gi.data.status === 'drawn'){
+      var wr = await sb.from('giveaway_winners').select('prize_rank,user_id,email,entries_held').eq('giveaway_id', id).order('prize_rank');
+      window._gaLD.winners = (wr.data || []).map(_gaWinnerToObj);
+    }
+    _gaRenderLiveDraw();
+  } catch(e){
+    ov.innerHTML = '<div class="ga-ld-card"><button class="ga-ld-close" onclick="_gaCloseLiveDraw()">&times;</button>'
+      + '<div style="color:var(--red);font-size:.8rem;padding:24px">' + _escHtml(e.message || String(e)) + '</div></div>';
+  }
+}
+
+function _gaRenderLiveDraw(){
+  var ov = document.getElementById('gaLiveDraw');
+  var st = window._gaLD; if (!ov || !st) return;
+  var g = st.giveaway || {};
+  var N = g.num_winners || 1;
+  var poolCount = (st.pool || []).length;
+  var entriesTotal = (st.pool || []).reduce(function(a, p){ return a + (parseInt(p.weight, 10) || 0); }, 0);
+  var drawn = g.status === 'drawn';
+  ov.innerHTML = '<div class="ga-ld-card">'
+    + '<button class="ga-ld-close" onclick="_gaCloseLiveDraw()">&times;</button>'
+    + '<div class="ga-ld-title">' + _escHtml(g.prize || g.name || 'Giveaway') + '</div>'
+    + '<div class="ga-ld-rank" id="gaLdRank">' + N + ' winner' + (N === 1 ? '' : 's') + ' &middot; ' + poolCount + ' entrants &middot; ' + entriesTotal + ' entries</div>'
+    + '<div class="ga-ld-reel-wrap"><div class="ga-ld-marker"></div><div class="ga-ld-reel" id="gaLdReel"></div></div>'
+    + '<div class="ga-ld-winner" id="gaLdWinner"></div>'
+    + '<div class="ga-ld-controls">'
+    +   (drawn ? '' : '<button class="ga-ld-arm" id="gaLdArm" onclick="_gaToggleArm()">REHEARSE</button>')
+    +   '<button class="ga-ld-btn primary" id="gaLdSpin" onclick="_gaSpin()">' + (drawn ? 'SPIN' : 'SPIN (rehearse)') + '</button>'
+    + '</div>'
+    + '<div class="ga-ld-note">' + (drawn
+        ? 'Already drawn — replaying the recorded winners (reproducible from the stored seed).'
+        : 'REHEARSE spins practice names and records nothing. Flip to ARMED to run the official seeded draw — once only.') + '</div>'
+    + '</div>';
+  _gaBuildReel((st.pool[0] && st.pool[0].label) || '—');
+}
+
+// The reel's content is the REAL pool expanded one tile per entry (a username
+// with 25 entries shows 25 times), shuffled — so the scroll is an honest
+// picture of the weighting. Repeats are capped at 50/entrant and the whole
+// strip at 600 tiles for performance.
+function _gaExpandedPool(){
+  var pool = (window._gaLD && window._gaLD.pool) || [];
+  var arr = [];
+  pool.forEach(function(p){
+    var n = Math.max(1, Math.min(parseInt(p.weight, 10) || 1, 50));
+    for (var i = 0; i < n; i++) arr.push(p.label);
+  });
+  if (!arr.length) arr = ['entrant'];
+  for (var i = arr.length - 1; i > 0; i--){        // Fisher-Yates shuffle
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  while (arr.length < 60) arr = arr.concat(arr);    // enough to scroll
+  if (arr.length > 600) arr = arr.slice(0, 600);
+  return arr;
+}
+
+// Weighted random pick for rehearsal spins (no draw, nothing recorded).
+function _gaRandomEntrant(){
+  var pool = (window._gaLD && window._gaLD.pool) || [];
+  if (!pool.length) return { label: 'entrant', entries: 0 };
+  var tot = pool.reduce(function(a, p){ return a + (parseInt(p.weight, 10) || 0); }, 0) || 1;
+  var r = Math.random() * tot;
+  for (var i = 0; i < pool.length; i++){ r -= (parseInt(pool[i].weight, 10) || 0); if (r <= 0) return { label: pool[i].label, entries: pool[i].weight }; }
+  var last = pool[pool.length - 1];
+  return { label: last.label, entries: last.weight };
+}
+
+var _GA_TH = 46, _GA_LAND_FROM_END = 8;   // tile height (44+2 margin); land N from the end
+
+function _gaBuildReel(winLabel){
+  var reel = document.getElementById('gaLdReel');
+  if (!reel) return 0;
+  var arr = _gaExpandedPool();
+  var landing = arr.length - _GA_LAND_FROM_END;
+  if (landing < 1) landing = arr.length - 1;
+  arr[landing] = winLabel;                 // the tile under the marker is the winner
+  var html = '';
+  for (var i = 0; i < arr.length; i++){
+    html += '<div class="ga-ld-tile' + (i === landing ? ' ga-ld-win' : '') + '">' + _escHtml(arr[i]) + '</div>';
+  }
+  reel.innerHTML = html;
+  reel.style.transition = 'none';
+  reel.style.transform = 'translateY(0px)';
+  void reel.offsetHeight;                  // force reflow so the next transform animates
+  return landing;
+}
+
+function _gaAnimateToWinner(landing, onDone){
+  var reel = document.getElementById('gaLdReel');
+  var wrap = reel && reel.parentElement;
+  if (!reel || !wrap){ if (onDone) onDone(); return; }
+  var H = wrap.clientHeight;
+  var jitter = (Math.random() * 12 - 6);
+  var target = (H / 2) - (landing * _GA_TH + _GA_TH / 2) + jitter;
+  reel.style.transition = 'transform 5s cubic-bezier(0.12,0.7,0.08,1)';
+  requestAnimationFrame(function(){ reel.style.transform = 'translateY(' + target + 'px)'; });
+  setTimeout(function(){
+    var winTile = reel.querySelector('.ga-ld-win');
+    if (winTile) winTile.classList.add('ga-ld-landed');
+    if (onDone) onDone();
+  }, 5120);
+}
+
+function _gaToggleArm(){
+  var st = window._gaLD; if (!st) return;
+  if (st.giveaway && st.giveaway.status === 'drawn') return;  // replay mode, N/A
+  if (st.winners.length){ showToast('Already drawn — mode is locked.'); return; }
+  st.armed = !st.armed;
+  _gaUpdateArmUI();
+}
+
+function _gaUpdateArmUI(){
+  var st = window._gaLD; if (!st) return;
+  var el = document.getElementById('gaLdArm');
+  var spin = document.getElementById('gaLdSpin');
+  if (el){
+    el.textContent = st.armed ? 'ARMED — LIVE' : 'REHEARSE';
+    el.style.borderColor = st.armed ? 'var(--red)' : 'var(--copper)';
+    el.style.color       = st.armed ? 'var(--red)' : 'var(--copper)';
+  }
+  if (spin && !st.winners.length){ spin.textContent = st.armed ? 'SPIN — DRAW LIVE' : 'SPIN (rehearse)'; }
+}
+
+async function _gaSpin(){
+  var st = window._gaLD; if (!st) return;
+  if (st.drawing) return;
+  var g = st.giveaway || {};
+  var btn = document.getElementById('gaLdSpin');
+
+  // ── REHEARSE: practice spin on a weighted-random entrant; nothing recorded ──
+  if (!st.armed && g.status !== 'drawn'){
+    var pick = _gaRandomEntrant();
+    var rEl = document.getElementById('gaLdRank'); if (rEl) rEl.textContent = 'Rehearsal — nothing recorded';
+    var rWin = document.getElementById('gaLdWinner'); if (rWin){ rWin.innerHTML = ''; rWin.classList.remove('show'); }
+    if (btn){ btn.textContent = 'Spinning…'; btn.disabled = true; btn.style.opacity = '.5'; }
+    var rLand = _gaBuildReel(pick.label);
+    _gaAnimateToWinner(rLand, function(){
+      if (rWin){
+        rWin.innerHTML = '<div class="ga-ld-win-rank" style="color:var(--copper)">&#9670; Rehearsal</div>'
+          + '<div class="ga-ld-win-name" style="color:var(--copper)">' + _escHtml(pick.label) + '</div>'
+          + '<div class="ga-ld-win-prize">practice spin &mdash; no draw, nothing recorded</div>';
+        rWin.classList.add('show');
+      }
+      if (btn){ btn.textContent = 'SPIN (rehearse)'; btn.disabled = false; btn.style.opacity = ''; }
+    });
+    return;
+  }
+
+  // Run the authoritative draw the first time, if not already drawn.
+  if (!st.winners.length){
+    st.drawing = true;
+    if (btn){ btn.textContent = 'Drawing…'; btn.disabled = true; btn.style.opacity = '.5'; }
+    try {
+      var r = await sb.rpc('giveaway_draw_winners', { p_giveaway_id: st.id });
+      if (r.error) throw r.error;
+      st.winners = (r.data || []).map(_gaWinnerToObj);
+      if (!st.winners.length) throw new Error('no winners drawn');
+    } catch(e){
+      st.drawing = false;
+      if (btn){ btn.textContent = 'SPIN'; btn.disabled = false; btn.style.opacity = ''; }
+      showToast('Draw failed: ' + (e.message || e));
+      return;
+    }
+    st.drawing = false;
+  }
+  if (st.revealIdx >= st.winners.length) return;
+  var w = st.winners[st.revealIdx];
+  var rankEl = document.getElementById('gaLdRank');
+  if (rankEl) rankEl.textContent = 'Prize #' + w.rank + ' of ' + (g.num_winners || st.winners.length) + ' — ' + _gaTierLabel(g, w.rank);
+  var winEl = document.getElementById('gaLdWinner');
+  if (winEl){ winEl.innerHTML = ''; winEl.classList.remove('show'); }
+  if (btn){ btn.textContent = 'Spinning…'; btn.disabled = true; btn.style.opacity = '.5'; }
+  var winIdx = _gaBuildReel(w.label);
+  _gaAnimateToWinner(winIdx, function(){
+    if (winEl){
+      winEl.innerHTML = '<div class="ga-ld-win-rank">&#9670; Winner — prize #' + w.rank + '</div>'
+        + '<div class="ga-ld-win-name">' + _escHtml(w.label) + '</div>'
+        + '<div class="ga-ld-win-prize">' + _escHtml(_gaTierLabel(g, w.rank)) + '</div>'
+        + (w.entries ? '<div class="ga-ld-win-entries">held ' + w.entries + ' entries</div>' : '');
+      winEl.classList.add('show');
+    }
+    st.revealIdx++;
+    if (!btn) return;
+    if (st.revealIdx < st.winners.length){
+      btn.textContent = 'SPIN NEXT (#' + st.winners[st.revealIdx].rank + ')';
+      btn.disabled = false; btn.style.opacity = '';
+    } else {
+      btn.outerHTML = '<button class="ga-ld-btn" id="gaLdSpin" onclick="_gaCloseLiveDraw()">Done</button>';
+    }
+  });
+}
+
+function _gaCloseLiveDraw(){
+  var ov = document.getElementById('gaLiveDraw');
+  if (ov){ ov.className = ''; ov.style.display = 'none'; ov.innerHTML = ''; }
+  window._gaLD = null;
+  try { renderAdminGiveaways(); } catch(_){}
+}
+
 async function adminCreateGiveaway(){
   var name = ((document.getElementById('gaName') || {}).value || '').trim();
   var prize = ((document.getElementById('gaPrize') || {}).value || '').trim();
@@ -1798,9 +2123,17 @@ async function adminCreateGiveaway(){
   var closesRaw = (document.getElementById('gaCloses') || {}).value || '';
   if (!name) { showToast('Enter an internal name'); return; }
   if (winners < 1) winners = 1;
+  var grand = ((document.getElementById('gaPrizeGrand') || {}).value || '').trim();
+  var rest  = ((document.getElementById('gaPrizeRest')  || {}).value || '').trim();
   var payload = { name: name, prize: prize || null, num_winners: winners, status: 'draft' };
   if (opensRaw)  { try { payload.opens_at  = new Date(opensRaw).toISOString();  } catch(_){} }
   if (closesRaw) { try { payload.closes_at = new Date(closesRaw).toISOString(); } catch(_){} }
+  // Per-rank prize labels for the winner email: rank 1 = grand (or the banner
+  // prize), ranks 2+ = rest (TBD until the pull video). Omit a tier if blank.
+  var tiers = [];
+  tiers.push({ from: 1, to: 1, label: grand || prize || 'Grand prize' });
+  if (rest) tiers.push({ from: 2, to: null, label: rest });
+  payload.prize_tiers = tiers;
   try {
     var r = await sb.from('giveaways').insert(payload);
     if (r.error) throw r.error;
@@ -1809,6 +2142,8 @@ async function adminCreateGiveaway(){
     var p = document.getElementById('gaPrize'); if (p) p.value = '';
     var o = document.getElementById('gaOpens'); if (o) o.value = '';
     var cl = document.getElementById('gaCloses'); if (cl) cl.value = '';
+    var pg = document.getElementById('gaPrizeGrand'); if (pg) pg.value = '';
+    var pr = document.getElementById('gaPrizeRest'); if (pr) pr.value = '';
     renderAdminGiveaways();
   } catch(e){ showToast('Create failed: ' + (e.message || e)); }
 }

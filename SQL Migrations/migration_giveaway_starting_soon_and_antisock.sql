@@ -285,6 +285,39 @@ begin
 end $function$;
 revoke execute on function public.giveaway_draw_winners(uuid, text) from public, anon;
 
+-- 4. Prize tiers (per-rank prize label) --------------------------------------
+-- An ordered list of {from,to,label}. A winner's prize_rank resolves to the
+-- first tier whose [from,to] covers it (to=null = open-ended). Lets rank 1 be
+-- the briefcase and ranks 2+ be "a pull from the second box (revealed in the
+-- video)" until the specific cards are known. Read by api/send-giveaway-winner.
+alter table public.giveaways
+  add column if not exists prize_tiers jsonb not null default '[]'::jsonb;
+
+-- 5. Live-draw entrant pool (admin, for the stream spinner) -------------------
+-- Labels + weights for the reel. Excludes disqualified entrants, so the spinner
+-- shows the same pool the draw actually samples. Admin-gated. Labels are public
+-- usernames (public_profiles_display already exposes them).
+create or replace function public.giveaway_entrant_pool(p_giveaway_id uuid)
+returns table(entrant_key text, label text, weight int, is_subscriber boolean)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin_current() then raise exception 'admin only'; end if;
+  return query
+  select coalesce(e.user_id::text, 'email:' || e.email)                  as entrant_key,
+         coalesce(max(p.username), 'guest-' || left(md5(coalesce(e.email,'')),4)) as label,
+         sum(e.entries)::int                                             as weight,
+         coalesce(bool_or(p.stripe_subscription_id is not null), false)  as is_subscriber
+  from public.giveaway_entries e
+  left join public.profiles p on p.id = e.user_id
+  where e.giveaway_id = p_giveaway_id
+    and not exists (select 1 from public.giveaway_disqualifications d
+                    where d.giveaway_id = e.giveaway_id and d.user_id = e.user_id)
+  group by coalesce(e.user_id::text, 'email:' || e.email)
+  having sum(e.entries) > 0
+  order by weight desc, label;
+end $$;
+grant execute on function public.giveaway_entrant_pool(uuid) to authenticated;
+
 -- ============================================================
 -- Verify:
 --   -- 'scheduled' accepted:
