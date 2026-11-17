@@ -32674,6 +32674,22 @@ function _loadAdmin(){
         if (!currentUser) currentUser = { ...session.user };
         updateAuthUI();
         renderAllContent();
+        // Stamp this account's country once, from Vercel's edge geo header,
+        // via /api/stamp-geo (server-side, write-once). Fire-and-forget — it
+        // must never block or break sign-in. Guarded to one call per browser
+        // session; the server no-ops after the first successful stamp.
+        try {
+          if (!sessionStorage.getItem('pb_geo_stamped')) {
+            sessionStorage.setItem('pb_geo_stamped', '1');
+            var _gtok = session.access_token;
+            if (_gtok) {
+              fetch('/api/stamp-geo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _gtok }
+              }).catch(function(){});
+            }
+          }
+        } catch (_) {}
         // Resume a paid-tier "Get Started"/upgrade intent captured before
         // sign-in — send the user to the pricing/upgrade path instead of just
         // the dashboard. Web only (native has no in-app purchase). Consumed
