@@ -34,6 +34,11 @@
   .prize .name{font-size:24px;color:#fff;font-weight:800;line-height:1.25;margin-bottom:8px}
   .prize .meta{font-size:14px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px}
   .prize .meta b{color:var(--text);font-weight:700}
+  .cd-label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:700;margin:16px 0 8px}
+  .countdown{display:flex;gap:8px;flex-wrap:wrap;max-width:420px}
+  .cd-cell{flex:1;min-width:58px;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 4px}
+  .cd-num{font-size:24px;font-weight:800;color:#fff;line-height:1;font-variant-numeric:tabular-nums}
+  .cd-unit{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-top:6px}
   .cta{display:inline-block;background:var(--accent);color:#0a0e1a;font-weight:800;padding:13px 26px;border-radius:10px;margin:6px 8px 4px 0}
   .cta:hover{text-decoration:none;filter:brightness(1.06)}
   .cta.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
@@ -68,6 +73,8 @@
   <div class="tag">Current drawing</div>
   <div class="name" id="prizeName">Loading the current prize&hellip;</div>
   <div class="meta" id="prizeMeta"></div>
+  <div class="cd-label" id="prizeCdLabel" style="display:none"></div>
+  <div class="countdown" id="prizeCountdown" style="display:none"></div>
 </div>
 
 <a class="cta" href="/?page=account">Become a member &amp; get entered &rarr;</a>
@@ -124,15 +131,38 @@
   </footer>
 
 <script>
-  // Pull the current OPEN giveaway live (giveaways is anon-readable for
-  // status <> 'draft'; the publishable key is client-safe).
+  // Pull the current scheduled/open giveaway live (giveaways is anon-readable
+  // for status <> 'draft'; the publishable key is client-safe). A 'scheduled'
+  // drawing shows the "coming soon" teaser + a countdown to when entries open;
+  // an 'open' drawing shows the prize + a countdown to close.
   (function(){
     var URL = 'https://xjamytrhxeaynywcwfun.supabase.co';
     var KEY = 'sb_publishable_HeBrC8k5nKaBmqA9qMn6-Q_YqL8OEBV';
     var nameEl = document.getElementById('prizeName');
     var metaEl = document.getElementById('prizeMeta');
+    var labEl  = document.getElementById('prizeCdLabel');
+    var cdEl   = document.getElementById('prizeCountdown');
     function esc(s){ return String(s == null ? '' : s).replace(/[<>&]/g, function(c){ return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c]; }); }
-    fetch(URL + '/rest/v1/giveaways?select=name,prize,num_winners,closes_at&status=eq.open&order=created_at.desc&limit=1', {
+
+    var cdTimer = null;
+    function startCountdown(targetMs, label){
+      if (!targetMs || isNaN(targetMs)) return;
+      labEl.textContent = label; labEl.style.display = ''; cdEl.style.display = '';
+      var units = [['Days',86400000],['Hrs',3600000],['Min',60000],['Sec',1000]];
+      function tick(){
+        var ms = targetMs - Date.now(); if (ms < 0) ms = 0;
+        cdEl.innerHTML = units.map(function(u){
+          var v = Math.floor(ms / u[1]); ms -= v * u[1];
+          return '<div class="cd-cell"><div class="cd-num">' + (v < 10 ? '0' + v : v) + '</div><div class="cd-unit">' + u[0] + '</div></div>';
+        }).join('');
+      }
+      tick();
+      if (cdTimer) clearInterval(cdTimer);
+      cdTimer = setInterval(tick, 1000);
+    }
+    function fmtDate(s){ try { return new Date(s).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(_) { return ''; } }
+
+    fetch(URL + '/rest/v1/giveaways?select=name,prize,num_winners,opens_at,closes_at,status&status=in.(scheduled,open)&order=status.asc,created_at.desc&limit=1', {
       headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }
     }).then(function(r){ return r.json(); }).then(function(rows){
       var g = rows && rows[0];
@@ -141,18 +171,23 @@
         metaEl.innerHTML = '<span>Subscribe now so you’re entered the moment it opens.</span>';
         return;
       }
+
+      if (g.status === 'scheduled') {
+        // Teaser state — keep the prize under wraps, show a countdown to open.
+        nameEl.textContent = 'Our next giveaway is coming soon';
+        metaEl.innerHTML = '<span>Subscribe now so you’re entered the moment it opens.</span>';
+        if (g.opens_at) startCountdown(new Date(g.opens_at).getTime(), 'Entries open in');
+        return;
+      }
+
+      // Open drawing — reveal the prize and count down to close.
       nameEl.innerHTML = esc(g.prize || g.name || 'Sealed TCG product');
       var bits = [];
       if (g.num_winners) bits.push('<b>' + g.num_winners + '</b> winner' + (g.num_winners === 1 ? '' : 's'));
-      if (g.closes_at) {
-        var ms = new Date(g.closes_at).getTime() - Date.now();
-        if (ms > 0) {
-          var d = Math.ceil(ms / 86400000);
-          bits.push('Closes in <b>' + d + '</b> day' + (d === 1 ? '' : 's'));
-        }
-      }
+      if (g.closes_at && fmtDate(g.closes_at)) bits.push('Closes <b>' + fmtDate(g.closes_at) + '</b>');
       bits.push('No purchase necessary');
       metaEl.innerHTML = bits.map(function(b){ return '<span>' + b + '</span>'; }).join('');
+      if (g.closes_at && new Date(g.closes_at).getTime() > Date.now()) startCountdown(new Date(g.closes_at).getTime(), 'Entries close in');
     }).catch(function(){
       nameEl.textContent = 'Giveaways for PathBinder members';
       metaEl.innerHTML = '<span>Open the app to see the current drawing.</span>';
