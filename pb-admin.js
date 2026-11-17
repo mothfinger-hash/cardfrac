@@ -467,6 +467,9 @@ function _pbInjectAdminMarkup(){
           <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">WINNERS
             <input type="number" id="gaWinners" value="1" min="1" step="1" inputmode="numeric"
               style="width:80px;background:var(--surface2);border:1px solid var(--border);padding:7px 10px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none"></label>
+          <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">STARTS (optional)
+            <input type="datetime-local" id="gaOpens"
+              style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.74rem;color:var(--text);outline:none"></label>
           <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">CLOSES (optional)
             <input type="datetime-local" id="gaCloses"
               style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;font-family:'Space Mono',monospace;font-size:.74rem;color:var(--text);outline:none"></label>
@@ -475,7 +478,7 @@ function _pbInjectAdminMarkup(){
           style="align-self:flex-start;background:var(--accent);color:var(--text-on-accent);border:none;padding:9px 20px;font-family:'Space Mono',monospace;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer">Create as draft</button>
       </div>
       <div style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted);margin-top:12px;line-height:1.6">
-        New giveaways start as <strong style="color:var(--text)">draft</strong> (hidden from users). <strong style="color:var(--text)">Open</strong> it to make it live and auto-enter paying subscribers. Entry totals are visible to admins only &mdash; each user sees only their own entry count.
+        New giveaways start as <strong style="color:var(--text)">draft</strong> (hidden from users). <strong style="color:var(--text)">Announce</strong> shows a public &ldquo;starting soon&rdquo; countdown to STARTS (no entries yet). <strong style="color:var(--text)">Open</strong> makes it live and auto-enters paying subscribers. Entry totals are visible to admins only &mdash; each user sees only their own entry count.
       </div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -1622,7 +1625,8 @@ async function renderAdminGiveaways(){
 
 function _gaStatusColor(s){
   return s === 'open' ? 'var(--green)' : s === 'drawn' ? 'var(--accent)'
-       : s === 'closed' ? 'var(--yellow)' : 'var(--muted)';
+       : s === 'closed' ? 'var(--yellow)' : s === 'scheduled' ? 'var(--copper)'
+       : 'var(--muted)';
 }
 
 function _gaBtn(label, onclick, color){
@@ -1635,16 +1639,24 @@ function _gaCardHtml(g){
   var sc = _gaStatusColor(g.status);
   var name = _escHtml(g.name || '');
   var prize = _escHtml(g.prize || '');
+  var opens = g.opens_at ? _escHtml(new Date(g.opens_at).toLocaleString()) : '';
   var closes = g.closes_at ? _escHtml(new Date(g.closes_at).toLocaleString()) : '';
+  var dupBtn = _gaBtn('Review duplicates', "adminReviewDupes('" + g.id + "')", 'var(--yellow)');
   var actions = '';
   if (g.status === 'draft') {
-    actions = _gaBtn('Open &amp; enter subscribers', "adminOpenGiveaway('" + g.id + "')", 'var(--green)');
+    actions = _gaBtn('Announce (starting soon)', "adminSetGiveawayStatus('" + g.id + "','scheduled')", 'var(--copper)')
+            + _gaBtn('Open &amp; enter subscribers', "adminOpenGiveaway('" + g.id + "')", 'var(--green)');
+  } else if (g.status === 'scheduled') {
+    actions = _gaBtn('Open &amp; enter subscribers', "adminOpenGiveaway('" + g.id + "')", 'var(--green)')
+            + _gaBtn('Back to draft', "adminSetGiveawayStatus('" + g.id + "','draft')", 'var(--muted)');
   } else if (g.status === 'open') {
     actions = _gaBtn('Re-grant subscribers', "adminGrantSubs('" + g.id + "')", 'var(--copper)')
+            + dupBtn
             + _gaBtn('Close', "adminSetGiveawayStatus('" + g.id + "','closed')", 'var(--yellow)')
             + _gaBtn('Draw winners', "adminDrawGiveaway('" + g.id + "')", 'var(--accent)');
   } else if (g.status === 'closed') {
     actions = _gaBtn('Re-open', "adminSetGiveawayStatus('" + g.id + "','open')", 'var(--muted)')
+            + dupBtn
             + _gaBtn('Draw winners', "adminDrawGiveaway('" + g.id + "')", 'var(--accent)');
   } else {
     actions = '<span style="font-size:.6rem;color:var(--muted);align-self:center;margin-right:4px">Drawn'
@@ -1658,9 +1670,11 @@ function _gaCardHtml(g){
     + '</div>'
     + (name && prize ? '<div style="font-size:.62rem;color:var(--muted);margin-top:2px">' + name + '</div>' : '')
     + '<div style="font-size:.62rem;color:var(--muted);margin-top:4px">Winners: ' + (g.num_winners || 1)
+        + (opens ? ' &middot; Starts ' + opens : '')
         + (closes ? ' &middot; Closes ' + closes : '') + '</div>'
     + '<div id="gaStats-' + g.id + '" style="font-family:\'Orbitron\',monospace;font-size:.7rem;color:var(--accent);margin-top:8px">&mdash;</div>'
     + '<div id="gaWinners-' + g.id + '"></div>'
+    + '<div id="gaDupes-' + g.id + '"></div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">' + actions + '</div>'
     + '</div>';
 }
@@ -1700,14 +1714,92 @@ async function _gaLoadWinners(id){
   } catch(_){}
 }
 
+// ── Shared-IP duplicate review (admin) ───────────────────────────────────────
+// Reads giveaway_ip_clusters (admin-gated RPC) and lets the admin disqualify
+// suspected sock accounts BEFORE the draw. NOT automatic: carriers/households
+// legitimately share IPs. Paying subscribers are protected server-side, so the
+// disqualify button is hidden for them and the RPC refuses them anyway.
+async function adminReviewDupes(id){
+  var box = document.getElementById('gaDupes-' + id);
+  if (!box) return;
+  box.innerHTML = '<div style="font-size:.62rem;color:var(--muted);margin-top:8px">Scanning shared IPs…</div>';
+  try {
+    var r = await sb.rpc('giveaway_ip_clusters', { p_giveaway_id: id });
+    if (r.error) throw r.error;
+    _gaRenderClusters(id, r.data || []);
+  } catch(e){
+    box.innerHTML = '<div style="font-size:.62rem;color:var(--red);margin-top:8px">Dup scan failed: ' + _escHtml(e.message || String(e)) + '</div>';
+  }
+}
+
+function _gaRenderClusters(id, rows){
+  var box = document.getElementById('gaDupes-' + id);
+  if (!box) return;
+  if (!rows.length){
+    box.innerHTML = '<div style="font-size:.62rem;color:var(--green);margin-top:8px;border-top:1px solid var(--border);padding-top:8px">No shared-IP clusters. Nothing to review.</div>';
+    return;
+  }
+  var groups = {};
+  rows.forEach(function(row){ (groups[row.cluster_key] = groups[row.cluster_key] || []).push(row); });
+  var html = '<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">'
+    + '<div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--yellow);margin-bottom:6px">Shared-IP clusters &mdash; review before drawing</div>'
+    + '<div style="font-size:.56rem;color:var(--muted);margin-bottom:8px;line-height:1.5">Carriers &amp; households share IPs, so these are NOT auto-removed. Subscribers are protected (they paid). Disqualify only accounts you judge to be duplicates &mdash; the highest-entry one is usually the keeper.</div>';
+  Object.keys(groups).forEach(function(k){
+    var grp = groups[k];
+    var hint = _escHtml(grp[0].ip_hint || '');
+    html += '<div style="border:1px solid var(--border);background:var(--surface2);padding:8px 10px;margin-bottom:8px">'
+      + '<div style="font-size:.56rem;color:var(--muted);margin-bottom:6px">IP ' + hint + ' &middot; ' + grp.length + ' accounts</div>';
+    grp.forEach(function(row, idx){
+      var uname = _escHtml(row.username || row.user_id || 'unknown');
+      var tag = '';
+      if (row.is_subscriber) tag = '<span style="color:var(--green);font-size:.54rem">protected (subscriber)</span>';
+      else if (idx === 0)    tag = '<span style="color:var(--copper);font-size:.54rem">highest &mdash; keeper</span>';
+      var btn = '';
+      if (!row.is_subscriber) {
+        btn = row.is_disqualified
+          ? _gaBtn('Requalify', "adminRequalify('" + id + "','" + row.user_id + "')", 'var(--muted)')
+          : _gaBtn('Disqualify', "adminDisqualify('" + id + "','" + row.user_id + "')", 'var(--red)');
+      }
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0' + (row.is_disqualified ? ';opacity:.5' : '') + '">'
+        + '<div style="font-size:.6rem;color:var(--text)">' + uname
+        +   ' <span style="color:var(--muted)">(' + (row.total_entries || 0) + ' entries)</span> ' + tag
+        +   (row.is_disqualified ? ' <span style="color:var(--red);font-size:.54rem">disqualified</span>' : '')
+        + '</div><div>' + btn + '</div></div>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  box.innerHTML = html;
+}
+
+async function adminDisqualify(id, userId){
+  try {
+    var r = await sb.rpc('giveaway_disqualify', { p_giveaway_id: id, p_user_ids: [userId], p_reason: 'shared-IP duplicate' });
+    if (r.error) throw r.error;
+    showToast(r.data ? 'Disqualified.' : 'Not disqualified (subscribers are protected).');
+    adminReviewDupes(id);
+  } catch(e){ showToast('Failed: ' + (e.message || e)); }
+}
+
+async function adminRequalify(id, userId){
+  try {
+    var r = await sb.rpc('giveaway_requalify', { p_giveaway_id: id, p_user_ids: [userId] });
+    if (r.error) throw r.error;
+    showToast('Requalified.');
+    adminReviewDupes(id);
+  } catch(e){ showToast('Failed: ' + (e.message || e)); }
+}
+
 async function adminCreateGiveaway(){
   var name = ((document.getElementById('gaName') || {}).value || '').trim();
   var prize = ((document.getElementById('gaPrize') || {}).value || '').trim();
   var winners = parseInt((document.getElementById('gaWinners') || {}).value, 10) || 1;
+  var opensRaw = (document.getElementById('gaOpens') || {}).value || '';
   var closesRaw = (document.getElementById('gaCloses') || {}).value || '';
   if (!name) { showToast('Enter an internal name'); return; }
   if (winners < 1) winners = 1;
   var payload = { name: name, prize: prize || null, num_winners: winners, status: 'draft' };
+  if (opensRaw)  { try { payload.opens_at  = new Date(opensRaw).toISOString();  } catch(_){} }
   if (closesRaw) { try { payload.closes_at = new Date(closesRaw).toISOString(); } catch(_){} }
   try {
     var r = await sb.from('giveaways').insert(payload);
@@ -1715,6 +1807,8 @@ async function adminCreateGiveaway(){
     showToast('Giveaway created (draft)');
     var n = document.getElementById('gaName'); if (n) n.value = '';
     var p = document.getElementById('gaPrize'); if (p) p.value = '';
+    var o = document.getElementById('gaOpens'); if (o) o.value = '';
+    var cl = document.getElementById('gaCloses'); if (cl) cl.value = '';
     renderAdminGiveaways();
   } catch(e){ showToast('Create failed: ' + (e.message || e)); }
 }

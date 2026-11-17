@@ -6458,8 +6458,8 @@ function _loadAdmin(){
       var cache = { user_id: currentUser.id, giveaway: null, entries: null, wins: [] };
       try {
         var g = await sb.from('giveaways')
-          .select('id,name,prize,closes_at,num_winners')
-          .eq('status', 'open')
+          .select('id,name,prize,opens_at,closes_at,num_winners,status')
+          .in('status', ['scheduled', 'open'])
           .order('created_at', { ascending: false })
           .limit(1);
         var row = (g && g.data && g.data[0]) || null;
@@ -6504,24 +6504,76 @@ function _loadAdmin(){
       return html;
     }
 
+    // Live countdown block (4 cells). The ticker (_gaTick) fills + updates the
+    // numbers each second from data-target (ms epoch); the dashboard re-render
+    // just re-emits the shell, so the timer survives re-renders.
+    function _gaCountdownBlock(targetMs, color) {
+      function cell(unit, label) {
+        return '<div style="flex:1;min-width:52px;text-align:center;border:1px solid var(--border);background:var(--surface);padding:8px 4px">'
+          + '<div data-ga-unit="' + unit + '" style="font-family:\'Orbitron\',monospace;font-size:1.35rem;font-weight:800;color:' + color + ';line-height:1;font-variant-numeric:tabular-nums">--</div>'
+          + '<div style="font-size:.5rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-top:4px">' + label + '</div>'
+          + '</div>';
+      }
+      return '<div data-ga-countdown data-target="' + targetMs + '" style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">'
+        + cell('d', 'Days') + cell('h', 'Hrs') + cell('m', 'Min') + cell('s', 'Sec')
+        + '</div>';
+    }
+
+    function _gaTick() {
+      var nodes = document.querySelectorAll('[data-ga-countdown]');
+      if (!nodes.length) return;
+      nodes.forEach(function (n) {
+        var t = parseInt(n.getAttribute('data-target'), 10) || 0;
+        var ms = t - Date.now();
+        if (ms < 0) ms = 0;   // clamp; the admin flips status manually
+        var d = Math.floor(ms / 86400000); ms -= d * 86400000;
+        var h = Math.floor(ms / 3600000);  ms -= h * 3600000;
+        var m = Math.floor(ms / 60000);    ms -= m * 60000;
+        var s = Math.floor(ms / 1000);
+        function set(u, v) {
+          var el = n.querySelector('[data-ga-unit="' + u + '"]');
+          if (el) el.textContent = String(v).length < 2 ? ('0' + v) : String(v);
+        }
+        set('d', d); set('h', h); set('m', m); set('s', s);
+      });
+    }
+
     function _giveawayBanner() {
       if (!currentUser) return '';
       var c = _giveawayDashCache;
       if (!c || c.user_id !== currentUser.id) return '';   // not loaded yet
       var g = c.giveaway;
-      if (!g) return '';                                    // no open giveaway
+      if (!g) return '';                                    // no visible giveaway
       if (_bannerDismissed('pb_dismiss_giveaway_' + g.id)) return '';
-      var total = (c.entries && c.entries.total) || 0;
-      var isPaying = !!(currentUser && currentUser.stripe_subscription_id);
 
-      var daysTxt = '';
-      if (g.closes_at) {
-        var ms = new Date(g.closes_at).getTime() - Date.now();
-        if (ms > 0) {
-          var d = Math.ceil(ms / 86400000);
-          daysTxt = d + ' day' + (d === 1 ? '' : 's') + ' left';
-        }
+      var isPaying = !!(currentUser && currentUser.stripe_subscription_id);
+      var prize = (typeof _escHtml === 'function')
+        ? _escHtml(g.prize || g.name || 'Giveaway')
+        : (g.prize || g.name || 'Giveaway');
+
+      // Keep the live countdown ticker running + fill it immediately on render.
+      if (!window._gaCountdownInterval) { try { window._gaCountdownInterval = setInterval(_gaTick, 1000); } catch (_) {} }
+      try { setTimeout(_gaTick, 0); } catch (_) {}
+
+      // ── Phase 1: STARTING SOON (status 'scheduled') — no entries yet ──────
+      if (g.status === 'scheduled') {
+        var opensMs = g.opens_at ? new Date(g.opens_at).getTime() : null;
+        var subS = isPaying
+          ? 'You\'re a subscriber &mdash; you\'ll get 10+ entries automatically the moment it opens.'
+          : 'Subscribers get 10+ entries every drawing. '
+            + '<a href="#" onclick="openPricingModalWithPromo(\'enthusiast\');return false" style="color:var(--accent)">Subscribe &rarr;</a>';
+        return '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--copper);border-left:3px solid var(--copper);background:var(--copper-glow);padding:14px 30px 14px 18px">'
+          + _bannerDismissBtn('pb_dismiss_giveaway_' + g.id)
+          + '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:4px">&#9671; Giveaway &mdash; Starting soon</div>'
+          + '<div style="font-size:.85rem;color:var(--text);font-weight:700;margin-bottom:3px">' + prize + '</div>'
+          + '<div style="font-size:.72rem;color:var(--muted);line-height:1.5">' + subS + '</div>'
+          + (opensMs ? _gaCountdownBlock(opensMs, 'var(--copper)') : '')
+          + '</div>';
       }
+
+      // ── Phase 2: LIVE (status 'open') ────────────────────────────────────
+      var total = (c.entries && c.entries.total) || 0;
+      var closesMs = g.closes_at ? new Date(g.closes_at).getTime() : null;
 
       var sub;
       if (isPaying) {
@@ -6539,15 +6591,11 @@ function _loadAdmin(){
           + '<a href="#" onclick="openPricingModalWithPromo(\'enthusiast\');return false" style="color:var(--accent)">Subscribe &rarr;</a>';
       }
 
-      var prize = (typeof _escHtml === 'function')
-        ? _escHtml(g.prize || g.name || 'Giveaway')
-        : (g.prize || g.name || 'Giveaway');
-
-      return '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--copper);border-left:3px solid var(--copper);background:rgba(184,115,51,.06);padding:14px 30px 14px 18px">'
+      return '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--accent);border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.07);padding:14px 30px 14px 18px">'
         + _bannerDismissBtn('pb_dismiss_giveaway_' + g.id)
         + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">'
         +   '<div style="flex:1;min-width:240px">'
-        +     '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:4px">&#9671; Giveaway' + (daysTxt ? ' &mdash; ' + daysTxt : '') + '</div>'
+        +     '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:4px">&#9670; Giveaway &mdash; Live</div>'
         +     '<div style="font-size:.85rem;color:var(--text);font-weight:700;margin-bottom:3px">' + prize + '</div>'
         +     '<div style="font-size:.72rem;color:var(--muted);line-height:1.5">' + sub + '</div>'
         +   '</div>'
@@ -6556,11 +6604,13 @@ function _loadAdmin(){
         +     '<div style="font-size:.58rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-top:2px">Your entries</div>'
         +   '</div>'
         + '</div>'
+        + (closesMs ? _gaCountdownBlock(closesMs, 'var(--accent)') : '')
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">'
         +   _gaFreeBtn(g.id, 'free_base', 'Enter free', '')
         +   _gaFreeBtn(g.id, 'social_follow', 'Follow +1', 'https://x.com/PathBindertcg')
         +   _gaFreeBtn(g.id, 'social_share', 'Share +1', '__SHARE__')
         + '</div>'
+        + '<div style="font-size:.6rem;color:var(--muted);margin-top:9px;line-height:1.5">One entry per person. No purchase necessary. Duplicate or alternate accounts are removed before the draw.</div>'
         + '</div>';
     }
 
