@@ -478,7 +478,7 @@ function _pbInjectAdminMarkup(){
           <input type="file" id="gaVideo" accept="video/*"
             style="font-family:'Space Mono',monospace;font-size:.68rem;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:7px 10px"></label>
         <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
-          <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">WINNERS
+          <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">WINNERS / PRIZES
             <input type="number" id="gaWinners" value="1" min="1" step="1" inputmode="numeric"
               style="width:80px;background:var(--surface2);border:1px solid var(--border);padding:7px 10px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none"></label>
           <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">STARTS (optional)
@@ -492,7 +492,7 @@ function _pbInjectAdminMarkup(){
           style="align-self:flex-start;background:var(--accent);color:var(--text-on-accent);border:none;padding:9px 20px;font-family:'Space Mono',monospace;font-size:.72rem;font-weight:700;letter-spacing:.06em;cursor:pointer">Create as draft</button>
       </div>
       <div style="font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted);margin-top:12px;line-height:1.6">
-        New giveaways start as <strong style="color:var(--text)">draft</strong> (hidden from users). <strong style="color:var(--text)">Announce</strong> shows a public &ldquo;starting soon&rdquo; countdown to STARTS (no entries yet). <strong style="color:var(--text)">Open</strong> makes it live and auto-enters paying subscribers. Entry totals are visible to admins only &mdash; each user sees only their own entry count.
+        New giveaways start as <strong style="color:var(--text)">draft</strong> (hidden from users). <strong style="color:var(--text)">Announce</strong> shows a public &ldquo;starting soon&rdquo; countdown to STARTS (no entries yet). <strong style="color:var(--text)">Open</strong> makes it live and auto-enters paying subscribers. <strong style="color:var(--text)">WINNERS / PRIZES</strong> is how many prizes you&rsquo;re giving away &mdash; the live-draw spinner spins <strong style="color:var(--text)">once per prize</strong>, and each winner is emailed their own prize. Entry totals are visible to admins only &mdash; each user sees only their own entry count.
       </div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -1975,14 +1975,76 @@ function _gaInjectDrawStyles(){
     + '.ga-ld-btn{font-family:\'Orbitron\',monospace;font-size:.78rem;font-weight:800;letter-spacing:.08em;padding:12px 26px;border:1px solid var(--muted);background:transparent;color:var(--text);cursor:pointer}'
     + '.ga-ld-btn.primary{border-color:var(--accent);color:var(--accent)}'
     + '.ga-ld-btn[disabled]{opacity:.5;cursor:default}'
-    + '.ga-ld-note{font-size:.58rem;color:var(--muted);line-height:1.5}';
+    + '.ga-ld-note{font-size:.58rem;color:var(--muted);line-height:1.5}'
+    + '.ga-ld-prizesel{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:12px}'
+    + '.ga-ld-prizesel label{font-family:\'Orbitron\',monospace;font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;color:var(--copper)}'
+    + '.ga-ld-prizesel select,.ga-ld-prizesel input{font-family:\'Space Mono\',monospace;font-size:.72rem;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;max-width:340px}'
+    + '.ga-ld-wtable-wrap{margin-top:16px;border-top:1px solid var(--border);padding-top:12px;text-align:left;max-height:220px;overflow:auto}'
+    + '.ga-ld-wtable-title{font-family:\'Orbitron\',monospace;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--copper);margin-bottom:8px}'
+    + '.ga-ld-wtable{width:100%;border-collapse:collapse;font-family:\'Space Mono\',monospace}'
+    + '.ga-ld-wtable th{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--copper-dim)}'
+    + '.ga-ld-wtable td{font-size:.72rem;color:var(--text);padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}'
+    + '.ga-ld-wtable td.rk{color:var(--accent);font-family:\'Orbitron\',monospace;font-weight:800;width:30px}'
+    + '.ga-ld-wtable td.pz{color:var(--muted);font-size:.64rem}';
   document.head.appendChild(s);
 }
 
 function _gaWinnerToObj(w){
   var key = w.user_id ? String(w.user_id) : ('email:' + (w.email || ''));
   var found = (window._gaLD && window._gaLD.pool || []).find(function(p){ return p.entrant_key === key; });
-  return { rank: w.prize_rank, key: key, label: (found && found.label) || (w.email || 'winner'), entries: w.entries_held || 0 };
+  return { rank: w.prize_rank, key: key, label: (found && found.label) || (w.email || 'winner'), entries: w.entries_held || 0, prize_label: w.prize_label || null };
+}
+
+// ── Prize selection (which prize the current spin is for) ────────────────────
+function _gaPrizeOptions(g){
+  var tiers = (g && Array.isArray(g.prize_tiers)) ? g.prize_tiers : [];
+  var labels = [];
+  tiers.forEach(function(t){ if (t && t.label && labels.indexOf(String(t.label)) < 0) labels.push(String(t.label)); });
+  if (!labels.length && g && g.prize) labels.push(String(g.prize));
+  if (!labels.length) labels.push('Prize');
+  return labels;
+}
+function _gaPrizeSelectorHtml(g){
+  var opts = _gaPrizeOptions(g);
+  var sel = '<select id="gaLdPrizeSel" onchange="_gaPrizeSelChanged()">';
+  opts.forEach(function(lbl){ sel += '<option value="' + _gaAttr(lbl) + '">' + _escHtml(lbl) + '</option>'; });
+  sel += '<option value="__custom__">Custom&hellip;</option></select>';
+  return '<div class="ga-ld-prizesel">'
+    + '<label>Prize for this spin</label>' + sel
+    + '<input id="gaLdPrizeCustom" type="text" placeholder="type a specific prize" style="display:none"></div>';
+}
+function _gaPrizeSelChanged(){
+  var sel = document.getElementById('gaLdPrizeSel');
+  var cust = document.getElementById('gaLdPrizeCustom');
+  if (!sel || !cust) return;
+  cust.style.display = (sel.value === '__custom__') ? '' : 'none';
+  if (sel.value === '__custom__') { try { cust.focus(); } catch(_){} }
+}
+function _gaCurrentPrize(fallback){
+  var sel = document.getElementById('gaLdPrizeSel');
+  if (!sel) return fallback || '';
+  if (sel.value === '__custom__'){
+    var cust = document.getElementById('gaLdPrizeCustom');
+    return (cust && cust.value.trim()) || fallback || '';
+  }
+  return sel.value || fallback || '';
+}
+function _gaSetPrizeDefault(rank){
+  var st = window._gaLD; if (!st) return;
+  var sel = document.getElementById('gaLdPrizeSel'); if (!sel) return;
+  var want = _gaTierLabel(st.giveaway || {}, rank);
+  for (var i = 0; i < sel.options.length; i++){
+    if (sel.options[i].value === want){ sel.selectedIndex = i; _gaPrizeSelChanged(); return; }
+  }
+}
+function _gaAddWinnerRow(w, prize){
+  var wrap = document.getElementById('gaLdTableWrap');
+  var body = document.getElementById('gaLdTableBody');
+  if (!wrap || !body) return;
+  wrap.style.display = '';
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td class="rk">' + w.rank + '</td><td>' + _escHtml(w.label) + '</td><td class="pz">' + _escHtml(prize || '') + '</td>';
+  body.appendChild(tr);
 }
 
 async function adminLiveDraw(id){
@@ -1991,7 +2053,7 @@ async function adminLiveDraw(id){
   if (!ov){ ov = document.createElement('div'); ov.id = 'gaLiveDraw'; document.body.appendChild(ov); }
   ov.className = 'ga-ld-overlay';
   ov.innerHTML = '<div class="ga-ld-card"><div style="color:var(--muted);font-size:.8rem;padding:30px">Loading entrant pool…</div></div>';
-  window._gaLD = { id: id, pool: [], winners: [], revealIdx: 0, giveaway: null, drawing: false, armed: false };
+  window._gaLD = { id: id, pool: [], winners: [], revealIdx: 0, giveaway: null, drawing: false, armed: false, replay: false };
   try {
     var gi = await sb.from('giveaways').select('id,name,prize,num_winners,status,prize_tiers,closes_at').eq('id', id).maybeSingle();
     if (gi.error) throw gi.error;
@@ -2000,7 +2062,8 @@ async function adminLiveDraw(id){
     if (pr.error) throw pr.error;
     window._gaLD.pool = pr.data || [];
     if (gi.data && gi.data.status === 'drawn'){
-      var wr = await sb.from('giveaway_winners').select('prize_rank,user_id,email,entries_held').eq('giveaway_id', id).order('prize_rank');
+      window._gaLD.replay = true;
+      var wr = await sb.from('giveaway_winners').select('prize_rank,user_id,email,entries_held,prize_label').eq('giveaway_id', id).order('prize_rank');
       window._gaLD.winners = (wr.data || []).map(_gaWinnerToObj);
     }
     _gaRenderLiveDraw();
@@ -2021,18 +2084,24 @@ function _gaRenderLiveDraw(){
   ov.innerHTML = '<div class="ga-ld-card">'
     + '<button class="ga-ld-close" onclick="_gaCloseLiveDraw()">&times;</button>'
     + '<div class="ga-ld-title">' + _escHtml(g.prize || g.name || 'Giveaway') + '</div>'
-    + '<div class="ga-ld-rank" id="gaLdRank">' + N + ' winner' + (N === 1 ? '' : 's') + ' &middot; ' + poolCount + ' entrants &middot; ' + entriesTotal + ' entries</div>'
+    + '<div class="ga-ld-rank" id="gaLdRank">' + N + ' prize' + (N === 1 ? '' : 's') + ' &middot; one spin each &middot; ' + poolCount + ' entrants &middot; ' + entriesTotal + ' entries</div>'
     + '<div class="ga-ld-reel-wrap"><div class="ga-ld-marker"></div><div class="ga-ld-reel" id="gaLdReel"></div></div>'
     + '<div class="ga-ld-winner" id="gaLdWinner"></div>'
-    + '<div class="ga-ld-controls">'
+    + _gaPrizeSelectorHtml(g)
+    + '<div class="ga-ld-controls" id="gaLdControls">'
     +   (drawn ? '' : '<button class="ga-ld-arm" id="gaLdArm" onclick="_gaToggleArm()">REHEARSE</button>')
     +   '<button class="ga-ld-btn primary" id="gaLdSpin" onclick="_gaSpin()">' + (drawn ? 'SPIN' : 'SPIN (rehearse)') + '</button>'
     + '</div>'
     + '<div class="ga-ld-note">' + (drawn
         ? 'Already drawn — replaying the recorded winners (reproducible from the stored seed).'
         : 'REHEARSE spins practice names and records nothing. Flip to ARMED to run the official seeded draw — once only.') + '</div>'
+    + '<div class="ga-ld-wtable-wrap" id="gaLdTableWrap" style="display:none">'
+    +   '<div class="ga-ld-wtable-title">&#9670; Winners</div>'
+    +   '<table class="ga-ld-wtable"><thead><tr><th style="width:30px">#</th><th>Winner</th><th>Prize</th></tr></thead><tbody id="gaLdTableBody"></tbody></table>'
+    + '</div>'
     + '</div>';
   _gaBuildReel((st.pool[0] && st.pool[0].label) || '—');
+  _gaSetPrizeDefault(st.winners.length ? st.winners[st.revealIdx].rank : 1);
 }
 
 // The reel's content is the REAL pool expanded one tile per entry (a username
@@ -2167,29 +2236,54 @@ async function _gaSpin(){
   }
   if (st.revealIdx >= st.winners.length) return;
   var w = st.winners[st.revealIdx];
+  // Prize for this spin: the admin's selection (fresh draw) or the recorded
+  // label (replay), falling back to the rank's tier.
+  var chosenPrize = st.replay
+    ? (w.prize_label || _gaTierLabel(g, w.rank))
+    : _gaCurrentPrize(_gaTierLabel(g, w.rank));
+  w.prize = chosenPrize;
   var rankEl = document.getElementById('gaLdRank');
-  if (rankEl) rankEl.textContent = 'Prize #' + w.rank + ' of ' + (g.num_winners || st.winners.length) + ' — ' + _gaTierLabel(g, w.rank);
+  if (rankEl) rankEl.textContent = 'Prize #' + w.rank + ' of ' + (g.num_winners || st.winners.length) + ' — ' + chosenPrize;
   var winEl = document.getElementById('gaLdWinner');
   if (winEl){ winEl.innerHTML = ''; winEl.classList.remove('show'); }
   if (btn){ btn.textContent = 'Spinning…'; btn.disabled = true; btn.style.opacity = '.5'; }
   var winIdx = _gaBuildReel(w.label);
   _gaAnimateToWinner(winIdx, function(){
+    // Persist the announced prize so the winner email matches (fresh draws
+    // only; replay just displays what was already recorded).
+    if (!st.replay){
+      try { sb.from('giveaway_winners').update({ prize_label: chosenPrize }).eq('giveaway_id', st.id).eq('prize_rank', w.rank).then(function(){}, function(){}); } catch(_){}
+    }
     if (winEl){
       winEl.innerHTML = '<div class="ga-ld-win-rank">&#9670; Winner — prize #' + w.rank + '</div>'
         + '<div class="ga-ld-win-name">' + _escHtml(w.label) + '</div>'
-        + '<div class="ga-ld-win-prize">' + _escHtml(_gaTierLabel(g, w.rank)) + '</div>'
+        + '<div class="ga-ld-win-prize">' + _escHtml(chosenPrize) + '</div>'
         + (w.entries ? '<div class="ga-ld-win-entries">held ' + w.entries + ' entries</div>' : '');
       winEl.classList.add('show');
     }
+    _gaAddWinnerRow(w, chosenPrize);
     st.revealIdx++;
+    if (st.revealIdx < st.winners.length) _gaSetPrizeDefault(st.winners[st.revealIdx].rank);
     if (!btn) return;
     if (st.revealIdx < st.winners.length){
       btn.textContent = 'SPIN NEXT (#' + st.winners[st.revealIdx].rank + ')';
       btn.disabled = false; btn.style.opacity = '';
     } else {
-      btn.outerHTML = '<button class="ga-ld-btn" id="gaLdSpin" onclick="_gaCloseLiveDraw()">Done</button>';
+      // All prizes revealed — offer to email each winner their own prize.
+      var ctr = document.getElementById('gaLdControls');
+      if (ctr) ctr.innerHTML =
+        '<button class="ga-ld-btn primary" onclick="_gaEmailFromDraw()">Email ' + st.winners.length + ' winner' + (st.winners.length === 1 ? '' : 's') + '</button>'
+        + '<button class="ga-ld-btn" onclick="_gaCloseLiveDraw()">Done</button>';
     }
   });
+}
+
+// Email each winner their own prize (reuses the per-winner send endpoint,
+// which resolves each winner's rank -> prize-tier label). adminEmailWinners
+// prompts for the $600 tax note and sends one email per winner.
+function _gaEmailFromDraw(){
+  var st = window._gaLD; if (!st || !st.id) return;
+  if (typeof adminEmailWinners === 'function') adminEmailWinners(st.id);
 }
 
 function _gaCloseLiveDraw(){

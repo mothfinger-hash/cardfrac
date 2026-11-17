@@ -104,7 +104,7 @@ module.exports = async function handler(req, res) {
   if (gErr || !giveaway) return res.status(404).json({ error: 'Giveaway not found' });
 
   const { data: winners, error: wErr } = await sb
-    .from('giveaway_winners').select('id, user_id, email, prize_rank').eq('giveaway_id', giveawayId).order('prize_rank');
+    .from('giveaway_winners').select('id, user_id, email, prize_rank, prize_label').eq('giveaway_id', giveawayId).order('prize_rank');
   if (wErr) return res.status(500).json({ error: 'Could not load winners', detail: wErr.message });
   if (!winners || !winners.length) return res.status(400).json({ error: 'No winners drawn for this giveaway yet' });
 
@@ -138,7 +138,7 @@ module.exports = async function handler(req, res) {
     // Per-rank prize: rank 1 = the briefcase, ranks 2+ = their tier label
     // (e.g. "a pull from the second box, revealed in the video"). prizeOverride
     // still wins when the admin passes one.
-    const thisPrize = prizeOverride || resolveTierLabel(giveaway.prize_tiers, w.prize_rank, prizeLabel);
+    const thisPrize = prizeOverride || w.prize_label || resolveTierLabel(giveaway.prize_tiers, w.prize_rank, prizeLabel);
     const result = await sendEmail({
       to,
       subject: '[PathBinder] You won ' + giveawayName + '!',
