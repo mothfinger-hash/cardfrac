@@ -39,6 +39,8 @@
   .cd-cell{flex:1;min-width:58px;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 4px}
   .cd-num{font-size:24px;font-weight:800;color:#fff;line-height:1;font-variant-numeric:tabular-nums}
   .cd-unit{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-top:6px}
+  #prizeMedia:not(:empty){margin:2px 0 14px}
+  #prizeMedia img,#prizeMedia video{display:block;width:100%;max-height:360px;object-fit:contain;background:#000;border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
   .cta{display:inline-block;background:var(--accent);color:#0a0e1a;font-weight:800;padding:13px 26px;border-radius:10px;margin:6px 8px 4px 0}
   .cta:hover{text-decoration:none;filter:brightness(1.06)}
   .cta.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
@@ -71,6 +73,7 @@
 
 <div class="prize" id="prizeCard">
   <div class="tag">Current drawing</div>
+  <div id="prizeMedia"></div>
   <div class="name" id="prizeName">Loading the current prize&hellip;</div>
   <div class="meta" id="prizeMeta"></div>
   <div class="cd-label" id="prizeCdLabel" style="display:none"></div>
@@ -161,8 +164,15 @@
       cdTimer = setInterval(tick, 1000);
     }
     function fmtDate(s){ try { return new Date(s).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(_) { return ''; } }
+    function renderMedia(g){
+      var el = document.getElementById('prizeMedia'); if (!el) return;
+      var html = '';
+      if (g.image_url) html += '<img src="' + esc(g.image_url) + '" alt="Giveaway prize" loading="lazy">';
+      if (g.video_url) html += '<video src="' + esc(g.video_url) + '" controls playsinline preload="metadata"></video>';
+      el.innerHTML = html;
+    }
 
-    fetch(URL + '/rest/v1/giveaways?select=name,prize,num_winners,opens_at,closes_at,status&status=in.(scheduled,open)&order=status.asc,created_at.desc&limit=1', {
+    fetch(URL + '/rest/v1/giveaways?select=name,prize,num_winners,opens_at,closes_at,status,image_url,video_url&status=in.(scheduled,open)&order=status.asc,created_at.desc&limit=1', {
       headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }
     }).then(function(r){ return r.json(); }).then(function(rows){
       var g = rows && rows[0];
@@ -171,6 +181,7 @@
         metaEl.innerHTML = '<span>Subscribe now so you’re entered the moment it opens.</span>';
         return;
       }
+      renderMedia(g);
 
       if (g.status === 'scheduled') {
         // Teaser state — keep the prize under wraps, show a countdown to open.

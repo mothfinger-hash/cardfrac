@@ -6458,7 +6458,7 @@ function _loadAdmin(){
       var cache = { user_id: currentUser.id, giveaway: null, entries: null, wins: [] };
       try {
         var g = await sb.from('giveaways')
-          .select('id,name,prize,opens_at,closes_at,num_winners,status')
+          .select('id,name,prize,opens_at,closes_at,num_winners,status,image_url')
           .in('status', ['scheduled', 'open'])
           .order('created_at', { ascending: false })
           .limit(1);
@@ -6550,6 +6550,9 @@ function _loadAdmin(){
       var prize = (typeof _escHtml === 'function')
         ? _escHtml(g.prize || g.name || 'Giveaway')
         : (g.prize || g.name || 'Giveaway');
+      var imgHtml = g.image_url
+        ? '<img src="' + (typeof _escHtml === 'function' ? _escHtml(g.image_url) : g.image_url) + '" alt="" style="width:100%;max-height:150px;object-fit:cover;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">'
+        : '';
 
       // Keep the live countdown ticker running + fill it immediately on render.
       if (!window._gaCountdownInterval) { try { window._gaCountdownInterval = setInterval(_gaTick, 1000); } catch (_) {} }
@@ -6564,6 +6567,7 @@ function _loadAdmin(){
             + '<a href="#" onclick="openPricingModalWithPromo(\'enthusiast\');return false" style="color:var(--accent)">Subscribe &rarr;</a>';
         return '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--copper);border-left:3px solid var(--copper);background:var(--copper-glow);padding:14px 30px 14px 18px">'
           + _bannerDismissBtn('pb_dismiss_giveaway_' + g.id)
+          + imgHtml
           + '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--copper);text-transform:uppercase;margin-bottom:4px">&#9671; Giveaway &mdash; Starting soon</div>'
           + '<div style="font-size:.85rem;color:var(--text);font-weight:700;margin-bottom:3px">' + prize + '</div>'
           + '<div style="font-size:.72rem;color:var(--muted);line-height:1.5">' + subS + '</div>'
@@ -6593,6 +6597,7 @@ function _loadAdmin(){
 
       return '<div data-dash-banner style="position:relative;margin-bottom:14px;border:1.5px solid var(--accent);border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.07);padding:14px 30px 14px 18px">'
         + _bannerDismissBtn('pb_dismiss_giveaway_' + g.id)
+        + imgHtml
         + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">'
         +   '<div style="flex:1;min-width:240px">'
         +     '<div style="font-family:\'Orbitron\',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:4px">&#9670; Giveaway &mdash; Live</div>'

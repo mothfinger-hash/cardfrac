@@ -459,14 +459,24 @@ function _pbInjectAdminMarkup(){
     <div style="margin-top:4px;border:1px solid var(--border);background:var(--surface);padding:16px 18px;margin-bottom:20px">
       <div style="font-family:'Orbitron',monospace;font-size:.72rem;font-weight:800;letter-spacing:.1em;color:var(--copper);text-transform:uppercase;margin-bottom:12px">Create Giveaway</div>
       <div style="display:flex;flex-direction:column;gap:10px;max-width:540px">
-        <input type="text" id="gaName" placeholder="Internal name (e.g. October Team Rocket Briefcase)"
-          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none">
-        <input type="text" id="gaPrize" placeholder="Prize shown to users (e.g. Sealed SV10 Team Rocket Briefcase)"
-          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none">
-        <input type="text" id="gaPrizeGrand" placeholder="Grand prize — rank 1, in winner email (defaults to the prize above)"
-          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text);outline:none">
-        <input type="text" id="gaPrizeRest" placeholder="Other winners — ranks 2+, in winner email (e.g. a card pulled from the second box, revealed in our opening video)"
-          style="background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text);outline:none">
+        <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">INTERNAL NAME &mdash; admin only, not shown to users
+          <input type="text" id="gaName" placeholder="e.g. Nov 2026 Team Rocket Briefcase"
+            style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none"></label>
+        <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">PRIZE SHOWN TO USERS &mdash; banner &amp; giveaway-page headline
+          <input type="text" id="gaPrize" placeholder="e.g. Sealed Team Rocket Briefcase + booster box"
+            style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);outline:none"></label>
+        <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">GRAND PRIZE &mdash; rank 1, in the winner email
+          <input type="text" id="gaPrizeGrand" placeholder="defaults to the prize above if left blank"
+            style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text);outline:none"></label>
+        <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">OTHER WINNERS &mdash; ranks 2+, in the winner email
+          <input type="text" id="gaPrizeRest" placeholder="e.g. a card pulled from the second box, revealed in our video"
+            style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);padding:8px 12px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text);outline:none"></label>
+        <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">PHOTO (optional) &mdash; shown on the giveaway page
+          <input type="file" id="gaImage" accept="image/*"
+            style="font-family:'Space Mono',monospace;font-size:.68rem;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:7px 10px"></label>
+        <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">VIDEO (optional) &mdash; e.g. the pack-opening / pull clip (max 100 MB)
+          <input type="file" id="gaVideo" accept="video/*"
+            style="font-family:'Space Mono',monospace;font-size:.68rem;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:7px 10px"></label>
         <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
           <label style="font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.06em;color:var(--muted);display:flex;flex-direction:column;gap:4px">WINNERS
             <input type="number" id="gaWinners" value="1" min="1" step="1" inputmode="numeric"
@@ -1647,6 +1657,7 @@ function _gaCardHtml(g){
   var closes = g.closes_at ? _escHtml(new Date(g.closes_at).toLocaleString()) : '';
   var dupBtn = _gaBtn('Review duplicates', "adminReviewDupes('" + g.id + "')", 'var(--yellow)');
   var prizeBtn = _gaBtn('Edit prizes', "adminEditPrizes('" + g.id + "')", 'var(--copper)');
+  var mediaBtn = _gaBtn('Edit media', "adminEditMedia('" + g.id + "')", 'var(--copper)');
   var liveBtn = _gaBtn('Live draw (stream)', "adminLiveDraw('" + g.id + "')", 'var(--accent)');
   var actions = '';
   if (g.status === 'draft') {
@@ -1670,9 +1681,11 @@ function _gaCardHtml(g){
       + _gaBtn('Email winners', "adminEmailWinners('" + g.id + "')", 'var(--copper)');
   }
   if (g.status !== 'drawn') actions += prizeBtn;                 // edit per-rank prizes
+  actions += mediaBtn;                                          // photo/video, any status
   if (g.status === 'open' || g.status === 'closed' || g.status === 'drawn') actions += liveBtn;
   return '<div style="border:1px solid var(--border);background:var(--surface);padding:14px 16px;margin-bottom:12px">'
     + '<div id="gaPrizeEdit-' + g.id + '"></div>'
+    + '<div id="gaMediaEdit-' + g.id + '"></div>'
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
     +   '<div style="font-size:.82rem;color:var(--text);font-weight:700">' + (prize || name || 'Giveaway') + '</div>'
     +   '<div style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:' + sc + '">' + _escHtml(g.status) + '</div>'
@@ -1814,6 +1827,77 @@ function _gaTierLabel(g, rank){
     if (!isNaN(from) && rank >= from && rank <= to) return String(t.label);
   }
   return (g && g.prize) || 'Prize';
+}
+
+// ── Media upload (photo + video) ─────────────────────────────────────────────
+// Uploads to the public giveaway-media bucket (admin-only write) and returns
+// the public URL to store on the giveaway row.
+async function _gaUploadMedia(file){
+  var ext = (String(file.name || '').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
+  var path = 'gm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + (ext || 'bin');
+  var up = await sb.storage.from('giveaway-media').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (up.error) throw up.error;
+  var pub = sb.storage.from('giveaway-media').getPublicUrl(path);
+  return (pub && pub.data && pub.data.publicUrl) || '';
+}
+
+async function adminEditMedia(id){
+  var box = document.getElementById('gaMediaEdit-' + id);
+  if (!box) return;
+  if (box.getAttribute('data-open') === '1'){ box.innerHTML = ''; box.removeAttribute('data-open'); return; }
+  box.setAttribute('data-open', '1');
+  box.innerHTML = '<div style="font-size:.62rem;color:var(--muted);padding:8px 0">Loading media…</div>';
+  var img = '', vid = '';
+  try {
+    var r = await sb.from('giveaways').select('image_url,video_url').eq('id', id).maybeSingle();
+    if (r.data){ img = r.data.image_url || ''; vid = r.data.video_url || ''; }
+  } catch(_){}
+  var preview = '';
+  if (img) preview += '<div style="margin-bottom:10px"><img src="' + _gaAttr(img) + '" alt="" style="max-height:120px;max-width:100%;border:1px solid var(--border)"><br>'
+    + '<button type="button" onclick="adminClearMedia(\'' + id + '\',\'image\')" style="font-size:.56rem;color:var(--red);background:none;border:none;cursor:pointer;padding:3px 0">Remove photo</button></div>';
+  if (vid) preview += '<div style="margin-bottom:10px"><video src="' + _gaAttr(vid) + '" controls style="max-height:150px;max-width:100%;border:1px solid var(--border)"></video><br>'
+    + '<button type="button" onclick="adminClearMedia(\'' + id + '\',\'video\')" style="font-size:.56rem;color:var(--red);background:none;border:none;cursor:pointer;padding:3px 0">Remove video</button></div>';
+  box.innerHTML = '<div style="border:1px solid var(--copper-dim);background:var(--copper-glow);padding:10px 12px;margin-bottom:10px">'
+    + '<div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--copper);margin-bottom:8px">Media (photo + video)</div>'
+    + preview
+    + '<label style="display:block;font-size:.56rem;color:var(--muted);margin-bottom:3px">' + (img ? 'Replace' : 'Add') + ' photo</label>'
+    + '<input type="file" id="gaEM-img-' + id + '" accept="image/*" style="font-family:\'Space Mono\',monospace;font-size:.66rem;color:var(--muted);margin-bottom:10px;display:block">'
+    + '<label style="display:block;font-size:.56rem;color:var(--muted);margin-bottom:3px">' + (vid ? 'Replace' : 'Add') + ' video (max 100 MB)</label>'
+    + '<input type="file" id="gaEM-vid-' + id + '" accept="video/*" style="font-family:\'Space Mono\',monospace;font-size:.66rem;color:var(--muted);margin-bottom:10px;display:block">'
+    + '<div style="display:flex;gap:6px">'
+    +   _gaBtn('Save media', "adminSaveMedia('" + id + "')", 'var(--green)')
+    +   _gaBtn('Close', "adminEditMedia('" + id + "')", 'var(--muted)')
+    + '</div></div>';
+}
+
+async function adminSaveMedia(id){
+  var imgEl = document.getElementById('gaEM-img-' + id);
+  var vidEl = document.getElementById('gaEM-vid-' + id);
+  var patch = {};
+  try {
+    if (imgEl && imgEl.files && imgEl.files[0]){ showToast('Uploading photo…'); patch.image_url = await _gaUploadMedia(imgEl.files[0]); }
+    if (vidEl && vidEl.files && vidEl.files[0]){ showToast('Uploading video…'); patch.video_url = await _gaUploadMedia(vidEl.files[0]); }
+  } catch(e){ showToast('Upload failed: ' + (e.message || e)); return; }
+  if (!Object.keys(patch).length){ showToast('Pick a file first.'); return; }
+  patch.updated_at = new Date().toISOString();
+  try {
+    var r = await sb.from('giveaways').update(patch).eq('id', id);
+    if (r.error) throw r.error;
+    showToast('Media saved');
+    var box = document.getElementById('gaMediaEdit-' + id); if (box){ box.innerHTML = ''; box.removeAttribute('data-open'); }
+  } catch(e){ showToast('Save failed: ' + (e.message || e)); }
+}
+
+async function adminClearMedia(id, kind){
+  var patch = {}; patch[kind === 'video' ? 'video_url' : 'image_url'] = null;
+  patch.updated_at = new Date().toISOString();
+  try {
+    var r = await sb.from('giveaways').update(patch).eq('id', id);
+    if (r.error) throw r.error;
+    showToast('Removed');
+    var box = document.getElementById('gaMediaEdit-' + id); if (box){ box.innerHTML = ''; box.removeAttribute('data-open'); }
+    adminEditMedia(id);
+  } catch(e){ showToast('Failed: ' + (e.message || e)); }
 }
 
 // ── Edit prizes by rank (inline on the card) ─────────────────────────────────
@@ -2134,6 +2218,16 @@ async function adminCreateGiveaway(){
   tiers.push({ from: 1, to: 1, label: grand || prize || 'Grand prize' });
   if (rest) tiers.push({ from: 2, to: null, label: rest });
   payload.prize_tiers = tiers;
+  // Optional media — upload to the public giveaway-media bucket, store the URLs.
+  var _imgEl = document.getElementById('gaImage');
+  var _vidEl = document.getElementById('gaVideo');
+  var _hasImg = !!(_imgEl && _imgEl.files && _imgEl.files[0]);
+  var _hasVid = !!(_vidEl && _vidEl.files && _vidEl.files[0]);
+  if (_hasImg || _hasVid) showToast('Uploading media…');
+  try { if (_hasImg) payload.image_url = await _gaUploadMedia(_imgEl.files[0]); }
+  catch(e){ showToast('Photo upload failed: ' + (e.message || e)); }
+  try { if (_hasVid) payload.video_url = await _gaUploadMedia(_vidEl.files[0]); }
+  catch(e){ showToast('Video upload failed: ' + (e.message || e)); }
   try {
     var r = await sb.from('giveaways').insert(payload);
     if (r.error) throw r.error;
@@ -2144,6 +2238,8 @@ async function adminCreateGiveaway(){
     var cl = document.getElementById('gaCloses'); if (cl) cl.value = '';
     var pg = document.getElementById('gaPrizeGrand'); if (pg) pg.value = '';
     var pr = document.getElementById('gaPrizeRest'); if (pr) pr.value = '';
+    if (_imgEl) _imgEl.value = '';
+    if (_vidEl) _vidEl.value = '';
     renderAdminGiveaways();
   } catch(e){ showToast('Create failed: ' + (e.message || e)); }
 }
