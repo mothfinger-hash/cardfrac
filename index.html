@@ -636,6 +636,12 @@ nav.sb-collapsed #registerBtn::after{content:'J';font-size:7px;display:block;fon
        (Visitors / Top Countries / Referrers). Served from Vercel's edge,
        no npm package or build step required. `defer` keeps it off the
        critical path. Disable by removing this line. -->
+  <!-- va() queue stub so virtual-pageview calls fired during app init (before
+       the deferred script loads) are queued and flushed, not dropped. The SPA
+       navigates with ?page= (path stays "/"), so showPage() reports a manual
+       pageview per in-app view via window.va('pageview', {...}) — otherwise
+       every view collapses to "/" in Vercel's Pages panel. -->
+  <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
   <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body class="on-landing">

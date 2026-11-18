@@ -2322,20 +2322,39 @@ async function adminCreateGiveaway(){
   catch(e){ showToast('Photo upload failed: ' + (e.message || e)); }
   try { if (_hasVid) payload.video_url = await _gaUploadMedia(_vidEl.files[0]); }
   catch(e){ showToast('Video upload failed: ' + (e.message || e)); }
+  var _created = false, _degraded = false;
   try {
     var r = await sb.from('giveaways').insert(payload);
     if (r.error) throw r.error;
-    showToast('Giveaway created (draft)');
-    var n = document.getElementById('gaName'); if (n) n.value = '';
-    var p = document.getElementById('gaPrize'); if (p) p.value = '';
-    var o = document.getElementById('gaOpens'); if (o) o.value = '';
-    var cl = document.getElementById('gaCloses'); if (cl) cl.value = '';
-    var pg = document.getElementById('gaPrizeGrand'); if (pg) pg.value = '';
-    var pr = document.getElementById('gaPrizeRest'); if (pr) pr.value = '';
-    if (_imgEl) _imgEl.value = '';
-    if (_vidEl) _vidEl.value = '';
-    renderAdminGiveaways();
-  } catch(e){ showToast('Create failed: ' + (e.message || e)); }
+    _created = true;
+  } catch(e){
+    // Graceful fallback: if a newer optional column is missing because a
+    // migration hasn't run yet, strip those columns and retry so the draft
+    // still saves (same schema-fallback pattern as quickAddScannedCard).
+    var msg = String((e && e.message) || e);
+    if (/prize_tiers|image_url|video_url|schema cache|does not exist/i.test(msg)){
+      var p2 = Object.assign({}, payload);
+      delete p2.prize_tiers; delete p2.image_url; delete p2.video_url;
+      try {
+        var r2 = await sb.from('giveaways').insert(p2);
+        if (r2.error) throw r2.error;
+        _created = true; _degraded = true;
+      } catch(e2){ showToast('Create failed: ' + ((e2 && e2.message) || e2)); }
+    } else {
+      showToast('Create failed: ' + msg);
+    }
+  }
+  if (!_created) return;
+  showToast(_degraded ? 'Created (draft) — run the latest migration to enable prize tiers/media.' : 'Giveaway created (draft)');
+  var n = document.getElementById('gaName'); if (n) n.value = '';
+  var p = document.getElementById('gaPrize'); if (p) p.value = '';
+  var o = document.getElementById('gaOpens'); if (o) o.value = '';
+  var cl = document.getElementById('gaCloses'); if (cl) cl.value = '';
+  var pg = document.getElementById('gaPrizeGrand'); if (pg) pg.value = '';
+  var pr = document.getElementById('gaPrizeRest'); if (pr) pr.value = '';
+  if (_imgEl) _imgEl.value = '';
+  if (_vidEl) _vidEl.value = '';
+  renderAdminGiveaways();
 }
 
 async function adminSetGiveawayStatus(id, status){

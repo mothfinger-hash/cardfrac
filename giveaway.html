@@ -72,7 +72,7 @@
 <p class="lede">We run regular giveaways of sealed trading-card product for our members. <strong>Every PathBinder subscriber is automatically entered in every drawing</strong>, just for staying subscribed. No purchase necessary; a free entry is always available.</p>
 
 <div class="prize" id="prizeCard">
-  <div class="tag">Current drawing</div>
+  <div class="tag" id="prizeTag">Current drawing</div>
   <div id="prizeMedia"></div>
   <div class="name" id="prizeName">Loading the current prize&hellip;</div>
   <div class="meta" id="prizeMeta"></div>
@@ -142,6 +142,7 @@
     var URL = 'https://xjamytrhxeaynywcwfun.supabase.co';
     var KEY = 'sb_publishable_HeBrC8k5nKaBmqA9qMn6-Q_YqL8OEBV';
     var nameEl = document.getElementById('prizeName');
+    var tagEl  = document.getElementById('prizeTag');
     var metaEl = document.getElementById('prizeMeta');
     var labEl  = document.getElementById('prizeCdLabel');
     var cdEl   = document.getElementById('prizeCountdown');
@@ -184,9 +185,14 @@
       renderMedia(g);
 
       if (g.status === 'scheduled') {
-        // Teaser state — keep the prize under wraps, show a countdown to open.
-        nameEl.textContent = 'Our next giveaway is coming soon';
-        metaEl.innerHTML = '<span>Subscribe now so you’re entered the moment it opens.</span>';
+        // Teaser state — reveal the prize to build hype, count down to open.
+        if (tagEl) tagEl.textContent = 'Coming soon';
+        nameEl.innerHTML = esc(g.prize || g.name || 'Sealed TCG product');
+        var sbits = [];
+        if (g.num_winners) sbits.push('<b>' + g.num_winners + '</b> winner' + (g.num_winners === 1 ? '' : 's'));
+        if (g.opens_at && fmtDate(g.opens_at)) sbits.push('Opens <b>' + fmtDate(g.opens_at) + '</b>');
+        sbits.push('No purchase necessary');
+        metaEl.innerHTML = sbits.map(function(b){ return '<span>' + b + '</span>'; }).join('');
         if (g.opens_at) startCountdown(new Date(g.opens_at).getTime(), 'Entries open in');
         return;
       }

@@ -2415,6 +2415,33 @@ function _loadAdmin(){
       }
     }
 
+    // Virtual pageviews for Vercel Web Analytics. The SPA keeps location.pathname
+    // at "/" (navigation is by ?page=), and Vercel keys pageviews off the path,
+    // so without a manual report every in-app view collapses to "/" and the
+    // Pages panel / bounce rate are meaningless. showPage() reports one clean
+    // path per view. `route` sets the page recorded in the Pages panel; `path`
+    // sets the URL. Deduped so re-renders of the same page don't double-count.
+    let _lastTrackedPage = null;
+    const _VA_PATHS = {
+      landing: '/', collection: '/collection', sets: '/sets',
+      browse: '/market', market: '/market', account: '/account',
+      fairTrade: '/trade', avatar: '/avatar', addCard: '/add-card',
+      publicProfile: '/seller-profile', storefront: '/store',
+      editListing: '/edit-listing', admin: '/admin',
+    };
+    function _vaPagePath(pageId) {
+      return _VA_PATHS[pageId] || ('/' + String(pageId || 'app'));
+    }
+    function _vaTrackPage(pageId) {
+      try {
+        if (!window.va || _lastTrackedPage === pageId) return;
+        const p = _vaPagePath(pageId);
+        if (p === location.pathname) { _lastTrackedPage = pageId; return; } // auto-pageview already covers the real path
+        _lastTrackedPage = pageId;
+        window.va('pageview', { path: p, route: p });
+      } catch (_) {}
+    }
+
     function toggleNavCollapse() {
       const nav = document.getElementById('appNav');
       const collapsed = nav.classList.toggle('sb-collapsed');
@@ -2504,6 +2531,7 @@ function _loadAdmin(){
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       targetEl.classList.add('active');
       _pushPageState(pageId);
+      _vaTrackPage(pageId);   // virtual pageview so Vercel sees distinct in-app views
       // Per-route <title> (shareability + tab/history UX). The SPA shipped one
       // generic title for every route before this.
       try {
