@@ -1656,6 +1656,7 @@ function _gaCardHtml(g){
   var opens = g.opens_at ? _escHtml(new Date(g.opens_at).toLocaleString()) : '';
   var closes = g.closes_at ? _escHtml(new Date(g.closes_at).toLocaleString()) : '';
   var dupBtn = _gaBtn('Review duplicates', "adminReviewDupes('" + g.id + "')", 'var(--yellow)');
+  var detailBtn = _gaBtn('Edit details', "adminEditDetails('" + g.id + "')", 'var(--copper)');
   var prizeBtn = _gaBtn('Edit prizes', "adminEditPrizes('" + g.id + "')", 'var(--copper)');
   var mediaBtn = _gaBtn('Edit media', "adminEditMedia('" + g.id + "')", 'var(--copper)');
   var liveBtn = _gaBtn('Live draw (stream)', "adminLiveDraw('" + g.id + "')", 'var(--accent)');
@@ -1680,10 +1681,12 @@ function _gaCardHtml(g){
       + (g.drawn_at ? ' ' + _escHtml(new Date(g.drawn_at).toLocaleDateString()) : '') + '</span>'
       + _gaBtn('Email winners', "adminEmailWinners('" + g.id + "')", 'var(--copper)');
   }
+  if (g.status !== 'drawn') actions += detailBtn;                // edit name/prize/winners/dates
   if (g.status !== 'drawn') actions += prizeBtn;                 // edit per-rank prizes
   actions += mediaBtn;                                          // photo/video, any status
   if (g.status === 'open' || g.status === 'closed' || g.status === 'drawn') actions += liveBtn;
   return '<div style="border:1px solid var(--border);background:var(--surface);padding:14px 16px;margin-bottom:12px">'
+    + '<div id="gaDetailEdit-' + g.id + '"></div>'
     + '<div id="gaPrizeEdit-' + g.id + '"></div>'
     + '<div id="gaMediaEdit-' + g.id + '"></div>'
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
@@ -1941,6 +1944,74 @@ async function adminSavePrizes(id){
     showToast('Prizes saved');
     var box = document.getElementById('gaPrizeEdit-' + id);
     if (box){ box.innerHTML = ''; box.removeAttribute('data-open'); }
+  } catch(e){ showToast('Save failed: ' + (e.message || e)); }
+}
+
+// ── Edit core details (name / prize / winners / dates) ───────────────────────
+// The admin panel is the only source of truth for a giveaway, so every field
+// set at create time must be editable afterward. Media and per-rank prizes have
+// their own editors above; this covers the rest. Stored timestamps are UTC; the
+// datetime-local inputs show/accept the admin's local wall-clock.
+function _gaDtLocal(iso){
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+async function adminEditDetails(id){
+  var box = document.getElementById('gaDetailEdit-' + id);
+  if (!box) return;
+  if (box.getAttribute('data-open') === '1'){ box.innerHTML = ''; box.removeAttribute('data-open'); return; }
+  box.setAttribute('data-open', '1');
+  box.innerHTML = '<div style="font-size:.62rem;color:var(--muted);padding:8px 0">Loading…</div>';
+  var g = {};
+  try {
+    var r = await sb.from('giveaways').select('name,prize,num_winners,opens_at,closes_at').eq('id', id).maybeSingle();
+    g = r.data || {};
+  } catch(_){}
+  var inp = 'width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);padding:7px 10px;font-family:\'Space Mono\',monospace;font-size:.72rem;color:var(--text);outline:none;margin-bottom:8px';
+  var lab = 'display:block;font-size:.56rem;color:var(--muted);margin-bottom:3px';
+  box.innerHTML = '<div style="border:1px solid var(--copper-dim);background:var(--copper-glow);padding:10px 12px;margin-bottom:10px">'
+    + '<div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--copper);margin-bottom:8px">Edit details</div>'
+    + '<label style="' + lab + '">Internal name</label>'
+    + '<input id="gaED-name-' + id + '" value="' + _gaAttr(g.name || '') + '" style="' + inp + '">'
+    + '<label style="' + lab + '">Prize (shown to users)</label>'
+    + '<input id="gaED-prize-' + id + '" value="' + _gaAttr(g.prize || '') + '" style="' + inp + '">'
+    + '<label style="' + lab + '">Winners</label>'
+    + '<input id="gaED-winners-' + id + '" type="number" min="1" step="1" inputmode="numeric" value="' + (parseInt(g.num_winners, 10) || 1) + '" style="' + inp + '">'
+    + '<label style="' + lab + '">Starts</label>'
+    + '<input id="gaED-opens-' + id + '" type="datetime-local" value="' + _gaDtLocal(g.opens_at) + '" style="' + inp + '">'
+    + '<label style="' + lab + '">Closes</label>'
+    + '<input id="gaED-closes-' + id + '" type="datetime-local" value="' + _gaDtLocal(g.closes_at) + '" style="' + inp + '">'
+    + '<div style="display:flex;gap:6px;margin-top:2px">'
+    +   _gaBtn('Save details', "adminSaveDetails('" + id + "')", 'var(--green)')
+    +   _gaBtn('Cancel', "adminEditDetails('" + id + "')", 'var(--muted)')
+    + '</div></div>';
+}
+
+async function adminSaveDetails(id){
+  var name = ((document.getElementById('gaED-name-' + id) || {}).value || '').trim();
+  var prize = ((document.getElementById('gaED-prize-' + id) || {}).value || '').trim();
+  var winners = parseInt((document.getElementById('gaED-winners-' + id) || {}).value, 10);
+  var opensRaw = (document.getElementById('gaED-opens-' + id) || {}).value || '';
+  var closesRaw = (document.getElementById('gaED-closes-' + id) || {}).value || '';
+  if (!name){ showToast('Internal name cannot be empty'); return; }
+  if (!winners || winners < 1) winners = 1;
+  var patch = { name: name, prize: prize || null, num_winners: winners, updated_at: new Date().toISOString() };
+  // Blank date = leave unchanged (never silently null a real date on a prefill
+  // hiccup). Local wall-clock -> UTC ISO, same conversion as the create form.
+  if (opensRaw){ var od = new Date(opensRaw); if (!isNaN(od.getTime())) patch.opens_at = od.toISOString(); }
+  if (closesRaw){ var cd = new Date(closesRaw); if (!isNaN(cd.getTime())) patch.closes_at = cd.toISOString(); }
+  if (patch.opens_at && patch.closes_at && new Date(patch.closes_at) <= new Date(patch.opens_at)){
+    showToast('Close date must be after the start date'); return;
+  }
+  try {
+    var r = await sb.from('giveaways').update(patch).eq('id', id);
+    if (r.error) throw r.error;
+    showToast('Details saved');
+    var box = document.getElementById('gaDetailEdit-' + id); if (box){ box.innerHTML = ''; box.removeAttribute('data-open'); }
+    renderAdminGiveaways();
   } catch(e){ showToast('Save failed: ' + (e.message || e)); }
 }
 
