@@ -166,24 +166,68 @@ Deno.serve(async (req) => {
         })
         const liveSub = existingSubs.data.find(s => s.status === 'active' || s.status === 'trialing')
         if (liveSub) {
-          // Map tier ordering to detect upgrade vs downgrade.
+          // Map tier ordering to detect upgrade vs downgrade. The rank folds
+          // in the billing interval so a same-tier monthly→annual switch counts
+          // as an upgrade (prorate + charge the diff now) and annual→monthly
+          // counts as a downgrade (hold the current plan until period end).
+          // Tier dominates interval: each tier step is worth 2 and the annual
+          // bump only 1, so moving up a tier always outranks moving
+          // monthly→annual within a tier. Without this, a same-tier interval
+          // switch had equal rank → mis-classified as a downgrade and never
+          // charged the annual difference.
           const TIER_RANK: Record<string, number> = {
             free: 0, collector: 1, enthusiast: 2, vendor: 3, shop: 4,
           }
+          const planRank = (t: string, annual: boolean) =>
+            (TIER_RANK[t] || 0) * 2 + (annual ? 1 : 0)
           // Use the PROFILE tier (the app's source of truth) to decide
           // upgrade vs downgrade — not the Stripe sub's metadata, which can be
           // stale or belong to a leftover/duplicate subscription. Fall back to
           // the sub metadata only if the profile tier is missing.
           const currentTier = ((profile?.subscription_tier || liveSub.metadata?.tier || '') as string).toLowerCase()
-          const isUpgrade = (TIER_RANK[tier] || 0) > (TIER_RANK[currentTier] || 0)
+          // Current interval comes from the live sub's price — authoritative,
+          // it's what they're actually billed. Stripe uses 'year'/'month'; the
+          // client sends 'annual'/'monthly'.
+          const currentIsAnnual = liveSub.items.data[0]?.price?.recurring?.interval === 'year'
+          const newIsAnnual = billing === 'annual'
+          const isUpgrade = planRank(tier, newIsAnnual) > planRank(currentTier, currentIsAnnual)
 
-          const updated = await stripe.subscriptions.update(liveSub.id, {
-            items: [{ id: liveSub.items.data[0].id, price: priceId }],
-            // Upgrades prorate immediately (credit + invoice the diff).
-            // Downgrades hold the current tier until period end.
-            proration_behavior: isUpgrade ? 'create_prorations' : 'none',
-            metadata: { type: 'subscription', tier, user_id: userId },
-          })
+          // FAIL CLOSED on the proration charge. With the default payment
+          // behavior ('allow_incomplete'), a proration charge that declines or
+          // needs 3-D Secure authentication leaves an *incomplete* invoice on
+          // the live sub → past_due → Stripe's "incomplete for N days" timer
+          // cancels the whole paid subscription. This is exactly what nuked a
+          // real annual payer: a $10 upgrade proration went Incomplete and the
+          // 15-day timer cancelled their $108/yr sub. 'error_if_incomplete'
+          // makes Stripe throw instead and roll the change back, so a failed
+          // upgrade leaves the customer on their current paid plan with no
+          // lingering invoice to cancel them. Downgrades use
+          // proration_behavior:'none' (no charge now), so this is a no-op there.
+          let updated: any
+          try {
+            updated = await stripe.subscriptions.update(liveSub.id, {
+              items: [{ id: liveSub.items.data[0].id, price: priceId }],
+              // Upgrades prorate immediately (credit + invoice the diff).
+              // Downgrades hold the current tier until period end.
+              proration_behavior: isUpgrade ? 'create_prorations' : 'none',
+              payment_behavior: 'error_if_incomplete',
+              metadata: { type: 'subscription', tier, user_id: userId },
+            })
+          } catch (e: any) {
+            // Proration charge failed or needs authentication → the sub is
+            // unchanged (still on the current paid plan). Surface a clear,
+            // non-scary message; the client keeps them where they are.
+            const code = e?.code || e?.raw?.code || ''
+            const needsAuth = code === 'authentication_required' ||
+              /authenticat/i.test(e?.message || '')
+            const msg = needsAuth
+              ? 'That card needs extra verification for the upgrade charge, so your plan is unchanged. Update your payment method in Manage Billing or try a different card.'
+              : 'Your card could not be charged for the upgrade, so your plan is unchanged. Try a different payment method in Manage Billing.'
+            return new Response(JSON.stringify({ error: msg, code: code || 'charge_failed', unchanged: true }), {
+              status: 402,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
 
           // Upgrades take effect immediately, so write the new tier NOW
           // rather than waiting on the async customer.subscription.updated
